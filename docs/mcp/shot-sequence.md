@@ -66,7 +66,8 @@ An element unmounts at its scene's content end — if you want it to persist vis
 
 ## Blueprint catalog
 
-Six parameterised shot-shapes ("blueprints") cover the most common beat roles.
+A catalog of parameterised shot-shapes ("blueprints") covers the most common beat
+roles (12 at the time of writing — `list_shot_shapes` always returns the live set).
 Use `list_shot_shapes` to browse the catalog and `get_shot_shape` to inspect a
 blueprint's exact param contract before writing a `blueprint` reveal in a brief.
 
@@ -76,12 +77,18 @@ The standard render-video credit (5 credits) applies to the overall
 
 | Id | Roles | Default duration (frames) | What it does |
 |----|-------|--------------------------|--------------|
-| `kinetic-type-beats` | hook | 150 | 1–4 statement lines swap in by hard-cut/scale-pop; final line spring-pops on an accent. |
-| `dataviz-countup` | pain_point | 240 | A big number counts up to a value with a label; numbers are the hero. |
-| `grid-card-assemble` | feature_showcase, benefit_highlight | 180 | N text cards cascade-assemble into a grid with a staggered entrance. |
-| `titlecard-reveal` | benefit_highlight | 120 | One clean title (+ optional subtitle) revealed with one restrained move, then held. |
-| `logo-assemble-lockup` | product_intro, branding | 180 | Brand word's letters cascade/assemble into a centered lockup (+ optional tagline). |
+| `comparison-split` | feature_showcase | 180 | Two labeled panels slide in from opposite sides and hold with a center divider; optional badges pop near the end. |
+| `constellation-hub` | hook, social_proof | 180 | Labeled nodes spring into a ring around a center hub, then the shot resolves on the core — camera push-in or orbiting badges. |
 | `cta-morph-press` | cta | 150 | A CTA button appears centered; a cursor decelerates in and presses it. |
+| `dataviz-countup` | pain_point | 240 | A big number counts up to a value with a label; numbers are the hero. |
+| `grid-card-assemble` | feature_showcase, benefit_highlight, social_proof | 180 | N text cards cascade-assemble into a grid with a staggered entrance. |
+| `kinetic-type-beats` | hook | 150 | 1–4 statement lines swap in by hard-cut/scale-pop; final line spring-pops on an accent. |
+| `logo-assemble-lockup` | product_intro, branding | 180 | Brand word's letters cascade/assemble into a centered lockup (+ optional tagline). |
+| `overwhelm-surround` | pain_point | 210 | Tool cards assemble, density chips scatter in, the center morphs to reveal the viewer, then demand bubbles close in from all sides. |
+| `spatial-pan-stations` | hook, pain_point | 240 | Labeled stations on one oversized canvas, traversed by ease-in-out camera pans that pop a callout at each stop. |
+| `ticker-takeover` | hook, branding | 180 | A typed lead-in with an accent word cycling options, then the hero crashes in and shoves the text aside. |
+| `titlecard-reveal` | benefit_highlight, social_proof | 120 | One clean title (+ optional subtitle) revealed with one restrained move, then held. |
+| `typewriter-reveal` | hook, branding | 180 | Text types in character-by-character with a blinking caret; optional sublabel fades up after typing finishes. |
 
 ### `list_shot_shapes()`
 

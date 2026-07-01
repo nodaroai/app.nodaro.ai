@@ -1,11 +1,15 @@
 import type React from "react"
 import type { BlueprintProps } from "./types"
 import { ComparisonSplit } from "./comparison-split"
+import { ConstellationHub } from "./constellation-hub"
 import { CtaMorphPress } from "./cta-morph-press"
 import { DatavizCountup } from "./dataviz-countup"
 import { GridCardAssemble } from "./grid-card-assemble"
 import { KineticTypeBeats } from "./kinetic-type-beats"
 import { LogoAssembleLockup } from "./logo-assemble-lockup"
+import { OverwhelmSurround } from "./overwhelm-surround"
+import { SpatialPanStations } from "./spatial-pan-stations"
+import { TickerTakeover } from "./ticker-takeover"
 import { TitlecardReveal } from "./titlecard-reveal"
 import { TypewriterReveal } from "./typewriter-reveal"
 
@@ -22,11 +26,15 @@ import { TypewriterReveal } from "./typewriter-reveal"
  */
 export const BLUEPRINT_REGISTRY: Record<string, React.FC<BlueprintProps>> = {
   "comparison-split": ComparisonSplit,
+  "constellation-hub": ConstellationHub,
   "cta-morph-press": CtaMorphPress,
   "dataviz-countup": DatavizCountup,
   "grid-card-assemble": GridCardAssemble,
   "kinetic-type-beats": KineticTypeBeats,
   "logo-assemble-lockup": LogoAssembleLockup,
+  "overwhelm-surround": OverwhelmSurround,
+  "spatial-pan-stations": SpatialPanStations,
+  "ticker-takeover": TickerTakeover,
   "titlecard-reveal": TitlecardReveal,
   "typewriter-reveal": TypewriterReveal,
 }

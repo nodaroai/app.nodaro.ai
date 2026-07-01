@@ -1107,7 +1107,7 @@ The catalog discovery tools (`list_shot_shapes`, `get_shot_shape`) are ungated.
 
 **Scope:** none — always visible (all editions, free).
 
-Return the catalog of all 6 shot-sequence blueprints (id, roles, description,
+Return the catalog of all registered shot-sequence blueprints (id, roles, description,
 defaultDurationFrames). Blueprints are text/shape only and carry no pricing or
 credit information. Use before authoring a `ShotSequenceBrief` to pick the
 right blueprint for each beat role. Zero credits.

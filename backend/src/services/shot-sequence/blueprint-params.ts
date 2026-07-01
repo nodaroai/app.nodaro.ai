@@ -18,11 +18,15 @@ import { z } from "zod"
 
 export const BLUEPRINT_IDS = [
   "comparison-split",
+  "constellation-hub",
   "cta-morph-press",
   "dataviz-countup",
   "grid-card-assemble",
   "kinetic-type-beats",
   "logo-assemble-lockup",
+  "overwhelm-surround",
+  "spatial-pan-stations",
+  "ticker-takeover",
   "titlecard-reveal",
   "typewriter-reveal",
 ] as const
@@ -41,6 +45,14 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     right: z.string().min(1),
     leftBadge: z.string().optional(),
     rightBadge: z.string().optional(),
+    accentColor: hexColor.optional(),
+  }),
+
+  /** Labeled nodes spring into a ring around a center hub, then the shot resolves on the core. */
+  "constellation-hub": z.object({
+    hubLabel: z.string().min(1),
+    nodes: z.array(z.object({ label: z.string().min(1) })).min(3).max(8),
+    finisher: z.enum(["push-in", "orbit"]).optional(),
     accentColor: hexColor.optional(),
   }),
 
@@ -83,6 +95,33 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     accentColor: hexColor.optional(),
   }),
 
+  /** Recognizable tool cards assemble, then demand bubbles close in from all sides on a revealed subject. */
+  "overwhelm-surround": z.object({
+    surfaces: z.array(z.object({ label: z.string().min(1) })).min(2).max(3),
+    markers: z.array(z.string().min(1)).min(3).max(10),
+    subjectLabel: z.string().min(1),
+    demands: z.array(z.string().min(1)).min(4).max(10),
+    accentColor: hexColor.optional(),
+  }),
+
+  /** Labeled stations on one oversized canvas, traversed by camera pans that center each in turn. */
+  "spatial-pan-stations": z.object({
+    stations: z
+      .array(z.object({ label: z.string().min(1), sublabel: z.string().optional() }))
+      .min(3)
+      .max(6),
+    variant: z.enum(["timeline", "web"]).optional(),
+    accentColor: hexColor.optional(),
+  }),
+
+  /** A typed lead-in cycles an accent word, then a hero crashes in and shoves the text off-screen. */
+  "ticker-takeover": z.object({
+    leadIn: z.string().min(1),
+    options: z.array(z.string().min(1)).min(2).max(3),
+    hero: z.string().min(1),
+    accentColor: hexColor.optional(),
+  }),
+
   /** One clean title (+ optional subtitle) revealed with one restrained move, then held. */
   "titlecard-reveal": z.object({
     title: z.string().min(1),
@@ -122,6 +161,12 @@ export const BLUEPRINT_META: Record<
     description:
       "Two labeled panels slide in from opposite sides and hold side-by-side with a center divider; optional badges pop near the end.",
   },
+  "constellation-hub": {
+    roles: ["hook", "social_proof"],
+    defaultDurationFrames: 180,
+    description:
+      "Labeled nodes spring into a ring around a center hub, then the shot resolves on the core — camera push-in (outer nodes blur) or partner badges orbiting the hub.",
+  },
   "cta-morph-press": {
     roles: ["cta"],
     defaultDurationFrames: 150,
@@ -135,7 +180,7 @@ export const BLUEPRINT_META: Record<
       "A big number counts up to a value with a label; numbers are the hero.",
   },
   "grid-card-assemble": {
-    roles: ["feature_showcase", "benefit_highlight"],
+    roles: ["feature_showcase", "benefit_highlight", "social_proof"],
     defaultDurationFrames: 180,
     description:
       "N text cards cascade-assemble into a grid with a staggered entrance.",
@@ -152,8 +197,26 @@ export const BLUEPRINT_META: Record<
     description:
       "Brand word's letters cascade/assemble into a centered lockup (+ optional tagline).",
   },
+  "overwhelm-surround": {
+    roles: ["pain_point"],
+    defaultDurationFrames: 210,
+    description:
+      "Recognizable tool cards assemble, density chips scatter in, the center card morphs to reveal the viewer, then demand bubbles close in from all sides — surrounded, not zoomed.",
+  },
+  "spatial-pan-stations": {
+    roles: ["hook", "pain_point"],
+    defaultDurationFrames: 240,
+    description:
+      "Labeled stations pre-placed on one oversized canvas, traversed by ease-in-out camera pans that center each station and pop a callout, landing held on the last.",
+  },
+  "ticker-takeover": {
+    roles: ["hook", "branding"],
+    defaultDurationFrames: 180,
+    description:
+      "A typed lead-in with an accent word cycling through options, then the hero crashes in from off-screen and physically shoves the text aside — a collision, not a fade.",
+  },
   "titlecard-reveal": {
-    roles: ["benefit_highlight"],
+    roles: ["benefit_highlight", "social_proof"],
     defaultDurationFrames: 120,
     description:
       "One clean title (+ optional subtitle) revealed with one restrained move, then held.",
