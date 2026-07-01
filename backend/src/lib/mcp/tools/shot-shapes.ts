@@ -29,8 +29,16 @@ import {
  * examples showing real param values the director uses.
  */
 const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
-  "kinetic-type-beats": {
-    lines: ["Still guessing?", "There's a better way."],
+  "comparison-split": {
+    left: "The old way",
+    right: "With Nodaro",
+    leftBadge: "Hours of work",
+    rightBadge: "30 seconds",
+    accentColor: "#8B5CF6",
+  },
+  "cta-morph-press": {
+    label: "Start free",
+    sublabel: "No credit card needed",
     accentColor: "#8B5CF6",
   },
   "dataviz-countup": {
@@ -44,19 +52,23 @@ const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
     columns: 3,
     accentColor: "#8B5CF6",
   },
-  "titlecard-reveal": {
-    title: "10× faster to ship",
-    subtitle: "No code. No setup.",
-    motion: "slide-up",
+  "kinetic-type-beats": {
+    lines: ["Still guessing?", "There's a better way."],
+    accentColor: "#8B5CF6",
   },
   "logo-assemble-lockup": {
     brand: "NODARO",
     tagline: "Motion. On your words.",
     accentColor: "#8B5CF6",
   },
-  "cta-morph-press": {
-    label: "Start free",
-    sublabel: "No credit card needed",
+  "titlecard-reveal": {
+    title: "10× faster to ship",
+    subtitle: "No code. No setup.",
+    motion: "slide-up",
+  },
+  "typewriter-reveal": {
+    text: "NODARO",
+    sublabel: "Motion. On your words.",
     accentColor: "#8B5CF6",
   },
 }
@@ -71,7 +83,7 @@ export function registerShotShapeTools(
     {
       title: "List Shot Shapes",
       description:
-        "Return the catalog of all 6 shot-sequence blueprints (id, roles, description, " +
+        "Return the catalog of all 8 shot-sequence blueprints (id, roles, description, " +
         "defaultDurationFrames). A blueprint is a parameterised shot-shape — a named " +
         "animation beat (e.g. kinetic-type-beats, titlecard-reveal) used inside a " +
         "ShotSequenceBrief. Call this BEFORE authoring a brief to pick the right blueprint " +

@@ -3,6 +3,7 @@ import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 import { registerShotShapeTools } from "../shot-shapes.js"
+import { BLUEPRINT_IDS } from "../../../../services/shot-sequence/blueprint-params.js"
 
 const session = newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Test" })
 
@@ -13,12 +14,12 @@ function makeServer() {
 }
 
 describe("list_shot_shapes", () => {
-  it("returns 6 entries, each with the required fields", async () => {
+  it("returns an entry per blueprint, each with the required fields", async () => {
     const server = makeServer()
     const result = await callTool(server, "list_shot_shapes", {})
     expect(result.isError).toBeUndefined()
     const shapes = JSON.parse(result.content[0]!.text!) as unknown[]
-    expect(shapes).toHaveLength(6)
+    expect(shapes).toHaveLength(BLUEPRINT_IDS.length)
     for (const shape of shapes) {
       const s = shape as Record<string, unknown>
       expect(typeof s.id).toBe("string")
@@ -28,17 +29,13 @@ describe("list_shot_shapes", () => {
     }
   })
 
-  it("contains all 6 known blueprint ids", async () => {
+  it("contains exactly the known blueprint ids", async () => {
     const server = makeServer()
     const result = await callTool(server, "list_shot_shapes", {})
     const shapes = JSON.parse(result.content[0]!.text!) as Array<{ id: string }>
-    const ids = shapes.map((s) => s.id)
-    expect(ids).toContain("kinetic-type-beats")
-    expect(ids).toContain("dataviz-countup")
-    expect(ids).toContain("grid-card-assemble")
-    expect(ids).toContain("titlecard-reveal")
-    expect(ids).toContain("logo-assemble-lockup")
-    expect(ids).toContain("cta-morph-press")
+    const ids = shapes.map((s) => s.id).sort()
+    // Assert against BLUEPRINT_IDS so adding a blueprint never silently drifts this.
+    expect(ids).toEqual([...BLUEPRINT_IDS].sort())
   })
 
   it("titlecard-reveal has the correct roles and defaultDurationFrames", async () => {

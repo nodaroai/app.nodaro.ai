@@ -1,11 +1,13 @@
 import type React from "react"
 import type { BlueprintProps } from "./types"
-import { TitlecardReveal } from "./titlecard-reveal"
-import { KineticTypeBeats } from "./kinetic-type-beats"
+import { ComparisonSplit } from "./comparison-split"
+import { CtaMorphPress } from "./cta-morph-press"
 import { DatavizCountup } from "./dataviz-countup"
 import { GridCardAssemble } from "./grid-card-assemble"
+import { KineticTypeBeats } from "./kinetic-type-beats"
 import { LogoAssembleLockup } from "./logo-assemble-lockup"
-import { CtaMorphPress } from "./cta-morph-press"
+import { TitlecardReveal } from "./titlecard-reveal"
+import { TypewriterReveal } from "./typewriter-reveal"
 
 /**
  * Maps every known blueprint id to its Remotion component.
@@ -19,10 +21,12 @@ import { CtaMorphPress } from "./cta-morph-press"
  * Both must be kept in sync when a new blueprint is added.
  */
 export const BLUEPRINT_REGISTRY: Record<string, React.FC<BlueprintProps>> = {
+  "comparison-split": ComparisonSplit,
   "cta-morph-press": CtaMorphPress,
   "dataviz-countup": DatavizCountup,
   "grid-card-assemble": GridCardAssemble,
   "kinetic-type-beats": KineticTypeBeats,
   "logo-assemble-lockup": LogoAssembleLockup,
   "titlecard-reveal": TitlecardReveal,
+  "typewriter-reveal": TypewriterReveal,
 }
