@@ -27,6 +27,7 @@ import {
   AI_AVATAR_SOURCE_OPTIONS,
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
+  COLLAGE_ASPECT_RATIOS,
   IMAGE_GEN_MODELS,
   getAspectRatiosForModel,
   IMAGE_RESOLUTION_OPTIONS,
@@ -377,6 +378,36 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
         { value: "2", label: "× 2" },
         { value: "3", label: "× 3" },
         { value: "4", label: "× 4" },
+      ],
+    },
+  ],
+  // ── Image Collage (layout · aspect · resolution) ──
+  // No provider/model — a local FFmpeg composite. Aspect values are single-sourced
+  // from COMPOSITION_RATIOS (the same list the config panel renders) so the strip
+  // and panel can't drift; labels are compacted to the bare ratio for the pill.
+  "image-collage": [
+    {
+      field: "layout",
+      ariaLabel: "Layout",
+      icon: LayoutGrid,
+      options: [
+        { value: "smart", label: "Smart" },
+        { value: "grid", label: "Grid" },
+      ],
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      options: COLLAGE_ASPECT_RATIOS.map((r) => ({ value: r.value, label: r.value })),
+    },
+    {
+      field: "resolution",
+      ariaLabel: "Resolution",
+      icon: Maximize2,
+      options: [
+        { value: "2K", label: "2K" },
+        { value: "4K", label: "4K" },
       ],
     },
   ],

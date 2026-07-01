@@ -38,8 +38,12 @@ export interface DirectorDeps {
   createRenderJob(plan: unknown, userId: string): Promise<{ jobId: string }>
   /** Block until a job reaches a terminal state; return its output_data. */
   waitForJob(jobId: string): Promise<{ output: Record<string, unknown> }>
-  /** Optional progress hook — called before each pipeline step. */
-  onProgress?(step: string): void
+  /** Optional progress hook — called (and AWAITED) before each pipeline step.
+   *  Awaited so an async progress write (the worker updates the jobs row) always
+   *  completes before the next step — otherwise a stale progress write can land
+   *  after the terminal failed/completed write and leave a failed job stuck at
+   *  "processing". */
+  onProgress?(step: string): void | Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +72,7 @@ export async function runVideoDirector(
   const { userId } = opts
 
   // ── 1. Author ──────────────────────────────────────────────────────────────
-  deps.onProgress?.("authoring")
+  await deps.onProgress?.("authoring")
   let authored: AuthoredSequence
   try {
     authored = await deps.author(opts)
@@ -77,7 +81,7 @@ export async function runVideoDirector(
   }
 
   // ── 2. Speech ──────────────────────────────────────────────────────────────
-  deps.onProgress?.("speech")
+  await deps.onProgress?.("speech")
   let speechJobId: string
   try {
     const r = await deps.createSpeechJob(authored.voScript, userId)
@@ -92,7 +96,7 @@ export async function runVideoDirector(
   if (!audioUrl) throw new Error("speech: no audioUrl in job output")
 
   // ── 3. Alignment ───────────────────────────────────────────────────────────
-  deps.onProgress?.("alignment")
+  await deps.onProgress?.("alignment")
   let alignJobId: string
   try {
     const r = await deps.createAlignmentJob(audioUrl, authored.voScript, userId)
@@ -107,7 +111,7 @@ export async function runVideoDirector(
   if (!alignment) throw new Error("alignment: no alignment in job output")
 
   // ── 4. Bake (resolve) ──────────────────────────────────────────────────────
-  deps.onProgress?.("resolve")
+  await deps.onProgress?.("resolve")
   let plan: ShotSequencePlan
   try {
     const baked = bakeShotSequence(authored.shotSequenceBrief, alignment, audioUrl)
@@ -117,7 +121,7 @@ export async function runVideoDirector(
   }
 
   // ── 5. Render ──────────────────────────────────────────────────────────────
-  deps.onProgress?.("render")
+  await deps.onProgress?.("render")
   let renderJobId: string
   try {
     const r = await deps.createRenderJob(plan, userId)

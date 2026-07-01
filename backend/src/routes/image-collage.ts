@@ -15,8 +15,14 @@ const imageCollageBody = z.object({
     .min(2, "At least 2 images required")
     .max(30, "At most 30 images"),
   layout: z.enum(["smart", "grid"]).optional().default("smart"),
-  resolution: z.enum(["2K", "4K"]).optional().default("2K"),
-  aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:5"]).optional().default("1:1"),
+  resolution: z.enum(["2K", "4K"]).optional().default("4K"),
+  // Any "W:H" (1–2 digits each). Parsed generically by resolveCollageCanvas, so
+  // new frontend ratios need no route change (no enum to keep in sync).
+  aspectRatio: z
+    .string()
+    .regex(/^([1-9]\d?):([1-9]\d?)$/, "Expected a W:H ratio like 4:3")
+    .optional()
+    .default("4:3"),
   /** Gap between cells + outer margin, in px on the output canvas. */
   gap: z.number().int().min(0).max(200).optional().default(24),
   /** "#RRGGBB" hex; the '#' is optional. Shown in the gaps. */

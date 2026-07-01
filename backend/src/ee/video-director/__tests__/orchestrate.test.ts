@@ -121,12 +121,38 @@ describe("runVideoDirector", () => {
   it("(a) calls pipeline steps in the correct order", async () => {
     const callLog: string[] = []
     const deps = buildDeps({
-      onProgress: (step: string) => callLog.push(step),
+      onProgress: (step: string) => {
+        callLog.push(step)
+      },
     })
 
     await runVideoDirector(BASE_OPTS, deps)
 
     expect(callLog).toEqual(["authoring", "speech", "alignment", "resolve", "render"])
+  })
+
+  it("(a2) awaits onProgress before the next step so a stale progress write can't stomp the terminal status", async () => {
+    // Regression: the worker's onProgress does an async jobs-row `status:processing`
+    // update. If runVideoDirector fires it un-awaited, that write can land AFTER the
+    // terminal (failed/completed) write, leaving a failed job stuck at "processing".
+    // Assert onProgress's async work COMPLETES before the next step runs.
+    const order: string[] = []
+    const deps = buildDeps({
+      onProgress: async (step: string) => {
+        await Promise.resolve() // model the async supabase update (a microtask hop)
+        order.push(`progress:${step}`)
+      },
+      createSpeechJob: vi.fn(async () => {
+        order.push("speech-job")
+        return { jobId: "speech-1" }
+      }),
+    })
+
+    await runVideoDirector(BASE_OPTS, deps)
+
+    // onProgress("speech") must be fully awaited before createSpeechJob is invoked.
+    // Un-awaited, "speech-job" records first and this fails.
+    expect(order.indexOf("progress:speech")).toBeLessThan(order.indexOf("speech-job"))
   })
 
   it("(b) passes alignment from alignment job + audioUrl from speech job to bakeShotSequence", async () => {

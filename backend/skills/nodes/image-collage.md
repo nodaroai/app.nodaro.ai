@@ -1,7 +1,7 @@
 ---
 node_type: image-collage
-generated_at: 2026-07-01T05:25:12.549Z
-generated_from: f1d45bf2d
+generated_at: 2026-07-01T15:39:01.234Z
+generated_from: f20a5838e
 ---
 
 # Image Collage
@@ -36,8 +36,8 @@ generated_from: f1d45bf2d
 {
   "label": "Image Collage",
   "layout": "smart",
-  "resolution": "2K",
-  "aspectRatio": "1:1",
+  "resolution": "4K",
+  "aspectRatio": "4:3",
   "gap": 24,
   "backgroundColor": "#ffffff",
   "fieldMappings": {},
@@ -73,8 +73,8 @@ generated_from: f1d45bf2d
   "data": {
     "label": "Image Collage",
     "layout": "smart",
-    "resolution": "2K",
-    "aspectRatio": "1:1",
+    "resolution": "4K",
+    "aspectRatio": "4:3",
     "gap": 24,
     "backgroundColor": "#ffffff",
     "fieldMappings": {},

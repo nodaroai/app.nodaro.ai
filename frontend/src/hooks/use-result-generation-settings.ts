@@ -16,6 +16,8 @@ export interface ResultGenerationSettings {
   readonly provider?: string
   readonly aspectRatio?: string
   readonly resolution?: string
+  /** Image Collage layout ("smart" | "grid"). Absent on other node types. */
+  readonly layout?: string
   readonly quality?: string
   readonly seed?: number
   readonly renderingSpeed?: string
@@ -44,6 +46,7 @@ export function selectSettings(job: Job): ResultGenerationSettings {
     provider: str(d.provider),
     aspectRatio: str(d.aspectRatio),
     resolution: str(d.resolution),
+    layout: str(d.layout),
     quality: str(d.quality),
     seed: typeof d.seed === "number" ? d.seed : undefined,
     renderingSpeed: str(d.renderingSpeed),

@@ -33,6 +33,10 @@ interface ResultSettingsInfoProps {
   readonly mediaNoun: string
   /** Apply handler — the caller writes the node-data patch + toasts. */
   readonly onApply: (includePrompt: boolean) => void
+  /** Hide the "Configuration + Prompt" apply button and show a single "Apply
+   *  settings" button — for node types with no prompt (e.g. Image Collage).
+   *  `onApply` is then always called with `false`. */
+  readonly hidePromptApply?: boolean
 }
 
 /**
@@ -54,6 +58,7 @@ export function ResultSettingsInfo({
   isLoading,
   mediaNoun,
   onApply,
+  hidePromptApply,
 }: ResultSettingsInfoProps) {
   const [open, setOpen] = useState(false)
 
@@ -127,14 +132,20 @@ export function ResultSettingsInfo({
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
             {settings ? (
-              <>
-                <Button variant="outline" className="sm:flex-1" onClick={() => apply(true)}>
-                  Configuration + Prompt
-                </Button>
+              hidePromptApply ? (
                 <Button className="sm:flex-1" onClick={() => apply(false)}>
-                  Configuration only
+                  Apply settings
                 </Button>
-              </>
+              ) : (
+                <>
+                  <Button variant="outline" className="sm:flex-1" onClick={() => apply(true)}>
+                    Configuration + Prompt
+                  </Button>
+                  <Button className="sm:flex-1" onClick={() => apply(false)}>
+                    Configuration only
+                  </Button>
+                </>
+              )
             ) : (
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Close

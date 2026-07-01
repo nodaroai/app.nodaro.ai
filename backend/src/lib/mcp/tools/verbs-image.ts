@@ -803,7 +803,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Image Collage",
       description:
         "Composite multiple images into ONE large 2K/4K image. Each item is either { url } or { asset_id } (a Nodaro job id whose output is an image). " +
-        "'smart' layout justifies images into aspect-balanced rows (Google-Photos style, minimal cropping); 'grid' uses uniform cells. " +
+        "No image is ever cropped: 'smart' layout justifies images into aspect-balanced rows at their exact aspect ratios (Google-Photos style; the output height floats to fit); 'grid' uses uniform cells with off-ratio images letterboxed in the background color. " +
         "Returns a job_id with the composited image.",
       inputSchema: {
         images: z
@@ -816,9 +816,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .min(2)
           .max(30)
           .describe("2–30 image sources, each { url } or { asset_id }."),
-        layout: z.enum(["smart", "grid"]).optional().describe("Arrangement algorithm. Default 'smart' (justified rows)."),
-        resolution: z.enum(["2K", "4K"]).optional().describe("Output long-edge resolution. Default '2K' (2560px)."),
-        aspect_ratio: z.enum(["1:1", "16:9", "9:16", "4:5"]).optional().describe("Output canvas aspect ratio. Default '1:1'."),
+        layout: z.enum(["smart", "grid"]).optional().describe("Arrangement algorithm. Default 'smart' (justified rows; output height floats to avoid cropping)."),
+        resolution: z.enum(["2K", "4K"]).optional().describe("Output long-edge resolution. Default '4K' (3840px)."),
+        aspect_ratio: z
+          .string()
+          .regex(/^([1-9]\d?):([1-9]\d?)$/)
+          .optional()
+          .describe("Output canvas ratio as W:H, e.g. '1:1','4:3','3:2','16:9','21:9','4:5','3:4','2:3','9:16'. Exact in 'grid'; a target that steers row count in 'smart'. Default '4:3'."),
         gap: z.number().int().min(0).max(200).optional().describe("Gap between images + outer margin, in px. Default 24."),
         background_color: z
           .string()

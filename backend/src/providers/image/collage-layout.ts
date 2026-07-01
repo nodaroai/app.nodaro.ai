@@ -10,15 +10,24 @@
  * Two modes:
  *   • "smart"  — justified rows (Google-Photos / Flickr style). Images are
  *                partitioned into rows balanced by aspect ratio; each row is
- *                width-justified to fill the canvas, and the row heights are
- *                scaled so they sum to the canvas height. Preserves input
- *                order and respects each image's aspect ratio (minimal crop).
- *   • "grid"   — uniform ceil(√n)-column grid; every cell is identical. The
- *                last (partial) row is centred.
+ *                width-justified to fill the canvas WIDTH. Row heights are the
+ *                NATURAL justified heights (availableWidth / Σaspect), so every
+ *                cell's width∶height equals its image's aspect ratio exactly —
+ *                zero crop, zero letterbox. The overall canvas HEIGHT then
+ *                floats to whatever the rows sum to (the target aspect only
+ *                steers the row count). Preserves input order.
+ *   • "grid"   — uniform ceil(√n)-column grid on the FIXED target canvas; every
+ *                cell is identical. The last (partial) row is centred. Cells are
+ *                letterboxed by the compositor, so no image is cropped here
+ *                either.
+ *
+ * Because smart mode floats the height, `computeCollageLayout` returns the
+ * effective canvas dimensions alongside the rects — the ffmpeg compositor sizes
+ * its canvas to those, not to the requested target.
  *
  * This module is intentionally free of any ffmpeg / sharp / network code so it
  * can be unit-tested exhaustively (see __tests__/collage-layout.test.ts). The
- * ffmpeg compositor consumes the returned rects verbatim.
+ * ffmpeg compositor consumes the returned rects + canvas verbatim.
  */
 
 export interface ImageDim {
@@ -41,6 +50,21 @@ export interface CollageLayoutOpts {
    *  outer margin. Defaults to 0. */
   readonly gap?: number
 }
+
+export interface CollageLayoutResult {
+  /** One integer-pixel rect per input image, in the SAME order as `images`. */
+  readonly rects: Rect[]
+  /** Effective output canvas. Equals the target in grid mode; in smart mode the
+   *  width matches the target but the height FLOATS to fit the justified rows. */
+  readonly canvasW: number
+  readonly canvasH: number
+}
+
+/** Upper bound on the floated smart-mode canvas: the long edge may not exceed
+ *  twice the target's long edge. A collage of extreme-portrait images is
+ *  uniformly scaled down to fit (preserving every aspect → no crop) rather than
+ *  producing a runaway 10k-px image. */
+const SMART_MAX_LONG_EDGE_FACTOR = 2
 
 /** Aspect ratios outside this band would blow up a justified row; clamp them
  *  so a single panoramic/columnar image can't collapse a whole row. */
@@ -108,48 +132,53 @@ function partitionIntoRows(aspects: readonly number[], rowCount: number): number
   return rows
 }
 
+/** Round a canvas dimension DOWN to an even integer (keeps yuv420p / thumbnailer
+ *  encoders happy downstream). */
+function even(v: number): number {
+  const r = Math.round(v)
+  return r - (r % 2)
+}
+
 function computeSmart(
   images: readonly ImageDim[],
-  canvasW: number,
-  canvasH: number,
+  targetW: number,
+  targetH: number,
   gap: number,
-): Rect[] {
+): CollageLayoutResult {
   const n = images.length
   const aspects = images.map(safeAspect)
-  const rowCount = chooseRows(n, canvasW / canvasH)
+  // The target aspect only steers HOW MANY rows we open — it does not squash the
+  // result. A wide target ⇒ fewer, taller rows; a tall target ⇒ more rows.
+  const rowCount = chooseRows(n, targetW / targetH)
   const rows = partitionIntoRows(aspects, rowCount)
   const R = rows.length
 
-  // Provisional row heights: for a row width-justified to fill the canvas,
-  // height = availableWidth / Σ(aspect). Wider rows (more/wider images) get
-  // shorter heights, which is what we then scale to fit the canvas height.
-  const provisional = rows.map((row) => {
-    const availW = canvasW - gap * (row.length + 1)
+  // NATURAL justified row heights: for a row width-justified to fill the canvas
+  // width, height = availableWidth / Σ(aspect). At this exact height every cell
+  // in the row has width∶height == its image's aspect ratio, so nothing is
+  // cropped. We do NOT rescale these to a fixed canvas height — the height
+  // floats to their sum instead.
+  const rowHeights = rows.map((row) => {
+    const availW = targetW - gap * (row.length + 1)
     const aspectSum = row.reduce((s, idx) => s + aspects[idx]!, 0)
     return availW / Math.max(0.0001, aspectSum)
   })
-
-  const availH = canvasH - gap * (R + 1)
-  const provisionalSum = provisional.reduce((s, h) => s + h, 0)
-  const scale = availH / Math.max(0.0001, provisionalSum)
 
   const rects: Rect[] = new Array(n)
   let y = gap
   for (let r = 0; r < R; r++) {
     const row = rows[r]!
-    // Final row height. Last row absorbs rounding so the collage bottom lands
-    // exactly on the canvas edge.
-    const rawH = provisional[r]! * scale
-    const rowH = r === R - 1 ? canvasH - gap - y : rawH
-    const availW = canvasW - gap * (row.length + 1)
+    const rowH = rowHeights[r]!
+    const availW = targetW - gap * (row.length + 1)
     const aspectSum = row.reduce((s, idx) => s + aspects[idx]!, 0)
 
     let x = gap
     for (let c = 0; c < row.length; c++) {
       const idx = row[c]!
       const rawW = (availW * aspects[idx]!) / aspectSum
-      // Last cell in the row absorbs rounding so the row edge lands exactly.
-      const cellW = c === row.length - 1 ? canvasW - gap - x : rawW
+      // Last cell in the row absorbs horizontal rounding so the row edge lands
+      // exactly on the canvas width (sub-pixel aspect change only).
+      const cellW = c === row.length - 1 ? targetW - gap - x : rawW
       rects[idx] = {
         x: Math.round(x),
         y: Math.round(y),
@@ -160,7 +189,31 @@ function computeSmart(
     }
     y += rowH + gap
   }
-  return rects
+
+  let canvasW = targetW
+  let canvasH = y // gap + Σ(rowH + gap) — the floated height.
+
+  // Safety cap: extreme-portrait inputs can float the height very high. Uniformly
+  // scale the whole layout down so the long edge stays bounded. A uniform scale
+  // preserves every cell's aspect ratio, so it still never crops.
+  const maxLong = Math.max(targetW, targetH) * SMART_MAX_LONG_EDGE_FACTOR
+  const long = Math.max(canvasW, canvasH)
+  if (long > maxLong) {
+    const f = maxLong / long
+    for (let i = 0; i < n; i++) {
+      const rr = rects[i]!
+      rects[i] = {
+        x: Math.round(rr.x * f),
+        y: Math.round(rr.y * f),
+        w: Math.max(1, Math.round(rr.w * f)),
+        h: Math.max(1, Math.round(rr.h * f)),
+      }
+    }
+    canvasW *= f
+    canvasH *= f
+  }
+
+  return { rects, canvasW: even(canvasW), canvasH: even(canvasH) }
 }
 
 function computeGrid(
@@ -168,7 +221,7 @@ function computeGrid(
   canvasW: number,
   canvasH: number,
   gap: number,
-): Rect[] {
+): CollageLayoutResult {
   const n = images.length
   const cols = Math.ceil(Math.sqrt(n))
   const rowCount = Math.ceil(n / cols)
@@ -194,19 +247,22 @@ function computeGrid(
       h: Math.max(1, Math.round(cellH)),
     }
   }
-  return rects
+  // Grid keeps the exact requested canvas (uniform cells fill it edge-to-edge).
+  return { rects, canvasW, canvasH }
 }
 
 /**
- * Compute the collage layout. Returns one integer-pixel rect per input image,
- * in the SAME order as `images`. Throws on an empty image list.
+ * Compute the collage layout. Returns one integer-pixel rect per input image
+ * (SAME order as `images`) plus the effective canvas: grid mode keeps the
+ * requested target; smart mode fixes the width and FLOATS the height so every
+ * image keeps its exact aspect ratio. Throws on an empty image list.
  */
 export function computeCollageLayout(
   images: readonly ImageDim[],
   canvasW: number,
   canvasH: number,
   opts: CollageLayoutOpts = {},
-): Rect[] {
+): CollageLayoutResult {
   if (images.length === 0) {
     throw new Error("computeCollageLayout: at least one image is required")
   }
