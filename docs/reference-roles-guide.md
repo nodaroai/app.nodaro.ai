@@ -76,7 +76,13 @@ when the source's default lock is off. Locations use their own built-in wording:
 
 > `Lock the exact look of reference image A — match the location's architecture, layout, and lighting.`
 
-The per-mention toggle applies to the default (hybrid) reference format only.
+The reverse is also available: a trailing **`~nolock`** (`@kira:1:face~nolock`) forces the lock
+**off** for that one mention — even when the reference's own default lock is on. So `~lock` and
+`~nolock` are a symmetric pair: force-on and force-off; a mention with neither simply inherits the
+reference's default. `~nolock` is typed directly into the prompt (the pill menu's toggle only sets
+force-on or inherit).
+
+The per-mention toggles apply to the default (hybrid) reference format only.
 
 ## Combining references
 

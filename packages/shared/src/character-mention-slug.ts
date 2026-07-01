@@ -33,11 +33,12 @@ export interface CharacterMentionTokenInfo {
   readonly usageMode: UsageMode | null
   /**
    * Additive per-mention identity-lock sentinel (Unified Reference Roles,
-   * Task 4). `true` when the token carried a trailing `~lock`
-   * (`@kira:1:face~lock`); ABSENT (undefined) otherwise, so a lock-less token
-   * stays byte-identical to the pre-Task-4 shape. Only ACTED UPON by the HYBRID
-   * resolvers (force `identityLock.enabled = true` for the ref); the LEGACY
-   * resolvers ignore it entirely, so `~lock` is inert on the legacy path.
+   * Task 4 + F4). Tri-state: `true` (trailing `~lock`, force lock ON) |
+   * `false` (trailing `~nolock`, force lock OFF — suppresses a ref-level
+   * `identityLock.enabled = true`) | ABSENT/undefined (neither sentinel —
+   * inherit the ref/source default; byte-identical to the pre-Task-4 shape).
+   * Only ACTED UPON by the HYBRID resolvers; the LEGACY resolvers ignore it
+   * entirely, so both `~lock` and `~nolock` are inert on the legacy path.
    */
   readonly lock?: boolean
   readonly offset: number
@@ -75,15 +76,24 @@ export function parseCharacterMentionToken(
   let rest = text.slice(1)
   if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
 
-  // Additive `~lock` sentinel (Unified Reference Roles, Task 4). Strip a
-  // trailing `~lock` BEFORE splitting on ":" so the segment grammar below is
-  // byte-identical to pre-Task-4 (a `~` can never appear inside a segment —
-  // the shapes are `[a-z][a-z0-9-]*`). A token WITHOUT `~lock` is untouched
-  // here. The parsed `lock` is only honored by the HYBRID resolvers.
-  const lock = rest.endsWith("~lock") || undefined
-  if (lock) rest = rest.slice(0, -"~lock".length)
-  // Spread into each return so a lock-less token gains NO `lock` key.
-  const lockField = lock ? { lock: true } : {}
+  // Additive `~lock` / `~nolock` sentinels (Unified Reference Roles, Task 4 +
+  // F4). Strip a trailing `~nolock` (force lock OFF) or `~lock` (force lock ON)
+  // BEFORE splitting on ":" so the segment grammar below is byte-identical to
+  // pre-Task-4 (a `~` can never appear inside a segment — the shapes are
+  // `[a-z][a-z0-9-]*`). Check `~nolock` FIRST: `"x~nolock".endsWith("~lock")` is
+  // false (last 5 chars "olock"), but the explicit ordering keeps intent clear.
+  // A token with NEITHER sentinel is untouched here and gains NO `lock` key
+  // (byte-identical). The parsed tri-state `lock` (true/false/undefined) is only
+  // honored by the HYBRID resolvers — undefined inherits the ref default, true
+  // forces the lock on, false forces it off.
+  let lockField: { lock?: boolean } = {}
+  if (rest.endsWith("~nolock")) {
+    rest = rest.slice(0, -"~nolock".length)
+    lockField = { lock: false }
+  } else if (rest.endsWith("~lock")) {
+    rest = rest.slice(0, -"~lock".length)
+    lockField = { lock: true }
+  }
 
   // Format: <character>:<index>(:<variant|mode>)?(:<mode>)?.
   // Splitting on ":" requires 2–4 parts (no bare @character anymore).
@@ -137,10 +147,12 @@ export function findCharacterMentionTokens(
   // for the rationale. The two optional trailing `:<slug>` groups absorb
   // either `:<variant>`, `:<mode>`, or `:<variant>:<mode>`; the parser
   // disambiguates which segment is which based on `USAGE_MODES`. The optional
-  // trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock sentinel
-  // INTO the token (so it is spliced out at resolve time); it is optional, so a
-  // lock-less token matches byte-identically to before.
-  const regex = /(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\d+(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?(?:~lock(?![a-z0-9-]))?)/g
+  // trailing `(?:~(?:no)?lock)?` absorbs the additive Task-4/F4 identity-lock
+  // sentinel (`~lock` force-on OR `~nolock` force-off) INTO the token (so it is
+  // spliced out at resolve time); it is optional, so a lock-less token matches
+  // byte-identically to before. The `(?![a-z0-9-])` word boundary keeps
+  // `~locked` / `~nolockx` literal.
+  const regex = /(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\d+(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?(?:~(?:no)?lock(?![a-z0-9-]))?)/g
   const knownSet = new Set(knownCharacterSlugs)
   for (const match of prompt.matchAll(regex)) {
     const token = match[1]

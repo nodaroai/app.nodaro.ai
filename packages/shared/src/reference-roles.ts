@@ -80,23 +80,22 @@ export function normalizeRoleSlug(slug: string): string {
  *
  * Shared by BOTH the image (`renderExtraRefsHybrid` in `prompt-builder.ts`) and
  * video (`resolveVideoReferenceCore` extras first-sight in
- * `video-reference-resolver.ts`) resolvers — but they share the HELPER, not its
- * INPUT, so they are NOT fully converged:
+ * `video-reference-resolver.ts`) resolvers — and, as of the Reference Roles
+ * deferred-follow-up, they share the HELPER **and** its INPUT, so they are
+ * fully converged:
  *   - image passes the COALESCED `defaultUsageMode`
  *     (`usageMode` → char-node default → "identical", folded by
- *     `expandExtraRefsToConnectedReferences`) → always defined, so an extra
- *     honors the character node's default mode. No variant fallback is needed
- *     (the field can't be undefined for a real character extra).
- *   - video passes the RAW per-ref `usageMode ?? variantSlug` — `usageMode` can
- *     be undefined there, so it legitimately relies on the `?? variantSlug`
- *     fallback and does NOT inherit the char-node default.
- * Consequence: a character whose node default is Face/Pose/Style with an
- * un-overridden extra resolves to that default on image but to "person" on
- * video. The image side was aligned UP to the video preset-gate formula in
- * Reference Roles follow-up F3 (it previously always fell back to
- * `defaultRoleForSource`, ignoring the ref's role); true input convergence
- * (a raw per-ref usageMode on `ConnectedReference`, or coalescing on the video
- * caller) is a live-prompt decision, deferred.
+ *     `expandExtraRefsToConnectedReferences`).
+ *   - video passes its COALESCED `effectiveMode`
+ *     (`ex.usageMode` → char-node default (`lookupCharacterBySlug`) →
+ *     "identical") — the identical resolution chain, already computed for the
+ *     legacy directive path.
+ * Both are always defined for a real character extra, so no `variantSlug`
+ * fallback is needed on either side. A character whose node default is
+ * Face/Pose/Style now resolves an un-overridden extra to that default on BOTH
+ * image and video (and consistently with the video legacy path). The single
+ * source of truth for the coalescing is the per-ref override → char-node
+ * default → "identical" chain, applied at both call sites.
  */
 export function firstSightExtraRole(
   segment: string | null | undefined,

@@ -10,11 +10,13 @@ export interface CharacterRefAttrs {
   imageIndex: number
   variantSlug: string | null
   usageMode: UsageMode | null
-  /** Per-mention identity-lock (Unified Reference Roles, Task 4). When true the
-   *  pill serializes a trailing `~lock` sentinel (`@kira:1:face~lock`) that the
-   *  HYBRID resolvers turn into a per-reference lock line. HYBRID-only: legacy
-   *  never sets it (the toggle is hidden and promotion strips it). Optional so a
-   *  lock-less parse stays byte-identical to the pre-Task-4 attr shape. */
+  /** Per-mention identity-lock (Unified Reference Roles, Task 4 + F4).
+   *  Tri-state: `true` → pill serializes `~lock` (force ON); `false` → pill
+   *  serializes `~nolock` (force OFF, suppresses a ref-level enabled lock);
+   *  `undefined` → NO sentinel (inherit — byte-identical to the pre-Task-4 attr
+   *  shape). HYBRID-only: legacy never sets it (the toggle is hidden and
+   *  promotion strips it). The menu only sets `true`/`undefined`; `false`
+   *  reaches the pill via a hand-typed/API `~nolock` token. */
   lock?: boolean
 }
 
@@ -30,19 +32,26 @@ export interface CharacterRefAttrs {
  * `foo@bar` are not promoted to pills. The capturing group still starts at
  * the `@`.
  */
-// The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
-// sentinel; it is non-capturing (segment capture groups 1–4 are unchanged) and
-// optional, so a lock-less token matches byte-identically. Lock presence is
-// detected from the full matched string via `matchHasLock`.
-const CHAR_REF_PATTERN_CORE = "(@[a-z][a-z0-9-]*):(\\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~lock(?![a-z0-9-]))?"
+// The optional trailing `(?:~(?:no)?lock)?` absorbs the additive Task-4/F4
+// identity-lock sentinel (`~lock` force-on OR `~nolock` force-off); it is
+// non-capturing (segment capture groups 1–4 are unchanged) and optional, so a
+// lock-less token matches byte-identically. The tri-state lock is read from the
+// full matched string via `matchLockState`.
+const CHAR_REF_PATTERN_CORE = "(@[a-z][a-z0-9-]*):(\\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~(?:no)?lock(?![a-z0-9-]))?"
 
-/** True when a matched mention string ends with the `~lock` sentinel. */
-function matchHasLock(full: string): boolean {
-  return /~lock$/.test(full)
+/** Tri-state lock sentinel read from a matched mention string: `~lock` → true
+ *  (force on), `~nolock` → false (force off), neither → undefined (inherit).
+ *  Checks `~nolock` FIRST (belt-and-braces — `"…~nolock".endsWith("~lock")` is
+ *  already false). */
+function matchLockState(full: string): boolean | undefined {
+  if (/~nolock$/.test(full)) return false
+  if (/~lock$/.test(full)) return true
+  return undefined
 }
 
-/** HYBRID is the only format that honors `~lock` on promotion — legacy strips
- *  it so a stray sentinel never flips a legacy pill's (hidden) lock on. */
+/** HYBRID is the only format that honors the lock sentinels on promotion —
+ *  legacy strips them so a stray sentinel never flips a legacy pill's (hidden)
+ *  lock on/off. */
 function lockHonored(): boolean {
   return IMAGE_REFERENCE_FORMAT === "hybrid"
 }
@@ -88,15 +97,15 @@ function parseMatchAttrs(
   indexStr: string,
   third: string | undefined,
   fourth: string | undefined,
-  lock = false,
+  lock: boolean | undefined = undefined,
 ): CharacterRefAttrs | null {
   const characterSlug = characterWithAt.slice(1) // drop leading "@"
   const imageIndex = parseInt(indexStr, 10)
   if (!Number.isInteger(imageIndex) || imageIndex < 1) return null
 
-  // Spread into each return so a lock-less parse gains NO `lock` key (byte-
-  // identical to the pre-Task-4 attr shape).
-  const lockField = lock ? { lock: true } : {}
+  // Tri-state (Task F4). Spread into each return so a lock-less parse gains NO
+  // `lock` key (byte-identical); `~lock` → true, `~nolock` → false.
+  const lockField = lock === true ? { lock: true } : lock === false ? { lock: false } : {}
 
   // 2-part: @kira:1
   if (third === undefined && fourth === undefined) {
@@ -169,12 +178,22 @@ export const CharacterRefExtension = Node.create({
             ? { "data-usage-mode": String(attrs.usageMode) }
             : {},
       },
-      // Per-mention identity-lock (Task 4). Boolean; renders `data-lock` only
-      // when on so lock-off pill HTML stays byte-identical.
+      // Per-mention identity-lock (Task 4 + F4). Tri-state true/false/undefined;
+      // default undefined (inherit) so a lock-less pill renders NO `data-lock`
+      // and NO sentinel (byte-identical). `data-lock` is emitted only for an
+      // explicit force-on (`"true"`) or force-off (`"false"`).
       lock: {
-        default: false,
-        parseHTML: (el) => el.getAttribute("data-lock") === "true",
-        renderHTML: (attrs) => (attrs.lock ? { "data-lock": "true" } : {}),
+        default: undefined,
+        parseHTML: (el) => {
+          const v = el.getAttribute("data-lock")
+          return v === "true" ? true : v === "false" ? false : undefined
+        },
+        renderHTML: (attrs) =>
+          attrs.lock === true
+            ? { "data-lock": "true" }
+            : attrs.lock === false
+              ? { "data-lock": "false" }
+              : {},
       },
     }
   },
@@ -212,9 +231,11 @@ export const CharacterRefExtension = Node.create({
     const parts: string[] = [`@${a.characterSlug}:${a.imageIndex}`]
     if (a.variantSlug) parts.push(a.variantSlug)
     if (a.usageMode) parts.push(a.usageMode)
-    // Additive `~lock` sentinel LAST (after all colon segments) so the shared
-    // parser reads it as the trailing per-mention lock flag.
-    return parts.join(":") + (a.lock ? "~lock" : "")
+    // Additive tri-state lock sentinel LAST (after all colon segments) so the
+    // shared parser reads it as the trailing per-mention lock flag: `true` →
+    // `~lock`, `false` → `~nolock`, `undefined` → nothing (byte-identical).
+    const lockSuffix = a.lock === true ? "~lock" : a.lock === false ? "~nolock" : ""
+    return parts.join(":") + lockSuffix
   },
 
   addNodeView() {
@@ -259,7 +280,9 @@ export const CharacterRefExtension = Node.create({
           const indexStr = match[3]
           const third = match[4]
           const fourth = match[5]
-          const lock = lockHonored() && matchHasLock(match[1])
+          // Tri-state (Task F4). In legacy, force `undefined` (inert) so a stray
+          // sentinel never sets a legacy pill's (hidden) lock.
+          const lock = lockHonored() ? matchLockState(match[1]) : undefined
           const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
           // Returning false tells `nodeInputRule` to skip the rule — leaves
           // the typed text alone (e.g. a 3-part token whose 3rd segment is
@@ -295,7 +318,7 @@ export const CharacterRefExtension = Node.create({
           const indexStr = match[2]
           const third = match[3]
           const fourth = match[4]
-          const lock = lockHonored() && matchHasLock(match[0])
+          const lock = lockHonored() ? matchLockState(match[0]) : undefined
           const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
           if (!attrs) return false
           const known = knownCharacterSlugs(self)
@@ -341,7 +364,7 @@ export function parseCharacterRefMatch(
   indexStr: string,
   third: string | undefined,
   fourth: string | undefined,
-  lock = false,
+  lock: boolean | undefined = undefined,
 ): CharacterRefAttrs | null {
   return parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
 }

@@ -22,10 +22,12 @@ export interface LocationRefAttrs {
    *  mode pills. Round-trips through `renderText` as the 3rd segment so the
    *  downstream shared parser sees the exact hand-typed token. */
   role: string | null
-  /** Per-mention identity-lock (Unified Reference Roles, Task 4). When true the
-   *  pill serializes a trailing `~lock` sentinel that the HYBRID location
-   *  resolver turns into a per-reference lock line. HYBRID-only (legacy strips
-   *  it on promotion). Optional so a lock-less parse stays byte-identical. */
+  /** Per-mention identity-lock (Unified Reference Roles, Task 4 + F4).
+   *  Tri-state: `true` → `~lock` (force ON); `false` → `~nolock` (force OFF,
+   *  suppresses a ref-level enabled lock); `undefined` → NO sentinel (inherit —
+   *  byte-identical). HYBRID-only (legacy strips it on promotion). The menu only
+   *  sets `true`/`undefined`; `false` reaches the pill via a hand-typed/API
+   *  `~nolock` token. */
   lock?: boolean
 }
 
@@ -49,12 +51,12 @@ export interface LocationRefAttrs {
  * have seen for a hand-typed slug.
  */
 const LOCATION_REF_SEGMENT = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
-// The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
-// sentinel INTO the single captured token (passed whole to
-// `parseLocationMentionToken`, which strips it); optional, so a lock-less token
-// matches byte-identically.
+// The optional trailing `(?:~(?:no)?lock)?` absorbs the additive Task-4/F4
+// identity-lock sentinel (`~lock` force-on OR `~nolock` force-off) INTO the
+// single captured token (passed whole to `parseLocationMentionToken`, which
+// strips it); optional, so a lock-less token matches byte-identically.
 const LOCATION_REF_PATTERN_CORE =
-  `(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_REF_SEGMENT})?(?::${LOCATION_REF_SEGMENT})?(?:~lock(?![a-z0-9-]))?)`
+  `(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_REF_SEGMENT})?(?::${LOCATION_REF_SEGMENT})?(?:~(?:no)?lock(?![a-z0-9-]))?)`
 
 /**
  * Parse the captured token into a complete attribute set. Delegates to the
@@ -73,9 +75,10 @@ function parseMatchAttrs(token: string): LocationRefAttrs | null {
     variant: parsed.variant,
     usageMode: parsed.usageMode,
     role: parsed.role ?? null,
-    // Additive `~lock` (Task 4): only present when true so a lock-less parse
-    // stays byte-identical to the pre-Task-4 attr shape.
-    ...(parsed.lock ? { lock: true } : {}),
+    // Additive tri-state lock (Task 4 + F4): `~lock` → true, `~nolock` → false,
+    // neither → NO key so a lock-less parse stays byte-identical to the pre-Task-4
+    // attr shape.
+    ...(parsed.lock === true ? { lock: true } : parsed.lock === false ? { lock: false } : {}),
   }
 }
 
@@ -127,10 +130,11 @@ export function resolvePromotableAttrs(
   if (!attrs) return false
   if (!knownLocationSlugs(extension).has(attrs.locationSlug)) return false
   if (attrs.role && IMAGE_REFERENCE_FORMAT !== "hybrid") return false
-  // `~lock` is a HYBRID-only construct (Task 4): in LEGACY strip it on promotion
-  // so a stray sentinel from a prior hybrid session never sets a legacy pill's
-  // (hidden, toggle-less) lock. HYBRID keeps it.
-  if (attrs.lock && IMAGE_REFERENCE_FORMAT !== "hybrid") return { ...attrs, lock: false }
+  // The lock sentinels are a HYBRID-only construct (Task 4 + F4): in LEGACY
+  // strip either `~lock` or `~nolock` on promotion (to `undefined`, inert) so a
+  // stray sentinel from a prior hybrid session never sets a legacy pill's
+  // (hidden, toggle-less) lock on/off. HYBRID keeps the tri-state.
+  if (attrs.lock !== undefined && IMAGE_REFERENCE_FORMAT !== "hybrid") return { ...attrs, lock: undefined }
   return attrs
 }
 
@@ -196,12 +200,22 @@ export const LocationRefExtension = Node.create({
         renderHTML: (attrs) =>
           attrs.role ? { "data-location-role": String(attrs.role) } : {},
       },
-      // Per-mention identity-lock (Task 4). Boolean; renders `data-lock` only
-      // when on so lock-off pill HTML stays byte-identical.
+      // Per-mention identity-lock (Task 4 + F4). Tri-state true/false/undefined;
+      // default undefined (inherit) so a lock-less pill renders NO `data-lock`
+      // and NO sentinel (byte-identical). `data-lock` is emitted only for an
+      // explicit force-on (`"true"`) or force-off (`"false"`).
       lock: {
-        default: false,
-        parseHTML: (el) => el.getAttribute("data-lock") === "true",
-        renderHTML: (attrs) => (attrs.lock ? { "data-lock": "true" } : {}),
+        default: undefined,
+        parseHTML: (el) => {
+          const v = el.getAttribute("data-lock")
+          return v === "true" ? true : v === "false" ? false : undefined
+        },
+        renderHTML: (attrs) =>
+          attrs.lock === true
+            ? { "data-lock": "true" }
+            : attrs.lock === false
+              ? { "data-lock": "false" }
+              : {},
       },
     }
   },
@@ -246,9 +260,11 @@ export const LocationRefExtension = Node.create({
     if (a.usageMode) {
       parts.push(a.usageMode)
     }
-    // Additive `~lock` sentinel LAST so the shared parser reads it as the
-    // trailing per-mention lock flag.
-    return parts.join(":") + (a.lock ? "~lock" : "")
+    // Additive tri-state lock sentinel LAST so the shared parser reads it as the
+    // trailing per-mention lock flag: `true` → `~lock`, `false` → `~nolock`,
+    // `undefined` → nothing (byte-identical).
+    const lockSuffix = a.lock === true ? "~lock" : a.lock === false ? "~nolock" : ""
+    return parts.join(":") + lockSuffix
   },
 
   addNodeView() {

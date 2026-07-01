@@ -110,6 +110,10 @@ export function LocationRefView(props: NodeViewProps) {
   // slugs pass through unchanged).
   const roleMenuPresets = locationSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
   const isHybrid = roleMenuPresets !== null
+  // Non-null in hybrid (the gate returned presets); `[]` in legacy — a single
+  // local so the `readonly string[]` cast isn't repeated at each use site
+  // (mirrors `rolePresets` in character-ref-view.tsx).
+  const rolePresets: readonly string[] = roleMenuPresets ?? []
   const currentRolePhrase = useMemo<string | null>(() => {
     if (!isHybrid) return null
     if (attrs.role) return normalizeRoleSlug(attrs.role)
@@ -182,11 +186,14 @@ export function LocationRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
-  // Hybrid identity-lock toggle (Task 4): flip the per-mention `~lock` sentinel
-  // for THIS pill; the hybrid location resolver forces `identityLock.enabled` on
-  // for this reference when set. Kept open so the state change is visible.
+  // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
+  // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
+  // the editor source defaults lock off, inherit == off). The menu NEVER sets
+  // `false` (that would pollute every off token with `~nolock`); the force-off
+  // `~nolock` state (lock:false) is reachable only via a hand-typed/API token,
+  // which still round-trips through parse → attr → renderText.
   const toggleLock = useCallback(() => {
-    props.updateAttributes({ lock: !attrs.lock })
+    props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
   const locationDisplay = ref?.label ?? attrs.locationSlug
@@ -312,7 +319,7 @@ export function LocationRefView(props: NodeViewProps) {
           // legacy it's the usage-mode list — keeping the legacy estimate
           // byte-identical to before.
           const vocabCount = isHybrid
-            ? (roleMenuPresets as readonly string[]).length + 1
+            ? rolePresets.length + 1
             : LOCATION_MODE_PRESETS_LIVE.length
           const MENU_H_ESTIMATE = (vocabCount + 2) * 32 + 16
           const MARGIN = 4
@@ -365,7 +372,7 @@ export function LocationRefView(props: NodeViewProps) {
                     {currentRolePhrase == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />
-                  {(roleMenuPresets as readonly string[]).map((roleP) => (
+                  {rolePresets.map((roleP) => (
                     <button
                       key={roleP}
                       type="button"

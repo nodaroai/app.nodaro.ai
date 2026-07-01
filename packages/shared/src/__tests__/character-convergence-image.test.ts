@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { expandExtraRefsToConnectedReferences } from "../extra-refs.js"
-import { firstSightExtraRole } from "../reference-roles.js"
+import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
 import type { ConnectedReference } from "../types.js"
 
 const victoria: ConnectedReference = {
@@ -166,52 +166,52 @@ describe("character reference converges onto the image hybrid form", () => {
     expect(out.prompt).not.toContain("Use these characters:")
   })
 
-  it("INVARIANT: image extra role reflects the COALESCED char-node default via the REAL expander, and diverges from the video RAW formula (Reference Roles F3 review)", () => {
+  it("INVARIANT: image and video extras roles CONVERGE — both honor the coalesced char-node default via their REAL pipelines (Reference Roles deferred-follow-up)", () => {
     // Build the extra the way PRODUCTION does — a raw `ExtraRefInput` with NO
-    // per-ref usageMode override — and run it through the REAL
-    // `expandExtraRefsToConnectedReferences`, not a hand-built ConnectedReference.
-    // The expander coalesces `usageMode` → char-node default → "identical" into
-    // `defaultUsageMode`, so for a character extra that field is ALWAYS defined.
-    // The RAW extra input as production produces it: character-sourced, no
-    // per-ref usageMode override, a non-preset picked variant ("look").
-    const rawExtra: { url: string; characterSlug: string; variantSlug: string; usageMode?: "style" } = {
-      url: "https://cdn/kira-look.png",
-      characterSlug: "kira",
-      variantSlug: "look",
-    }
-    const expanded = expandExtraRefsToConnectedReferences(
-      [rawExtra],
-      (slug) => (slug === "kira" ? { defaultUsageMode: "style", displayName: "Kira" } : undefined),
-    )
-    // The char-node default was coalesced in — never undefined for a char extra,
-    // which is exactly why the image call needs NO `?? variantSlug` fallback
-    // (the dropped dead code could never have fired here).
-    expect(expanded).toHaveLength(1)
-    expect(expanded[0].defaultUsageMode).toBe("style")
+    // per-ref usageMode override — and run it through the REAL pipelines on BOTH
+    // sides (not hand-built ConnectedReferences or a mirrored formula). The char
+    // node's default mode is "style"; the extra carries no per-ref override and a
+    // non-preset picked variant ("look").
+    const CHAR_DEFAULT = "style" as const
 
-    const out = buildImagePrompt({
+    // IMAGE side: `expandExtraRefsToConnectedReferences` coalesces `usageMode` →
+    // char-node default → "identical" into `defaultUsageMode` (always defined for
+    // a char extra — which is why the image call needs no `?? variantSlug`).
+    const expanded = expandExtraRefsToConnectedReferences(
+      [{ url: "https://cdn/kira-look.png", characterSlug: "kira", variantSlug: "look" }],
+      (slug) => (slug === "kira" ? { defaultUsageMode: CHAR_DEFAULT, displayName: "Kira" } : undefined),
+    )
+    expect(expanded).toHaveLength(1)
+    expect(expanded[0].defaultUsageMode).toBe(CHAR_DEFAULT)
+    const imageOut = buildImagePrompt({
       provider: "nano-banana-pro",
       prompt: "a portrait",
       connectedReferences: expanded,
       referenceFormat: "hybrid",
     })
-    // IMAGE side reads the COALESCED `defaultUsageMode` → honors the char-node
-    // default even though the extra carried no per-ref override.
-    expect(out.prompt).toContain("the style from reference image A")
-    expect(out.prompt).not.toContain("the person from reference image A")
-    expect(out.prompt).not.toContain("Use these characters:")
+    expect(imageOut.prompt).toContain("the style from reference image A")
+    expect(imageOut.prompt).not.toContain("the person from reference image A")
 
-    // DIVERGENCE PIN: the VIDEO extras path shares `firstSightExtraRole` but feeds
-    // the RAW per-ref `usageMode ?? variantSlug` (here `undefined ?? "look"` →
-    // "look", not a preset → the source default "person"). It does NOT inherit
-    // the char-node default. Image === "style", video === "person" for the SAME
-    // logical extra. True convergence is deferred (a live-prompt decision); this
-    // asserts the current, intentional split so it can't silently change.
-    const imageRole = firstSightExtraRole(expanded[0].defaultUsageMode, "wired-character")
-    // Mirror the video resolver's exact input: RAW `usageMode ?? variantSlug`.
-    const videoRole = firstSightExtraRole(rawExtra.usageMode ?? rawExtra.variantSlug, "wired-character")
-    expect(imageRole).toBe("style")
-    expect(videoRole).toBe("person")
-    expect(imageRole).not.toBe(videoRole)
+    // VIDEO side: the resolver computes the SAME coalesced `effectiveMode`
+    // (`ex.usageMode` → `lookupCharacterBySlug().defaultUsageMode` → "identical")
+    // and now feeds THAT to `firstSightExtraRole`. Same raw extra (no per-ref
+    // override) + same char default → the video first-sight role must ALSO be
+    // "style". This proves convergence through the real video code path, not a
+    // re-derived formula.
+    const videoOut = resolveVideoReferenceCore({
+      prompt: "a portrait",
+      wiredCharRefs: [],
+      extraRefs: [{ url: "https://cdn/kira-look.png", characterSlug: "kira", variantSlug: "look" }],
+      lookupCharacterBySlug: () => ({ characterName: "Kira", defaultUsageMode: CHAR_DEFAULT }),
+      hybridRoles: true,
+    })
+    expect(videoOut.prompt).toContain("the style from @image_1")
+    expect(videoOut.prompt).not.toContain("the person from @image_1")
+
+    // CONVERGENCE: the SAME logical extra yields the SAME role on both surfaces.
+    expect(imageOut.prompt).toContain("the style from reference image A")
+    expect(videoOut.prompt).toContain("the style from @image_1")
+    expect(imageOut.prompt).not.toContain("Use these characters:")
+    expect(videoOut.prompt).not.toContain("Use these characters:")
   })
 })
