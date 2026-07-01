@@ -17,12 +17,14 @@ import { z } from "zod"
  */
 
 export const BLUEPRINT_IDS = [
-  "kinetic-type-beats",
+  "comparison-split",
+  "cta-morph-press",
   "dataviz-countup",
   "grid-card-assemble",
-  "titlecard-reveal",
+  "kinetic-type-beats",
   "logo-assemble-lockup",
-  "cta-morph-press",
+  "titlecard-reveal",
+  "typewriter-reveal",
 ] as const
 
 export type BlueprintId = (typeof BLUEPRINT_IDS)[number]
@@ -33,12 +35,20 @@ const hexColor = z
   .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #RRGGBB")
 
 export const BLUEPRINT_PARAM_SCHEMAS = {
-  /** 1–4 statement lines swap in by hard-cut/scale-pop; accent color for the payoff. */
-  "kinetic-type-beats": z.object({
-    lines: z.array(z.string().min(1)).min(1).max(4),
-    accentColor: hexColor,
-    bgColor: hexColor.optional(),
-    invert: z.boolean().optional(),
+  /** Two labeled panels slide in from opposite sides; optional badges pop near the end. */
+  "comparison-split": z.object({
+    left: z.string().min(1),
+    right: z.string().min(1),
+    leftBadge: z.string().optional(),
+    rightBadge: z.string().optional(),
+    accentColor: hexColor.optional(),
+  }),
+
+  /** A CTA button appears centred; a cursor decelerates in and presses it. */
+  "cta-morph-press": z.object({
+    label: z.string().min(1),
+    sublabel: z.string().optional(),
+    accentColor: hexColor.optional(),
   }),
 
   /** A big number counts up to a value with a label. */
@@ -58,11 +68,12 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     accentColor: hexColor.optional(),
   }),
 
-  /** One clean title (+ optional subtitle) revealed with one restrained move, then held. */
-  "titlecard-reveal": z.object({
-    title: z.string().min(1),
-    subtitle: z.string().optional(),
-    motion: z.enum(["slide-up", "crossfade", "wipe"]).optional(),
+  /** 1–4 statement lines swap in by hard-cut/scale-pop; accent color for the payoff. */
+  "kinetic-type-beats": z.object({
+    lines: z.array(z.string().min(1)).min(1).max(4),
+    accentColor: hexColor,
+    bgColor: hexColor.optional(),
+    invert: z.boolean().optional(),
   }),
 
   /** Brand word letters cascade/assemble into a centred lockup (+ optional tagline). */
@@ -72,9 +83,16 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     accentColor: hexColor.optional(),
   }),
 
-  /** A CTA button appears centred; a cursor decelerates in and presses it. */
-  "cta-morph-press": z.object({
-    label: z.string().min(1),
+  /** One clean title (+ optional subtitle) revealed with one restrained move, then held. */
+  "titlecard-reveal": z.object({
+    title: z.string().min(1),
+    subtitle: z.string().optional(),
+    motion: z.enum(["slide-up", "crossfade", "wipe"]).optional(),
+  }),
+
+  /** Text types in character-by-character with a blinking caret; optional sublabel fades up after. */
+  "typewriter-reveal": z.object({
+    text: z.string().min(1),
     sublabel: z.string().optional(),
     accentColor: hexColor.optional(),
   }),
@@ -98,11 +116,17 @@ export const BLUEPRINT_META: Record<
   BlueprintId,
   { roles: string[]; defaultDurationFrames: number; description: string }
 > = {
-  "kinetic-type-beats": {
-    roles: ["hook"],
+  "comparison-split": {
+    roles: ["feature_showcase"],
+    defaultDurationFrames: 180,
+    description:
+      "Two labeled panels slide in from opposite sides and hold side-by-side with a center divider; optional badges pop near the end.",
+  },
+  "cta-morph-press": {
+    roles: ["cta"],
     defaultDurationFrames: 150,
     description:
-      "1–4 statement lines swap in by hard-cut/scale-pop; final line lands a spring-pop payoff on an accent.",
+      "A CTA button appears centered; a cursor decelerates in and presses it with compression + ripple feedback.",
   },
   "dataviz-countup": {
     roles: ["pain_point"],
@@ -116,11 +140,11 @@ export const BLUEPRINT_META: Record<
     description:
       "N text cards cascade-assemble into a grid with a staggered entrance.",
   },
-  "titlecard-reveal": {
-    roles: ["benefit_highlight"],
-    defaultDurationFrames: 120,
+  "kinetic-type-beats": {
+    roles: ["hook"],
+    defaultDurationFrames: 150,
     description:
-      "One clean title (+ optional subtitle) revealed with one restrained move, then held.",
+      "1–4 statement lines swap in by hard-cut/scale-pop; final line lands a spring-pop payoff on an accent.",
   },
   "logo-assemble-lockup": {
     roles: ["product_intro", "branding"],
@@ -128,11 +152,17 @@ export const BLUEPRINT_META: Record<
     description:
       "Brand word's letters cascade/assemble into a centered lockup (+ optional tagline).",
   },
-  "cta-morph-press": {
-    roles: ["cta"],
-    defaultDurationFrames: 150,
+  "titlecard-reveal": {
+    roles: ["benefit_highlight"],
+    defaultDurationFrames: 120,
     description:
-      "A CTA button appears centered; a cursor decelerates in and presses it with compression + ripple feedback.",
+      "One clean title (+ optional subtitle) revealed with one restrained move, then held.",
+  },
+  "typewriter-reveal": {
+    roles: ["hook", "branding"],
+    defaultDurationFrames: 180,
+    description:
+      "Text types in character-by-character with a blinking caret; optional sublabel fades up after typing finishes, then held.",
   },
 }
 
