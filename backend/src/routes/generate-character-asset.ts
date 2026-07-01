@@ -17,7 +17,9 @@ import {
   CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
   getIdentityLockClause,
+  toIdentityLockMode,
   type CharacterAssetTypeForAspect,
+  type IdentityLockMode,
   type PersonValue,
   type WardrobeValue,
 } from "@nodaro/shared"
@@ -121,6 +123,7 @@ function buildVariantPrompt(
   person?: PersonValue,
   wardrobe?: WardrobeValue,
   hasReferences: boolean = false,
+  identityLockMode?: IdentityLockMode,
 ): string {
   // Derive structured Person + Wardrobe hints once and fold them into the
   // assembled prompt for EVERY asset-type branch (the inner buildBase covers
@@ -140,9 +143,10 @@ function buildVariantPrompt(
   }
   // Identity-lock reinforcement — only when the generation actually has
   // reference images to lock onto (a lock clause with no ref is noise for a
-  // text-to-image render). Reuses the shared strict wording.
+  // text-to-image render). Strength comes from the character's setting; default
+  // 'strict' preserves the shipped behavior and `"off"` yields "" (no clause).
   if (!hasReferences) return withHints
-  const lock = getIdentityLockClause("strict")
+  const lock = getIdentityLockClause(identityLockMode ?? "strict")
   if (!lock) return withHints
   return `${withHints} ${lock.charAt(0).toUpperCase()}${lock.slice(1)}`
 
@@ -295,6 +299,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
     let portraitImageUrl: string | null = null
     let characterPerson: Record<string, unknown> | null = null
     let characterWardrobe: Record<string, unknown> | null = null
+    let characterIdentityLock: IdentityLockMode | undefined = undefined
     let characterReferencePhotos: ReferencePhoto[] | null = null
     let characterPriorAssets: PriorAssetColumn[] = []
     if (parsed.data.attachToCharacterId) {
@@ -306,7 +311,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         // a missing one just drops that column's prior assets from the reference
         // set (graceful degradation, not a failure).
         .select(
-          "source_image_url, canonical_description, person, wardrobe, reference_photos, expressions, angles, body_angles, poses, lighting_variations, outfit_variations",
+          "source_image_url, canonical_description, person, wardrobe, identity_lock, reference_photos, expressions, angles, body_angles, poses, lighting_variations, outfit_variations",
         )
         .eq("id", parsed.data.attachToCharacterId)
         .eq("user_id", userId)
@@ -327,6 +332,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       portraitImageUrl = char.source_image_url as string
       characterPerson = (char.person as Record<string, unknown> | null) ?? null
       characterWardrobe = (char.wardrobe as Record<string, unknown> | null) ?? null
+      characterIdentityLock = toIdentityLockMode((char as Record<string, unknown>).identity_lock)
       characterReferencePhotos =
         ((char as Record<string, unknown>).reference_photos as ReferencePhoto[] | null) ?? null
       characterPriorAssets = characterPriorAssetsFromRow(char as Record<string, unknown>)
@@ -411,6 +417,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       characterPerson ?? undefined,
       characterWardrobe ?? undefined,
       assembledReferenceUrls.length > 0,
+      characterIdentityLock,
     )
 
     // ─────────────────────────────────────────────────────────────────────

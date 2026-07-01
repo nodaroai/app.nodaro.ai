@@ -119,6 +119,8 @@ export interface Character {
    *  Optional on the read surface so existing literal consumers don't break;
    *  the route always returns it (string | null). */
   canonicalDescription?: string | null
+  /** Identity-lock strength for Character Studio asset generation. */
+  identityLock?: "off" | "soft" | "strict"
   deletedAt: string | null
   createdAt: string
   updatedAt: string
@@ -214,6 +216,8 @@ export interface UpsertCharacterInput {
   } | null
   seedPrompt?: string
   canonicalDescription?: string
+  /** Identity-lock strength for Character Studio asset generation (off/soft/strict). */
+  identityLock?: "off" | "soft" | "strict"
   referencePhotos?: ReferencePhoto[]
   /** Per-variant real-life reference URLs. Keys are lowercased+trimmed server-side. */
   realLifeRefsByVariant?: Record<string, string[]>

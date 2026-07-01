@@ -114,6 +114,16 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
           placeholder="Base outfit"
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
+        <select
+          value={s.identityLock ?? "strict"}
+          onChange={(e) => state.patch({ identityLock: e.target.value as "off" | "soft" | "strict" })}
+          title="How strongly to preserve this character's face when generating Studio assets"
+          className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+        >
+          <option value="off">Identity lock: Off — may reinterpret the face</option>
+          <option value="soft">Identity lock: Soft — preserve overall likeness</option>
+          <option value="strict">Identity lock: Strict — clamp to the reference (default)</option>
+        </select>
         <input
           value={s.sourceImageUrl}
           onChange={(e) => state.patch({ sourceImageUrl: e.target.value })}

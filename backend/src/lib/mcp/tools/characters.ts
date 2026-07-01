@@ -84,6 +84,7 @@ interface CharacterRow {
   angles: AssetEntry[] | null
   body_angles: AssetEntry[] | null
   lighting_variations: AssetEntry[] | null
+  identity_lock: string | null
   reference_photos: ReferencePhoto[] | null
   real_life_refs_by_variant: Record<string, string[]> | null
   reference_videos_by_variant: Record<string, string[]> | null
@@ -124,7 +125,7 @@ const SUMMARY_COLUMNS =
   "expressions, poses, motions, angles, body_angles, lighting_variations, updated_at"
 
 const FULL_COLUMNS =
-  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, created_at, updated_at"
+  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, identity_lock, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, created_at, updated_at"
 
 // Free-text style — entities persist style as free text (the save routes + DB
 // column are both z.string().max(50)). A narrow enum 400s inherited styles
@@ -181,6 +182,7 @@ function detail(row: CharacterRow) {
     gender: row.gender,
     style: row.style,
     baseOutfit: row.base_outfit,
+    identityLock: row.identity_lock,
     expressions: row.expressions ?? [],
     poses: row.poses ?? [],
     motions: row.motions ?? [],
@@ -370,6 +372,10 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
           .max(2000)
           .optional()
           .describe("Short prompt fragment that scaffolds the canonical portrait."),
+        identity_lock: z
+          .enum(["off", "soft", "strict"])
+          .optional()
+          .describe("Identity-lock strength for Character Studio asset generation: off / soft / strict (default strict)."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
@@ -383,6 +389,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         style: args.style ?? null,
         base_outfit: args.base_outfit ?? null,
         seed_prompt: args.seed_prompt ?? null,
+        identity_lock: args.identity_lock ?? "strict",
         expressions: [],
         poses: [],
         lighting_variations: [],
@@ -434,6 +441,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         style: STYLE_FIELD.optional(),
         base_outfit: z.string().max(1000).optional(),
         seed_prompt: z.string().max(2000).optional(),
+        identity_lock: z.enum(["off", "soft", "strict"]).optional(),
         expected_updated_at: z
           .string()
           .optional()
@@ -453,6 +461,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
       if (args.style !== undefined) patch.style = args.style
       if (args.base_outfit !== undefined) patch.base_outfit = args.base_outfit
       if (args.seed_prompt !== undefined) patch.seed_prompt = args.seed_prompt
+      if (args.identity_lock !== undefined) patch.identity_lock = args.identity_lock
 
       if (Object.keys(patch).length === 1) {
         return err("Nothing to update — pass at least one field besides id.")
