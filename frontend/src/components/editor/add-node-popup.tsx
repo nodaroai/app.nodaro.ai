@@ -1006,6 +1006,15 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Quality",
     // adminOnly NOT set — image-critic is user-facing (qa-check is admin-only; we deliberately differ)
   },
+  // Processing — Image
+  {
+    type: "image-collage",
+    label: "Image Collage",
+    icon: <LayoutGrid className="h-4 w-4" />,
+    category: "Processing",
+    group: "Image",
+    keywords: ["collage", "grid", "montage", "mosaic", "combine images", "contact sheet", "tile"],
+  },
   // Processing — Video
   {
     type: "combine-videos",

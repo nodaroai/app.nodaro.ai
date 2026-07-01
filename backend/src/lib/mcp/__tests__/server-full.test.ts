@@ -60,9 +60,10 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("ping")).toBe(true)
 
     // 13 generation verbs (image / video / audio / character-location-object)
-    // image: generate_image, modify_image
+    // image: generate_image, modify_image, image_collage
     expect(names.has("generate_image")).toBe(true)
     expect(names.has("modify_image")).toBe(true)
+    expect(names.has("image_collage")).toBe(true)
     // video: generate_video, animate_image, extract_frame, combine_videos,
     // add_captions, extend_video
     expect(names.has("generate_video")).toBe(true)

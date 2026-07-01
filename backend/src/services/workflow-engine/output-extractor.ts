@@ -824,6 +824,9 @@ const IMAGE_RESULT_TYPES = new Set([
   "remove-background",
   "extract-frame",
   "upload-image",
+  // Image Collage: composites N images → one image (generatedImageUrl +
+  // generatedResults[].url like every other image producer).
+  "image-collage",
 ])
 
 export { extractVideoDurationFromNode } from "@nodaro/shared"

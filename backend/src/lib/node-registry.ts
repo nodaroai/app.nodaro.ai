@@ -644,6 +644,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   },
 
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
+  { type: "image-collage", label: "Image Collage", category: "processing", description: "Composite N images into one 2K/4K image with a smart (justified) or grid layout. Local ffmpeg — priced by resolution (2K=2, 4K=4).", outputType: "image", creditCost: "2-4" },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },
   { type: "resize-video", label: "Resize Video", category: "processing", description: "Resize a video.", outputType: "video" },

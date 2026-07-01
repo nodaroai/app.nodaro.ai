@@ -137,7 +137,7 @@ afterEach(async () => {
  *   - "jobs"       -> insert chain returning job-1 by default
  */
 function setupSupabaseMock(opts: {
-  charRow?: { source_image_url: string | null; canonical_description: string | null } | null
+  charRow?: Record<string, unknown> | null
   charError?: { message: string } | null
   jobInsertResult?: { data: { id: string } | null; error: { message: string } | null }
 }) {
@@ -815,5 +815,152 @@ describe("POST /v1/generate-character-asset — quality / resolution levers", ()
 
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Multi-image identity references + identity-lock (design 2026-07-01).
+// ---------------------------------------------------------------------------
+describe("POST /v1/generate-character-asset — identity references", () => {
+  function enqueued(): Record<string, unknown> {
+    return vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+  }
+
+  it("selects reference_photos + the identity asset columns on the studio path", async () => {
+    const { charSelect } = setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/anchor.png", canonical_description: "tall woman" },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        description: "warm smile",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "expressions",
+        attachName: "smile",
+      },
+    })
+
+    expect(charSelect).toHaveBeenCalledTimes(1)
+    const selectArg = charSelect.mock.calls[0][0] as string
+    expect(selectArg).toContain("reference_photos")
+    expect(selectArg).toContain("expressions")
+    expect(selectArg).toContain("body_angles")
+  })
+
+  it("assembles a ranked multi-URL reference set: portrait anchor first, angle-matched photo next, prior asset included", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://cdn/anchor.png",
+        canonical_description: "tall woman",
+        reference_photos: [
+          { url: "https://cdn/left.png", kind: "sideLeft" },
+          { url: "https://cdn/front.png", kind: "frontFace" },
+        ],
+        expressions: [{ name: "smile", url: "https://cdn/expr-smile.png" }],
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "headAngles",
+        variant: "left profile",
+        name: "Kira",
+        description: "left profile",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "angles",
+        attachName: "left profile",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const refs = enqueued().assembledReferenceUrls as string[]
+    expect(refs[0]).toBe("https://cdn/anchor.png") // portrait anchor
+    expect(refs[1]).toBe("https://cdn/left.png") // sideLeft angle-matched for headAngles + left profile
+    expect(refs).toContain("https://cdn/expr-smile.png") // prior generated asset included
+  })
+
+  it("injects the strict identity-lock clause into the prompt when references exist", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/anchor.png", canonical_description: "tall woman" },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        description: "warm smile",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "expressions",
+        attachName: "smile",
+      },
+    })
+
+    expect(enqueued().prompt as string).toContain("facial identity must match")
+  })
+
+  it("omits the identity-lock clause and sends an empty ref set on the non-studio path with no source image", async () => {
+    setupSupabaseMock({ jobInsertResult: { data: { id: "job-1" }, error: null } })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        // no attachToCharacterId, no sourceImageUrl → no references
+      },
+    })
+
+    expect(enqueued().assembledReferenceUrls).toEqual([])
+    expect(enqueued().prompt as string).not.toContain("facial identity must match")
+  })
+
+  it("reserves the per-reference Flux 2 credit tier reflecting the assembled ref count (not the sourceImageUrl heuristic)", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://cdn/anchor.png",
+        canonical_description: "tall woman",
+        reference_photos: [{ url: "https://cdn/front.png", kind: "frontFace" }],
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        description: "warm smile",
+        provider: "flux-2-max",
+        resolution: "2 MP",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "expressions",
+        attachName: "smile",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // portrait anchor + 1 reference photo = 2 refs; the reserved id must reflect
+    // 2ref, not the body-sourceImageUrl-based 0ref that would under-charge Flux 2.
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-1", "flux-2-max:2MP:2ref",
+    )
   })
 })

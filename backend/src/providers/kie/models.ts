@@ -52,6 +52,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     model: "nano-banana-pro",
     credits: 4,
     ***REDACTED-OSS-SCRUB***
+    // Accepts multiple reference images via `image_input` (sent by image.ts).
+    // Cap the identity reference set so multi-ref character-asset generations
+    // stay within the sweet-spot (portrait + up to 5 supporting refs).
+    maxRefImages: 6,
     extraParams: { aspect_ratio: "16:9" },
   },
   "nano-banana-pro": {
@@ -61,6 +65,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     // Pro uses `aspect_ratio` (NOT `image_size`) and supports `resolution` (1K/2K/4K)
     // See: docs.kie.ai/market/google/pro-image-to-image.md
     ***REDACTED-OSS-SCRUB***
+    maxRefImages: 6,
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   // Nano Banana 2 (latest version, uses native aspect_ratio, supports resolution + google_search)

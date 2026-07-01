@@ -21,6 +21,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import type {
   CombineVideosData,
+  ImageCollageData,
   AddCaptionsData,
   ResizeVideoData,
   TrimAudioData,
@@ -1260,6 +1261,73 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export function ImageCollageConfig({ data, onUpdate }: ConfigProps<ImageCollageData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground px-1">
+        Arranges every connected image into one large image. Connect 2+ image
+        producers — or a List of image URLs — to the input handle.
+      </p>
+      <div>
+        <Label>Layout</Label>
+        <Select
+          value={data.layout ?? "smart"}
+          onValueChange={(v) => onUpdate({ layout: v as ImageCollageData["layout"] })}
+        >
+          <SelectTrigger aria-label="Layout"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="smart">Smart (justified — aspect-aware)</SelectItem>
+            <SelectItem value="grid">Grid (uniform cells)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Aspect Ratio</Label>
+        <AspectRatioSelector
+          options={COMPOSITION_RATIOS}
+          value={data.aspectRatio ?? "1:1"}
+          onValueChange={(v) => onUpdate({ aspectRatio: v })}
+        />
+      </div>
+      <div>
+        <Label>Resolution</Label>
+        <Select
+          value={data.resolution ?? "2K"}
+          onValueChange={(v) => onUpdate({ resolution: v as ImageCollageData["resolution"] })}
+        >
+          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2K">2K (2560 px long edge)</SelectItem>
+            <SelectItem value="4K">4K (3840 px long edge)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="collage-gap">Gap: {data.gap ?? 24}px</Label>
+        <input
+          id="collage-gap"
+          type="range"
+          min={0}
+          max={120}
+          step={2}
+          value={data.gap ?? 24}
+          onChange={(e) => onUpdate({ gap: parseInt(e.target.value, 10) })}
+          className="w-full accent-[#ff0073]"
+        />
+      </div>
+      <div>
+        <Label htmlFor="collage-bg">Background Color</Label>
+        <Input
+          id="collage-bg"
+          type="color"
+          value={data.backgroundColor ?? "#ffffff"}
+          onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+        />
+      </div>
     </div>
   )
 }

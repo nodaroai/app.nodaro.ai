@@ -2824,6 +2824,31 @@ export async function combineVideos(
   })
 }
 
+export async function imageCollageApi(
+  imageUrls: string[],
+  opts: {
+    layout?: "smart" | "grid"
+    resolution?: "2K" | "4K"
+    aspectRatio?: string
+    gap?: number
+    backgroundColor?: string
+    userId?: string
+  } = {},
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrls }
+  if (opts.layout) body.layout = opts.layout
+  if (opts.resolution) body.resolution = opts.resolution
+  if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio
+  if (typeof opts.gap === "number") body.gap = opts.gap
+  if (opts.backgroundColor) body.backgroundColor = opts.backgroundColor
+  if (opts.userId) body.userId = opts.userId
+  return apiJson("/v1/image-collage", {
+    body,
+    workflowId: true,
+    label: "Failed to start image collage",
+  })
+}
+
 export async function mergeVideoAudioApi(
   videoUrl: string,
   audioTracks: { url: string; startTime: number; volume?: number; sourceType?: "audio" | "video" }[],

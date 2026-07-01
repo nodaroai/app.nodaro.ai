@@ -122,6 +122,9 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // reference-board → every image consumer (the voice-changer-pro output-drift
   // class). Guarded by connection-validation.test.ts.
   "reference-board",
+  // image-collage composites N images → ONE image (generatedImageUrl). Its
+  // `image` source pip must be enumerable by downstream image consumers.
+  "image-collage",
 ])
 
 /** Identity-locking source node types that feed Subjects. */

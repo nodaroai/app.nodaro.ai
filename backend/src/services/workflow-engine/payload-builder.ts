@@ -3987,6 +3987,28 @@ export function buildPayload(
       })
     }
 
+    case "image-collage": {
+      const collageImageUrls =
+        resolvedInputs.imageUrls || (data.imageUrls as string[] | undefined) || []
+      const resolution = (data.resolution as string | undefined) === "4K" ? "4K" : "2K"
+      return ffmpegResult(
+        "image-collage",
+        {
+          jobId,
+          imageUrls: collageImageUrls,
+          layout: (data.layout as string | undefined) ?? "smart",
+          resolution,
+          aspectRatio: (data.aspectRatio as string | undefined) ?? "1:1",
+          gap: (data.gap as number | undefined) ?? 24,
+          backgroundColor: (data.backgroundColor as string | undefined) ?? "#ffffff",
+          usageLogId,
+        },
+        // Composite id so workflow-run reservations price 4K correctly (the
+        // single-node route uses the creditGuard computeCredits hook instead).
+        `image-collage:${resolution}`,
+      )
+    }
+
     case "merge-video-audio": {
       // Build audioTracks from resolved audioSources (matches frontend mergeVideoAudioApi shape)
       const trackSettings = (data.trackSettings as Record<string, Record<string, unknown>> | undefined) ?? {}

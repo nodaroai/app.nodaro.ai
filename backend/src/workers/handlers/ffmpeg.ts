@@ -7,6 +7,7 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
+import { createImageCollage } from "../../providers/image/collage.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { trimAudio } from "../../providers/video/trim-audio.js"
@@ -643,8 +644,39 @@ const handleRemoveAudio: HandlerFn = async function handleRemoveAudio(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx) {
+  const { imageUrls, layout, resolution, aspectRatio, gap, backgroundColor } = job.data as {
+    jobId: string
+    imageUrls: string[]
+    layout?: "smart" | "grid"
+    resolution?: "2K" | "4K"
+    aspectRatio?: string
+    gap?: number
+    backgroundColor?: string
+  }
+  console.log(`[worker] image-collage ${ctx.jobId}: ${imageUrls.length} images, layout=${layout ?? "smart"}, ${resolution ?? "2K"} ${aspectRatio ?? "1:1"}`)
+
+  const outputPath = await createImageCollage({ imageUrls, layout, resolution, aspectRatio, gap, backgroundColor })
+  await setJobProgress(job, ctx.jobId, 80)
+
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "image", ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { imageUrl: r2Url },
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
+  "image-collage": handleImageCollage,
   "merge-video-audio": handleMergeVideoAudio,
   "trim-audio": handleTrimAudio,
   "trim-video": handleTrimVideo,

@@ -582,6 +582,8 @@ export interface FrontendResolvedInputs {
   faceImageUrl?: string;
   videoUrls?: string[];
   videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
+  /** Images accumulated from every upstream image producer (image-collage). */
+  imageUrls?: string[];
   audioUrl?: string;
   audioUrl2?: string;
   audioUrls?: string[];
@@ -1180,6 +1182,13 @@ export function resolveNodeInputs(
           }
           continue;
         }
+        if (node.type === "image-collage") {
+          // A List of image URLs (edgeMode "all") spreads into imageUrls[].
+          for (const item of filteredSrc) {
+            if (item) inputs.imageUrls = [...(inputs.imageUrls ?? []), item];
+          }
+          continue;
+        }
         if (node.type === "manual-edit") {
           for (const item of filteredSrc) {
             if (item) {
@@ -1289,6 +1298,16 @@ export function resolveNodeInputs(
       output = extractNodeOutput(src, resolvedSourceHandle ?? undefined);
     }
     if (!output) continue;
+
+    // Image Collage accumulates EVERY connected image into imageUrls[] — the
+    // single choke point (like combine-videos → videoUrls). Every valid input
+    // is an image producer (connection-validation gate), so `output` is an
+    // image URL here regardless of source type. MUST precede reference-sheet /
+    // source-type routing so the accumulation wins.
+    if (node.type === "image-collage") {
+      inputs.imageUrls = [...(inputs.imageUrls ?? []), output];
+      continue;
+    }
 
     // Reference Sheet dual-output (MUST precede targetHandle routing, which
     // would otherwise push only the single `output` into referenceImageUrls when

@@ -363,6 +363,9 @@ describe("mediaTabNodeOptions", () => {
       // reference-board is an image producer (emits a composited board image),
       // so it surfaces as an image-input candidate — see IMAGE_PRODUCER_TYPES.
       "reference-board",
+      // image-collage composites N images → one image; it's an image producer
+      // (IMAGE_PRODUCER_TYPES), surfacing here in NODE_OPTIONS pool order.
+      "image-collage",
       "extract-frame",
     ])
   })

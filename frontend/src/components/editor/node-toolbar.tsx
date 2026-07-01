@@ -163,6 +163,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // AI — Quality
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality", adminOnly: true },
   { type: "image-critic", label: "Image Critic", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Quality" },
+  // Processing — Image
+  { type: "image-collage", label: "Image Collage", icon: <LayoutGrid className="h-4 w-4" />, category: "Processing", group: "Image", keywords: ["collage", "grid", "montage", "mosaic", "combine images", "contact sheet", "tile"] },
   // Processing — Video
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },

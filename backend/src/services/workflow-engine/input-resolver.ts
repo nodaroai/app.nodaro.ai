@@ -982,8 +982,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 // Preview routes by actual media type, not always to text (handled in routeOutput)
 // Social-media-format may produce images (handled in routeOutput)
 
-/** Target node types that accumulate inputs into arrays (videoUrls, audioUrls). */
-const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio"])
+/** Target node types that accumulate inputs into arrays (videoUrls, audioUrls,
+ *  imageUrls). image-collage collects every upstream image into imageUrls[]. */
+const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage"])
 
 /** Target node types that consume an upstream list as a single fan-in input.
  *  The resolver collects all upstream items into `inputs.inputs` and skips
@@ -1113,6 +1114,16 @@ function routeOutput(
     const handleId = edge.targetHandle.replace(/^in_/, "")
     if (!inputs.componentInputMap) inputs.componentInputMap = {}
     inputs.componentInputMap[handleId] = output
+    return
+  }
+
+  // --- Image Collage accumulates EVERY connected image into imageUrls[] ---
+  // Single choke point (like combine-videos → videoUrls). Every valid input is
+  // an image producer (frontend handle `accepts` gate + reference-sheet sheet
+  // handle), so `output` is an image URL here regardless of source type. MUST
+  // precede reference-sheet / source-type routing so the accumulation wins.
+  if (targetType === "image-collage") {
+    inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
     return
   }
 

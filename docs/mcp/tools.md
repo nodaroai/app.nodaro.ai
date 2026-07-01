@@ -401,6 +401,7 @@ prompt with no questions round-trip.
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint, or use Nodaro's nano-banana-edit model. |
 | `generate_mask` | Generate or refine a segmentation mask for inpainting workflows. |
+| `image_collage` | Composite 2–30 images into one 2K/4K image with a smart (justified) or grid layout. Accepts `images[]` (`url` or `asset_id`), `layout`, `resolution`, `aspect_ratio`, `gap`, `background_color`. |
 | `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. |
 | `generate_script` | Generate a short video script from a prompt (LLM-backed; outputs scene-by-scene copy). |
 | `save_image_defaults` | Persist preferred `model`, `aspect_ratio`, and `quality` values so they become the defaults for subsequent `generate_image` calls in the same session. |

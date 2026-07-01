@@ -136,6 +136,7 @@ import {
   LipSyncConfig,
   GenerateMusicConfig,
   CombineVideosConfig,
+  ImageCollageConfig,
   AddCaptionsConfig,
   ResizeVideoConfig,
   SocialMediaFormatConfig,
@@ -316,6 +317,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "describe-to-picker": "Describe to Picker",
   "llm-chat": "Generate Text",
   "combine-videos": "Combine Videos",
+  "image-collage": "Image Collage",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
@@ -403,7 +405,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "combine-videos", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "combine-videos", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -598,6 +600,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
     case "video-sfx": return <VideoSfxConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
+    case "image-collage": return <ImageCollageConfig {...configProps} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />
     case "resize-video": return <ResizeVideoConfig {...configProps} />
