@@ -516,7 +516,7 @@ motion / angle / lighting variant with its URL.
 Creates a new character row with identity fields. No portrait — call
 `generate_character` (kind=`"main"`) afterwards.
 
-**Input:** `name`, `description`, `gender`, `style` (`realistic`/`anime`/`3d-pixar`/`illustration`), `base_outfit`, `seed_prompt`
+**Input:** `name`, `description`, `gender`, `style` (`realistic`/`anime`/`3d-pixar`/`illustration`), `base_outfit`, `seed_prompt`, `identity_lock` (`off`/`soft`/`strict` — face-preservation strength for Studio assets, default `strict`)
 
 ---
 

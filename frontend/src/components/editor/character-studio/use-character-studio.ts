@@ -34,7 +34,7 @@ const AUTOSAVE_DEBOUNCE_MS = 600
  *  writes them, so they live here alongside the identity fields. */
 const ALWAYS_PATCH_FIELDS = [
   "characterName", "description", "gender", "style", "baseOutfit", "voice", "personality",
-  "referencePhotos", "seedPrompt", "person", "wardrobe",
+  "referencePhotos", "seedPrompt", "person", "wardrobe", "identityLock",
 ] as const
 
 /** Fields that the WORKER can also write to. The frontend sends them on
@@ -137,6 +137,7 @@ function buildInsertPayload(nodeId: string, d: CharacterNodeData) {
     seedPrompt: d.seedPrompt,
     canonicalDescription: d.canonicalDescription,
     realLifeRefsByVariant: d.realLifeRefsByVariant,
+    identityLock: d.identityLock,
   }
 }
 
@@ -159,6 +160,7 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
     personality: d.personality,
     referencePhotos: d.referencePhotos,
     seedPrompt: d.seedPrompt,
+    identityLock: d.identityLock,
   }
   // Dirty-only fields (worker also writes these — only send what the user
   // changed in this debounce window to avoid clobbering worker appends).

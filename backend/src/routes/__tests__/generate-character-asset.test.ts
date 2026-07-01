@@ -888,11 +888,14 @@ describe("POST /v1/generate-character-asset — identity references", () => {
     expect(refs).toContain("https://cdn/expr-smile.png") // prior generated asset included
   })
 
-  it("injects the strict identity-lock clause into the prompt when references exist", async () => {
+  async function postStudioAsset(identityLock: "off" | "soft" | "strict") {
     setupSupabaseMock({
-      charRow: { source_image_url: "https://example.com/anchor.png", canonical_description: "tall woman" },
+      charRow: {
+        source_image_url: "https://example.com/anchor.png",
+        canonical_description: "tall woman",
+        identity_lock: identityLock,
+      },
     })
-
     await app.inject({
       method: "POST",
       url: "/v1/generate-character-asset",
@@ -907,8 +910,23 @@ describe("POST /v1/generate-character-asset — identity references", () => {
         attachName: "smile",
       },
     })
+    return enqueued().prompt as string
+  }
 
-    expect(enqueued().prompt as string).toContain("facial identity must match")
+  it("identity_lock=strict → strict identity clause in the prompt", async () => {
+    expect(await postStudioAsset("strict")).toContain("facial identity must match")
+  })
+
+  it("identity_lock=soft → soft likeness clause, not the strict wording", async () => {
+    const prompt = await postStudioAsset("soft")
+    expect(prompt).toContain("overall facial likeness")
+    expect(prompt).not.toContain("facial identity must match")
+  })
+
+  it("identity_lock=off → no identity-lock clause even with references present", async () => {
+    const prompt = await postStudioAsset("off")
+    expect(prompt).not.toContain("facial identity must match")
+    expect(prompt).not.toContain("overall facial likeness")
   })
 
   it("omits the identity-lock clause and sends an empty ref set on the non-studio path with no source image", async () => {

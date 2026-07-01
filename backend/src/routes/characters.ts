@@ -120,6 +120,9 @@ export const upsertCharacterBody = z.object({
   // so a runaway client can't blow up the row.
   seedPrompt: z.string().max(2000).optional(),
   canonicalDescription: z.string().max(4000).optional(),
+  // Identity-lock strength for Character Studio asset generation (reuses the
+  // shared IdentityLockMode). The DB column defaults to 'strict'.
+  identityLock: z.enum(["off", "soft", "strict"]).optional(),
   referencePhotos: z
     .array(referencePhoto)
     .max(20)
@@ -177,7 +180,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, person, wardrobe, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, person, wardrobe, personality, canonical_description, identity_lock, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -205,6 +208,7 @@ type CharacterRow = {
   wardrobe: Record<string, unknown> | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
+  identity_lock: string | null
   lora_training_status: string | null
   lora_replicate_version: string | null
   lora_trigger_word: string | null
@@ -248,6 +252,7 @@ function toCamel(c: CharacterRow) {
     wardrobe: c.wardrobe,
     personality: c.personality,
     canonicalDescription: c.canonical_description,
+    identityLock: c.identity_lock,
     loraTrainingStatus: c.lora_training_status,
     loraReplicateVersion: c.lora_replicate_version,
     loraTriggerWord: c.lora_trigger_word,
@@ -544,7 +549,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, boards, voice, person, wardrobe, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, boards, voice, person, wardrobe, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider, identityLock } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -589,6 +594,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (personality !== undefined) patch.personality = personality ?? null
       if (seedPrompt !== undefined) patch.seed_prompt = seedPrompt ?? null
       if (canonicalDescription !== undefined) patch.canonical_description = canonicalDescription ?? null
+      if (identityLock !== undefined) patch.identity_lock = identityLock
       if (referencePhotos !== undefined) patch.reference_photos = referencePhotos
       if (normalizedVariantRefs !== undefined) patch.real_life_refs_by_variant = normalizedVariantRefs
       if (normalizedVideoRefs !== undefined) patch.reference_videos_by_variant = normalizedVideoRefs
@@ -646,6 +652,7 @@ export async function characterRoutes(app: FastifyInstance) {
       personality: personality ?? null,
       seed_prompt: seedPrompt ?? null,
       canonical_description: canonicalDescription ?? null,
+      identity_lock: identityLock ?? "strict",
       reference_photos: referencePhotos ?? [],
       real_life_refs_by_variant: normalizedVariantRefs ?? {},
       reference_videos_by_variant: normalizedVideoRefs ?? {},

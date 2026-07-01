@@ -53,6 +53,7 @@ export function mergeCharacterDetailIntoNodeData(
     referencePhotos: fresh.referencePhotos ?? prev.referencePhotos,
     seedPrompt: fresh.seedPrompt ?? prev.seedPrompt,
     canonicalDescription: fresh.canonicalDescription ?? prev.canonicalDescription,
+    identityLock: fresh.identityLock ?? prev.identityLock,
     realLifeRefsByVariant: fresh.realLifeRefsByVariant ?? prev.realLifeRefsByVariant,
   }
 }

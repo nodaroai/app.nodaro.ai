@@ -810,6 +810,7 @@ const { id } = await client.characters.create({
   description: "young protagonist with auburn hair",
   style: "realistic",
   seedPrompt: "kira portrait, warm natural lighting",
+  identityLock: "strict", // off | soft | strict — face-preservation strength for Studio asset generation (default strict)
 })
 ```
 

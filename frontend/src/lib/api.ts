@@ -799,6 +799,8 @@ export async function saveCharacter(data: {
   seedPrompt?: string
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
+  /** Identity-lock strength for Studio asset generation (default 'strict'). */
+  identityLock?: "off" | "soft" | "strict"
 }): Promise<{ id: string }> {
   return apiJson("/v1/characters", {
     body: data,
@@ -852,6 +854,7 @@ export async function getCharacter(id: string): Promise<{
   seedPrompt?: string
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
+  identityLock?: "off" | "soft" | "strict"
   pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"; name: string }[]
   readonly portraitCandidates?: ReadonlyArray<{
     readonly jobId: string
