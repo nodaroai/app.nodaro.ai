@@ -36,6 +36,12 @@ const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
     rightBadge: "30 seconds",
     accentColor: "#8B5CF6",
   },
+  "constellation-hub": {
+    hubLabel: "NODARO",
+    nodes: [{ label: "Slack" }, { label: "Notion" }, { label: "Figma" }, { label: "GitHub" }],
+    finisher: "orbit",
+    accentColor: "#8B5CF6",
+  },
   "cta-morph-press": {
     label: "Start free",
     sublabel: "No credit card needed",
@@ -61,6 +67,28 @@ const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
     tagline: "Motion. On your words.",
     accentColor: "#8B5CF6",
   },
+  "overwhelm-surround": {
+    surfaces: [{ label: "Email" }, { label: "Editor" }, { label: "Spreadsheet" }],
+    markers: ["Slack", "Docs", "Calendar", "Tickets"],
+    subjectLabel: "You",
+    demands: ["Review this", "Export that", "Re-render", "New format", "Fix timing"],
+    accentColor: "#EF4444",
+  },
+  "spatial-pan-stations": {
+    stations: [
+      { label: "2019", sublabel: "First cut" },
+      { label: "2022", sublabel: "Templates" },
+      { label: "Today", sublabel: "Directed by AI" },
+    ],
+    variant: "timeline",
+    accentColor: "#8B5CF6",
+  },
+  "ticker-takeover": {
+    leadIn: "Your next video could be",
+    options: ["a demo", "an explainer", "a launch"],
+    hero: "NODARO",
+    accentColor: "#8B5CF6",
+  },
   "titlecard-reveal": {
     title: "10× faster to ship",
     subtitle: "No code. No setup.",
@@ -83,7 +111,7 @@ export function registerShotShapeTools(
     {
       title: "List Shot Shapes",
       description:
-        "Return the catalog of all 8 shot-sequence blueprints (id, roles, description, " +
+        `Return the catalog of all ${BLUEPRINT_IDS.length} shot-sequence blueprints (id, roles, description, ` +
         "defaultDurationFrames). A blueprint is a parameterised shot-shape — a named " +
         "animation beat (e.g. kinetic-type-beats, titlecard-reveal) used inside a " +
         "ShotSequenceBrief. Call this BEFORE authoring a brief to pick the right blueprint " +
