@@ -88,3 +88,32 @@ describe("resolveEntityImageCreditIdentifier", () => {
     ).toBe("flux-2-max:1MP:0ref")
   })
 })
+
+describe("resolveEntityImageCreditIdentifier — refCountOverride (multi-image assembly)", () => {
+  it("pins the Flux 2 ref-count to the override (the actual sent count), overriding the sourceImageUrl heuristic", () => {
+    expect(
+      resolveEntityImageCreditIdentifier({ provider: "flux-2-max", resolution: "2 MP" }, 4),
+    ).toBe("flux-2-max:2MP:4ref")
+    // Override wins even when sourceImageUrl is present (would otherwise be 1).
+    expect(
+      resolveEntityImageCreditIdentifier(
+        { provider: "flux-2-max", resolution: "2 MP", sourceImageUrl: "https://x/p.png" },
+        3,
+      ),
+    ).toBe("flux-2-max:2MP:3ref")
+    expect(resolveEntityImageCreditIdentifier({ provider: "flux-2-pro" }, 0)).toBe("flux-2-pro:1MP:0ref")
+  })
+
+  it("is inert for non-ref-priced providers (override changes nothing)", () => {
+    expect(resolveEntityImageCreditIdentifier({ provider: "nano-banana" }, 5)).toBe("nano-banana")
+    expect(
+      resolveEntityImageCreditIdentifier({ provider: "gpt-image", quality: "high" }, 5),
+    ).toBe("gpt-image:high")
+  })
+
+  it("falls back to the sourceImageUrl-based count when no override is given (legacy CHECK behavior)", () => {
+    expect(
+      resolveEntityImageCreditIdentifier({ provider: "flux-2-max", resolution: "2 MP" }),
+    ).toBe("flux-2-max:2MP:0ref")
+  })
+})

@@ -16,11 +16,19 @@ import {
   CHARACTER_ASSET_VARIANTS,
   CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
+  getIdentityLockClause,
   type CharacterAssetTypeForAspect,
   type PersonValue,
   type WardrobeValue,
 } from "@nodaro/shared"
 import { buildEntityHints } from "../lib/character-prompts.js"
+import {
+  assembleCharacterReferenceSet,
+  characterPriorAssetsFromRow,
+  type PriorAssetColumn,
+  type ReferencePhoto,
+} from "../lib/character-reference-set.js"
+import { entityImageRefCap } from "../lib/entity-ref-cap.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -112,19 +120,31 @@ function buildVariantPrompt(
   userPrompt?: string,
   person?: PersonValue,
   wardrobe?: WardrobeValue,
+  hasReferences: boolean = false,
 ): string {
   // Derive structured Person + Wardrobe hints once and fold them into the
   // assembled prompt for EVERY asset-type branch (the inner buildBase covers
   // all return paths). Empty/unknown ids produce no hint.
   const hints = buildEntityHints(person, wardrobe).join(", ")
   const base = buildBase()
-  if (!hints) return base
   // Insert the hints just before the trailing scaffolding sentence (the last
   // ". " boundary) so they read as part of the subject clause; fall back to a
   // simple append if there's no period to anchor on.
-  const lastPeriod = base.lastIndexOf(". ")
-  if (lastPeriod === -1) return `${base.replace(/\.+$/, "")}, ${hints}.`
-  return `${base.slice(0, lastPeriod)}, ${hints}${base.slice(lastPeriod)}`
+  let withHints = base
+  if (hints) {
+    const lastPeriod = base.lastIndexOf(". ")
+    withHints =
+      lastPeriod === -1
+        ? `${base.replace(/\.+$/, "")}, ${hints}.`
+        : `${base.slice(0, lastPeriod)}, ${hints}${base.slice(lastPeriod)}`
+  }
+  // Identity-lock reinforcement — only when the generation actually has
+  // reference images to lock onto (a lock clause with no ref is noise for a
+  // text-to-image render). Reuses the shared strict wording.
+  if (!hasReferences) return withHints
+  const lock = getIdentityLockClause("strict")
+  if (!lock) return withHints
+  return `${withHints} ${lock.charAt(0).toUpperCase()}${lock.slice(1)}`
 
   function buildBase(): string {
   const genderDesc = gender ?? "character"
@@ -275,10 +295,19 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
     let portraitImageUrl: string | null = null
     let characterPerson: Record<string, unknown> | null = null
     let characterWardrobe: Record<string, unknown> | null = null
+    let characterReferencePhotos: ReferencePhoto[] | null = null
+    let characterPriorAssets: PriorAssetColumn[] = []
     if (parsed.data.attachToCharacterId) {
       const { data: char, error: charErr } = await supabase
         .from("characters")
-        .select("source_image_url, canonical_description, person, wardrobe")
+        // Static literal — Supabase infers the row type from the string literal,
+        // so a `${...}` interpolation would erase the types. The identity columns
+        // here MUST mirror IDENTITY_ASSET_COLUMNS in character-reference-set.ts;
+        // a missing one just drops that column's prior assets from the reference
+        // set (graceful degradation, not a failure).
+        .select(
+          "source_image_url, canonical_description, person, wardrobe, reference_photos, expressions, angles, body_angles, poses, lighting_variations, outfit_variations",
+        )
         .eq("id", parsed.data.attachToCharacterId)
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -298,6 +327,9 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       portraitImageUrl = char.source_image_url as string
       characterPerson = (char.person as Record<string, unknown> | null) ?? null
       characterWardrobe = (char.wardrobe as Record<string, unknown> | null) ?? null
+      characterReferencePhotos =
+        ((char as Record<string, unknown>).reference_photos as ReferencePhoto[] | null) ?? null
+      characterPriorAssets = characterPriorAssetsFromRow(char as Record<string, unknown>)
 
       // ───────────────────────────────────────────────────────────────────
       // 4. Studio-gated LLM draft of `description` (when caller omitted it).
@@ -335,14 +367,37 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       }
     }
 
-    // Composite identifier (provider[:quality|:resolution|…]) — derived by
-    // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
-    const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data)
-
     // Use the character's anchor portrait as the i2i source when the studio
     // path runs, UNLESS the caller passed an explicit sourceImageUrl (their
     // choice wins). Outside the studio path, behavior is unchanged.
     const resolvedSourceImageUrl = parsed.data.sourceImageUrl ?? portraitImageUrl ?? undefined
+
+    // Assemble the multi-image identity reference set — portrait anchor + real
+    // reference photos + realLifeRefs + recent attached assets, ranked and
+    // angle-matched. The worker caps it to the provider's maxRefImages. Outside
+    // the studio path (no character fetched) this is just [resolvedSourceImageUrl]
+    // (or empty), so behavior there is unchanged.
+    const assembledReferenceUrls = assembleCharacterReferenceSet({
+      portraitUrl: resolvedSourceImageUrl ?? null,
+      referencePhotos: characterReferencePhotos,
+      realLifeRefs: parsed.data.realLifeRefs,
+      priorAssets: characterPriorAssets,
+      assetType,
+      variant,
+    })
+
+    // Reserve credits for the ACTUAL number of reference images the worker will
+    // send (the assembled set, capped to the provider's limit) — not just
+    // body.sourceImageUrl. Per-ref-priced providers (Flux 2 family) bill per
+    // reference image and commit non-metered, so this must reflect the multi-
+    // image assembly or the job under-charges. Inert for non-ref-priced
+    // providers (nano-banana etc. — the Studio default). See
+    // resolveEntityImageCreditIdentifier for the CHECK/DEBIT safety argument.
+    const effectiveRefCount = Math.min(
+      assembledReferenceUrls.length,
+      entityImageRefCap(parsed.data.provider),
+    )
+    const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data, effectiveRefCount)
 
     const prompt = buildVariantPrompt(
       assetType,
@@ -355,6 +410,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       parsed.data.userPrompt,
       characterPerson ?? undefined,
       characterWardrobe ?? undefined,
+      assembledReferenceUrls.length > 0,
     )
 
     // ─────────────────────────────────────────────────────────────────────
@@ -409,6 +465,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       sourceImageUrl: resolvedSourceImageUrl,
+      assembledReferenceUrls,
       assetType,
       variant,
       provider: parsed.data.provider,

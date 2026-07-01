@@ -26,11 +26,20 @@ import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import { autoAttachObjectAsset, setObjectMainImage } from "../../lib/object-auto-attach.js"
 import { autoAttachCreatureAsset, setCreatureMainImage } from "../../lib/creature-auto-attach.js"
 import { clampAspectRatioToModel } from "../../lib/aspect-ratio.js"
+import { entityImageRefCap } from "../../lib/entity-ref-cap.js"
 
 interface EntityImageJobData {
   jobId: string
   prompt: string
   sourceImageUrl?: string
+  // Caller-assembled, pre-ranked multi-image reference set (the
+  // `generate-character-asset` route via `assembleCharacterReferenceSet`). When
+  // present it REPLACES the single-ref `[sourceImageUrl]` behavior, then gets
+  // capped to the provider's `maxRefImages`. Deliberately DISTINCT from the DAG
+  // payload's `referenceImageUrls` field (set by `payload-builder` for every
+  // entity node type) which the worker intentionally does NOT read — activating
+  // that would silently flip every entity DAG node onto wired refs. See design §4.
+  assembledReferenceUrls?: string[]
   assetType?: string
   provider?: string
   // Character Studio auto-attach (best-effort). When set, after the image is
@@ -97,6 +106,7 @@ function makeEntityImageHandler(
     const {
       prompt,
       sourceImageUrl,
+      assembledReferenceUrls,
       assetType,
       provider,
       attachToCharacterId,
@@ -120,7 +130,18 @@ function makeEntityImageHandler(
       console.log(`[worker] ${logPrefix} ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
     }
 
-    const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
+    // Prefer the caller-assembled multi-image reference set (character-asset
+    // identity refs); else fall back to the single source image. Cap to the
+    // provider's `maxRefImages` capability (null-safe for non-KIE / unknown
+    // providers — see entityImageRefCap). The route reserves credits for this
+    // same capped count, so reserved refs === sent refs.
+    const baseRefs = assembledReferenceUrls?.length
+      ? assembledReferenceUrls
+      : sourceImageUrl
+        ? [sourceImageUrl]
+        : undefined
+    const refCap = entityImageRefCap(resolvedProvider)
+    const referenceImageUrls = baseRefs ? baseRefs.slice(0, refCap) : undefined
     // Per-job aspect ratio (set by the route's `resolveCharacterAspectRatio`)
     // wins over the handler's static `opts.aspectRatio` so each character
     // asset can pick a framing that matches its asset type. Generate-face

@@ -1105,3 +1105,66 @@ describe("shared entity handler behavior", () => {
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(PROVIDER_RESULT.url, "job-1", "user-1", true)
   })
 })
+
+describe("multi-image reference set (assembledReferenceUrls + maxRefImages cap)", () => {
+  const handler = entityHandlers["generate-character-asset"]
+  const refsArg = () => mocks.mockGenerateImage.mock.calls[0][2]
+
+  it("prefers assembledReferenceUrls over sourceImageUrl", async () => {
+    const job = makeJob("generate-character-asset", {
+      prompt: "smile",
+      assetType: "expressions",
+      sourceImageUrl: "https://portrait.png",
+      assembledReferenceUrls: ["https://a.png", "https://b.png"],
+    })
+    await handler(job as never, makeCtx())
+    expect(refsArg()).toEqual(["https://a.png", "https://b.png"])
+  })
+
+  it("caps the reference set to the provider's maxRefImages (nano-banana → 6)", async () => {
+    const many = Array.from({ length: 10 }, (_, i) => `https://r${i}.png`)
+    const job = makeJob("generate-character-asset", {
+      prompt: "smile",
+      assetType: "expressions",
+      provider: "nano-banana",
+      assembledReferenceUrls: many,
+    })
+    await handler(job as never, makeCtx())
+    expect(refsArg()).toEqual(many.slice(0, 6))
+  })
+
+  it("falls back to DEFAULT_ENTITY_REF_CAP (4) for a non-KIE / unknown provider — no throw on missing model config", async () => {
+    const many = Array.from({ length: 10 }, (_, i) => `https://r${i}.png`)
+    const job = makeJob("generate-character-asset", {
+      prompt: "smile",
+      assetType: "expressions",
+      provider: "totally-unknown-provider",
+      assembledReferenceUrls: many,
+    })
+    await expect(handler(job as never, makeCtx())).resolves.toBeUndefined()
+    expect(refsArg()).toHaveLength(4)
+  })
+
+  it("falls back to [sourceImageUrl] when assembledReferenceUrls is absent", async () => {
+    const job = makeJob("generate-character-asset", {
+      prompt: "smile",
+      assetType: "expressions",
+      sourceImageUrl: "https://portrait.png",
+    })
+    await handler(job as never, makeCtx())
+    expect(refsArg()).toEqual(["https://portrait.png"])
+  })
+
+  it("ignores the inert DAG referenceImageUrls field — entity DAG paths keep single-ref behavior", async () => {
+    const portraitHandler = entityHandlers["generate-character"]
+    const job = makeJob("generate-character", {
+      prompt: "portrait",
+      sourceImageUrl: "https://portrait.png",
+      // payload-builder sets this for all 5 entity DAG node types; the worker
+      // must NOT read it (design §4 — activating it is out of scope).
+      referenceImageUrls: ["https://dag-1.png", "https://dag-2.png"],
+    })
+    await portraitHandler(job as never, makeCtx())
+    expect(mocks.mockGenerateImage.mock.calls[0][2]).toEqual(["https://portrait.png"])
+  })
+})

@@ -14,16 +14,26 @@ import { extractProvider } from "./request-helpers.js"
  *
  * `sourceImageUrl` doubles as the single reference image (the entity worker
  * sends it as `referenceImageUrls: [sourceImageUrl]`), so it drives the
- * ref-count dimension for ref-priced models (Flux 2 family). The studio
- * attach-path anchor (resolved from the DB row inside the -asset routes) is
- * NOT counted — it isn't knowable from the raw body at CHECK time, and the
- * identifier must read identically at both sites.
+ * ref-count dimension for ref-priced models (Flux 2 family) at the preHandler
+ * CHECK, where the raw body is all that's knowable.
+ *
+ * `refCountOverride` lets a handler pin the ACTUAL number of reference images it
+ * will send once known — the `generate-character-asset` route assembles a
+ * multi-image identity set (portrait + reference_photos + realLifeRefs + prior
+ * assets) that the CHECK can't see, so its DEBIT passes the real capped count.
+ * Flux 2 bills per reference image and commits non-metered (no upward true-up),
+ * so the RESERVED identifier must reflect the sent refs or the job under-charges.
+ * A DEBIT count above the body-based CHECK count is safe: `reserveCredits` is the
+ * authoritative atomic gate, so the delta can only reject a truly over-budget
+ * request, never over-charge. For non-ref-priced providers the override is inert
+ * (`buildCreditModelIdentifier` ignores refCount off the Flux 2 family).
  */
-export function resolveEntityImageCreditIdentifier(body: unknown): string {
+export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverride?: number): string {
   const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>
   const provider = extractProvider(body, "nano-banana")
   const quality = typeof b.quality === "string" ? b.quality : undefined
   const resolution = typeof b.resolution === "string" ? b.resolution : undefined
-  const refCount = typeof b.sourceImageUrl === "string" && b.sourceImageUrl.length > 0 ? 1 : 0
+  const refCount =
+    refCountOverride ?? (typeof b.sourceImageUrl === "string" && b.sourceImageUrl.length > 0 ? 1 : 0)
   return buildCreditModelIdentifier(provider, quality, resolution, undefined, undefined, refCount)
 }
