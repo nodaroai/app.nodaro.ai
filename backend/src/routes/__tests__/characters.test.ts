@@ -1337,6 +1337,44 @@ describe("POST /v1/characters", () => {
     ])
   })
 
+  it("persists board type + sourceImages (identity sheet) without stripping", async () => {
+    // Identity reference sheet: a board entry widens with `type` +
+    // `sourceImages` (the images it was collaged from). A plain z.object strips
+    // unknown keys, so without widening the schema these silently vanish on
+    // save. Mirrors the boards-only UPDATE write above.
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        id: TEST_CHARACTER_ID,
+        userId: TEST_USER_ID,
+        boards: [
+          {
+            name: "Identity",
+            url: "https://r2.example/sheet.png",
+            type: "identity",
+            sourceImages: ["https://r2.example/a.png", "https://r2.example/b.png"],
+          },
+        ],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const patch = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    const boards = patch.boards as Array<Record<string, unknown>>
+    expect(boards[0]).toMatchObject({
+      name: "Identity",
+      type: "identity",
+      sourceImages: ["https://r2.example/a.png", "https://r2.example/b.png"],
+    })
+  })
+
   it("rejects more than 24 boards (400)", async () => {
     const res = await app.inject({
       method: "POST",

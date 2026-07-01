@@ -80,7 +80,17 @@ export const upsertCharacterBody = z.object({
   // like the asset buckets above; `name` is a caller-owned label ("" = the
   // unnamed board). Bounded so a runaway client can't blow up the row — and
   // unlike the buckets, names are free text, so cap their length too.
-  boards: z.array(z.object({ name: z.string().max(200), url: safeUrlSchema })).max(24).optional(),
+  // `type` distinguishes a plain "looks" board from an image-collage "identity"
+  // sheet; `sourceImages` records the R2 URLs that sheet was collaged from
+  // (studio's identity reference sheet). Both OPTIONAL + backward-compatible —
+  // legacy boards have neither. MUST be listed here explicitly: a plain
+  // z.object STRIPS unknown keys, so without them the fields vanish on save.
+  boards: z.array(z.object({
+    name: z.string().max(200),
+    url: safeUrlSchema,
+    type: z.enum(["looks", "identity"]).optional(),
+    sourceImages: z.array(safeUrlSchema).max(30).optional(),
+  })).max(24).optional(),
   // `voiceType` records the selected voice's KIND so text-to-speech can resolve
   // a library/custom voice by id (premade voices are addressed by name). Always
   // OPTIONAL: a character may have no voice, or a legacy voice with no recorded
@@ -191,7 +201,7 @@ type CharacterRow = {
   angles: { name: string; url: string }[] | null
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
-  boards: { name: string; url: string }[] | null
+  boards: { name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }[] | null
   reference_videos_by_variant: Record<string, string[]> | null
   selected_asset_by_variant: Record<string, string> | null
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
