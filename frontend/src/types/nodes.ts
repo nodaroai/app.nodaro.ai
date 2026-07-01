@@ -6476,8 +6476,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Image Collage",
       layout: "smart",
-      resolution: "2K",
-      aspectRatio: "1:1",
+      resolution: "4K",
+      aspectRatio: "4:3",
       gap: 24,
       backgroundColor: "#ffffff",
       fieldMappings: {},

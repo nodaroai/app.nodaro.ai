@@ -270,6 +270,26 @@ export const COMPOSITION_RATIOS = [
   { value: "4:5", label: "4:5 (Social)" },
 ] as const
 
+/**
+ * Aspect ratios offered by the Image Collage node — a richer set than
+ * COMPOSITION_RATIOS (square + four landscape + four portrait). The values are
+ * arbitrary "W:H"; the backend parses them generically (no enum), so adding one
+ * here needs no route change. `AspectRatioSelector` renders each as a
+ * proportional SVG shape. Ordered square → widening landscape → deepening
+ * portrait so the picker grid reads left-to-right.
+ */
+export const COLLAGE_ASPECT_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "4:3", label: "4:3 (Standard)" },
+  { value: "3:2", label: "3:2 (Photo)" },
+  { value: "16:9", label: "16:9 (Wide)" },
+  { value: "21:9", label: "21:9 (Cinema)" },
+  { value: "4:5", label: "4:5 (Social)" },
+  { value: "3:4", label: "3:4 (Portrait)" },
+  { value: "2:3", label: "2:3 (Portrait)" },
+  { value: "9:16", label: "9:16 (Tall)" },
+] as const
+
 // Image resolutions — derived from MODEL_CATALOG. Add new entries to the
 // catalog's `resolutions` field, not here.
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> =

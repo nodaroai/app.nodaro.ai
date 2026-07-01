@@ -113,19 +113,28 @@ export function buildCollageFfmpegArgs(opts: {
   for (const p of localPaths) args.push("-i", p)
 
   const filters: string[] = []
-  // Scale each image to COVER its rect (increase + centre-crop), no distortion.
+  // Fit each image INSIDE its rect (scale down, never up-crop) preserving aspect.
+  // In smart mode the rect already matches the image's aspect ratio, so it fills
+  // the cell; in grid mode (uniform cells) it leaves a margin. We deliberately do
+  // NOT use `pad` here — `scale=…:decrease` can round the fitted image 1px over
+  // the cell, and `pad` then aborts with "Padded dimensions cannot be smaller
+  // than input dimensions". Instead we centre the fitted image over the cell with
+  // an overlay expression; the leftover area shows the canvas, which is already
+  // filled with the background colour (so letterbox bars match the gaps exactly).
   rects.forEach((rect, i) => {
     const inputIdx = i + 1 // input 0 is the canvas
     filters.push(
-      `[${inputIdx}:v]scale=${rect.w}:${rect.h}:force_original_aspect_ratio=increase,` +
-        `crop=${rect.w}:${rect.h},setsar=1[s${i}]`,
+      `[${inputIdx}:v]scale=${rect.w}:${rect.h}:force_original_aspect_ratio=decrease,setsar=1[s${i}]`,
     )
   })
-  // Overlay chain: canvas ← s0 ← s1 ← … ← s(n-1).
+  // Overlay chain: canvas ← s0 ← s1 ← … ← s(n-1). Each image is centred within
+  // its cell — `w`/`h` are the fitted image's dimensions, `${rect.w/h}` the cell.
   let prev = "[0:v]"
   rects.forEach((rect, i) => {
     const out = i === rects.length - 1 ? "[out]" : `[t${i}]`
-    filters.push(`${prev}[s${i}]overlay=${rect.x}:${rect.y}${out}`)
+    const ox = `${rect.x}+(${rect.w}-w)/2`
+    const oy = `${rect.y}+(${rect.h}-h)/2`
+    filters.push(`${prev}[s${i}]overlay=x=${ox}:y=${oy}${out}`)
     prev = out
   })
 
@@ -154,7 +163,10 @@ export async function createImageCollage(params: ImageCollageParams): Promise<st
   const gap = Math.max(0, Math.min(200, Math.floor(params.gap ?? 24)))
   const bgColor = toFfmpegColor(params.backgroundColor)
 
-  const { w: canvasW, h: canvasH } = resolveCollageCanvas(resolution, aspectRatio)
+  // Target canvas from resolution × aspect. In smart mode the WIDTH is honoured
+  // and the target height only steers the row count; the layout floats the real
+  // output height. In grid mode both are honoured exactly.
+  const { w: targetW, h: targetH } = resolveCollageCanvas(resolution, aspectRatio)
 
   const workDir = await createWorkDir("image-collage")
   const outputPath = join(workDir, "collage.png")
@@ -182,7 +194,7 @@ export async function createImageCollage(params: ImageCollageParams): Promise<st
   // Probe dimensions concurrently (ffprobe on local files — cheap, not gated by
   // the ffmpeg semaphore), then compute the layout.
   const dims = await Promise.all(localPaths.map(probeImageSize))
-  const rects = computeCollageLayout(dims, canvasW, canvasH, { mode: layout, gap })
+  const { rects, canvasW, canvasH } = computeCollageLayout(dims, targetW, targetH, { mode: layout, gap })
 
   const args = buildCollageFfmpegArgs({ localPaths, rects, canvasW, canvasH, bgColor, outputPath })
   await runFfmpeg(args)

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
-import { COMPOSITION_RATIOS } from "./model-options"
+import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "./combine-transition-picker"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -1288,8 +1288,8 @@ export function ImageCollageConfig({ data, onUpdate }: ConfigProps<ImageCollageD
       <div>
         <Label>Aspect Ratio</Label>
         <AspectRatioSelector
-          options={COMPOSITION_RATIOS}
-          value={data.aspectRatio ?? "1:1"}
+          options={COLLAGE_ASPECT_RATIOS}
+          value={data.aspectRatio ?? "4:3"}
           onValueChange={(v) => onUpdate({ aspectRatio: v })}
         />
       </div>

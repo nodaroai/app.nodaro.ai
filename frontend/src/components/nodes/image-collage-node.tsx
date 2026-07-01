@@ -9,7 +9,9 @@ import {
   X,
   Image as ImageIcon,
   Expand,
-  Settings,
+  Pencil,
+  Download,
+  Link,
   Images,
 } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
@@ -19,14 +21,15 @@ import { BaseNode } from "./base-node"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { imageNodeSizing } from "./video-node-defaults"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
-import { computeDeleteResultUpdates } from "@/lib/utils"
+import { ImageCollageResultInfo } from "./image-collage-result-info"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ImageCollageData, GeneratedResult } from "@/types/nodes"
 
 const ACCEPTS_IMAGE = (t: string) => isValidImageCollageConnection("in", t)
@@ -34,8 +37,7 @@ const ACCEPTS_IMAGE = (t: string) => isValidImageCollageConnection("in", t)
 function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageCollageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
 
   const status = nodeData.executionStatus ?? "idle"
@@ -81,7 +83,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
         {...imageNodeSizing(aspectRatio, upstreamImageAspect)}
         hideHeader
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         bottomToolbarContent={
           showThumbnails && canBrowseAlternates ? (
@@ -134,15 +136,21 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
 
             {status !== "running" && hasResult && activeUrl && (
               <>
+                {/* Versions toggle — brand-pink + pinned when open, else hover-revealed (matches Generate Image). */}
                 {results.length > 1 && (
                   <button
                     type="button"
-                    className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover/collage:opacity-100 transition-opacity"
+                    className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
+                      showThumbnails
+                        ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                        : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/collage:opacity-100"
+                    }`}
                     onClick={(e) => {
                       e.stopPropagation()
                       setShowThumbnails((v) => !v)
                     }}
-                    title="Show versions"
+                    title={showThumbnails ? "Hide versions" : "Show versions"}
+                    aria-pressed={showThumbnails}
                   >
                     <LayoutGrid className="w-3 h-3" />
                     <span className="text-[11px] font-medium">{results.length}</span>
@@ -158,6 +166,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                   onLoadDimensions={handleLoadDimensions}
                 />
 
+                {/* Top-right: delete this result. */}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/collage:opacity-100 transition-opacity">
                   {results.length > 0 && (
                     <button
@@ -175,7 +184,20 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                   )}
                 </div>
 
+                {/* Bottom-left: Edit · Expand · Download · Copy URL (matches Generate Image, minus i2i-specific Refine/Extract). */}
                 <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/collage:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    aria-label="Edit image"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl)
+                    }}
+                    title="Edit image"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     type="button"
                     aria-label="Expand preview"
@@ -188,32 +210,41 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
-                </div>
-
-                <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/collage:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Settings"
-                    className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+                    aria-label="Download"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      selectNode(isSettingsOpen ? null : id)
+                      const a = document.createElement("a")
+                      a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
+                      a.download = `${nodeData.label || "collage"}.png`
+                      a.click()
                     }}
-                    title="Settings"
+                    title="Download"
                   >
-                    <Settings className="w-3.5 h-3.5" />
+                    <Download className="w-3.5 h-3.5" />
                   </button>
+                  <button
+                    type="button"
+                    aria-label="Copy URL"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      copyToClipboard(activeUrl!, "URL copied")
+                    }}
+                    title="Copy URL"
+                  >
+                    <Link className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Bottom-right: settings badge (Layout · Aspect · Resolution + apply). Pinned while the versions panel is open. */}
+                <div className={`absolute bottom-2 right-2 transition-opacity ${showThumbnails ? "opacity-100" : "opacity-0 group-hover/collage:opacity-100"}`}>
+                  <ImageCollageResultInfo nodeId={id} result={activeResult} data={nodeData} />
                 </div>
               </>
             )}
-          </div>
-
-          {/* Compact config summary */}
-          <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
-            <span className="flex-1 truncate text-muted-foreground capitalize">
-              {nodeData.layout ?? "smart"} · {nodeData.aspectRatio ?? "1:1"}
-            </span>
-            <span className="font-mono text-muted-foreground/80 shrink-0">{nodeData.resolution ?? "2K"}</span>
           </div>
         </div>
       </BaseNode>
