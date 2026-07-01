@@ -30,7 +30,7 @@
 import { DEFAULT_USAGE_MODE, usageModeDirective, type UsageMode } from "./character-usage-mode.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-builder.js"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, firstSightExtraRole } from "./reference-roles.js"
+import { roleToPhrase, REFERENCE_ROLE_PRESETS, resolveDefaultRole } from "./reference-roles.js"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import type { ConnectedReference } from "./types.js"
 
@@ -144,8 +144,22 @@ export interface VideoExtraRef {
    * Optional, opt-in per-extra identity-lock (the `ConnectedReference.identityLock`
    * analogue). Emitted ONLY in hybrid mode on a first-sight character extra, via
    * `buildIdentityLockLine`. Default OFF (absent / `enabled === false`) → no lock.
+   * When absent, the first-sight branch falls back to the node's mapped lock
+   * from `CharacterMeta.identityLock`.
    */
   identityLock?: { enabled: boolean; text?: string }
+  /**
+   * The `ConnectedReference.defaultRole` analogue for ROUTE-supplied extras
+   * (generate-video / text-to-video / MCP verbs), whose adapter can only feed
+   * the COALESCED `defaultUsageMode` as `usageMode` — which would otherwise
+   * trip the meta-suppression gate and permanently ignore the node default.
+   * Preferred over `CharacterMeta.defaultRole` at the first-sight role site.
+   * The expander (`expandExtraRefsToConnectedReferences`) already suppresses
+   * the source field when a true per-ref override existed, so passing it
+   * through verbatim preserves the override-wins precedence. Canvas /
+   * orchestrator extras leave this unset (they resolve via `CharacterMeta`).
+   */
+  defaultRole?: string
 }
 
 /**
@@ -159,6 +173,14 @@ export interface CharacterMeta {
   characterName?: string
   defaultUsageMode?: UsageMode
   canonicalDescription?: string
+  /** Character node's hybrid `defaultRole` — takes precedence over
+   *  `defaultUsageMode` at the video extras first-sight role site (via
+   *  `resolveDefaultRole`). Absent when the node never set a role. */
+  defaultRole?: string
+  /** Character node's `identityLock`, already mapped to the per-reference lock
+   *  shape (`characterLockToRefLock`). Read at the video extras first-sight lock
+   *  site; a per-extra `identityLock` still wins over it. */
+  identityLock?: { enabled: boolean; text?: string }
 }
 
 export interface ResolveVideoReferenceCoreArgs {
@@ -267,7 +289,6 @@ function resolveVideoCharacterMentionsHybrid(
   }
 
   const presets = REFERENCE_ROLE_PRESETS["wired-character"]
-  const defaultRole = defaultRoleForSource("wired-character")
 
   const mentionedCharacterSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
@@ -294,11 +315,13 @@ function resolveVideoCharacterMentionsHybrid(
     // in lock-step so FE single-node + orchestrator video runs never diverge. A
     // preset OR a free-form value in the variant/role slot that didn't resolve to
     // a real variant URL → role; a real variant slug or a directive-only usage
-    // mode → source default. Strict superset of the old preset-membership gate.
+    // mode → the NODE default (`defaultRole` verbatim → `defaultUsageMode`-derived
+    // → "person", via `resolveDefaultRole` — Character Node Role+Lock), mirroring
+    // the image-side mention fallback.
     const role =
       segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
         ? segment
-        : defaultRole
+        : resolveDefaultRole(match.defaultRole, match.defaultUsageMode, "wired-character")
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
@@ -512,7 +535,10 @@ export function resolveVideoReferenceCore(
     // is shared with the legacy branch so both paths attach the SAME URLs.
     if (hybrid) {
       const binding = REF_BINDING.ordinal(position)
-      canonicalPhrases.push(roleToPhrase(defaultRoleForSource(r.source), binding))
+      // Node-default role chain (Character Node Role+Lock): `defaultRole`
+      // (hybrid dropdown pick, verbatim) → `defaultUsageMode`-derived → source
+      // default — mirroring the image `renderCanonicalFallbackHybrid`.
+      canonicalPhrases.push(roleToPhrase(resolveDefaultRole(r.defaultRole, r.defaultUsageMode, r.source), binding))
       const lock = buildIdentityLockLine(r, binding)
       if (lock) canonicalLockLines.push(lock)
       const inject = r.elementInjection?.trim()
@@ -599,19 +625,28 @@ export function resolveVideoReferenceCore(
             // First-sight: mapped role phrase + opt-in identity-lock + wired
             // element injection (the latter two surfaced as their own lines,
             // mirroring `renderCanonicalFallbackHybrid` / the mention hybrid).
-            // Role = the COALESCED effective mode (per-ref override → upstream
-            // character-node default → global "identical"), mapped to a curated
-            // preset else the wired-character default — via the shared
-            // `firstSightExtraRole` helper. This feeds the SAME coalesced input
-            // the image `renderExtraRefsHybrid` uses (`ConnectedReference`'s
-            // `defaultUsageMode`, folded identically by
-            // `expandExtraRefsToConnectedReferences`), so image and video are
-            // now fully converged — same helper AND same input — and both honor
-            // the character node's default mode (matching the video legacy path
-            // at ~L522). Reference Roles deferred-follow-up: true convergence.
-            const role = firstSightExtraRole(effectiveMode, "wired-character")
+            // Role chain (Character Node Role+Lock): the node's `defaultRole`
+            // (`meta.defaultRole`, verbatim — applied only when the extra
+            // carries NO per-ref `usageMode` override, which would win) → the
+            // COALESCED effective mode (per-ref override → node default →
+            // "identical"), preset-mapped → source default — via the shared
+            // `resolveDefaultRole` helper. The image `renderExtraRefsHybrid`
+            // feeds the same helper the expander-stamped `defaultRole` +
+            // coalesced `defaultUsageMode`, so image and video stay fully
+            // converged (same helper, same precedence); pinned by
+            // `character-convergence-image.test.ts`.
+            const role = resolveDefaultRole(
+              // Per-extra `defaultRole` (route-supplied CR extras) wins; else
+              // the node default via meta — suppressed when the extra carries a
+              // true per-ref usageMode override (the override wins).
+              ex.defaultRole ?? (ex.usageMode ? undefined : meta?.defaultRole),
+              effectiveMode,
+              "wired-character",
+            )
             const phrase = roleToPhrase(role, binding)
             extraHybridLines.push(desc ? `${phrase}, ${desc}.` : `${phrase}.`)
+            // Lock: per-extra `identityLock` wins; else the node's mapped lock
+            // (`meta.identityLock`, from `characterLockToRefLock`).
             const lock = buildIdentityLockLine(
               {
                 id: ex.url,
@@ -620,7 +655,7 @@ export function resolveVideoReferenceCore(
                 url: ex.url,
                 characterSlug: ex.characterSlug,
                 variantSlug: ex.variantSlug,
-                identityLock: ex.identityLock,
+                identityLock: ex.identityLock ?? meta?.identityLock,
               },
               binding,
             )
@@ -690,7 +725,10 @@ export function resolveVideoReferenceCore(
     // injections). Every extra line carries an `@image_N` binding, so the
     // numbering stays consistent with the core's `position` walk. The
     // `"Use these characters:"` block is NEVER assembled here.
-    const lockLines = [...mentionLockLines, ...canonicalLockLines, ...extraHybridLockLines]
+    // Set-dedup — mirrors the image assembler: identical lock lines (same ref
+    // locked via mention + canonical/extra) are emitted once. {ref}-bound
+    // texts keep distinct references distinct.
+    const lockLines = [...new Set([...mentionLockLines, ...canonicalLockLines, ...extraHybridLockLines])]
     const trailingLines = [
       ...mentionElementDirectives,
       ...canonicalPhrases,

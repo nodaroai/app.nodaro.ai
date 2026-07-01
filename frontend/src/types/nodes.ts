@@ -3682,6 +3682,18 @@ export type CharacterNodeData = {
    * See `packages/shared/src/character-usage-mode.ts`.
    */
   defaultUsageMode?: import("@nodaro/shared").UsageMode
+  /**
+   * HYBRID default role for references derived from this character — the node
+   * title-row dropdown pick: a `REFERENCE_ROLE_PRESETS["wired-character"]`
+   * value (`person`/`face`/`clothes`/`hair`/`pose`/`expression`/`style`) or a
+   * sanitized Custom slug (`sanitizeRole`). Resolved with precedence
+   * per-mention role → this → `defaultUsageMode`-derived → "person" via the
+   * shared `resolveDefaultRole` at every hybrid path (image + video ×
+   * extras/canonical/mention). Unset for legacy nodes (read-through applies).
+   * Only written by the hybrid dropdown; `defaultUsageMode` stays the LEGACY
+   ***REDACTED-OSS-SCRUB***
+   */
+  defaultRole?: string
   characterSheet: CharacterSheet | null
   projectId: string
   createdAt: string

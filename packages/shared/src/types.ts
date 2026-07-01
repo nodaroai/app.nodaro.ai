@@ -156,6 +156,16 @@ export interface ConnectedReference {
    */
   readonly defaultUsageMode?: UsageMode
   /**
+   * Character node's HYBRID `defaultRole` (the role-dropdown pick: a
+   * `REFERENCE_ROLE_PRESETS["wired-character"]` value or a sanitized Custom
+   * slug) propagated into every entry derived from that node. Read via
+   * `resolveDefaultRole(defaultRole, defaultUsageMode, source)` at the hybrid
+   * resolver sites — it takes precedence over `defaultUsageMode`. Absent for
+   * non-character refs and for nodes that never set a role (fall back to the
+   * `defaultUsageMode`-derived role, then the source default).
+   */
+  readonly defaultRole?: string
+  /**
    * Marks an entry as a user-attached "extra reference image" (see the
    * `extraRefs` field on Generate/Modify/Image-to-Video/Text-to-Video/Video-to-Video
    * node data types in the frontend). Extras are auto-attached to the worker

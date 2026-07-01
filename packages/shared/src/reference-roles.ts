@@ -104,3 +104,50 @@ export function firstSightExtraRole(
   const s = (segment ?? "").trim()
   return s && REFERENCE_ROLE_PRESETS[source].includes(s) ? s : defaultRoleForSource(source)
 }
+
+/**
+ * The effective default role for a wired entity, given the node's explicit
+ * hybrid `defaultRole` and its legacy `defaultUsageMode`. Single source of truth
+ * for the node-default precedence, read at every hybrid resolver site (image +
+ * video × extras / canonical / mention):
+ *
+ *   1. `defaultRole` (the hybrid dropdown pick) — used VERBATIM when non-blank,
+ *      so a Custom role like `earrings` survives (mirrors the pill's Custom
+ *      relaxation) and beats any legacy `defaultUsageMode`.
+ *   2. else `firstSightExtraRole(defaultUsageMode, source)` — the back-compat
+ *      mapping (`face`/`pose`/`style` pass through; every other usage mode, and
+ *      an absent one, collapse to the source default, e.g. `"person"`).
+ *
+ * A per-mention token role (the pill / autocomplete) still wins over this at the
+ * mention call sites; this is only the NODE-level fallback.
+ */
+export function resolveDefaultRole(
+  defaultRole: string | null | undefined,
+  defaultUsageMode: string | null | undefined,
+  source: ReferenceSource,
+): string {
+  const explicit = defaultRole?.trim()
+  if (explicit) return explicit
+  return firstSightExtraRole(defaultUsageMode, source)
+}
+
+/**
+ * Sanitize a free-form Custom role into a character-variant-slug-safe token.
+ * Hoisted to shared (was `config-panels/prompt-editor/character-ref-roles.ts`)
+ * so BOTH the mention pill and the character node's role dropdown share one
+ * source of truth. Grammar is `[a-z][a-z0-9-]*` (the `variantSlug` token slot):
+ * lower-case, dash-join whitespace, drop out-of-grammar chars, force a leading
+ * letter, cap at 32, collapse dash runs, drop a trailing dash — keeping the
+ * emitted role re-parseable and matching `characterMentionSlug`'s slugification.
+ */
+export function sanitizeRole(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/^[^a-z]+/, "") // grammar requires a leading [a-z]
+    .slice(0, 32)
+    .replace(/-+/g, "-") // collapse dash runs (matches characterMentionSlug)
+    .replace(/-$/, "") // drop a trailing dash (incl. one left by the 32-cap)
+}

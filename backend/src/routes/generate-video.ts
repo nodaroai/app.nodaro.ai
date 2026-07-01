@@ -234,6 +234,16 @@ export function assembleVideoConnectedReferences(args: {
         characterSlug: r.characterSlug,
         variantSlug: r.variantSlug,
         usageMode: r.defaultUsageMode,
+        // Node-default role + mapped identity-lock (Character Node Role+Lock).
+        // `usageMode` above is the COALESCED mode (always set for character
+        // extras), which would trip the core's meta-suppression gate — so the
+        // role rides the dedicated per-extra slot instead. The expander already
+        // cleared `defaultRole` when a true per-ref override existed, so
+        // override-wins precedence is preserved. Without these two fields a
+        // direct-API/MCP run silently ignores the character node's role/lock
+        // controls on the extras leg (canvas + orchestrator honor them).
+        defaultRole: r.defaultRole,
+        identityLock: r.identityLock,
       })
     }
   }
@@ -250,6 +260,10 @@ export function assembleVideoConnectedReferences(args: {
       characterName: m.defaultName,
       defaultUsageMode: m.defaultUsageMode,
       canonicalDescription: m.characterCanonicalDescription ?? undefined,
+      // Keep this third CharacterMeta producer in lockstep with the FE
+      // (video-prompt-assembly.ts) and orchestrator (payload-builder.ts) ones.
+      defaultRole: m.defaultRole,
+      identityLock: m.identityLock,
     }
   }
 

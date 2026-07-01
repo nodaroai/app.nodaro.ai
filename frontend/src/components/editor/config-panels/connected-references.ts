@@ -8,6 +8,7 @@ import {
   locationMentionSlug,
   expandExtraRefsToConnectedReferences,
   characterMentionableAssetArrays,
+  characterLockToRefLock,
   resolveEffectiveSourceType,
   FRAME_TARGET_HANDLES,
 } from "@nodaro/shared"
@@ -172,6 +173,11 @@ export function buildImageConnectedReferences(params: {
       const slug = characterMentionSlug(charName)
       if (slug) {
         const defaultUsageMode = charData.defaultUsageMode
+        // Node-default role + mapped identity-lock (Character Node Role+Lock) —
+        // stamped onto every ref derived from this node so the hybrid resolvers
+        // can honor them. Inert in legacy (nothing reads them there).
+        const defaultRole = charData.defaultRole
+        const identityLock = characterLockToRefLock(charData.identityLock)
         const canonicalUrl =
           charData.defaultAssetUrl ||
           charData.sourceImageUrl ||
@@ -191,6 +197,8 @@ export function buildImageConnectedReferences(params: {
             variantDescription: null,
             variantDisplayName: "canonical",
             defaultUsageMode,
+            defaultRole,
+            identityLock,
           })
         }
         // All {name,url}[] variant buckets (incl. wardrobe + detail close-ups) —
@@ -215,6 +223,8 @@ export function buildImageConnectedReferences(params: {
               variantDescription: item.description ?? null,
               variantDisplayName: item.name,
               defaultUsageMode,
+              defaultRole,
+              identityLock,
             })
           }
         }
@@ -259,6 +269,10 @@ export function buildImageConnectedReferences(params: {
     if (matchingCharNode && slug) {
       const charData = matchingCharNode.data as CharacterNodeData
       const defaultUsageMode = charData.defaultUsageMode
+      // Same node-default role + lock stamp as the wired-canvas branch above —
+      // an attached-char definition backed by a canvas node must not diverge.
+      const defaultRole = charData.defaultRole
+      const identityLock = characterLockToRefLock(charData.identityLock)
       const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl
       if (canonicalUrl) {
         map.set(`char_${c.id}`, {
@@ -273,6 +287,8 @@ export function buildImageConnectedReferences(params: {
           variantDescription: null,
           variantDisplayName: "canonical",
           defaultUsageMode,
+          defaultRole,
+          identityLock,
         })
       }
       const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
@@ -301,6 +317,8 @@ export function buildImageConnectedReferences(params: {
             variantDescription: item.description ?? null,
             variantDisplayName: item.name,
             defaultUsageMode,
+            defaultRole,
+            identityLock,
           })
         }
       }
@@ -345,6 +363,8 @@ export function buildImageConnectedReferences(params: {
           defaultUsageMode: cd.defaultUsageMode,
           canonicalDescription: cd.canonicalDescription ?? null,
           displayName: name,
+          defaultRole: cd.defaultRole,
+          identityLock: characterLockToRefLock(cd.identityLock),
         }
       }
     }

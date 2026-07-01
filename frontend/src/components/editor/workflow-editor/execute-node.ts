@@ -250,7 +250,7 @@ import { characterMentionSlug } from "@nodaro/shared";
 import { characterMentionableAssetArrays } from "@nodaro/shared";
 import { selectLoraRoutingForMentions } from "@nodaro/shared";
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
-import { collectIdentityLockClause } from "@nodaro/shared";
+import { collectIdentityLockClause, characterLockToRefLock } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
 import { spreadJsonArrayIfSingleton } from "@nodaro/shared";
@@ -617,6 +617,8 @@ function buildExtraRefCharacterContextLookup(
         defaultUsageMode: charData.defaultUsageMode,
         canonicalDescription: charData.canonicalDescription ?? null,
         displayName: charName,
+        defaultRole: charData.defaultRole,
+        identityLock: characterLockToRefLock(charData.identityLock),
       });
     }
   }
@@ -1002,7 +1004,11 @@ export function executeNode(
               // Propagate the character node's default usage mode into every
               // derived entry — `resolveCharacterMentions` reads this as the
               // fallback when a mention slug omits its own `:mode` override.
+              // Also the node-default role + mapped identity-lock (Character
+              // Node Role+Lock) — read by the hybrid resolvers.
               const defaultUsageMode = charData.defaultUsageMode;
+              const defaultRole = charData.defaultRole;
+              const identityLock = characterLockToRefLock(charData.identityLock);
               const canonicalUrl = charData.defaultAssetUrl || chainRefs[i] || charData.sourceImageUrl;
               if (canonicalUrl) {
                 refMetaMap.set(upstream.id, {
@@ -1016,6 +1022,8 @@ export function executeNode(
                   variantDescription: null,
                   variantDisplayName: "canonical",
                   defaultUsageMode,
+                  defaultRole,
+                  identityLock,
                 });
               }
               const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>);
@@ -1035,6 +1043,8 @@ export function executeNode(
                     variantDescription: null,
                     variantDisplayName: item.name,
                     defaultUsageMode,
+                    defaultRole,
+                    identityLock,
                   });
                 }
               }
@@ -1113,6 +1123,10 @@ export function executeNode(
       if (source === "wired-character" && characterSlug && matchingCharNode) {
         const charData = matchingCharNode.data as CharacterNodeData;
         const defaultUsageMode = charData.defaultUsageMode;
+        // Same node-default role + lock stamp as the wired-canvas branch —
+        // an attached-char definition backed by a canvas node must not diverge.
+        const defaultRole = charData.defaultRole;
+        const identityLock = characterLockToRefLock(charData.identityLock);
         const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl;
         if (canonicalUrl) {
           refMetaMap.set(`char_${c.id}`, {
@@ -1126,6 +1140,8 @@ export function executeNode(
             variantDescription: null,
             variantDisplayName: "canonical",
             defaultUsageMode,
+            defaultRole,
+            identityLock,
           });
         }
         const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>);
@@ -1145,6 +1161,8 @@ export function executeNode(
               variantDescription: null,
               variantDisplayName: item.name,
               defaultUsageMode,
+              defaultRole,
+              identityLock,
             });
           }
         }

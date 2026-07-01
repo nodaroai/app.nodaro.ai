@@ -1,6 +1,7 @@
 import {
   REFERENCE_ROLE_PRESETS,
   isUsageMode,
+  sanitizeRole,
   type UsageMode,
 } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
@@ -28,30 +29,13 @@ export function characterSwapMenuRoles(
 }
 
 /**
- * Sanitize a free-form custom role into a character-variant-slug-safe token.
- *
- * Deliberately STRICTER than image-ref-view's `sanitizeLabel`: a character role
- * rides the `variantSlug` token slot, whose grammar is `[a-z][a-z0-9-]*` (see
- * `CHAR_REF_PATTERN_CORE` / the shared `parseCharacterMentionToken`). We must
- * NOT change that grammar (Phase D guardrail), so we conform to it here —
- * lower-case, dash-join whitespace, drop out-of-grammar characters, force a
- * leading letter, then collapse dash runs and drop a trailing dash — keeping
- * the emitted `@kira:1:<role>` token re-parseable on reload and matching
- * `characterMentionSlug`'s slugification (so `"gold - ring"` → `"gold-ring"`
- * and `"ring-"` → `"ring"`). (image-ref's label can preserve case/underscores
- * because the `{image:N:label}` grammar is looser.)
+ * `sanitizeRole` was HOISTED to `@nodaro/shared` (`reference-roles.ts`) so the
+ * mention pill and the character node's role dropdown share one source of
+ * truth. Re-exported here so existing importers (pill views, tests) keep
+ * working unchanged. See the shared docstring for the grammar rationale
+ * (`[a-z][a-z0-9-]*` — the `variantSlug` token slot).
  */
-export function sanitizeRole(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/^[^a-z]+/, "") // grammar requires a leading [a-z]
-    .slice(0, 32)
-    .replace(/-+/g, "-") // collapse dash runs (matches characterMentionSlug)
-    .replace(/-$/, "") // drop a trailing dash (incl. one left by the 32-cap)
-}
+export { sanitizeRole }
 
 /**
  * Map a hybrid role string to the character-ref token slot it occupies. A role

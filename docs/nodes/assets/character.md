@@ -9,10 +9,21 @@ The Character node creates a reusable character asset with a base portrait, mult
 The Character node on the canvas is a compact summary card. It shows:
 - The base portrait preview
 - The character name and `style · gender`
+- A **Role** dropdown next to the name — the default part of this character that downstream generators take from its reference image: `person` (the default), `face`, `clothes`, `hair`, `pose`, `expression`, `style`, or a **Custom…** free-form role (e.g. `earrings`). See [Default Role & Identity Lock](#default-role--identity-lock) below.
+- An **Identity lock** row (**Off / Soft / Strict**) — how strongly downstream generators must preserve the character's facial identity. Defaults to **Soft**.
 - Asset-count badges for **Expressions**, **Poses**, and **Motions**
 - A row indicating whether **Voice** and **Personality** are filled in (✓)
 - A **⬡ Studio** button that opens the Character Studio
 - A **Choose existing** button (next to **⬡ Studio**) that opens the **Asset Picker** to bind the node to a character you already have. Once a character is bound, this button becomes **Replace** — use it to swap in a different character.
+
+### Default Role & Identity Lock
+
+When this character is wired into a Generate Image / Generate Video (or mentioned with `@name` in their prompts), its reference image is described to the model as an inline role phrase — e.g. *"the person from reference image A"*. The node's two controls set the defaults for every reference derived from this character:
+
+- **Role** — which part of the reference the model should take. `person` means the whole subject; `face`/`clothes`/`hair`/`pose`/`expression`/`style` narrow it to that aspect; a **Custom…** role (a short word or phrase, e.g. `freckles`) is used verbatim. A role picked on an individual `@`-mention pill always overrides the node default for that mention.
+- **Identity lock** — **Off** emits no identity constraint, **Soft** adds a mild "preserve the overall facial likeness" line, **Strict** adds a strong "must match exactly" clamp. Each lock line names its reference image, so multi-character scenes stay unambiguous. A per-mention `~lock` / `~nolock` on the pill overrides the node default for that mention. This is the same `Identity Lock` field shown in the config panel and Character Studio.
+
+Both defaults apply on image **and** video generation, whether the character is `@`-mentioned, auto-attached as an unmentioned wired reference, or added as an extra reference — including runs through the REST API, SDK, and MCP tools.
 
 All appearance and asset editing — generating the portrait, expressions, poses, motions, reference views, lighting, and setting voice/personality — happens inside the studio. The old in-node image action buttons, version history, accordions, and asset-sheet thumbnails have been replaced by the studio.
 
@@ -25,7 +36,7 @@ The config panel (right side, when a Character node is selected) is intentionall
 | Summary | read-only | Character name and style at a glance. |
 | Open Character Studio | button | Opens the full-screen Character Studio (same modal as the node's **⬡ Studio** button). |
 | Choose from Library / Gallery | button (row) | Opens the **Asset Picker** to bind the node to an existing character. Becomes **Replace from Library / Gallery** once a character is bound — use it to swap in a different one. |
-| Identity Lock | dropdown | Controls how strictly downstream nodes preserve the character's face/identity. |
+| Identity Lock | dropdown | Controls how strictly downstream nodes preserve the character's face/identity (**Off / Soft / Strict**, default Soft). The same field as the canvas node's **Identity lock** row — see [Default Role & Identity Lock](#default-role--identity-lock). |
 | Field Mappings | section | Map upstream node outputs to the character's inputs — `{characterName}` injection still works. |
 
 ### Character Data

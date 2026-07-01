@@ -175,6 +175,7 @@ describe("connectedReferenceSchema mirrors ConnectedReference (key-set drift gua
       variantDescription: true,
       variantDisplayName: true,
       defaultUsageMode: true,
+      defaultRole: true,
       isExtraRef: true,
       loraReplicateVersion: true,
       loraTriggerWord: true,

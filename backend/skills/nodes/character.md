@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-23T20:10:00.105Z
-generated_from: 527130f41
+generated_at: 2026-07-01T19:51:21.752Z
+generated_from: c65209366
 ---
 
 # Character
@@ -53,6 +53,7 @@ generated_from: 527130f41
 - `provider?: string`
 - `identityLock?: "off" | "soft" | "strict"`
 - `defaultUsageMode?: import("@nodaro/shared").UsageMode`
+- `defaultRole?: string`
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `assetInjections?: ReadonlyArray<{ sourceNodeId: string; facet?: string }>`

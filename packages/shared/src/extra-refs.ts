@@ -53,6 +53,14 @@ export interface ExtraRefCharacterContext {
   readonly defaultUsageMode?: UsageMode
   readonly canonicalDescription?: string | null
   readonly displayName?: string
+  /** Character node's hybrid `defaultRole` — stamped onto the extra's
+   *  `ConnectedReference.defaultRole` (only when the extra carries no per-ref
+   *  `usageMode` override, which would take precedence). */
+  readonly defaultRole?: string
+  /** Character node's `identityLock`, mapped to the per-reference lock shape
+   *  (`characterLockToRefLock`) — stamped onto the extra's
+   *  `ConnectedReference.identityLock`. */
+  readonly identityLock?: { enabled: boolean; text?: string }
 }
 
 /**
@@ -99,6 +107,15 @@ export function expandExtraRefsToConnectedReferences(
         variantDescription: description.length > 0 ? description : null,
         variantDisplayName: r.variantDisplayName,
         defaultUsageMode: effectiveMode,
+        // Node-default role (Character Node Role+Lock): stamped ONLY when the
+        // extra carries no per-ref `usageMode` override — the override wins
+        // (it's already folded into `defaultUsageMode` above, and
+        // `resolveDefaultRole` would otherwise let the role beat it).
+        defaultRole: r.usageMode ? undefined : ctx?.defaultRole,
+        // Node's mapped identity-lock (`characterLockToRefLock`) — orthogonal
+        // to the role; the hybrid renderers emit its line via
+        // `buildIdentityLockLine`.
+        identityLock: ctx?.identityLock,
         isExtraRef: true,
       })
     } else {
