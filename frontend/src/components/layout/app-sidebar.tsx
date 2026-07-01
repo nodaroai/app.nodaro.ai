@@ -21,6 +21,7 @@ import {
   Sparkles,
   Compass,
   Flag,
+  Clapperboard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -62,6 +63,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/projects", label: "Projects", icon: FolderOpen },
       { href: "/apps", label: "Apps", icon: Rocket },
       { href: "/templates", label: "Templates", icon: LayoutTemplate },
+      { href: "/video-director", label: "Video Director", icon: Clapperboard },
       { href: "/explore", label: "Explore", icon: Compass, multiUserOnly: true },
     ]
   },

@@ -7386,3 +7386,17 @@ export async function deleteAdminNodeDefault(nodeType: string): Promise<void> {
     throw new Error(text || `deleteAdminNodeDefault failed: ${res.status}`)
   }
 }
+
+// ============================================================
+// Video Director
+// ============================================================
+
+export async function runVideoDirector(params: {
+  genre: "explainer" | "product-launch"
+  brief: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/video-director/run", {
+    body: params as unknown as Record<string, unknown>,
+    label: "Failed to start video director",
+  })
+}
