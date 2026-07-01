@@ -85,8 +85,11 @@ export interface Character {
   /** Named Character Boards — dense reference sheets, one per persona/look
    *  (the `generate-image/character-board` factory preset rendered from the
    *  character's images). A first-class bucket: community publish snapshots it
-   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
-  boards?: Array<{ name: string; url: string }> | null
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`.
+   *  `type` marks an image-collage `"identity"` sheet vs a plain `"looks"`
+   *  board; `sourceImages` are the R2 URLs it was collaged from. Both optional
+   *  + backward-compatible (legacy boards have neither). */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }> | null
   /** Per-label user-uploaded reference VIDEO URLs (R2), keyed by a
    *  caller-owned label (lowercased+trimmed server-side). Mirrors
    *  `realLifeRefsByVariant` for video clips; read the chosen URLs off the row
@@ -201,8 +204,9 @@ export interface UpsertCharacterInput {
   bodyAngles?: Array<{ name: string; url: string }>
   motions?: Array<{ name: string; url: string }>
   /** Named Character Boards (see `Character.boards`) — whole-array replace,
-   *  like the asset buckets. Server caps: 24 boards, 200-char names. */
-  boards?: Array<{ name: string; url: string }>
+   *  like the asset buckets. Server caps: 24 boards, 200-char names, 30
+   *  sourceImages per board. */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }>
   /** See `Character.voice` — persisted alongside the voice so TTS can resolve a
    *  library/custom voice by id, `previewUrl` keeps the sample playable after
    *  reload, and `ttsProvider` keeps generation on a model the voice is
