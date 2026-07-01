@@ -319,6 +319,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedImageUrl as string | undefined)
     );
   }
+  if (type === "image-collage") {
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedImageUrl as string | undefined)
+    );
+  }
   if (type === "combine-videos") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -875,6 +884,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "upscale-image",
   "remove-background",
   "extract-frame",
+  "image-collage",
   "character",
   "face",
   "object",

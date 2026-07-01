@@ -218,6 +218,9 @@ export interface ResolvedInputs {
    *  `duration` is the upstream node's video duration in seconds (when known) —
    *  used to build aligned upstreamDurations on the combine-videos payload. */
   videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string; duration?: number }>
+  /** Image URLs accumulated from every upstream image producer, in wire order
+   *  (image-collage). Mirrors videoUrls for combine-videos. */
+  imageUrls?: string[]
   audioUrl?: string
   audioUrl2?: string
   audioUrls?: string[]

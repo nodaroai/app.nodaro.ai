@@ -49,6 +49,7 @@ import {
   generate3DTitle,
   generateMotionGraphics,
   mergeVideoAudioApi,
+  imageCollageApi,
   trimAudioApi,
   splitMediaApi,
   extractAudioApi,
@@ -145,6 +146,7 @@ import type {
   CompositeData,
   RenderVideoData,
   CombineVideosData,
+  ImageCollageData,
   MergeVideoAudioData,
   TrimAudioData,
   SplitMediaData,
@@ -5124,6 +5126,31 @@ export function executeNode(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "image-collage") {
+    const collageData = node.data as ImageCollageData;
+    const imageUrls = inputs.imageUrls ?? [];
+    if (imageUrls.length < 2) {
+      toast.error(`Node "${collageData.label}": need at least 2 image inputs`);
+      return Promise.reject(new Error("Need at least 2 images"));
+    }
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        imageCollageApi(imageUrls, {
+          layout: collageData.layout,
+          resolution: collageData.resolution,
+          aspectRatio: collageData.aspectRatio,
+          gap: collageData.gap,
+          backgroundColor: collageData.backgroundColor,
+          userId: ctx.userId,
+        }),
+      "generatedImageUrl",
+      "Image Collage",
+      ctx,
+    );
   }
 
   if (node.type === "combine-videos") {

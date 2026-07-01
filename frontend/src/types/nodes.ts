@@ -2995,6 +2995,27 @@ export type CombineVideosData = {
   activeResultIndex?: number
 }
 
+export type ImageCollageData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  /** "smart" = justified rows (aspect-aware); "grid" = uniform cells. */
+  layout: "smart" | "grid"
+  resolution: "2K" | "4K"
+  /** One of COMPOSITION_RATIOS: "1:1" | "16:9" | "9:16" | "4:5". */
+  aspectRatio: string
+  /** Gap between cells + outer margin, px on the output canvas. */
+  gap: number
+  backgroundColor: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export interface MergeAudioTrack {
   readonly id: string
   readonly sourceNodeId: string
@@ -4892,6 +4913,7 @@ export type SceneNodeData =
   | VoiceDesignData
   | ForcedAlignmentData
   | CombineVideosData
+  | ImageCollageData
   | MergeVideoAudioData
   | AddCaptionsData
   | ResizeVideoData
@@ -5067,6 +5089,7 @@ export type SceneNodeType =
   | "voice-design"
   | "forced-alignment"
   | "combine-videos"
+  | "image-collage"
   | "merge-video-audio"
   | "add-captions"
   | "resize-video"
@@ -6442,6 +6465,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", fieldMappings: {} },
+  },
+  {
+    type: "image-collage",
+    label: "Image Collage",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["image"],
+    defaultData: {
+      label: "Image Collage",
+      layout: "smart",
+      resolution: "2K",
+      aspectRatio: "1:1",
+      gap: 24,
+      backgroundColor: "#ffffff",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as ImageCollageData,
+    exposableOutputs: [{ key: "image", label: "Image", outputType: "image" as const }],
   },
   {
     type: "merge-video-audio",

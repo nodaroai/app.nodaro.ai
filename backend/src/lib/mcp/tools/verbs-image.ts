@@ -796,6 +796,76 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── image_collage ──
+  server.registerTool(
+    "image_collage",
+    {
+      title: "Image Collage",
+      description:
+        "Composite multiple images into ONE large 2K/4K image. Each item is either { url } or { asset_id } (a Nodaro job id whose output is an image). " +
+        "'smart' layout justifies images into aspect-balanced rows (Google-Photos style, minimal cropping); 'grid' uses uniform cells. " +
+        "Returns a job_id with the composited image.",
+      inputSchema: {
+        images: z
+          .array(
+            z.object({
+              url: z.string().url().optional(),
+              asset_id: z.string().optional(),
+            }),
+          )
+          .min(2)
+          .max(30)
+          .describe("2–30 image sources, each { url } or { asset_id }."),
+        layout: z.enum(["smart", "grid"]).optional().describe("Arrangement algorithm. Default 'smart' (justified rows)."),
+        resolution: z.enum(["2K", "4K"]).optional().describe("Output long-edge resolution. Default '2K' (2560px)."),
+        aspect_ratio: z.enum(["1:1", "16:9", "9:16", "4:5"]).optional().describe("Output canvas aspect ratio. Default '1:1'."),
+        gap: z.number().int().min(0).max(200).optional().describe("Gap between images + outer margin, in px. Default 24."),
+        background_color: z
+          .string()
+          .regex(/^#?[0-9a-fA-F]{6}$/)
+          .optional()
+          .describe("Background shown in the gaps, #RRGGBB. Default #ffffff."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-image", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const imageUrls: string[] = []
+      for (const item of args.images) {
+        const url =
+          item.url ??
+          (item.asset_id
+            ? await resolveAssetId({ assetId: item.asset_id, userId: session.userId, expectedKind: "image" })
+            : null)
+        if (!url) {
+          return { content: [{ type: "text" as const, text: "Each image must have either a url or an asset_id." }], isError: true }
+        }
+        imageUrls.push(url)
+      }
+      const payload: Record<string, unknown> = {
+        imageUrls,
+        ...(args.layout ? { layout: args.layout } : {}),
+        ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(args.gap !== undefined ? { gap: args.gap } : {}),
+        ...(args.background_color ? { backgroundColor: args.background_color } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/image-collage",
+        payload,
+        label: "image collage",
+        widgetKind: "image",
+        widgetData: { prompt: `Collage of ${imageUrls.length} images`, model: "image-collage" },
+      })
+    },
+  )
+
   // ── image_to_text ──
   server.registerTool(
     "image_to_text",

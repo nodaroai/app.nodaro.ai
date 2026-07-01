@@ -17,6 +17,7 @@ import { lipSyncRoutes } from "./routes/lip-sync.js"
 import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
+import { imageCollageRoutes } from "./routes/image-collage.js"
 import { referenceSheetRoutes } from "./routes/reference-sheet.js"
 import { referenceBoardRoutes } from "./routes/reference-board.js"
 import { mergeVideoAudioRoutes } from "./routes/merge-video-audio.js"
@@ -305,6 +306,7 @@ export async function buildApp() {
   await app.register(textToSpeechRoutes)
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
+  await app.register(imageCollageRoutes)
   await app.register(referenceSheetRoutes)
   await app.register(referenceBoardRoutes)
   await app.register(mergeVideoAudioRoutes)

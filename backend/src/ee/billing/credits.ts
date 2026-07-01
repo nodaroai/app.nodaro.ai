@@ -846,6 +846,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   "combine-videos": 3,
+  // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
+  // no provider cost). Priced by resolution. Base + resolution composites;
+  // the single-node route uses computeCredits, workflow runs reserve the
+  // composite via the payload-builder modelIdentifier. See migration 244.
+  "image-collage": 2,
+  "image-collage:2K": 2,
+  "image-collage:4K": 4,
   "merge-video-audio": 2,
   "add-captions": 3,
   "add-captions:kinetic": 5,

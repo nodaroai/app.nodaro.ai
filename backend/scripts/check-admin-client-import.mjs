@@ -110,6 +110,12 @@ const ALLOWED_PATHS = [
   /^src\/routes\/audio-separation\.ts$/,
   /^src\/routes\/audio-fx\.ts$/,
 
+  // Image Collage: FFmpeg job-creation route. Derives `userId = req.userId`
+  // (401 if absent) and INSERTs the job with `user_id: userId` — identical
+  // shape to combine-videos (legacy-baselined). Service-role required to insert
+  // into `jobs`; no cross-user reads or writes.
+  /^src\/routes\/image-collage\.ts$/,
+
   // Node presets: per-user CRUD collection. Every handler derives
   // `userId = req.userId` (401 if absent); LIST/DELETE scope by
   // `.eq("user_id", userId)` and CREATE/IMPORT INSERT with `user_id: userId`.
