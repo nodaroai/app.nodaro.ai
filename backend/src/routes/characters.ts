@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { PLACEHOLDER_CHARACTER_NAME, TTS_PROVIDERS } from "@nodaro/shared"
+import { CHARACTER_REFERENCE_PHOTO_KINDS, PLACEHOLDER_CHARACTER_NAME, TTS_PROVIDERS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
@@ -28,20 +28,11 @@ import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 //
 // Migration 118 renamed `front` → `frontFace` and `fullBody` → `frontBody`
 // (the original names were ambiguous — `front` could be face-only or body, and
-// `fullBody` collapsed front-body and back-body into one slot).
-const REFERENCE_PHOTO_KINDS = [
-  "frontFace",
-  "sideLeft",
-  "sideRight",
-  "threeQuarterLeft",
-  "threeQuarterRight",
-  "frontBody",
-  "other",
-] as const
-
+// `fullBody` collapsed front-body and back-body into one slot). The 7-kind enum
+// is the shared `CHARACTER_REFERENCE_PHOTO_KINDS` (@nodaro/shared).
 const referencePhoto = z.object({
   url: safeUrlSchema,
-  kind: z.enum(REFERENCE_PHOTO_KINDS),
+  kind: z.enum(CHARACTER_REFERENCE_PHOTO_KINDS),
 })
 
 export const upsertCharacterBody = z.object({

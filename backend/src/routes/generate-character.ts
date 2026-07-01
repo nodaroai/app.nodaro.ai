@@ -14,6 +14,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import {
   CHARACTER_ASPECT_OPTIONS,
+  CHARACTER_REFERENCE_PHOTO_KINDS,
   resolveCharacterAspectRatio,
 } from "@nodaro/shared"
 
@@ -63,15 +64,8 @@ const generateCharacterBody = z
           // Migration 118 renamed the two ambiguous kinds:
           //   front    → frontFace  (face-level shot)
           //   fullBody → frontBody  (full-body natural standing shot)
-          kind: z.enum([
-            "frontFace",
-            "sideLeft",
-            "sideRight",
-            "threeQuarterLeft",
-            "threeQuarterRight",
-            "frontBody",
-            "other",
-          ]),
+          // The 7-kind enum is the shared CHARACTER_REFERENCE_PHOTO_KINDS.
+          kind: z.enum(CHARACTER_REFERENCE_PHOTO_KINDS),
         }),
       )
       .max(20)

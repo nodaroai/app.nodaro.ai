@@ -197,6 +197,35 @@ export function locationReferencePhotoKindLabel(kind: LocationReferencePhotoKind
 }
 
 /**
+ * Reference-photo kinds captured in the Character Studio identity foundation —
+ * the SINGLE schema-of-record for the 7 kinds. Previously duplicated across the
+ * `generate-character` + `characters` route Zod enums, `character-reference-set.ts`
+ * (backend ranking), and `frontend/src/lib/reference-photo-routing.ts` (UI
+ * filtering). All of those now derive from this const (build a Zod enum via
+ * `z.enum(CHARACTER_REFERENCE_PHOTO_KINDS)` at the backend edge — this package
+ * stays zod-free). Also the shape of the DB `characters.reference_photos[].kind`.
+ *
+ * `other` is the free-form bucket; the rest are curated identity-foundation roles
+ * (frontFace + the four rotation views + a full-body shot).
+ */
+export const CHARACTER_REFERENCE_PHOTO_KINDS = [
+  "frontFace",
+  "sideLeft",
+  "sideRight",
+  "threeQuarterLeft",
+  "threeQuarterRight",
+  "frontBody",
+  "other",
+] as const
+export type CharacterReferencePhotoKind = (typeof CHARACTER_REFERENCE_PHOTO_KINDS)[number]
+
+/** A single character reference photo: a URL plus its identity-foundation role. */
+export interface CharacterReferencePhoto {
+  url: string
+  kind: CharacterReferencePhotoKind
+}
+
+/**
  * Reserved name the Character Studio auto-assigns when a user clicks Generate
  * before naming the character. Treated as "no name" by prompt builders so the
  * literal string "Untitled character" never leaks into a generation prompt.
