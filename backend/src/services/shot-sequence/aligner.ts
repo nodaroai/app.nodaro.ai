@@ -11,9 +11,13 @@ export interface AlignCuesResult {
   warnings: string[]
 }
 
-/** trim → lowercase → strip non-alphanumeric. Empty string means "skip". */
+/** trim → lowercase → strip non-alphanumeric. Empty string means "skip".
+ *  Unicode-aware (`\p{L}\p{N}` + `u` flag) so non-Latin scripts — Hebrew, Arabic,
+ *  Cyrillic, CJK, etc. — survive normalization and their cues can anchor to the
+ *  forced-alignment words. An ASCII-only class ([a-z0-9]) erased every Hebrew
+ *  word to "", so Hebrew cues never matched → EmptyAlignmentError. */
 function normalizeToken(s: string): string {
-  return s.trim().toLowerCase().replace(/[^a-z0-9]/g, "")
+  return s.trim().toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")
 }
 
 function tokenize(text: string): string[] {

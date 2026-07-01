@@ -42,6 +42,23 @@ describe("alignCues", () => {
     expect(spans.c1).toEqual({ startMs: 0, endMs: 2000 })
   })
 
+  it("matches a Hebrew (non-Latin, RTL) cue against Hebrew alignment words", () => {
+    // Every Hebrew char is non-ASCII; ASCII-only normalization stripped each word
+    // to "" → the cue could never match → EmptyAlignmentError downstream. Unicode-
+    // aware normalization keeps the letters so Hebrew/Arabic/Cyrillic/CJK cues anchor.
+    const a = align(["איך", "מזגן", "עובד", "היום"]) // "how does an AC work today"
+    const { spans, warnings } = alignCues([{ id: "c1", text: "מזגן עובד" }], a)
+    expect(warnings).toEqual([])
+    expect(spans.c1).toEqual({ startMs: 1000, endMs: 3000 })
+  })
+
+  it("matches a mixed Hebrew + Latin/digit cue (loanwords survive normalization)", () => {
+    const a = align(["מה", "זה", "Bitcoin", "2009"])
+    const { spans, warnings } = alignCues([{ id: "c1", text: "זה Bitcoin 2009" }], a)
+    expect(warnings).toEqual([])
+    expect(spans.c1).toEqual({ startMs: 1000, endMs: 4000 })
+  })
+
   it("matches a hyphenated word the aligner glued into one token", () => {
     // forced-alignment splits on whitespace only → "well-known" is ONE token
     const a: AlignmentWord[] = [{ word: "well-known", start: 0, end: 1 }, { word: "brand", start: 1, end: 2 }]
