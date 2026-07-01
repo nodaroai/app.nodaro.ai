@@ -3,10 +3,11 @@
  * shared by every frontend call site (execute-node generate-image / i2i /
  * modify, and the config-panel preview) so they can never drift apart.
  *
- * - Local dev (`import.meta.env.DEV`, i.e. `npm run dev`) defaults to "hybrid"
- *   so the new format is active without needing an env var set.
- * - Production respects `VITE_IMAGE_REFERENCE_FORMAT` (default "legacy").
- * - Set `VITE_IMAGE_REFERENCE_FORMAT=legacy` to force legacy even in dev.
+ * - Default is "hybrid" everywhere (dev AND production) — the Unified Reference
+ *   Roles feature is the default assembly format.
+ * - Set `VITE_IMAGE_REFERENCE_FORMAT=legacy` to revert to the legacy format
+ *   (the instant kill-switch; pair with the backend `IMAGE_REFERENCE_FORMAT=legacy`).
+ * - Test runs ALWAYS resolve to "legacy" (the suites assert the legacy assembly).
  */
 // Test runs must ALWAYS resolve to legacy (the execute-node suite asserts the
 // legacy assembly) — regardless of `.env.local` (vitest loads it) or the
@@ -23,6 +24,4 @@ export const IMAGE_REFERENCE_FORMAT: "legacy" | "hybrid" = isTest
   ? "legacy"
   : import.meta.env.VITE_IMAGE_REFERENCE_FORMAT === "legacy"
     ? "legacy"
-    : import.meta.env.VITE_IMAGE_REFERENCE_FORMAT === "hybrid" || import.meta.env.DEV
-      ? "hybrid"
-      : "legacy"
+    : "hybrid"

@@ -247,15 +247,12 @@ function buildAssembleInput(
     // per-provider reference gate inside `buildImagePrompt` resolves the same
     // way regardless of which call site invokes assembly.
     provider: body.provider ?? "nano-banana",
-    // Test runs must resolve to legacy (route tests assert the legacy assembly),
-    // regardless of `.env` (which vitest loads) — so the test check comes FIRST.
-    // Local dev defaults to hybrid; prod (NODE_ENV=production) respects
-    // IMAGE_REFERENCE_FORMAT (default legacy). Set it to "legacy" to force legacy.
+    // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs must
+    // resolve to legacy (route tests assert the legacy assembly) — so the test
+    // check comes FIRST. Set IMAGE_REFERENCE_FORMAT=legacy to revert to legacy.
     ...(process.env.NODE_ENV === "test" || process.env.IMAGE_REFERENCE_FORMAT === "legacy"
       ? {}
-      : process.env.NODE_ENV !== "production" || process.env.IMAGE_REFERENCE_FORMAT === "hybrid"
-        ? { referenceFormat: "hybrid" as const }
-        : {}),
+      : { referenceFormat: "hybrid" as const }),
     ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
     ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),
