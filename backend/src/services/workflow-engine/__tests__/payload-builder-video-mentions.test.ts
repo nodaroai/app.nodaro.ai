@@ -620,6 +620,61 @@ describe("payload-builder video paths: extra reference images", () => {
     expect(prompt).toContain("@image_1 (danny) — hands in pockets, looking right")
   })
 
+  it("hybrid: first-sight extra character surfaces the wired held-prop elementInjection (Reference Roles F3)", () => {
+    // Part A wiring guard: a first-sight character extra whose slug has a wired
+    // scene-composition element (held-prop) must surface that injection in the
+    // video HYBRID output — the builder now populates `VideoExtraRef.elementInjection`
+    // from the same map the mention/canonical paths use. Kira's canonical is
+    // suppressed so the extra is FIRST-SIGHT (not a pair-back), exercising the
+    // first-sight element-injection branch. Gated on the hybrid env (mirrors
+    // payload-builder-hybrid-gate.test.ts).
+    const prevNodeEnv = process.env.NODE_ENV
+    const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+    try {
+      process.env.NODE_ENV = "development"
+      process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+
+      const character = charNode("char-1") // Kira
+      const heldProp = node("hp-1", "held-prop", { heldProp: "smartphone" })
+      const t2v = node("t2v-1", "text-to-video", {
+        prompt: "a neon-lit street",
+        provider: "kling",
+        // Suppress Kira's canonical auto-attach → the extra is first-sight.
+        suppressedCanonicalCharacterIds: ["kira"],
+        extraRefs: [
+          {
+            url: "https://r2/kira-alt.png",
+            characterSlug: "kira",
+            variantSlug: "alt",
+            description: "leaning on a railing",
+          },
+        ],
+      })
+      const nodes = [character, heldProp, t2v]
+      const edges = [
+        edge("hp-1", "char-1", null, "assets"), // held-prop → character
+        edge("char-1", "t2v-1"), // character → consumer (canonical suppressed)
+      ]
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(t2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+      const prompt = result.payload.prompt as string
+
+      // The wired held-prop rides the first-sight extra as a trailing directive.
+      expect(prompt.toLowerCase()).toContain("smartphone")
+      // Hybrid form (no legacy directive block) and first-sight (not a pair-back).
+      expect(prompt).not.toContain("Use these characters:")
+      expect(prompt).not.toContain("is the same subject as")
+      // The extra URL rode into the worker payload.
+      expect(result.payload.referenceImageUrls as string[]).toContain("https://r2/kira-alt.png")
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = prevNodeEnv
+      if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+      else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+    }
+  })
+
   it("propagates extra refs to text-to-video referenceImageUrls", () => {
     const character = charNode("char-1")
     const t2v = node("t2v-1", "text-to-video", {

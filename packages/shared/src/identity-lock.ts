@@ -136,6 +136,7 @@ const DEFAULT_LOCK_TEXT: Partial<Record<ReferenceSource, string>> = {
   "wired-character": "Lock the exact identity of the person in {ref} — face, bone structure, skin tone, and all unique features.",
   "wired-face": "Lock the exact facial identity in {ref} — bone structure, features, and skin texture.",
   "wired-creature": "Lock the exact identity of the creature in {ref} — anatomy, markings, and all unique features.",
+  "wired-location": "Lock the exact look of {ref} — match the location's architecture, layout, and lighting.",
 }
 
 /**
@@ -144,6 +145,19 @@ const DEFAULT_LOCK_TEXT: Partial<Record<ReferenceSource, string>> = {
  * (absent or `enabled === false` → `null`). Custom `text` wins (with `{ref}` →
  * binding); otherwise the source's built-in wording is used.
  */
+/**
+ * Return a copy of `ref` with `identityLock.enabled` forced ON when `forceLock`
+ * is true — the per-mention `~lock` override (Unified Reference Roles, Task 4).
+ * Any existing custom `text` is preserved. When `forceLock` is false the
+ * ORIGINAL ref is returned UNCHANGED (never a copy), so a lock-less mention
+ * resolves byte-identically to before. Called by the three HYBRID mention
+ * resolvers right before `buildIdentityLockLine`. Never mutates `ref`.
+ */
+export function withForcedIdentityLock(ref: ConnectedReference, forceLock: boolean): ConnectedReference {
+  if (!forceLock) return ref
+  return { ...ref, identityLock: { enabled: true, text: ref.identityLock?.text } }
+}
+
 export function buildIdentityLockLine(ref: ConnectedReference, binding: string): string | null {
   const lock = ref.identityLock
   if (!lock?.enabled) return null                       // default OFF + explicit-false OFF

@@ -95,8 +95,19 @@ describe("parseLocationMentionToken", () => {
       ).toBeNull()
     })
 
-    it("returns null for 3-part with unknown plain segment (not bucket/variant, not mode)", () => {
-      expect(parseLocationMentionToken("@oldlibrary:1:foobar")).toBeNull()
+    it("3-part with a bare non-mode slug parses as a custom ROLE (parser gate removed, F2)", () => {
+      // Widened in the reference-roles F2 follow-up: any valid slash-less,
+      // non-mode 3rd segment is accepted as a role verbatim (previously the
+      // parser preset-gated `foobar` → null). Legacy stays literal via the
+      // resolver's `if (t.role) continue` guard, not the parser.
+      expect(parseLocationMentionToken("@oldlibrary:1:foobar")).toEqual({
+        locationSlug: "oldlibrary",
+        imageIndex: 1,
+        bucket: null,
+        variant: null,
+        usageMode: null,
+        role: "foobar",
+      })
     })
   })
 

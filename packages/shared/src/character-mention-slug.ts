@@ -31,6 +31,15 @@ export interface CharacterMentionTokenInfo {
    * other 4-part token.
    */
   readonly usageMode: UsageMode | null
+  /**
+   * Additive per-mention identity-lock sentinel (Unified Reference Roles,
+   * Task 4). `true` when the token carried a trailing `~lock`
+   * (`@kira:1:face~lock`); ABSENT (undefined) otherwise, so a lock-less token
+   * stays byte-identical to the pre-Task-4 shape. Only ACTED UPON by the HYBRID
+   * resolvers (force `identityLock.enabled = true` for the ref); the LEGACY
+   * resolvers ignore it entirely, so `~lock` is inert on the legacy path.
+   */
+  readonly lock?: boolean
   readonly offset: number
 }
 
@@ -61,10 +70,20 @@ export interface CharacterMentionTokenInfo {
 export function parseCharacterMentionToken(
   text: string,
   _knownCharacterSlugs?: readonly string[],
-): { characterSlug: string; imageIndex: number; variantSlug: string | null; usageMode: UsageMode | null } | null {
+): { characterSlug: string; imageIndex: number; variantSlug: string | null; usageMode: UsageMode | null; lock?: boolean } | null {
   if (!text.startsWith("@")) return null
-  const rest = text.slice(1)
+  let rest = text.slice(1)
   if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
+
+  // Additive `~lock` sentinel (Unified Reference Roles, Task 4). Strip a
+  // trailing `~lock` BEFORE splitting on ":" so the segment grammar below is
+  // byte-identical to pre-Task-4 (a `~` can never appear inside a segment —
+  // the shapes are `[a-z][a-z0-9-]*`). A token WITHOUT `~lock` is untouched
+  // here. The parsed `lock` is only honored by the HYBRID resolvers.
+  const lock = rest.endsWith("~lock") || undefined
+  if (lock) rest = rest.slice(0, -"~lock".length)
+  // Spread into each return so a lock-less token gains NO `lock` key.
+  const lockField = lock ? { lock: true } : {}
 
   // Format: <character>:<index>(:<variant|mode>)?(:<mode>)?.
   // Splitting on ":" requires 2–4 parts (no bare @character anymore).
@@ -79,7 +98,7 @@ export function parseCharacterMentionToken(
 
   // 2-part: kira:1 — canonical, default mode.
   if (parts.length === 2) {
-    return { characterSlug, imageIndex, variantSlug: null, usageMode: null }
+    return { characterSlug, imageIndex, variantSlug: null, usageMode: null, ...lockField }
   }
 
   // 3-part: kira:1:X — X is either a usage-mode keyword or a variant slug.
@@ -89,9 +108,9 @@ export function parseCharacterMentionToken(
   if (parts.length === 3) {
     if (!/^[a-z][a-z0-9-]*$/.test(third)) return null
     if (isUsageMode(third)) {
-      return { characterSlug, imageIndex, variantSlug: null, usageMode: third }
+      return { characterSlug, imageIndex, variantSlug: null, usageMode: third, ...lockField }
     }
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: null }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, ...lockField }
   }
 
   // 4-part: kira:1:smile:mode — variant + mode override. Both segments must
@@ -100,7 +119,7 @@ export function parseCharacterMentionToken(
   if (parts.length === 4) {
     if (!/^[a-z][a-z0-9-]*$/.test(third)) return null
     if (!isUsageMode(fourth)) return null
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, ...lockField }
   }
 
   return null
@@ -117,8 +136,11 @@ export function findCharacterMentionTokens(
   // The `\d+` index segment is required — see `parseCharacterMentionToken`
   // for the rationale. The two optional trailing `:<slug>` groups absorb
   // either `:<variant>`, `:<mode>`, or `:<variant>:<mode>`; the parser
-  // disambiguates which segment is which based on `USAGE_MODES`.
-  const regex = /(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\d+(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?)/g
+  // disambiguates which segment is which based on `USAGE_MODES`. The optional
+  // trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock sentinel
+  // INTO the token (so it is spliced out at resolve time); it is optional, so a
+  // lock-less token matches byte-identically to before.
+  const regex = /(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\d+(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?(?:~lock(?![a-z0-9-]))?)/g
   const knownSet = new Set(knownCharacterSlugs)
   for (const match of prompt.matchAll(regex)) {
     const token = match[1]

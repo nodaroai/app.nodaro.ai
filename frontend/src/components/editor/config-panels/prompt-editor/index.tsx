@@ -13,6 +13,8 @@ import { ImageRefExtension } from "./image-ref-extension"
 import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
+import { roleToCharacterRefSlots } from "./character-ref-roles"
+import { roleToLocationRefSlots } from "./location-ref-roles"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
@@ -23,7 +25,7 @@ import { SnippetSuggestionList } from "./snippet-suggestion-list"
 import { SnippetPillExtension } from "./snippet-pill-extension"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { matchSnippetRanges, type MatchableSnippet } from "@/lib/snippet-matching"
-import { DEFAULT_USAGE_MODE, canonicalVarName } from "@nodaro/shared"
+import { DEFAULT_USAGE_MODE, canonicalVarName, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
@@ -48,8 +50,12 @@ const AUDIO_TOKEN_RE = /\{audio:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
  *   3=imageIndex
  *   4=third (variant OR mode)
  *   5=fourth (mode)
+ *
+ * The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
+ * sentinel into the match (detected via `/~lock$/` on match[0]); optional +
+ * non-capturing, so groups 1–5 and a lock-less token stay byte-identical.
  */
-const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?/g
+const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~lock(?![a-z0-9-]))?/g
 
 /**
  * Location token shape — wider than character because the 3rd/4th segment
@@ -67,8 +73,11 @@ const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::(
  * would have seen for a hand-typed slug.
  */
 const LOCATION_TOKEN_SEGMENT = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
+// The optional trailing `(?:~lock)?` is captured INSIDE group 2 (the token
+// passed to `parseLocationRefMatch`, which strips it); optional, so a lock-less
+// token stays byte-identical.
 const LOCATION_TOKEN_RE_GLOBAL = new RegExp(
-  `(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_TOKEN_SEGMENT})?(?::${LOCATION_TOKEN_SEGMENT})?)`,
+  `(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_TOKEN_SEGMENT})?(?::${LOCATION_TOKEN_SEGMENT})?(?:~lock(?![a-z0-9-]))?)`,
   "g",
 )
 
@@ -212,13 +221,13 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     if (!attrs) continue
     if (!known.locations.has(attrs.locationSlug)) continue
     // Phase D legacy gate (mirrors the extension's input/paste rule): a
-    // bare-slug ROLE token (`@old-library:1:background`, role set) is a
-    // HYBRID-only construct. In LEGACY it stayed literal text pre-Phase-D, so
-    // the valueToDoc scanner must NOT auto-promote it to a pill either —
-    // otherwise a saved legacy prompt would flip text→pill on reload (and, since
-    // the node below drops the role slug, silently rewrite the token on the next
-    // edit). HYBRID keeps promotion. NOT gated: `parseLocationRefMatch` itself
-    // (existing pills still parse) — only this promotion decision.
+    // bare-slug ROLE token (`@old-library:1:background` or a custom
+    // `@old-library:1:rooftop`, role set) is a HYBRID-only construct. In LEGACY
+    // it stayed literal text pre-Phase-D, so the valueToDoc scanner must NOT
+    // auto-promote it to a pill either — otherwise a saved legacy prompt would
+    // flip text→pill on reload. HYBRID keeps promotion. NOT gated:
+    // `parseLocationRefMatch` itself (existing pills still parse) — only this
+    // promotion decision.
     if (attrs.role && IMAGE_REFERENCE_FORMAT !== "hybrid") continue
     tokens.push({
       start: slugStart,
@@ -231,6 +240,14 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
           bucket: attrs.bucket,
           variant: attrs.variant,
           usageMode: attrs.usageMode,
+          // Carry the ROLE slug through (hybrid only reaches here): dropping it
+          // would let `renderText` silently rewrite `@old-library:1:background`
+          // → `@old-library:1` on the next edit. Matches the extension's
+          // `parseMatchAttrs` / input-rule shape.
+          role: attrs.role,
+          // Per-mention `~lock` (Task 4): HYBRID-only so a reloaded legacy
+          // prompt never flips a pill's lock on. Mirrors `resolvePromotableAttrs`.
+          lock: IMAGE_REFERENCE_FORMAT === "hybrid" ? (attrs.lock ?? false) : false,
         },
       },
     })
@@ -247,7 +264,11 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     const indexStr = match[3]
     const third = match[4]
     const fourth = match[5]
-    const attrs = parseCharacterRefMatch(characterWithAt, indexStr, third, fourth)
+    // Per-mention `~lock` (Task 4): read from the full match (which now includes
+    // the sentinel) and HYBRID-gated so a reloaded legacy prompt never flips a
+    // pill's lock on. Mirrors the extension's input/paste `getAttributes`.
+    const lock = IMAGE_REFERENCE_FORMAT === "hybrid" && /~lock$/.test(match[0])
+    const attrs = parseCharacterRefMatch(characterWithAt, indexStr, third, fourth, lock)
     if (!attrs) continue
     if (!known.characters.has(attrs.characterSlug)) continue
     tokens.push({
@@ -260,6 +281,7 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
           imageIndex: attrs.imageIndex,
           variantSlug: attrs.variantSlug,
           usageMode: attrs.usageMode,
+          lock: attrs.lock ?? false,
         },
       },
     })
@@ -557,29 +579,41 @@ export function PromptEditor({
             // for a hand-typed slug.
             if (item.source === "location" && item.locationSlug) {
               const nextIdx = computeNextMentionIndex()
-              const bucket = item.locationVariantBucket ?? null
-              const variant = item.locationVariantSlug ?? null
-              // Mode resolution (slice 4): if the user explicitly picked a
-              // location mode via the 3rd-level drill, ALWAYS emit it as
-              // the trailing slug segment (4th segment for bucketed
-              // variants — `@oldlibrary:1:weather/rain:style`; 3rd segment
-              // for canonical — `@oldlibrary:1:style`) so the user's
-              // explicit choice round-trips through `getText` and survives
-              // a `valueToDoc` re-parse. When no mode was picked
-              // (`locationUsageMode` undefined), we stash `null` and the
-              // extension's `renderText` emits a clean 2-or-3-part slug —
-              // the runtime path then falls back to the location node's
-              // default mode (or the global `DEFAULT_LOCATION_USAGE_MODE`
-              // "identical") when resolving the slug.
+              // Slot resolution. In HYBRID the 3rd-level drill picks a ROLE
+              // (`item.role`): a location token is role XOR bucket/variant XOR
+              // mode, so the Plan-D `roleToLocationRefSlots` helper fills at
+              // most one of role/usageMode and ALWAYS clears bucket/variant
+              // (never an invalid multi-segment token). The helper is the
+              // single source of truth for the role→slot mapping — do not
+              // re-derive it here.
               //
-              // Mirrors the character path's mode-priority logic but
-              // simpler: locations don't yet thread a per-source
-              // `defaultUsageMode` through `RefImageItem`, so the only
-              // emission trigger is an explicit pick.
-              const explicitLocMode = item.locationUsageMode
-              const locModeForNode = explicitLocMode != null
-                ? explicitLocMode
-                : null
+              // Otherwise (legacy drill, or a level-2 variant / canonical pick
+              // in either format) the existing path is byte-identical to
+              // before: bucket/variant come from the picked entry, and the
+              // mode is emitted ONLY when explicitly chosen via the mode drill
+              // (4th segment for bucketed variants — `@oldlibrary:1:weather/rain:style`;
+              // 3rd segment for canonical — `@oldlibrary:1:style`). When no
+              // mode was picked (`locationUsageMode` undefined) the extension's
+              // `renderText` emits a clean 2-or-3-part slug and the runtime
+              // path falls back to the location node's default mode (or the
+              // global `DEFAULT_LOCATION_USAGE_MODE` "identical").
+              let bucket: string | null
+              let variant: string | null
+              let roleForNode: string | null
+              let locModeForNode: LocationUsageMode | null
+              if (item.role != null) {
+                const slots = roleToLocationRefSlots(item.role)
+                bucket = slots.bucket
+                variant = slots.variant
+                roleForNode = slots.role
+                locModeForNode = slots.usageMode
+              } else {
+                bucket = item.locationVariantBucket ?? null
+                variant = item.locationVariantSlug ?? null
+                roleForNode = null
+                const explicitLocMode = item.locationUsageMode
+                locModeForNode = explicitLocMode != null ? explicitLocMode : null
+              }
               ed
                 .chain()
                 .focus()
@@ -593,6 +627,7 @@ export function PromptEditor({
                       bucket,
                       variant,
                       usageMode: locModeForNode,
+                      role: roleForNode,
                     },
                   },
                   // Trailing space — matches the character path so the
@@ -616,27 +651,39 @@ export function PromptEditor({
             // behavior is preserved.
             if (item.source === "character" && item.characterSlug) {
               const nextIdx = computeNextMentionIndex()
-              // Mode resolution priority:
-              //   1. `item.usageMode` — set by the 3rd-level mode-picker drill;
+              // Slot resolution. In HYBRID the 3rd-level drill picks a ROLE
+              // (`item.role`), which occupies EXACTLY ONE of usageMode /
+              // variantSlug — routed through the Plan-D `roleToCharacterRefSlots`
+              // helper (the single source of truth for the role→slot mapping;
+              // do not re-derive it here). It clears the sibling slot so a role
+              // pick can never emit an invalid 4-part token.
+              //
+              // Otherwise (legacy drill, or a level-2 variant pick) the mode
+              // resolution is byte-identical to before:
+              //   1. `item.usageMode` — set by the legacy 3rd-level mode drill;
               //      ALWAYS emitted as the 4th slug segment (even when equal to
               //      the default) so the user's explicit choice round-trips.
               //   2. character node's `defaultUsageMode` — emitted only when
-              //      non-default. Keeps the common case (`identical`) clean as
-              //      the legacy 2/3-part form. Casual users never see the
-              //      4-part syntax unless they intentionally pick a mode or
-              //      configured a non-default default on the source node.
-              //
-              // The resolved `modeForNode` is what we stash on the
-              // characterRef node's `usageMode` attribute. The extension's
-              // `renderText` only emits a 4th segment when `usageMode` is
-              // non-null, so passing `null` here keeps the pill clean and
+              //      non-default, keeping the common case (`identical`) clean as
+              //      the legacy 2/3-part form.
+              // The extension's `renderText` only emits a 4th segment when
+              // `usageMode` is non-null, so a null keeps the pill clean and
               // defers mode resolution to the character node at runtime.
-              const explicitMode = item.usageMode
-              const defaultMode = item.defaultUsageMode
-              const includeMode = explicitMode != null
-                ? true
-                : defaultMode != null && defaultMode !== DEFAULT_USAGE_MODE
-              const modeForNode = includeMode ? (explicitMode ?? defaultMode ?? null) : null
+              let variantSlugForNode: string | null
+              let modeForNode: UsageMode | null
+              if (item.role != null) {
+                const slots = roleToCharacterRefSlots(item.role)
+                variantSlugForNode = slots.variantSlug
+                modeForNode = slots.usageMode
+              } else {
+                variantSlugForNode = item.variantSlug ?? null
+                const explicitMode = item.usageMode
+                const defaultMode = item.defaultUsageMode
+                const includeMode = explicitMode != null
+                  ? true
+                  : defaultMode != null && defaultMode !== DEFAULT_USAGE_MODE
+                modeForNode = includeMode ? (explicitMode ?? defaultMode ?? null) : null
+              }
               ed
                 .chain()
                 .focus()
@@ -647,7 +694,7 @@ export function PromptEditor({
                     attrs: {
                       characterSlug: item.characterSlug,
                       imageIndex: nextIdx,
-                      variantSlug: item.variantSlug ?? null,
+                      variantSlug: variantSlugForNode,
                       usageMode: modeForNode,
                     },
                   },

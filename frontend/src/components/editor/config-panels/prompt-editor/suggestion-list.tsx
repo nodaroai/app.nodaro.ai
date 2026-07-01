@@ -12,6 +12,9 @@ import {
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
 import { optimizedImageUrl } from "@/lib/image"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
+import { characterSwapMenuRoles, sanitizeRole } from "./character-ref-roles"
+import { locationSwapMenuRoles, sanitizeLocationRole } from "./location-ref-roles"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 
 /**
@@ -35,6 +38,17 @@ export type SuggestionCommandPayload = RefImageItem & {
   usageMode?: UsageMode
   /** Location usage-mode override (only meaningful when `source === "location"`). */
   locationUsageMode?: LocationUsageMode
+  /**
+   * Hybrid ROLE override, set by the 3rd-level drill when
+   * `IMAGE_REFERENCE_FORMAT === "hybrid"` (character AND location). Takes
+   * precedence over `usageMode`/`locationUsageMode`/variant: the parent's
+   * `command` handler routes it through `roleTo{Character,Location}RefSlots`,
+   * which lands it in EXACTLY ONE token slot (usageMode XOR variantSlug for
+   * character; `role` XOR usageMode for location, always clearing
+   * bucket/variant). Undefined in legacy — the drill offers the usage-mode
+   * list unchanged, so this field never appears.
+   */
+  role?: string
 }
 
 export interface SuggestionListHandle {
@@ -91,6 +105,10 @@ type DisplayRow =
   | { kind: "character-root"; item: RefImageItem; variantCount: number; characterSlug: string }
   | { kind: "variant"; item: RefImageItem; flatSearch?: boolean; characterLabel?: string }
   | { kind: "mode"; mode: UsageMode }
+  // Hybrid CHARACTER role row (3rd-level drill when IMAGE_REFERENCE_FORMAT ===
+  // "hybrid"). Selecting fires `command({ ...item, role })`; the parent routes
+  // the role into usageMode XOR variantSlug via `roleToCharacterRefSlots`.
+  | { kind: "role"; role: string }
   | { kind: "image-ref"; item: RefImageItem }
   | {
       kind: "location-root"
@@ -107,6 +125,10 @@ type DisplayRow =
       locationLabel?: string
     }
   | { kind: "location-mode"; mode: LocationUsageMode }
+  // Hybrid LOCATION role row (3rd-level drill). Selecting fires
+  // `command({ ...item, role })`; the parent routes the role into `role` XOR
+  // usageMode (bucket/variant cleared) via `roleToLocationRefSlots`.
+  | { kind: "location-role"; role: string }
 
 /** Active drill-in target for the character mode picker (3rd level). */
 interface DrillVariant {
@@ -190,6 +212,16 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     const [drillLocationSlug, setDrillLocationSlug] = useState<string | null>(null)
     const [drillLocationVariant, setDrillLocationVariant] = useState<DrillLocationVariant | null>(null)
 
+    // In hybrid the 3rd-level drill picks a ROLE; in legacy it picks a usage
+    // mode. The drill-into chip on each variant row reflects that noun. Legacy
+    // strings are byte-identical to before.
+    const drillIsHybrid = IMAGE_REFERENCE_FORMAT === "hybrid"
+    const drillChipText = drillIsHybrid ? "role" : "mode"
+    const drillChipAria = drillIsHybrid ? "Pick role" : "Pick usage mode"
+    const drillChipTitle = drillIsHybrid
+      ? "Pick role (or press Right arrow)"
+      : "Pick usage mode (or press Right arrow)"
+
     // Group character items by characterSlug; group location items by
     // locationSlug; keep all other refs flat.
     const { characterGroups, locationGroups, nonCharacterItems } = useMemo(() => {
@@ -216,9 +248,26 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     const displayRows = useMemo<DisplayRow[]>(() => {
       const q = query.trim().toLowerCase()
 
-      // LOCATION MODE PICKER (3rd-level drill, NEW). Filter by mode label.
+      // LOCATION 3rd-level drill. In HYBRID the drill offers the curated ROLE
+      // presets (a role occupies `role` XOR `usageMode`, clearing
+      // bucket/variant — routed via `roleToLocationRefSlots` in index.tsx). In
+      // LEGACY the gate returns null and the drill is byte-identical to before:
+      // the location usage-mode list.
       if (drillLocationVariant) {
         const backLabel = `back (${drillLocationVariant.variantDisplayName ?? drillLocationVariant.locationName})`
+        const roleMenu = locationSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
+        if (roleMenu) {
+          const roles = q.length > 0
+            ? roleMenu.filter((r) =>
+                r.toLowerCase().includes(q) || sanitizeLocationRole(r).includes(q),
+              )
+            : roleMenu
+          const rows: DisplayRow[] = [{ kind: "back", label: backLabel }]
+          for (const r of roles) {
+            rows.push({ kind: "location-role", role: r })
+          }
+          return rows
+        }
         const modes = q.length > 0
           ? LOCATION_USAGE_MODES.filter((m) =>
               locationUsageModeLabel(m).toLowerCase().includes(q) || m.toLowerCase().includes(q),
@@ -231,9 +280,25 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         return rows
       }
 
-      // CHARACTER MODE PICKER (3rd-level drill). Filter by usage-mode label.
+      // CHARACTER 3rd-level drill. In HYBRID the drill offers the curated ROLE
+      // presets (a role occupies usageMode XOR variantSlug — routed via
+      // `roleToCharacterRefSlots` in index.tsx). In LEGACY the gate returns null
+      // and the drill is byte-identical to before: the usage-mode list.
       if (drillVariant) {
         const backLabel = `back (${drillVariant.variantDisplayName ?? drillVariant.characterName})`
+        const roleMenu = characterSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
+        if (roleMenu) {
+          const roles = q.length > 0
+            ? roleMenu.filter((r) =>
+                r.toLowerCase().includes(q) || sanitizeRole(r).includes(q),
+              )
+            : roleMenu
+          const rows: DisplayRow[] = [{ kind: "back", label: backLabel }]
+          for (const r of roles) {
+            rows.push({ kind: "role", role: r })
+          }
+          return rows
+        }
         const modes = q.length > 0
           ? USAGE_MODES.filter((m) =>
               usageModeLabel(m).toLowerCase().includes(q) || m.toLowerCase().includes(q),
@@ -475,9 +540,26 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         }
         return
       }
+      if (row.kind === "role") {
+        // Hybrid character role pick — the parent routes `role` into
+        // usageMode XOR variantSlug via `roleToCharacterRefSlots`.
+        if (drillVariant) {
+          command({ ...drillVariant.item, role: row.role })
+        }
+        return
+      }
       if (row.kind === "location-mode") {
         if (drillLocationVariant) {
           command({ ...drillLocationVariant.item, locationUsageMode: row.mode })
+        }
+        return
+      }
+      if (row.kind === "location-role") {
+        // Hybrid location role pick — the parent routes `role` into
+        // `role` XOR usageMode (bucket/variant cleared) via
+        // `roleToLocationRefSlots`.
+        if (drillLocationVariant) {
+          command({ ...drillLocationVariant.item, role: row.role })
         }
         return
       }
@@ -656,6 +738,41 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               </button>
             )
           }
+          if (row.kind === "role") {
+            // Hybrid character role row. Chip previews the token segment the
+            // role will occupy (its sanitized slug — e.g. "empty background"
+            // has no character analogue, but Custom roles do sanitize here).
+            return (
+              <button
+                key={`role-${row.role}`}
+                type="button"
+                data-index={idx}
+                data-row-kind="role"
+                data-role={row.role}
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleSelect(row)
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                <span className="truncate flex-1 min-w-0">{row.role}</span>
+                <span
+                  className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                    isSelected
+                      ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                      : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                  }`}
+                >
+                  :{sanitizeRole(row.role)}
+                </span>
+              </button>
+            )
+          }
           if (row.kind === "location-mode") {
             return (
               <button
@@ -684,6 +801,40 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                   }`}
                 >
                   :{row.mode}
+                </span>
+              </button>
+            )
+          }
+          if (row.kind === "location-role") {
+            // Hybrid location role row. Chip previews the sanitized slug the
+            // role serializes to (e.g. "empty background" → ":empty-background").
+            return (
+              <button
+                key={`loc-role-${row.role}`}
+                type="button"
+                data-index={idx}
+                data-row-kind="location-role"
+                data-role={row.role}
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleSelect(row)
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                <span className="truncate flex-1 min-w-0">{row.role}</span>
+                <span
+                  className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                    isSelected
+                      ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-700 dark:text-cyan-200"
+                      : "border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
+                  }`}
+                >
+                  :{sanitizeLocationRole(row.role)}
                 </span>
               </button>
             )
@@ -834,8 +985,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 {showModeChip && (
                   <span
                     role="button"
-                    aria-label="Pick usage mode"
-                    title="Pick usage mode (or press Right arrow)"
+                    aria-label={drillChipAria}
+                    title={drillChipTitle}
                     data-testid="location-variant-mode-chip"
                     className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
                       isSelected
@@ -848,7 +999,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                       drillIntoLocationMode(item)
                     }}
                   >
-                    mode &rsaquo;
+                    {drillChipText} &rsaquo;
                   </span>
                 )}
               </button>
@@ -932,8 +1083,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               {showModeChip && (
                 <span
                   role="button"
-                  aria-label="Pick usage mode"
-                  title="Pick usage mode (or press Right arrow)"
+                  aria-label={drillChipAria}
+                  title={drillChipTitle}
                   className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
                     isSelected
                       ? "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25"
@@ -947,7 +1098,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                     drillIntoMode(item)
                   }}
                 >
-                  mode &rsaquo;
+                  {drillChipText} &rsaquo;
                 </span>
               )}
             </button>

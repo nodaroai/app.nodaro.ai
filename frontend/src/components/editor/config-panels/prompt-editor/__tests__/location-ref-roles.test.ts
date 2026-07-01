@@ -22,9 +22,10 @@ import {
 
 /**
  * LOGIC contract for the hybrid LOCATION-pill role-label picker (Phase D Task
- * 3 — presets-only, NO Custom because the location parser is preset-gated). The
- * menu rendering is visual (human staging check); these tests pin the
- * load-bearing logic:
+ * 3 + F2 follow-up — curated presets PLUS a free-form Custom… input, now that
+ * the location parser accepts any bare non-mode slug as a role). The menu
+ * rendering is visual (human staging check); these tests pin the load-bearing
+ * logic:
  *
  *   1. the hybrid/legacy GATE — role presets in hybrid, the unchanged
  *      usage-mode menu (gate → null) in legacy;
@@ -254,6 +255,29 @@ describe("token round-trip — role slot → literal @oldlibrary:1:<slug> → re
 
   it("the Default state (all slots null) → clean @oldlibrary:1", () => {
     expect(tokenFor(roleToLocationRefSlots(""))).toBe("@oldlibrary:1")
+  })
+
+  it("(F2) a CUSTOM role ('Rooftop View') → sanitized slug → token → re-parses to role", () => {
+    // Mirrors the pill's Custom… input path: raw phrase → roleToLocationRefSlots
+    // (sanitizeLocationRole) → role slot → renderText token → shared parser.
+    const slots = roleToLocationRefSlots("Rooftop View")
+    expect(slots).toEqual({
+      role: "rooftop-view",
+      usageMode: null,
+      bucket: null,
+      variant: null,
+    })
+    const token = tokenFor(slots)
+    expect(token).toBe("@oldlibrary:1:rooftop-view")
+    const parsed = parseLocationRefMatch(token)
+    expect(parsed).toMatchObject({
+      role: "rooftop-view",
+      usageMode: null,
+      bucket: null,
+      variant: null,
+    })
+    // A custom slug passes through normalizeRoleSlug unchanged (not a preset).
+    expect(normalizeRoleSlug(parsed!.role!)).toBe("rooftop-view")
   })
 
   it("EVERY preset → clean 3-part token AND parse→render is idempotent (text-stable)", () => {

@@ -70,3 +70,38 @@ export function normalizeRoleSlug(slug: string): string {
   }
   return s
 }
+
+/**
+ * Role for a FIRST-SIGHT character extra-ref in HYBRID assembly. The `segment`
+ * is the role when it is a curated preset for `source`; otherwise the source
+ * default. This mirrors the segment→role preset gate the mention-hybrid paths
+ * use, minus their custom-role-survival relaxation (an extra has no parsed
+ * `usageMode == null` signal to tell a role from a variant pick).
+ *
+ * Shared by BOTH the image (`renderExtraRefsHybrid` in `prompt-builder.ts`) and
+ * video (`resolveVideoReferenceCore` extras first-sight in
+ * `video-reference-resolver.ts`) resolvers — but they share the HELPER, not its
+ * INPUT, so they are NOT fully converged:
+ *   - image passes the COALESCED `defaultUsageMode`
+ *     (`usageMode` → char-node default → "identical", folded by
+ *     `expandExtraRefsToConnectedReferences`) → always defined, so an extra
+ *     honors the character node's default mode. No variant fallback is needed
+ *     (the field can't be undefined for a real character extra).
+ *   - video passes the RAW per-ref `usageMode ?? variantSlug` — `usageMode` can
+ *     be undefined there, so it legitimately relies on the `?? variantSlug`
+ *     fallback and does NOT inherit the char-node default.
+ * Consequence: a character whose node default is Face/Pose/Style with an
+ * un-overridden extra resolves to that default on image but to "person" on
+ * video. The image side was aligned UP to the video preset-gate formula in
+ * Reference Roles follow-up F3 (it previously always fell back to
+ * `defaultRoleForSource`, ignoring the ref's role); true input convergence
+ * (a raw per-ref usageMode on `ConnectedReference`, or coalescing on the video
+ * caller) is a live-prompt decision, deferred.
+ */
+export function firstSightExtraRole(
+  segment: string | null | undefined,
+  source: ReferenceSource,
+): string {
+  const s = (segment ?? "").trim()
+  return s && REFERENCE_ROLE_PRESETS[source].includes(s) ? s : defaultRoleForSource(source)
+}

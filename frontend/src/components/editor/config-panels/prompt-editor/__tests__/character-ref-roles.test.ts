@@ -138,6 +138,17 @@ describe("sanitizeRole — character-variant-slug grammar [a-z][a-z0-9-]*", () =
     expect(sanitizeRole("  gold ring  ")).toBe("gold-ring")
   })
 
+  it("collapses dash runs (matches characterMentionSlug slugification)", () => {
+    // "gold - ring" → whitespace-joins to "gold---ring", then dash-collapse.
+    expect(sanitizeRole("gold - ring")).toBe("gold-ring")
+    expect(sanitizeRole("gold  --  ring")).toBe("gold-ring")
+  })
+
+  it("drops a trailing dash", () => {
+    expect(sanitizeRole("ring-")).toBe("ring")
+    expect(sanitizeRole("ring - ")).toBe("ring")
+  })
+
   it("drops out-of-grammar characters", () => {
     expect(sanitizeRole("a/b!c")).toBe("abc")
   })

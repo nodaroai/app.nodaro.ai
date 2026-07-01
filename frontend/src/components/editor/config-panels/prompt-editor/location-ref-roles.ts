@@ -8,11 +8,11 @@ import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 /**
  * Hybrid-mode role vocabulary for the LOCATION mention pill — the curated,
  * ordered preset list the swap-menu offers when `IMAGE_REFERENCE_FORMAT ===
- * "hybrid"`. Single source of truth is the shared registry. Unlike the
- * character pill, the location menu does NOT append a `Custom…` entry: the
- * location parser is PRESET-GATED (a `@loc:1:foobar` returns null → literal
- * text), so a free-form role could never round-trip. Custom is a deferred
- * follow-up that would require widening the parser.
+ * "hybrid"`. Single source of truth is the shared registry; the menu UI appends
+ * a `Custom…` free-form entry on top of this list (not listed here), mirroring
+ * the character pill. The F2 follow-up widened the location parser to accept any
+ * bare non-mode slug as a role, so a custom role now round-trips (a
+ * `@loc:1:rooftop` parses back to `role: "rooftop"`).
  */
 export const LOCATION_ROLE_PRESETS: readonly string[] = REFERENCE_ROLE_PRESETS["wired-location"]
 
@@ -42,9 +42,10 @@ export function locationSwapMenuRoles(
  * this exact preset.
  *
  * Also conforms to the location token's bare-slug segment grammar
- * `[a-z][a-z0-9-]*` (drop out-of-grammar characters, force a leading letter) —
- * defensive for any future multi-word/punctuated preset, though today every
- * input is a clean curated preset (no Custom for location).
+ * `[a-z][a-z0-9-]*` (drop out-of-grammar characters, force a leading letter,
+ * collapse dash runs, drop a trailing dash) — load-bearing now that the pill
+ * accepts a free-form Custom role (e.g. `"Rooftop View"` → `"rooftop-view"`),
+ * keeping the emitted `@loc:1:<slug>` token re-parseable on reload.
  */
 export function sanitizeLocationRole(raw: string): string {
   return raw
@@ -54,6 +55,8 @@ export function sanitizeLocationRole(raw: string): string {
     .replace(/[^a-z0-9-]/g, "")
     .replace(/^[^a-z]+/, "") // grammar requires a leading [a-z]
     .slice(0, 32)
+    .replace(/-+/g, "-") // collapse dash runs (matches locationMentionSlug)
+    .replace(/-$/, "") // drop a trailing dash (incl. one left by the 32-cap)
 }
 
 /** The mutually-exclusive token-slot set a location role resolves into. A
@@ -78,7 +81,8 @@ export interface LocationRefRoleSlots {
  *     yields the same slot, so the pill never silently "flips" on reload.
  *   - otherwise (`background` / `atmosphere` / `as-is` / `empty-background` /
  *     `lighting`) → `role`, which `renderText` serializes as the bare 3rd
- *     segment the preset-gated D1 parser reads back as a role.
+ *     segment the (now un-gated, F2) parser reads back as a role — presets and
+ *     free-form Custom roles alike.
  *
  * Clearing the sibling slots guarantees a role pick can never emit an invalid
  * multi-segment token. A blank role clears everything (the "Default" state).

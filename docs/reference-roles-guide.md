@@ -66,8 +66,17 @@ role label alone drives the result. When you want to pin a subject's exact ident
 > `… the person from reference image A …`
 
 The lock is **opt-in and editable** per reference: turn it on when you need it, and either keep the
-built-in wording (tuned per type — person / face / creature) or replace it with your own. Left off,
-your prompt stays terse and you remain in full control of any fidelity language.
+built-in wording (tuned per type — person / face / creature / location) or replace it with your own.
+Left off, your prompt stays terse and you remain in full control of any fidelity language.
+
+**In the editor** you can also flip the lock **per `@`-mention**: open a character or location pill's
+menu and toggle **Identity lock**. That mention then serializes a trailing `~lock`
+(`@kira:1:face~lock`, `@old-library:1:background~lock`) and its reference gets the lock line — even
+when the source's default lock is off. Locations use their own built-in wording:
+
+> `Lock the exact look of reference image A — match the location's architecture, layout, and lighting.`
+
+The per-mention toggle applies to the default (hybrid) reference format only.
 
 ## Combining references
 

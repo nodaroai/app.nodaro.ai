@@ -30,8 +30,8 @@
 import { DEFAULT_USAGE_MODE, usageModeDirective, type UsageMode } from "./character-usage-mode.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-builder.js"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS } from "./reference-roles.js"
-import { buildIdentityLockLine } from "./identity-lock.js"
+import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, firstSightExtraRole } from "./reference-roles.js"
+import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import type { ConnectedReference } from "./types.js"
 
 /**
@@ -271,6 +271,10 @@ function resolveVideoCharacterMentionsHybrid(
 
   const mentionedCharacterSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
+  // Per-mention `~lock` (Task 4): URLs whose mention carried a trailing `~lock`.
+  // Forced ON before `buildIdentityLockLine` so the lock line appears even when
+  // the ref's default lock is off. Mirrors the image-side hybrid resolvers.
+  const lockedUrls = new Set<string>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
   for (const t of tokens) {
     // Variant-first, canonical-fallback. `variantMatch` (a REAL matched variant
@@ -282,6 +286,7 @@ function resolveVideoCharacterMentionsHybrid(
     if (!match || !match.url) continue
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
+    if (t.lock) lockedUrls.add(match.url)
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
     // Custom roles survive VERBATIM — the SAME relaxation as the image-side
     // `resolveCharacterMentionsHybrid` (Unified Reference Roles, Phase D), kept
@@ -330,7 +335,7 @@ function resolveVideoCharacterMentionsHybrid(
     const ref = refByUrl.get(m.url)
     if (!ref) continue
     const binding = bindingFor(m.url)
-    const lock = buildIdentityLockLine(ref, binding)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockedUrls.has(m.url)), binding)
     if (lock) lockLines.push(lock)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
@@ -594,10 +599,10 @@ export function resolveVideoReferenceCore(
             // element injection (the latter two surfaced as their own lines,
             // mirroring `renderCanonicalFallbackHybrid` / the mention hybrid).
             // Role = (usageMode ?? variantSlug) when a curated preset, else the
-            // wired-character default — consistent with `resolveVideoCharacterMentionsHybrid`.
-            const presets = REFERENCE_ROLE_PRESETS["wired-character"]
-            const segment = (ex.usageMode ?? ex.variantSlug ?? "").trim()
-            const role = presets.includes(segment) ? segment : defaultRoleForSource("wired-character")
+            // wired-character default — via the shared `firstSightExtraRole`
+            // helper, the SAME logic the image `renderExtraRefsHybrid` now uses
+            // (single source of truth, Reference Roles follow-up F3).
+            const role = firstSightExtraRole(ex.usageMode ?? ex.variantSlug, "wired-character")
             const phrase = roleToPhrase(role, binding)
             extraHybridLines.push(desc ? `${phrase}, ${desc}.` : `${phrase}.`)
             const lock = buildIdentityLockLine(

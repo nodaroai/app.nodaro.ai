@@ -31,8 +31,6 @@
  *                                          location usage mode)
  */
 
-import { REFERENCE_ROLE_PRESETS, normalizeRoleSlug } from "./reference-roles.js"
-
 /** Modes that apply to scenes/locations. Subset of character `USAGE_MODES`. */
 export const LOCATION_USAGE_MODES = [
   "identical",
@@ -107,13 +105,23 @@ export interface LocationMentionTokenInfo {
   /** Per-mention mode override; null falls back to the location node's default
    *  (or the global "identical" default). */
   readonly usageMode: LocationUsageMode | null
-  /** Bare-slug ROLE (Unified Reference Roles, Phase D) — a slash-less, non-mode
-   *  3rd segment that is a KNOWN location role (`background`, `empty-background`,
-   *  `as-is`, …), stored verbatim in slug form. Absent (undefined) for canonical /
+  /** Bare-slug ROLE (Unified Reference Roles, Phase D + F2) — any slash-less,
+   *  non-mode 3rd segment (`background`, `empty-background`, `as-is`, … or a
+   *  CUSTOM slug), stored verbatim in slug form. Absent (undefined) for canonical /
    *  bucket-variant / mode tokens. The hybrid resolver + role pill map it back to
-   *  the phrase key via `normalizeRoleSlug`. Optional so canonical/variant/mode
-   *  tokens stay shape-identical to the pre-Phase-D parser output. */
+   *  the phrase key via `normalizeRoleSlug` (custom slugs pass through). Optional so
+   *  canonical/variant/mode tokens stay shape-identical to the pre-Phase-D parser
+   *  output. */
   readonly role?: string
+  /**
+   * Additive per-mention identity-lock sentinel (Unified Reference Roles,
+   * Task 4). `true` when the token carried a trailing `~lock`
+   * (`@old-library:1:background~lock`); ABSENT (undefined) otherwise so a
+   * lock-less token stays byte-identical to the pre-Task-4 shape. Only ACTED
+   * UPON by the HYBRID resolver (force `identityLock.enabled = true`); the
+   * LEGACY resolver ignores it, so `~lock` is inert on the legacy path.
+   */
+  readonly lock?: boolean
   /** Byte offset into the source prompt — used to splice the token out at
    *  resolve time. */
   readonly offset: number
@@ -136,14 +144,24 @@ export function parseLocationMentionToken(
   bucket: string | null
   variant: string | null
   usageMode: LocationUsageMode | null
-  /** Bare-slug role (slug form). Present ONLY for a known-role 3rd segment;
-   *  OMITTED (undefined) for every other shape so canonical/variant/mode results
-   *  stay byte-identical to the pre-Phase-D parser. */
+  /** Bare-slug role (slug form). Present for ANY bare, non-mode 3rd segment
+   *  (preset OR custom, F2); OMITTED (undefined) for every other shape so
+   *  canonical/variant/mode results stay byte-identical to the pre-Phase-D parser. */
   role?: string
+  /** Additive per-mention identity-lock sentinel (Task 4). `true` when the token
+   *  carried a trailing `~lock`; OMITTED otherwise (byte-identical). */
+  lock?: boolean
 } | null {
   if (!text.startsWith("@")) return null
-  const rest = text.slice(1)
+  let rest = text.slice(1)
   if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
+
+  // Additive `~lock` sentinel (Task 4). Strip a trailing `~lock` BEFORE
+  // splitting so the segment grammar stays byte-identical (a `~` never appears
+  // inside a bucket/variant/mode/role segment). A lock-less token is untouched.
+  const lock = rest.endsWith("~lock") || undefined
+  if (lock) rest = rest.slice(0, -"~lock".length)
+  const lockField = lock ? { lock: true } : {}
 
   const parts = rest.split(":")
   if (parts.length < 2 || parts.length > 4) return null
@@ -162,6 +180,7 @@ export function parseLocationMentionToken(
       bucket: null,
       variant: null,
       usageMode: null,
+      ...lockField,
     }
   }
 
@@ -173,7 +192,7 @@ export function parseLocationMentionToken(
       const variant = third.slice(slashAt + 1)
       if (!/^[a-z][a-z0-9-]*$/.test(bucket)) return null
       if (!/^[a-z][a-z0-9-]*$/.test(variant)) return null
-      return { locationSlug, imageIndex, bucket, variant, usageMode: null }
+      return { locationSlug, imageIndex, bucket, variant, usageMode: null, ...lockField }
     }
     if (!/^[a-z][a-z0-9-]*$/.test(third)) return null
     if (isLocationUsageMode(third)) {
@@ -183,31 +202,30 @@ export function parseLocationMentionToken(
         bucket: null,
         variant: null,
         usageMode: third,
+        ...lockField,
       }
     }
-    // Additive (Unified Reference Roles, Phase D): a bare 3rd segment that is a
-    // KNOWN location role (a `REFERENCE_ROLE_PRESETS["wired-location"]` entry, in
-    // slug form — `background`, `empty-background`, `as-is`, …) parses as a role.
-    // PRESET-GATED on purpose: an unknown slug (`foobar`) still returns null →
-    // literal text, so legacy parsing stays byte-identical for everything outside
-    // the curated vocabulary. The slug is stored verbatim (round-trips through the
-    // pill's `renderText`); the resolver/pill map it to the phrase key via
-    // `normalizeRoleSlug`. Driven by the preset registry so a new role needs no
-    // edit here. (`layout`/`style` never reach this branch — they're caught above
-    // as usage modes.)
-    if (REFERENCE_ROLE_PRESETS["wired-location"].includes(normalizeRoleSlug(third))) {
-      return {
-        locationSlug,
-        imageIndex,
-        bucket: null,
-        variant: null,
-        usageMode: null,
-        role: third,
-      }
+    // Additive (Unified Reference Roles, Phase D + F2 follow-up): a bare, non-
+    // mode 3rd segment parses as a ROLE, stored verbatim in slug form
+    // (`background`, `empty-background`, `as-is`, …, or a user's CUSTOM slug).
+    // The F2 follow-up REMOVED the preset membership gate so custom location
+    // roles behave like custom character roles — any valid slug (guaranteed
+    // `[a-z][a-z0-9-]*` by the regex above, and not a `LocationUsageMode`, which
+    // is caught first) is accepted. Legacy stays byte-identical NOT via this
+    // parser but via the resolver's `if (t.role) continue` guard, which skips
+    // ANY role token (preset or custom) → literal text with no bullet / phrase.
+    // The slug round-trips through the pill's `renderText`; the hybrid resolver /
+    // pill map it to a phrase via `normalizeRoleSlug` (custom slugs pass through
+    // unchanged). (`layout`/`style` never reach this branch — usage modes above.)
+    return {
+      locationSlug,
+      imageIndex,
+      bucket: null,
+      variant: null,
+      usageMode: null,
+      role: third,
+      ...lockField,
     }
-    // Unknown 3rd segment — neither bucket/variant, a known mode, nor a known
-    // role. Return null so the resolver falls through to literal text.
-    return null
   }
 
   // 4-part: @oldlibrary:1:bucket/variant:mode.
@@ -219,7 +237,7 @@ export function parseLocationMentionToken(
     if (!/^[a-z][a-z0-9-]*$/.test(bucket)) return null
     if (!/^[a-z][a-z0-9-]*$/.test(variant)) return null
     if (!isLocationUsageMode(fourth)) return null
-    return { locationSlug, imageIndex, bucket, variant, usageMode: fourth }
+    return { locationSlug, imageIndex, bucket, variant, usageMode: fourth, ...lockField }
   }
 
   return null
@@ -244,8 +262,11 @@ export function findLocationMentionTokens(
   // bucket/variant pair (`[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*`). The two are
   // disjoint at the regex level — bucket/variant requires the literal `/`.
   const segment = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
+  // The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
+  // sentinel INTO the captured token (spliced out at resolve time); optional, so
+  // a lock-less token matches byte-identically to before.
   const regex = new RegExp(
-    `(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${segment})?(?::${segment})?)`,
+    `(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${segment})?(?::${segment})?(?:~lock(?![a-z0-9-]))?)`,
     "g",
   )
   const knownSet = new Set(knownLocationSlugs)

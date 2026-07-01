@@ -56,9 +56,14 @@ const ROLE_TOKENS = [
   "@old-library:1:lighting",
 ]
 
+// A CUSTOM (non-preset) role token. Since the F2 follow-up removed the parser's
+// preset gate, this now parses with `role` set exactly like the presets above —
+// so the SAME legacy-literal / hybrid-promote gate must apply to it.
+const CUSTOM_ROLE_TOKEN = "@old-library:1:foobar"
+
 describe("root cause: the parser accepts these role tokens (gate, not parser, controls promotion)", () => {
   it("parseLocationRefMatch parses every role token with `role` set", () => {
-    for (const token of ROLE_TOKENS) {
+    for (const token of [...ROLE_TOKENS, CUSTOM_ROLE_TOKEN]) {
       const attrs = parseLocationRefMatch(token)
       expect(attrs, token).not.toBeNull()
       expect(attrs?.role, token).toBeTruthy()
@@ -66,6 +71,10 @@ describe("root cause: the parser accepts these role tokens (gate, not parser, co
       expect(attrs?.variant).toBeNull()
       expect(attrs?.usageMode).toBeNull()
     }
+  })
+
+  it("parses a CUSTOM (non-preset) bare slug into `role` verbatim (F2)", () => {
+    expect(parseLocationRefMatch(CUSTOM_ROLE_TOKEN)).toMatchObject({ role: "foobar" })
   })
 })
 
@@ -75,7 +84,7 @@ describe("LEGACY: role tokens are NOT auto-promoted (stay literal text)", () => 
   })
 
   it("every bare-slug role token returns false (no pill)", () => {
-    for (const token of ROLE_TOKENS) {
+    for (const token of [...ROLE_TOKENS, CUSTOM_ROLE_TOKEN]) {
       expect(resolvePromotableAttrs(token, KNOWN), token).toBe(false)
     }
   })
@@ -130,11 +139,22 @@ describe("HYBRID: role tokens ARE auto-promoted to a role pill", () => {
   })
 
   it("every bare-slug role token promotes (role preserved verbatim)", () => {
-    for (const token of ROLE_TOKENS) {
+    for (const token of [...ROLE_TOKENS, CUSTOM_ROLE_TOKEN]) {
       const attrs = resolvePromotableAttrs(token, KNOWN)
       expect(attrs, token).not.toBe(false)
       expect((attrs as { role: string }).role, token).toBeTruthy()
     }
+  })
+
+  it("a CUSTOM role token promotes with its verbatim slug (F2)", () => {
+    expect(resolvePromotableAttrs(CUSTOM_ROLE_TOKEN, KNOWN)).toMatchObject({
+      locationSlug: "old-library",
+      imageIndex: 1,
+      bucket: null,
+      variant: null,
+      usageMode: null,
+      role: "foobar",
+    })
   })
 })
 
@@ -151,7 +171,7 @@ function known(locs: string[]): KnownSlugSets {
 describe("collectTokens (valueToDoc) honors the legacy role gate", () => {
   it("LEGACY: a role token does NOT become a locationRef node (stays text)", () => {
     fmt.value = "legacy"
-    for (const token of ROLE_TOKENS) {
+    for (const token of [...ROLE_TOKENS, CUSTOM_ROLE_TOKEN]) {
       const out = collectTokens(`${token} a scene`, known(["old-library"]))
       expect(out, token).toEqual([])
     }
@@ -173,5 +193,13 @@ describe("collectTokens (valueToDoc) honors the legacy role gate", () => {
     const out = collectTokens("@old-library:1:background a scene", known(["old-library"]))
     expect(out).toHaveLength(1)
     expect(out[0].node.type).toBe("locationRef")
+  })
+
+  it("HYBRID: a CUSTOM role token DOES become a locationRef node (role verbatim)", () => {
+    fmt.value = "hybrid"
+    const out = collectTokens(`${CUSTOM_ROLE_TOKEN} a scene`, known(["old-library"]))
+    expect(out).toHaveLength(1)
+    expect(out[0].node.type).toBe("locationRef")
+    expect(out[0].node.attrs).toMatchObject({ role: "foobar" })
   })
 })

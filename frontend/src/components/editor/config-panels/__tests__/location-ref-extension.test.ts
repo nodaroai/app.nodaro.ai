@@ -77,12 +77,36 @@ describe("parseLocationRefMatch", () => {
     })
   })
 
-  describe("rejection cases", () => {
-    it("returns null for an unknown mode in the 3-part form", () => {
-      // Third segment is a bare slug but not a valid LocationUsageMode.
-      expect(parseLocationRefMatch("@oldlibrary:1:foo")).toBeNull()
+  describe("accepts a bare non-mode 3rd segment as a CUSTOM role (F2)", () => {
+    it("parses @<slug>:N:<custom-slug> into the role slot (gate removed)", () => {
+      // The reference-roles F2 follow-up widened the parser: any slash-less,
+      // non-mode 3rd segment is a role (previously `foo` → null). Legacy stays
+      // literal via the resolver / promotion gate, not the parser.
+      expect(parseLocationRefMatch("@oldlibrary:1:foo")).toEqual({
+        locationSlug: "oldlibrary",
+        imageIndex: 1,
+        bucket: null,
+        variant: null,
+        usageMode: null,
+        role: "foo",
+      })
     })
 
+    it("parses a former character-only mode (face) as a custom role for locations", () => {
+      // `face` is not a LocationUsageMode, so it is no longer rejected — it is a
+      // valid custom role slug for a location pill.
+      expect(parseLocationRefMatch("@oldlibrary:1:face")).toEqual({
+        locationSlug: "oldlibrary",
+        imageIndex: 1,
+        bucket: null,
+        variant: null,
+        usageMode: null,
+        role: "face",
+      })
+    })
+  })
+
+  describe("rejection cases", () => {
     it("returns null for an unknown mode in the 4-part form", () => {
       expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:bogus")).toBeNull()
     })
@@ -101,10 +125,10 @@ describe("parseLocationRefMatch", () => {
       expect(parseLocationRefMatch("@oldlibrary:0")).toBeNull()
     })
 
-    it("returns null for character-only modes (face / pose / etc.)", () => {
-      // Character modes that don't apply to scenes — 4-mode subset enforced
-      // by `isLocationUsageMode`.
-      expect(parseLocationRefMatch("@oldlibrary:1:face")).toBeNull()
+    it("returns null for a 4-part token whose mode override is character-only (pose)", () => {
+      // The 4th segment must be a LocationUsageMode; `pose` (a character mode)
+      // is not in the 4-mode subset enforced by `isLocationUsageMode`. (A bare
+      // 3rd-segment `face` is now a custom role — see the accepts block above.)
       expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:pose")).toBeNull()
     })
   })

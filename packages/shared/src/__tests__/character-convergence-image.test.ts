@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
+import { expandExtraRefsToConnectedReferences } from "../extra-refs.js"
+import { firstSightExtraRole } from "../reference-roles.js"
 import type { ConnectedReference } from "../types.js"
 
 const victoria: ConnectedReference = {
@@ -122,5 +124,94 @@ describe("character reference converges onto the image hybrid form", () => {
     expect(out.prompt.toLowerCase()).toContain("katana")
     expect(out.referenceImageUrls).toContain("https://cdn/kato.png")
     expect(out.prompt).not.toContain("Use these characters:")
+  })
+
+  it("first-sight extra-ref carrying a role (usageMode) → phrase uses THAT role, not the source default (Reference Roles F3)", () => {
+    // A first-sight character extra whose per-ref usage-mode override ("style",
+    // folded into `defaultUsageMode` by `expandExtraRefsToConnectedReferences`)
+    // is a curated preset → the hybrid phrase must read "the style from …",
+    // aligned UP to the video extras first-sight formula. Before F3 the image
+    // side ALWAYS emitted the source default ("the person from …").
+    const stylist: ConnectedReference = {
+      id: "s", defaultName: "Kira / look", source: "wired-character",
+      url: "https://cdn/kira-look.png", characterSlug: "kira", variantSlug: "look",
+      defaultUsageMode: "style", isExtraRef: true,
+    }
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "a portrait",
+      connectedReferences: [stylist],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the style from reference image A")
+    expect(out.prompt).not.toContain("the person from reference image A")
+    expect(out.prompt).not.toContain("Use these characters:")
+  })
+
+  it("first-sight extra-ref with NO role → source default phrase (unchanged)", () => {
+    // No usage-mode override + a non-preset variant ("alt") → the source default
+    // ("person"), byte-identical to the pre-F3 behavior for role-less extras.
+    const plain: ConnectedReference = {
+      id: "p", defaultName: "Kira / alt", source: "wired-character",
+      url: "https://cdn/kira-alt.png", characterSlug: "kira", variantSlug: "alt",
+      isExtraRef: true,
+    }
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "a portrait",
+      connectedReferences: [plain],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the person from reference image A")
+    expect(out.prompt).not.toContain("Use these characters:")
+  })
+
+  it("INVARIANT: image extra role reflects the COALESCED char-node default via the REAL expander, and diverges from the video RAW formula (Reference Roles F3 review)", () => {
+    // Build the extra the way PRODUCTION does — a raw `ExtraRefInput` with NO
+    // per-ref usageMode override — and run it through the REAL
+    // `expandExtraRefsToConnectedReferences`, not a hand-built ConnectedReference.
+    // The expander coalesces `usageMode` → char-node default → "identical" into
+    // `defaultUsageMode`, so for a character extra that field is ALWAYS defined.
+    // The RAW extra input as production produces it: character-sourced, no
+    // per-ref usageMode override, a non-preset picked variant ("look").
+    const rawExtra: { url: string; characterSlug: string; variantSlug: string; usageMode?: "style" } = {
+      url: "https://cdn/kira-look.png",
+      characterSlug: "kira",
+      variantSlug: "look",
+    }
+    const expanded = expandExtraRefsToConnectedReferences(
+      [rawExtra],
+      (slug) => (slug === "kira" ? { defaultUsageMode: "style", displayName: "Kira" } : undefined),
+    )
+    // The char-node default was coalesced in — never undefined for a char extra,
+    // which is exactly why the image call needs NO `?? variantSlug` fallback
+    // (the dropped dead code could never have fired here).
+    expect(expanded).toHaveLength(1)
+    expect(expanded[0].defaultUsageMode).toBe("style")
+
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "a portrait",
+      connectedReferences: expanded,
+      referenceFormat: "hybrid",
+    })
+    // IMAGE side reads the COALESCED `defaultUsageMode` → honors the char-node
+    // default even though the extra carried no per-ref override.
+    expect(out.prompt).toContain("the style from reference image A")
+    expect(out.prompt).not.toContain("the person from reference image A")
+    expect(out.prompt).not.toContain("Use these characters:")
+
+    // DIVERGENCE PIN: the VIDEO extras path shares `firstSightExtraRole` but feeds
+    // the RAW per-ref `usageMode ?? variantSlug` (here `undefined ?? "look"` →
+    // "look", not a preset → the source default "person"). It does NOT inherit
+    // the char-node default. Image === "style", video === "person" for the SAME
+    // logical extra. True convergence is deferred (a live-prompt decision); this
+    // asserts the current, intentional split so it can't silently change.
+    const imageRole = firstSightExtraRole(expanded[0].defaultUsageMode, "wired-character")
+    // Mirror the video resolver's exact input: RAW `usageMode ?? variantSlug`.
+    const videoRole = firstSightExtraRole(rawExtra.usageMode ?? rawExtra.variantSlug, "wired-character")
+    expect(imageRole).toBe("style")
+    expect(videoRole).toBe("person")
+    expect(imageRole).not.toBe(videoRole)
   })
 })
