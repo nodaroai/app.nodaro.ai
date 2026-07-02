@@ -28,6 +28,7 @@ import { randomUUID } from "node:crypto"
 import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3 } from "../../storage.js"
+import { mcpBaseUrl } from "../../deployment-urls.js"
 import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
@@ -474,14 +475,14 @@ function registerPresignedUrl(
         mime: args.mime_type,
         exp: Date.now() + expiresIn * 1000,
       })
-      // Upload via mcp.nodaro.ai specifically. LLM code-interpreter
+      // Upload via the MCP host specifically. LLM code-interpreter
       // sandboxes (Claude.ai) only allowlist the MCP resource server
       // domain (which they discover via /.well-known/oauth-protected-
-      // resource), NOT the OAuth auth server. config.PUBLIC_URL points
-      // to app.nodaro.ai (auth server) and is also blocked. Hardcode
-      // the MCP host — it serves the same Fastify instance via Caddy
-      // host routing.
-      const uploadUrl = `https://mcp.nodaro.ai/v1/upload-proxy/${token}`
+      // resource), NOT the OAuth auth server — config.PUBLIC_URL points
+      // to the auth server and is also blocked. On Nodaro Cloud the MCP
+      // host is mcp.nodaro.ai (same Fastify instance via Caddy host
+      // routing); self-hosters override via MCP_PUBLIC_URL.
+      const uploadUrl = `${mcpBaseUrl()}/v1/upload-proxy/${token}`
       const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
       return {
         content: [

@@ -53,7 +53,10 @@ jobs:
           path: frontend/coverage/
       - name: Coverage report
         uses: davelosert/vitest-coverage-report-action@02f3c2e641286b7fa308cd3e430783103ce6103b # v2
-        if: github.event_name == 'pull_request'
+        # Same-repo PRs only: the action posts a sticky PR comment, which needs
+        # pull-requests: write — GitHub downgrades the token to read-only on
+        # fork PRs, so running there would red-X the job after tests passed.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         with:
           name: Frontend
           json-summary-path: frontend/coverage/coverage-summary.json
@@ -100,7 +103,10 @@ jobs:
           path: backend/coverage/
       - name: Coverage report
         uses: davelosert/vitest-coverage-report-action@02f3c2e641286b7fa308cd3e430783103ce6103b # v2
-        if: github.event_name == 'pull_request'
+        # Same-repo PRs only: the action posts a sticky PR comment, which needs
+        # pull-requests: write — GitHub downgrades the token to read-only on
+        # fork PRs, so running there would red-X the job after tests passed.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         with:
           name: Backend
           json-summary-path: backend/coverage/coverage-summary.json

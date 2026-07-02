@@ -56,6 +56,8 @@ const envSchema = z.object({
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
   PUBLIC_URL: z.string().default(""),
+  /** Public base URL of the MCP host when it differs from PUBLIC_URL (on Nodaro Cloud: https://mcp.nodaro.ai, a subdomain host-routed to the same backend). Drives the RFC 9728 protected-resource identity and MCP upload-proxy links. Self-hosters serving MCP on their main host should set this to the same value as PUBLIC_URL; empty = the Nodaro Cloud default. */
+  MCP_PUBLIC_URL: z.string().default(""),
   /** Email of the platform owner whose super_admin role is protected from changes by other admins. Empty = no protected owner (self-host default). */
   PLATFORM_OWNER_EMAIL: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */

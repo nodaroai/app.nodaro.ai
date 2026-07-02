@@ -1,8 +1,16 @@
 {
   "name": "@nodaro/shared",
   "version": "1.0.0",
+  "description": "Shared types, model registries, and prompt helpers for the Nodaro platform and SDK.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodaroai/app.nodaro.ai.git",
+    "directory": "packages/shared"
+  },
+  "homepage": "https://github.com/nodaroai/app.nodaro.ai/tree/main/packages/shared#readme",
+  "bugs": "https://github.com/nodaroai/app.nodaro.ai/issues",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

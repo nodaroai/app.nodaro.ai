@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { appBaseUrl } from "../lib/deployment-urls.js"
 import { findAppByClientId, verifyClientSecret } from "./developer-apps.js"
 import { issueCode, redeemCode } from "../lib/oauth-codes.js"
 import { ALL_SCOPES, formatScopeString } from "../lib/scopes.js"
@@ -81,8 +81,7 @@ export async function oauthRoutes(app: FastifyInstance) {
   app.get("/v1/oauth/authorize", async (req, reply) => {
     const idx = req.url.indexOf("?")
     const queryString = idx >= 0 ? req.url.slice(idx) : ""
-    const issuer = config.PUBLIC_URL || "https://app.nodaro.ai"
-    return reply.redirect(`${issuer}/oauth/authorize${queryString}`, 302)
+    return reply.redirect(`${appBaseUrl()}/oauth/authorize${queryString}`, 302)
   })
 
   // POST /v1/oauth/authorize — frontend sends here AFTER user clicks "Allow"

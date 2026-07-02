@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { config } from "../lib/config.js"
+import { appBaseUrl, mcpBaseUrl } from "../lib/deployment-urls.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 
 /**
@@ -10,7 +10,7 @@ import { ALL_SCOPES } from "../lib/scopes.js"
  * and supported flows without hardcoding them.
  */
 function authorizationServerMetadata() {
-  const issuer = config.PUBLIC_URL || "https://app.nodaro.ai"
+  const issuer = appBaseUrl()
   return {
     issuer,
     authorization_endpoint: `${issuer}/v1/oauth/authorize`,
@@ -36,9 +36,9 @@ function authorizationServerMetadata() {
  * the auth server, so this binding is required.
  */
 function protectedResourceMetadata() {
-  const issuer = config.PUBLIC_URL || "https://app.nodaro.ai"
+  const issuer = appBaseUrl()
   return {
-    resource: "https://mcp.nodaro.ai/mcp",
+    resource: `${mcpBaseUrl()}/mcp`,
     authorization_servers: [issuer],
     scopes_supported: [...ALL_SCOPES],
     bearer_methods_supported: ["header"],
