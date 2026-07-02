@@ -245,6 +245,88 @@ describe("bakeShotSequence", () => {
     expect(B.startFrame + B.durationInFrames).toBe(C.startFrame)
   })
 
+  it("cut-the-curve: exitTransition on scene N sets N's cut-the-curve exit AND N+1's cut-the-curve entry (mirrored)", () => {
+    const b = brief()
+    b.narration = { script: "a b c", cues: [{ id: "c1", text: "a" }] }
+    const mk = (id: string, tid: string, text: string, frame: number): BriefReveal => ({
+      id, element: { id: tid, type: "text", text, fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 },
+      revealAt: { kind: "frame", frame }, enter: { motion: "fade", durationFrames: 6 },
+    })
+    b.scenes = [
+      { id: "A", shots: [{ id: "shA", reveals: [mk("rA", "ta", "A", 0)] }], exitTransition: { type: "cut-the-curve", direction: "left" } },
+      { id: "B", shots: [{ id: "shB", reveals: [mk("rB", "tb", "B", 100)] }] }, // no exitTransition of its own
+      { id: "C", shots: [{ id: "shC", reveals: [mk("rC", "tc", "C", 200)] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const [A, B, C] = plan.scenes
+    // fps 30 → cut-the-curve out round(0.3*30)=9, in round(0.34*30)=10.
+    expect(A.transitionOutFrames).toBe(9)
+    expect(A.transitionOutType).toBe("cut-the-curve")
+    expect(A.transitionOutDirection).toBe("left")
+    expect(A.transitionInFrames).toBeUndefined() // first scene, no entry treatment
+    // B's ENTRY mirrors A's exitTransition (type+direction), even though B authored none itself.
+    expect(B.transitionInFrames).toBe(10)
+    expect(B.transitionInType).toBe("cut-the-curve")
+    expect(B.transitionInDirection).toBe("left")
+    // B has no exitTransition of its own → B's EXIT stays plain crossfade (independent of its entry).
+    expect(B.transitionOutFrames).toBe(4)
+    expect(B.transitionOutType).toBeUndefined()
+    expect(B.transitionOutDirection).toBeUndefined()
+    // C's entry mirrors B's (absent) exitTransition → plain crossfade, unaffected by A's cut.
+    expect(C.transitionInFrames).toBe(3)
+    expect(C.transitionInType).toBeUndefined()
+    // Stored windows still stay non-overlapping/abutting regardless of transition type.
+    expect(A.startFrame + A.durationInFrames).toBe(B.startFrame)
+    expect(B.startFrame + B.durationInFrames).toBe(C.startFrame)
+  })
+
+  it("cut-the-curve: a scene's own exit direction can differ from its inherited entry direction", () => {
+    const b = brief()
+    b.narration = { script: "a b c", cues: [{ id: "c1", text: "a" }] }
+    const mk = (id: string, tid: string, text: string, frame: number): BriefReveal => ({
+      id, element: { id: tid, type: "text", text, fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 },
+      revealAt: { kind: "frame", frame }, enter: { motion: "fade", durationFrames: 6 },
+    })
+    b.scenes = [
+      { id: "A", shots: [{ id: "shA", reveals: [mk("rA", "ta", "A", 0)] }], exitTransition: { type: "cut-the-curve", direction: "left" } },
+      { id: "B", shots: [{ id: "shB", reveals: [mk("rB", "tb", "B", 100)] }], exitTransition: { type: "cut-the-curve", direction: "up" } },
+      { id: "C", shots: [{ id: "shC", reveals: [mk("rC", "tc", "C", 200)] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const [, B] = plan.scenes
+    expect(B.transitionInDirection).toBe("left") // inherited from A's exit
+    expect(B.transitionOutDirection).toBe("up") // B's own exit — independently authored, legitimately different
+  })
+
+  it("cut-the-curve: omitting exitTransition everywhere produces a byte-identical plan to the plain-crossfade baseline", () => {
+    const b = brief()
+    b.narration = { script: "a b c", cues: [{ id: "c1", text: "a" }] }
+    const mk = (id: string, tid: string, text: string, frame: number): BriefReveal => ({
+      id, element: { id: tid, type: "text", text, fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 },
+      revealAt: { kind: "frame", frame }, enter: { motion: "fade", durationFrames: 6 },
+    })
+    b.scenes = [
+      { id: "A", shots: [{ id: "shA", reveals: [mk("rA", "ta", "A", 0)] }] },
+      { id: "B", shots: [{ id: "shB", reveals: [mk("rB", "tb", "B", 100)] }] },
+      { id: "C", shots: [{ id: "shC", reveals: [mk("rC", "tc", "C", 200)] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    // Identical brief/scenes to the existing "emits scene cross-dissolve frames" test above,
+    // just re-asserted here as the explicit regression gate for this phase's schema additions —
+    // no transitionType/Direction field appears anywhere when exitTransition is never authored.
+    for (const scene of plan.scenes) {
+      expect((scene as Record<string, unknown>).transitionInType).toBeUndefined()
+      expect((scene as Record<string, unknown>).transitionInDirection).toBeUndefined()
+      expect((scene as Record<string, unknown>).transitionOutType).toBeUndefined()
+      expect((scene as Record<string, unknown>).transitionOutDirection).toBeUndefined()
+    }
+    const [A, B, C] = plan.scenes
+    expect(A.transitionOutFrames).toBe(4)
+    expect(B.transitionInFrames).toBe(3)
+    expect(B.transitionOutFrames).toBe(4)
+    expect(C.transitionInFrames).toBe(3)
+  })
+
   it("mixes cue + frame anchors in one scene (lowest anchor wins the window)", () => {
     const b = brief()
     // r1 frame-anchored at 20; r2 stays cue c2 start (2s → frame 60).

@@ -1,7 +1,7 @@
 import type { AlignmentWord } from "../../providers/elevenlabs/forced-alignment.js"
 import { validatePlanByType, type ShotSequencePlan } from "../../lib/plan-schemas.js"
 import { alignCues, type CueSpan } from "./aligner.js"
-import type { ShotSequenceBrief, BriefReveal } from "./brief-schema.js"
+import type { ShotSequenceBrief, BriefReveal, ExitTransition } from "./brief-schema.js"
 import { BLUEPRINT_META, type BlueprintId } from "./blueprint-params.js"
 
 const MAX_FRAMES = 54000
@@ -37,6 +37,23 @@ interface BakedReveal {
 
 function clampFrame(frame: number): number {
   return Math.max(0, Math.min(MAX_FRAMES, Math.round(frame)))
+}
+
+/**
+ * Builds one half (entry or exit) of a scene's resolved transition fields.
+ * `transition` present → cut-the-curve (`cutFrames` + its type/direction);
+ * absent → the plain crossfade (`crossfadeFrames` only). Shared by both the
+ * entry and exit sides of the scene-building step below — they differ only
+ * in which transition source they read and which frame-count constants apply.
+ */
+function buildTransitionHalf(
+  transition: ExitTransition | undefined,
+  cutFrames: number,
+  crossfadeFrames: number,
+): { frames: number; type?: ExitTransition["type"]; direction?: ExitTransition["direction"] } {
+  return transition
+    ? { frames: cutFrames, type: transition.type, direction: transition.direction }
+    : { frames: crossfadeFrames }
 }
 
 function anchorMs(reveal: BriefReveal, spans: Record<string, CueSpan>): number | null {
@@ -158,6 +175,15 @@ export function bakeShotSequence(
   const CROSSFADE_OUT_FRAMES = Math.max(1, Math.round((fps / 30) * 4))
   const CROSSFADE_IN_FRAMES = Math.max(1, Math.round((fps / 30) * 3))
 
+  // Cut-the-curve — HF's velocity-matched directional scene cut. Set on the
+  // OUTGOING scene's brief only (`exitTransition`); its constants are longer
+  // than the crossfade's (0.3s/0.34s exit/entry vs crossfade's ~4/3 frames —
+  // a directional cut needs travel time the plain fade doesn't). The baker
+  // mirrors the type+direction onto the FOLLOWING scene's entry below, so a
+  // seam always reads as one continuous motion from a single authored field.
+  const CUT_CURVE_OUT_FRAMES = Math.max(1, Math.round(0.3 * fps))
+  const CUT_CURVE_IN_FRAMES = Math.max(1, Math.round(0.34 * fps))
+
   // 5. Build the resolved scenes (scene-relative reveal frames, revealAt stripped).
   const scenes = sceneWindows.map((win, idx) => {
     const isLast = idx === sceneWindows.length - 1
@@ -170,12 +196,32 @@ export function bakeShotSequence(
     // so the next startAbs is always ≥ this scene's endAbs — this never shrinks a scene.
     // The last scene fills to the composition end (narration tail + held read).
     const sceneEnd = isLast ? durationInFrames : sceneWindows[idx + 1].startAbs
+    // Entry treatment mirrors the PRECEDING scene's own exitTransition (a seam
+    // is one continuous motion, authored once on the outgoing side); exit
+    // treatment reads this scene's own exitTransition. The two are independent
+    // — this scene's incoming and outgoing directions need not match.
+    const prevExitTransition = isFirst ? undefined : sceneWindows[idx - 1].scene.exitTransition
+    const ownExitTransition = win.scene.exitTransition
+    const entryHalf = isFirst ? undefined : buildTransitionHalf(prevExitTransition, CUT_CURVE_IN_FRAMES, CROSSFADE_IN_FRAMES)
+    const exitHalf = isLast ? undefined : buildTransitionHalf(ownExitTransition, CUT_CURVE_OUT_FRAMES, CROSSFADE_OUT_FRAMES)
+    const entryFields = entryHalf
+      ? {
+          transitionInFrames: entryHalf.frames,
+          ...(entryHalf.type ? { transitionInType: entryHalf.type, transitionInDirection: entryHalf.direction } : {}),
+        }
+      : {}
+    const exitFields = exitHalf
+      ? {
+          transitionOutFrames: exitHalf.frames,
+          ...(exitHalf.type ? { transitionOutType: exitHalf.type, transitionOutDirection: exitHalf.direction } : {}),
+        }
+      : {}
     return {
       id: win.scene.id,
       startFrame: win.startAbs,
       durationInFrames: Math.max(1, sceneEnd - win.startAbs),
-      ...(isFirst ? {} : { transitionInFrames: CROSSFADE_IN_FRAMES }),
-      ...(isLast ? {} : { transitionOutFrames: CROSSFADE_OUT_FRAMES }),
+      ...entryFields,
+      ...exitFields,
       ...(win.scene.background ? { background: win.scene.background } : {}),
       shots: win.scene.shots.map((shot) => ({
         id: shot.id,

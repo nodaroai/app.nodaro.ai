@@ -1,9 +1,18 @@
 import React from "react"
-import { AbsoluteFill, Audio, Sequence, useCurrentFrame, interpolate } from "remotion"
+import { AbsoluteFill, Audio, Sequence, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
 import { FONT_MAP } from "../lib/font-registry"
 import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
+import { easeOutQuad, easeInQuad } from "../blueprints/motion"
+
+type CutDirection = "left" | "right" | "up" | "down"
+const DIRECTION_VECTOR: Record<CutDirection, readonly [number, number]> = {
+  left: [-1, 0],
+  right: [1, 0],
+  up: [0, -1],
+  down: [0, 1],
+}
 
 /** Final opacity = base × entrance × exit (multiplied, not overwritten). */
 export function computeRevealOpacity(base: number | undefined, enterOpacity: number, exitOpacity: number): number {
@@ -34,6 +43,90 @@ export function sceneCrossfadeOpacity(
     opacity *= Math.max(0, Math.min(1, 1 - (frame - durationInFrames) / transitionOutFrames))
   }
   return opacity
+}
+
+interface CutCurveHalf {
+  readonly frames?: number
+  readonly type?: "cut-the-curve"
+  readonly direction?: CutDirection
+}
+
+/** Opacity completes its fade at this fraction of the exit's travel — the
+ *  element vanishes while still visibly accelerating (HF: ~25-30%). */
+const EXIT_FADE_FRACTION = 0.3
+/** Opacity ramps in over this fraction of the entry's travel — fast, under
+ *  the entry's deceleration (HF: ~35%). */
+const ENTRY_FADE_FRACTION = 0.35
+/** Cut travel distance as a fraction of the transition axis's canvas
+ *  dimension (HF's own reference: 230px / 1920px ≈ 0.12). */
+const DISTANCE_FRACTION = 0.12
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v))
+}
+
+/** The full travel distance (px) for a cut in `direction`, plus its unit
+ *  direction vector — "left"/"right" travel along width, "up"/"down" along
+ *  height. */
+function axisOffset(direction: CutDirection, width: number, height: number): { dx: number; dy: number; distance: number } {
+  const [dx, dy] = DIRECTION_VECTOR[direction]
+  const axisSize = direction === "left" || direction === "right" ? width : height
+  return { dx, dy, distance: axisSize * DISTANCE_FRACTION }
+}
+
+/**
+ * Cut-the-curve — HF's velocity-matched directional scene-to-scene cut.
+ * Handles both halves of a scene's transition independently (a scene's
+ * inherited entry direction and its own authored exit direction can
+ * legitimately differ). The opacity baseline delegates to
+ * `sceneCrossfadeOpacity` (passing `undefined` frames for whichever half IS
+ * cut-the-curve, so that half's linear-fade branch is a no-op there) — the
+ * plain-fade formula for a non-cut-the-curve half is never re-derived, only
+ * ever computed by that one function. `frame` is scene-relative, matching
+ * `sceneCrossfadeOpacity`.
+ *
+ * Only meaningfully different from `sceneCrossfadeOpacity` when at least one
+ * half has `type: "cut-the-curve"` — SceneView only calls this function in
+ * that case, using `sceneCrossfadeOpacity` directly otherwise (byte-identical
+ * to the pre-cut-the-curve renderer for every scene that doesn't opt in).
+ * Pure function — safe to unit-test without a render.
+ */
+export function cutCurveTransform(
+  frame: number,
+  durationInFrames: number,
+  width: number,
+  height: number,
+  entry: CutCurveHalf,
+  exit: CutCurveHalf,
+): { x: number; y: number; opacity: number } {
+  let opacity = sceneCrossfadeOpacity(
+    frame,
+    durationInFrames,
+    entry.type === "cut-the-curve" ? undefined : entry.frames,
+    exit.type === "cut-the-curve" ? undefined : exit.frames,
+  )
+  let x = 0
+  let y = 0
+
+  if (entry.type === "cut-the-curve" && entry.direction && entry.frames && entry.frames > 0 && frame < entry.frames) {
+    const t = clamp01(frame / entry.frames)
+    const { dx, dy, distance } = axisOffset(entry.direction, width, height)
+    const remaining = distance * (1 - easeOutQuad(t))
+    x += -dx * remaining
+    y += -dy * remaining
+    opacity *= clamp01(t / ENTRY_FADE_FRACTION)
+  }
+
+  if (exit.type === "cut-the-curve" && exit.direction && exit.frames && exit.frames > 0 && frame >= durationInFrames) {
+    const t = clamp01((frame - durationInFrames) / exit.frames)
+    const { dx, dy, distance } = axisOffset(exit.direction, width, height)
+    const traveled = distance * easeInQuad(t)
+    x += dx * traveled
+    y += dy * traveled
+    opacity *= clamp01(1 - t / EXIT_FADE_FRACTION)
+  }
+
+  return { x, y, opacity }
 }
 
 function ElementBox({ element, style }: { element: ShotElement; style: React.CSSProperties }) {
@@ -161,13 +254,38 @@ function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backg
   )
 }
 
-/** One scene's layer. Reads the scene-relative frame to apply the cross-dissolve
- *  opacity envelope (in at the open, out across the overlap tail). */
+/** One scene's layer. Reads the scene-relative frame to apply its transition
+ *  envelope — a plain cross-dissolve (opacity only) by default, or a
+ *  cut-the-curve directional cut (opacity + translate) when either half opts
+ *  in via `transitionInType`/`transitionOutType`. The plain-crossfade branch
+ *  is byte-identical to the pre-cut-the-curve renderer — same function call,
+ *  same output — for every scene that doesn't opt in. */
 function SceneView({ scene, backgroundColor }: { scene: ResolvedScene; backgroundColor: string }) {
   const frame = useCurrentFrame()
-  const opacity = sceneCrossfadeOpacity(frame, scene.durationInFrames, scene.transitionInFrames, scene.transitionOutFrames)
+  const { width, height } = useVideoConfig()
+  const usesCutCurve = scene.transitionInType === "cut-the-curve" || scene.transitionOutType === "cut-the-curve"
+  const { x, y, opacity } = usesCutCurve
+    ? cutCurveTransform(
+        frame,
+        scene.durationInFrames,
+        width,
+        height,
+        { frames: scene.transitionInFrames, type: scene.transitionInType, direction: scene.transitionInDirection },
+        { frames: scene.transitionOutFrames, type: scene.transitionOutType, direction: scene.transitionOutDirection },
+      )
+    : {
+        x: 0,
+        y: 0,
+        opacity: sceneCrossfadeOpacity(frame, scene.durationInFrames, scene.transitionInFrames, scene.transitionOutFrames),
+      }
   return (
-    <AbsoluteFill style={{ backgroundColor: scene.background?.color, opacity }}>
+    <AbsoluteFill
+      style={{
+        backgroundColor: scene.background?.color,
+        opacity,
+        transform: x || y ? `translate(${x}px, ${y}px)` : undefined,
+      }}
+    >
       {scene.shots.flatMap((shot) =>
         shot.reveals.map((r) => <RevealView key={r.id} reveal={r} backgroundColor={backgroundColor} />),
       )}

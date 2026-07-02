@@ -1,12 +1,25 @@
 import { describe, it, expect } from "vitest"
 
-import { easeOutQuad, ringAngle, popWithSettle, POP_OVERSHOOT } from "../motion"
+import { easeOutQuad, easeInQuad, ringAngle, popWithSettle, POP_OVERSHOOT } from "../motion"
 
 describe("easeOutQuad", () => {
   it("maps 0→0 and 1→1 with a decelerating middle", () => {
     expect(easeOutQuad(0)).toBe(0)
     expect(easeOutQuad(1)).toBe(1)
     expect(easeOutQuad(0.5)).toBe(0.75)
+  })
+})
+
+describe("easeInQuad", () => {
+  it("maps 0→0 and 1→1 with an accelerating middle — the mirror of easeOutQuad", () => {
+    expect(easeInQuad(0)).toBe(0)
+    expect(easeInQuad(1)).toBe(1)
+    expect(easeInQuad(0.5)).toBe(0.25)
+  })
+
+  it("is slower than linear at the start (accelerating), unlike easeOutQuad", () => {
+    expect(easeInQuad(0.3)).toBeLessThan(0.3)
+    expect(easeOutQuad(0.3)).toBeGreaterThan(0.3)
   })
 })
 

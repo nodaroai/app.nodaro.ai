@@ -361,6 +361,15 @@ export interface ResolvedScene {
   /** Non-last scenes render this many frames PAST their window and fade OUT across
    *  that tail, overlapping the next scene for the cross-dissolve. */
   readonly transitionOutFrames?: number
+  /** Absent = plain crossfade (today's only behavior), independently for entry
+   *  and exit — the incoming direction comes from the PRECEDING scene's own
+   *  exit authoring, so it can differ from this scene's outgoing direction.
+   *  Present = a velocity-matched directional cut for that half — see
+   *  shot-sequence-renderer.tsx's cutCurveTransform. */
+  readonly transitionInType?: "cut-the-curve"
+  readonly transitionInDirection?: "left" | "right" | "up" | "down"
+  readonly transitionOutType?: "cut-the-curve"
+  readonly transitionOutDirection?: "left" | "right" | "up" | "down"
 }
 export interface ShotSequencePlan {
   readonly planType: "shot-sequence"
