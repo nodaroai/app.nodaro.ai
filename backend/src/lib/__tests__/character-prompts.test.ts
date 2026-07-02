@@ -33,6 +33,13 @@ describe("buildPortraitPrompt", () => {
     expect(buildPortraitPrompt({ seedPrompt: "young woman", injectedAssets: "" })).toBe(base)
     expect(buildPortraitPrompt({ seedPrompt: "young woman", injectedAssets: "   " })).toBe(base)
   })
+
+  it("defaults the subject to clothed (a face-referenced studio shot renders nude/underwear otherwise)", () => {
+    // No outfit picked → nothing specifies clothing → the model fills a bare body.
+    // The scaffolding carries a clothed floor so an outfit-less portrait is dressed.
+    expect(PORTRAIT_SCAFFOLDING).toMatch(/clothed/i)
+    expect(buildPortraitPrompt({ seedPrompt: "young woman" })).toMatch(/clothed/i)
+  })
 })
 
 describe("buildAssetPromptText", () => {
@@ -67,6 +74,19 @@ describe("buildAssetPromptText", () => {
       assetType: "poses",
     })
     expect(prompt).toContain("full body visible including feet")
+  })
+
+  it("defaults full-body assets to clothed (the 'full body' framing renders nude/underwear otherwise)", () => {
+    // poses/bodyAngles/lighting demand a full body; without a clothed default the
+    // model dresses it in underwear or nothing. The still scaffolding fixes it.
+    expect(ASSET_STILL_SCAFFOLDING).toMatch(/clothed/i)
+    const prompt = buildAssetPromptText({
+      canonicalDescription: "Kira",
+      assetDescription: "standing",
+      variantOrPrompt: "front",
+      assetType: "poses",
+    })
+    expect(prompt).toMatch(/clothed/i)
   })
 
   it("omits framing for unknown assetType (e.g. custom)", () => {

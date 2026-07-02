@@ -9,11 +9,22 @@
 
 import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeValue } from "@nodaro/shared"
 
+/**
+ * Clothing floor. A face-referenced full-body studio shot with no outfit specified
+ * renders in underwear or nude (the model invents the unseen body), and the pose /
+ * body-angle / lighting framings all demand a full body — so every portrait + still
+ * asset carries a clothed default. "unless the outfit is otherwise described" keeps
+ * intentional wardrobe (or swimwear, etc.) working: a described outfit / wardrobe
+ * hint precedes this clause in the assembled prompt and takes precedence.
+ */
+const CLOTHED_DEFAULT =
+  "fully clothed in simple everyday attire unless the outfit is otherwise described"
+
 export const PORTRAIT_SCAFFOLDING =
-  "4k portrait, plain background, studio lighting, neutral expression unless described otherwise, no text, no labels, no watermarks"
+  `4k portrait, plain background, studio lighting, neutral expression unless described otherwise, ${CLOTHED_DEFAULT}, no text, no labels, no watermarks`
 
 export const ASSET_STILL_SCAFFOLDING =
-  "The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, proportions, and unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Ultra-detailed, 8K quality, cinematic framing, plain background, no text, no labels, no watermarks"
+  `The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, proportions, and unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Ultra-detailed, 8K quality, cinematic framing, plain background, ${CLOTHED_DEFAULT}, no text, no labels, no watermarks`
 
 export const ASSET_MOTION_SCAFFOLDING =
   "The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, and proportions. Smooth motion, natural movement, no text, no labels, no watermarks"
