@@ -913,20 +913,28 @@ describe("POST /v1/generate-character-asset — identity references", () => {
     return enqueued().prompt as string
   }
 
-  it("identity_lock=strict → strict identity clause in the prompt", async () => {
-    expect(await postStudioAsset("strict")).toContain("facial identity must match")
+  it("identity_lock=strict → ref-bound strict identity clause in the prompt", async () => {
+    expect(await postStudioAsset("strict")).toContain(
+      "The facial identity of the subject in reference image A must match exactly",
+    )
   })
 
-  it("identity_lock=soft → soft likeness clause, not the strict wording", async () => {
+  it("identity_lock=soft → ref-bound soft likeness clause, not the strict wording", async () => {
     const prompt = await postStudioAsset("soft")
-    expect(prompt).toContain("overall facial likeness")
-    expect(prompt).not.toContain("facial identity must match")
+    expect(prompt).toContain("Preserve the overall facial likeness of the subject in reference image A")
+    expect(prompt).not.toContain("must match exactly")
   })
 
   it("identity_lock=off → no identity-lock clause even with references present", async () => {
     const prompt = await postStudioAsset("off")
-    expect(prompt).not.toContain("facial identity must match")
+    expect(prompt).not.toContain("must match exactly")
     expect(prompt).not.toContain("overall facial likeness")
+  })
+
+  it("subject binds to reference image A when references exist; clothed default always present", async () => {
+    const prompt = await postStudioAsset("strict")
+    expect(prompt).toContain("Portrait headshot of the person from reference image A")
+    expect(prompt).toContain("fully clothed in simple everyday attire unless the outfit is otherwise described")
   })
 
   it("omits the identity-lock clause and sends an empty ref set on the non-studio path with no source image", async () => {
@@ -945,7 +953,13 @@ describe("POST /v1/generate-character-asset — identity references", () => {
     })
 
     expect(enqueued().assembledReferenceUrls).toEqual([])
-    expect(enqueued().prompt as string).not.toContain("facial identity must match")
+    const prompt = enqueued().prompt as string
+    expect(prompt).not.toContain("must match exactly")
+    // No references → the subject stays the name, never "reference image A".
+    expect(prompt).toContain("Portrait headshot of Kira")
+    expect(prompt).not.toContain("reference image A")
+    // The clothed default is unconditional — text-to-image renders need it too.
+    expect(prompt).toContain("fully clothed in simple everyday attire")
   })
 
   it("reserves the per-reference Flux 2 credit tier reflecting the assembled ref count (not the sourceImageUrl heuristic)", async () => {
