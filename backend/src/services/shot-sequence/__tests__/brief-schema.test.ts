@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { shotSequenceBriefSchema, briefRevealSchema } from "../brief-schema.js"
-import { shotElementSchema } from "../../../lib/plan-schemas.js"
+import { shotElementSchema, enterMotionSchema, exitMotionSchema } from "../../../lib/plan-schemas.js"
 
 function makeBrief(overrides: Record<string, unknown> = {}) {
   return {
@@ -100,5 +100,16 @@ describe("shotElementSchema — text dir", () => {
       fontSize: 80, color: "#fff", x: 0, y: 0 }
     expect(shotElementSchema.safeParse({ ...base, dir: "rtl" }).success).toBe(true)
     expect(shotElementSchema.safeParse({ ...base, dir: "sideways" }).success).toBe(false)
+  })
+})
+
+// ── Z-axis motions (Phase 2.z2) ──────────────────────────────────────────
+
+describe("enterMotionSchema / exitMotionSchema — Z-axis motions", () => {
+  it("accepts inverse-zoom enter and zoom-through exit motions", () => {
+    const enter = enterMotionSchema.safeParse({ motion: "inverse-zoom", durationFrames: 12 })
+    const exit = exitMotionSchema.safeParse({ motion: "zoom-through", durationFrames: 10 })
+    expect(enter.success).toBe(true)
+    expect(exit.success).toBe(true)
   })
 })

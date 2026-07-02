@@ -2,6 +2,10 @@ import type React from "react"
 import { Easing } from "remotion"
 import type { MGElementAnimation, MGExitAnimation } from "../plan-types"
 
+/** Z-axis cut magnitudes (HF cut-catalog, ported to Nodaro's quadratic-ease doctrine). */
+const ZOOM_ARRIVE = 1.5 // inverse-zoom enters from 1 + ZOOM_ARRIVE (~2.5x) → 1
+const ZOOM_THRU = 1.5 // zoom-through flies out from 1 → 1 + ZOOM_THRU (~2.5x)
+
 export const EASING_MAP: Record<string, (t: number) => number> = {
   linear: Easing.linear,
   easeIn: Easing.ease,
@@ -46,6 +50,8 @@ export function getEntranceStyle(
       return { transform: `translateX(${(1 - progress) * 60}px)`, opacity: progress }
     case "slide-right":
       return { transform: `translateX(${-(1 - progress) * 60}px)`, opacity: progress }
+    case "inverse-zoom":
+      return { transform: `scale(${1 + (1 - progress) * ZOOM_ARRIVE})`, opacity: progress }
     case "wipe-in":
       return { clipPath: getWipeClipPath(progress, anim.direction) }
     case "draw-path":
@@ -71,6 +77,8 @@ export function getExitStyle(
       return { transform: `translateX(${-(1 - progress) * 60}px)`, opacity: progress }
     case "slide-right":
       return { transform: `translateX(${(1 - progress) * 60}px)`, opacity: progress }
+    case "zoom-through":
+      return { transform: `scale(${1 + (1 - progress) * ZOOM_THRU})`, opacity: progress }
     default:
       return {}
   }

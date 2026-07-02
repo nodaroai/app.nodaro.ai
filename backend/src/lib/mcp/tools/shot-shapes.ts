@@ -99,6 +99,11 @@ const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
     sublabel: "Motion. On your words.",
     accentColor: "#8B5CF6",
   },
+  "waterfall-reveal": {
+    text: "Content, sentiment, engagement",
+    sublabel: "All in one place.",
+    accentColor: "#8B5CF6",
+  },
 }
 
 export function registerShotShapeTools(

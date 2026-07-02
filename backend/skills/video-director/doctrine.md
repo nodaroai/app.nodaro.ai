@@ -6,7 +6,7 @@ You are a motion director. Turn a one-line brief into a coherent, narrated motio
 
 ## Blueprint picker
 
-Twelve blueprints cover the most common beat roles. **Default to a blueprint whenever the beat has a recognizable shape** — a blueprint's signature move is what separates a finished video from typed-out text, so reach for one *first*. A beat has a blueprint shape when it:
+The blueprint library covers the most common beat roles. **Default to a blueprint whenever the beat has a recognizable shape** — a blueprint's signature move is what separates a finished video from typed-out text, so reach for one *first*. A beat has a blueprint shape when it:
 
 - states a **number / metric / stat** → `dataviz-countup`
 - **lists** features or benefits (2+ items) → `grid-card-assemble`
@@ -15,6 +15,7 @@ Twelve blueprints cover the most common beat roles. **Default to a blueprint whe
 - is the **call to action** → `cta-morph-press`
 - is a punchy **multi-line hook** → `kinetic-type-beats`
 - **types in a brand name / slogan character-by-character** → `typewriter-reveal`
+- **reveals a phrase word-by-word as a cascade** → `waterfall-reveal`
 - **contrasts two sides** (before/after, old/new, us/them) → `comparison-split`
 - says "**it connects everything / one hub** for your tools" or "**plugs into your stack**" → `constellation-hub`
 - builds "**this could be many things… actually it's THIS**" (options cycle, the brand crashes in) → `ticker-takeover`
@@ -25,10 +26,10 @@ Twelve blueprints cover the most common beat roles. **Default to a blueprint whe
 
 | Role | Blueprint id(s) |
 |------|----------------|
-| `hook` | `kinetic-type-beats` · `typewriter-reveal` · `constellation-hub` · `ticker-takeover` · `spatial-pan-stations` |
+| `hook` | `kinetic-type-beats` · `typewriter-reveal` · `constellation-hub` · `ticker-takeover` · `spatial-pan-stations` · `waterfall-reveal` |
 | `pain_point` | `dataviz-countup` · `overwhelm-surround` · `spatial-pan-stations` |
 | `product_intro` | `logo-assemble-lockup` |
-| `feature_showcase` | `grid-card-assemble` · `comparison-split` |
+| `feature_showcase` | `grid-card-assemble` · `comparison-split` · `waterfall-reveal` |
 | `benefit_highlight` | `grid-card-assemble` · `titlecard-reveal` |
 | `social_proof` | `constellation-hub` (partner logos orbit the hub) · `titlecard-reveal` ("loved by N+ teams" proof card) · `grid-card-assemble` (logo wall) |
 | `branding` | `logo-assemble-lockup` · `typewriter-reveal` · `ticker-takeover` |
@@ -82,6 +83,11 @@ Exactly **one** of `element` or `blueprint` per reveal — never both. `duration
 `typewriter-reveal` _(text types in character-by-character with a blinking caret; optional sublabel fades up after typing finishes)_
 ```json
 { "text": "NODARO", "sublabel": "Motion. On your words.", "accentColor": "#8B5CF6" }
+```
+
+`waterfall-reveal` _(words of a line cut in one-by-one with a small horizontal slide, cascading left-to-right; optional sublabel fades up after the last word lands)_
+```json
+{ "text": "Content, sentiment, engagement", "sublabel": "All in one place.", "accentColor": "#8B5CF6" }
 ```
 
 `comparison-split` _(two labeled panels slide in from opposite sides; optional badges pop near the end)_
