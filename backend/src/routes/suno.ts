@@ -867,7 +867,12 @@ export async function sunoRoutes(app: FastifyInstance) {
           await CreditsService.commitCredits(usageLogId)
         }
 
-        return { text: result.text }
+        // jobId included so MCP dispatchJob → parseJobId resolves (it was
+        // missing, making the suno_style_boost MCP verb return isError on
+        // every SUCCESSFUL, billed boost). Additive — REST callers keying on
+        // `text` are unaffected. The job row is already completed with
+        // output_data.text above, so a get_asset poll resolves immediately.
+        return { jobId: job.id, text: result.text }
       } catch (err) {
         // Refund credits on failure
         if (usageLogId) {

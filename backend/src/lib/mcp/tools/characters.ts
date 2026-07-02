@@ -11,7 +11,9 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -663,8 +665,9 @@ function registerGenerationTools({
         "`attach_to_character_id=<id>`) for the best motion results. " +
         "The motion_prompt describes WHAT moves and " +
         "HOW (e.g. 'slow head turn left, eyes track the camera, soft " +
-        "smile'). Returns the i2v job id — poll via `get_job` until " +
-        "completion. Credit cost depends on the provider.",
+        "smile'). Returns the i2v job id — progress and the finished clip " +
+        "appear in the tool card (get_job is the programmatic fallback). " +
+        "Credit cost depends on the provider.",
       inputSchema: {
         motion_prompt: z.string().min(1).max(2000),
         name: z.string().min(1).max(200),
@@ -706,6 +709,7 @@ function registerGenerationTools({
         destructiveHint: false,
         openWorldHint: true,
       },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const payload: Record<string, unknown> = {

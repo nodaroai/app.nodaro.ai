@@ -526,6 +526,16 @@ describe("POST /v1/suno/style-boost", () => {
     expect(mockCommitCredits).toHaveBeenCalledWith("usage-1")
   })
 
+  it("style-boost success response carries jobId (MCP dispatchJob parses it)", async () => {
+    const res = await authedPost("/v1/suno/style-boost", {
+      content: "epic cinematic trailer",
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { jobId?: string; text?: string }
+    expect(body.text).toBe("boosted style text")
+    expect(body.jobId).toBe(TEST_JOB_ID) // ← the fix: was `{ text }` only, so MCP suno_style_boost ALWAYS returned isError
+  })
+
   it("refunds credits on failure", async () => {
     mockSunoStyleBoost.mockRejectedValueOnce(new Error("KIE API down"))
 

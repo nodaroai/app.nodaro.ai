@@ -12,7 +12,7 @@ vi.mock("../../../supabase.js", () => ({
 }))
 
 vi.mock("../../../config.js", () => ({
-  config: { INTERNAL_ORCHESTRATOR_SECRET: "test-secret" },
+  config: { INTERNAL_ORCHESTRATOR_SECRET: "test-secret", PUBLIC_URL: "" },
   hasCredits: () => true,
   hasAdmin: () => true,
   isCloud: () => true,

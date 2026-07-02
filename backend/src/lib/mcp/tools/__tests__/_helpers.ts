@@ -21,10 +21,15 @@ export type ToolHandler = (
   extra: Record<string, unknown>,
 ) => Promise<ToolCallResult>
 
+export interface ListedTool {
+  name: string
+  _meta?: Record<string, unknown>
+}
+
 export type ListToolsHandler = (
   req: { method: string; params: Record<string, unknown> },
   extra: Record<string, unknown>,
-) => Promise<{ tools: { name: string }[] }>
+) => Promise<{ tools: ListedTool[] }>
 
 export async function callTool(
   server: McpServer,
@@ -42,7 +47,7 @@ export async function callTool(
   )
 }
 
-export async function listTools(server: McpServer): Promise<{ name: string }[]> {
+export async function listTools(server: McpServer): Promise<ListedTool[]> {
   const internal = (server as unknown as {
     server: { _requestHandlers: Map<string, ListToolsHandler> }
   }).server._requestHandlers

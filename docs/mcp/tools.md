@@ -27,6 +27,26 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 
 ---
 
+## Job cards
+
+Generation tools render an inline **tool card** in MCP-Apps hosts (claude.ai):
+live progress, then the finished result. Media tools (generate_image,
+generate_video, generate_music, …) have media-specific cards. All remaining
+job tools — entity motion clips (`generate_*_motion`), `render_shot_sequence`,
+`create_explainer`, `create_launch_video`, `run_component`, and the
+text-output tools (`image_to_text`, `generate_script`, `transcribe`,
+`suno_lyrics`, `suno_style_boost`, `forced_alignment`) — share the universal
+job card, which auto-detects the output: video/image/audio players, inline
+text with a Copy button (scripts, lyrics, transcripts, alignment JSON), or a
+component's stacked outputs.
+
+Result-text contract: job tools respond with `"<label> started (id <jobId>)"`
+plus card-first guidance. Clients without card support poll `get_job` with the
+job id (`run_app` returns an execution id — poll `get_app_run` instead). The
+result is always also saved to your Nodaro library.
+
+---
+
 ## The "mcp" project
 
 All workflow tools that create or modify workflows operate inside a single
@@ -1160,8 +1180,9 @@ inline (no job). Feed the plan directly to `render_shot_sequence`.
 **Scope:** `workflows:execute`
 
 Render a resolved shot-sequence plan to an MP4 on Nodaro's Remotion engine.
-Returns a `job_id`; the finished video appears in your library when the render
-is complete.
+Returns a `job_id`; in hosts with interactive tool cards (claude.ai),
+progress and the finished video render inline in the tool card. The video
+is also saved to your Nodaro library.
 
 **Input:** `plan` (a resolved `ShotSequencePlan` from `resolve_shot_sequence`)
 

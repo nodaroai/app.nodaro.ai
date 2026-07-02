@@ -11,7 +11,9 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -626,8 +628,9 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
         "`attach_to_location_id` to auto-append the result to the " +
         "location's `atmosphere_motions[]` bucket on completion. " +
         "`source_image_url` is REQUIRED — typically the location's " +
-        "approved main image. Returns the i2v job id — poll via `get_job` " +
-        "until completion. Credit cost depends on the provider.",
+        "approved main image. Returns the i2v job id — progress and the " +
+        "finished clip appear in the tool card (get_job is the " +
+        "programmatic fallback). Credit cost depends on the provider.",
       inputSchema: {
         motion_prompt: z
           .string()
@@ -694,6 +697,7 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
         destructiveHint: false,
         openWorldHint: true,
       },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const payload: Record<string, unknown> = {

@@ -16,6 +16,8 @@ import { buildWorkflowWidgetTemplate } from "./workflow.js"
 import { buildGalleryWidgetTemplate } from "./gallery.js"
 import { buildAppRunWidgetTemplate } from "./app-run.js"
 import { buildUploadWidget } from "./upload.js"
+import { buildJobAutoWidget } from "./job-auto.js"
+import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
 import { config } from "../../config.js"
 
 export const WIDGET_URI = {
@@ -23,6 +25,7 @@ export const WIDGET_URI = {
   jobVideo: "ui://nodaro/widget/v4/job-video",
   jobAudio: "ui://nodaro/widget/v4/job-audio",
   jobGeneric: "ui://nodaro/widget/v4/job-generic",
+  jobAuto: "ui://nodaro/widget/v4/job-auto",
   workflow: "ui://nodaro/widget/v4/workflow",
   gallery: "ui://nodaro/widget/v4/gallery",
   appRun: "ui://nodaro/widget/v4/app-run",
@@ -60,6 +63,12 @@ const WIDGETS: Array<{
     uri: WIDGET_URI.jobGeneric,
     description: "Inline status card for generic jobs without media preview",
     build: () => buildSingleJobWidget("generic"),
+  },
+  {
+    name: "widget-job-auto",
+    uri: WIDGET_URI.jobAuto,
+    description: "Universal job card: progress + auto-detected result (media, text, or component outputs)",
+    build: () => buildJobAutoWidget(),
   },
   {
     name: "widget-workflow",
@@ -116,11 +125,7 @@ const WIDGETS: Array<{
 // harmless for them. Stripping the trailing slash so the entry parses
 // cleanly into a CSP source.
 const WIDGET_CSP = {
-  resourceDomains: [
-    "https://cdn.nodaro.ai",
-    "https://assets.nodaro.ai",
-    "https://*.r2.cloudflarestorage.com",
-  ],
+  resourceDomains: [...WIDGET_MEDIA_ORIGINS],
   connectDomains: [config.PUBLIC_URL.replace(/\/+$/, "")],
 }
 

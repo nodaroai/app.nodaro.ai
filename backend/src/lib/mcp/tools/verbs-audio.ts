@@ -11,7 +11,9 @@ import {
   jobResultWithWidget,
   dispatchJob,
   JOB_OUTPUT_SCHEMA,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS } from "@nodaro/shared"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 
@@ -467,8 +469,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "video — while preserving the delivery / cadence (ElevenLabs Voice " +
         "Changer). Provide ONE source: audio_url / audio_asset_id to revoice " +
         "audio→audio, OR video_url / video_asset_id to revoice an entire clip " +
-        "(the revoiced video is saved to your library; the new audio track is " +
-        "previewed here). Video wins if both are supplied. Plus a target voice_id.\n\n" +
+        "(the new audio track is previewed in the tool card; the revoiced " +
+        "VIDEO lands in your Nodaro library — video output has no card " +
+        "preview). Video wins if both are supplied. Plus a target voice_id.\n\n" +
         "remove_background_noise off keeps the music/SFX bed under the new " +
         "voice; on yields a clean voice-only result.\n\n" +
         "Use the same voice naming as `generate_speech`: pass a premade " +
@@ -1621,8 +1624,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Separate ANY audio into vocals + instrumental, or full stems (drums, " +
         "bass, other, guitar, piano), using Demucs. Works on uploaded or " +
         "generated audio — unlike `suno_separate_stems`, no Suno track is " +
-        "needed. Returns a job_id; poll `get_job` for the per-stem URLs " +
-        "(vocalUrl, instrumentalUrl, drumsUrl, …).",
+        "needed. Returns a job_id; the stems appear in the tool card — " +
+        "read the per-stem URLs (vocalUrl, instrumentalUrl, drumsUrl, …) " +
+        "via get_job.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional().describe("Nodaro audio job id."),
@@ -1728,6 +1732,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const audioUrl =
@@ -1843,6 +1848,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       return dispatchJob(fastify, session, { url: "/v1/suno/lyrics", payload: { prompt: args.prompt, mcp_client: session.clientName, userId: session.userId }, label: "Suno lyrics", widgetKind: "generic", widgetData: { prompt: args.prompt, model: "suno-lyrics" } })
@@ -1952,6 +1958,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       return dispatchJob(fastify, session, { url: "/v1/suno/style-boost", payload: { content: args.content, mcp_client: session.clientName, userId: session.userId }, label: "Suno style boost", widgetKind: "generic", widgetData: { prompt: args.content.slice(0, 60), model: "suno-style-boost" } })

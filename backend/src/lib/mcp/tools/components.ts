@@ -10,6 +10,8 @@ import {
   extractComponentInputSchema,
   flatInputsToOverrides,
 } from "../extract-app-inputs.js"
+import { cardResultText, uiMeta } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -211,6 +213,7 @@ export function registerComponents({
           destructiveHint: false,
           openWorldHint: true,
         },
+        _meta: uiMeta(WIDGET_URI.jobAuto),
       },
       async (args) => {
         let inputOverrides:
@@ -281,7 +284,11 @@ export function registerComponents({
           content: [
             {
               type: "text" as const,
-              text: `Started component '${args.component_id}' (job ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
+              text: cardResultText({
+                started: `Started component '${args.component_id}' (job ${jobId}).`,
+                noun: "outputs",
+                pollHint: "poll get_job with this id",
+              }),
             },
           ],
           structuredContent: { jobId, componentId: args.component_id },
