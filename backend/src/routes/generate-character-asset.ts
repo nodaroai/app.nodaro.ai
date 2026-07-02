@@ -23,7 +23,7 @@ import {
   type PersonValue,
   type WardrobeValue,
 } from "@nodaro/shared"
-import { buildEntityHints, CLOTHED_DEFAULT } from "../lib/character-prompts.js"
+import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,
   characterPriorAssetsFromRow,
@@ -175,10 +175,13 @@ function buildVariantPrompt(
       ? namePart.trim()
       : "the character"
 
-  // CLOTHED_DEFAULT: same clothing floor as the portrait route — an
-  // unspecified outfit otherwise renders underwear/nude on full-body framings.
-  // A described outfit (outfitPart / wardrobe hints) precedes it and wins.
-  const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, ${CLOTHED_DEFAULT}, white/plain background, no text, no labels, no watermarks.`
+  // Clothing floor — an unspecified outfit otherwise renders underwear/nude on
+  // full-body framings. With reference images the directive asks for the SAME
+  // outfit as the refs (outfit continuity across the identity sheet); without
+  // them it's the plain everyday-attire default. A described outfit
+  // (outfitPart / wardrobe hints) precedes either clause and wins.
+  const clothing = hasReferences ? CLOTHED_MATCH_REFERENCES : CLOTHED_DEFAULT
+  const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, ${clothing}, white/plain background, no text, no labels, no watermarks.`
 
   if (assetType === "custom") {
     return `${userPrompt ?? variant}. ${base}`

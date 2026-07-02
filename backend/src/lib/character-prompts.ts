@@ -20,6 +20,20 @@ import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeVa
 export const CLOTHED_DEFAULT =
   "fully clothed in simple everyday attire unless the outfit is otherwise described"
 
+/**
+ * Reference-aware variant of the clothing floor, for generations that condition
+ * on reference images (the asset route's multi-image identity set). The plain
+ * CLOTHED_DEFAULT actively FIGHTS outfit continuity there: the model sees
+ * "simple everyday attire" in the text and the established outfit in the refs,
+ * and the text often wins — so every asset render re-invents clothes and the
+ * identity sheet drifts. Lead with "same outfit as the reference images"; a
+ * described outfit (wardrobe hints / baseOutfit, which precede this clause)
+ * still overrides, and the everyday-attire floor remains the final fallback
+ * for refs that show no outfit (head-only portraits).
+ */
+export const CLOTHED_MATCH_REFERENCES =
+  "wearing the same outfit as shown in the reference images unless a different outfit is described; if no outfit is visible or described, fully clothed in simple everyday attire"
+
 export const PORTRAIT_SCAFFOLDING =
   `4k portrait, plain background, studio lighting, neutral expression unless described otherwise, ${CLOTHED_DEFAULT}, no text, no labels, no watermarks`
 
