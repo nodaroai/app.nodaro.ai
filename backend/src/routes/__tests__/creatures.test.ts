@@ -961,6 +961,32 @@ describe("POST /v1/creatures — boards + voice (migration 220)", () => {
     expect("voice" in updateRow2).toBe(false)
   })
 
+  it("persists board type + sourceImages (identity sheet) without stripping", async () => {
+    // Identity reference sheet: a board entry widens with `type` +
+    // `sourceImages` (the images it was collaged from). A plain z.object strips
+    // unknown keys, so without widening the schema these silently vanish on
+    // save. Mirrors the boards + voice UPDATE write above.
+    const mockUpdate = updateChain()
+    const boards = [
+      {
+        name: "Identity",
+        url: "https://cdn.example/sheet.png",
+        type: "identity",
+        sourceImages: ["https://cdn.example/a.png", "https://cdn.example/b.png"],
+      },
+      { name: "Winter", url: "https://cdn.example/winter.png" },
+    ]
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { id: TEST_CREATURE_ID, userId: TEST_USER_ID, boards },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const updateRow = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(updateRow.boards).toEqual(boards)
+  })
+
   it("UPDATE with voice: null explicitly clears the voice", async () => {
     const mockUpdate = updateChain()
     await app.inject({

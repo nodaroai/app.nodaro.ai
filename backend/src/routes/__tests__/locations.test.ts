@@ -594,6 +594,40 @@ describe("POST /v1/locations", () => {
     expect("node_id" in patch).toBe(false)
   })
 
+  it("persists board type + sourceImages (identity sheet) without stripping", async () => {
+    // Identity reference sheet: a board entry widens with `type` +
+    // `sourceImages` (the images it was collaged from). A plain z.object strips
+    // unknown keys, so without widening the schema these silently vanish on
+    // save. Mirrors the boards-only UPDATE write above.
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: TEST_LOCATION_ID, updated_at: "2026-06-11T00:00:00Z" },
+      error: null,
+    })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const boards = [
+      {
+        name: "Identity",
+        url: "https://cdn.example/sheet.png",
+        type: "identity",
+        sourceImages: ["https://cdn.example/a.png", "https://cdn.example/b.png"],
+      },
+      { name: "Winter", url: "https://cdn.example/winter.png" },
+    ]
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: { id: TEST_LOCATION_ID, userId: TEST_USER_ID, boards },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const patch = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(patch.boards).toEqual(boards)
+  })
+
   it("INSERT still requires name + nodeId (enforced in the handler)", async () => {
     const res = await app.inject({
       method: "POST",

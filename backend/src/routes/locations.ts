@@ -64,7 +64,17 @@ const upsertLocationBody = z.object({
   // whole-array replace that flows through INSERT *and* UPDATE (Studio
   // serializes its writers), bounded like the characters boards (migration
   // 212): 24 boards, 200-char free-text names, SSRF-gated urls.
-  boards: z.array(z.object({ name: z.string().max(200), url: safeUrlSchema })).max(24).optional(),
+  // `type` distinguishes a plain "looks" board from an image-collage "identity"
+  // sheet; `sourceImages` records the R2 URLs that sheet was collaged from
+  // (studio's identity reference sheet). Both OPTIONAL + backward-compatible —
+  // legacy boards have neither. MUST be listed here explicitly: a plain
+  // z.object STRIPS unknown keys, so without them the fields vanish on save.
+  boards: z.array(z.object({
+    name: z.string().max(200),
+    url: safeUrlSchema,
+    type: z.enum(["looks", "identity"]).optional(),
+    sourceImages: z.array(safeUrlSchema).max(30).optional(),
+  })).max(24).optional(),
   // PII consent timestamp (Phase 2 #7). When the user first adds a reference
   // photo, the studio sends now() so the backend records the consent moment.
   // Once set, the studio's checkbox stays hidden and the user can add more
@@ -163,7 +173,7 @@ type LocationRow = {
   lighting: { name: string; url: string }[] | null
   seasons: { name: string; url: string }[] | null
   atmosphere_motions: { name: string; url: string }[] | null
-  boards: { name: string; url: string }[] | null
+  boards: { name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }[] | null
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null
