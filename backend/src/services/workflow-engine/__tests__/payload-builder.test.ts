@@ -495,6 +495,64 @@ describe("buildPayload", () => {
       expect(result.payload.transition).toBe("cut")
     })
 
+    describe("assemble-narrated-video", () => {
+      it("index-pairs videoUrls/audioUrls into blocks, audio shorter than video is a valid video-only trailing block", () => {
+        const n = node("n1", "assemble-narrated-video", {})
+        const inputs: ResolvedInputs = {
+          videoUrls: ["https://v1.mp4", "https://v2.mp4", "https://v3.mp4"],
+          audioUrls: ["https://a1.mp3"],
+        }
+        const result = buildPayload(n, jobId, inputs)
+        expect(result.jobName).toBe("assemble-narrated-video")
+        expect(result.queueName).toBe("video-generation")
+        expect(result.payload.blocks).toEqual([
+          { videoUrl: "https://v1.mp4", audioUrl: "https://a1.mp3" },
+          { videoUrl: "https://v2.mp4" },
+          { videoUrl: "https://v3.mp4" },
+        ])
+      })
+
+      it("throws when audio clips outnumber video clips (no silent drop)", () => {
+        const n = node("n1", "assemble-narrated-video", {})
+        const inputs: ResolvedInputs = {
+          videoUrls: ["https://v1.mp4"],
+          audioUrls: ["https://a1.mp3", "https://a2.mp3"],
+        }
+        expect(() => buildPayload(n, jobId, inputs)).toThrow(
+          /2 voice clips but only 1 video clips/,
+        )
+      })
+
+      it("applies the 5 knobs with route-matching defaults", () => {
+        const n = node("n1", "assemble-narrated-video", {})
+        const inputs: ResolvedInputs = { videoUrls: ["https://v1.mp4"], audioUrls: [] }
+        const result = buildPayload(n, jobId, inputs, usageLogId)
+        expect(result.payload.voiceVolume).toBe(100)
+        expect(result.payload.clipAudioVolume).toBe(40)
+        expect(result.payload.maxSlowdown).toBe(1.5)
+        expect(result.payload.trimStartFrames).toBe(0)
+        expect(result.payload.trimEndFrames).toBe(0)
+        expect(result.payload.usageLogId).toBe(usageLogId)
+      })
+
+      it("honors node-configured knob overrides", () => {
+        const n = node("n1", "assemble-narrated-video", {
+          voiceVolume: 80,
+          clipAudioVolume: 25,
+          maxSlowdown: 1.2,
+          trimStartFrames: 3,
+          trimEndFrames: 4,
+        })
+        const inputs: ResolvedInputs = { videoUrls: ["https://v1.mp4"], audioUrls: [] }
+        const result = buildPayload(n, jobId, inputs)
+        expect(result.payload.voiceVolume).toBe(80)
+        expect(result.payload.clipAudioVolume).toBe(25)
+        expect(result.payload.maxSlowdown).toBe(1.2)
+        expect(result.payload.trimStartFrames).toBe(3)
+        expect(result.payload.trimEndFrames).toBe(4)
+      })
+    })
+
     it("merge-video-audio builds audioTracks", () => {
       const n = node("n1", "merge-video-audio", {})
       const inputs: ResolvedInputs = {

@@ -541,8 +541,19 @@ export function resolveLoopColumnValues(
  *  hand-maintained duplicate that the backend copy had drifted from). */
 const DEFAULT_EACH_TYPES = FAN_OUT_EACH_TYPES;
 
-/** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
-const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
+/** Node types that accept multiple audio inputs (accumulate to audioUrls array).
+ *  "assemble-narrated-video" reuses this ordered accumulator for its `audio`
+ *  target handle — execute-node.ts index-pairs it against MULTI_VIDEO_INPUT_TYPES'
+ *  videoUrls (block i = videoUrls[i] + audioUrls[i], trailing video-only blocks
+ *  are valid when audioUrls is shorter). */
+const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio", "assemble-narrated-video"]);
+
+/** Node types that accept multiple video inputs (accumulate to videoUrls array).
+ *  Single source of truth for the video-accumulation branches below — mirrors
+ *  MULTI_AUDIO_INPUT_TYPES so combine-videos (unordered "in" handle) and
+ *  assemble-narrated-video (ordered "video" handle, paired against audioUrls
+ *  above) share the same routing instead of drifting per-site hardcoded checks. */
+const MULTI_VIDEO_INPUT_TYPES = new Set(["combine-videos", "assemble-narrated-video"]);
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   // Legacy / i2v single-name handle ids (kept for un-migrated workflows)
@@ -758,7 +769,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "video-upscale", "video-composer", "merge-video-audio",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
-  "video-sfx", "remove-audio",
+  "video-sfx", "remove-audio", "assemble-narrated-video",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
@@ -1170,7 +1181,7 @@ export function resolveNodeInputs(
         const edgeData = srcEdge.data as Record<string, unknown> | undefined;
         const filteredSrc = selectListItems(srcListResults, edgeData as SelectorFields | undefined);
         // For array-accumulating targets, spread items individually
-        if (node.type === "combine-videos") {
+        if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           for (const item of filteredSrc) {
             if (item) {
               inputs.videoUrls = [...(inputs.videoUrls ?? []), item];
@@ -1529,7 +1540,7 @@ export function resolveNodeInputs(
           inputs.imageUrl = output
         }
       } else if (handleType === "video") {
-        if (node.type === "combine-videos") {
+        if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
           inputs.videoUrlsWithSourceIds = [
             ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
@@ -1638,7 +1649,7 @@ export function resolveNodeInputs(
       } else if (colType === "video-url") {
         if (isCarouselTarget) {
           inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "video", url: output }];
-        } else if (node.type === "combine-videos") {
+        } else if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
           inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {
@@ -1773,7 +1784,7 @@ export function resolveNodeInputs(
           srcData.downloadedAudioUrl as string | undefined
         )?.trim();
         inputs.uploadUrl = audioUrl || output;
-      } else if (node.type === "combine-videos") {
+      } else if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
         inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
         inputs.videoUrlsWithSourceIds = [
           ...((inputs.videoUrlsWithSourceIds as Array<{
@@ -1900,7 +1911,7 @@ export function resolveNodeInputs(
         inputs.imageUrl = output;
       }
     } else if (VIDEO_OUTPUT_NODE_TYPES.has(src.type!)) {
-      if (node.type === "combine-videos") {
+      if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
         inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
         inputs.videoUrlsWithSourceIds = [
           ...((inputs.videoUrlsWithSourceIds as Array<{
@@ -2006,7 +2017,7 @@ export function resolveNodeInputs(
         }
       } else {
         // Default → video (composite_video). Mirror VIDEO_OUTPUT_NODE_TYPES routing.
-        if (node.type === "combine-videos") {
+        if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
           inputs.videoUrlsWithSourceIds = [
             ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
@@ -2336,7 +2347,7 @@ export function resolveNodeInputs(
           if (param.type === "imageUrl") {
             inputs.imageUrl = output;
           } else if (param.type === "videoUrl") {
-            if (node.type === "combine-videos") {
+            if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
               inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
               inputs.videoUrlsWithSourceIds = [
                 ...(inputs.videoUrlsWithSourceIds ?? []),
@@ -2407,7 +2418,7 @@ export function resolveNodeInputs(
           inputs.imageUrl = output;
         }
       } else if (mediaType === "video") {
-        if (node.type === "combine-videos") {
+        if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
           inputs.videoUrlsWithSourceIds = [
             ...(inputs.videoUrlsWithSourceIds ?? []),

@@ -50,6 +50,7 @@ import {
   generateMotionGraphics,
   mergeVideoAudioApi,
   imageCollageApi,
+  assembleNarratedVideo,
   trimAudioApi,
   splitMediaApi,
   extractAudioApi,
@@ -146,6 +147,7 @@ import type {
   CompositeData,
   RenderVideoData,
   CombineVideosData,
+  AssembleNarratedVideoData,
   ImageCollageData,
   MergeVideoAudioData,
   TrimAudioData,
@@ -5209,6 +5211,51 @@ export function executeNode(
       combineData.trimEndFrames,
       upstreamDurations,
       combineData.audioCrossfadeCurve,
+    );
+  }
+
+  if (node.type === "assemble-narrated-video") {
+    const assembleData = node.data as AssembleNarratedVideoData;
+    const videoUrls = inputs.videoUrls ?? [];
+    const audioUrls = inputs.audioUrls ?? [];
+
+    if (videoUrls.length === 0) {
+      toast.error(`Node "${assembleData.label}": need at least 1 video input`);
+      return Promise.reject(new Error("Need at least 1 video"));
+    }
+    // Pairing semantics: block i = video[i] + audio[i] (index-paired, per the
+    // `video`/`audio` target handles' connection order). Audio SHORTER than
+    // video is valid — trailing blocks are video-only passthrough. Audio
+    // LONGER than video is a pre-flight validation error: fail before calling
+    // the API instead of silently dropping the extra voice clips.
+    if (audioUrls.length > videoUrls.length) {
+      toast.error(
+        `Node "${assembleData.label}": ${audioUrls.length} voice clips but only ${videoUrls.length} video clips — connect at most one voice clip per video clip`,
+      );
+      return Promise.reject(new Error("More audio clips than video clips"));
+    }
+
+    const blocks = videoUrls.map((videoUrl, i) => {
+      const audioUrl = audioUrls[i];
+      return audioUrl ? { videoUrl, audioUrl } : { videoUrl };
+    });
+
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        assembleNarratedVideo({
+          blocks,
+          voiceVolume: assembleData.voiceVolume,
+          clipAudioVolume: assembleData.clipAudioVolume,
+          maxSlowdown: assembleData.maxSlowdown,
+          trimStartFrames: assembleData.trimStartFrames,
+          trimEndFrames: assembleData.trimEndFrames,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Assemble Narrated Video",
+      ctx,
     );
   }
 

@@ -24,6 +24,7 @@
  */
 import { uiProtocolShim } from "./_common.js"
 import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
+import { appBaseUrl } from "../../deployment-urls.js"
 
 const CARD_CSS = `
   :root { color-scheme: light dark; }
@@ -382,7 +383,7 @@ ${uiProtocolShim()}
       libLink.textContent = 'Open Nodaro library';
       libLink.addEventListener('click', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
+          window.NodaroMCP.openLink(${JSON.stringify(`${appBaseUrl()}/gallery`)});
         }
       });
       statusEl.appendChild(libLink);

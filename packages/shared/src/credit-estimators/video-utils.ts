@@ -154,3 +154,12 @@ export function estimateLoopTrimAddonCredits(
   return Math.ceil(outputDurationSeconds / 5) +
          Math.ceil(frames / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT)
 }
+
+/** BASE credits (pre-markup) for assemble-narrated-video: 3 flat + 1 per 6
+ *  blocks. 6→4, 24→7, 60→13. Single source of truth shared by the backend
+ *  route/creditGuard (`backend/src/providers/video/narrated-block-fit.ts`
+ *  re-exports this) and the frontend pre-run estimate
+ *  (`frontend/src/hooks/use-estimated-credits.ts`). */
+export function assembleNarratedVideoCredits(blockCount: number): number {
+  return 3 + Math.ceil(blockCount / 6)
+}

@@ -29,6 +29,7 @@ export const BLUEPRINT_IDS = [
   "ticker-takeover",
   "titlecard-reveal",
   "typewriter-reveal",
+  "waterfall-reveal",
 ] as const
 
 export type BlueprintId = (typeof BLUEPRINT_IDS)[number]
@@ -135,6 +136,13 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     sublabel: z.string().optional(),
     accentColor: hexColor.optional(),
   }),
+
+  /** Words of a line cut in one-by-one with a small horizontal slide, cascading left-to-right. */
+  "waterfall-reveal": z.object({
+    text: z.string().min(1),
+    sublabel: z.string().optional(),
+    accentColor: hexColor.optional(),
+  }),
 } satisfies Record<BlueprintId, z.ZodTypeAny>
 
 /**
@@ -226,6 +234,12 @@ export const BLUEPRINT_META: Record<
     defaultDurationFrames: 180,
     description:
       "Text types in character-by-character with a blinking caret; optional sublabel fades up after typing finishes, then held.",
+  },
+  "waterfall-reveal": {
+    roles: ["hook", "feature_showcase"],
+    defaultDurationFrames: 150,
+    description:
+      "Words of a line cut in one-by-one with a small horizontal slide, cascading left-to-right; optional sublabel fades up after the last word lands.",
   },
 }
 

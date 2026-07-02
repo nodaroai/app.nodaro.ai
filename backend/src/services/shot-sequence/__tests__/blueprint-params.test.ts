@@ -10,7 +10,7 @@ describe("blueprint-params", () => {
       expect(BLUEPRINT_META[id].roles.length).toBeGreaterThan(0)
     }
   })
-  it("has all 12 blueprint ids, alphabetical (Phase 2.y adds 4)", () => {
+  it("has all 13 blueprint ids, alphabetical (Phase 2.z2 adds waterfall-reveal)", () => {
     expect(BLUEPRINT_IDS).toEqual([
       "comparison-split",
       "constellation-hub",
@@ -24,6 +24,7 @@ describe("blueprint-params", () => {
       "ticker-takeover",
       "titlecard-reveal",
       "typewriter-reveal",
+      "waterfall-reveal",
     ])
   })
   it("validates good kinetic-type-beats params", () => {

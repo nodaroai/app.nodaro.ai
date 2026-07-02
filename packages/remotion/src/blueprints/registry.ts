@@ -12,6 +12,7 @@ import { SpatialPanStations } from "./spatial-pan-stations"
 import { TickerTakeover } from "./ticker-takeover"
 import { TitlecardReveal } from "./titlecard-reveal"
 import { TypewriterReveal } from "./typewriter-reveal"
+import { WaterfallReveal } from "./waterfall-reveal"
 
 /**
  * Maps every known blueprint id to its Remotion component.
@@ -37,4 +38,5 @@ export const BLUEPRINT_REGISTRY: Record<string, React.FC<BlueprintProps>> = {
   "ticker-takeover": TickerTakeover,
   "titlecard-reveal": TitlecardReveal,
   "typewriter-reveal": TypewriterReveal,
+  "waterfall-reveal": WaterfallReveal,
 }

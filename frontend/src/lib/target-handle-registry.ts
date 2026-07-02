@@ -305,6 +305,15 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
 
+  // Assemble Narrated Video — TWO distinct typed handles (video clips list,
+  // voice audio list) rather than the ffmpeg family's shared single `in`, so
+  // it gets its own entry instead of joining the block above. Mirrors the
+  // dedicated dispatch in connection-validation.ts.
+  "assemble-narrated-video": [
+    { handleId: "video", label: "Clips",  accepts: ACCEPTS_VIDEO },
+    { handleId: "audio", label: "Voices", accepts: ACCEPTS_AUDIO },
+  ],
+
   // Lottie Overlay — `video` accepts video producers; `lottie` accepts the
   // motion-graphics lottie engine (authored animation assets). Lets a
   // motion-graphics source pip's popover surface "→ Lottie" as a candidate.

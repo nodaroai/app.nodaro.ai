@@ -2,7 +2,7 @@ import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
 import { isValidVideoRetakeConnection, type VideoRetakeHandleId } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
-import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
+import { FFMPEG_NODE_TYPES, isValidFfmpegConnection, ACCEPTS_VIDEO, ACCEPTS_AUDIO } from "./ffmpeg-handles"
 import {
   isValidTextToSpeechConnection,
   isValidTextToAudioConnection,
@@ -392,6 +392,18 @@ export function isValidWorkflowConnection(
       connection.targetHandle,
       typeOf(connection.source) ?? "",
     )
+  }
+
+  // Assemble Narrated Video — two DISTINCT typed handles (video clips list,
+  // voice audio list), unlike the ffmpeg family above which shares one `in`
+  // handle per node. Mirrors the accepts predicates registered in
+  // target-handle-registry.ts so drag-to-connect, the Connect button, and
+  // the source-direction popover all agree.
+  if (targetType === "assemble-narrated-video" && connection.targetHandle) {
+    const sourceType = typeOf(connection.source) ?? ""
+    if (connection.targetHandle === "video") return ACCEPTS_VIDEO(sourceType)
+    if (connection.targetHandle === "audio") return ACCEPTS_AUDIO(sourceType)
+    return false
   }
 
   // ─── Data root-category nodes ─────────────────────────────────────────

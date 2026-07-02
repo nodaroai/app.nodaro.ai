@@ -2,6 +2,7 @@ import {
   estimateLoopVideoCredits,
   estimateTrimVideoCredits,
   estimateCombineVideosCredits,
+  assembleNarratedVideoCredits,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
   type CombineVideosEstimatorInput,
@@ -35,6 +36,15 @@ export function useEstimatedCredits(node: WorkflowNode): number {
       case "combine-videos": {
         const durations = getCombineUpstreamDurations(node, s.nodes as WorkflowNode[], s.edges)
         return estimateCombineVideosCredits(data as CombineVideosEstimatorInput, durations)
+      }
+      case "assemble-narrated-video": {
+        // Block count = edges wired into the "video" handle (the `blocks`
+        // array driver — see execute-node.ts). No inputs wired yet still
+        // reserves the 1-block floor (never shows the unreachable N=0 value).
+        const wiredCount = s.edges.filter(
+          (e) => e.target === node.id && e.targetHandle === "video",
+        ).length
+        return assembleNarratedVideoCredits(Math.max(1, wiredCount))
       }
       default:
         return 0

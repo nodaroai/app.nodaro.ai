@@ -41,6 +41,10 @@ const AUTHORITATIVE = new Map<string, readonly string[]>([
   ["generate-image", [...GENERATE_IMAGE_INPUT_HANDLES]],
   ["video-retake", [...VIDEO_RETAKE_HANDLE_IDS]],
   ["video-sfx", ["prompt", "negative", "video"]],
+  // assemble-narrated-video — two ordered list handles (video clips, voice
+  // audio), each with its own predicate; no *_HANDLE_LABELS entry (own
+  // dispatch in connection-validation.ts, not one of the shared batches).
+  ["assemble-narrated-video", ["video", "audio"]],
   // validator/component overrides — see header.
   ["ai-avatar", ["image", "script", "audio"]],
   ["cinematic-avatar", ["prompt", "ref-video", "ref-audio", "ref-image"]],

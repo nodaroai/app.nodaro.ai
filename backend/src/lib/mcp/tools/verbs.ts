@@ -6,6 +6,7 @@ import { registerShotSequenceVerbs } from "./verbs-shot-sequence.js"
 import { registerShotShapeTools } from "./shot-shapes.js"
 import { registerVideoDirectorTool } from "./video-director.js"
 import { registerVideoDirectorTools } from "./video-director-tools.js"
+import { registerRecipeTool } from "./recipes.js"
 import { hasCredits } from "../../config.js"
 
 export type RegisterVerbsOpts = RegisterOpts
@@ -47,6 +48,11 @@ export function registerVerbs(opts: RegisterVerbsOpts): void {
   // take (generate_speech, render_shot_sequence, etc.) are scope-gated by
   // their own tools, so no capability leak from omitting a gate here.
   registerVideoDirectorTool(opts.server, opts.session)
+  // get_recipe: pure content delivery (multi-step content recipe catalog),
+  // no side effects — registered unconditionally on all editions, same
+  // posture as start_video_director / get_node_skill. The actions a recipe
+  // instructs the LLM to take are scope-gated by their own tools.
+  registerRecipeTool(opts.server, opts.session)
   // create_explainer / create_launch_video: dispatch to the director worker
   // (author → speech → align → render). The worker is Cloud-only (started
   // in server.ts only when hasCredits()), so register these tools only on

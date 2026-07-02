@@ -167,6 +167,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "image-collage", label: "Image Collage", icon: <LayoutGrid className="h-4 w-4" />, category: "Processing", group: "Image", keywords: ["collage", "grid", "montage", "mosaic", "combine images", "contact sheet", "tile"] },
   // Processing — Video
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "assemble-narrated-video", label: "Assemble Narrated Video", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video", keywords: ["narration", "voiceover", "narrated", "audio-led", "montage", "assemble"] },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "social-media-format", label: "Social Media Format", icon: <Share2 className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -288,6 +288,23 @@ const maskThresholdControl: QuickConfigControl = {
   ],
 }
 
+/** assemble-narrated-video's three ffmpeg-fit knobs. No provider lever exists
+ *  on this node (pure ffmpeg logic — see assemble-narrated-video-config.tsx),
+ *  so these are static option lists; every value is within the route's Zod
+ *  bounds (voiceVolume/clipAudioVolume 0-200, maxSlowdown 1-2 — see
+ *  backend/src/routes/assemble-narrated-video.ts), so the static-superset
+ *  Zod-reject trap does not apply. trimStartFrames/trimEndFrames stay
+ *  config-panel-only (fine-trim, not part of the quick-strip set). */
+const ASSEMBLE_NARRATED_VIDEO_VOICE_VOLUME_OPTIONS: ReadonlyArray<QuickConfigOption> = [
+  0, 25, 50, 75, 100, 125, 150, 200,
+].map((v) => ({ value: String(v), label: `${v}%` }))
+const ASSEMBLE_NARRATED_VIDEO_CLIP_VOLUME_OPTIONS: ReadonlyArray<QuickConfigOption> = [
+  0, 10, 20, 30, 40, 60, 80, 100,
+].map((v) => ({ value: String(v), label: `${v}%` }))
+const ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS: ReadonlyArray<QuickConfigOption> = [
+  1, 1.1, 1.25, 1.5, 1.75, 2,
+].map((v) => ({ value: String(v), label: `${v}×` }))
+
 /** Title-case a kebab sheet enum value for the dropdown label (drift-proof — no
  *  separate label map to keep in sync with SHEET_TYPES/SHEET_SKINS). */
 const sheetLabel = (v: string) => v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -410,6 +427,13 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
         { value: "4K", label: "4K" },
       ],
     },
+  ],
+  // ── Assemble Narrated Video (voice / ambient / max-slow — per original
+  // design spec; trims stay config-panel-only) ──
+  "assemble-narrated-video": [
+    { field: "voiceVolume", ariaLabel: "Voice %", icon: Mic, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_VOICE_VOLUME_OPTIONS },
+    { field: "clipAudioVolume", ariaLabel: "Ambient %", icon: Volume2, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_CLIP_VOLUME_OPTIONS },
+    { field: "maxSlowdown", ariaLabel: "Max slow ×", icon: Gauge, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS },
   ],
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.

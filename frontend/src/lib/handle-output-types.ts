@@ -32,6 +32,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "ai-avatar": { video: "video" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
+  "assemble-narrated-video": { video: "video" },
   "audio-fx": { "audio-out": "audio" },
   "after-effects": { composition: "control" },
   "audio-isolation": { audio: "audio" },

@@ -7,6 +7,7 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
+import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
@@ -74,6 +75,41 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
   })
   if (!ok) return
 
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleAssembleNarratedVideo: HandlerFn = async function handleAssembleNarratedVideo(job, ctx) {
+  const { blocks, voiceVolume, clipAudioVolume, maxSlowdown, trimStartFrames, trimEndFrames } = job.data as {
+    jobId: string
+    blocks: { videoUrl: string; audioUrl?: string }[]
+    voiceVolume?: number; clipAudioVolume?: number; maxSlowdown?: number
+    trimStartFrames?: number; trimEndFrames?: number
+  }
+  console.log(`[worker] assemble-narrated-video ${ctx.jobId}: ${blocks.length} blocks`)
+
+  // Per-block progress: walks 5 -> 75 while blocks download/normalize/concat,
+  // so a many-block job (e.g. 60 blocks) shows incremental movement instead
+  // of sitting at 0% for minutes. Fire-and-forget (not awaited) so a slow DB
+  // write never serializes block processing — `setJobProgress` already
+  // best-effort-catches its own DB write failures; the `.catch` here only
+  // guards the (rarer) BullMQ `job.updateProgress` rejection.
+  const outputPath = await assembleNarratedVideo({
+    blocks, voiceVolume, clipAudioVolume, maxSlowdown, trimStartFrames, trimEndFrames,
+    onProgress: (f) => {
+      void setJobProgress(job, ctx.jobId, Math.round(5 + f * 70)).catch(() => {})
+    },
+  })
+  await setJobProgress(job, ctx.jobId, 80)
+
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+  await setJobProgress(job, ctx.jobId, 100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl } })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -676,6 +712,7 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
 
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
+  "assemble-narrated-video": handleAssembleNarratedVideo,
   "image-collage": handleImageCollage,
   "merge-video-audio": handleMergeVideoAudio,
   "trim-audio": handleTrimAudio,

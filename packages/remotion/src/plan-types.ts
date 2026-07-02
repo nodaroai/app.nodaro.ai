@@ -210,7 +210,7 @@ export interface ThreeDTitlePlan {
 // ── Motion Graphics Plan Types ──────────────────────────────────────
 
 export interface MGElementAnimation {
-  readonly type: "wipe-in" | "scale-up" | "fade" | "draw-path" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+  readonly type: "wipe-in" | "scale-up" | "inverse-zoom" | "fade" | "draw-path" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
   readonly direction?: "left" | "right" | "up" | "down"
   readonly startFrame: number
   readonly durationFrames: number
@@ -264,7 +264,7 @@ export interface MGSvgPathElement {
 export type MGElement = MGShapeElement | MGTextElement | MGSvgPathElement
 
 export interface MGExitAnimation {
-  readonly type: "fade" | "slide-down" | "slide-up" | "slide-left" | "slide-right" | "none"
+  readonly type: "fade" | "zoom-through" | "slide-down" | "slide-up" | "slide-left" | "slide-right" | "none"
   readonly startFrame: number
   readonly durationFrames: number
 }
@@ -283,8 +283,8 @@ export interface MotionGraphicsPlan {
 // ── Shot Sequence Plan (VO-cued reveals) ─────────────────────────────────
 
 export type ShotEnterMotionType =
-  | "fade" | "scale-up" | "wipe-in" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
-export type ShotExitMotionType = "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+  | "fade" | "scale-up" | "inverse-zoom" | "wipe-in" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+export type ShotExitMotionType = "fade" | "zoom-through" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
 export type ShotEasing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
 
 export interface ShotEnterMotion {

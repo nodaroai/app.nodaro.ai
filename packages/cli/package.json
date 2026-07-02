@@ -4,6 +4,13 @@
   "description": "Command-line interface for Nodaro — list and run workflows, inspect jobs and executions, manage projects from the terminal.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodaroai/app.nodaro.ai.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/nodaroai/app.nodaro.ai/tree/main/packages/cli#readme",
+  "bugs": "https://github.com/nodaroai/app.nodaro.ai/issues",
   "bin": {
     "nodaro": "./dist/index.js"
   },

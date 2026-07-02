@@ -505,6 +505,7 @@ export const enterMotionSchema = z.object({
   motion: z.enum([
     "fade",
     "scale-up",
+    "inverse-zoom",
     "wipe-in",
     "slide-up",
     "slide-down",
@@ -519,7 +520,7 @@ export const enterMotionSchema = z.object({
 
 /** Exit motion — constrained to what getExitStyle actually implements. */
 export const exitMotionSchema = z.object({
-  motion: z.enum(["fade", "slide-up", "slide-down", "slide-left", "slide-right", "none"]),
+  motion: z.enum(["fade", "zoom-through", "slide-up", "slide-down", "slide-left", "slide-right", "none"]),
   durationFrames: z.number().min(0).max(MAX_FRAMES),
   easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut", "spring"]).optional(),
   direction: z.enum(["left", "right", "up", "down"]).optional(),

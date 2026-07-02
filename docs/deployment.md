@@ -406,12 +406,18 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
    Domains → Add custom domain. Add the CNAME at your DNS provider (no
    Cloudflare proxy — proxies break long-lived SSE connections).
 
-2. **Set env vars on the backend service.** Only `MCP_ENABLED` is required —
-   the other two have safe defaults you typically don't need to change:
+2. **Set env vars on the backend service.**
    ```
    MCP_ENABLED=true                              # required (default: false)
+   MCP_PUBLIC_URL=https://mcp.your-domain.com    # the domain from step 1
    ```
-   Optional overrides:
+   `MCP_PUBLIC_URL` is what the discovery endpoints advertise as the
+   protected-resource identity (RFC 9728) and what upload links point at —
+   without it your instance advertises the Nodaro Cloud MCP host. If you
+   serve MCP from your main domain instead of a subdomain, set it to the
+   same value as `PUBLIC_URL`.
+
+   Optional overrides (safe defaults you typically don't need to change):
    ```
    MCP_DYNAMIC_REGISTRATION=open                 # default: "allowlist" (recommended)
    MCP_DCR_ALLOWLIST=Claude,Cursor,Cline,Continue,Goose,YourCustomClient

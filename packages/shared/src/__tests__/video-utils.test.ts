@@ -9,6 +9,7 @@ import {
   estimateLoopTrimAddonCredits,
   type LoopTrimEstimatorInput,
 } from "../credit-estimators/video-utils.js"
+import { assembleNarratedVideoCredits } from "../credit-estimators/video-utils.js"
 
 describe("estimateLoopVideoCredits", () => {
   describe("repeat mode", () => {
@@ -282,5 +283,21 @@ describe("estimateLoopTrimAddonCredits", () => {
 
   it("returns 0 when framesToTest=64 but enabled is false (precedence)", () => {
     expect(estimateLoopTrimAddonCredits({ enabled: false, framesToTest: 64 }, 60)).toBe(0)
+  })
+})
+
+describe("assembleNarratedVideoCredits", () => {
+  it("matches the worked examples 6→4, 24→7, 60→13", () => {
+    expect(assembleNarratedVideoCredits(6)).toBe(4)
+    expect(assembleNarratedVideoCredits(24)).toBe(7)
+    expect(assembleNarratedVideoCredits(60)).toBe(13)
+  })
+
+  it("is 3 flat credits at the theoretical N=0 floor (never shown directly — call sites clamp N to 1)", () => {
+    expect(assembleNarratedVideoCredits(0)).toBe(3)
+  })
+
+  it("returns the 1-block floor of 4 credits", () => {
+    expect(assembleNarratedVideoCredits(1)).toBe(4)
   })
 })

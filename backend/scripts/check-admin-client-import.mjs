@@ -116,6 +116,12 @@ const ALLOWED_PATHS = [
   // into `jobs`; no cross-user reads or writes.
   /^src\/routes\/image-collage\.ts$/,
 
+  // Assemble Narrated Video: FFmpeg job-creation route, same shape as
+  // Image Collage above. Derives `userId = req.userId` (401 if absent) and
+  // INSERTs the job with `user_id: userId`. Service-role required to insert
+  // into `jobs`; no cross-user reads or writes.
+  /^src\/routes\/assemble-narrated-video\.ts$/,
+
   // Node presets: per-user CRUD collection. Every handler derives
   // `userId = req.userId` (401 if absent); LIST/DELETE scope by
   // `.eq("user_id", userId)` and CREATE/IMPORT INSERT with `user_id: userId`.

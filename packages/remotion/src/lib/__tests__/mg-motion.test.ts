@@ -33,3 +33,33 @@ describe("mg-motion helpers", () => {
     expect(EASING_MAP.spring(1)).toBeCloseTo(1, 2)
   })
 })
+
+describe("inverse-zoom entrance (arrival: large → normal)", () => {
+  it("progress 0 → starts ~2.5x, invisible", () => {
+    expect(getEntranceStyle(0, { type: "inverse-zoom" })).toEqual({ transform: "scale(2.5)", opacity: 0 })
+  })
+  it("progress 1 → settled at scale 1, opaque", () => {
+    expect(getEntranceStyle(1, { type: "inverse-zoom" })).toEqual({ transform: "scale(1)", opacity: 1 })
+  })
+  it("progress 0.5 → midway (scale 1.75, opacity 0.5)", () => {
+    expect(getEntranceStyle(0.5, { type: "inverse-zoom" })).toEqual({ transform: "scale(1.75)", opacity: 0.5 })
+  })
+})
+
+describe("zoom-through exit (fly toward camera: normal → large)", () => {
+  it("exit progress 1 (start) → scale 1, opaque", () => {
+    expect(getExitStyle(1, { type: "zoom-through" })).toEqual({ transform: "scale(1)", opacity: 1 })
+  })
+  it("exit progress 0 (gone) → ~2.5x, invisible", () => {
+    expect(getExitStyle(0, { type: "zoom-through" })).toEqual({ transform: "scale(2.5)", opacity: 0 })
+  })
+})
+
+describe("regression: existing motions unchanged", () => {
+  it("scale-up entrance still scales from progress", () => {
+    expect(getEntranceStyle(0.5, { type: "scale-up" })).toEqual({ transform: "scale(0.5)", opacity: 0.5 })
+  })
+  it("fade exit unchanged", () => {
+    expect(getExitStyle(0.5, { type: "fade" })).toEqual({ opacity: 0.5 })
+  })
+})

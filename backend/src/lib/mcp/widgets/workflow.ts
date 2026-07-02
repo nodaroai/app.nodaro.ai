@@ -15,6 +15,7 @@
  * `setAttribute` only.
  */
 import { uiProtocolShim } from "./_common.js"
+import { appBaseUrl } from "../../deployment-urls.js"
 
 const WF_CSS = `
   :root { color-scheme: light dark; }
@@ -104,7 +105,7 @@ ${uiProtocolShim()}
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
+      window.NodaroMCP.openLink(${JSON.stringify(`${appBaseUrl()}/gallery`)});
     });
 
     window.addEventListener('mcp-tool-result', function(e) {

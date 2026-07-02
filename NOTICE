@@ -41,6 +41,39 @@ Layout Kernel, licensed under the Eclipse Public License 2.0. Source:
 https://github.com/kieler/elkjs
 
 --------------------------------------------------------------------------------
+Binaries bundled in the Docker image
+--------------------------------------------------------------------------------
+The published Docker image installs Debian packages for `ffmpeg` (GPL-2.0+ /
+LGPL-2.1+ depending on build configuration) and `aubio-tools` (GPL-3.0), plus
+`yt-dlp` (Unlicense) and the Caddy web server (Apache-2.0). All are separate,
+unmodified executables invoked as child processes — none is linked into
+Nodaro's code, which remains under the licenses described above. Distributing
+the image distributes those binaries; their corresponding source is available
+from Debian (`apt-get source ffmpeg aubio` — https://www.debian.org), from
+https://github.com/yt-dlp/yt-dlp, and from https://github.com/caddyserver/caddy.
+The render worker additionally downloads Chrome Headless Shell (Chromium,
+BSD-3-Clause and other licenses) via `@remotion/renderer`.
+
+--------------------------------------------------------------------------------
+Fonts
+--------------------------------------------------------------------------------
+The web UI bundles the Geist and Geist Mono typefaces (Copyright 2024 The Geist
+Project Authors, https://github.com/vercel/geist-font), licensed under the SIL
+Open Font License 1.1. The OFL text ships alongside the font files at
+`frontend/public/fonts/OFL.txt`.
+
+`packages/remotion/public/fonts/helvetiker_regular.typeface.json` (three.js
+text-geometry font) is MgOpen Helvetica, Copyright MAGENTA Ltd, under its
+permissive MgOpen license; the full notice is embedded in the file itself.
+
+--------------------------------------------------------------------------------
+Bundled Lottie animations  (first-party)
+--------------------------------------------------------------------------------
+The 12 animations in `backend/assets/lottie-catalog/` are first-party assets
+authored with Nodaro's own Lottie engine (see the README in that directory).
+They carry no third-party license obligations.
+
+--------------------------------------------------------------------------------
 Everything else
 --------------------------------------------------------------------------------
 The remaining dependencies are predominantly MIT, ISC, BSD-2/3-Clause, and

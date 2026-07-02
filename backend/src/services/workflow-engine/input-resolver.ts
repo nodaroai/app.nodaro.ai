@@ -904,7 +904,7 @@ function routeAudioOutput(
   targetType: string,
   sourceNodeId: string,
 ): void {
-  if (targetType === "mix-audio" || targetType === "combine-audio") {
+  if (targetType === "mix-audio" || targetType === "combine-audio" || targetType === "assemble-narrated-video") {
     inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
     inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: sourceNodeId, url: output }]
   } else if (targetType === "merge-video-audio") {
@@ -936,7 +936,7 @@ function routeVideoOutput(
   sourceNodeId: string,
   duration?: number,
 ): void {
-  if (targetType === "combine-videos") {
+  if (targetType === "combine-videos" || targetType === "assemble-narrated-video") {
     inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
     inputs.videoUrlsWithSourceIds = [
       ...(inputs.videoUrlsWithSourceIds ?? []),
@@ -983,8 +983,13 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 // Social-media-format may produce images (handled in routeOutput)
 
 /** Target node types that accumulate inputs into arrays (videoUrls, audioUrls,
- *  imageUrls). image-collage collects every upstream image into imageUrls[]. */
-const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage"])
+ *  imageUrls). image-collage collects every upstream image into imageUrls[].
+ *  assemble-narrated-video accumulates BOTH videoUrls (its "video" handle) and
+ *  audioUrls (its "audio" handle) — per-item routing below dispatches each
+ *  list element through routeOutput, which re-checks edge.targetHandle so a
+ *  list wired to either handle lands in the right array instead of being
+ *  joined into a single comma-separated string. */
+const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage", "assemble-narrated-video"])
 
 /** Target node types that consume an upstream list as a single fan-in input.
  *  The resolver collects all upstream items into `inputs.inputs` and skips
@@ -1264,8 +1269,14 @@ function routeOutput(
   // an explicit handle case bullet-proofs against sources whose default
   // routing doesn't land in `videoUrl` (e.g. a future media-producing
   // source-type that defaults elsewhere). Mirrors the `image` handle above.
+  // Routed through routeVideoOutput (not a bare overwrite) so multi-input
+  // targets that ALSO name their ordered clips handle "video" — currently
+  // assemble-narrated-video's "Clips" handle — accumulate into videoUrls[]
+  // instead of last-wins clobbering. Single-video targets (video-sfx,
+  // face-swap, fade-video, …) are unaffected: routeVideoOutput's default
+  // branch still does `inputs.videoUrl = output` for every other targetType.
   if (edge.targetHandle === "video") {
-    inputs.videoUrl = output
+    routeVideoOutput(inputs, output, targetType, src.id)
     return
   }
   if (edge.targetHandle === "reference") {

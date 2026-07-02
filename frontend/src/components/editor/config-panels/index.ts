@@ -8,6 +8,7 @@ export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDial
 export { GenerateMusicConfig } from "./music-config"
 export { CombineVideosConfig, ImageCollageConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, SplitMediaConfig, ExtractAudioConfig, RemoveAudioConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, ExtractFrameConfig, SpeedRampConfig, LoopVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"
 export { CombineAudioConfig } from "./combine-audio-config"
+export { AssembleNarratedVideoConfig } from "./assemble-narrated-video-config"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"
 export { MergeVideoAudioConfig } from "./merge-audio-config"
 export { CharacterConfig, FaceConfig, ObjectConfig, CreatureConfig, LocationConfig } from "./entity-configs"

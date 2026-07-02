@@ -644,6 +644,14 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   },
 
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
+  {
+    type: "assemble-narrated-video",
+    label: "Assemble Narrated Video",
+    category: "processing",
+    outputType: "video",
+    creditCost: 4,
+    description: "Fit N ordered (clip, voice) blocks into one MP4: center short voice, slow-to-fit long voice, never crop audio.",
+  },
   { type: "image-collage", label: "Image Collage", category: "processing", description: "Composite N images into one 2K/4K image with a smart (justified) or grid layout. No image is cropped — smart floats the output height; grid letterboxes. Local ffmpeg — priced by resolution (2K=2, 4K=4).", outputType: "image", creditCost: "2-4", inputSchema: { fields: [
     { key: "imageUrls", type: "image-url-array", required: true },
     { key: "layout", type: "select", options: ["smart", "grid"] },

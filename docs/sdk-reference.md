@@ -667,7 +667,19 @@ if ("jobId" in result) {
 > reference's binding — `reference image A` / `@image_N`), honored when the route
 > assembles in the hybrid reference format. See the
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
-> model. Other node types keep the generic `Record<string, unknown>` body.
+> model.
+
+> **Assemble Narrated Video.** `run("assemble-narrated-video", …)` also has a
+> typed overload — `AssembleNarratedVideoParams`: `blocks: { videoUrl: string;
+> audioUrl?: string }[]` (1–60, in play order) plus `voiceVolume` (0–200,
+> default 100), `clipAudioVolume` (0–200, default 40), `maxSlowdown` (1–2,
+> default 1.5), `trimStartFrames` / `trimEndFrames` (0–120, default 0). See the
+> [Assemble Narrated Video node docs](nodes/processing-video/assemble-narrated-video.md)
+> for the fit policy and credit formula (`3 + ceil(blocks / 6)`).
+>
+> Every other node type keeps the generic `Record<string, unknown>` body —
+> `generate-image`, `generate-video`, and `assemble-narrated-video` are
+> currently the only three with dedicated typed params.
 
 #### `runAndWait(type, params?, opts?)`
 

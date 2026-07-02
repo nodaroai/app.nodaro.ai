@@ -35,6 +35,8 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 ## Skills
 
 - [Film Director](./film-director.md) — Claude Skill that drives a 10-stage director workflow (script → characters → storyboard → animation → audio → final cut) and assembles an editable Nodaro workflow on your canvas in real-time
+- [Video Director](./video-director.md) — one-shot narrated motion-graphics video authoring (`create_explainer`, `create_launch_video`), built on the [Shot Sequence](./shot-sequence.md) pipeline
+- [Content Recipes](./recipes.md) — the `get_recipe` catalog of curated multi-tool playbooks (e.g. `video-explainer`), plus the authoring format for adding new ones
 
 ## Under the hood
 

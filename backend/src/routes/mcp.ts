@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { buildMcpServer } from "../lib/mcp/server.js"
 import { handleMcpRequest } from "../lib/mcp/fastify-adapter.js"
 import { config } from "../lib/config.js"
+import { mcpBaseUrl } from "../lib/deployment-urls.js"
 import type { Scope } from "../lib/scopes.js"
 
 /**
@@ -58,7 +59,7 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
         .status(401)
         .header(
           "WWW-Authenticate",
-          `Bearer realm="mcp.nodaro.ai", resource="https://mcp.nodaro.ai/mcp"`,
+          `Bearer realm="${mcpBaseUrl().replace(/^https?:\/\//, "")}", resource="${mcpBaseUrl()}/mcp"`,
         )
         .send({
           error: {
