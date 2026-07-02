@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { FONT_MAP } from "../lib/font-registry"
 import { readableTextColor } from "./color"
+import { popWithSettle } from "./motion"
 
 interface Params {
   stations: Array<{ label: string; sublabel?: string }>
@@ -33,18 +34,20 @@ function easeInOut(t: number): number {
  *   (the component multiplies by its spacing). Monotonically non-increasing.
  * - `arrived`: true while resting on a station center.
  * - `legIndex`: the current segment (= the station being travelled to / held).
+ * - `segLen`: the segment length in frames — single source for callers that
+ *   derive per-station timings (arrival frames, reveal starts).
  * Pure function — safe to unit-test without a render.
  */
 export function panCamera(
   frame: number,
   durationInFrames: number,
   stationCount: number,
-): { legIndex: number; cameraPos: number; worldX: number; arrived: boolean } {
+): { legIndex: number; cameraPos: number; worldX: number; arrived: boolean; segLen: number } {
   const segLen = durationInFrames / Math.max(1, stationCount)
   const legIndex = Math.max(0, Math.min(stationCount - 1, Math.floor(frame / segLen)))
 
   if (legIndex === 0) {
-    return { legIndex: 0, cameraPos: 0, worldX: -0, arrived: true }
+    return { legIndex: 0, cameraPos: 0, worldX: -0, arrived: true, segLen }
   }
 
   const t = (frame - legIndex * segLen) / segLen
@@ -57,7 +60,7 @@ export function panCamera(
     cameraPos = legIndex - 1 + easeInOut(t / PAN_FRACTION_OF_LEG)
     arrived = false
   }
-  return { legIndex, cameraPos, worldX: -cameraPos, arrived }
+  return { legIndex, cameraPos, worldX: -cameraPos, arrived, segLen }
 }
 
 export function SpatialPanStations({ params, durationInFrames, brand }: BlueprintProps) {
@@ -69,8 +72,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
-  const { legIndex, cameraPos, arrived } = panCamera(frame, durationInFrames, stations.length)
-  const segLen = durationInFrames / stations.length
+  const { legIndex, cameraPos, arrived, segLen } = panCamera(frame, durationInFrames, stations.length)
 
   // World layout — stations pre-placed in world space, one virtual camera.
   const spacing = width * 0.7
@@ -93,13 +95,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
   const arrivalFrame = (k: number) => (k === 0 ? 0 : k * segLen + segLen * PAN_FRACTION_OF_LEG)
 
   // Spring-pop progress for a callout that appears once the camera arrives.
-  const calloutPop = (k: number) => {
-    const t = Math.max(0, Math.min(1, (frame - arrivalFrame(k)) / 10))
-    // Ease-out with a gentle overshoot that settles (≤1.12).
-    if (t >= 1) return 1
-    const eased = 1 - (1 - t) * (1 - t)
-    return eased * (t < 0.7 ? 1.12 : 1.12 - 0.12 * ((t - 0.7) / 0.3))
-  }
+  const calloutPop = (arrival: number) => popWithSettle((frame - arrival) / 10)
 
   // Web variant's terminal scribble knot draws over the final hold.
   const knotStart = arrivalFrame(stations.length - 1) + 6
@@ -178,8 +174,9 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
 
         {/* Stations */}
         {stations.map((station, k) => {
-          const pop = calloutPop(k)
-          const revealed = frame >= arrivalFrame(k) - segLen * PAN_FRACTION_OF_LEG
+          const pop = calloutPop(arrivalFrame(k))
+          // The station's leg has started — the pan toward it is underway.
+          const revealed = frame >= k * segLen
           if (!revealed) return null
           return (
             <div key={k} style={{ position: "absolute", left: stationX(k), top: stationY(k) }}>

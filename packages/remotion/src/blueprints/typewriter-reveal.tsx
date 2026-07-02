@@ -13,8 +13,18 @@ interface Params {
 /**
  * The typing window occupies the first 70% of the reveal duration.
  * After that the text holds fully typed.
+ * Exported so consumers of `typedCharCount` (ticker-takeover) can size their
+ * typing window against the same fraction instead of re-encoding it.
  */
-const TYPING_FRACTION = 0.7
+export const TYPING_FRACTION = 0.7
+
+/**
+ * Caret blink state — on/off every 8 frames (~2 Hz at 30 fps).
+ * Shared by every blueprint that renders a typing caret.
+ */
+export function caretBlinkVisible(frame: number): boolean {
+  return Math.floor(frame / 8) % 2 === 0
+}
 
 /**
  * Returns the number of characters of `text` that should be visible at
@@ -50,11 +60,10 @@ export function TypewriterReveal({ params, durationInFrames, brand }: BlueprintP
   const chars = typedCharCount(frame, durationInFrames, text.length)
   const visible = text.slice(0, chars)
 
-  // The caret blinks at ~2 Hz (every 15 frames at 30 fps) while typing.
-  // It disappears once typing is done and the sublabel is shown.
+  // The caret blinks while typing and disappears once typing is done.
   const typingEnd = Math.max(1, Math.round(durationInFrames * TYPING_FRACTION))
   const isTyping = frame < typingEnd
-  const caretVisible = isTyping && Math.floor(frame / 8) % 2 === 0
+  const caretVisible = isTyping && caretBlinkVisible(frame)
 
   // Sublabel fades in after typing finishes (quadratic ease-out, 12-frame window).
   const sublabelStartFrame = typingEnd

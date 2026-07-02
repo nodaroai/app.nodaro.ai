@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { FONT_MAP } from "../lib/font-registry"
 import { readableTextColor } from "./color"
+import { easeOutQuad, ringAngle, popWithSettle } from "./motion"
 
 interface Params {
   hubLabel: string
@@ -30,7 +31,8 @@ const PUSH_IN_MAX_BLUR = 8
  *
  * `x`/`y` are unit-circle multiples (the component multiplies by the ring
  * radius). Entrances are staggered by index and pop with a small overshoot
- * (≤1.15) settling to 1. During the resolve phase (≥ RESOLVE_FRACTION):
+ * settling to 1 — `scale` is 0 until the node's entrance starts. During the
+ * resolve phase (≥ RESOLVE_FRACTION):
  *  - "orbit": the ring revolves (positions rotate, blur stays 0);
  *  - "push-in": positions hold (the camera move is a group transform) and
  *    `blur` grows so outer nodes defocus while the hub stays sharp.
@@ -42,35 +44,20 @@ export function ringNodeTransform(
   nodeIndex: number,
   nodeCount: number,
   finisher: "push-in" | "orbit",
-): { x: number; y: number; scale: number; blur: number; entered: boolean } {
+): { x: number; y: number; scale: number; blur: number } {
   const resolveStart = durationInFrames * RESOLVE_FRACTION
 
   // Ring placement — start at 12 o'clock, clockwise, evenly spaced.
-  let angle = -Math.PI / 2 + (nodeIndex * 2 * Math.PI) / Math.max(1, nodeCount)
+  let angle = ringAngle(nodeIndex, nodeCount)
   if (finisher === "orbit" && frame > resolveStart) {
     angle += (frame - resolveStart) * ORBIT_RADIANS_PER_FRAME
   }
   const x = Math.cos(angle)
   const y = Math.sin(angle)
 
-  // Staggered spring-pop entrance: 0 → overshoot (1.12) → settle at 1.
+  // Staggered spring-pop entrance: 0 → overshoot → settle at 1.
   const entranceStart = nodeIndex * ENTRANCE_STAGGER_FRAMES
-  const e = (frame - entranceStart) / ENTRANCE_FRAMES
-  let scale: number
-  if (e <= 0) {
-    scale = 0
-  } else if (e >= 1) {
-    scale = 1
-  } else if (e < 0.7) {
-    // Quadratic ease-out up to a gentle 1.12 overshoot.
-    const t = e / 0.7
-    scale = (1 - (1 - t) * (1 - t)) * 1.12
-  } else {
-    // Linear settle from the overshoot back to resting scale.
-    const t = (e - 0.7) / 0.3
-    scale = 1.12 - 0.12 * t
-  }
-  const entered = e > 0
+  const scale = popWithSettle((frame - entranceStart) / ENTRANCE_FRAMES)
 
   // Push-in resolve: ring nodes defocus progressively (quadratic ease-in
   // reads as the depth-of-field collapsing onto the hub).
@@ -80,7 +67,7 @@ export function ringNodeTransform(
     blur = t * t * PUSH_IN_MAX_BLUR
   }
 
-  return { x, y, scale, blur, entered }
+  return { x, y, scale, blur }
 }
 
 export function ConstellationHub({ params, durationInFrames, brand }: BlueprintProps) {
@@ -96,19 +83,23 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
   const cx = width / 2
   const cy = height / 2
 
+  // One transform per node per frame — shared by the connector and chip loops.
+  const transforms = nodes.map((_, i) =>
+    ringNodeTransform(frame, durationInFrames, i, nodes.length, finisher),
+  )
+
   // Connector lines draw hub→node between 25% and 45% of the window, staggered.
   const connectStart = durationInFrames * CONNECT_START_FRACTION
   const connectEnd = durationInFrames * RESOLVE_FRACTION
   const connectWindow = Math.max(1, connectEnd - connectStart)
 
-  // Resolve-phase group transforms.
+  // Resolve-phase group transforms — quadratic ease-out for the camera move.
   const resolveStart = durationInFrames * RESOLVE_FRACTION
   const resolveT = Math.max(
     0,
     Math.min(1, (frame - resolveStart) / Math.max(1, durationInFrames - resolveStart)),
   )
-  // Quadratic ease-out for the camera move.
-  const resolveProgress = 1 - (1 - resolveT) * (1 - resolveT)
+  const resolveProgress = easeOutQuad(resolveT)
   // push-in: the whole constellation scales up toward the viewer; the hub grows
   // a little extra and stays sharp while the ring defocuses (depth of field).
   // orbit: a slight zoom-out reveals the ecosystem while the ring revolves.
@@ -151,12 +142,12 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
           style={{ position: "absolute", top: 0, left: 0 }}
         >
           {nodes.map((_, i) => {
-            const t = ringNodeTransform(frame, durationInFrames, i, nodes.length, finisher)
+            const t = transforms[i]!
             const lineT = Math.max(
               0,
               Math.min(1, (frame - (connectStart + i * 2)) / connectWindow),
             )
-            const drawn = 1 - (1 - lineT) * (1 - lineT)
+            const drawn = easeOutQuad(lineT)
             if (drawn <= 0) return null
             return (
               <line
@@ -178,8 +169,8 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
 
         {/* Ring node chips */}
         {nodes.map((node, i) => {
-          const t = ringNodeTransform(frame, durationInFrames, i, nodes.length, finisher)
-          if (!t.entered) return null
+          const t = transforms[i]!
+          if (t.scale <= 0) return null
           return (
             <div
               key={i}

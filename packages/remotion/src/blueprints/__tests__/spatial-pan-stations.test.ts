@@ -4,12 +4,6 @@ import { describe, it, expect, vi } from "vitest"
 vi.mock("remotion", () => ({
   useCurrentFrame: () => 0,
   useVideoConfig: () => ({ fps: 30, width: 1920, height: 1080, durationInFrames: 300 }),
-  interpolate: (v: number, [a, b]: number[], [c, d]: number[]) => {
-    if (v <= a) return c
-    if (v >= b) return d
-    return c + ((v - a) / (b - a)) * (d - c)
-  },
-  Easing: { ease: (t: number) => t, out: (fn: (t: number) => number) => fn },
 }))
 vi.mock("../../lib/font-registry", () => ({
   FONT_MAP: { Montserrat: "Montserrat, sans-serif" },

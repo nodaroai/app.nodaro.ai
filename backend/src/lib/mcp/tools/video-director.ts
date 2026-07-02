@@ -66,8 +66,8 @@ You are a motion director. Author a narrated, VO-paced motion-graphics video usi
  * Embedded fallback — verbatim composed string (HEADER + three doctrine body
  * files). The unit test `video-director.test.ts` (`embedded fallback matches
  * the composed skill`) fails if this drifts from what loadVideoDirectorSkill()
- * produces from disk. Bump this constant whenever you edit any file under
- * backend/skills/video-director/.
+ * produces from disk. Regenerate with `npm run gen:vd-fallback` whenever you
+ * edit any file under backend/skills/video-director/ — never hand-edit this.
  */
 export const FALLBACK_VIDEO_DIRECTOR_SKILL = `# Nodaro Video Director — Motion Director Skill
 
