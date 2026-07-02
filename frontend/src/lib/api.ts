@@ -2852,6 +2852,29 @@ export async function imageCollageApi(
   })
 }
 
+/**
+ * Audio-led narrated-video assembler: index-pairs `blocks[i].videoUrl` with an
+ * optional `blocks[i].audioUrl` (trailing video-only blocks are valid — see
+ * node-input-resolver.ts pairing). `workflowId: true` picks up the same
+ * withWorkflowId() injection (workflowId/nodeId/forcePrivate/userPrompt) as
+ * combineVideos/imageCollageApi, so single-node Run history keeps working.
+ */
+export async function assembleNarratedVideo(params: {
+  blocks: { videoUrl: string; audioUrl?: string }[]
+  voiceVolume?: number
+  clipAudioVolume?: number
+  maxSlowdown?: number
+  trimStartFrames?: number
+  trimEndFrames?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/assemble-narrated-video", {
+    body: params,
+    workflowId: true,
+    label: "Failed to start narrated video assembly",
+  })
+}
+
 export async function mergeVideoAudioApi(
   videoUrl: string,
   audioTracks: { url: string; startTime: number; volume?: number; sourceType?: "audio" | "video" }[],

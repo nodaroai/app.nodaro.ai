@@ -866,6 +866,12 @@ const VIDEO_RESULT_TYPES = new Set([
   "suno-music-video",
   "render-video",
   "combine-videos",
+  // Assemble Narrated Video: fits N (clip, voice) blocks into one MP4, writes
+  // generatedVideoUrl + per-result `url` like every other video producer.
+  // Without this, "Run from here" / DAG resume can't hydrate a downstream
+  // consumer from a previously-executed assemble-narrated-video without
+  // re-running it.
+  "assemble-narrated-video",
   "merge-video-audio",
   "add-captions",
   "resize-video",

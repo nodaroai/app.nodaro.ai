@@ -3016,6 +3016,24 @@ export type ImageCollageData = {
   currentJobId?: string
 }
 
+export type AssembleNarratedVideoData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  voiceVolume: number
+  clipAudioVolume: number
+  maxSlowdown: number
+  trimStartFrames: number
+  trimEndFrames: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export interface MergeAudioTrack {
   readonly id: string
   readonly sourceNodeId: string
@@ -4926,6 +4944,7 @@ export type SceneNodeData =
   | ForcedAlignmentData
   | CombineVideosData
   | ImageCollageData
+  | AssembleNarratedVideoData
   | MergeVideoAudioData
   | AddCaptionsData
   | ResizeVideoData
@@ -5102,6 +5121,7 @@ export type SceneNodeType =
   | "forced-alignment"
   | "combine-videos"
   | "image-collage"
+  | "assemble-narrated-video"
   | "merge-video-audio"
   | "add-captions"
   | "resize-video"
@@ -6498,6 +6518,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as ImageCollageData,
     exposableOutputs: [{ key: "image", label: "Image", outputType: "image" as const }],
+  },
+  {
+    type: "assemble-narrated-video",
+    label: "Assemble Narrated Video",
+    category: "processing",
+    creditCost: 4,
+    inputs: ["video", "audio"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Assemble Narrated Video",
+      voiceVolume: 100,
+      clipAudioVolume: 40,
+      maxSlowdown: 1.5,
+      trimStartFrames: 0,
+      trimEndFrames: 0,
+      fieldMappings: {},
+    } as AssembleNarratedVideoData,
   },
   {
     type: "merge-video-audio",

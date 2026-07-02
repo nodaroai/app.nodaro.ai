@@ -214,6 +214,57 @@ describe("resolveNodeInputs", () => {
     expect(result.audioUrls).toEqual(["https://a1.mp3", "https://a2.mp3"])
   })
 
+  it("routes a single video-sfx-style video handle to inputs.videoUrl (regression guard: not accumulated)", () => {
+    // video-sfx (and other single-video-input nodes) share the same
+    // edge.targetHandle==="video" dispatch as assemble-narrated-video's Clips
+    // handle. This guards that redirecting that branch through
+    // routeVideoOutput (needed for assemble-narrated-video's accumulation)
+    // kept the single-input default branch — `inputs.videoUrl = output` —
+    // intact for every other targetType.
+    const target = node("t", "video-sfx")
+    const v1 = node("v1", "image-to-video")
+    const allNodes = [v1, target]
+    const edges = [edge("v1", "t", null, "video")]
+    const states: Record<string, NodeExecutionState> = {
+      v1: { status: "completed", output: { videoUrl: "https://v1.mp4" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.videoUrl).toBe("https://v1.mp4")
+    expect(result.videoUrls).toBeUndefined()
+  })
+
+  it("accumulates videoUrls + audioUrls for assemble-narrated-video via its typed video/audio handles", () => {
+    // assemble-narrated-video exposes TWO ordered target handles ("video" =
+    // Clips, "audio" = Voices) — unlike combine-videos' single unordered "in"
+    // handle. The generic edge.targetHandle==="video" case in routeOutput and
+    // the edge.targetHandle==="audio" case both dispatch through
+    // routeVideoOutput/routeAudioOutput, which must treat assemble-narrated-video
+    // as an array-accumulating target (like combine-videos/mix-audio) instead of
+    // last-wins overwriting a single videoUrl/audioUrl.
+    const target = node("t", "assemble-narrated-video")
+    const v1 = node("v1", "image-to-video")
+    const v2 = node("v2", "image-to-video")
+    const a1 = node("a1", "text-to-speech")
+    const allNodes = [v1, v2, a1, target]
+    const edges = [
+      edge("v1", "t", null, "video"),
+      edge("v2", "t", null, "video"),
+      edge("a1", "t", null, "audio"),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      v1: { status: "completed", output: { videoUrl: "https://v1.mp4" } },
+      v2: { status: "completed", output: { videoUrl: "https://v2.mp4" } },
+      a1: { status: "completed", output: { audioUrl: "https://a1.mp3" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    // Audio shorter than video is valid at the resolver level — payload-builder
+    // pairs by index and leaves the trailing video-only block passthrough.
+    expect(result.videoUrls).toEqual(["https://v1.mp4", "https://v2.mp4"])
+    expect(result.audioUrls).toEqual(["https://a1.mp3"])
+  })
+
   it("routes suno-mashup to audioUrl and audioUrl2", () => {
     const target = node("t", "suno-mashup")
     const a1 = node("a1", "text-to-speech")

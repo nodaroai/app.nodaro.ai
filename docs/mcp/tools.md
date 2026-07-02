@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 138 tools exposed by the Nodaro MCP server.
+Complete reference for the 145 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets`, `get_node_preset` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `get_recipe`
 
 ---
 
@@ -442,6 +442,7 @@ prompt with no questions round-trip.
 | `relight_video` | Relight & switch/composite a clip from its own pixels (Beeble SwitchX). Accepts `video_url`/`video_asset_id` + `prompt` and/or `reference_image_url`, `alpha_mode` (auto/fill/select/custom), `mask_url`, `alpha_keyframe_index`, `max_resolution` (720/1080), `seed`. |
 | `trim_video` | Trim a video to a start/end timestamp. Accepts `video_url`, `start`, `end`. |
 | `combine_videos` | Concatenate multiple video clips with optional transitions. Accepts `video_urls[]`, `transition`, `transition_duration`. |
+| `assemble_narrated_video` | Fit N ordered (clip, voice) blocks into one narrated MP4 — a shorter voice is centered over its clip with silence padding, a longer voice slows the clip to fit (capped, holding the last frame beyond the cap); audio is never cropped. Accepts `blocks[]` (1–60, each `video_url`/`video_asset_id` + optional `audio_url`/`audio_asset_id`), `voice_volume` (default 100), `clip_audio_volume` (default 40), `max_slowdown` (default 1.5), `trim_start_frames`, `trim_end_frames`. |
 | `merge_video_audio` | Merge a video track and an audio track into a single output file. |
 | `add_captions` | Burn subtitles/captions onto a video. Accepts `video_url` and caption style options. |
 | `extract_frame` | Extract a single frame from a video at a given timestamp. Returns an image URL. |
@@ -1287,6 +1288,31 @@ and configuration options — so the LLM can correctly populate that node
 when building or editing a workflow.
 
 **Input:** `{ node_type: string }`
+
+---
+
+### `get_recipe`
+
+**Scope:** none (always visible)
+
+Discover and load multi-step Nodaro content recipes — curated,
+terminal-verb-anchored playbooks (e.g. `video-explainer`) that walk the LLM
+through a full multi-tool flow. Call with no argument to list available
+recipes (name, description, trigger phrases); pass `recipe` to load that
+recipe's full instructions; add `file` to read a bundled reference file
+inside it. Pure content delivery, no side effects — the actions a recipe
+instructs the LLM to take are scope-gated by their own tools.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `recipe` | string | Recipe name, e.g. `"video-explainer"`. Omit to list all. |
+| `file` | string | Relative path inside the recipe folder, e.g. `"references/prompts.md"`. Requires `recipe`. |
+
+See [Content Recipes](./recipes.md) for the current catalog and the
+`RECIPE.md` authoring format (frontmatter fields, folder layout, bundled
+reference files).
 
 ---
 

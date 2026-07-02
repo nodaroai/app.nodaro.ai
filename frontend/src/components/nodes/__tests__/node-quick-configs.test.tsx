@@ -177,6 +177,61 @@ describe("cinematic-avatar NODE_QUICK_CONFIGS registration", () => {
   })
 })
 
+// ===========================================================================
+// assemble-narrated-video quick-config registration — no provider lever (pure
+// ffmpeg fit logic), so all three option lists are static. Every option value
+// must stay within the route's Zod bounds (voiceVolume/clipAudioVolume 0-200,
+// maxSlowdown 1-2 — backend/src/routes/assemble-narrated-video.ts) or the
+// route rejects a value the strip let the user pick.
+// ===========================================================================
+describe("assemble-narrated-video NODE_QUICK_CONFIGS registration", () => {
+  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+    typeof c.options === "function" ? c.options(data) : c.options
+
+  it("registers exactly 3 controls: voiceVolume, clipAudioVolume, maxSlowdown", () => {
+    const controls = getQuickConfigs("assemble-narrated-video")
+    expect(controls).toHaveLength(3)
+    expect(controls.map((c) => c.field)).toEqual([
+      "voiceVolume",
+      "clipAudioVolume",
+      "maxSlowdown",
+    ])
+  })
+
+  it("all three controls are numeric (write number, not string, to node data)", () => {
+    for (const control of getQuickConfigs("assemble-narrated-video")) {
+      expect(control.numeric, `${control.field} should be numeric`).toBe(true)
+    }
+  })
+
+  it("every voiceVolume/clipAudioVolume option value is within the route's 0-200 bound", () => {
+    const [voiceControl, clipControl] = getQuickConfigs("assemble-narrated-video")
+    for (const control of [voiceControl, clipControl]) {
+      for (const opt of resolve(control)) {
+        const n = Number(opt.value)
+        expect(n, `${control.field} option ${opt.value} in range`).toBeGreaterThanOrEqual(0)
+        expect(n, `${control.field} option ${opt.value} in range`).toBeLessThanOrEqual(200)
+      }
+    }
+  })
+
+  it("every maxSlowdown option value is within the route's 1-2 bound", () => {
+    const [, , maxSlowdownControl] = getQuickConfigs("assemble-narrated-video")
+    for (const opt of resolve(maxSlowdownControl)) {
+      const n = Number(opt.value)
+      expect(n, `maxSlowdown option ${opt.value} in range`).toBeGreaterThanOrEqual(1)
+      expect(n, `maxSlowdown option ${opt.value} in range`).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it("each control's option set includes the node's default value (defaultData in nodes.ts)", () => {
+    const [voiceControl, clipControl, maxSlowdownControl] = getQuickConfigs("assemble-narrated-video")
+    expect(resolve(voiceControl).map((o) => o.value)).toContain("100")
+    expect(resolve(clipControl).map((o) => o.value)).toContain("40")
+    expect(resolve(maxSlowdownControl).map((o) => o.value)).toContain("1.5")
+  })
+})
+
 describe("QuickConfigSelect provider-aware fail-safe", () => {
   it("hides the control AND clears a stale value when the provider has no lever", () => {
     const { queryByTestId } = render(

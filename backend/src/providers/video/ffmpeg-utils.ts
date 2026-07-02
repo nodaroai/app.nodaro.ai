@@ -157,6 +157,25 @@ export async function hasAudioStream(filePath: string): Promise<boolean> {
   return output.trim().length > 0
 }
 
+/**
+ * Probe the frame rate of a local video file. Falls back to 30fps if the
+ * probe fails or returns something unparseable — a missing fps shouldn't
+ * abort a frame-count-based trim.
+ */
+export async function getVideoFps(filePath: string): Promise<number> {
+  try {
+    const out = await runFfprobe([
+      "-v", "error", "-select_streams", "v:0",
+      "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", filePath,
+    ])
+    const [n, d] = out.trim().split("/").map(Number)
+    const fps = d ? n / d : n
+    return fps && Number.isFinite(fps) && fps > 0 ? fps : 30
+  } catch {
+    return 30
+  }
+}
+
 export async function getVideoDuration(filePath: string): Promise<number> {
   const output = await runFfprobe([
     "-v", "error",
@@ -411,6 +430,46 @@ export async function trimLastFrames(
     "-movflags", "+faststart",
     outputPath,
   ])
+  return outputPath
+}
+
+/**
+ * Trim N frames off the start and/or end of a clip (re-encode). Shared by
+ * combine-videos.ts (clip-boundary seam trim between combined clips) and
+ * assemble-narrated-video.ts (interior block-join seam trim) — both callers
+ * are responsible for zeroing out the start/end frame count on edges that
+ * must stay untouched (e.g. the very first clip's start, the very last
+ * clip's end) BEFORE calling this, since this helper has no notion of clip
+ * position.
+ *
+ * Probes fps + duration, converts frame counts to seconds, then:
+ *   - returns `inputPath` unchanged when both `trimStartFrames` and
+ *     `trimEndFrames` are <= 0 (nothing requested — skips the probe too)
+ *   - returns `inputPath` unchanged when the combined trim would meet or
+ *     exceed the clip's duration (would leave nothing to keep)
+ *   - otherwise re-encodes to `outputPath` via `-ss`/`-to` and returns it
+ */
+export async function trimEdgeFrames(
+  inputPath: string,
+  outputPath: string,
+  trimStartFrames: number,
+  trimEndFrames: number,
+): Promise<string> {
+  if (trimStartFrames <= 0 && trimEndFrames <= 0) return inputPath
+
+  const fps = await getVideoFps(inputPath)
+  const duration = await getVideoDuration(inputPath)
+  const startSec = trimStartFrames / fps
+  const endSec = trimEndFrames / fps
+
+  if (startSec + endSec >= duration) return inputPath
+
+  const args = ["-y", "-i", inputPath]
+  if (trimStartFrames > 0) args.push("-ss", String(startSec))
+  if (trimEndFrames > 0) args.push("-to", String(duration - endSec))
+  args.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac", outputPath)
+
+  await runFfmpeg(args)
   return outputPath
 }
 

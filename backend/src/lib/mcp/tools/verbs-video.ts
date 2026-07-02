@@ -768,6 +768,77 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── assemble_narrated_video ──
+  server.registerTool(
+    "assemble_narrated_video",
+    {
+      title: "Assemble Narrated Video",
+      description:
+        "Fit N ordered (clip, voice) blocks into ONE narrated MP4. Per block: a shorter voice is centered over its clip with silence padding; a longer voice slows the clip to fit (capped, holding the last frame beyond the cap); audio is NEVER cropped. Clips must contain no spoken dialogue. Each block's video/audio is { url } or { asset_id } (a Nodaro job id). Returns a job_id with the assembled video.",
+      inputSchema: {
+        blocks: z
+          .array(
+            z.object({
+              video_url: z.string().url().optional(),
+              video_asset_id: z.string().optional(),
+              audio_url: z.string().url().optional(),
+              audio_asset_id: z.string().optional(),
+            }),
+          )
+          .min(1)
+          .max(60)
+          .describe("1–60 blocks in play order. Each block: a video (url or asset_id) and an optional voice (url or asset_id)."),
+        voice_volume: z.number().min(0).max(200).optional().describe("Voice loudness %, default 100."),
+        clip_audio_volume: z.number().min(0).max(200).optional().describe("Clip ambient bed loudness % under the voice, default 40."),
+        max_slowdown: z.number().min(1).max(2).optional().describe("Max slow factor for a long voice, default 1.5; beyond it the last frame holds."),
+        trim_end_frames: z.number().int().min(0).max(120).optional().describe("Frames trimmed from the end of each non-final block (seamless-merge). Default 0."),
+        trim_start_frames: z.number().int().min(0).max(120).optional().describe("Frames trimmed from the start of each non-first block. Default 0."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const blocks: { videoUrl: string; audioUrl?: string }[] = []
+      for (const b of args.blocks) {
+        const videoUrl =
+          b.video_url ??
+          (b.video_asset_id
+            ? await resolveAssetId({ assetId: b.video_asset_id, userId: session.userId, expectedKind: "video" })
+            : null)
+        if (!videoUrl) {
+          return { content: [{ type: "text" as const, text: "Each block needs a video_url or video_asset_id." }], isError: true }
+        }
+        const audioUrl =
+          b.audio_url ??
+          (b.audio_asset_id
+            ? await resolveAssetId({ assetId: b.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+            : undefined)
+        blocks.push({ videoUrl, ...(audioUrl ? { audioUrl } : {}) })
+      }
+      const payload: Record<string, unknown> = {
+        blocks,
+        ...(args.voice_volume !== undefined ? { voiceVolume: args.voice_volume } : {}),
+        ...(args.clip_audio_volume !== undefined ? { clipAudioVolume: args.clip_audio_volume } : {}),
+        ...(args.max_slowdown !== undefined ? { maxSlowdown: args.max_slowdown } : {}),
+        ...(args.trim_end_frames !== undefined ? { trimEndFrames: args.trim_end_frames } : {}),
+        ...(args.trim_start_frames !== undefined ? { trimStartFrames: args.trim_start_frames } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/assemble-narrated-video",
+        payload,
+        label: "assemble narrated video",
+        widgetKind: "video",
+        widgetData: { prompt: `Narrated video from ${blocks.length} blocks`, model: "assemble-narrated-video" },
+      })
+    },
+  )
+
   // ── add_captions ──
   server.registerTool(
     "add_captions",

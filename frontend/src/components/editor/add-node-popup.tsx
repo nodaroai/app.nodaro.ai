@@ -1024,6 +1024,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video",
   },
   {
+    type: "assemble-narrated-video",
+    label: "Assemble Narrated Video",
+    icon: <Merge className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video",
+    keywords: ["narration", "voiceover", "narrated", "audio-led", "montage", "assemble"],
+  },
+  {
     type: "resize-video",
     label: "Resize Video",
     icon: <Maximize className="h-4 w-4" />,

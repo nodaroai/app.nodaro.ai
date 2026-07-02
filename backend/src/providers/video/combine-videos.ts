@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames } from "./ffmpeg-utils.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
 interface CombineOptions {
@@ -16,57 +16,6 @@ interface CombineOptions {
   readonly audioCrossfadeCurve?: string
   readonly trimStartFrames: number
   readonly trimEndFrames: number
-}
-
-/**
- * Probe the frame rate of a video file.
- */
-async function getVideoFps(filePath: string): Promise<number> {
-  const output = await runFfprobe([
-    "-v", "error",
-    "-select_streams", "v:0",
-    "-show_entries", "stream=r_frame_rate",
-    "-of", "csv=p=0",
-    filePath,
-  ])
-  // r_frame_rate is a fraction like "24/1" or "30000/1001"
-  const [num, den] = output.trim().split("/").map(Number)
-  if (!num || !den) return 24
-  return num / den
-}
-
-/**
- * Trim frames from start and/or end of a video clip.
- * Returns the path to the trimmed file (or the original if no trimming needed).
- */
-async function trimClipFrames(
-  inputPath: string,
-  workDir: string,
-  index: number,
-  trimStartFrames: number,
-  trimEndFrames: number,
-): Promise<string> {
-  if (trimStartFrames <= 0 && trimEndFrames <= 0) return inputPath
-
-  const fps = await getVideoFps(inputPath)
-  const duration = await getVideoDuration(inputPath)
-  const startSec = trimStartFrames / fps
-  const endTrimSec = trimEndFrames / fps
-
-  // Don't trim more than the clip length
-  if (startSec + endTrimSec >= duration) {
-    console.log(`[combineVideos] Trim would exceed clip ${index} duration (${duration.toFixed(2)}s), skipping`)
-    return inputPath
-  }
-
-  const outputPath = join(workDir, `trimmed_${index}.mp4`)
-  const args = ["-y", "-i", inputPath]
-  if (trimStartFrames > 0) args.push("-ss", String(startSec))
-  if (trimEndFrames > 0) args.push("-to", String(duration - endTrimSec))
-  args.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac", outputPath)
-
-  await runFfmpeg(args)
-  return outputPath
 }
 
 /**
@@ -262,7 +211,12 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       const isLast = i === rawPaths.length - 1
       const effStart = isFirst ? 0 : trimStartFrames
       const effEnd = isLast ? 0 : trimEndFrames
-      const trimmedPath = await trimClipFrames(normalizedPath, workDir, i, effStart, effEnd)
+      const trimmedPath = await trimEdgeFrames(
+        normalizedPath, join(workDir, `trimmed_${i}.mp4`), effStart, effEnd,
+      )
+      if (trimmedPath === normalizedPath && (effStart > 0 || effEnd > 0)) {
+        console.log(`[combineVideos] Trim would exceed clip ${i} duration, skipping`)
+      }
       inputPaths.push(trimmedPath)
     }
 

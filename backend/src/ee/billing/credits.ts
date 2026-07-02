@@ -853,6 +853,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "image-collage": 2,
   "image-collage:2K": 2,
   "image-collage:4K": 4,
+  // Assemble Narrated Video — fits N ordered (clip, voice) blocks into one
+  // MP4 via ffmpeg (local compute, no external provider cost). BASE credits
+  ***REDACTED-OSS-SCRUB***
+  // with block count via computeCredits (assembleNarratedVideoCredits).
+  // See migration 246.
+  "assemble-narrated-video": 4,
   "merge-video-audio": 2,
   "add-captions": 3,
   "add-captions:kinetic": 5,

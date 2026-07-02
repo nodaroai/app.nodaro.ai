@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-07-01T05:25:11.723Z
-generated_from: f1d45bf2d
+generated_at: 2026-07-02T16:49:53.215Z
+generated_from: a8f6ce759
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -72,6 +72,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `ai-avatar` — AI Avatar
 - `animal` — Animal
 - `aspect-ratio` — Aspect Ratio
+- `assemble-narrated-video` — Assemble Narrated Video
 - `atmosphere` — Atmosphere
 - `audio-fx` — Audio FX
 - `audio-isolation` — Voice Extractor

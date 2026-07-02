@@ -120,6 +120,7 @@ import {
   runFfmpeg,
   runFfprobe,
   getVideoDuration,
+  getVideoFps,
   probeVideoSource,
   probeVideoStream,
   needsTranscode,
@@ -127,6 +128,7 @@ import {
   createWorkDir,
   cleanupWorkDir,
   trimLastFrames,
+  trimEdgeFrames,
   stripAudio,
   normalizeVideoForCombine,
   BROWSER_SAFE_VIDEO_ARGS,
@@ -441,6 +443,38 @@ describe("getVideoDuration", () => {
 })
 
 // ===========================================================================
+// 4b) getVideoFps
+// ===========================================================================
+
+describe("getVideoFps", () => {
+  it("parses a fractional r_frame_rate (e.g. 30000/1001)", async () => {
+    execFileOnce("30000/1001\n")
+
+    const fps = await getVideoFps("/tmp/v.mp4")
+
+    expect(fps).toBeCloseTo(29.97, 1)
+  })
+
+  it("parses a whole-number fraction (24/1)", async () => {
+    execFileOnce("24/1\n")
+
+    expect(await getVideoFps("/tmp/v.mp4")).toBe(24)
+  })
+
+  it("falls back to 30 when the probe yields an invalid fraction", async () => {
+    execFileOnce("invalid\n")
+
+    expect(await getVideoFps("/tmp/v.mp4")).toBe(30)
+  })
+
+  it("falls back to 30 when ffprobe throws", async () => {
+    execFileOnce("", new Error("boom") as NodeJS.ErrnoException, "ffprobe: no such file")
+
+    expect(await getVideoFps("/tmp/missing.mp4")).toBe(30)
+  })
+})
+
+// ===========================================================================
 // 5) probeVideoSource
 // ===========================================================================
 
@@ -724,6 +758,98 @@ describe("trimLastFrames", () => {
     const result = await trimLastFrames("/tmp/in.mp4", "/tmp/out.mp4", 8, 24)
 
     expect(result).toBe("/tmp/out.mp4")
+  })
+})
+
+// ===========================================================================
+// 10b) trimEdgeFrames
+//
+// Shared by combine-videos.ts (clip-boundary seam trim) and
+// assemble-narrated-video.ts (interior block-join seam trim) — see
+// combine-videos.test.ts for coverage of the CALLERS' boundary-protection
+// math (which frame counts get zeroed for the first/last clip); this suite
+// owns the helper's own probe/skip/re-encode semantics. A real-ffmpeg
+// fixture test lives in trim-edge-frames.e2e.test.ts (this file mocks
+// execFile globally, so it can't exercise real duration math end to end).
+// ===========================================================================
+
+describe("trimEdgeFrames", () => {
+  it("returns inputPath unchanged when both trim counts are <= 0 (skips the probe entirely)", async () => {
+    const result = await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 0, 0)
+
+    expect(result).toBe("/tmp/in.mp4")
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("returns inputPath unchanged for negative trim counts (treated as <= 0)", async () => {
+    const result = await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", -5, -1)
+
+    expect(result).toBe("/tmp/in.mp4")
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("returns inputPath unchanged when the requested trim would meet/exceed the clip duration", async () => {
+    execFileOnce("30/1\n") // fps probe → 30fps
+    execFileOnce("1.000\n") // duration probe → 1s clip
+
+    // 30 frames @ 30fps = 1s start trim; clip is exactly 1s → startSec+endSec
+    // (1) >= duration (1) → skip, no ffmpeg trim call.
+    const result = await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 30, 0)
+
+    expect(result).toBe("/tmp/in.mp4")
+    expect(mocks.execFile).toHaveBeenCalledTimes(2) // fps + duration probes only
+  })
+
+  it("trims only the start when trimEndFrames is 0 (-ss present, no -to)", async () => {
+    execFileOnce("30/1\n")
+    execFileOnce("10.0\n")
+    execFileOnce("") // ffmpeg trim
+
+    const result = await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 30, 0)
+
+    const args = execArgs(2)
+    expect(args[args.indexOf("-ss") + 1]).toBe("1")
+    expect(args).not.toContain("-to")
+    expect(result).toBe("/tmp/out.mp4")
+  })
+
+  it("trims only the end when trimStartFrames is 0 (-to present, no -ss)", async () => {
+    execFileOnce("30/1\n")
+    execFileOnce("10.0\n")
+    execFileOnce("")
+
+    await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 0, 30)
+
+    const args = execArgs(2)
+    expect(args).not.toContain("-ss")
+    expect(args[args.indexOf("-to") + 1]).toBe("9")
+  })
+
+  it("trims both ends and re-encodes with libx264 fast preset + aac audio", async () => {
+    execFileOnce("30/1\n")
+    execFileOnce("10.0\n")
+    execFileOnce("")
+
+    await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 30, 30)
+
+    const args = execArgs(2)
+    expect(args[args.indexOf("-ss") + 1]).toBe("1")
+    expect(args[args.indexOf("-to") + 1]).toBe("9")
+    expect(args).toContain("libx264")
+    expect(args[args.indexOf("-preset") + 1]).toBe("fast")
+    expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
+    expect(args[args.length - 1]).toBe("/tmp/out.mp4")
+  })
+
+  it("uses whatever fps getVideoFps resolves (including its own invalid-probe 30fps fallback)", async () => {
+    execFileOnce("invalid\n") // getVideoFps falls back to 30
+    execFileOnce("10.0\n")
+    execFileOnce("")
+
+    await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 30, 0)
+
+    const args = execArgs(2)
+    expect(args[args.indexOf("-ss") + 1]).toBe("1") // 30 frames / 30fps fallback = 1s
   })
 })
 

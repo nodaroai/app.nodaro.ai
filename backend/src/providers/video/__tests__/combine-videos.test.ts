@@ -35,10 +35,16 @@ const mocks = vi.hoisted(() => {
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
   const normalizeVideoForCombine = vi.fn().mockResolvedValue("")
+  // Pass-through by default (mirrors normalizeVideoForCombine's default
+  // above): trimEdgeFrames's own probe/skip/re-encode math is unit-tested in
+  // ffmpeg-utils.test.ts. Here we only verify combine-videos.ts's delegation
+  // — which (input, output, effStart, effEnd) it calls with per clip
+  // position, and that it uses the returned path downstream.
+  const trimEdgeFrames = vi.fn(async (input: string) => input)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
   return {
     downloadFile, runFfmpeg, runFfprobe, getVideoDuration,
-    createWorkDir, cleanupWorkDir, normalizeVideoForCombine, fsWriteFile,
+    createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, fsWriteFile,
   }
 })
 
@@ -50,6 +56,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
   normalizeVideoForCombine: mocks.normalizeVideoForCombine,
+  trimEdgeFrames: mocks.trimEdgeFrames,
 }))
 
 vi.mock("node:fs", () => ({
@@ -132,6 +139,7 @@ beforeEach(() => {
   mocks.runFfprobe.mockResolvedValue("")
   mocks.getVideoDuration.mockResolvedValue(5)
   mocks.normalizeVideoForCombine.mockImplementation(async (_in: string, out: string) => out)
+  mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
   mocks.fsWriteFile.mockResolvedValue(undefined)
 })
 
@@ -182,51 +190,37 @@ describe("combineVideos — pre-processing", () => {
 })
 
 // ===========================================================================
-// 2) Frame-trim helper (trimClipFrames, exercised through public flow)
+// 2) Frame-trim delegation (trimEdgeFrames, shared with assemble-narrated-
+//    video.ts — its own probe/skip/re-encode math is unit-tested in
+//    ffmpeg-utils.test.ts). combine-videos.ts's own responsibility is just
+//    computing the per-clip effective (start, end) frame counts — protecting
+//    the first clip's start and the last clip's end — and forwarding the
+//    right paths.
 // ===========================================================================
 
-describe("combineVideos — frame trim", () => {
-  it("only trims at clip boundaries: first clip preserves start, last clip preserves end", async () => {
-    // Trim removes transition artifacts at clip joins. The first clip's start
-    // and the last clip's end are the final video's opening/closing frames —
-    // never touched. 2-clip case: clip 0 gets only -to (end trim), clip 1
-    // gets only -ss (start trim).
+describe("combineVideos — frame trim (delegates to trimEdgeFrames)", () => {
+  it("protects first clip's start and last clip's end (2-clip case)", async () => {
     stubResolutionProbes(2)
-    mocks.runFfprobe
-      .mockResolvedValueOnce("30/1") // fps for clip 0 (end trim only)
-      .mockResolvedValueOnce("30/1") // fps for clip 1 (start trim only)
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(10) // duration for clip 0 (needed for -to calc)
-      .mockResolvedValueOnce(10) // duration for clip 1
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
-      trimStartFrames: 30, // 1s @ 30fps
-      trimEndFrames: 30,    // 1s @ 30fps
+      trimStartFrames: 30,
+      trimEndFrames: 30,
       transition: "cut",
     }))
 
-    // Trim 0 (first clip): only end trim → -to 9, NO -ss
-    const trim0 = ffargs(0)
-    expect(trim0).not.toContain("-ss")
-    expect(trim0[trim0.indexOf("-to") + 1]).toBe("9")
-
-    // Trim 1 (last clip): only start trim → -ss 1, NO -to
-    const trim1 = ffargs(1)
-    expect(trim1[trim1.indexOf("-ss") + 1]).toBe("1")
-    expect(trim1).not.toContain("-to")
+    // Clip 0 (first): start protected → effStart=0, effEnd=30.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 30,
+    )
+    // Clip 1 (last): end protected → effStart=30, effEnd=0.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 30, 0,
+    )
   })
 
-  it("middle clips trim both start and end (3-clip case)", async () => {
+  it("middle clips get both start and end trim frames forwarded (3-clip case)", async () => {
     stubResolutionProbes(3)
-    mocks.runFfprobe
-      .mockResolvedValueOnce("30/1") // fps for clip 0 (end trim)
-      .mockResolvedValueOnce("30/1") // fps for clip 1 (both trims)
-      .mockResolvedValueOnce("30/1") // fps for clip 2 (start trim)
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(10) // clip 0
-      .mockResolvedValueOnce(10) // clip 1
-      .mockResolvedValueOnce(10) // clip 2
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
@@ -235,51 +229,60 @@ describe("combineVideos — frame trim", () => {
       transition: "cut",
     }))
 
-    // Trim 1 is the middle clip — trims both ends.
-    const trim1 = ffargs(1)
-    expect(trim1[trim1.indexOf("-ss") + 1]).toBe("1")
-    expect(trim1[trim1.indexOf("-to") + 1]).toBe("9")
+    // Clip 1 is the middle clip — no boundary protection, both ends forwarded.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 30, 30,
+    )
   })
 
-  it("skips trim when start+end exceeds clip duration (no extra ffmpeg call)", async () => {
+  it("still delegates with (0, 0) when no trim is configured (helper owns the no-op)", async () => {
+    stubResolutionProbes(1)
+
+    await combineVideos(defaultOptions({ videoUrls: ["a.mp4"], transition: "cut" }))
+
+    expect(mocks.trimEdgeFrames).toHaveBeenCalledWith(
+      "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 0,
+    )
+    // Pass-through default → no extra ffmpeg call beyond the concat.
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses trimEdgeFrames's returned path downstream (concat filelist)", async () => {
+    stubResolutionProbes(1)
+    mocks.trimEdgeFrames.mockResolvedValueOnce("/tmp/work/CUSTOM_trimmed_0.mp4")
+
+    await combineVideos(defaultOptions({ videoUrls: ["a.mp4"], transition: "cut" }))
+
+    const listContent = mocks.fsWriteFile.mock.calls[0][1] as string
+    expect(listContent).toContain("CUSTOM_trimmed_0.mp4")
+  })
+
+  it("logs a skip notice when trimEdgeFrames returns the input unchanged for a requested trim", async () => {
     stubResolutionProbes(2)
-    mocks.runFfprobe
-      .mockResolvedValueOnce("30/1")
-      .mockResolvedValueOnce("30/1")
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(0.5) // 0.5s clip
-      .mockResolvedValueOnce(0.5)
+    // Simulate the helper's exceeds-duration skip: returns the SAME path it
+    // was given instead of a freshly trimmed one.
+    mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
-      trimStartFrames: 30, // 1s @ 30fps — exceeds clip
+      trimStartFrames: 30,
       trimEndFrames: 30,
       transition: "cut",
     }))
 
-    // Cut path with no trims → 1 ffmpeg call (the concat).
-    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(1)
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Trim would exceed clip 0"))
+    logSpy.mockRestore()
   })
 
-  it("falls back to fps=24 when fps probe yields invalid fraction", async () => {
-    stubResolutionProbes(2)
-    // Under boundary-only trim, clip 0 (first) skips trim entirely with
-    // trimEndFrames=0, so only clip 1 needs fps + duration probes. Queueing
-    // extras would leak into subsequent tests because vi.clearAllMocks() does
-    // NOT drain mockResolvedValueOnce queues.
-    mocks.runFfprobe.mockResolvedValueOnce("invalid") // fps for clip 1
-    mocks.getVideoDuration.mockResolvedValueOnce(10)  // duration for clip 1
+  it("does NOT log a skip notice when no trim was requested (0,0 pass-through is not a skip)", async () => {
+    stubResolutionProbes(1)
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
 
-    await combineVideos(defaultOptions({
-      videoUrls: ["a.mp4", "b.mp4"],
-      trimStartFrames: 24, // 1s @ 24fps fallback
-      trimEndFrames: 0,
-      transition: "cut",
-    }))
+    await combineVideos(defaultOptions({ videoUrls: ["a.mp4"], transition: "cut" }))
 
-    // First ffmpeg call is clip 1's trim → -ss 24/24 = 1
-    const trim0 = ffargs(0)
-    expect(trim0[trim0.indexOf("-ss") + 1]).toBe("1")
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("Trim would exceed"))
+    logSpy.mockRestore()
   })
 })
 

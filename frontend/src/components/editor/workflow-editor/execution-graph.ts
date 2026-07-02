@@ -328,7 +328,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedImageUrl as string | undefined)
     );
   }
-  if (type === "combine-videos") {
+  if (type === "combine-videos" || type === "assemble-narrated-video") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -904,6 +904,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "upload-video",
   "youtube-video",
   "combine-videos",
+  "assemble-narrated-video",
   "lip-sync",
   "speech-to-video",
   "ai-avatar",

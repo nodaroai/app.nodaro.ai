@@ -114,6 +114,20 @@ export interface GenerateVideoParams extends StructuredReferenceParams {
 }
 
 /**
+ * Typed request body for `nodes.run("assemble-narrated-video", …)` / `runAndWait`.
+ * Assembles blocks of video with audio narration into a single composed video.
+ */
+export interface AssembleNarratedVideoParams {
+  blocks: { videoUrl: string; audioUrl?: string }[]
+  voiceVolume?: number
+  clipAudioVolume?: number
+  maxSlowdown?: number
+  trimStartFrames?: number
+  trimEndFrames?: number
+  [k: string]: unknown
+}
+
+/**
  * The `output_data` shape a finalized generation job writes. Every async
  * generation node persists one (or more) of these media URLs to
  * `jobs.output_data` on completion — `generate-image` → `imageUrl`,
@@ -234,6 +248,7 @@ export class NodesResource {
    */
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
+  run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}): Promise<RunNodeResult> {
     return this.client.request("POST", `/v1/${encodeURIComponent(type)}`, { body: params })
@@ -263,6 +278,7 @@ export class NodesResource {
    */
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: string, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   async runAndWait(
     type: string,

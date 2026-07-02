@@ -67,6 +67,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "ai-avatar",
   // Cinematic Avatar (HeyGen cinematic_avatar): prompt + 1–3 avatar looks → video.
   "cinematic-avatar",
+  // Assemble Narrated Video: fits N (clip, voice) blocks into one MP4 → video.
+  "assemble-narrated-video",
 ])
 
 /**

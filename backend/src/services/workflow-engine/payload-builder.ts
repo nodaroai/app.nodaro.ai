@@ -4020,6 +4020,38 @@ export function buildPayload(
       })
     }
 
+    case "assemble-narrated-video": {
+      const videoUrls = (resolvedInputs.videoUrls || (data.videoUrls as string[] | undefined) || []) as string[]
+      const audioUrls = (resolvedInputs.audioUrls || (data.audioUrls as string[] | undefined) || []) as string[]
+      // Pairing semantics mirror the frontend executor (execute-node.ts): block i
+      // = video[i] + audio[i], index-paired by the "video"/"audio" target
+      // handles' connection order (routed via input-resolver's routeVideoOutput /
+      // routeAudioOutput, same accumulator combine-videos / mix-audio use). Audio
+      // SHORTER than video is valid — trailing blocks are video-only passthrough
+      // (assembleNarratedVideo keeps the clip's own audio when no voice is
+      // paired). Audio LONGER than video is a pre-flight error: fail before
+      // enqueuing instead of silently dropping the extra voice clips.
+      if (audioUrls.length > videoUrls.length) {
+        throw new Error(
+          `Assemble Narrated Video: ${audioUrls.length} voice clips but only ${videoUrls.length} video clips — connect at most one voice clip per video clip`,
+        )
+      }
+      const blocks = videoUrls.map((videoUrl, i) => {
+        const audioUrl = audioUrls[i]
+        return audioUrl ? { videoUrl, audioUrl } : { videoUrl }
+      })
+      return ffmpegResult("assemble-narrated-video", {
+        jobId,
+        blocks,
+        voiceVolume: (data.voiceVolume as number | undefined) ?? 100,
+        clipAudioVolume: (data.clipAudioVolume as number | undefined) ?? 40,
+        maxSlowdown: (data.maxSlowdown as number | undefined) ?? 1.5,
+        trimStartFrames: (data.trimStartFrames as number | undefined) ?? 0,
+        trimEndFrames: (data.trimEndFrames as number | undefined) ?? 0,
+        usageLogId,
+      })
+    }
+
     case "image-collage": {
       const collageImageUrls =
         resolvedInputs.imageUrls || (data.imageUrls as string[] | undefined) || []

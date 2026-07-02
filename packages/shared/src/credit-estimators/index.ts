@@ -4,6 +4,7 @@ export {
   estimateTrimVideoCredits,
   estimateCombineVideosCredits,
   estimateLoopTrimAddonCredits,
+  assembleNarratedVideoCredits,
 } from "./video-utils.js"
 
 export type {
