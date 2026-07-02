@@ -13,7 +13,9 @@ import {
   resolveRefArray,
   StructuredFields,
   JOB_OUTPUT_SCHEMA,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
@@ -887,6 +889,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const imageUrl =
@@ -925,6 +928,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const payload: Record<string, unknown> = {

@@ -1,8 +1,9 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
-import { dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"
+import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { resolveAssetId } from "../asset-resolver.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -25,6 +26,7 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const audioUrl =
@@ -95,13 +97,14 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
     {
       title: "Render Shot Sequence",
       description:
-        "Render a resolved shot-sequence plan to an MP4 on Nodaro's Remotion engine. Returns a job_id; the " +
-        "video appears in your library when ready.",
+        "Render a resolved shot-sequence plan to an MP4 on Nodaro's Remotion engine. Returns a job_id; " +
+        "progress and the finished video appear in the tool card.",
       inputSchema: {
         plan: z.record(z.unknown()).describe("A resolved ShotSequencePlan from resolve_shot_sequence."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       return dispatchJob(fastify, session, {

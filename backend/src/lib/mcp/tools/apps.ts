@@ -9,6 +9,7 @@ import {
   extractAppInputSchema,
   flatInputsToOverrides,
 } from "../extract-app-inputs.js"
+import { cardResultText } from "./_verb-helpers.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -297,7 +298,12 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           content: [
             {
               type: "text" as const,
-              text: `Started app '${args.slug}' (id ${executionId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
+              text: cardResultText({
+                started: `Started app '${args.slug}' (id ${executionId}).`,
+                noun: "outputs",
+                pollHint:
+                  "poll get_app_run with this execution id (NOT get_job — this id is an execution id)",
+              }),
             },
           ],
           structuredContent: {

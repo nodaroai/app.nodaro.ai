@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"
+import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
 
 /**
@@ -34,8 +35,8 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
       description:
         "Author and render a narrated, time-coded explainer video from a topic. Nodaro's video " +
         "director writes the script + shot sequence, generates the voiceover, aligns it word-by-word, " +
-        "and renders an MP4 on the Remotion engine. Returns a job_id; the video appears in your " +
-        "library when ready.",
+        "and renders an MP4 on the Remotion engine. Returns a job_id; progress and the finished " +
+        "video appear in the tool card.",
       inputSchema: {
         topic: z
           .string()
@@ -45,6 +46,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       return dispatchJob(fastify, session, {
@@ -69,8 +71,9 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
       title: "Create Product Launch Video",
       description:
         "Author and render a narrated product-launch video. Pass `brief` describing the product " +
-        "(what it is, who it's for, the tone). Returns a job_id; the video appears in your library " +
-        "when ready. (A `url` to auto-capture the product is not supported yet — describe it in `brief`.)",
+        "(what it is, who it's for, the tone). Returns a job_id; progress and the finished video " +
+        "appear in the tool card. (A `url` to auto-capture the product is not supported yet — " +
+        "describe it in `brief`.)",
       inputSchema: {
         brief: z
           .string()
@@ -85,6 +88,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       // URL-only capture is deferred — never silently fabricate a brief.

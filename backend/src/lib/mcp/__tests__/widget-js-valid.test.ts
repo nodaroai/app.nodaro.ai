@@ -5,6 +5,7 @@ import { buildWorkflowWidgetTemplate } from "../widgets/workflow.js"
 import { buildGalleryWidgetTemplate } from "../widgets/gallery.js"
 import { buildAppRunWidgetTemplate } from "../widgets/app-run.js"
 import { buildUploadWidget } from "../widgets/upload.js"
+import { buildJobAutoWidget } from "../widgets/job-auto.js"
 
 // Regression guard for the "single-job widget stuck on Initializing…" outage.
 //
@@ -40,6 +41,7 @@ const WIDGETS: Array<[string, string]> = [
   ["job-video", buildSingleJobWidget("video")],
   ["job-audio", buildSingleJobWidget("audio")],
   ["job-generic", buildSingleJobWidget("generic")],
+  ["job-auto", buildJobAutoWidget()],
   ["workflow", buildWorkflowWidgetTemplate()],
   ["gallery", buildGalleryWidgetTemplate()],
   ["app-run", buildAppRunWidgetTemplate()],

@@ -5,6 +5,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { type GalleryItem } from "../widgets/gallery.js"
+import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -697,11 +698,16 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               ? "audio"
               : null
 
-        // Log (structured, keys only) when a completed job has no URL we can
-        // find, so we can diagnose output_data shape in production WITHOUT
-        // dumping the value (which can carry generated text / transcripts /
-        // PII). Uses the Fastify logger — never console.log in prod code.
-        if (data.status === "completed" && !outputUrl) {
+        // Log (structured, keys only) when a completed MEDIA job has no URL
+        // we can find. Text/component jobs (script, lyrics, transcripts,
+        // alignment, component handle-maps) legitimately have no outputUrl —
+        // the job-auto widget renders them from outputData — so they are
+        // excluded to keep this warn a real malformed-media signal instead of
+        // steady-state spam. Never dump values (transcripts can carry PII).
+        const isTextOrComponentJob =
+          JOB_AUTO_TEXT_OUTPUT_KEYS.some((k) => out[k] !== undefined) ||
+          out._executionId !== undefined
+        if (data.status === "completed" && !outputUrl && !isTextOrComponentJob) {
           fastify.log.warn(
             { jobId: args.job_id, jobType: data.job_type, outputKeys: Object.keys(out) },
             "[mcp] get_asset: completed job has no resolvable output URL",
@@ -718,8 +724,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             assetKind,
             jobType: data.job_type,
             completedAt: data.completed_at,
-            // For now also expose the raw output_data so the widget can fall
-            // back to alternate field names if our normalization missed one.
+            // outputData is a CONTRACTUAL dependency of the job widgets: the
+            // job-auto card renders text outputs (script / lyrics /
+            // generatedText / alignment / text) and component handle-maps
+            // directly from it, and single-job falls back to it for alternate
+            // URL field names. Do not remove or trim without bumping the
+            // widget URIs. Guarded by __tests__/job-auto-bindings.test.ts.
             outputData: out,
           },
         }

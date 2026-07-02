@@ -10,7 +10,9 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -262,8 +264,9 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
         "`source_image_url` is REQUIRED — typically the object's approved " +
         "main image. Default aspect ratio is 1:1 (product-showcase " +
         "framing), default provider is kling-turbo. Returns the i2v job id " +
-        "— poll via `get_job` until completion. Credit cost depends on the " +
-        "provider.",
+        "— progress and the finished clip appear in the tool card " +
+        "(get_job is the programmatic fallback). Credit cost depends on " +
+        "the provider.",
       inputSchema: {
         motion_prompt: z
           .string()
@@ -339,6 +342,7 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
         destructiveHint: false,
         openWorldHint: true,
       },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
       const payload: Record<string, unknown> = {

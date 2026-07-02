@@ -101,6 +101,21 @@ export const JOB_OUTPUT_SCHEMA = {
     .optional(),
 }
 
+/**
+ * Build the MCP-Apps `_meta` block that binds a tool to a widget template
+ * (SEP-1865). The host reads `ui/resourceUri` from the cached tool definition
+ * and fetches the iframe HTML via resources/read. Use with a WIDGET_URI
+ * constant from ../widgets/registrar.js:
+ *
+ *   _meta: uiMeta(WIDGET_URI.jobAuto),
+ */
+export function uiMeta(uri: string) {
+  return {
+    "ui/resourceUri": uri,
+    ui: { resourceUri: uri, visibility: ["model", "app"] },
+  } as const
+}
+
 interface ParsedJobBody {
   jobId?: string
   job_id?: string
@@ -308,6 +323,32 @@ interface JobResultOpts {
 }
 
 /**
+ * The ONE place the card-first result-text contract is worded ("prefer the
+ * card, do not send the user to the gallery"). Consumed by
+ * {@link jobResultWithWidget} plus the two bespoke dispatchers whose response
+ * shapes cannot go through it (run_component in components.ts, run_app in
+ * apps.ts) — so a wording change lands everywhere at once instead of drifting
+ * across three hand-copied paragraphs.
+ *
+ * `noun` is "result" for single-output jobs, "outputs" for multi-output runs;
+ * `pollHint` names the programmatic fallback ("poll get_job with this id" for
+ * job ids, get_app_run phrasing for execution ids).
+ */
+export function cardResultText(opts: {
+  started: string
+  noun: "result" | "outputs"
+  pollHint: string
+}): string {
+  const verb = opts.noun === "outputs" ? "are" : "is"
+  return (
+    `${opts.started} Hosts with interactive tool cards show live progress and ` +
+    `the finished ${opts.noun} in the card — prefer the card; do not send the user to the gallery. ` +
+    `Clients without tool cards: ${opts.pollHint}. ` +
+    `The ${opts.noun} ${verb} also saved to the user's Nodaro library.`
+  )
+}
+
+/**
  * Build the standard verb-tool result: text + structuredContent.
  *
  * Async-friendly: we DO NOT include `_meta.task_id` and we DO NOT mention
@@ -330,7 +371,11 @@ export function jobResultWithWidget(opts: JobResultOpts) {
 
   const text = {
     type: "text" as const,
-    text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
+    text: cardResultText({
+      started: `${label} started (id ${jobId}).`,
+      noun: "result",
+      pollHint: "poll get_job with this id",
+    }),
   }
 
   if (!widgetKind) {
@@ -378,17 +423,3 @@ export async function dispatchJob(
   return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
 }
 
-/**
- * Legacy alias — v1.1 callers used `jobResult(jobId, label)` without widgets.
- * Prefer `jobResultWithWidget` going forward.
- */
-export function jobResult(jobId: string, label: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
-      },
-    ],
-  }
-}

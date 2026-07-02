@@ -10,7 +10,7 @@ you) authors a **brief**, and the server bakes word timings into exact frames.
 1. `generate_speech(script)` → a narration MP3 (job; read `audioUrl` from the job output).
 2. `forced_alignment(audio_url, transcript)` → per-word timings (job; read `output_data.alignment`). The transcript MUST be the exact narration script. Costs 3 credits.
 3. `resolve_shot_sequence(brief, audio_url, alignment)` → a render-ready plan (synchronous; returns the plan inline + any warnings). No credits.
-4. `render_shot_sequence(plan)` → an MP4 (job; appears in your library). Costs 5 credits (standard render fee).
+4. `render_shot_sequence(plan)` → an MP4 (job; progress + result render in the tool card, and it lands in your library). Costs 5 credits (standard render fee).
 
 ## Authoring a brief
 
@@ -136,7 +136,9 @@ No scope gate, no credits.
 
 ### `forced_alignment(audio_url?, audio_asset_id?, transcript)`
 
-Returns a `job_id`. Poll `get_job`; when complete, the alignment is in
+Returns a `job_id`; in hosts with interactive tool cards (claude.ai), the
+alignment JSON renders inline in the tool card as it completes. Clients
+without card support poll `get_job`; when complete, the alignment is in
 `output_data.alignment` — an array of `[{ word, start, end }]` objects with
 timings in **seconds**. Costs **3 credits**.
 
@@ -187,9 +189,10 @@ If scenes interleave in time, returns HTTP 422 `scene_overlap`.
 
 ### `render_shot_sequence(plan)`
 
-Renders the resolved plan into an MP4 video. Returns a `job_id`; the finished
-MP4 appears in your library. Costs **5 credits** (the standard render fee for
-Remotion videos).
+Renders the resolved plan into an MP4 video. Returns a `job_id`; in hosts
+with interactive tool cards (claude.ai), progress and the finished video
+render inline in the tool card. The MP4 is also saved to your Nodaro
+library. Costs **5 credits** (the standard render fee for Remotion videos).
 
 **Inputs:**
 

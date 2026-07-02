@@ -87,8 +87,9 @@ the `ShotSequenceBrief` machine contract with a worked example).
 Author and render a narrated, time-coded **concept-led explainer video** in one
 call. The director writes the VO script + shot-sequence brief, generates the
 voiceover, aligns it word-by-word, resolves cue anchors to exact frames, and
-renders an MP4 on the Remotion engine. The finished video appears in your
-library.
+renders an MP4 on the Remotion engine. In hosts with interactive tool cards
+(claude.ai), progress and the finished video render inline in the tool card.
+The video is also saved to your Nodaro library.
 
 **Input:**
 
@@ -96,8 +97,8 @@ library.
 |-------|------|-------|
 | `topic` | string (1–8000 chars) | What the explainer should teach or cover. Required. |
 
-**Returns:** `{ job_id: string }` — poll `get_job` to track progress. When
-complete, the MP4 URL is in `output_data.videoUrl`.
+**Returns:** `{ job_id: string }`. Clients without card support poll `get_job`
+to track progress; when complete, the MP4 URL is in `output_data.videoUrl`.
 
 **Example:**
 
@@ -114,7 +115,9 @@ complete, the MP4 URL is in `output_data.videoUrl`.
 Author and render a narrated **product-launch video** in one call. Pass `brief`
 describing the product — what it is, who it is for, the key features, the tone.
 The director writes the VO + brief, generates the voiceover, aligns it, and
-renders an MP4.
+renders an MP4. In hosts with interactive tool cards (claude.ai), progress and
+the finished video render inline in the tool card. The video is also saved to
+your Nodaro library.
 
 **Input:**
 
@@ -123,7 +126,8 @@ renders an MP4.
 | `brief` | string (1–8000 chars) | Describe the product to launch (features, audience, tone). Required when no `url`. |
 | `url` | string | Not yet supported. Passing `url` without `brief` returns a "Real-UI capture isn't supported yet — pass `brief` instead" message. Passing both (`url` + `brief`) ignores the URL and proceeds with `brief`. |
 
-**Returns:** `{ job_id: string }` — poll `get_job` to track progress.
+**Returns:** `{ job_id: string }`. Clients without card support poll `get_job`
+to track progress.
 
 **Example:**
 
