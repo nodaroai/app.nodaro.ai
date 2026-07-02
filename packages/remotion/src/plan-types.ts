@@ -312,6 +312,7 @@ export interface ShotTextElement {
   readonly y: number
   readonly letterSpacing?: number
   readonly opacity?: number
+  readonly dir?: "rtl" | "ltr"
 }
 export interface ShotShapeElement {
   readonly id: string

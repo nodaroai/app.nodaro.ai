@@ -1,9 +1,10 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { caretBlinkVisible, typedCharCount, TYPING_FRACTION } from "./typewriter-reveal"
+import { caretBlinkVisible, caretMarginStyle, typedCharCount, TYPING_FRACTION } from "./typewriter-reveal"
 import { easeOutQuad } from "./motion"
 
 interface Params {
@@ -95,7 +96,7 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
@@ -122,6 +123,7 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
   const heroJitterRot = phase === "hold" ? 0.25 * Math.sin(frame * 0.13) : 0
 
   const caretVisible = phase === "type" && caretBlinkVisible(frame)
+  const leadInDir = directionStyle(leadIn)
 
   return (
     <div
@@ -151,11 +153,20 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
           fontWeight: 600,
           color: primaryColor,
           whiteSpace: "nowrap",
+          ...leadInDir,
         }}
       >
         <span>
           {visibleLeadIn}
-          <span style={{ color: emphasisColor, opacity: caretVisible ? 1 : 0, marginLeft: 2 }}>|</span>
+          <span
+            style={{
+              color: emphasisColor,
+              opacity: caretVisible ? 1 : 0,
+              ...caretMarginStyle(),
+            }}
+          >
+            |
+          </span>
         </span>
         {/* Vertical ticker slot — visible only once typing is done */}
         {phase !== "type" && (
@@ -184,6 +195,7 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
                     lineHeight: `${lineHeight}px`,
                     color: emphasisColor,
                     fontWeight: 700,
+                    ...directionStyle(opt),
                   }}
                 >
                   {opt}
@@ -206,6 +218,7 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
             letterSpacing: "-0.03em",
             color: emphasisColor,
             whiteSpace: "nowrap",
+            ...directionStyle(hero),
           }}
         >
           {hero}

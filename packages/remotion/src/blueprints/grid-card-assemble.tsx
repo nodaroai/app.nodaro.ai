@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 
 interface Params {
   items: { label: string }[]
@@ -44,7 +45,7 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
 
   const clipped = items.slice(0, 6)
   const count = Math.max(1, clipped.length)
@@ -112,6 +113,7 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
                   lineHeight: 1.3,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
+                  ...directionStyle(item.label),
                 }}
               >
                 {item.label}

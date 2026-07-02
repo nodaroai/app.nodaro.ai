@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { popWithSettle } from "./motion"
 
@@ -68,7 +69,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
@@ -178,6 +179,10 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
           // The station's leg has started — the pan toward it is underway.
           const revealed = frame >= k * segLen
           if (!revealed) return null
+          // Computed once — both the timeline and web variant branches need
+          // the same label/sublabel direction (only one branch renders).
+          const labelDir = directionStyle(station.label)
+          const sublabelDir = station.sublabel != null ? directionStyle(station.sublabel) : undefined
           return (
             <div key={k} style={{ position: "absolute", left: stationX(k), top: stationY(k) }}>
               {/* Marker dot on the rail / web point */}
@@ -213,6 +218,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                         fontWeight: 700,
                         color: primaryColor,
                         whiteSpace: "nowrap",
+                        ...labelDir,
                       }}
                     >
                       {station.label}
@@ -246,6 +252,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                         fontWeight: 300,
                         color: emphasisColor,
                         whiteSpace: "nowrap",
+                        ...sublabelDir,
                       }}
                     >
                       {station.sublabel}
@@ -266,6 +273,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                     color: primaryColor,
                     whiteSpace: "nowrap",
                     textAlign: "center",
+                    ...labelDir,
                   }}
                 >
                   {station.label}
@@ -276,6 +284,7 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                         fontWeight: 300,
                         color: emphasisColor,
                         marginTop: 4,
+                        ...sublabelDir,
                       }}
                     >
                       {station.sublabel}

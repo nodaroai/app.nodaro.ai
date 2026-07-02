@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 
 interface Params {
@@ -38,7 +39,7 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
@@ -115,6 +116,7 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
             padding: `0 ${Math.round(panelW * 0.08)}px`,
+            ...directionStyle(left),
           }}
         >
           {left}
@@ -140,6 +142,7 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
                 fontWeight: 700,
                 color: brand.backgroundColor,
                 whiteSpace: "nowrap",
+                ...directionStyle(leftBadge),
               }}
             >
               {leftBadge}
@@ -187,6 +190,7 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
             padding: `0 ${Math.round(panelW * 0.08)}px`,
+            ...directionStyle(right),
           }}
         >
           {right}
@@ -212,6 +216,7 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
                 fontWeight: 700,
                 color: brand.backgroundColor,
                 whiteSpace: "nowrap",
+                ...directionStyle(rightBadge),
               }}
             >
               {rightBadge}

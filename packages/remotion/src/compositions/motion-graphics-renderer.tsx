@@ -9,7 +9,8 @@ import type {
   MGTextElement,
   MGSvgPathElement,
 } from "../plan-types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
 
 interface MotionGraphicsRendererProps {
@@ -119,7 +120,7 @@ function TextElementRenderer({
   entranceProgress: number
 }) {
   const style = getEntranceStyle(entranceProgress, element.animation)
-  const fontFamily = FONT_MAP[element.fontFamily] ?? element.fontFamily
+  const fontFamily = withRtlFallback(FONT_MAP[element.fontFamily] ?? element.fontFamily)
 
   return (
     <div
@@ -128,6 +129,7 @@ function TextElementRenderer({
         left: element.x,
         top: element.y,
         fontFamily,
+        ...directionStyle(element.text),
         fontSize: element.fontSize,
         fontWeight: element.fontWeight ?? 400,
         color: element.color,

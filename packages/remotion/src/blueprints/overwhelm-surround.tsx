@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { easeOutQuad, ringAngle } from "./motion"
 
@@ -85,7 +86,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
@@ -159,6 +160,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               fontSize: surfaceFontSize,
               fontWeight: 600,
               color: primaryColor,
+              ...directionStyle(surface.label),
             }}
           >
             {surface.label}
@@ -190,6 +192,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               fontWeight: 500,
               color: primaryColor,
               whiteSpace: "nowrap",
+              ...directionStyle(marker),
             }}
           >
             {marker}
@@ -233,6 +236,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               fontSize: subjectFontSize,
               fontWeight: 700,
               color: primaryColor,
+              ...directionStyle(subjectLabel),
             }}
           >
             {subjectLabel}
@@ -264,6 +268,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               fontWeight: 600,
               color: primaryColor,
               whiteSpace: "nowrap",
+              ...directionStyle(demand),
             }}
           >
             {demand}

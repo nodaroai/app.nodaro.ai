@@ -2,6 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig, spring } from "remotion"
 import type { OverlayCommonProps } from "./subtitle-overlay"
 import { POSITION_Y } from "./overlay-position"
+import { directionStyle } from "./text-direction"
 
 /** Render exactly one word at a time, springing in then out. */
 export const WordPopOverlay: React.FC<OverlayCommonProps> = ({
@@ -22,6 +23,7 @@ export const WordPopOverlay: React.FC<OverlayCommonProps> = ({
       color, fontWeight: 900, lineHeight: 1, letterSpacing: "0.02em",
       textShadow: "0 4px 8px rgba(0,0,0,0.4)",
       ...(backgroundColor ? { background: backgroundColor, padding: "0.2em 0.5em", borderRadius: "0.4em", display: "inline-block" } : {}),
+      ...directionStyle(active.text),
     }}>
       {active.text.trim()}
     </div>

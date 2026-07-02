@@ -60,6 +60,11 @@ export function ThreeDTitleRenderer({ plan }: ThreeDTitleRendererProps) {
             {/* Objects */}
             {plan.objects.map((obj) => {
               if (obj.type === "3d-text") {
+                // RTL limitation (best-effort): WebGL builds glyph geometry directly from the
+                // font with no Unicode bidi engine, so this renderer displays the string in
+                // logical order. Pure Hebrew/Arabic strong-RTL runs still shape via the font;
+                // MIXED LTR+RTL content may order incorrectly. Full bidi reordering here is a
+                ***REDACTED-OSS-SCRUB***
                 return <AnimatedText3D key={obj.id} object={obj} />
               }
               if (obj.type === "particle-system") {

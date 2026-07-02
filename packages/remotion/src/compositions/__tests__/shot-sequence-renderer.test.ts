@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeRevealOpacity, sceneCrossfadeOpacity, cutCurveTransform } from "../shot-sequence-renderer.js"
+import { computeRevealOpacity, sceneCrossfadeOpacity, cutCurveTransform, elementTextStyle } from "../shot-sequence-renderer.js"
 
 describe("computeRevealOpacity", () => {
   it("multiplies base × enter × exit", () => {
@@ -141,5 +141,21 @@ describe("cutCurveTransform", () => {
     const exitEnd = cutCurveTransform(DUR + 10, DUR, WIDTH, HEIGHT, entry, exit)
     expect(exitEnd.x).toBe(0)
     expect(exitEnd.y).toBeCloseTo(-YDIST, 5) // "up" exit ends on the y-axis — independent axis from entry
+  })
+})
+
+describe("elementTextStyle", () => {
+  const base = { id: "t", type: "text" as const, text: "", fontFamily: "Montserrat",
+    fontSize: 80, color: "#fff", x: 0, y: 0 }
+  it("Hebrew text auto-detects rtl and appends the RTL fallback", () => {
+    const s = elementTextStyle({ ...base, text: "שלום" })
+    expect(s.direction).toBe("rtl")
+    expect(s.fontFamily).toContain("sans-serif")
+  })
+  it("Latin text stays ltr", () => {
+    expect(elementTextStyle({ ...base, text: "Hello" }).direction).toBe("ltr")
+  })
+  it("explicit dir overrides content", () => {
+    expect(elementTextStyle({ ...base, text: "Hello", dir: "rtl" }).direction).toBe("rtl")
   })
 })

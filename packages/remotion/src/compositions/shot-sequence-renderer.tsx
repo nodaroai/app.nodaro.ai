@@ -2,7 +2,8 @@ import React from "react"
 import { AbsoluteFill, Audio, Sequence, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
 import { easeOutQuad, easeInQuad } from "../blueprints/motion"
 
@@ -129,9 +130,20 @@ export function cutCurveTransform(
   return { x, y, opacity }
 }
 
+/** Font + direction CSS for a resolved text element (pure — unit-testable). */
+export function elementTextStyle(element: Extract<ShotElement, { type: "text" }>): {
+  fontFamily: string
+  direction: "rtl" | "ltr"
+} {
+  return {
+    fontFamily: withRtlFallback(FONT_MAP[element.fontFamily] ?? element.fontFamily),
+    ...directionStyle(element.text, { explicit: element.dir }),
+  }
+}
+
 function ElementBox({ element, style }: { element: ShotElement; style: React.CSSProperties }) {
   if (element.type === "text") {
-    const fontFamily = FONT_MAP[element.fontFamily] ?? element.fontFamily
+    const { fontFamily, direction } = elementTextStyle(element)
     return (
       <div
         style={{
@@ -139,6 +151,7 @@ function ElementBox({ element, style }: { element: ShotElement; style: React.CSS
           left: element.x,
           top: element.y,
           fontFamily,
+          direction,
           fontSize: element.fontSize,
           fontWeight: element.fontWeight ?? 400,
           color: element.color,

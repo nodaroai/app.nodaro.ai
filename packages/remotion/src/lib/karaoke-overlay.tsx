@@ -2,6 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import type { OverlayCommonProps } from "./subtitle-overlay"
 import { POSITION_Y } from "./overlay-position"
+import { directionStyle, rowDirectionFromCaptions } from "./text-direction"
 
 /** Sentence visible; each word fills with `color` over its [startMs, endMs] window. */
 export const KaraokeOverlay: React.FC<OverlayCommonProps> = ({
@@ -20,6 +21,11 @@ export const KaraokeOverlay: React.FC<OverlayCommonProps> = ({
       transform: "translateY(-50%)", textAlign: "center",
       fontSize, color: "#777", fontWeight: 700, lineHeight: 1.2,
       ...(backgroundColor ? { background: backgroundColor, padding: "0.3em 0.6em", borderRadius: "0.4em", display: "inline-block" } : {}),
+      // Joined full-line text drives the row's base direction so word order
+      // (not just per-word glyph shaping) follows the language, reordering
+      // sibling word <span>s visually without touching DOM/timing order —
+      // see the logoRowDirection pattern in blueprints/logo-assemble-lockup.tsx.
+      direction: rowDirectionFromCaptions(captions),
     }}>
       {captions.map((c, i) => {
         const t = interpolate(ms, [c.startMs, c.endMs], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
@@ -28,6 +34,7 @@ export const KaraokeOverlay: React.FC<OverlayCommonProps> = ({
             background: `linear-gradient(90deg, ${color} ${t * 100}%, #777 ${t * 100}%)`,
             WebkitBackgroundClip: "text", backgroundClip: "text",
             WebkitTextFillColor: "transparent", color: "transparent",
+            ...directionStyle(c.text),
           }}>
             {c.text}
           </span>

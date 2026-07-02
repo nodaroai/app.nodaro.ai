@@ -9,6 +9,7 @@ import {
   NoiseOverlay,
 } from "../lib/effect-renderers"
 import { SceneTextSegment } from "../lib/scene-text-segment"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 
 const EASING_MAP: Record<string, (t: number) => number> = {
   linear: Easing.linear,
@@ -151,19 +152,34 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
           from={overlay.startFrame}
           durationInFrames={overlay.durationInFrames}
         >
-          <SceneTextSegment
-            segment={{
-              id: overlay.id,
-              text: overlay.text,
-              startFrame: 0,
-              durationInFrames: overlay.durationInFrames,
-              position: overlay.position,
-              fontSize: overlay.fontSize,
-              color: overlay.color,
-              fontFamily: overlay.fontFamily,
-              animation: overlay.animation,
+          {/*
+           * SceneTextSegment resolves its own fontFamily/direction from `segment`
+           * unconditionally (it spreads directionStyle(text) on its own root —
+           * see scene-text-segment.tsx). This wrapper only supplies the
+           * RTL-safe font-family default (Inter + Rubik fallback stack) for
+           * overlays without an explicit fontFamily; overlays that do set
+           * fontFamily are unaffected since SceneTextSegment's own explicit
+           * style wins.
+           */}
+          <div
+            style={{
+              fontFamily: withRtlFallback(FONT_MAP[overlay.fontFamily ?? "Inter"] ?? "Inter"),
             }}
-          />
+          >
+            <SceneTextSegment
+              segment={{
+                id: overlay.id,
+                text: overlay.text,
+                startFrame: 0,
+                durationInFrames: overlay.durationInFrames,
+                position: overlay.position,
+                fontSize: overlay.fontSize,
+                color: overlay.color,
+                fontFamily: overlay.fontFamily,
+                animation: overlay.animation,
+              }}
+            />
+          </div>
         </Sequence>
       ))}
     </AbsoluteFill>

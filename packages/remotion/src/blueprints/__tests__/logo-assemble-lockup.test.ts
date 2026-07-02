@@ -15,7 +15,7 @@ vi.mock("../../lib/font-registry", () => ({
   SUPPORTED_FONTS: ["Montserrat"],
 }))
 
-import { letterEntranceProgress } from "../logo-assemble-lockup"
+import { letterEntranceProgress, logoRowDirection } from "../logo-assemble-lockup"
 
 // Reference constants matching the component:
 //   LETTER_ENTRANCE_FRAMES = 12
@@ -96,5 +96,24 @@ describe("letterEntranceProgress", () => {
         expect(letterEntranceProgress(frame, index, 4, 60)).toBeLessThanOrEqual(1)
       }
     }
+  })
+})
+
+describe("logoRowDirection", () => {
+  it("returns ltr for a Latin brand name (Latin output stays byte-identical)", () => {
+    expect(logoRowDirection("Acme")).toBe("ltr")
+  })
+
+  it("returns rtl for a Hebrew brand name", () => {
+    expect(logoRowDirection("שלום")).toBe("rtl")
+  })
+
+  it("returns rtl for an Arabic brand name", () => {
+    expect(logoRowDirection("مرحبا")).toBe("rtl")
+  })
+
+  it("falls back to ltr when there is no strong directional character", () => {
+    expect(logoRowDirection("123")).toBe("ltr")
+    expect(logoRowDirection("")).toBe("ltr")
   })
 })

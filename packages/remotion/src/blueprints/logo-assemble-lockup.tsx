@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle, detectBaseDirection, type TextDirection } from "../lib/text-direction"
 
 interface Params {
   brand: string
@@ -40,6 +41,22 @@ export function letterEntranceProgress(
   return 1 - (1 - t) * (1 - t)
 }
 
+/**
+ * CSS `direction` for the brand-name row container.
+ *
+ * Letters are DOM-ordered in logical (reading) order and each animates via
+ * per-letter opacity/translateY only (no x-offset) — the stagger is purely
+ * index-based, not position-based. That means flipping the row container's
+ * CSS `direction` to "rtl" is sufficient to re-flow an RTL brand name into
+ * correct right-to-left visual order (index 0 lands rightmost and still
+ * enters first, matching the LTR "first letter enters first" feel) without
+ * touching the entrance animation at all. Pure function — safe to
+ * unit-test without a render.
+ */
+export function logoRowDirection(brandText: string): TextDirection {
+  return detectBaseDirection(brandText)
+}
+
 export function LogoAssembleLockup({ params, durationInFrames, brand }: BlueprintProps) {
   // Note: `brand` from Params (string) is destructured as `brandText` to avoid
   // shadowing `brand` from BlueprintProps (object).
@@ -52,7 +69,7 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const letters = brandText.split("")
   const count = letters.length
 
@@ -94,6 +111,8 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
           display: "flex",
           flexDirection: "row",
           alignItems: "baseline",
+          // Flips visual letter order for RTL brand names — see logoRowDirection.
+          direction: logoRowDirection(brandText),
         }}
       >
         {letters.map((letter, i) => {
@@ -134,6 +153,7 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
             opacity: taglineOpacity * 0.7,
             transform: `translateY(${(1 - taglineOpacity) * 10}px)`,
             whiteSpace: "nowrap",
+            ...directionStyle(tagline),
           }}
         >
           {tagline}

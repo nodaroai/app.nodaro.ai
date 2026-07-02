@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { shotSequenceBriefSchema, briefRevealSchema } from "../brief-schema.js"
+import { shotElementSchema } from "../../../lib/plan-schemas.js"
 
 function makeBrief(overrides: Record<string, unknown> = {}) {
   return {
@@ -88,5 +89,16 @@ describe("briefRevealSchema — blueprint reveals", () => {
       id: "r5", revealAt: { kind: "frame", frame: 0 }, blueprint: { id: "nope", params: {} },
     })
     expect(r.success).toBe(false)
+  })
+})
+
+// ── Text element direction ───────────────────────────────────────────────
+
+describe("shotElementSchema — text dir", () => {
+  it("accepts dir on a text element and rejects a bad value", () => {
+    const base = { id: "t1", type: "text" as const, text: "שלום", fontFamily: "Montserrat",
+      fontSize: 80, color: "#fff", x: 0, y: 0 }
+    expect(shotElementSchema.safeParse({ ...base, dir: "rtl" }).success).toBe(true)
+    expect(shotElementSchema.safeParse({ ...base, dir: "sideways" }).success).toBe(false)
   })
 })

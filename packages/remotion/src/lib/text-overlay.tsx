@@ -1,6 +1,7 @@
 import React from "react"
 import { useCurrentFrame, interpolate } from "remotion"
 import type { TextOverlay, CaptionPosition } from "../types"
+import { directionStyle } from "./text-direction"
 
 const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 
@@ -56,6 +57,7 @@ export function TextOverlayLayer({
               textAlign: "center",
               maxWidth: "80%",
               zIndex: 10,
+              ...directionStyle(overlay.text),
               ...style,
             }}
           >

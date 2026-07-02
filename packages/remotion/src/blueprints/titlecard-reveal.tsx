@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 
 interface Params {
@@ -34,7 +35,7 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
   const { width, height } = useVideoConfig()
 
   const progress = titlecardEntranceProgress(frame, durationInFrames)
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
 
   // Derive entrance-driven style per motion variant.
   // "wipe" keeps full opacity (clip reveals it); the others fade in.
@@ -84,6 +85,7 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
           whiteSpace: "nowrap",
           textAlign: "center",
           ...entranceStyle,
+          ...directionStyle(title),
         }}
       >
         {title}
@@ -101,6 +103,7 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
             textAlign: "center",
             marginTop: subtitleMargin,
             ...entranceStyle,
+            ...directionStyle(subtitle),
           }}
         >
           {subtitle}

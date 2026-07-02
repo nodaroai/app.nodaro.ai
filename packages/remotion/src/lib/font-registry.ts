@@ -19,6 +19,10 @@ import { loadFont as loadPacifico } from "@remotion/google-fonts/Pacifico"
 import { loadFont as loadCaveat } from "@remotion/google-fonts/Caveat"
 import { loadFont as loadRobotoMono } from "@remotion/google-fonts/RobotoMono"
 import { loadFont as loadFiraCode } from "@remotion/google-fonts/FiraCode"
+import { loadFont as loadRubik } from "@remotion/google-fonts/Rubik"
+import { loadFont as loadHeebo } from "@remotion/google-fonts/Heebo"
+import { loadFont as loadCairo } from "@remotion/google-fonts/Cairo"
+import { loadFont as loadTajawal } from "@remotion/google-fonts/Tajawal"
 
 // Only load weights actually used in compositions and latin subset
 // to avoid hundreds of unnecessary network requests per render.
@@ -44,6 +48,10 @@ const fonts = {
   "Caveat": loadCaveat("normal", { weights: ["400", "700"], subsets: ["latin"] }),
   "Roboto Mono": loadRobotoMono("normal", { weights: ["300", "400", "700"], subsets: ["latin"] }),
   "Fira Code": loadFiraCode("normal", { weights: ["300", "400", "700"], subsets: ["latin"] }),
+  "Rubik": loadRubik("normal", { weights: ["300", "400", "700", "900"], subsets: ["latin", "hebrew", "arabic"] }),
+  "Heebo": loadHeebo("normal", { weights: ["300", "400", "700", "900"], subsets: ["latin", "hebrew"] }),
+  "Cairo": loadCairo("normal", { weights: ["300", "400", "700", "900"], subsets: ["latin", "arabic"] }),
+  "Tajawal": loadTajawal("normal", { weights: ["300", "400", "700", "900"], subsets: ["latin", "arabic"] }),
 } satisfies Record<SupportedFontName, { readonly fontFamily: string }>
 
 /** Maps display name → CSS font-family value */
@@ -53,3 +61,11 @@ export const FONT_MAP: Record<string, string> = Object.fromEntries(
 
 /** Display names supported by the renderer (single source of truth in @nodaro/shared). */
 export const SUPPORTED_FONTS: readonly string[] = SUPPORTED_FONT_NAMES
+
+/** RTL fallback stack, derived from the loaded Rubik face (covers Latin+Hebrew+Arabic). */
+export const RTL_FONT_FALLBACK: string = `${fonts["Rubik"].fontFamily}, sans-serif`
+
+/** Append the RTL fallback so Hebrew/Arabic codepoints resolve on a controlled webfont. */
+export function withRtlFallback(fontFamily: string): string {
+  return `${fontFamily}, ${RTL_FONT_FALLBACK}`
+}
