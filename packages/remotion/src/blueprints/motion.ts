@@ -12,6 +12,11 @@ export function easeOutQuad(t: number): number {
   return 1 - (1 - t) * (1 - t)
 }
 
+/** Quadratic ease-in: slow start, accelerating — the mirror of easeOutQuad. */
+export function easeInQuad(t: number): number {
+  return t * t
+}
+
 /**
  * Angle (radians) for item `index` of `count` evenly spaced on a circle,
  * starting at 12 o'clock and proceeding clockwise.

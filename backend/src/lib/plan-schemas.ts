@@ -612,6 +612,17 @@ const resolvedSceneSchema = z.object({
   // window — the renderer adds transitionOutFrames PAST it for the overlap).
   transitionInFrames: z.number().min(0).max(MAX_FRAMES).optional(),
   transitionOutFrames: z.number().min(0).max(MAX_FRAMES).optional(),
+  // Absent = plain crossfade, today's only behavior (independently for entry
+  // and exit — a scene's incoming cut direction is set by the PRECEDING
+  // scene's exitTransition, its outgoing cut direction by its OWN, so the two
+  // can legitimately differ and must be tracked separately, mirroring the
+  // existing transitionInFrames/transitionOutFrames split). Present = the
+  // renderer applies a directional translate alongside opacity for that half
+  // instead of a plain fade. See shot-sequence-renderer.tsx's cutCurveTransform.
+  transitionInType: z.enum(["cut-the-curve"]).optional(),
+  transitionInDirection: z.enum(["left", "right", "up", "down"]).optional(),
+  transitionOutType: z.enum(["cut-the-curve"]).optional(),
+  transitionOutDirection: z.enum(["left", "right", "up", "down"]).optional(),
 })
 
 /** Base object — this is what the discriminated union references. */

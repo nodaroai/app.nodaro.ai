@@ -67,10 +67,23 @@ const briefShotSchema = z.object({
   reveals: z.array(briefRevealSchema).min(1).max(500),
 })
 
+/**
+ * Cut-the-curve — a velocity-matched directional scene-to-scene cut (HF cut
+ * catalog). Set on the OUTGOING scene only; the baker mirrors the same type +
+ * direction onto the following scene's entry, so a seam always reads as one
+ * continuous motion without the author having to set matching fields on two
+ * scene objects. Absent → today's plain crossfade (zero behavior change).
+ */
+const exitTransitionSchema = z.object({
+  type: z.literal("cut-the-curve"),
+  direction: z.enum(["left", "right", "up", "down"]),
+})
+
 const briefSceneSchema = z.object({
   id: z.string(),
   background: z.object({ color: z.string().optional() }).optional(),
   shots: z.array(briefShotSchema).min(1).max(200),
+  exitTransition: exitTransitionSchema.optional(),
 })
 
 export const shotSequenceBriefSchema = z
@@ -112,6 +125,7 @@ export type BriefShot = z.infer<typeof briefShotSchema>
 export type BriefReveal = z.infer<typeof briefRevealSchema>
 export type RevealAnchor = z.infer<typeof revealAnchorSchema>
 export type AlignmentWordInput = z.infer<typeof alignmentWordSchema>
+export type ExitTransition = z.infer<typeof exitTransitionSchema>
 
 /** Resolve-route body cap: forced-alignment over a 20k-char script stays well under this. */
 export const MAX_ALIGNMENT_WORDS = 20_000
