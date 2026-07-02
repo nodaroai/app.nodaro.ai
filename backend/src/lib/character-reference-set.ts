@@ -138,13 +138,43 @@ export function characterPriorAssetsFromRow(row: Record<string, unknown>): Prior
 }
 
 /**
+ * Asset types whose render is full-body — for these, outfit + body continuity
+ * matters as much as facial identity, and a head shot carries neither. Keep in
+ * sync with `preferredKind`'s frontBody branch (guard test derives from the
+ * shared variant catalog).
+ */
+const FULL_BODY_ASSET_TYPES = new Set(["poses", "bodyAngles", "lighting"])
+
+/**
+ * Prior-asset columns that hold full-body renders, best-outfit-signal first.
+ * `outfit_variations` is deliberately absent: those are ALTERNATE outfits, so
+ * anchoring outfit continuity on them would pin the wrong clothes.
+ */
+const FULL_BODY_ASSET_COLUMNS = ["body_angles", "poses", "lighting_variations"] as const
+
+/** The newest attached full-body render, or null when none exists. */
+function newestFullBodyPriorAsset(byColumn: Map<string, { url: string }[]>): string | null {
+  for (const column of FULL_BODY_ASSET_COLUMNS) {
+    const items = byColumn.get(column) ?? []
+    for (let i = items.length - 1; i >= 0; i--) {
+      const url = items[i]?.url
+      if (url) return url
+    }
+  }
+  return null
+}
+
+/**
  * Assemble an ordered, deduped reference-image set. Ranking (highest first;
  * order matters — nano-banana-pro treats the first image as the primary anchor):
  *   1. canonical portrait (always first, never dropped)
  *   2. angle-matched real reference photo (`preferredKind`)
+ *   2b. full-body renders only: the newest generated full-body asset — the
+ *       outfit/body anchor for sheet continuity (see below)
  *   3. remaining real reference photos (frontFace first)
  *   4. per-request real-life refs
- *   5. recent-first attached prior assets from identity columns
+ *   5. recent-first attached prior assets from identity columns (full-body
+ *      columns first for full-body renders)
  *
  * NOT capped here — the worker caps to the provider's `maxRefImages`.
  */
@@ -153,6 +183,7 @@ export function assembleCharacterReferenceSet(
 ): string[] {
   const { portraitUrl, referencePhotos, realLifeRefs, priorAssets, assetType, variant } = input
   const wanted = preferredKind(assetType, variant)
+  const fullBody = FULL_BODY_ASSET_TYPES.has(assetType)
 
   const ordered: string[] = []
   const seen = new Set<string>()
@@ -164,12 +195,20 @@ export function assembleCharacterReferenceSet(
     ordered.push(url)
   }
 
+  const byColumn = new Map<string, { url: string }[]>()
+  for (const c of priorAssets ?? []) byColumn.set(c.column, c.items)
+
   // 1. Canonical portrait — the anchor.
   push(portraitUrl)
 
   const photos = referencePhotos ?? []
   // 2. Angle-matched real reference photo.
   for (const p of photos) if (p?.kind === wanted) push(p.url)
+  // 2b. Full-body render: promote the newest generated full-body asset so the
+  // established outfit + body persist across the sheet — under the provider's
+  // ref cap it would otherwise be crowded out by head shots, which carry no
+  // outfit signal. An uploaded frontBody photo (2) still outranks it.
+  if (fullBody) push(newestFullBodyPriorAsset(byColumn))
   // 3. Remaining real reference photos — frontFace first, then the rest.
   for (const p of photos) if (p?.kind === "frontFace") push(p.url)
   for (const p of photos) push(p?.url)
@@ -177,10 +216,13 @@ export function assembleCharacterReferenceSet(
   // 4. Per-request real-life refs.
   for (const url of realLifeRefs ?? []) push(url)
 
-  // 5. Recent-first attached prior assets from the identity columns.
-  const byColumn = new Map<string, { url: string }[]>()
-  for (const c of priorAssets ?? []) byColumn.set(c.column, c.items)
-  for (const column of IDENTITY_ASSET_COLUMNS) {
+  // 5. Recent-first attached prior assets from the identity columns — for
+  // full-body renders the full-body columns come first (same continuity
+  // argument as 2b), otherwise the face-first default order.
+  const columnOrder = fullBody
+    ? [...FULL_BODY_ASSET_COLUMNS, ...IDENTITY_ASSET_COLUMNS.filter((c) => !(FULL_BODY_ASSET_COLUMNS as readonly string[]).includes(c))]
+    : IDENTITY_ASSET_COLUMNS
+  for (const column of columnOrder) {
     const items = byColumn.get(column)
     if (!items) continue
     for (let i = items.length - 1; i >= 0; i--) push(items[i]?.url)

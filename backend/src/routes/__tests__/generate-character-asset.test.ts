@@ -931,10 +931,14 @@ describe("POST /v1/generate-character-asset — identity references", () => {
     expect(prompt).not.toContain("overall facial likeness")
   })
 
-  it("subject binds to reference image A when references exist; clothed default always present", async () => {
+  it("subject binds to reference image A when references exist; clothing matches the reference outfit", async () => {
     const prompt = await postStudioAsset("strict")
     expect(prompt).toContain("Portrait headshot of the person from reference image A")
-    expect(prompt).toContain("fully clothed in simple everyday attire unless the outfit is otherwise described")
+    // With references the clothing directive asks for the SAME outfit as the
+    // refs (with the everyday-attire fallback), never invent-an-outfit-first —
+    // otherwise every asset render re-invents clothes and the sheet drifts.
+    expect(prompt).toContain("wearing the same outfit as shown in the reference images")
+    expect(prompt).not.toContain("unless the outfit is otherwise described,")
   })
 
   it("omits the identity-lock clause and sends an empty ref set on the non-studio path with no source image", async () => {

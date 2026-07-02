@@ -108,6 +108,59 @@ describe("assembleCharacterReferenceSet", () => {
     })).toEqual([])
   })
 
+  it("full-body render promotes the newest generated full-body asset ahead of face photos (outfit continuity)", () => {
+    const out = assembleCharacterReferenceSet({
+      portraitUrl: portrait,
+      referencePhotos: [{ url: "https://cdn/front.png", kind: "frontFace" }], // no frontBody upload
+      realLifeRefs: [],
+      priorAssets: [
+        { column: "expressions", items: [{ url: "expr.png" }] },
+        { column: "body_angles", items: [{ url: "body-old.png" }, { url: "body-new.png" }] },
+      ],
+      assetType: "poses", variant: "standing",
+    })
+    // Newest body_angles render lands right after the portrait — ahead of the
+    // frontFace photo, which carries no outfit/body signal for a pose render.
+    expect(out[0]).toBe(portrait)
+    expect(out[1]).toBe("body-new.png")
+  })
+
+  it("full-body promotion never outranks an uploaded frontBody photo", () => {
+    const out = assembleCharacterReferenceSet({
+      portraitUrl: portrait,
+      referencePhotos: photos, // includes frontBody upload
+      realLifeRefs: [],
+      priorAssets: [{ column: "poses", items: [{ url: "pose-gen.png" }] }],
+      assetType: "bodyAngles", variant: "front",
+    })
+    expect(out[1]).toBe("https://cdn/body.png") // uploaded body photo first
+    expect(out[2]).toBe("pose-gen.png") // promoted generated full-body next
+  })
+
+  it("full-body render pulls body columns ahead of face columns in the prior-asset tier", () => {
+    const out = assembleCharacterReferenceSet({
+      portraitUrl: null, referencePhotos: [], realLifeRefs: [],
+      priorAssets: [
+        { column: "expressions", items: [{ url: "expr.png" }] },
+        { column: "poses", items: [{ url: "pose.png" }] },
+      ],
+      assetType: "lighting", variant: "daylight",
+    })
+    expect(out.indexOf("pose.png")).toBeLessThan(out.indexOf("expr.png"))
+  })
+
+  it("head/face renders keep the face-first column order and get no full-body promotion", () => {
+    const out = assembleCharacterReferenceSet({
+      portraitUrl: null, referencePhotos: [], realLifeRefs: [],
+      priorAssets: [
+        { column: "expressions", items: [{ url: "expr.png" }] },
+        { column: "poses", items: [{ url: "pose.png" }] },
+      ],
+      assetType: "expressions", variant: "smile",
+    })
+    expect(out.indexOf("expr.png")).toBeLessThan(out.indexOf("pose.png"))
+  })
+
   it("only pulls prior assets from identity columns (ignores sheets/detail_closeups/motions)", () => {
     const out = assembleCharacterReferenceSet({
       portraitUrl: null, referencePhotos: [], realLifeRefs: [],
