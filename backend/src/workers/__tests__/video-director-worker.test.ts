@@ -205,4 +205,31 @@ describe("processVideoDirectorJob", () => {
     expect(mocks.mockRefund).toHaveBeenCalledWith(BASE_PAYLOAD.jobId)
     expect(mocks.mockCommit).not.toHaveBeenCalled()
   })
+
+  it("on failure, if the refund throws, leaves the job 'processing' for the reconcile sweep (no 'failed' write, no rethrow)", async () => {
+    // Failure path: runVideoDirector throws so we enter the catch.
+    mocks.mockRunVideoDirector.mockRejectedValue(new Error("resolve: scene overlap"))
+    // The refund RPC then throws transiently. The reconcile sweep
+    // (sweepStuckOrchestratorJobs) only re-scans 'processing' rows, so the
+    // worker must settle credits BEFORE the terminal 'failed' write — otherwise
+    // a refund failure after a 'failed' write strands the reserved authoring
+    // credit with no backstop.
+    mocks.mockRefund.mockRejectedValue(new Error("refund RPC transient error"))
+
+    // Must not rethrow: with attempts=1 a throw is harmless, but rethrowing
+    // would surface as a bullJob error and (if attempts were ever raised)
+    // re-run the whole author→…→render chain and double-charge sub-jobs.
+    await expect(processVideoDirectorJob(BASE_PAYLOAD, FAKE_APP)).resolves.toBeUndefined()
+
+    // Refund WAS attempted...
+    expect(mocks.mockRefund).toHaveBeenCalledWith(BASE_PAYLOAD.jobId)
+
+    // ...but because it threw, the row is left 'processing' (no terminal
+    // 'failed' write) so the reconcile sweep picks it up and retries the refund.
+    const allUpdateCalls = mocks.mockUpdate.mock.calls as Record<string, unknown>[][]
+    const failedCall = allUpdateCalls.find(
+      ([data]: Record<string, unknown>[]) => data.status === "failed",
+    )
+    expect(failedCall).toBeUndefined()
+  })
 })

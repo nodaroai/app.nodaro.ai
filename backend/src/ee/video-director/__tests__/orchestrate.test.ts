@@ -181,4 +181,21 @@ describe("runVideoDirector", () => {
 
     await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/render/)
   })
+
+  it("(e) surfaces a 'resolve'-prefixed error when the bake throws (SceneOverlapError) — the credit-leak-backstop seam", async () => {
+    // A genuine cross-scene cue interleave makes bakeShotSequence throw SceneOverlapError.
+    // runVideoDirector MUST re-throw it as a `resolve:`-prefixed Error so it propagates
+    // out of the chain — the video-director worker's catch then marks the job failed and
+    // refunds the reserved authoring credit (covered by video-director-worker.test.ts).
+    // Without this propagation the reserved credit would strand ("processing", no refund).
+    mockBake.mockImplementation(() => {
+      throw new Error(
+        'Scene "s2" starts at frame 0 but scene "s1" runs until 20. ' +
+          "Reveal cue spans must not interleave across scenes.",
+      )
+    })
+    const deps = buildDeps()
+
+    await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/resolve/)
+  })
 })

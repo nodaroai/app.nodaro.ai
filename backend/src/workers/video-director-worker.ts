@@ -137,19 +137,41 @@ export async function processVideoDirectorJob(
     const errMsg = err instanceof Error ? err.message : String(err)
     console.error(`[video-director] Job ${jobId} failed:`, errMsg)
 
-    await supabase
-      .from("jobs")
-      .update({
-        status: "failed",
-        error_message: errMsg,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
-
-    // Refund the reserved authoring credit — the chain did not deliver. No-ops
-    // if nothing is left in `reserved` (already committed/refunded). Mirrors
-    // the catch path in ee/pipelines/services/pipeline-final-merge.ts.
-    await refundReservedCreditsForJob(jobId)
+    // Settle credits BEFORE the terminal status write. The ONLY backstop for a
+    // stranded video-director credit is the reconcile sweep
+    // (sweepStuckOrchestratorJobs in lib/reconcile/cron.ts), which re-scans
+    // 'processing' rows only. If we marked the row 'failed' first and the refund
+    // then threw, the reserved authoring credit would strand with no backstop.
+    // Refunding first means a refund failure leaves the row 'processing' for the
+    // sweep to retry; refund is idempotent (CAS-on-reserved) so the sweep's own
+    // refund is a safe no-op if this one already succeeded. (Unlike
+    // pipeline-final-merge.ts, which is covered by the main
+    // provider_call_started_at scan, this queue calls no provider directly.)
+    // NOTE: refundReservedCreditsForJob swallows its own business-logic failures
+    // (bad RPC result / lost CAS race / no reserved log) and returns 0 — so the
+    // inner catch below only fires on a raw transport exception (a network blip
+    // on the usage_logs read or the refund RPC call), or a throw from the
+    // 'failed' update itself. Both are correctly left for the sweep to retry.
+    try {
+      await refundReservedCreditsForJob(jobId)
+      await supabase
+        .from("jobs")
+        .update({
+          status: "failed",
+          error_message: errMsg,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", jobId)
+    } catch (settleErr) {
+      // Do NOT rethrow — leave the row 'processing' for the reconcile sweep.
+      // Rethrowing would surface as the bullJob result and (if attempts were
+      // ever raised above 1) re-run the whole author→…→render chain and
+      // double-charge the sub-jobs.
+      console.error(
+        `[video-director] Job ${jobId} failure-settle errored; left 'processing' for reconcile sweep:`,
+        settleErr instanceof Error ? settleErr.message : String(settleErr),
+      )
+    }
   }
 }
 
