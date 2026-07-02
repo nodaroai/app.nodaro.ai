@@ -3,7 +3,8 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { FONT_MAP } from "../lib/font-registry"
 import { readableTextColor } from "./color"
-import { typedCharCount } from "./typewriter-reveal"
+import { caretBlinkVisible, typedCharCount, TYPING_FRACTION } from "./typewriter-reveal"
+import { easeOutQuad } from "./motion"
 
 interface Params {
   leadIn: string
@@ -71,9 +72,9 @@ export function takeoverPositions(
     const t = (frame - cycleEnd) / Math.max(1, contactFrame - cycleEnd)
     heroX = 1.1 - (1.1 - CONTACT_X) * (t * t)
   } else if (frame < holdStart) {
-    // Heavy landing: long quadratic ease-out from contact to rest — mass, not zip.
+    // Heavy landing: long quadratic decay from contact to rest — mass, not zip.
     const t = (frame - contactFrame) / Math.max(1, holdStart - contactFrame)
-    heroX = CONTACT_X * (1 - (1 - (1 - t) * (1 - t)))
+    heroX = CONTACT_X * (1 - t) * (1 - t)
   } else {
     heroX = 0
   }
@@ -83,7 +84,7 @@ export function takeoverPositions(
   let textGroupX = 0
   if (frame >= contactFrame) {
     const t = Math.min(1, (frame - contactFrame) / Math.max(1, holdStart - contactFrame))
-    textGroupX = EJECT_X * (1 - (1 - t) * (1 - t))
+    textGroupX = EJECT_X * easeOutQuad(t)
   }
 
   return { typedFraction, optionIndex, heroX, textGroupX, phase }
@@ -104,8 +105,9 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
     options.length,
   )
 
-  // Lead-in types over the type window (reuses the typewriter timing curve).
-  const typeWindowFrames = Math.max(1, Math.round(durationInFrames * TYPE_FRACTION / 0.7))
+  // Lead-in types over the type window (reuses the typewriter timing curve,
+  // scaled so its TYPING_FRACTION-sized window lands exactly on TYPE_FRACTION).
+  const typeWindowFrames = Math.max(1, Math.round((durationInFrames * TYPE_FRACTION) / TYPING_FRACTION))
   const chars = typedCharCount(frame, typeWindowFrames, leadIn.length)
   const visibleLeadIn = leadIn.slice(0, chars)
 
@@ -119,7 +121,7 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
   const heroJitterScale = phase === "hold" ? 1 + 0.006 * Math.sin(frame * 0.21) : 1
   const heroJitterRot = phase === "hold" ? 0.25 * Math.sin(frame * 0.13) : 0
 
-  const caretVisible = phase === "type" && Math.floor(frame / 8) % 2 === 0
+  const caretVisible = phase === "type" && caretBlinkVisible(frame)
 
   return (
     <div

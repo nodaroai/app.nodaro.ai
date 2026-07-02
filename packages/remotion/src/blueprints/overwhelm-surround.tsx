@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { FONT_MAP } from "../lib/font-registry"
 import { readableTextColor } from "./color"
+import { easeOutQuad, ringAngle } from "./motion"
 
 interface Params {
   surfaces: Array<{ label: string }>
@@ -26,47 +27,45 @@ const BUBBLE_TRAVEL_FRAMES = 30
 export const BUBBLE_STOP_DISTANCE = 0.28
 
 /**
- * Timeline state for the overwhelm-surround shot at `frame` for demand bubble
- * `demandIndex` (of `demandCount`).
- *
- * - `morphProgress`: 0 before MORPH_START, quadratic-eased 0→1 across the morph
- *   window, 1 from CLOSE_IN_START on (content fade → container reshape → subject).
- * - `bubbleEntered` / `bubbleDistance`: each demand bubble enters staggered
- *   after CLOSE_IN_START and travels inward from 1 to BUBBLE_STOP_DISTANCE
- *   (quadratic ease-out), clamped so it never crosses the stop-short ring.
+ * Morph progress at `frame`: 0 before MORPH_START, quadratic-eased 0→1 across
+ * the morph window, 1 from CLOSE_IN_START on (content fade → container
+ * reshape → subject). Independent of the demand bubbles — compute it once per
+ * frame. Pure function — safe to unit-test without a render.
+ */
+export function morphProgressAt(frame: number, durationInFrames: number): number {
+  const morphStart = durationInFrames * MORPH_START_FRACTION
+  const closeInStart = durationInFrames * CLOSE_IN_START_FRACTION
+  if (frame >= closeInStart) return 1
+  if (frame <= morphStart) return 0
+  const t = (frame - morphStart) / Math.max(1, closeInStart - morphStart)
+  const morphProgress = easeOutQuad(t)
+  return morphProgress > 0.999 ? 1 : morphProgress
+}
+
+/**
+ * Close-in state for demand bubble `demandIndex` at `frame`: the bubble enters
+ * staggered after CLOSE_IN_START and travels inward from 1 to
+ * BUBBLE_STOP_DISTANCE (quadratic ease-out), clamped so it never crosses the
+ * stop-short ring.
  *
  * Deliberately exposes NO camera/world transform — the claustrophobia comes
  * from the world crowding the subject; the frame itself never moves.
  * Pure function — safe to unit-test without a render.
  */
-export function surroundState(
+export function bubbleState(
   frame: number,
   durationInFrames: number,
-  _demandCount: number,
   demandIndex: number,
-): { morphProgress: number; bubbleDistance: number; bubbleEntered: boolean } {
-  const morphStart = durationInFrames * MORPH_START_FRACTION
+): { bubbleDistance: number; bubbleEntered: boolean } {
   const closeInStart = durationInFrames * CLOSE_IN_START_FRACTION
-
-  let morphProgress = 0
-  if (frame >= closeInStart) {
-    morphProgress = 1
-  } else if (frame > morphStart) {
-    const t = (frame - morphStart) / Math.max(1, closeInStart - morphStart)
-    morphProgress = 1 - (1 - t) * (1 - t)
-    if (morphProgress > 0.999) morphProgress = 1
-  }
-
   const entryFrame = closeInStart + demandIndex * BUBBLE_STAGGER_FRAMES
   const bubbleEntered = frame >= entryFrame && frame > closeInStart
   let bubbleDistance = 1
   if (bubbleEntered) {
     const t = Math.min(1, (frame - entryFrame) / BUBBLE_TRAVEL_FRAMES)
-    const eased = 1 - (1 - t) * (1 - t)
-    bubbleDistance = 1 - (1 - BUBBLE_STOP_DISTANCE) * eased
+    bubbleDistance = 1 - (1 - BUBBLE_STOP_DISTANCE) * easeOutQuad(t)
   }
-
-  return { morphProgress, bubbleDistance, bubbleEntered }
+  return { bubbleDistance, bubbleEntered }
 }
 
 /**
@@ -92,7 +91,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
 
   const cx = width / 2
   const cy = height / 2
-  const { morphProgress } = surroundState(frame, durationInFrames, demands.length, 0)
+  const morphProgress = morphProgressAt(frame, durationInFrames)
 
   // ── Phase 1: surface cards assemble (staggered scale-in; center hero-sized) ──
   const assemblyEnd = Math.max(1, durationInFrames * ASSEMBLY_END_FRACTION)
@@ -129,7 +128,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
       {surfaces.map((surface, i) => {
         const enterStart = i * 6
         const t = Math.max(0, Math.min(1, (frame - enterStart) / Math.max(1, assemblyEnd - enterStart)))
-        const entrance = 1 - (1 - t) * (1 - t)
+        const entrance = easeOutQuad(t)
         const isCenter = i === centerIdx
         const resting = isCenter ? 1 : 0.86
         // Low-amplitude float so the context feels live, composed onto the resting scale.
@@ -172,7 +171,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
         const p = scatterPoint(i)
         const enterStart = markerStart + (i * markerWindow) / Math.max(1, markers.length)
         const t = Math.max(0, Math.min(1, (frame - enterStart) / 8))
-        const entrance = 1 - (1 - t) * (1 - t)
+        const entrance = easeOutQuad(t)
         if (entrance <= 0) return null
         return (
           <div
@@ -243,14 +242,9 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
 
       {/* Demand bubbles — close in from all compass points, stop short, hold */}
       {demands.map((demand, i) => {
-        const { bubbleDistance, bubbleEntered } = surroundState(
-          frame,
-          durationInFrames,
-          demands.length,
-          i,
-        )
+        const { bubbleDistance, bubbleEntered } = bubbleState(frame, durationInFrames, i)
         if (!bubbleEntered) return null
-        const angle = -Math.PI / 2 + (i * 2 * Math.PI) / demands.length
+        const angle = ringAngle(i, demands.length)
         const arrival = Math.max(0, Math.min(1, (1 - bubbleDistance) / (1 - BUBBLE_STOP_DISTANCE)))
         return (
           <div

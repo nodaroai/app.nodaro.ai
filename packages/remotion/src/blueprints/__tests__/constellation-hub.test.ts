@@ -4,12 +4,6 @@ import { describe, it, expect, vi } from "vitest"
 vi.mock("remotion", () => ({
   useCurrentFrame: () => 0,
   useVideoConfig: () => ({ fps: 30, width: 1920, height: 1080, durationInFrames: 300 }),
-  interpolate: (v: number, [a, b]: number[], [c, d]: number[]) => {
-    if (v <= a) return c
-    if (v >= b) return d
-    return c + ((v - a) / (b - a)) * (d - c)
-  },
-  Easing: { ease: (t: number) => t, out: (fn: (t: number) => number) => fn },
 }))
 vi.mock("../../lib/font-registry", () => ({
   FONT_MAP: { Montserrat: "Montserrat, sans-serif" },
@@ -22,17 +16,16 @@ const DURATION = 180
 const COUNT = 6
 
 describe("ringNodeTransform", () => {
-  it("staggers entrances — node 0 is entered while the last node is not yet", () => {
+  it("staggers entrances — node 0 has entered (scale > 0) while the last node has not", () => {
     const probeFrame = ENTRANCE_STAGGER_FRAMES + 2 // after node 0 starts, before node 5 starts
     const first = ringNodeTransform(probeFrame, DURATION, 0, COUNT, "push-in")
     const last = ringNodeTransform(probeFrame, DURATION, COUNT - 1, COUNT, "push-in")
-    expect(first.entered).toBe(true)
-    expect(last.entered).toBe(false)
+    expect(first.scale).toBeGreaterThan(0)
+    expect(last.scale).toBe(0)
   })
 
-  it("is not entered at frame 0 for the last node", () => {
+  it("has scale 0 at frame 0 for the last node (not yet entered)", () => {
     const last = ringNodeTransform(0, DURATION, COUNT - 1, COUNT, "push-in")
-    expect(last.entered).toBe(false)
     expect(last.scale).toBe(0)
   })
 
