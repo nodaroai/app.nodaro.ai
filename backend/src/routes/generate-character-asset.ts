@@ -16,14 +16,14 @@ import {
   CHARACTER_ASSET_VARIANTS,
   CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
-  getIdentityLockClause,
+  characterLockToRefLock,
   toIdentityLockMode,
   type CharacterAssetTypeForAspect,
   type IdentityLockMode,
   type PersonValue,
   type WardrobeValue,
 } from "@nodaro/shared"
-import { buildEntityHints } from "../lib/character-prompts.js"
+import { buildEntityHints, CLOTHED_DEFAULT } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,
   characterPriorAssetsFromRow,
@@ -144,11 +144,15 @@ function buildVariantPrompt(
   // Identity-lock reinforcement — only when the generation actually has
   // reference images to lock onto (a lock clause with no ref is noise for a
   // text-to-image render). Strength comes from the character's setting; default
-  // 'strict' preserves the shipped behavior and `"off"` yields "" (no clause).
+  // 'strict' preserves the shipped behavior and `"off"` emits no clause. The
+  // wording is the shared {ref}-BOUND ladder bound to "reference image A" — the
+  // portrait anchor is always first in the assembled reference set, so the
+  // clause names the image the provider must lock onto instead of a vague
+  // "the reference photo" (which reads ambiguous with multiple refs attached).
   if (!hasReferences) return withHints
-  const lock = getIdentityLockClause(identityLockMode ?? "strict")
-  if (!lock) return withHints
-  return `${withHints} ${lock.charAt(0).toUpperCase()}${lock.slice(1)}`
+  const lock = characterLockToRefLock(identityLockMode ?? "strict")
+  if (!lock.enabled || !lock.text) return withHints
+  return `${withHints} ${lock.text.replaceAll("{ref}", "reference image A")}`
 
   function buildBase(): string {
   const genderDesc = gender ?? "character"
@@ -160,8 +164,21 @@ function buildVariantPrompt(
   // description carries the visual identity until the user renames.
   const trimmedName = name.trim()
   const namePart = trimmedName && trimmedName !== PLACEHOLDER_CHARACTER_NAME ? ` ${trimmedName}` : ""
+  // Framing subject: with reference images attached, bind to the anchor image
+  // ("the person from reference image A") so the provider renders THAT person
+  // rather than a fresh invention of the name/description; without refs the
+  // name (or "the character") is all we have. The name still appears in the
+  // base sentence below either way.
+  const subject = hasReferences
+    ? "the person from reference image A"
+    : namePart
+      ? namePart.trim()
+      : "the character"
 
-  const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, white/plain background, no text, no labels, no watermarks.`
+  // CLOTHED_DEFAULT: same clothing floor as the portrait route — an
+  // unspecified outfit otherwise renders underwear/nude on full-body framings.
+  // A described outfit (outfitPart / wardrobe hints) precedes it and wins.
+  const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, ${CLOTHED_DEFAULT}, white/plain background, no text, no labels, no watermarks.`
 
   if (assetType === "custom") {
     return `${userPrompt ?? variant}. ${base}`
@@ -182,7 +199,6 @@ function buildVariantPrompt(
       crying: "crying, tears, distressed expression",
     }
     const expr = expressionMap[variant] ?? `${variant} expression`
-    const subject = namePart ? namePart.trim() : "the character"
     return `Portrait headshot of ${subject}, ${expr}. ${base}`
   }
 
@@ -199,7 +215,6 @@ function buildVariantPrompt(
       turning: "turning to look over the shoulder, body in three-quarter view",
     }
     const pose = poseMap[variant] ?? `${variant} pose`
-    const subject = namePart ? namePart.trim() : "the character"
     return `Full body view of ${subject}, ${pose}. FULL BODY visible including feet. ${base}`
   }
 
@@ -217,7 +232,6 @@ function buildVariantPrompt(
       below: "low-angle view, camera looking up at the head from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
-    const subject = namePart ? namePart.trim() : "the character"
     return `Head-and-shoulders portrait of ${subject}, ${angle}, same neutral expression. ${base}`
   }
 
@@ -233,7 +247,6 @@ function buildVariantPrompt(
       below: "low-angle view, camera looking up at the body from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
-    const subject = namePart ? namePart.trim() : "the character"
     return `Full body view of ${subject}, ${angle}, standing naturally with arms relaxed at sides. FULL BODY visible including feet, plain background. ${base}`
   }
 
@@ -244,7 +257,6 @@ function buildVariantPrompt(
     dramatic: "dramatic side lighting, cinematic single light source, high contrast",
   }
   const light = lightMap[variant] ?? `${variant} lighting`
-  const subject = namePart ? namePart.trim() : "the character"
   return `Full body view of ${subject}, same neutral standing pose. ${light}. FULL BODY visible. ${base}`
   }
 }

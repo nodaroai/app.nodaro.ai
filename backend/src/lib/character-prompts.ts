@@ -17,7 +17,7 @@ import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeVa
  * intentional wardrobe (or swimwear, etc.) working: a described outfit / wardrobe
  * hint precedes this clause in the assembled prompt and takes precedence.
  */
-const CLOTHED_DEFAULT =
+export const CLOTHED_DEFAULT =
   "fully clothed in simple everyday attire unless the outfit is otherwise described"
 
 export const PORTRAIT_SCAFFOLDING =
