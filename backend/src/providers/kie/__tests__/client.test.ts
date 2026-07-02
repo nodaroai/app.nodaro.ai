@@ -40,6 +40,27 @@ describe("createUpstreamFailureError + isUpstreamKieFailure", () => {
   })
 })
 
+describe("createSanitizedError — provider account balance exhausted", () => {
+  it("maps KIE 'Credits insufficient' to a distinct service-capacity message (prod job 3b2f644d)", () => {
+    const err = createSanitizedError(
+      `createTask error (code 500): {"code":500,"msg":"Credits insufficient : Your current balance isn’t enough to run this request. Please top up to continue.","data":null}`,
+      "Generation",
+    )
+    expect(err.message).toContain("out of capacity on our side")
+    expect(err.message).toContain("credits were not charged")
+    // Never leak the provider name or its top-up phrasing to the user, and
+    // never the generic retry fallback — retrying can't fix a drained account.
+    expect(err.message).not.toMatch(/kie/i)
+    expect(err.message).not.toContain("top up")
+    expect(err.message).not.toContain("Please try again or contact support if the issue persists")
+  })
+
+  it("matches the 'insufficient credits' / 'insufficient balance' spellings too", () => {
+    expect(createSanitizedError("insufficient credits on account", "Generation").message).toContain("out of capacity")
+    expect(createSanitizedError("Insufficient balance for this request", "Generation").message).toContain("out of capacity")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------

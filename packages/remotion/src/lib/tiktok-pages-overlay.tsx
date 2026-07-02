@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig, spring } from "remotion"
 import { createTikTokStyleCaptions, type Caption } from "@remotion/captions"
 import type { OverlayCommonProps } from "./subtitle-overlay"
 import { POSITION_Y } from "./overlay-position"
+import { directionStyle } from "./text-direction"
 
 export interface TikTokPagesOverlayProps extends OverlayCommonProps {
   combineTokensWithinMilliseconds?: number
@@ -30,6 +31,11 @@ export const TikTokPagesOverlay: React.FC<TikTokPagesOverlayProps> = ({
       textAlign: "center", fontSize, color, fontWeight: 800, lineHeight: 1.1,
       whiteSpace: "pre",
       ...(backgroundColor ? { background: backgroundColor, padding: "0.3em 0.7em", borderRadius: "0.4em", display: "inline-block" } : {}),
+      // active.text is the pre-joined multi-word page string (no per-word
+      // spans here), so it IS the "row container" and the "fullLineText" —
+      // one directionStyle call covers both the row-direction and per-node
+      // requirements from the RTL overlay contract.
+      ...directionStyle(active.text),
     }}>
       {active.text}
     </div>

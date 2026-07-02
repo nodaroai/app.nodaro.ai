@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 
 interface Params {
@@ -37,7 +38,7 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const textColor = readableTextColor(brand.backgroundColor)
   // accentColor is user-configurable; fall back to the contrast-safe text color
   // so the big number is never invisible on a light brand.backgroundColor.
@@ -82,6 +83,7 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
           letterSpacing: "-0.04em",
           whiteSpace: "nowrap",
           lineHeight: 1,
+          ...directionStyle(`${prefix}${displayValue}${suffix}`),
         }}
       >
         {prefix}{displayValue}{suffix}
@@ -100,6 +102,7 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
           opacity: labelProgress,
           transform: `translateY(${(1 - labelProgress) * 12}px)`,
           textTransform: "uppercase",
+          ...directionStyle(label),
         }}
       >
         {label}
@@ -117,6 +120,7 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
             whiteSpace: "nowrap",
             marginTop: Math.round(height * 0.015),
             opacity: labelProgress,
+            ...directionStyle(sublabel),
           }}
         >
           {sublabel}

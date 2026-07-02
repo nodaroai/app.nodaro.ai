@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 
 interface Params {
   lines: string[]
@@ -49,7 +50,7 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
   const bg = bgColor ?? brand.backgroundColor
   const canvasBg = invert ? "#ffffff" : bg
   const defaultTextColor = invert ? bg : "#ffffff"
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
 
   return (
     <div
@@ -95,6 +96,7 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
               textAlign: "center",
               transform: `scale(${scale})`,
               transformOrigin: "center center",
+              ...directionStyle(line),
             }}
           >
             {line}

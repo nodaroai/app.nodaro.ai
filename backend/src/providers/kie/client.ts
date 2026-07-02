@@ -110,6 +110,22 @@ export function createSanitizedError(
     sanitizedMessage =
       "Service is temporarily busy. Please try again in a moment."
   } else if (
+    lowerMsg.includes("credits insufficient") ||
+    lowerMsg.includes("insufficient credits") ||
+    lowerMsg.includes("insufficient balance") ||
+    (lowerMsg.includes("balance") && lowerMsg.includes("top up"))
+  ) {
+    // OUR KIE.ai account is drained — nothing to do with the user's Nodaro
+    // credits (the worker refunds those). The generic retry fallback hid this
+    // in prod (job 3b2f644d): the user saw "try again" while every KIE-routed
+    // generation was failing. Distinct message + a greppable [ALERT] marker so
+    // an empty provider balance is diagnosable from Railway logs at a glance.
+    console.error(
+      `[ALERT] KIE.ai account balance exhausted — top up required (context: ${context})`
+    )
+    sanitizedMessage =
+      "The generation service is temporarily out of capacity on our side — your credits were not charged. Please try again later or contact support."
+  } else if (
     lowerMsg.includes("invalid") ||
     lowerMsg.includes("validation")
   ) {

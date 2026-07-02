@@ -2,6 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { Caption } from "@remotion/captions"
 import { POSITION_Y, type OverlayPosition } from "./overlay-position"
+import { directionStyle } from "./text-direction"
 
 export interface OverlayCommonProps {
   captions: readonly Caption[]
@@ -27,6 +28,7 @@ export const SubtitleOverlay: React.FC<OverlayCommonProps> = ({
       fontSize, color, fontWeight: 700, lineHeight: 1.2,
       textShadow: "0 2px 4px rgba(0,0,0,0.6)",
       ...(backgroundColor ? { background: backgroundColor, padding: "0.3em 0.6em", borderRadius: "0.4em", display: "inline-block" } : {}),
+      ...directionStyle(active.text),
     }}>
       {active.text}
     </div>

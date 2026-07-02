@@ -537,6 +537,7 @@ const shotTextElementSchema = z.object({
   y: z.number(),
   letterSpacing: z.number().optional(),
   opacity: z.number().min(0).max(1).optional(),
+  dir: z.enum(["rtl", "ltr"]).optional(),
 })
 
 const shotShapeElementSchema = z.object({

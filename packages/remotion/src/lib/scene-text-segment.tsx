@@ -1,7 +1,8 @@
 import type React from "react"
 import { useCurrentFrame, interpolate } from "remotion"
 import type { TextSegment } from "../scene-graph"
-import { FONT_MAP } from "./font-registry"
+import { FONT_MAP, withRtlFallback } from "./font-registry"
+import { directionStyle } from "./text-direction"
 
 const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 
@@ -23,7 +24,7 @@ function getPositionStyle(position: TextSegment["position"]): React.CSSPropertie
 export function SceneTextSegment({ segment }: { segment: TextSegment }) {
   const frame = useCurrentFrame()
   const { durationInFrames, animation, text, position, fontSize, color, fontWeight, fontStyle, fontFamily } = segment
-  const resolvedFont = fontFamily ? FONT_MAP[fontFamily] : undefined
+  const resolvedFont = fontFamily ? withRtlFallback(FONT_MAP[fontFamily] ?? fontFamily) : undefined
 
   const fadeFrames = Math.min(15, Math.floor(durationInFrames * 0.15))
 
@@ -70,7 +71,7 @@ export function SceneTextSegment({ segment }: { segment: TextSegment }) {
               style={{
                 color: wi === highlightIndex ? "#FFD700" : color,
                 fontWeight: wi === highlightIndex ? 900 : (fontWeight ?? 700),
-                marginRight: 8,
+                marginInlineEnd: 8,
                 transition: "color 0.1s",
               }}
             >
@@ -108,6 +109,7 @@ export function SceneTextSegment({ segment }: { segment: TextSegment }) {
         maxWidth: "80%",
         zIndex: 10,
         lineHeight: 1.4,
+        ...directionStyle(text),
       }}
     >
       {content}

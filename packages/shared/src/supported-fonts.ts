@@ -31,6 +31,10 @@ export const SUPPORTED_FONT_NAMES = [
   "Caveat",
   "Roboto Mono",
   "Fira Code",
+  "Rubik",
+  "Heebo",
+  "Cairo",
+  "Tajawal",
 ] as const
 
 export type SupportedFontName = (typeof SUPPORTED_FONT_NAMES)[number]

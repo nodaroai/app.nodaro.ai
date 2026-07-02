@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 
 interface Params {
   label: string
@@ -62,7 +63,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
 
   // ── Button entrance (scale 0.6 → 1 over first BUTTON_ENTRANCE_END frames) ──
   const entranceT = Math.max(0, Math.min(1, frame / BUTTON_ENTRANCE_END))
@@ -166,6 +167,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
               letterSpacing: "0.03em",
               whiteSpace: "nowrap",
               textAlign: "center",
+              ...directionStyle(label),
             }}
           >
             {label}
@@ -185,6 +187,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
             marginTop: Math.round(height * 0.04),
             whiteSpace: "nowrap",
             opacity: entranceProgress * 0.65,
+            ...directionStyle(sublabel),
           }}
         >
           {sublabel}

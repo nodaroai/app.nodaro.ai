@@ -16,7 +16,7 @@ vi.mock("../../lib/font-registry", () => ({
   SUPPORTED_FONTS: ["Montserrat"],
 }))
 
-import { typedCharCount } from "../typewriter-reveal"
+import { typedCharCount, caretMarginStyle } from "../typewriter-reveal"
 
 const TOTAL = 10
 const DURATION = 180
@@ -64,5 +64,11 @@ describe("typedCharCount", () => {
   it("returns totalChars immediately when durationFrames = 1", () => {
     // typingEnd = max(1, round(1 * 0.7)) = 1; frame ≥ 1 → totalChars
     expect(typedCharCount(1, 1, TOTAL)).toBe(TOTAL)
+  })
+})
+
+describe("caretMarginStyle", () => {
+  it("uses marginInlineStart so the caret trails the text's leading edge regardless of direction", () => {
+    expect(caretMarginStyle()).toEqual({ marginInlineStart: 2 })
   })
 })

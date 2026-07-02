@@ -1,7 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP } from "../lib/font-registry"
+import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
+import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { easeOutQuad, ringAngle, popWithSettle } from "./motion"
 
@@ -75,7 +76,7 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = FONT_MAP["Montserrat"] ?? "Montserrat"
+  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = accentColor ?? primaryColor
 
@@ -190,6 +191,7 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
                 whiteSpace: "nowrap",
                 opacity: ringOpacity,
                 filter: t.blur > 0 ? `blur(${t.blur}px)` : undefined,
+                ...directionStyle(node.label),
               }}
             >
               {node.label}
@@ -214,6 +216,7 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
             border: `3px solid ${emphasisColor}`,
             backgroundColor: brand.backgroundColor,
             whiteSpace: "nowrap",
+            ...directionStyle(hubLabel),
           }}
         >
           {hubLabel}
