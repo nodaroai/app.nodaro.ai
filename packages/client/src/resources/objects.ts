@@ -86,8 +86,11 @@ export interface Object {
   /** Named Product Boards — dense reference sheets, one per variant/colorway
    *  (the `generate-image/product-board` factory preset rendered from the
    *  object's images). A first-class bucket: community publish snapshots it
-   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
-  boards?: Array<{ name: string; url: string }> | null
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`.
+   *  `type` marks an image-collage `"identity"` sheet vs a plain `"looks"`
+   *  board; `sourceImages` are the R2 URLs it was collaged from. Both optional
+   *  + backward-compatible (legacy boards have neither). */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }> | null
   referencePhotos: ObjectReferencePhoto[]
   /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
@@ -193,8 +196,8 @@ export interface UpdateObjectInput {
   selectedAssetByVariant?: Record<string, string>
   /** Named Product Boards (see `Object.boards`) — whole-array replace,
    *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
-   *  Server caps: 24 boards, 200-char names. */
-  boards?: Array<{ name: string; url: string }>
+   *  Server caps: 24 boards, 200-char names, 30 sourceImages per board. */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }>
   expectedUpdatedAt?: string
 }
 

@@ -58,7 +58,17 @@ const upsertCreatureBody = z.object({
   // (flows through INSERT + UPDATE, unlike the worker-owned buckets above).
   // Mirrors objects.boards (migration 214) / characters.boards (212); caps
   // match: 24 boards, 200-char names, SSRF-gated URLs.
-  boards: z.array(z.object({ name: z.string().max(200), url: safeUrlSchema })).max(24).optional(),
+  // `type` distinguishes a plain "looks" board from an image-collage "identity"
+  // sheet; `sourceImages` records the R2 URLs that sheet was collaged from
+  // (studio's identity reference sheet). Both OPTIONAL + backward-compatible —
+  // legacy boards have neither. MUST be listed here explicitly: a plain
+  // z.object STRIPS unknown keys, so without them the fields vanish on save.
+  boards: z.array(z.object({
+    name: z.string().max(200),
+    url: safeUrlSchema,
+    type: z.enum(["looks", "identity"]).optional(),
+    sourceImages: z.array(safeUrlSchema).max(30).optional(),
+  })).max(24).optional(),
   // Creature voice — IDENTICAL shape + semantics to characters.voice (the
   // "talking creature" stack reuses the character voice plumbing verbatim:
   // text-to-speech reads voiceId/ttsProvider/voiceType, lip-sync targets the
@@ -161,7 +171,7 @@ type CreatureRow = {
   poses: { name: string; url: string }[] | null
   variations: { name: string; url: string }[] | null
   motion_clips: { name: string; url: string }[] | null
-  boards: { name: string; url: string }[] | null
+  boards: { name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }[] | null
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null

@@ -81,8 +81,11 @@ export interface Location {
   /** Named Location Boards — dense reference sheets, one per variant/mood
    *  (the `generate-image/location-board` factory preset rendered from the
    *  location's images). A first-class bucket: community publish snapshots it
-   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
-  boards?: Array<{ name: string; url: string }> | null
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`.
+   *  `type` marks an image-collage `"identity"` sheet vs a plain `"looks"`
+   *  board; `sourceImages` are the R2 URLs it was collaged from. Both optional
+   *  + backward-compatible (legacy boards have neither). */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }> | null
   referencePhotos: LocationReferencePhoto[]
   /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
@@ -184,8 +187,8 @@ export interface UpdateLocationInput {
   selectedAssetByVariant?: Record<string, string>
   /** Named Location Boards (see `Location.boards`) — whole-array replace,
    *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
-   *  Server caps: 24 boards, 200-char names. */
-  boards?: Array<{ name: string; url: string }>
+   *  Server caps: 24 boards, 200-char names, 30 sourceImages per board. */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }>
   /** ISO-8601 timestamp recording when PII consent was captured for this location. */
   piiConsentAt?: string
   expectedUpdatedAt?: string

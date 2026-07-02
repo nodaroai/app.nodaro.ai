@@ -130,8 +130,11 @@ export interface Creature {
   /** Named Creature Boards — dense reference sheets, one per variant/mood
    *  (the `generate-image/creature-board` factory preset rendered from the
    *  creature's images). A first-class bucket: community publish snapshots it
-   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
-  boards?: Array<{ name: string; url: string }> | null
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`.
+   *  `type` marks an image-collage `"identity"` sheet vs a plain `"looks"`
+   *  board; `sourceImages` are the R2 URLs it was collaged from. Both optional
+   *  + backward-compatible (legacy boards have neither). */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }> | null
   /** The creature's voice (the "talking creature" stack) — same shape and
    *  flow as `Character["voice"]`. `null` when no voice is selected. */
   voice?: CreatureVoice | null
@@ -230,8 +233,8 @@ export interface UpdateCreatureInput {
   selectedAssetByVariant?: Record<string, string>
   /** Named Creature Boards (see `Creature.boards`) — whole-array replace,
    *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
-   *  Server caps: 24 boards, 200-char names. */
-  boards?: Array<{ name: string; url: string }>
+   *  Server caps: 24 boards, 200-char names, 30 sourceImages per board. */
+  boards?: Array<{ name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }>
   /** Voice selection (see `CreatureVoice`) — whole-object replace; pass
    *  `null` to clear the voice, omit to leave untouched. */
   voice?: CreatureVoice | null
