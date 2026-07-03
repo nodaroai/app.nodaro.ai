@@ -8,8 +8,7 @@
 -- VARIABLE PRICING — Replicate bills $0.04 base + $0.03 per ref image, so we
 -- seed 9 composite identifiers covering the 0..8 ref range. The route's
 -- buildCreditModelIdentifier picks `flux-2-max:Nref` based on the actual
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- reference image count at request time (1 credit = $0.02).
 --
 -- STATIC_CREDIT_COSTS in backend/src/ee/billing/credits.ts mirrors these
 -- rows as the runtime fallback; the admin UI reads pricing exclusively from

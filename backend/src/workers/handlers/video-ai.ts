@@ -1048,8 +1048,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   // Extends ANY video by URL: generate the continuation through the
   // seedance-2 reference-video transport with the bare temporal template,
   // then trim-stitch source+extension into one seamless clip. The template
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // phrasing and trim counts are load-bearing — spike-validated ("reference"
   // keywords / meta-instructions re-stage the scene; dropping 4 source-tail
   // + 3 extension-head frames removes the duplicated boundary).
   if (provider === "seedance-2-extend") {

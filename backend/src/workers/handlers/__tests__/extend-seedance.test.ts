@@ -4,8 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // seedance-2-extend worker branch: bare-template continuation generation via
 // the seedance-2 reference-video transport + trim-stitch via combineVideos.
 // Template phrasing, trim counts, and "stitch failure = job failure" are all
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+// spike-validated invariants — these tests pin them.
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => {

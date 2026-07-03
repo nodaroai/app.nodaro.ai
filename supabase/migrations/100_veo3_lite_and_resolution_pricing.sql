@@ -4,13 +4,12 @@
 -- composite). 4K is via the separate /get-4k-video endpoint and stays
 -- with the existing video-upscale node — not seeded here.
 --
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- Per KIE pricing (verified 2026-05-06), seeded credits:
+--   veo3.1 Fast 720p   → 19 credits
+--   veo3.1 Fast 1080p  → 21 credits  ← NEW
+--   veo3_lite 720p     → 10 credits  ← NEW
+--   veo3_lite 1080p    → 11 credits  ← NEW
 --
-***REDACTED-OSS-SCRUB***
 -- ON CONFLICT DO NOTHING preserves any admin overrides set via
 -- /admin/models after the row first lands.
 

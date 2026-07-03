@@ -5,7 +5,7 @@
 -- Durations: 4..15s (user parameter, known at submit — no bucketing).
 --
 -- Hold formula: [formula removed]  — 1.5× safety factor over base credits
-***REDACTED-OSS-SCRUB***
+-- so the hold is always ≥ the actual metered charge after runtime markup.
 -- The actual charge is computed at job completion from the provider's real
 -- USD cost (Math.ceil(durationSec) × rate); commit_credits refunds any surplus.
 --

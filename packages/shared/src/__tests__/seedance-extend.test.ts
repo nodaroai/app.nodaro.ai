@@ -9,8 +9,7 @@ import {
 
 /**
  * seedance-2-extend: extend ANY video by URL — bare-template continuation
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
+ * generation + trim-stitch (spike-validated).
  */
 describe("seedance-2-extend shared wiring", () => {
   it("is a registered extend provider", () => {

@@ -16,9 +16,6 @@
  *    family don't apply to e.g. an audio-style slot on Generate Music.
  *  - text + audio + video producer sets are imported from existing modules
  *    so a single change there propagates to every consumer's accepts logic.
- *
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
  */
 
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"

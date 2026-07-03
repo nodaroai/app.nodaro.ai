@@ -1,4 +1,4 @@
-***REDACTED-OSS-SCRUB***
+-- Delta-save protocol (P3).
 --
 -- apply_workflow_delta applies an id-keyed node/edge delta atomically against
 -- an exact base version: FOR UPDATE row lock, integer CAS, whole-node

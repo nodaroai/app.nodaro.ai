@@ -11,7 +11,6 @@
 --   - supabase/migrations/137_locations_jobs_realtime.sql (REPLICA
 --     IDENTITY FULL + ALTER PUBLICATION with DO/EXCEPTION idempotency)
 --
-***REDACTED-OSS-SCRUB***
 -- Required-prerequisite PR: #2601 (Furniture parameter-picker, merged)
 --
 -- Idempotent: every ALTER/CREATE uses IF NOT EXISTS / OR REPLACE,

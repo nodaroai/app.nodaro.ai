@@ -1,5 +1,5 @@
 -- 126_character_lora.sql
-***REDACTED-OSS-SCRUB***
+-- Per-character LoRA training metadata.
 -- All columns nullable — existing characters are untrained by default. Adds 7 columns
 -- + a partial index for in-flight statuses.
 

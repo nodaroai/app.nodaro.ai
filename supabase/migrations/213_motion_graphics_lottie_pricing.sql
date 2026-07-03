@@ -2,10 +2,7 @@
 -- Three rows: base (standard tier), economy, premium — mirrors the existing
 -- motion-graphics 2/1/3 layout but on the heavier Lottie token profile.
 --
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- credits: standard 5, economy 1, premium 8 — sized for ~3K in + 4K out tokens per run.
 --
 -- Values MUST match STATIC_CREDIT_COSTS in backend/src/ee/billing/credits.ts.
 -- Per CLAUDE.md Provider Enum Sync step 9: ON CONFLICT DO NOTHING (preserves admin overrides).

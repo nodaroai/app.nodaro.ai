@@ -3,7 +3,7 @@
 -- Completes the decision-A re-baseline (migration 174 did the 175 KIE/Replicate-flat
 -- markup-baked ids). Values researched from current public provider rates
 -- (Anthropic/Google/OpenAI tokens, ElevenLabs, Replicate per-model GPU runs, Apify
-***REDACTED-OSS-SCRUB***
+-- per-result, KIE).
 --
 -- Owner decisions applied: generate-music -> 18 ([figures removed],
 -- was a ~6x under-charge); :premium LLM tiers repriced at [figures removed];

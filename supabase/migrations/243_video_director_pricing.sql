@@ -3,9 +3,8 @@
 -- One-shot authoring: fixed model claude-sonnet-4.6 (standard tier). No
 -- :economy/:premium composites — the model is not user-selectable.
 --
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- Sized for ~6,000 input + ~8,000 output tokens per authoring run;
+--   seeded at 9 credits.
 --
 -- Value MUST match STATIC_CREDIT_COSTS["video-director"] in
 -- backend/src/ee/billing/credits.ts (enforced by credit-pricing-migration-sync

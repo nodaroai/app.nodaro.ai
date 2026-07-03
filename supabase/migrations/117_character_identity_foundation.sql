@@ -1,8 +1,7 @@
 -- supabase/migrations/117_character_identity_foundation.sql
 --
 -- Character Studio Identity Foundation redesign — new columns + asset backfill.
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- Three new persistent columns + extended asset bundle
 -- shape (description on every item, motionDescription on motions, realLifeRefs
 -- on expressions/poses/motions).
 

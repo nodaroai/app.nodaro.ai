@@ -24,8 +24,8 @@ export function extractWorkflowId(body: unknown): string | null {
  * Extracts an optional nodeId from the raw request body. Like workflowId, this
  * is NOT part of any Zod schema — the frontend injects it (via withWorkflowId)
  * so a single-node job can be tied back to its canvas node and its in-flight
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
+ * progress restored after a page reload. Persisted to the dedicated
+ * `jobs.node_id` column.
  */
 export function extractNodeId(body: unknown): string | null {
   if (body && typeof body === "object" && "nodeId" in body) {

@@ -6,8 +6,6 @@
  *
  * Pure logic — no DB, no I/O. The route feeds it the character row's columns;
  * the worker caps the result to the provider's `maxRefImages` capability.
- *
- ***REDACTED-OSS-SCRUB***
  */
 
 import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared"

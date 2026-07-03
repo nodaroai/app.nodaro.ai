@@ -2,7 +2,7 @@
  * Pure credit estimators for video-utility nodes (loop-video, trim-video,
  * combine-videos). Used by frontend (Run-button display + API call) AND
  * backend (creditGuard reservation) so the displayed cost equals what gets
- ***REDACTED-OSS-SCRUB***
+ * debited.
  */
 
 export const VIDEO_UTIL_PRICING = {

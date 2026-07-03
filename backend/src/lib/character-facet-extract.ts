@@ -13,8 +13,6 @@
  * full source text, so a flaky extractor degrades to "inject everything" rather
  * than blocking the character generation. The extractor cost is tiny and is
  * absorbed into the character-generation credit (no separate charge).
- *
- ***REDACTED-OSS-SCRUB***
  */
 import { z } from "zod"
 import { llmCompleteStructured } from "./llm-client.js"

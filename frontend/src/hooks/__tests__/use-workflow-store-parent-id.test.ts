@@ -2,8 +2,7 @@
  * Regression test for React Flow's `parentId` field — the canonical marker
  * that ties a child node to its parent Group node.
  *
- * This is a prerequisite verification gate for the group/collect node feature
- ***REDACTED-OSS-SCRUB***
+ * This is a prerequisite verification gate for the group/collect node feature.
  *
  * Verifies React Flow's `parentId` field is preserved through `loadWorkflow`'s
  * migration helpers (`migrateImageNodes`, `filterCloneNodes`). Save-path
