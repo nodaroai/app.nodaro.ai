@@ -258,3 +258,8 @@ export function resolveLlmCreditId(feature: string, body: unknown): string {
   const llmModel = (body as Record<string, unknown>)?.llmModel as string | undefined
   return buildLlmCreditIdentifier(feature, llmModel)
 }
+
+/** Models capable of video-analysis: capability-derived, never hand-listed (route-enum-sync convention). */
+export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
+  .filter((m) => getLlmModalityCaps(m.id).video && getLlmModalityCaps(m.id).audio)
+  .map((m) => m.id)

@@ -3531,6 +3531,36 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   })
 }
 
+export async function startVideoAnalysis(params: {
+  videoUrl?: string
+  youtubeUrl?: string
+  llmModel?: string
+  analysisFocus?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {}
+  if (params.videoUrl) body.videoUrl = params.videoUrl
+  if (params.youtubeUrl) body.youtubeUrl = params.youtubeUrl
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.analysisFocus) body.analysisFocus = params.analysisFocus
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/video-analysis", {
+    body,
+    workflowId: true,
+    label: "Failed to start video analysis",
+  })
+}
+
+/** Pre-flight duration/title probe for a YouTube URL — no credits, no job row.
+ *  The editor uses the returned duration to bucket the pre-run credit estimate
+ *  and to surface an early "video too long / unavailable" error. */
+export async function probeVideoAnalysis(params: { youtubeUrl: string }): Promise<{ durationSec: number; title: string | null }> {
+  return apiJson("/v1/video-analysis/probe", {
+    body: { youtubeUrl: params.youtubeUrl },
+    label: "Failed to read video details",
+  })
+}
+
 export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ jobId: string; success: boolean; statusCode: number; responseBody: string }> {
   return apiJson("/v1/webhook-output/send", {
     body: data,

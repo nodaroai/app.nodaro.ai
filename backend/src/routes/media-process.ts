@@ -23,6 +23,20 @@ const MIME_TYPES: Record<string, string> = {
   aac: "audio/aac",
 }
 
+/** Allowed on-disk extensions — kept in lockstep with MIME_TYPES (single source of truth). */
+const ALLOWED_MEDIA_EXT = new Set(Object.keys(MIME_TYPES))
+
+/**
+ * Derive a filesystem-safe extension from an attacker-controllable source URL.
+ * The extension is only used to name a temp file under a server-owned workDir, but
+ * clamping it to a known allowlist removes any path-shaping input entirely (defense
+ * in depth — mirrors the regex-allowlist pattern in providers/kie/video.ts).
+ */
+export function safeMediaExt(url: string, fallback: string): string {
+  const raw = url.split("?")[0].split(".").pop()?.toLowerCase() ?? ""
+  return ALLOWED_MEDIA_EXT.has(raw) ? raw : fallback
+}
+
 const MediaProcessSchema = z.object({
   sourceUrl: safeUrlSchema,
   type: z.enum(["video", "audio"]),
@@ -67,7 +81,7 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
 
     const { sourceUrl, type, crop, trim, format } = parsed.data
 
-    const inputExt = sourceUrl.split(".").pop()?.split("?")[0] ?? "mp4"
+    const inputExt = safeMediaExt(sourceUrl, type === "video" ? "mp4" : "mp3")
     const outputExt = format ?? inputExt
     const workDir = await createWorkDir("media-process")
     const inputPath = join(workDir, `input.${inputExt}`)

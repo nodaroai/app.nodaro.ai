@@ -27,6 +27,8 @@
     "@playwright/test": "^1.58.2"
   },
   "overrides": {
+    "axios": "1.18.1",
+    "basic-ftp": "^6.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "react": "19.2.3",

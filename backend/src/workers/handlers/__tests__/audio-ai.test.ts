@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
-  const mockRoutedTextToSpeech = vi.fn()
   const mockGenerateMusic = vi.fn()
   const mockTextToAudio = vi.fn()
   const mockKieAudioProviderInstance = {
@@ -16,7 +15,6 @@ const mocks = vi.hoisted(() => {
   const mockUploadBufferToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockDirectElevenLabsTTS = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStripAudioTags = vi.fn((text: string) => text)
-  const mockIsKieAcceptedVoice = vi.fn().mockReturnValue(true)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStartDubbing = vi.fn().mockResolvedValue("dub-id")
   const mockWaitForDubbing = vi.fn().mockResolvedValue(undefined)
@@ -42,7 +40,6 @@ const mocks = vi.hoisted(() => {
   const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
 
   return {
-    mockRoutedTextToSpeech,
     mockGenerateMusic,
     mockTextToAudio,
     mockKieAudioProvider,
@@ -53,7 +50,6 @@ const mocks = vi.hoisted(() => {
     mockUploadBufferToR2,
     mockDirectElevenLabsTTS,
     mockStripAudioTags,
-    mockIsKieAcceptedVoice,
     mockVoiceChangerFromUrl,
     mockStartDubbing,
     mockWaitForDubbing,
@@ -81,11 +77,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBufferToR2: mocks.mockUploadBufferToR2, uploadFileToR2: mocks.mockUploadFileToR2 }))
-vi.mock("@/providers/index.js", () => ({ textToSpeech: mocks.mockRoutedTextToSpeech }))
 vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.mockGenerateMusic }))
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
-vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider, isKieAcceptedVoice: mocks.mockIsKieAcceptedVoice }))
+vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.mockExtractAudioTrack }))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: mocks.mockMergeVideoAudio }))
@@ -129,7 +124,6 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.mockRoutedTextToSpeech.mockResolvedValue({ url: "https://provider.example.com/tts.mp3", providerUsed: "elevenlabs-turbo", cost: 0.01, displayCost: 0.0125 })
   mocks.mockGenerateMusic.mockResolvedValue("https://replicate.example.com/music.mp3")
   mocks.mockTextToAudio.mockResolvedValue("https://replicate.example.com/audio.mp3")
   mocks.mockKieAudioProviderInstance.generateSoundEffect.mockResolvedValue({ url: "https://kie.example.com/sfx.mp3", cost: 0.01 })
@@ -151,72 +145,89 @@ beforeEach(() => {
 describe("text-to-speech handler", () => {
   const handler = audioAIHandlers["text-to-speech"]
 
-  it("happy path: generates speech, uploads, saves, commits", async () => {
-    const job = makeJob("text-to-speech", { text: "Hello world" })
+  it("happy path: generates speech via directElevenLabsTTS, uploads, finalizes", async () => {
+    const job = makeJob("text-to-speech", { text: "Hello world", provider: "elevenlabs-v3" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalledWith(
-      "Hello world", "elevenlabs-turbo", undefined, undefined,
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hello world", "Rachel", "elevenlabs-v3",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
     )
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://provider.example.com/tts.mp3", "job-1", "audio", "user-1")
-    // progress flows through setJobProgress (mocked) — no direct assertion
-    // progress flows through setJobProgress (mocked) — no direct assertion
-    // markJobCompleted assertion removed — now inside finalizeJobWithMedia (mocked)
-    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      Buffer.from("fake-audio"), "audio/job-1.mp3", "audio/mpeg", "user-1",
+    )
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "text-to-speech",
+        result: expect.objectContaining({ cost: null, providerUsed: "elevenlabs-direct" }),
+      }),
+    )
   })
 
   it("uses custom voice and options", async () => {
-    const job = makeJob("text-to-speech", { text: "Hi", voice: "Daniel", stability: 0.5, speed: 1.2, languageCode: "en-US" })
+    const job = makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3", voice: "Daniel", stability: 0.5, speed: 1.2, languageCode: "en-US" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalledWith(
-      "Hi", "elevenlabs-turbo", "Daniel",
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hi", "Daniel", "elevenlabs-v3",
       expect.objectContaining({ stability: 0.5, speed: 1.2, languageCode: "en-US" }),
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
   it("returns early when finalize signals not-ok (cancelled)", async () => {
     mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
-    const job = makeJob("text-to-speech", { text: "cancel" })
+    const job = makeJob("text-to-speech", { text: "cancel", provider: "elevenlabs-v3" })
     await handler(job as never, makeCtx())
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
-  // Reconciliation wiring (Task 1.11): when the router fires onTaskCreated
-  // with a taskId, the persistence layer writes provider_kind +
-  // provider_task_id + provider_call_started_at on the job row. KIE TTS
-  // (elevenlabs-turbo) routes through KIE standard so the kind is
-  // "kie-standard".
-  it("persists provider_kind + provider_task_id on the job row via makeOnTaskCreated", async () => {
-    mocks.mockRoutedTextToSpeech.mockImplementationOnce(
-      async (
-        _text: unknown,
-        _model: unknown,
-        _voice: unknown,
-        _options: unknown,
-        reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
-      ) => {
-        if (reconcileOpts?.onTaskCreated) {
-          await reconcileOpts.onTaskCreated("t-test")
-        }
-        return { url: "https://provider.example.com/tts.mp3", providerUsed: "elevenlabs-turbo", cost: 0.01, displayCost: 0.0125 }
-      },
-    )
-    const job = makeJob("text-to-speech", { text: "reconcile-me" })
-
+  // Regression guard for the KIE→direct migration: a premade, KIE-accepted
+  // voice used to route turbo/multilingual through KIE's TTS proxy
+  // (`useDirectApi` was false). Now every provider goes direct regardless of
+  // voice/voiceType.
+  it("elevenlabs-turbo with a premade voice routes direct (not KIE) with turbo model mapping", async () => {
+    const job = makeJob("text-to-speech", { text: "Hello", provider: "elevenlabs-turbo", voice: "Rachel", voiceType: "premade" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider_kind: "kie-standard",
-        provider_task_id: "t-test",
-        provider_call_started_at: expect.any(String),
-      }),
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hello", "Rachel", "elevenlabs-turbo",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
     )
-    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
+    // Non-v3 → tags stripped before hitting the provider.
+    expect(mocks.mockStripAudioTags).toHaveBeenCalledWith("Hello")
+  })
+
+  it("elevenlabs-multilingual with a premade voice routes direct (not KIE)", async () => {
+    const job = makeJob("text-to-speech", { text: "Bonjour", provider: "elevenlabs-multilingual", voice: "Sarah", voiceType: "premade" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Bonjour", "Sarah", "elevenlabs-multilingual",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).toHaveBeenCalledWith("Bonjour")
+  })
+
+  it("defaults an absent provider to elevenlabs-v3 (direct), tags NOT stripped", async () => {
+    const job = makeJob("text-to-speech", { text: "no provider given [whispers]" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "no provider given [whispers]", "Rachel", "elevenlabs-v3",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+  })
+
+  // Reconcile consideration: the direct call is synchronous — it never calls
+  // makeOnTaskCreated/markProviderCallStart, so TTS jobs never persist
+  // provider_kind/provider_call_started_at and stay invisible to the
+  // reconcile cron (which only scans rows with a non-null
+  // provider_call_started_at). See lib/reconcile/cron.ts.
+  it("does not persist provider_kind / provider_call_started_at (no reconcile wiring)", async () => {
+    const job = makeJob("text-to-speech", { text: "sync call", provider: "elevenlabs-turbo" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockUpdate).not.toHaveBeenCalled()
   })
 })
 
@@ -393,21 +404,14 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
   // unchanged and the user is wrongly refunded → revenue leak.
   const rawUploadError = () => new Error("R2 PutObject failed: connection reset")
 
-  it("text-to-speech (direct ElevenLabs branch, uploadBufferToR2)", async () => {
-    // useDirectApi branch: provider already returned the audio buffer.
-    mocks.mockIsKieAcceptedVoice.mockReturnValueOnce(false)
+  it("text-to-speech (direct ElevenLabs API, uploadBufferToR2)", async () => {
+    // Every TTS request (v3/turbo/multilingual, any voice type) now goes
+    // through directElevenLabsTTS — the provider already returned the audio
+    // buffer, so a failed upload must be tagged post-provider.
     mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
-    const job = makeJob("text-to-speech", { text: "hi", voice: "custom-uuid", voiceType: "custom" })
+    const job = makeJob("text-to-speech", { text: "hi", provider: "elevenlabs-turbo", voice: "custom-uuid", voiceType: "custom" })
     const err = await captureThrow(() => audioAIHandlers["text-to-speech"](job as never, makeCtx()))
     expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalled() // provider was billed
-    expect(isPostProcessingError(err)).toBe(true)
-  })
-
-  it("text-to-speech (routed/KIE branch, uploadToR2)", async () => {
-    mocks.mockUploadToR2.mockRejectedValueOnce(rawUploadError())
-    const job = makeJob("text-to-speech", { text: "hi" })
-    const err = await captureThrow(() => audioAIHandlers["text-to-speech"](job as never, makeCtx()))
-    expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalled()
     expect(isPostProcessingError(err)).toBe(true)
   })
 

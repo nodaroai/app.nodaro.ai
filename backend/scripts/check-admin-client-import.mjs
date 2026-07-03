@@ -306,6 +306,14 @@ const ALLOWED_PATHS = [
   // by job id. Audited 2026-05-28 (#2834 landed without allowlist update).
   /^src\/routes\/video-sfx\.ts$/,
 
+  // Video Analysis (Gemini video understanding): creates a jobs row tagged
+  // with `user_id: req.userId` (401 if absent), then reserveCreditsForJob
+  // runs under the same service-role client and the BullMQ worker reads +
+  // commits/refunds the job by `job.id` out-of-band. Mirrors video-sfx /
+  // ai-avatar (probe preHandler + jobs insert). No cross-user reads or
+  // writes — the only DB touch is the insert scoped to req.userId.
+  /^src\/routes\/video-analysis\.ts$/,
+
   // Collect: inline-HTTP route — needs service-role to insert the jobs row +
   // reserve credits before strategy dispatch, then commit/refund on completion.
   // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`

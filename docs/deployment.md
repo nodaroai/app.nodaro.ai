@@ -312,7 +312,11 @@ point.
 
 **Object storage**: configure bucket-level lifecycle rules on R2/S3 to
 expire old assets (e.g. 90 days). Nodaro never deletes assets itself —
-it only references them by key.
+it only references them by key. One exception: on Cloud, a daily cron
+reaps transient `video-analysis-tmp/` intermediates (analysis working
+files, orphaned after a worker crash). Self-hosted (Community/Business)
+deployments have no such cron, so include the `video-analysis-tmp/`
+prefix in your bucket lifecycle rule.
 
 ## 8. Backups
 

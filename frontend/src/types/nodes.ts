@@ -27,6 +27,7 @@ import type { ReferenceSheet } from "@nodaro/shared"
 import type { PersonValue, WardrobeValue } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
 import type { PickerApplyMode, PickerGaps } from "@nodaro/shared"
+import type { VideoAnalysisResult } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -4253,6 +4254,29 @@ export type WebScrapeNodeData = {
   generatedJson?: unknown
 }
 
+// --- Video Analysis Node Data ---
+
+export type VideoAnalysisNodeData = {
+  [key: string]: unknown
+  label: string
+  // Source: an uploaded/wired video URL OR a YouTube URL (mutually exclusive at run).
+  videoUrl?: string
+  youtubeUrl?: string
+  // Cached probe of the YouTube URL (duration binds credit pricing). Only trusted
+  // while `probedYoutube.url === youtubeUrl` — a URL edit invalidates it.
+  probedYoutube?: { url: string; durationSec: number }
+  // Analysis config
+  llmModel?: string
+  analysisFocus?: string
+  // execution state
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  // execution result — merged, validator-computed scene breakdown (shared contract)
+  generatedJson?: VideoAnalysisResult
+}
+
 // --- Combine Text Node Data ---
 
 export type CombineTextNodeData = {
@@ -4991,6 +5015,7 @@ export type SceneNodeData =
   | FaceNodeData
   | LLMChatData
   | WebScrapeNodeData
+  | VideoAnalysisNodeData
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
@@ -5120,6 +5145,7 @@ export type SceneNodeType =
   | "voice-remix"
   | "voice-design"
   | "forced-alignment"
+  | "video-analysis"
   | "combine-videos"
   | "image-collage"
   | "assemble-narrated-video"
@@ -6504,6 +6530,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       executionStatus: "idle",
       alignmentResults: [],
     } as ForcedAlignmentData,
+  },
+  {
+    type: "video-analysis",
+    label: "Video Analysis",
+    category: "processing",
+    // Representative estimate for the default model's ceiling bucket; the live
+    // per-run cost is dynamic (buildVideoAnalysisCreditId → useModelCredits).
+    creditCost: 3,
+    inputs: ["video"],
+    outputs: ["json"],
+    defaultData: {
+      label: "Video Analysis",
+      analysisFocus: "",
+      executionStatus: "idle",
+    } as VideoAnalysisNodeData,
   },
   // Processing
   {

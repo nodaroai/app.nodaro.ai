@@ -303,6 +303,7 @@ export {
   LLM_MODELS,
   LLM_MODEL_IDS,
   STRUCTURED_VISION_MODELS,
+  VIDEO_ANALYSIS_LLM_MODELS,
   LLM_FEATURE_DEFAULTS,
   LLM_MODALITY_CAPS,
   getLlmModel,
@@ -1412,3 +1413,9 @@ export {
 
 // --- Type-aware reference-role registry (presets + default + phrase renderer) ---
 export * from "./reference-roles.js"
+
+// --- Video-analysis node (window/result schemas + slot-token + aspect helpers) ---
+export * from "./video-analysis.js"
+
+// --- Video-analysis pricing (duration buckets + structural credit formula) ---
+export * from "./video-analysis-pricing.js"

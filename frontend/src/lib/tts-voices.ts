@@ -3,8 +3,10 @@ export interface TTSVoice {
   readonly name: string
 }
 
-// Only voices supported by KIE.ai's ElevenLabs TTS endpoints.
-// 21 voices accepted by name, plus Adam & Harry via their ElevenLabs UUIDs.
+// Curated "premade" voice catalog for the TTS node — all text-to-speech
+// requests route through the direct ElevenLabs API (never KIE), but this
+// stays a fixed 21-name list (plus Adam & Harry via their ElevenLabs UUIDs)
+// so premade voices resolve consistently across turbo/multilingual/v3.
 export const TTS_VOICES: readonly TTSVoice[] = [
   // Female voices
   { id: "Alice", name: "Alice (Female, British)" },

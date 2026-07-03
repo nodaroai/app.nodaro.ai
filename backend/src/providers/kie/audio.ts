@@ -147,6 +147,25 @@ export class KieAudioProvider
     return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
+  /**
+   * NOT called by the live TTS path anymore — `workers/handlers/audio-ai.ts`
+   * routes every ElevenLabs text-to-speech call through
+   * `directElevenLabsTTS` (standing rule: always ElevenLabs direct, never
+   * KIE's elevenlabs-* wrappers; the KIE TTS proxy garbled Hebrew and had a
+   * history of queue hangs). Retained rather than deleted because:
+   *  (a) `KIE_TTS_MODELS` costs still feed
+   *      `ee/routes/admin-credit-audit.ts` for historical actual-cost
+   *      reconciliation of jobs that DID route through KIE before this change;
+   *  (b) this method + the "text-to-speech" capability entry in
+   *      `kie/index.ts` keep this provider's shape consistent with the
+   *      generic router/registry test suites (`route-enum-sync.test.ts`,
+   *      `kie-catalog-param-sync.test.ts`, `model-sync.test.ts`), which
+   *      assert cross-capability invariants unrelated to whether anything
+   *      calls this specific method in production.
+   * If a future audit confirms (a) is no longer needed, this method, its
+   * `TextToSpeechProvider` implementation, and the "text-to-speech" entries
+   * in `kie/index.ts`'s `capabilities`/`supportedModels` can be removed together.
+   */
   async textToSpeech(
     text: string,
     voice?: string,

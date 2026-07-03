@@ -61,6 +61,17 @@ export const MOCK_AUTHORED = {
   shotSequenceBrief: MOCK_BRIEF_OBJ,
 } as AuthoredSequence
 
+// A "repaired" brief (Task T2 self-repair) — same voScript/cues as
+// MOCK_AUTHORED (satisfies the byte-identical invariant) but a structurally
+// different shotSequenceBrief (collapsed to one scene, per the doctrine's own
+// "prefer one scene when in doubt" guidance) so it's distinguishable from
+// MOCK_AUTHORED in assertions.
+export const MOCK_REPAIRED = {
+  voScript: "Ship faster.",
+  cues: [{ id: "c1", text: "Ship faster" }],
+  shotSequenceBrief: { ...MOCK_BRIEF_OBJ, scenes: [MOCK_BRIEF_OBJ.scenes[0]] },
+} as AuthoredSequence
+
 export const BASE_OPTS = {
   genre: "explainer" as const,
   brief: "Nodaro MVP promo",

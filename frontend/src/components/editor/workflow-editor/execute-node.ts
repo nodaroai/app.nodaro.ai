@@ -79,6 +79,7 @@ import {
   imageCriticApi,
   saveToStorageApi,
   webScrape,
+  startVideoAnalysis,
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
@@ -182,6 +183,7 @@ import type {
   VoiceRemixData,
   VoiceDesignData,
   ForcedAlignmentData,
+  VideoAnalysisNodeData,
   SubWorkflowData,
   SocialMediaFormatData,
   SocialPostData,
@@ -3027,6 +3029,125 @@ export function executeNode(
           });
           if (!checkStorageError(err, ctx)) {
             guardedToast.error("Failed to start forced alignment", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
+  }
+
+  if (node.type === "video-analysis") {
+    const d = node.data as VideoAnalysisNodeData;
+    // Source precedence mirrors the backend: a wired video wins; else the
+    // YouTube URL from node data. At least one must be present.
+    const videoUrl = inputs.videoUrl;
+    const youtubeUrl = d.youtubeUrl?.trim() || undefined;
+    if (!videoUrl && !youtubeUrl) {
+      toast.error(`Node "${d.label}": connect a video or set a YouTube URL`);
+      return Promise.reject(new Error("No video source"));
+    }
+    const { updateNodeData } = useWorkflowStore.getState();
+    // Clear any stale result on run start so a prior scene table can't co-render
+    // with a fresh running/failed state.
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedJson: undefined,
+      errorMessage: undefined,
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+    });
+
+    setUserPromptTemplate(d.analysisFocus?.trim() || undefined);
+    return new Promise<string>((resolve, reject) => {
+      startVideoAnalysis({
+        videoUrl,
+        youtubeUrl,
+        llmModel: d.llmModel,
+        analysisFocus: d.analysisFocus,
+        userId: ctx.userId,
+      })
+        .then(({ jobId }) => {
+          guardedToast.info("Video analysis started", { description: `Job ID: ${jobId}` });
+          updateNodeData(node.id, { currentJobId: jobId });
+
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatusLean(jobId);
+                pollFailures = 0;
+                if (job.status === "processing" && job.progress != null) {
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const json = (job.output_data as Record<string, unknown> | undefined)?.json;
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedJson: json,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.success("Video analysis complete");
+                  resolve(json === undefined ? "" : JSON.stringify(json));
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Video analysis failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Video analysis failed", { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Failed to check video analysis status");
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error("Failed to start video analysis", {
               description: err instanceof Error ? err.message : "Unknown error",
             });
           }

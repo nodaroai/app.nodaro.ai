@@ -37,7 +37,8 @@ export interface PipelineGenerateNarrationArgs {
   voiceId?: string
   /** Optional model id override. Defaults to `elevenlabs-v3` (direct API)
    *  which supports the [audio tag] delivery cues. Callers can pass
-   *  `elevenlabs-turbo` for a cheaper run via KIE. */
+   *  `elevenlabs-turbo` for a cheaper run (also direct API — every TTS
+   *  provider routes through ElevenLabs directly, never KIE). */
   modelId?: string
 }
 
@@ -60,8 +61,8 @@ export async function pipelineGenerateNarration(
   const { supabase, pipelineId, userId, text, voiceId, modelId } = args
 
   // Default to ElevenLabs v3 (direct API) — supports expressive delivery via
-  // [audio tags] and the worker routes it through the ElevenLabs SDK rather
-  // than KIE. Callers can override with `elevenlabs-turbo` to save credits.
+  // [audio tags]. Every ElevenLabs TTS model routes through the direct API
+  // (never KIE). Callers can override with `elevenlabs-turbo` to save credits.
   const provider = modelId ?? "elevenlabs-v3"
   const modelIdentifier = provider === "elevenlabs" ? "elevenlabs-turbo" : provider
 

@@ -97,6 +97,7 @@ import { DubbingNode } from "./dubbing-node"
 import { VoiceRemixNode } from "./voice-remix-node"
 import { VoiceDesignNode } from "./voice-design-node"
 import { ForcedAlignmentNode } from "./forced-alignment-node"
+import { VideoAnalysisNode } from "./video-analysis-node"
 import { ImageToTextNode } from "./image-to-text-node";
 import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
@@ -289,6 +290,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "voice-remix": VoiceRemixNode,
   "voice-design": VoiceDesignNode,
   "forced-alignment": ForcedAlignmentNode,
+  "video-analysis": VideoAnalysisNode,
   "llm-chat": LLMChatNode,
   // Processing
   "combine-videos": CombineVideosNode,

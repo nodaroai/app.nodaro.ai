@@ -123,6 +123,9 @@ function classifyPreviewValue(
 ): PreviewItem["type"] {
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (nodeType === "forced-alignment") return "data"
+  // Must precede the `includes("video")` catch-all below — video-analysis emits
+  // a JSON scene breakdown, not a video URL.
+  if (nodeType === "video-analysis") return "data"
   if (/\.(png|jpe?g|gif|webp|svg|bmp)/i.test(value)) return "image"
   if (/\.(mp4|mov|webm)/i.test(value)) return "video"
   if (/\.(mp3|wav|ogg|aac|flac|m4a)/i.test(value)) return "audio"

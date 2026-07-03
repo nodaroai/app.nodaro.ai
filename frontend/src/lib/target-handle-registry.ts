@@ -291,6 +291,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // direction popovers (drag from a producer's output pip) walk this
   // map to find which ffmpeg consumers + handles light up.
   "trim-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  // Video Analysis takes ONE video on its `video` target and emits a scene-
+  // breakdown JSON on its `json` source. Video producers light up here.
+  "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO }],
   "combine-videos":     [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "extract-frame":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "loop-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],

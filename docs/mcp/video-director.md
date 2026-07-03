@@ -68,6 +68,18 @@ itself fails — a step that already completed is not refunded when a later step
 fails (e.g. if render fails, the speech + alignment credits already spent are
 not returned).
 
+**Automatic resolve repair:** the authoring LLM occasionally produces a brief
+that violates a resolver invariant (e.g. two scenes with overlapping reveal
+timing). When that happens the director silently gives the author ONE
+corrective pass — feeding back the resolver's exact error — before failing the
+job. The corrected brief must keep the voiceover script and cues byte-identical
+to the original (speech and forced alignment have already been generated from
+them and are not redone), so only scene/shot/reveal structure and timing may
+change. This repair round is free — no extra credits are charged — and is
+invisible when it succeeds. If the repair either drifts the script/cues or
+still fails the resolver, the job fails exactly as it would without the
+repair attempt, with the same stage-prefixed `resolve:` error message.
+
 ## Tool reference
 
 ### `start_video_director`

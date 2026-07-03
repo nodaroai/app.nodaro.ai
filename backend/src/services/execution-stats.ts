@@ -211,6 +211,19 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
       }
     }
 
+    case "video-analysis": {
+      // Key on the duration-bucketed composite (`video-analysis:<model>:<bucket>s`)
+      // so each bucket accrues its own EMA. Orchestrated jobs stamp
+      // `reservedCreditId` into input_data (payload → input_data); route-only jobs
+      // (no reservedCreditId persisted) fall back to the bare node type.
+      return {
+        model_identifier: str(inputData.reservedCreditId) || "video-analysis",
+        aspect_ratio: "",
+        quality: "",
+        duration_seconds: 0,
+      }
+    }
+
     case "transcribe": {
       const provider = str(inputData.provider) || "elevenlabs-stt"
       return {

@@ -434,6 +434,12 @@ export function isValidWorkflowConnection(
       typeOf(connection.source) ?? "",
     )
   }
+  // Video Analysis — single `video` target accepts video producers. Inline
+  // ACCEPTS_VIDEO (same predicate the handle popover uses) so drag-to-connect
+  // and the source-direction popover agree.
+  if (targetType === "video-analysis" && connection.targetHandle === "video") {
+    return ACCEPTS_VIDEO(typeOf(connection.source) ?? "")
+  }
   if (targetType === "extract-field" && connection.targetHandle) {
     return isValidExtractFieldConnection(
       connection.targetHandle,

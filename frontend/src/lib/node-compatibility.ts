@@ -22,6 +22,10 @@ const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSON
 const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   "list", "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
+  // video-analysis emits scene-breakdown JSON on its `json` source handle;
+  // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (same as
+  // web-scrape) so data consumers surface as candidates.
+  "video-analysis",
   // describe-to-picker emits picker JSON on its `picker-json` source handle;
   // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (where the
   // analyzable pickers' `picker-json` targets are registered) so it surfaces them.

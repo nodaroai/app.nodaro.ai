@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
-import { deleteFromR2, batchDeleteFromR2 } from "../../lib/storage.js"
+import { deleteFromR2, batchDeleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
+import { VIDEO_ANALYSIS_TMP_PREFIX } from "../../workers/handlers/video-analysis-state.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
@@ -918,6 +919,116 @@ export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepR
     result.rowsPurged++
   }
 
+  return result
+}
+
+// ============================================================
+// Aged reaper for the video-analysis tmp prefix (double-stall residue)
+// ============================================================
+
+interface VaTmpSweepResult {
+  /** Objects returned by the prefix listing (before age/prefix filtering). */
+  objectsListed: number
+  /** Objects successfully deleted. */
+  deleted: number
+  /** Delete rejections + a listing failure (best-effort; never throws). */
+  failed: number
+  /** Listed keys rejected by the structural prefix guard (should be 0 in prod). */
+  skippedOutOfPrefix: number
+}
+
+/**
+ * Reap orphaned video-analysis intermediates from `video-analysis-tmp/`.
+ *
+ * WHY this exists: the video-analysis worker keys ALL of its intermediates
+ * (`source.mp4`, `window-<k>.mp4`, `state.json`) under
+ * `video-analysis-tmp/<jobId>/` and best-effort deletes them in its `finally`
+ * (`deleteVaTmp`). A double-stall / crash means that `finally` never runs, and
+ * NO other lifecycle covers these keys — the media-cleanup reapers only delete
+ * DB-referenced keys (assets / jobs.output_data / locations), and these
+ * transient files are referenced by NOTHING in the DB. Left alone they
+ * accumulate forever (up to ~600 MB per crashed job).
+ *
+ * PREFIX-SCOPED ONLY (irreversible-data-loss guard): this function is
+ * structurally incapable of touching any other prefix. The one prefix it may
+ * ever list/delete is built from the shared `VIDEO_ANALYSIS_TMP_PREFIX`
+ * constant, and every key is re-asserted to start with that prefix immediately
+ * before it can reach a delete. Real outputs live under `videos/` / `images/`
+ * / `audios/` and can never match.
+ *
+ * Age gate: only objects strictly older than `maxAgeHours` (default 24 h) are
+ * reaped — comfortably past the per-node 30-min + per-workflow 60-min timeouts,
+ * so a slow-but-live job's checkpoint is never pulled out from under it. An
+ * object with no `LastModified` is left in place (age unprovable → treat as
+ * possibly-live).
+ *
+ * Best-effort: a listing failure or any individual delete rejection is counted,
+ * never thrown — one bad key must not abort the sweep or the sibling crons.
+ */
+export async function sweepVideoAnalysisTmp(maxAgeHours = 24): Promise<VaTmpSweepResult> {
+  // The ONLY prefix this sweep may ever touch. Built from the shared constant +
+  // trailing slash; the trailing slash also prevents a sibling like
+  // `video-analysis-tmp-archive/` from ever matching.
+  const LIST_PREFIX = `${VIDEO_ANALYSIS_TMP_PREFIX}/`
+  const result: VaTmpSweepResult = {
+    objectsListed: 0,
+    deleted: 0,
+    failed: 0,
+    skippedOutOfPrefix: 0,
+  }
+
+  const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000
+
+  let objects
+  try {
+    objects = await listObjectsByPrefixWithMeta(LIST_PREFIX)
+  } catch (err) {
+    console.error("[cleanup] video-analysis-tmp list failed:", err)
+    result.failed++
+    return result
+  }
+  result.objectsListed = objects.length
+
+  // Structural guard + age gate. Even though we listed BY prefix, re-assert the
+  // prefix on every key before it can be deleted — this is the last line of
+  // defense against ever touching a non-tmp object.
+  const toDelete: string[] = []
+  for (const o of objects) {
+    if (!o.key.startsWith(LIST_PREFIX)) {
+      result.skippedOutOfPrefix++
+      continue
+    }
+    // Missing LastModified → age unprovable → leave it (a fresh in-flight
+    // checkpoint must never be reaped out from under a running worker).
+    if (!o.lastModified) continue
+    if (o.lastModified.getTime() < cutoffMs) toDelete.push(o.key)
+  }
+
+  if (toDelete.length === 0) {
+    console.log(
+      `[cleanup] video-analysis-tmp sweep: listed=${result.objectsListed} ` +
+      `deleted=0 (nothing older than ${maxAgeHours}h)`,
+    )
+    return result
+  }
+
+  // Best-effort per-key deletes. allSettled so one rejection never aborts the
+  // rest (and never throws out of the sweep).
+  const settled = await Promise.allSettled(toDelete.map((key) => deleteFromR2(key)))
+  for (const s of settled) {
+    if (s.status === "fulfilled") {
+      result.deleted++
+    } else {
+      result.failed++
+      console.error("[cleanup] video-analysis-tmp delete failed:", s.reason)
+    }
+  }
+
+  console.log(
+    `[cleanup] video-analysis-tmp sweep: listed=${result.objectsListed} ` +
+    `deleted=${result.deleted} failed=${result.failed} ` +
+    `skippedOutOfPrefix=${result.skippedOutOfPrefix} (maxAgeHours=${maxAgeHours})`,
+  )
   return result
 }
 

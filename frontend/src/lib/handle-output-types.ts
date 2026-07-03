@@ -126,6 +126,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "upload-image": { image: "image" },
   "upload-video": { video: "video" },
   "upscale-image": { image: "image" },
+  "video-analysis": { json: "look" },
   "video-composer": { composition: "control" },
   "video-retake": { video: "video" },
   "video-sfx": { video: "video" },

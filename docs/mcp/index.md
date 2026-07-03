@@ -15,7 +15,7 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 
 ## What's included
 
-- 130 tools across all media families (image / video / audio / Suno / character / location / object)
+- 131 tools across all media families (image / video / audio / Suno / character / location / object)
 - Workflow tools (`list_workflows`, `get_workflow`, `create_workflow`, `delete_workflow`, `get_workflow_json`, `update_workflow_json`, `export_workflow`, `import_workflow`, `run_workflow`) — all scoped to an auto-created "mcp" project except `export_workflow`, which can export any of your workflows
 - Prompt tools (`analyze_prompt`, `generate_prompt`, `enhance_prompt`) — AI assistance for writing prompts for generation nodes
 - Other utility tools (`list_jobs`, `get_job`, `diagnose_run`, `list_projects`, `get_project`, `list_models`, ...)

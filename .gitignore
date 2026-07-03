@@ -10,6 +10,10 @@ CLAUDE.md
 /ARCHITECTURE.md
 architecture-graph.html
 node_modules/
+# This repo uses npm (single root package-lock.json). A stray pnpm-lock.yaml
+# only creates a second, drifting dependency graph that security scanners flag
+# for CVEs the npm build never installs (e.g. a phantom Next.js pin). Keep it out.
+pnpm-lock.yaml
 .next/
 .env
 .env.*

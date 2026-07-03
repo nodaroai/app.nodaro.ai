@@ -100,6 +100,9 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   // ── Script / alignment (their primary text field) ──
   "generate-script": { prompt: "styleGuide", promptLabel: "Style guide", media: "text", inline: false },
   "forced-alignment": { prompt: "transcript", promptLabel: "Transcript", media: "audio", inline: false },
+  // Video Analysis — its focus hint is the editable prompt (renders a JSON scene
+  // table, not a media preview → no inline editor).
+  "video-analysis": { prompt: "analysisFocus", promptLabel: "Analysis focus", media: "video", inline: false },
 }
 
 /** The prompt-field spec for a node type, or undefined if it has none. */

@@ -3,12 +3,10 @@ import { z } from "zod"
 import { safeUrlSchema, isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
-import { join, dirname } from "node:path"
-import { fileURLToPath } from "node:url"
+import { join } from "node:path"
 import { promises as fs } from "node:fs"
-import { spawn } from "node:child_process"
-import { createRequire } from "node:module"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { downloadYouTubeVideo } from "../providers/video/youtube-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
@@ -29,34 +27,6 @@ interface ActiveDownload {
 }
 
 const activeDownloads = new Map<string, ActiveDownload>()
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const isWindows = process.platform === "win32"
-// Resolve via Node's module lookup so workspace hoisting (deps land in
-// the workspace root, not backend/node_modules) doesn't break the path.
-const require = createRequire(import.meta.url)
-const ytDlpExecPkgJson = require.resolve("youtube-dl-exec/package.json")
-const YT_DLP_BIN = join(
-  dirname(ytDlpExecPkgJson),
-  `bin/yt-dlp${isWindows ? ".exe" : ""}`,
-)
-
-function findVideoFile(baseName: string, expectedPath: string): Promise<string> {
-  return fs.access(expectedPath).then(() => expectedPath).catch(async () => {
-    const alternatives = [".mkv", ".webm", ".mov", ".avi", ".flv"]
-    for (const ext of alternatives) {
-      const altPath = join(tmpdir(), `${baseName}${ext}`)
-      try {
-        await fs.access(altPath)
-        return altPath
-      } catch {
-        continue
-      }
-    }
-    throw new Error("yt-dlp did not produce an output file")
-  })
-}
 
 async function findAndUploadThumbnail(baseName: string, outputId: string): Promise<string | undefined> {
   const thumbExtensions = [".jpg", ".webp", ".png"]
@@ -89,157 +59,54 @@ function cleanupFiles(baseName: string): void {
   }
 }
 
-function isH264(filePath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const proc = spawn("ffprobe", [
-      "-v", "error",
-      "-select_streams", "v:0",
-      "-show_entries", "stream=codec_name",
-      "-of", "csv=p=0",
-      filePath,
-    ], { stdio: ["ignore", "pipe", "pipe"] })
-
-    // Watchdog: a corrupt download can wedge ffprobe; local probes finish in
-    // well under a second, so 30s is purely a leak guard.
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 30_000)
-    let stdout = ""
-    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.on("close", (code) => {
-      clearTimeout(watchdog)
-      resolve(code === 0 && stdout.trim() === "h264")
-    })
-    proc.on("error", () => { clearTimeout(watchdog); resolve(false) })
-  })
-}
-
-function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", [
-      "-i", inputPath,
-      "-c:v", "libx264",
-      "-preset", "fast",
-      "-crf", "23",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
-      "-y",
-      outputPath,
-    ], { stdio: ["ignore", "ignore", "pipe"] })
-
-    // Watchdog: an ffmpeg wedged on corrupt input would leak the process and
-    // strand the download in "processing" forever. 10min matches the worker
-    // wrappers' DEFAULT_FFMPEG_TIMEOUT_MS — far above any legit re-encode.
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 10 * 60 * 1000)
-    let stderrBuf = ""
-    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
-    proc.on("close", (code) => {
-      clearTimeout(watchdog)
-      if (code === 0) resolve()
-      else reject(new Error(`ffmpeg re-encode exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
-    })
-    proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
-  })
-}
-
-function runDownloadWithProgress(
+async function runDownloadWithProgress(
   downloadId: string,
   url: string,
   outputId: string,
   baseName: string,
-  outputTemplate: string,
-  expectedPath: string,
-): void {
+  outPath: string,
+): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
 
-  const args = [
-    url,
-    "--format", "mp4/best",
-    "--output", outputTemplate,
-    "--no-playlist",
-    "--no-check-certificates",
-    "--merge-output-format", "mp4",
-    "--write-thumbnail",
-    "--convert-thumbnails", "jpg",
-    "--extractor-args", "youtube:player_client=android",
-    "--add-header", "referer:youtube.com",
-    "--add-header", "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "--newline",
-    "--progress-template", "download:%(progress._percent_str)s",
-  ]
-
-  const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
-
-  let stderrBuf = ""
-
-  proc.stdout.on("data", (chunk: Buffer) => {
-    const lines = chunk.toString().split("\n")
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      // Progress lines look like "download: 45.2%" or "download:  45.2%"
-      const match = trimmed.match(/^download:\s*([\d.]+)%/)
-      if (match) {
-        const pct = parseFloat(match[1])
-        if (!Number.isNaN(pct) && state.phase === "downloading") {
+  try {
+    // Provider owns yt-dlp spawn + spoof + h264 normalize; we keep the SSE
+    // progress map, fed by its callbacks. onProgress reports download percent;
+    // onProcessingStart fires once when the h264 re-encode begins.
+    await downloadYouTubeVideo({
+      url,
+      outPath,
+      onProgress: (pct) => {
+        if (state.phase === "downloading") {
           state.percent = Math.min(Math.round(pct), 99)
         }
-      }
-    }
-  })
-
-  proc.stderr.on("data", (chunk: Buffer) => {
-    stderrBuf += chunk.toString()
-  })
-
-  proc.on("close", async (code) => {
-    if (code !== 0) {
-      const errMsg = stderrBuf.trim().split("\n").pop() || "yt-dlp exited with code " + code
-      state.phase = "failed"
-      state.error = errMsg
-      cleanupFiles(baseName)
-      // Auto-clean after 5 minutes
-      setTimeout(() => activeDownloads.delete(downloadId), 5 * 60 * 1000)
-      return
-    }
-
-    try {
-      const actualPath = await findVideoFile(baseName, expectedPath)
-      const stat = await fs.stat(actualPath)
-      if (stat.size === 0) throw new Error("Downloaded video file is empty")
-
-      // Re-encode to h264/aac if needed for downstream compatibility
-      let uploadPath = actualPath
-      const normalizedPath = join(tmpdir(), `normalized-${outputId}.mp4`)
-      const alreadyH264 = await isH264(actualPath)
-      if (!alreadyH264) {
+      },
+      onProcessingStart: () => {
         state.phase = "processing"
         state.percent = 90
-        await reencodeToH264(actualPath, normalizedPath)
-        await fs.unlink(actualPath).catch(() => {})
-        uploadPath = normalizedPath
-      }
+      },
+    })
 
-      state.phase = "uploading"
-      state.percent = 95
+    state.phase = "uploading"
+    state.percent = 95
 
-      const videoR2Url = await uploadFileWithKeyToR2(uploadPath, `videos/yt-${outputId}.mp4`, "video/mp4")
-      await fs.unlink(uploadPath).catch(() => {})
+    const videoR2Url = await uploadFileWithKeyToR2(outPath, `videos/yt-${outputId}.mp4`, "video/mp4")
+    await fs.unlink(outPath).catch(() => {})
 
-      const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
+    const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
 
-      state.phase = "completed"
-      state.percent = 100
-      state.videoUrl = videoR2Url
-      state.thumbnailUrl = thumbnailUrl
-    } catch (err) {
-      state.phase = "failed"
-      state.error = err instanceof Error ? err.message : "Upload failed"
-      cleanupFiles(baseName)
-    }
+    state.phase = "completed"
+    state.percent = 100
+    state.videoUrl = videoR2Url
+    state.thumbnailUrl = thumbnailUrl
+  } catch (err) {
+    state.phase = "failed"
+    state.error = err instanceof Error ? err.message : "Download failed"
+    cleanupFiles(baseName)
+  }
 
-    // Auto-clean from map after 5 minutes
-    setTimeout(() => activeDownloads.delete(downloadId), 5 * 60 * 1000)
-  })
+  // Auto-clean from map after 5 minutes
+  setTimeout(() => activeDownloads.delete(downloadId), 5 * 60 * 1000)
 }
 
 export async function downloadVideoRoutes(app: FastifyInstance) {
@@ -262,14 +129,13 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const downloadId = randomUUID()
     const outputId = randomUUID()
     const baseName = `yt-video-${outputId}`
-    const outputTemplate = join(tmpdir(), `${baseName}.%(ext)s`)
-    const expectedPath = join(tmpdir(), `${baseName}.mp4`)
+    const outPath = join(tmpdir(), `${baseName}.mp4`)
 
     const state: ActiveDownload = { percent: 0, phase: "downloading" }
     activeDownloads.set(downloadId, state)
 
     // Start download in background
-    runDownloadWithProgress(downloadId, url, outputId, baseName, outputTemplate, expectedPath)
+    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath)
 
     return { downloadId }
   })

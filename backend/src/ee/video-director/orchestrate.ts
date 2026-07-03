@@ -128,16 +128,68 @@ export async function runVideoDirector(
   // When the caller supplied a brand, set the resolved tokens on the brief so
   // the render pipeline (baker → plan.brandTokens) honors them. When no brand
   // was supplied, pass the brief unchanged so an author-chosen brandTokens survives.
-  const briefToBake = resolvedBrand
-    ? { ...authored.shotSequenceBrief, brandTokens: resolvedBrand }
-    : authored.shotSequenceBrief
+  const briefToBake = (seq: AuthoredSequence) =>
+    resolvedBrand ? { ...seq.shotSequenceBrief, brandTokens: resolvedBrand } : seq.shotSequenceBrief
+
   await deps.onProgress?.("resolve")
   let plan: ShotSequencePlan
   try {
-    const baked = bakeShotSequence(briefToBake, alignment, audioUrl)
+    const baked = bakeShotSequence(briefToBake(authored), alignment, audioUrl)
     plan = baked.plan
   } catch (err) {
-    throw new Error(`resolve: ${err instanceof Error ? err.message : String(err)}`)
+    // ── One-round author self-repair (Task T2) ────────────────────────────
+    // The bake/resolve step is a pure plan-validation seam: a rejection here
+    // means the authoring LLM produced a brief that violates a resolver
+    // invariant (e.g. overlapping scenes) — a nondeterministic failure class
+    // where one repair round usually fixes it. Give the author ONE chance to
+    // correct ONLY the scene/shot/reveal structure before failing the job.
+    //
+    // Speech + forced alignment are already generated from voScript/cues and
+    // cannot be redone without re-billing, so the repaired output's voScript
+    // AND cues (ids + text, order) MUST stay byte-identical to the original.
+    // Any drift discards the repair and surfaces the ORIGINAL bake error, as
+    // if no repair had been attempted at all. No third attempt.
+    const originalMsg = err instanceof Error ? err.message : String(err)
+    const originalError = new Error(`resolve: ${originalMsg}`)
+
+    console.log(`[video-director] resolve failed, attempting author self-repair: ${originalMsg}`)
+    // Still working the "resolve" stage from the caller's point of view — no
+    // new stage name is introduced for the repair round.
+    await deps.onProgress?.("resolve")
+
+    let repaired: AuthoredSequence
+    try {
+      repaired = await deps.author({
+        ...opts,
+        brand: resolvedBrand,
+        repair: { previousBrief: authored, resolverError: originalError.message },
+      })
+    } catch {
+      // The repair authoring call itself failed — nothing to re-bake. Surface
+      // the ORIGINAL bake error (the signal the caller/refund path cares
+      // about), not the repair attempt's own failure.
+      console.log(`[video-director] resolve self-repair outcome: repair-failed`)
+      throw originalError
+    }
+
+    const cuesMatch =
+      repaired.cues.length === authored.cues.length &&
+      repaired.cues.every((c, i) => c.id === authored.cues[i].id && c.text === authored.cues[i].text)
+
+    if (repaired.voScript !== authored.voScript || !cuesMatch) {
+      console.log(`[video-director] resolve self-repair outcome: repair-discarded-voScript-drift`)
+      throw originalError
+    }
+
+    // Re-bake with the SAME alignment + audioUrl — no new speech/alignment job.
+    try {
+      const baked = bakeShotSequence(briefToBake(repaired), alignment, audioUrl)
+      plan = baked.plan
+      console.log(`[video-director] resolve self-repair outcome: repaired-ok`)
+    } catch (err2) {
+      console.log(`[video-director] resolve self-repair outcome: repair-failed`)
+      throw new Error(`resolve: ${err2 instanceof Error ? err2.message : String(err2)}`)
+    }
   }
 
   // ── 5. Render ──────────────────────────────────────────────────────────────

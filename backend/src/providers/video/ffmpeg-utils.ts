@@ -542,3 +542,70 @@ export async function normalizeVideoForCombine(
   ])
   return outputPath
 }
+
+// Containers the video-analysis consumer accepts directly — everything else is
+// remuxed into .mp4 first. Extension-only decision (case-insensitive); the
+// actual per-stream codec fix-up happens in buildRemuxArgs / remuxToMp4.
+const REMUX_PASS_THROUGH_EXTS = new Set(["mp4", "webm", "mov"])
+
+/**
+ * True when a media file must be remuxed into an MP4 container before the
+ * downstream consumer can read it. False for the already-safe containers
+ * (.mp4/.webm/.mov), true for everything else (.mkv, .avi, …). Accepts a full
+ * path OR a bare extension ("mkv", ".mkv") — case-insensitive on the extension.
+ */
+export function needsContainerRemux(pathOrExt: string): boolean {
+  const lower = pathOrExt.toLowerCase()
+  const dotIdx = lower.lastIndexOf(".")
+  // No dot → treat the whole string as a bare extension (the "Ext" form).
+  const ext = dotIdx >= 0 ? lower.slice(dotIdx + 1) : lower
+  return !REMUX_PASS_THROUGH_EXTS.has(ext)
+}
+
+/**
+ * Build the ffmpeg args to remux `input` into an MP4 at `output`. The video
+ * stream is always stream-copied (`-c:v copy` — no re-encode, near-instant).
+ * Audio recipe, keyed on the probed source audio codec:
+ *   - aac / mp3        → `-c:a copy` (already MP4-muxer-safe)
+ *   - any other codec  → `-c:a aac`  (the MP4 muxer rejects Opus/PCM — common
+ *                          in yt-dlp .mkv/.webm payloads; an audio-only
+ *                          re-encode is cheap next to a video re-encode)
+ *   - null (no audio)  → no `-c:a` flags at all (audio-less source)
+ */
+export function buildRemuxArgs(input: string, output: string, audioCodec: string | null): string[] {
+  const args = ["-y", "-i", input, "-c:v", "copy"]
+  if (audioCodec !== null) {
+    const muxerSafe = audioCodec === "aac" || audioCodec === "mp3"
+    args.push("-c:a", muxerSafe ? "copy" : "aac")
+  }
+  args.push("-movflags", "+faststart", output)
+  return args
+}
+
+/**
+ * Probe the codec_name of the FIRST audio stream (a:0). Returns null when the
+ * source has no audio stream at all (ffprobe prints nothing). LOCAL file only
+ * (no network), so no SSRF guard is needed. Mirrors probeVideoStream's shape.
+ */
+async function probeFirstAudioCodec(filePath: string): Promise<string | null> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "a:0",
+    "-show_entries", "stream=codec_name",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  const codec = output.trim().toLowerCase()
+  return codec.length > 0 ? codec : null
+}
+
+/**
+ * Remux any container into MP4: video stream copied untouched, audio kept when
+ * already MP4-muxer-safe (aac/mp3) else re-encoded to AAC. Probes the source
+ * audio codec first (absent stream → audio-less remux), then runs a single
+ * semaphore-gated ffmpeg spawn (remux is cheap but is still a real spawn).
+ */
+export async function remuxToMp4(inputPath: string, outputPath: string): Promise<void> {
+  const audioCodec = await probeFirstAudioCodec(inputPath)
+  await runFfmpeg(buildRemuxArgs(inputPath, outputPath, audioCodec))
+}

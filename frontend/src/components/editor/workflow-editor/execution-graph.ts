@@ -22,6 +22,7 @@ import type {
   LoopNodeData,
   SelectorNodeData,
   WebScrapeNodeData,
+  VideoAnalysisNodeData,
   DescribeToPickerData,
 } from "@/types/nodes";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
@@ -644,6 +645,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return undefined;
   }
+  if (type === "video-analysis") {
+    const d = node.data as VideoAnalysisNodeData;
+    // Single json handle — stringify the merged scene breakdown for text
+    // consumers; Extract Field / JSON Process read d.generatedJson directly
+    // (bypasses extractNodeOutput). Mirrors web-scrape's json branch.
+    if (sourceHandle === "json" || !sourceHandle) {
+      return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
+  }
   if (type === "describe-to-picker") {
     const d = node.data as DescribeToPickerData;
     // Single picker-json handle — stringify for any consumer; the person picker
@@ -973,6 +984,7 @@ export function detectPreviewItemType(
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
   if (nodeType === "forced-alignment") return "data"
+  if (nodeType === "video-analysis") return "data"
   if (value) {
     if (IMAGE_URL_RE.test(value)) return "image"
     if (VIDEO_URL_RE.test(value)) return "video"

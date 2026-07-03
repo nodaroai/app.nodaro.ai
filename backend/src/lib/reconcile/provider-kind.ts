@@ -70,15 +70,6 @@ export function providerKindForVideoToVideoModel(model: string): ProviderKind {
 }
 
 // ---------------------------------------------------------------------------
-// Audio (text-to-speech, text-to-audio, etc.)
-// ---------------------------------------------------------------------------
-
-export function providerKindForTtsModel(model: string): ProviderKind {
-  if (model === "elevenlabs-v3") return "elevenlabs-sync"
-  return "kie-standard"
-}
-
-// ---------------------------------------------------------------------------
 // Suno (every Suno music function)
 // ---------------------------------------------------------------------------
 

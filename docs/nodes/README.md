@@ -275,6 +275,7 @@ FFmpeg-based video manipulation.
 | [Transcode Video](./processing-video/transcode-video.md) | Convert video codec and resolution | Change codec (H.264/H.265), quality, or resolution |
 | [Manual Edit](./processing-video/manual-edit.md) | Open video in web editor | Make manual adjustments in browser-based editor |
 | [Remove Audio](./processing-video/remove-audio.md) | Strip the audio track, output a silent video | Mute a clip losslessly before adding new sound |
+| [Video Analysis](./processing-video/video-analysis.md) | Scene-by-scene breakdown for AI re-creation | Reverse-engineer a video (or YouTube URL) into castable ≤8s scenes with prompt-ready descriptions, mode-tagged audio, and reusable entity slots |
 
 ---
 

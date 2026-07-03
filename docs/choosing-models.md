@@ -93,6 +93,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | --- | --- | --- | --- | --- | --- |
 | VEO 1080p Upscale | Google | Everyday | 2 | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 3 | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
+| Video Analysis (Gemini 3 Flash) | Google | Everyday | 3 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast Gemini tier. Billed per duration bucket. |
 | Grok Imagine (I2V) | xAI | Everyday | 5 | i2v | Grok image-to-video — stylized motion. Up to 15s. |
 | Bytedance Lite I2V | Bytedance | Everyday | 6 | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
 | Hailuo 02 Standard | MiniMax | Everyday | 8 | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
@@ -136,6 +137,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 Extend | Bytedance | Premium | 53 | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
 | Kling Avatar Pro | Kuaishou | Premium | 56 | lip-sync | Premium lip-sync — better mouth shape and timing. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 63 | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. Flat per-generation pricing across durations. |
+| Video Analysis (Gemini 3.1 Pro) | Google | Premium | 94 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket. |
 | OmniHuman 1.5 | ByteDance | Premium | 405 | lip-sync | Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime. |
 | Volcengine Lip Sync | Volcengine | Premium | 600 | lip-sync | Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 2000 | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
@@ -149,9 +151,9 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 1 | sfx | Generate short sound effects from a text prompt. |
-| ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 2 | tts | Fast, cheap ElevenLabs TTS via KIE. Good for narration. |
+| ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 2 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs Forced Alignment | ElevenLabs | Everyday | 3 | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
-| ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 3 | tts | Multi-language ElevenLabs TTS via KIE. |
+| ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 3 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ElevenLabs STT | ElevenLabs | Everyday | 3 | stt | Speech-to-text — transcribe audio with timestamps. |
 | ⭐ ElevenLabs v3 | ElevenLabs | Everyday | 3 | tts | Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
 | Suno v4 | Suno | Everyday | 3 | music | Suno v4 music generation — full songs with vocals, multiple genres. |

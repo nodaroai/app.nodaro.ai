@@ -62,6 +62,7 @@ const MODE_TO_NODE: Readonly<Partial<Record<ModelMode, string>>> = {
   "lip-sync": "lip-sync", "tts": "text-to-speech", "sfx": "text-to-audio",
   "music": "suno-generate", "voice-design": "voice-design", "voice-changer": "voice-changer",
   "isolation": "audio-isolation", "dubbing": "dubbing", "forced-alignment": "forced-alignment", "stt": "transcribe",
+  "video-analysis": "video-analysis",
 }
 
 export function modelToNodeTarget(modelId: string): ModelNodeTarget | null {
