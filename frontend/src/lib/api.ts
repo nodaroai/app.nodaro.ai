@@ -1413,7 +1413,7 @@ export async function deleteNodePresetGroup(id: string): Promise<void> {
   })
 }
 
-***REDACTED-OSS-SCRUB***
+// ---- Prompt snippets (reusable inline prompt fragments; see docs/design/prompt-snippets.md) ----
 
 export interface PromptSnippet {
   id: string

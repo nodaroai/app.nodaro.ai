@@ -3709,7 +3709,7 @@ export type CharacterNodeData = {
    * shared `resolveDefaultRole` at every hybrid path (image + video ×
    * extras/canonical/mention). Unset for legacy nodes (read-through applies).
    * Only written by the hybrid dropdown; `defaultUsageMode` stays the LEGACY
-   ***REDACTED-OSS-SCRUB***
+   * default. See `docs/design/character-node-role-and-lock.md`.
    */
   defaultRole?: string
   characterSheet: CharacterSheet | null

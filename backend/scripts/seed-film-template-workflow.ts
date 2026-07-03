@@ -1,8 +1,8 @@
 /**
  * Seed the Film Director reference template workflow.
  *
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
+ * Spec: §5.4 Layer 2 of `docs/design/film-director-skill.md`
+ * (and Phase B of the internal implementation plan).
  *
  * Purpose:
  * The Film Director skill's Stage 0 fetches this workflow via the MCP

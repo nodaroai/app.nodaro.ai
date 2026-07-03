@@ -3,7 +3,7 @@
 -- Admin-curated community sharing for characters/locations/objects.
 -- Admins publish into community_listings (+ protected snapshot); any logged-in
 -- user browses and clones. Snapshot-copy independence: assets are R2-copied at
-***REDACTED-OSS-SCRUB***
+-- publish and again at clone. See docs/design/community-sharing.md.
 --
 -- License: Nodaro Enterprise (this schema backs ee/ code; see LICENSE.md).
 

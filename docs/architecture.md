@@ -336,4 +336,4 @@ A few of the more opinionated decisions:
 - [SDK Quickstart](./sdk-quickstart.md) — TypeScript client
 - [Deployment](./deployment.md) — self-hosting
 - [Edge modes](./edge-modes.md) — request flow specifics
-***REDACTED-OSS-SCRUB***
+- [`docs/design/`](./design/) — curated design notes (RFD-style) explaining the *why* behind key features

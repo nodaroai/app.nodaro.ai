@@ -1,7 +1,7 @@
 -- Prompt snippets: per-user reusable inline prompt fragments.
 -- Factory snippets are code-defined in @nodaro/shared and are NOT stored here.
 -- Scoping: target = which field menu (prompt/negative); media = node modalities
-***REDACTED-OSS-SCRUB***
+-- (empty array = applies to all). See docs/design/prompt-snippets.md.
 
 CREATE TABLE IF NOT EXISTS public.prompt_snippets (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

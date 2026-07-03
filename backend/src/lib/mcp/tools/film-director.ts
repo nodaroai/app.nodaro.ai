@@ -25,7 +25,7 @@
  * No scope gate: this is a content-delivery tool with no side effects, no
  * DB access, no API calls. Universal availability is the point.
  *
- ***REDACTED-OSS-SCRUB***
+ * Source spec: docs/design/film-director-skill.md
  * Skill content source: .claude/skills/nodaro-film-director/SKILL.md
  */
 import { readFileSync } from "node:fs"

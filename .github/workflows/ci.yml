@@ -188,6 +188,24 @@ jobs:
       - name: Check locale sidecar completeness
         run: node scripts/check-locale-completeness.mjs
 
+  check-no-internal-specs:
+    name: No Internal Specs In Repo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ensure internal planning docs are not committed
+        run: |
+          # Internal design/planning docs live in the private plan.nodaro.ai
+          # repo, not here. A curated public subset is in docs/design/. This
+          # guard keeps them from being re-added to the public repo.
+          offenders="$(git ls-files 'specs/' 'docs/superpowers/')"
+          if [ -n "$offenders" ]; then
+            echo "::error::Internal planning docs must not be committed to the public repo. Move them to the private plan.nodaro.ai repo; curated public design notes belong in docs/design/."
+            echo "$offenders"
+            exit 1
+          fi
+          echo "OK: no specs/ or docs/superpowers/ tracked files."
+
   check-ee-imports:
     name: Check EE Imports
     runs-on: ubuntu-latest
