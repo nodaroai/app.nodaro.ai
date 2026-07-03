@@ -520,7 +520,7 @@ export interface AppSettings {
 
 const DEFAULT_SETTINGS: AppSettings = {
   ai_provider: "replicate",
-  ***REDACTED-OSS-SCRUB***
+  cost_markup_percent: 0,
 }
 
 async function fetchAppSettings(): Promise<AppSettings> {

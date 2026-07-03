@@ -165,9 +165,9 @@ describe("creditGuard with computeCredits", () => {
   })
 
   it("applies admin markup when cost_markup_percent > 0", async () => {
-    ***REDACTED-OSS-SCRUB***
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 50 })
 
-    ***REDACTED-OSS-SCRUB***
+    // base 4 + 50% markup → ceil(4 * 1.5) = ceil(6.0) = 6
     const app = await buildApp(() => "loop-video", () => 4)
 
     await app.inject({
@@ -181,7 +181,7 @@ describe("creditGuard with computeCredits", () => {
       expect.objectContaining({ tier: "standard" }),
       "loop-video",
       undefined,
-      5,
+      6,
     )
 
     await app.close()

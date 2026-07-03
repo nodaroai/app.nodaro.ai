@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const { mockSettings } = vi.hoisted(() => {
   const mockSettings = {
     ai_provider: "kie" as "kie" | "replicate",
-    ***REDACTED-OSS-SCRUB***
+    cost_markup_percent: 50,
   }
   return { mockSettings }
 })
@@ -37,7 +37,7 @@ import {
 describe("buildRoutingDecision", () => {
   beforeEach(() => {
     mockSettings.ai_provider = "kie"
-    ***REDACTED-OSS-SCRUB***
+    mockSettings.cost_markup_percent = 50
   })
 
   it("non-kie mode returns empty chain (replicate disabled)", async () => {
@@ -74,7 +74,7 @@ describe("buildRoutingDecision", () => {
     const result = await buildRoutingDecision("image-to-video", "minimax")
 
     expect(result.providerChain).toEqual(["kie"])
-    ***REDACTED-OSS-SCRUB***
+    expect(result.markupPercent).toBe(50)
     expect(result.activeProvider).toBe("kie")
   })
 })
@@ -97,13 +97,13 @@ describe("resolveMarkup", () => {
   it("returns configured markup for KIE mode regardless of providerUsed (replicate disabled)", () => {
     const kieDecision: RoutingDecision = {
       providerChain: ["kie"],
-      ***REDACTED-OSS-SCRUB***
+      markupPercent: 50,
       activeProvider: "kie",
-      ***REDACTED-OSS-SCRUB***
+      settings: { ai_provider: "kie", cost_markup_percent: 50, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 },
     }
-    ***REDACTED-OSS-SCRUB***
+    expect(resolveMarkup(kieDecision, "kie")).toBe(50)
     // With replicate disabled, even replicate providerUsed returns the same KIE markup
-    ***REDACTED-OSS-SCRUB***
+    expect(resolveMarkup(kieDecision, "replicate")).toBe(50)
   })
 })
 
