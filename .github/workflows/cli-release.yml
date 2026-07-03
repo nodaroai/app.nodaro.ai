@@ -19,13 +19,18 @@ on:
     tags:
       - 'cli-v*'
 
-permissions:
-  contents: write  # needed to create the release + upload assets
+# Deny all permissions at the workflow level; each job opts into the minimum it
+# needs (least privilege). Only the `release` job gets `contents: write`.
+permissions: {}
 
 jobs:
   build:
     name: Compile ${{ matrix.target }}
     runs-on: ubuntu-latest
+    # Compiles binaries + uploads *workflow artifacts* (artifact upload uses the
+    # Actions API, not the `contents` scope) — read is all it needs to checkout.
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +91,9 @@ jobs:
     name: Attach binaries to GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    # The only job that writes to the repo: creates the GitHub Release + assets.
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
