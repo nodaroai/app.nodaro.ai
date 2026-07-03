@@ -1,6 +1,6 @@
 # CLAUDE.md — Maintenance
 
-***REDACTED-OSS-SCRUB***
+**Update only when conventions, architecture, or registration steps change** — not per commit (change history → `git log` / PR descriptions; no "Last updated" footer). This root file plus four subdirectory CLAUDE.md files (`backend/`, `frontend/`, and the two provider dirs) are tracked in git — they are explicitly un-ignored in `.gitignore`; any other `CLAUDE.md` is gitignored.
 
 # Public Docs Maintenance Rule (CRITICAL)
 
@@ -150,7 +150,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 All video and image nodes thus share ONE sizing characteristic (240 min width, 368 min height; height is the lever so portrait stays proportioned). Overlay nodes feed raw dims via `<VideoResultOverlay onRawDimensions={…}>`; inline `<video>`/`<CachedImage>` via `onLoadedMetadata`/`onLoadDimensions`. The invariant is guarded by `frontend/src/components/nodes/__tests__/media-node-sizing.test.ts` — a new media node that hand-picks sizing fails that test.
 
-***REDACTED-OSS-SCRUB***
+Full guide: the **New Node Registration** table above, plus `docs/contributing.md`.
 
 ### Parameter Picker Node Registration (CRITICAL)
 
@@ -188,7 +188,7 @@ There are FIVE registries a parameter picker must appear in. **Missing any one o
 - RLS on every table.
 - **NEVER create RLS policies on `profiles` that query `profiles`** — infinite recursion. Use the `is_admin()` SECURITY DEFINER function instead.
 - All credit operations must be atomic (RPC functions with `FOR UPDATE` locks).
-***REDACTED-OSS-SCRUB***
+- Full schema reference: the SQL migrations in `supabase/migrations/`.
 
 ---
 
@@ -198,10 +198,10 @@ Most subsystem rules live in subdirectory CLAUDE.md files — Claude Code auto-l
 
 | Area | Rule |
 |------|------|
-***REDACTED-OSS-SCRUB***
+| Key directories | `frontend/src/components/editor/config-panels/` (per-node config UIs; `model-options.ts` is the registry), `frontend/src/components/editor/workflow-editor/` (frontend DAG), `frontend/src/types/nodes.ts` (all node data types), `backend/src/services/workflow-engine/` (backend DAG), `backend/src/providers/` (KIE + Replicate). Curated design notes in `docs/design/`; public docs in `docs/`. |
 | Deployment | Railway + single multi-stage Dockerfile at repo root. `dev` → `next.nodaro.ai` (staging), `main` → `app.nodaro.ai` (prod). New `VITE_*` env vars MUST get both `ARG` and `ENV` lines in the Dockerfile — Vite inlines them at build time. |
 | `@nodaro/shared` + `@nodaro/client` + `@nodaro/cli` | Public npm packages (`packages/`, Apache 2.0, built via `tsup`, released via changesets). `@nodaro/shared`: types + model registries + prompt helpers (re-used by backend/frontend/SDK). `@nodaro/client`: typed REST client (`createClient` + one resource per feature area — workflows, jobs, executions, characters, …). `@nodaro/cli` (`packages/cli/`): commander wrapper over `@nodaro/client` (multi-profile auth, JSON, `--watch`); ships standalone binaries via `bun build --compile`, release workflow `cli-release.yml` on `cli-v*` tags. Backend imports `@nodaro/shared` via workspace symlink; frontend uses npm. |
-***REDACTED-OSS-SCRUB***
+| Documentation | `docs/` is published via GitHub Pages (public), including curated design notes under `docs/design/`. Internal planning/design docs live in a separate private repo. Licensing: root LICENSE = Sustainable Use License, `ee/` = Nodaro Enterprise License, `packages/{shared,client,cli}` = Apache-2.0 (see `LICENSE.md`). Public docs cover: deployment, architecture, OAuth flow, API integration, SDK quickstart + reference, contributing. The `.gitignore` rule for `ARCHITECTURE.md` is anchored to repo root (`/ARCHITECTURE.md`) so it does NOT silently match `docs/architecture.md` on case-insensitive filesystems. |
 
 **Subsystem rules** — see the relevant subdirectory CLAUDE.md (auto-loaded by Claude Code when you work in that directory):
 - **`backend/CLAUDE.md`** — credits/billing, LLM routing, Workflow orchestrator + sub-workflows, tier parallelism, auth/OAuth, dynamic CORS, developer apps, MCP server, webhook triggers, provider gotchas (TTS, Loop Trim, combine-videos, LoRA training), `packages/shared/` build invariants.

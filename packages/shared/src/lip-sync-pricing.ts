@@ -52,13 +52,13 @@ export function getLipSyncMaxAudioSeconds(provider: string): number {
 const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
   "kling-avatar",
   "kling-avatar-pro",
-  ***REDACTED-OSS-SCRUB***
+  // OmniHuman 1.5 — /sec, bucketed by audio length (60s cap).
   "omnihuman-1-5",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
-  ***REDACTED-OSS-SCRUB***
+  // Sync Lipsync v3 (fal.ai) — billed per output second (/min).
   "sync-lipsync-v3",
-  ***REDACTED-OSS-SCRUB***
+  // Volcengine (KIE) — video-to-video dubbing, billed per output second.
   "volcengine-lipsync",
 ])
 

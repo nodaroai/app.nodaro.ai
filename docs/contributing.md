@@ -31,9 +31,11 @@ The repo is a single npm workspaces monorepo. Top-level folders:
 | `packages/remotion/` | Remotion video compositions (slideshow, scene-graph, motion-graphics, etc.). |
 | `supabase/migrations/` | Database schema as forward-only SQL migrations. |
 | `docs/` | Public docs — this folder is published to GitHub Pages. |
-***REDACTED-OSS-SCRUB***
+| `docs/design/` | Curated design notes (RFD-style) — the *why* behind key features. |
 | `scripts/` | Repo-level utilities (architecture graph generator, audits, etc.). |
 | `.changeset/` | Pending version-bump intents for `@nodaro/shared` + `@nodaro/client`. |
+
+> Some source-code comments reference design docs by a `specs/…` path. Those design docs live in Nodaro's private planning repo; a curated public subset is published under `docs/design/`.
 
 The root `CLAUDE.md` is the canonical "house rules" file — coding
 standards, the Provider Enum Sync checklist, and the New Node
@@ -234,8 +236,8 @@ Two unintuitive details that bite contributors:
   your node renders fine but the Run button can't fire it.
 
 There's a more detailed walkthrough in
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+the **New Node Registration** checklist in the root `CLAUDE.md`. The
+19-step checklist in `CLAUDE.md` is the version that
 actually stays in sync.
 
 ## 7. Adding a new AI provider

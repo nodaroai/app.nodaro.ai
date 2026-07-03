@@ -1,11 +1,11 @@
 // Beeble SwitchX pricing. Anchored to Beeble's published rate 2026-06-26
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+// (developer.beeble.ai/pricing): metered per 30-frame BLOCK — 720p f
+// 1080p f — with no per-job meter returned, so we reserve a block tier
 // and commit it verbatim. Tiers ARE 30-frame multiples, so a clip snaps to the
 // exact number of blocks Beeble bills (ceil(frames/30)); there is no tier
-***REDACTED-OSS-SCRUB***
+// over-charge. Alpha mode does not affect price. 1 credit
 //
-***REDACTED-OSS-SCRUB***
+// AT-COST: block credits = blockUSD / (5 @720p, 15 @1080p), i.e. zero
 // [comment removed]
 // cost_markup_percent (applied at reserve) rather than baking it in here.
 export const SWITCHX_FRAME_TIERS = [30, 60, 90, 120, 150, 180, 210, 240] as const
@@ -18,7 +18,7 @@ export function pickSwitchXFrameTier(frames?: number): number {
   return 240
 }
 
-***REDACTED-OSS-SCRUB***
+// At-cost credits per 30-frame block: 720p cr, 1080p cr.
 const SWITCHX_BLOCK_CREDITS: Record<720 | 1080, number> = { 720: 5, 1080: 15 }
 
 export function switchXHoldCredits(frames: number | undefined, res: 720 | 1080): number {

@@ -87,7 +87,7 @@ const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
 
 /**
  * Look up the reserved usage_log id for a job. There is no `usage_log_id`
- ***REDACTED-OSS-SCRUB***
+ * column on `jobs` today (see D7 in `docs/design/external-call-reconciliation.md`),
  * so we query `usage_logs` directly. Returns `null` when no reserved row exists
  * — `commitJobCredits` then no-ops gracefully.
  */

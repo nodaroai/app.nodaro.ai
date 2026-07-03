@@ -90,7 +90,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const scope = args.scope ?? "mine"
       // display_cost (USD) intentionally excluded — MCP surfaces only the
       // credits abstraction; raw $ pricing is internal/admin and distracts
-      ***REDACTED-OSS-SCRUB***
+      // the agent's response (Claude was rendering "" in chat for
       // every job before this was stripped).
       const baseSelect =
         "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits"

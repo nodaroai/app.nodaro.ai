@@ -78,7 +78,7 @@ export async function falLipSync(
 
   // Cost falls back to the 300s ceiling when no duration is supplied so the
   // written provider_cost reflects the worst case (mirrors buildLipSyncCreditId),
-  // not $0.
+  // not
   const seconds =
     params.audioDurationSec && params.audioDurationSec > 0 ? params.audioDurationSec : 300
   const cost = falCostUsd(provider, { seconds })

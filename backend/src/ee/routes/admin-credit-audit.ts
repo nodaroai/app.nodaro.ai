@@ -30,7 +30,7 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
   "wan-turbo": "wan-turbo-t2v",
 }
 
-***REDACTED-OSS-SCRUB***
+// 1 Nodaro credit = ( vs )
 const KIE_CREDITS_PER_NODARO = 4
 
 // Build reverse map: KIE model ID → { ourKey, kieCredits, category }

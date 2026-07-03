@@ -38,11 +38,11 @@ for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
 
 // ── AI Avatar (HeyGen) duration-bucketed reserve holds ──
 // 60 ids: 2 engines × 3 resolutions × 10 buckets (5/10/15/30/60/120/240/360/600/900s).
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+// The stored value is the at-cost 0%-base credit amount — NO *1.5 safety factor
+// getModelCreditCostFromDB applies the admin markup (configurable) to this stored value
 // at RESERVE time, and the reserve buckets UP (true clip ≤ bucket ceiling), so
 // reserved ≥ metered-actual already (they're EQUAL at the bucket ceiling, where
-***REDACTED-OSS-SCRUB***
+// both derive from the same base). The old *1.5 double-buffered
 // on top of the runtime markup — the user-reported over-reservation. The actual
 // charge is recomputed at job completion by commitJobCredits/computeActualCredits
 // from the provider's real USD cost; commit_credits refunds any surplus.
@@ -60,7 +60,7 @@ for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]
 // ── Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) exact-duration holds ──
 // 24 ids: 2 resolutions × 12 durations (4..15s). Duration is a USER PARAMETER
 // (known at submit), so the reserve id encodes the EXACT requested duration —
-***REDACTED-OSS-SCRUB***
+// no bucketing. The stored value is the at-cost 0%-base credit amount. NO *1.5
 // the admin markup is applied to this stored value at RESERVE time, so the
 // reserved tier equals the metered actual (same exact duration, same base).
 // A missing id causes a hard 503 `price_not_configured` at runtime.
@@ -160,46 +160,46 @@ export class PriceNotConfiguredError extends Error {
 // ============================================================
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = {
-  ***REDACTED-OSS-SCRUB***
+  // Credits = ceil(kieCredits / 4) at 0% markup.
   // Markup % is configurable in admin settings (app_settings.cost_markup_percent).
   // Base entries = default/cheapest setting. Composite entries = specific setting.
   //
   // ── Image Generation ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "nano-banana": 1,
+  "nano-banana-2": 4,             // (1K default)
+  "nano-banana-2:2K": 5,
+  "nano-banana-2:4K": 5,
+  "nano-banana-pro": 5,          // (1K/2K default)
+  "nano-banana-pro:4K": 6,
+  "flux": 2,                     // (1K default)
+  "flux:2K": 2,
+  "grok": 1,
+  "gpt-image": 4,                // (medium default)
+  "gpt-image:high": 6,
+  "gpt-image-2": 1,              // (1K default; estimated, recalibrate from anomalies)
+  "gpt-image-2:2K": 3,           // (estimated)
+  "gpt-image-2:4K": 6,           // (estimated)
   "reference-sheet:assembly": 4, // Flat sheet-assembly fee; per-panel gen priced separately (bare provider key)
   "reference-sheet:assembly-motion": 6, // Flat FFmpeg-assembly fee for motion sheets; motion clips priced separately by the motion routes
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "imagen4": 2,
+  "imagen4-fast": 1,
+  "imagen4-ultra": 3,
+  "qwen": 1,
+  "seedream": 2,
+  "seedream:high": 4,            // estimated (4K)
+  "seedream-5-lite": 2,
   "seedream-5-lite:high": 5,     // estimated (4K)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "flux-flex": 4,                // (1K default)
+  "flux-flex:2K": 6,
+  "z-image": 1,
+  "flux-kontext": 2,
+  "flux-kontext-max": 4,
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   // Base rows (representative default-resolution 0-ref) — for admin display and
   // single-node runs where no :MP:ref composite is available yet.
   // Per-MP×ref composites are spread below via FLUX2_STATIC.
   "flux-2-klein": 1,             // default 1MP 0ref — BFL Flux 2 9B Klein via Replicate
-  ***REDACTED-OSS-SCRUB***
+  "kontext-multi": 3,            // multi-image-kontext-pro via Replicate
   "flux-2-pro": 3,               // default 2MP 0ref — BFL Flux 2 Pro via Replicate, safety_tolerance=5
   "flux-2-max": 7,               // default 2MP 0ref — BFL Flux 2 Max via Replicate, safety_tolerance=5
   // Full per-MP×ref grid for Flux 2 family (108 entries, see flux2BaseCredits formula).
@@ -207,278 +207,278 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ...FLUX2_STATIC,
   // AI Avatar (HeyGen) — 42 duration-bucketed reserve holds (2 engines × 3 resolutions × 7 buckets (30/60/120/240/360/600/900s)).
   // Format: `heygen-<engine>:<resolution>:<bucketSec>s`  e.g. `heygen-avatar-iv:720p:60s`.
-  ***REDACTED-OSS-SCRUB***
+  // Hold; actual charge metered at commit, surplus refunded.
   ...AI_AVATAR_STATIC,
   // Cinematic Avatar (HeyGen) — 24 exact-duration reserve holds (2 resolutions × 12 durations 4..15s).
   // Format: `cinematic-avatar:<resolution>:<durationSec>s`  e.g. `cinematic-avatar:720p:10s`.
-  ***REDACTED-OSS-SCRUB***
+  // Hold; actual charge metered at commit, surplus refunded.
   // Rate is an UNCONFIRMED estimate — confirm via a paid run per audit-credits ship-gate.
   ...CINEMATIC_STATIC,
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "flux-lora-character": 2,      // flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
+  "character-lora-training": 150, // Replicate ostris/flux-dev-lora-trainer (1000 steps, one-shot). Refunded by webhook on failure/cancel.
   // ── Image Editing ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "recraft-upscale": 1,
+  "recraft-remove-bg": 1,
+  "nano-banana-edit": 2,
+  "topaz-image-upscale": 3,      // (2K default)
+  "topaz-image-upscale:4K": 5,
+  "topaz-image-upscale:8K": 10,
+  "grok-upscale": 3,
   // ── Image-to-Image ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "flux-i2i": 4,                 // (1K default)
+  "flux-i2i:2K": 6,
+  "flux-pro-i2i": 2,             // (1K default)
+  "flux-pro-i2i:2K": 2,
+  "grok-i2i": 1,
+  "gpt-image-i2i": 4,            // (medium default)
+  "gpt-image-i2i:high": 6,
+  "gpt-image-2-i2i": 1,          // (1K default; estimated)
+  "gpt-image-2-i2i:2K": 3,       // (estimated)
+  "gpt-image-2-i2i:4K": 6,       // (estimated)
+  "ideogram-edit": 5,            // (BALANCED default)
+  "ideogram-edit:TURBO": 3,
+  "ideogram-edit:QUALITY": 6,
+  "ideogram-remix": 5,           // (BALANCED default)
+  "ideogram-remix:TURBO": 3,
+  "ideogram-remix:QUALITY": 6,
+  "ideogram-reframe": 2,         // (V3 Reframe BALANCED)
+  "ideogram-reframe:TURBO": 1,
+  "ideogram-reframe:QUALITY": 3,
+  "ideogram-v3": 2,              // (BALANCED default)
+  "ideogram-v3:TURBO": 1,
+  "ideogram-v3:QUALITY": 3,
+  "qwen-i2i": 1,
+  "qwen-edit": 2,
+  "seedream-edit": 2,
+  "seedream-edit:high": 4,       // estimated (4K)
+  "seedream-5-lite-i2i": 2,
   "seedream-5-lite-i2i:high": 5, // estimated (4K)
   // ── Video Generation (I2V / T2V) ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "minimax": 15,                 // (6s, 1080p)
+  "veo3": 63,                    // (VEO 3.1 Quality)
+  "veo3.1": 15,                  // (VEO 3.1 Fast @ 720p)
+  "veo3.1:1080p": 17,            // (VEO 3.1 Fast @ 1080p)
+  "veo3_lite": 8,               // (VEO 3.1 Lite @ 720p)
+  "veo3_lite:1080p": 9,         // (VEO 3.1 Lite @ 1080p)
   // Direct-4K generation (base 1080p → chained get-4k-video). Base cost, NO markup
   // (admin panel applies markup). KIE: ceil(KIE_cr/4). docs.kie.ai VEO 3.1 4K.
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "veo3:4k": 93,                 // (VEO 3.1 Quality @ 4K)
+  "veo3.1:4k": 45,               // (VEO 3.1 Fast @ 4K)
+  "veo3_lite:4k": 38,           // (VEO 3.1 Lite @ 4K)
+  "kling": 28,                   // (10s no-audio fallback)
   // Kling 2.6 duration-tiered pricing (5s/10s, audio doubles cost)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "kling:5s": 14,                // (5s no audio)
+  "kling:10s": 28,               // (10s no audio)
+  "kling:5s:audio": 28,          // (5s with audio)
+  "kling:10s:audio": 55,         // (10s with audio)
+  "kling-turbo": 11,             // (5s fallback)
   // Kling Turbo duration-tiered pricing
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "kling-turbo:5s": 11,
+  "kling-turbo:10s": 21,
+  "kling-3.0": 50,               // (5s, audio, 1080P — 40 cr/sec) — fallback only
   // Kling 3.0 duration-tiered pricing (1080P, per-second: 27 no audio, 40 with audio)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "kling-3.0:5s": 34,            // (1080P, no audio, 5s)
+  "kling-3.0:10s": 68,           // (1080P, no audio, 10s)
+  "kling-3.0:15s": 102,          // (1080P, no audio, 15s)
+  "kling-3.0:5s:audio": 50,      // (1080P, audio, 5s)
+  "kling-3.0:10s:audio": 100,    // (1080P, audio, 10s)
+  "kling-3.0:15s:audio": 150,    // (1080P, audio, 15s)
+  "grok-i2v": 5,                 // (6s fallback)
   // Grok I2V duration-tiered pricing (shared with grok T2V)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "grok-i2v:6s": 5,
+  "grok-i2v:10s": 8,
+  "grok-i2v:15s": 10,
   // ── Grok Imagine Video 1.5 (KIE) — per-second billing, 480p/720p, image-to-video. ──
   // KIE 14.5 cr/s @480p, 25 cr/s @720p, +2 cr/image (always 1 image → +2 in every tier).
   // Nodaro = ceil(KIE_total / 4) — priced at cost, like Seedance-2. Base = 8s/480p.
   "grok-imagine-video-1.5": 30,
   // 480p (KIE 14.5 cr/s + 2)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "grok-imagine-video-1.5:1s:480p": 5,
+  "grok-imagine-video-1.5:2s:480p": 8,
+  "grok-imagine-video-1.5:3s:480p": 12,
+  "grok-imagine-video-1.5:4s:480p": 15,
+  "grok-imagine-video-1.5:5s:480p": 19,
+  "grok-imagine-video-1.5:6s:480p": 23,
+  "grok-imagine-video-1.5:7s:480p": 26,
+  "grok-imagine-video-1.5:8s:480p": 30,
+  "grok-imagine-video-1.5:9s:480p": 34,
+  "grok-imagine-video-1.5:10s:480p": 37,
+  "grok-imagine-video-1.5:11s:480p": 41,
+  "grok-imagine-video-1.5:12s:480p": 44,
+  "grok-imagine-video-1.5:13s:480p": 48,
+  "grok-imagine-video-1.5:14s:480p": 52,
+  "grok-imagine-video-1.5:15s:480p": 55,
   // 720p (KIE 25 cr/s + 2)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "grok-imagine-video-1.5:1s:720p": 7,
+  "grok-imagine-video-1.5:2s:720p": 13,
+  "grok-imagine-video-1.5:3s:720p": 20,
+  "grok-imagine-video-1.5:4s:720p": 26,
+  "grok-imagine-video-1.5:5s:720p": 32,
+  "grok-imagine-video-1.5:6s:720p": 38,
+  "grok-imagine-video-1.5:7s:720p": 45,
+  "grok-imagine-video-1.5:8s:720p": 51,
+  "grok-imagine-video-1.5:9s:720p": 57,
+  "grok-imagine-video-1.5:10s:720p": 63,
+  "grok-imagine-video-1.5:11s:720p": 70,
+  "grok-imagine-video-1.5:12s:720p": 76,
+  "grok-imagine-video-1.5:13s:720p": 82,
+  "grok-imagine-video-1.5:14s:720p": 88,
+  "grok-imagine-video-1.5:15s:720p": 95,
+  "seedance": 7,                 // (8s default; actual 3.5 KIE/sec)
+  // Seedance duration-tiered pricing (/sec)
+  "seedance:4s": 4,
+  "seedance:8s": 7,
+  "seedance:12s": 15,            // (actual from audit)
   // ── Seedance 2.0 — per-second billing, resolution × video-ref dimensions ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2": 38,
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // 480p no video ref (/s)
+  "seedance-2:4s:480p": 19,
+  "seedance-2:8s:480p": 38,
+  "seedance-2:12s:480p": 57,
+  "seedance-2:15s:480p": 72,
+  // 480p with video ref (/s)
+  "seedance-2:4s:480p-ref": 12,
+  "seedance-2:8s:480p-ref": 23,
+  "seedance-2:12s:480p-ref": 35,
+  "seedance-2:15s:480p-ref": 44,
+  // 720p no video ref (/s)
+  "seedance-2:4s:720p": 41,
+  "seedance-2:8s:720p": 82,
+  "seedance-2:12s:720p": 123,
+  "seedance-2:15s:720p": 154,
+  // 720p with video ref (/s)
+  "seedance-2:4s:720p-ref": 25,
+  "seedance-2:8s:720p-ref": 50,
+  "seedance-2:12s:720p-ref": 75,
+  "seedance-2:15s:720p-ref": 94,
+  // 1080p — authoritative KIE rate is /s (no video) / 62 (with video)
   // ~2.49× the 720p rate (the original 1.5× estimate under-billed ~40%; KIE pricing
   // page verified 2026-06-25).
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "seedance-2:4s:1080p": 102,
+  "seedance-2:8s:1080p": 204,
+  "seedance-2:12s:1080p": 306,
+  "seedance-2:15s:1080p": 383,   // → ceil
+  // 1080p with video ref (/s)
+  "seedance-2:4s:1080p-ref": 62,
+  "seedance-2:8s:1080p-ref": 124,
+  "seedance-2:12s:1080p-ref": 186,
+  "seedance-2:15s:1080p-ref": 233, // → ceil
+  // 4K (/s no video / 128 with video) — full seedance-2 only.
+  "seedance-2:4s:4k": 208,
+  "seedance-2:8s:4k": 416,
+  "seedance-2:12s:4k": 624,
+  "seedance-2:15s:4k": 780,
+  "seedance-2:4s:4k-ref": 128,
+  "seedance-2:8s:4k-ref": 256,
+  "seedance-2:12s:4k-ref": 384,
+  "seedance-2:15s:4k-ref": 480,
   // ── Seedance 2.0 Fast — same matrix, lower rates ──
   "seedance-2-fast": 31,
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // 480p no video ref (/s)
+  "seedance-2-fast:4s:480p": 16,
+  "seedance-2-fast:8s:480p": 31,
+  "seedance-2-fast:12s:480p": 47,
+  "seedance-2-fast:15s:480p": 59,
+  // 480p with video ref (/s)
+  "seedance-2-fast:4s:480p-ref": 9,
+  "seedance-2-fast:8s:480p-ref": 18,
+  "seedance-2-fast:12s:480p-ref": 27,
+  "seedance-2-fast:15s:480p-ref": 34,
+  // 720p no video ref (/s)
+  "seedance-2-fast:4s:720p": 33,
+  "seedance-2-fast:8s:720p": 66,
+  "seedance-2-fast:12s:720p": 99,
+  "seedance-2-fast:15s:720p": 124,
+  // 720p with video ref (/s)
+  "seedance-2-fast:4s:720p-ref": 20,
+  "seedance-2-fast:8s:720p-ref": 40,
+  "seedance-2-fast:12s:720p-ref": 60,
+  "seedance-2-fast:15s:720p-ref": 75,
   // NOTE: seedance-2-fast has NO 1080p tier — KIE sells it at 480p/720p only
   // (verified KIE pricing page 2026-06-25, 4 SKUs). The full seedance-2 has 1080p/4K.
   // ── Seedance 2.0 Mini — budget tier, 480p/720p only, per-second × video-ref ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2-mini": 19,
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // 480p no video ref (/s)
+  "seedance-2-mini:4s:480p": 10,
+  "seedance-2-mini:8s:480p": 19,
+  "seedance-2-mini:12s:480p": 29,
+  "seedance-2-mini:15s:480p": 36,
+  // 480p with video ref (/s)
+  "seedance-2-mini:4s:480p-ref": 6,
+  "seedance-2-mini:8s:480p-ref": 12,
+  "seedance-2-mini:12s:480p-ref": 18,
+  "seedance-2-mini:15s:480p-ref": 23,
+  // 720p no video ref (/s)
+  "seedance-2-mini:4s:720p": 21,
+  "seedance-2-mini:8s:720p": 41,
+  "seedance-2-mini:12s:720p": 62,
+  "seedance-2-mini:15s:720p": 77,
+  // 720p with video ref (/s)
+  "seedance-2-mini:4s:720p-ref": 13,
+  "seedance-2-mini:8s:720p-ref": 25,
+  "seedance-2-mini:12s:720p-ref": 38,
+  "seedance-2-mini:15s:720p-ref": 47,
+  // ── Gemini Omni Video (KIE) —; Nodaro. Lowercase 4k. ──
   "gemini-omni-video": 23,         // base = 720p/1080p 4s
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "gemini-omni-video:4": 23,
+  "gemini-omni-video:6": 30,
+  "gemini-omni-video:8": 38,
+  "gemini-omni-video:10": 45,
+  "gemini-omni-video:4k:4": 53,
+  "gemini-omni-video:4k:6": 60,
+  "gemini-omni-video:4k:8": 68,
+  "gemini-omni-video:4k:10": 75,
+  "gemini-omni-video:vref": 60,    // (video-edit, flat)
+  "gemini-omni-video:4k:vref": 90,// (video-edit 4K, flat)
+  "wan-i2v": 18,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "wan-i2v:5s": 18,
+  "wan-i2v:10s": 35,
+  "wan-i2v:15s": 53,
+  "wan-turbo": 10,               // (5s, 480p I2V default)
+  "hailuo-2.3-pro": 20,          // (10s fallback, actual from audit)
   // Hailuo 2.3 Pro duration-tiered pricing (768p default)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "hailuo-2.3-pro:6s": 13,       // (estimated from audit)
+  "hailuo-2.3-pro:10s": 20,      // (actual from audit)
+  "hailuo-2.3": 8,              // (6s fallback)
   // Hailuo 2.3 duration-tiered pricing
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "hailuo-2.3:6s": 8,
+  "hailuo-2.3:10s": 13,
+  "hailuo-standard": 8,         // (6s fallback)
   // Hailuo Standard duration-tiered pricing
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "hailuo-standard:6s": 8,
+  "hailuo-standard:10s": 13,
+  "bytedance-lite": 6,            // (actual from audit)
+  "bytedance-pro": 18,            // (actual from audit)
+  "bytedance-pro-fast": 9,       // (actual from audit)
+  "kling-master": 40,            // (5s fallback)
   // Kling Master duration-tiered pricing
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "kling-master:5s": 40,
+  "kling-master:10s": 80,
+  "kling-3-omni": 25,            // Replicate, est (5s 720p fallback)
   // Kling 3 Omni duration-tiered pricing (Replicate, estimated — actual cost tracked via predict_time)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "kling-3-omni:5s": 25,         // est
+  "kling-3-omni:10s": 50,        // est
+  "kling-3-omni:15s": 75,        // est
   // ── Lightricks LTX 2.3 (Replicate) — official pricing from replicate.com/lightricks/ltx-2.3-{pro,fast} ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // Per-second of output video: Pro (1080p/2k/4k), Fast
+  // Formula: per second × duration → cr/sec: Pro Fast
+  // Pro: text/image/audio→video, 1080p/2k/4k, durations s. Base = 1080p:6s.
   "ltx-2.3-pro": 24,             // default = 1080p:6s
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-pro:1080p:6s": 24,    // → ceil = 30
   "ltx-2.3-pro:1080p:8s": 32,
   "ltx-2.3-pro:1080p:10s": 40,
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-pro:2k:6s": 48,
   "ltx-2.3-pro:2k:8s": 64,
   "ltx-2.3-pro:2k:10s": 80,
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-pro:4k:6s": 96,
   "ltx-2.3-pro:4k:8s": 128,
   "ltx-2.3-pro:4k:10s": 160,
   // Fast: text/image→video, 1080p/2k/4k, durations 6–20s (1080p only past 10s). Base = 1080p:6s.
   "ltx-2.3-fast": 18,            // default = 1080p:6s
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-fast:1080p:6s": 18,   // ceil = ceil(22.5)
   "ltx-2.3-fast:1080p:8s": 24,
   "ltx-2.3-fast:1080p:10s": 30,
   "ltx-2.3-fast:1080p:12s": 36,
@@ -486,10 +486,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ltx-2.3-fast:1080p:16s": 48,
   "ltx-2.3-fast:1080p:18s": 54,
   "ltx-2.3-fast:1080p:20s": 60,
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-fast:2k:6s": 36,      // ceil = 45
   "ltx-2.3-fast:2k:8s": 48,
   "ltx-2.3-fast:2k:10s": 60,
-  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-fast:4k:6s": 72,      // = 90
   "ltx-2.3-fast:4k:8s": 96,
   "ltx-2.3-fast:4k:10s": 120,
   // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
@@ -511,29 +511,29 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-extend:12s:1080p": 116,
   "seedance-2-extend:15s:1080p": 144,
   "ltx-2.3-pro-retake:per-second": 4,
-  ***REDACTED-OSS-SCRUB***
+  "runway-kie": 3,               // (5s, 720p)
   // ── Video Extend ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "veo-extend": 19,              // (VEO 3.1 Fast default)
+  "veo-extend:quality": 79,      // (VEO 3.1 Quality)
+  "runway-extend": 32,           // (Runway extend)
   // ── VEO Upscale ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "veo-1080p": 2,                // (VEO 3.1 1080p)
+  "veo-4k": 38,                  // (VEO 3.1 4K)
   // ── Video-to-Video / Motion ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "wan": 18,                     // (V2V 5s 720p)
+  "wan-flash": 13,               // est (Flash V2V, faster)
+  "wan-videoedit": 32,
+  "wan-t2v": 27,                 // (T2V 5s 1080p default)
+  "wan-turbo-t2v": 20,           // (T2V 5s 720p default)
   // Wan 2.7 T2I — 1K/2K/4K (estimated, adjust after audit-credits post-ship)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "wan-2.7": 2,        // (1K default)
+  "wan-2.7:2K": 4,     // ( est.)
+  "wan-2.7:4K": 8,    // ( est.)
 
   // Wan 2.7 Pro T2I — 1K/2K/4K (estimated)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "wan-2.7-pro": 3,        // (1K)
+  "wan-2.7-pro:2K": 6,     // ( est.)
+  "wan-2.7-pro:4K": 12,    // ( est.)
 
   // ⚠️ UNDERCHARGE (deferred — needs owner cost data): the wan-2.7-i2v/t2v and
   // happyhorse/-i2v/-ref2v entries below are FLAT prices for "5s 720p", but the
@@ -549,52 +549,52 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // wan-i2v / seedance-2) once rates are confirmed, then run `audit-credits`.
 
   // Wan 2.7 I2V (estimated)
-  ***REDACTED-OSS-SCRUB***
+  "wan-2.7-i2v": 19,    // (5s 720p)
 
   // Wan 2.7 T2V (estimated)
-  ***REDACTED-OSS-SCRUB***
+  "wan-2.7-t2v": 19,    // (5s 720p)
 
   // HappyHorse (estimated)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "happyhorse": 13,        // (5s 720p)
+  "happyhorse-i2v": 13,    // (5s 720p)
+  "happyhorse-ref2v": 15,  // (5s 720p)
+  "happyhorse-edit": 20,
+  "luma-modify": 32,             // (not in KIE pricing data)
+  "runway-aleph": 35,             // (V2V conversion)
+  "topaz-video": 19,             // (12 cr/sec * ~5s)
   // ── Motion Transfer (per-second pricing, duration-tiered) ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // Kling 3.0 720p: /sec
+  "kling-3.0-motion": 30,        // 10s default
+  "kling-3.0-motion:5s": 15,
+  "kling-3.0-motion:10s": 30,
+  "kling-3.0-motion:15s": 45,
+  "kling-3.0-motion:30s": 90,
+  // Kling 3.0 1080p: /sec
+  "kling-3.0-motion:1080p": 50,  // 10s default
+  "kling-3.0-motion:1080p:5s": 25,
+  "kling-3.0-motion:1080p:10s": 50,
+  "kling-3.0-motion:1080p:15s": 75,
+  "kling-3.0-motion:1080p:30s": 150,
+  // Kling 2.6 720p: /sec
+  "motion-transfer": 15,         // 10s default:, (Kling 2.6 720p)
   "kling-motion": 15,            // alias
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "motion-transfer:5s": 8,
+  "motion-transfer:10s": 15,
+  "motion-transfer:15s": 23,
+  "motion-transfer:30s": 45,
+  // Kling 2.6 1080p: /sec
+  "motion-transfer:1080p": 23,   // 10s default
+  "motion-transfer:1080p:5s": 12,
+  "motion-transfer:1080p:10s": 23,
+  "motion-transfer:1080p:15s": 34,
+  "motion-transfer:1080p:30s": 68,
   // Wan Animate (Move + Replace) — resolution-tiered pricing
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "wan-animate-move": 26,         // (480p default, actual from audit)
+  "wan-animate-move:580p": 33,    // (interpolated from audit)
+  "wan-animate-move:720p": 41,    // (actual from audit)
+  "wan-animate-replace": 26,      // (480p default, same as move)
+  "wan-animate-replace:580p": 33, // (interpolated)
+  "wan-animate-replace:720p": 41, // (same as move)
   // ── Lip Sync ──
   // Kling AI Avatar 2.0 (May 2026) supports up to 5min audio, billed per-second
   // by KIE at 8 cr/sec (Standard, 720p) and 16 cr/sec (Pro, 1080p).
@@ -613,49 +613,49 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro:60s": 240,    // 60s × 4 cr/sec
   "kling-avatar-pro:120s": 480,   // 120s × 4 cr/sec
   "kling-avatar-pro:300s": 1200,  // 300s × 4 cr/sec — 5-min ceiling
-  ***REDACTED-OSS-SCRUB***
+  // OmniHuman 1.5 — /sec → ceil(27×s/4). Bare = worst-case 60s
   // (reserved on unknown-duration workflow runs; reconciled down by the worker).
   "omnihuman-1-5": 405,
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "omnihuman-1-5:15s": 102,
+  "omnihuman-1-5:30s": 203,
+  "omnihuman-1-5:60s": 405,
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro (Replicate, video-input dubbing).
   // Billed per second of output; bucketed like kling-avatar via buildLipSyncCreditId.
-  ***REDACTED-OSS-SCRUB***
+  // At-cost (0% markup): credits. lip-sync
   // sets no meteredCost, so the worker commits the reserved bucket as the charge.
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "heygen-lipsync-precision": 1001,      // bare = 300s ceiling
+  "heygen-lipsync-precision:15s": 51,    // 15s ×
+  "heygen-lipsync-precision:30s": 101,   // 30s ×
+  "heygen-lipsync-precision:60s": 201,   // 60s ×
+  "heygen-lipsync-precision:120s": 401,  // 120s ×
+  "heygen-lipsync-precision:300s": 1001, // 300s × — 5-min ceiling
+  "lipsync-2-pro": 1249,                 // bare = 300s ceiling
+  "lipsync-2-pro:15s": 63,               // 15s ×
+  "lipsync-2-pro:30s": 125,              // 30s ×
+  "lipsync-2-pro:60s": 250,              // 60s ×
+  "lipsync-2-pro:120s": 500,             // 120s ×
+  "lipsync-2-pro:300s": 1249,            // 300s × — 5-min ceiling
+  // Sync Lipsync v3 (fal.ai). /min, billed per output second
   // bucketed via buildLipSyncCreditId. At-cost (0% markup): credits =
-  ***REDACTED-OSS-SCRUB***
+  // . lip-sync sets no meteredCost, so the
   // reserved bucket is committed verbatim as the charge.
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "sync-lipsync-v3": 2000,               // bare = 300s ceiling
+  "sync-lipsync-v3:15s": 100,            // 15s ×
+  "sync-lipsync-v3:30s": 200,            // 30s ×
+  "sync-lipsync-v3:60s": 400,            // 60s ×
+  "sync-lipsync-v3:120s": 800,           // 120s ×
+  "sync-lipsync-v3:300s": 2000,          // 300s × — 5-min ceiling
+  // Volcengine video-to-video lip sync (KIE). (/sec) — identical
   // to kling-avatar — billed per output second, bucketed via buildLipSyncCreditId.
   // At-cost (matches kling-avatar + the per-second lip-sync family): credits =
-  ***REDACTED-OSS-SCRUB***
+  // = 2 cr/sec. lip-sync sets no meteredCost, so
   // the reserved bucket is committed verbatim as the charge.
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "volcengine-lipsync": 600,             // bare = 300s ceiling
+  "volcengine-lipsync:15s": 30,          // 15s ×
+  "volcengine-lipsync:30s": 60,          // 30s ×
+  "volcengine-lipsync:60s": 120,         // 60s ×
+  "volcengine-lipsync:120s": 240,        // 120s ×
+  "volcengine-lipsync:300s": 600,        // 300s × — 5-min ceiling
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
   ***REDACTED-OSS-SCRUB***
@@ -667,46 +667,46 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "replicate-mmaudio:60s":   3,
   "replicate-mmaudio:120s":  5,
   "replicate-mmaudio:300s": 11,
-  ***REDACTED-OSS-SCRUB***
+  "hailuo-avatar": 19,           // estimated (not in KIE pricing data)
   // ── Audio / TTS / Music ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "elevenlabs-v3": 3,             // direct ElevenLabs API
+  "elevenlabs-turbo": 2,         // per 1K chars
+  "elevenlabs-multilingual": 3,  // per 1K chars
   "elevenlabs": 2,               // alias for turbo
-  ***REDACTED-OSS-SCRUB***
+  "elevenlabs-sfx": 1,           // 0.24 cr/sec * ~5s
   // Replicate disabled
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // "tangoflux": 4, // Replicate SFX, estimated
+  "suno": 3,                     // (V4 default) — 0%-base
+  "suno-v5": 3,                  // (V5)
+  "suno-v5_5": 3,                // (V5.5)
+  "suno-generate": 3,            // (V4 default)
+  "suno-cover": 3,
+  "suno-extend": 3,
+  "suno-lyrics": 1,
   "suno-separate": 4,            // matches model_pricing (mig 059); held by re-baseline (unclear)
-  ***REDACTED-OSS-SCRUB***
+  "suno-separate-stem": 13,      // 0%-base
   "audio-separation": 3,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
   "audio-separation:best": 8,    // htdemucs_ft (~4× compute), fixed reserved tier
   "audio-separation:stems": 6,   // htdemucs_6s (6-stem, heavier than base) — conservative estimate, tune via audit-credits
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "suno-music-video": 1,         // matches model_pricing (mig 059)
+  "suno-mashup": 3,
+  "suno-replace-section": 2,
+  "suno-style-boost": 1,
+  "suno-add-instrumental": 3,
+  "suno-add-vocals": 3,
+  "suno-convert-wav": 1,
+  "suno-upload-extend": 3,
   "suno-voice-create": 20,       // One-time persona creation (validate + generate); KIE does not publish pricing — flat conservative default
   // Replicate disabled
   // "musicgen": 7,                 // Replicate Meta MusicGen
   // "lyria": 7,                    // Replicate Google Lyria 2
   // "bark": 7,                     // Replicate Suno Bark
-  ***REDACTED-OSS-SCRUB***
+  "elevenlabs-isolation": 8,     // /sec, variable; ~148s avg = (from audit)
   // Replicate disabled
   // "whisper": 4,                   // Replicate whisper transcription
   // "incredibly-fast-whisper": 4,   // Replicate fast whisper
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "elevenlabs-stt": 3,           // avg (from audit)
+  "elevenlabs-dialogue": 4,     // per 1K chars
   "voice-clone": 5,              // ElevenLabs instant voice clone
   "elevenlabs-voice-changer": 4,  // ElevenLabs speech-to-speech
   "elevenlabs-dubbing": 8,        // ElevenLabs dubbing (async)
@@ -714,19 +714,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
   "infinitalk": 42,              // fallback (720p default)
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "infinitalk:480p": 11,         // (3 cr/sec * ~14s)
+  "infinitalk:720p": 42,         // (12 cr/sec * ~14s)
   // ── Speech-to-Video ──
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "speech-to-video": 3,           // (480p)
+  "speech-to-video:580p": 5,
+  "speech-to-video:720p": 6,
   // ── Processing ──
   "topaz": 1,                     // processing
   "ffmpeg": 1,
   "render-video": 5,            // Remotion compute
   // Replicate disabled
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // "runway": 20, // Replicate, typical
+  // "pika": 20, // Replicate, typical
   // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
   "prompt-helper": 2,            // standard
   "prompt-helper:economy": 1,
@@ -800,7 +800,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "generate-script:premium": 3,
   // ── Video Director (HyperFrames Phase 1) — fixed model: claude-sonnet-4.6 (standard) ──
   // No :economy/:premium composites — the authoring model is not user-selectable.
-  ***REDACTED-OSS-SCRUB***
+  // Math: ~6K input × /M + ~8K output × /M = → × → ceil = 9
   "video-director": 9,
   "generate-image": 2,
   "edit-image": 2,
@@ -825,7 +825,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // defensive lookups when the route's computeCredits hook isn't reached.
   // Real reservation uses `ltx-2.3-pro-retake:per-second × retakeDuration`.
   "video-retake": 100,
-  ***REDACTED-OSS-SCRUB***
+  "roop-face-swap": 13,           // Replicate ×
   "generate-mask": 5,             // adirik/grounded-sam (Replicate) — segmentation mask
   "transcribe": 1,
   // ── Web Scrape (Apify + direct RSS) ──
@@ -855,7 +855,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "image-collage:4K": 4,
   // Assemble Narrated Video — fits N ordered (clip, voice) blocks into one
   // MP4 via ffmpeg (local compute, no external provider cost). BASE credits
-  ***REDACTED-OSS-SCRUB***
+  // (pre-markup) is the 6-block case: 3 + ceil = 4. The route scales
   // with block count via computeCredits (assembleNarratedVideoCredits).
   // See migration 246.
   "assemble-narrated-video": 4,
@@ -928,7 +928,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Phase 2 (granular-pipeline-control): per-call Showrunner refine of a
   // single scene from the ScriptPanel "Regenerate this scene" button.
   // Charged per click — flat 3 credits (1 LLM call, single-SceneSpec emit,
-  ***REDACTED-OSS-SCRUB***
+  // actual cost @ Sonnet 4.6 + buffer).
   "regenerate-scene": 3,
   // ── Scene-Context Helpers (Phase 1B.3, §6.11) ──
   // Per-call LLM micro-actions invoked from a SceneNode's context panel.
@@ -968,8 +968,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 17 ids: bare (= 240f/1080p worst-case) + 8 block tiers (30/60/90/120/150/
   // 180/210/240, SWITCHX_FRAME_TIERS) × 2 resolutions (720/1080p). ANCHORED to
   // Beeble's published rate 2026-06-26 (developer.beeble.ai/pricing): metered per
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // 30-frame block — 720p f, 1080p f — committed verbatim. AT-COST
+  // (no platform margin): block credits = blockUSD / @720p, 15 @1080p.
   // Tiers are 30-frame multiples so each snaps to the exact block Beeble bills
   // (ceil(frames/30)). Mirrors migration 241 rows (credit-pricing-migration-sync).
   "beeble-switchx": 120,

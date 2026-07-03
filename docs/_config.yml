@@ -41,7 +41,6 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - "*.gemspec"
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  # Internal planning docs must never reach the published site.
+  # This guard catches internal planning docs that get misfiled under docs/.
   - superpowers/

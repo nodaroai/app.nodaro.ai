@@ -8,8 +8,8 @@ import {
   type VideoCriticFrameMode,
 } from "@nodaro/shared"
 
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+const PER_TURN_ESTIMATE_CREDITS = 2 // cached Sonnet 4.6 turn /
+const STORYBOARD_COHESION_CREDITS = 5 // Sonnet vision call with N images × markup /
 
 /**
  * Phase 1D.2c-b-ii (G1): per-shot Video Critic budget by frame extraction mode.

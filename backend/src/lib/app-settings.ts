@@ -45,12 +45,12 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    ***REDACTED-OSS-SCRUB***
+    return { ai_provider: "replicate", cost_markup_percent: 0, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 }
   }
 
   const settings: AppSettings = {
     ai_provider: "replicate",
-    ***REDACTED-OSS-SCRUB***
+    cost_markup_percent: 0,
     carousel_video_autoplay: true,
     apps_page_video_autoplay: true,
     featured_app_ids: [],
@@ -86,7 +86,7 @@ async function refreshSettings(): Promise<AppSettings> {
 /**
  * Calculate display cost with markup applied
  * @param providerCost - The raw cost from the API response
- ***REDACTED-OSS-SCRUB***
+ * @param markupPercent - The markup percentage (e.g., 20 for a 20% markup; default 0)
  * @returns The display cost with markup applied
  */
 export function calculateDisplayCost(providerCost: number, markupPercent: number): number {

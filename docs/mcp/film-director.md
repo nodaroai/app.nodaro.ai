@@ -91,7 +91,7 @@ See the general [MCP troubleshooting guide](./troubleshooting.md). Skill-specifi
 
 The skill is a single markdown file (`SKILL.md`) that orchestrates calls to the Nodaro MCP tools listed in the [Tool reference](./tools.md). It uses no private APIs — every action Claude takes is something you can do yourself via MCP, the dashboard, or the [SDK](../sdk-reference.md).
 
-***REDACTED-OSS-SCRUB***
+Architecture details — Pattern A-prime workflow JSON composition, the 4-layer construction model, the 8 quality patterns it implements — live in the design note at [`docs/design/film-director-skill.md`](../design/film-director-skill.md).
 
 ## Related
 

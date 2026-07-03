@@ -19,7 +19,7 @@ import { baz } from "../lib/baz"
 
 **Why CI does not catch it on its own:** `tsconfig.json` uses `"moduleResolution": "bundler"`, which tells tsc to pass extensionless imports through verbatim (it assumes a bundler will resolve them later — but there is no bundler in this pipeline). Vitest uses its own tolerant resolver against the `.ts` source, so unit tests never see the broken compiled JS. The dedicated `backend-boot-smoke` job in `.github/workflows/ci.yml` does catch it by actually starting `node dist/server.js` against stub env vars and probing `/health`.
 
-***REDACTED-OSS-SCRUB***
+**Real-world failure mode:** extensionless imports in `backend/src/services/collect-strategies/` once passed CI but crashed the compiled process at startup — exactly what the `backend-boot-smoke` job now guards against.
 
 ---
 
@@ -136,7 +136,7 @@ Cache invalidated on dev-app create/update/delete. Both Fastify CORS (in `app.ts
 backend/src/providers/
   provider.interface.ts  — All capability interfaces (11 types)
   registry.ts            — Singleton ProviderRegistry
-  ***REDACTED-OSS-SCRUB***
+  config.ts              — Routing rules + credit cost calculation
   router.ts              — 10 typed operation functions
   index.ts               — initProviders() + re-exports
   kie/
@@ -163,41 +163,41 @@ backend/src/providers/
 | text-to-speech | Yes | No | v3 = direct ElevenLabs API; v2 models = KIE |
 
 ### Routing Logic
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+- `ai_provider = "replicate"` -> [replicate] chain
+- `ai_provider = "kie"` + shared capability -> [kie, replicate] chain
+- `ai_provider = "kie"` + KIE-only capability -> [kie] chain
 
 ### KIE.ai Models
 
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+| Category | Model Key | Duration | End Frame |
+|----------|-----------|----------|-----------|
+| Image | nano-banana | - | - |
+| Image | nano-banana-pro | - | - |
+| Image | flux | - | - |
+| Image | grok | - | - |
+| Image | gpt-image | - | - |
+| Video | minimax | 5s fixed | end_image_url |
+| Video | veo3 | 4/6/8s | imageUrls[] |
+| Video | veo3.1 | 4/6/8s | imageUrls[] |
+| Video | kling | 5/10s | No |
+| Video | kling-turbo | 5/10s | tail_image_url |
+| Video | kling-3.0 | 3-15s | Yes |
+| Video | grok-i2v | 6/10s | No |
+| Video | sora2-pro | 5/10s | No |
+| Video | seedance | 4/8/12s | No |
+| Video | wan-i2v | 5/10/15s | No |
+| Video | wan-turbo | 5s | No |
+| Video | hailuo-2.3-pro | 6/10s | No |
+| Video | hailuo-2.3 | 6/10s | No |
+| Video | hailuo-standard | 6/10s | end_image_url |
+| Video | sora2 | 5/10s | No |
+| Video | bytedance-lite | 5/10s | end_image_url |
+| Video | bytedance-pro | 5/10s | No |
+| Video | bytedance-pro-fast | 5/10s | No |
+| Video | kling-master | 5/10s | No |
+| Lip Sync | kling-avatar | - | - |
+| Lip Sync | kling-avatar-pro | - | - |
+| Lip Sync | infinitalk | - | - |
 
 ### Model Identifiers (Case-Sensitive)
 All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3`, `veo3.1` (NOT `veo-3` or `veo_3.1`)
@@ -244,7 +244,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 - Free tier: **150** credits, 50/day cap, veo3/sora2-pro blocked, outputs watermarked
 
 ### Pricing
-***REDACTED-OSS-SCRUB***
+- Base unit: `1 credit = $0.02` (Cloud edition; the credit conversion applies a configurable markup)
 - Tiers: Free ($0/150cr), Basic ($12mo/$10yr/250cr), Standard ($29mo/$24yr/850cr), Pro ($59mo/$49yr/2000cr), Business ($129mo/$109yr/4800cr)
 - Top-ups: $10/150cr, $25/450cr, $50/1000cr, $100/2200cr (never expire)
 
@@ -268,7 +268,7 @@ Composite identifiers use `:` separator: `{provider}:{setting_value}`.
 
 ### Credit Cost Per Node
 
-***REDACTED-OSS-SCRUB***
+Per-model costs are stored in the `model_pricing` DB table and fetched at runtime. Static fallbacks in `credits.ts` (`STATIC_CREDIT_COSTS`) are used when the DB is unavailable.
 
 | Node Type | Credits | Notes |
 |-----------|---------|-------|
@@ -308,7 +308,7 @@ Composite identifiers use `:` separator: `{provider}:{setting_value}`.
 - Special case: image-to-video with audio merge -- watermark applied to FINAL merged output only
 
 ### Cost Markup (Cloud Edition)
-***REDACTED-OSS-SCRUB***
+- `[formula removed]` (Cloud edition; `markupPercent` is configurable)
 - Regular users see `cost` (display_cost). Provider/provider_cost hidden via `sanitizeJobForPublic()`
 - Admin users see full breakdown. Self-hosted: no markup, full data visible.
 
@@ -607,7 +607,7 @@ All three tiers are VEO 3.1 per [docs.kie.ai/veo3-api/generate-veo-3-video](http
 | Image-to-video Loop Trim | `loopTrim?: { enabled, framesToTest, quality }` on `ImageToVideoData` runs a generic PSNR-based smart-loop-cut post-process after any i2v generation. Replaces the VEO-only `autoLoopTrim` (auto-migrated on workflow load via `use-workflow-store.ts:loadWorkflow`). Two quality modes: lossless (keyframe stream-copy, byte-perfect) / precise (libx264 re-encode, frame-precise). Pricing add-on: `ceil(duration/5) + ceil(framesToTest/24)` on top of the i2v base, wired via `computeCredits` hook on `creditGuard` (uses `getModelCreditBaseCost` to avoid double-markup). Failure mode: smart-loop-cut errors don't fail the whole job — the un-trimmed clip is kept and only the addon is refunded via `refundLoopTrimAddon` in `workers/shared.ts`. |
 | Combine-videos resolution | `combineVideos` (`backend/src/providers/video/combine-videos.ts`) probes every downloaded clip up front via `pickTargetResolution` (most common (W,H), ties → largest area) and passes that target into `normalizeVideoForCombine`, which applies `scale=W:H:force_original_aspect_ratio=decrease,pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1` to letterbox every clip to exactly the target. Without this, `xfade`/`acrossfade`/`concat` filters reject mismatched dimensions (`First input link main parameters (size A) do not match the corresponding second input link xfade parameters (size B)`). Even-rounding for yuv420p lives in `normalizeVideoForCombine` only. The dip-to-black/white path reuses the same target for its color clips. |
 | Default project per user | Migration 116 adds `projects.is_default BOOLEAN` + partial unique index `(user_id) WHERE is_default = TRUE` (one default per user). `ensure_default_project()` SECURITY DEFINER RPC returns the caller's default project, lazy-creating "My Recent Flows" on first need — frontend uses `supabase.rpc()` directly; backend helper `lib/default-project.ts::ensureDefaultProject(userId)` reproduces the lookup-or-insert in-handler (the RPC depends on `auth.uid()` which is null under the service-role client). `prevent_default_project_delete()` BEFORE DELETE trigger blocks DELETE on default rows for both Supabase JS and Fastify paths; `DELETE /v1/projects/:id` returns a friendly 409 `default_project` before the trigger fires. New `POST /v1/workflows` (no `:projectId` in path) accepts optional `projectId` — when omitted, lands in the caller's default project; powers the dashboard split button's "+ New Workflow" quick-create. New `GET /v1/workflows` returns the caller's flat workflow list (used by the SDK/CLI/MCP; the frontend hits Supabase JS directly via `useMyWorkflows`). `PATCH /v1/workflows/:id` now accepts `projectId` for cross-project move — ownership-checked, auto-clears `folder_id` (folders are project-scoped). Dashboard `/projects` adds a workspace tab strip (`My Workflows` default | `My Projects`) persisted to `localStorage.nodaro-dashboard-workspace-tab` + URL `?tab=`. Default projects render with a ⭐ icon + `title=Auto-created — your default workspace` tooltip and hide the Delete menu item; the store's `deleteProject` guards client-side too. |
-***REDACTED-OSS-SCRUB***
+| Finalize claim + deterministic R2 keys | `finalizeJobWithMedia` CAS-claims the finalize phase via the `claim_job_finalize` RPC (migration 210, `jobs.finalize_claimed_at`, TTL = `FINALIZE_CLAIM_TTL_MS` in `lib/reconcile/types.ts`) BEFORE any media download/upload; the claim loser exits `{ok:false}` (graceful skip), a failed claimant releases its claim (scoped to its own ts), a crashed one expires via TTL. The reconcile cron skips stale candidates whose claim is fresh. **NEVER delete a deterministic R2 key (`images/<jobId>.png`) on upload failure** — a concurrent finalizer may own a live object there; doing so left a `completed` job with a permanent 404 (guard test in `lib/__tests__/storage.test.ts`). Completed-but-404 jobs are repairable while KIE retains the result: `npx tsx scripts/recover-job-media.ts <jobId>`. |
 | Internal-only models | Synthetic provider/model ids set by the orchestrator (never user-submitted) bypass the user-facing UI half of the Provider Enum Sync (steps 1, 2, 2b, 8, 8b, 11, 12, 12b). They MUST be in `STATIC_CREDIT_COSTS` + `model_pricing` seed + provider `supportedModels`. Workflow-run swap lives in `payload-builder.ts` (case `generate-image`); single-node Run uses a pre-Zod swap in `routes/generate-image.ts` via the `_internalLora` body hint AND a matching short-circuit in the inline `creditGuard` preHandler resolver (otherwise credits reserve as the default provider, 1cr silent under-bill). Reference: `flux-lora-character` (2cr/image) — selected when a single trained `@character` mention is detected. Companion training id `character-lora-training` (150cr/training, Cloud only). |
 | Suno Voice Persona | Setup-time node — does NOT execute at workflow runtime. 3-step modal flow: ① POST `/v1/suno/voice/validate` + poll GET `/v1/suno/voice/validate-info` → returns `validateInfo` phrase; ② user records phrase + uploads via `uploadAudio`; ③ POST `/v1/suno/voice/generate` (creditGuard `"suno-voice-create"`, 20cr reserved on a `jobs` row) + poll GET `/v1/suno/voice/record-info` → returns `voiceId`. **IDOR scoping (audit fix):** every voice route that takes a `taskId` verifies ownership via `userOwnsVoiceTask(taskId, userId, tag)`. Ownership rows are `jobs` tagged `model_identifier="suno-voice-validate"` (validate/regenerate, free) or `"suno-voice-create"` (generate, 20cr). Polls return 404 when not owned; generate refuses to charge if the input validate `taskId` isn't owned. GET `/voice/record-info` doubles as commit/refund site: on `status="success"` marks job completed + commits credits, on `status="fail"` marks failed + refunds. Both via `commitReservedCreditsForJob` / `refundReservedCreditsForJob` (CAS on `status='reserved'`, idempotent). Rate-limit 5/min/token on `/voice/generate`. **Stale-job sweep (audit fix):** `sweepStaleVoiceJobs` in `ee/billing/cleanup-service.ts` (cron `45 * * * *`) refunds `suno-voice-create` jobs stuck >2h in `pending/processing` (closing the abandoned-modal credit-leak hole — there's no KIE webhook fallback like character-lora), and GC's validate rows >24h. Suno music nodes (`suno-generate` / `suno-cover` / `suno-extend`) gained `personaId` + `personaModel` body fields → wired through worker → KIE API. The `suno-voice` node is registered in `SOURCE_NODE_TYPES` (`execution-graph.ts`) so the orchestrator skips execution at runtime; `output-extractor.ts` emits `{ voiceId, personaId, personaModel: "voice_persona", voiceName, style }` from `data.voiceId` AND `getPrimaryOutput` has a `case "suno-voice"` returning `output.voiceId` (without this case the orchestrator's `if (!output) continue` skipped the entire suno-voice → personaId routing block — only single-node Run worked). Frontend resolver `node-input-resolver.ts` + backend resolver `input-resolver.ts` both route `voiceId` → `personaId` when downstream is one of the 3 music nodes (no-op otherwise so the edge stays valid). Pricing seeded in migration 130 + `STATIC_CREDIT_COSTS["suno-voice-create"] = 20`. KIE does not publish pricing — value is a conservative one-time default, tune via `audit-credits` after usage data. |
 

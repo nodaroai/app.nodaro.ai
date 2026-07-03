@@ -47,7 +47,7 @@ describe("getAppSettings", () => {
     const settings = await getAppSettings()
 
     expect(settings.ai_provider).toBe("replicate")
-    ***REDACTED-OSS-SCRUB***
+    expect(settings.cost_markup_percent).toBe(0)
   })
 
   it("returns cached result on second call within TTL", async () => {
@@ -116,7 +116,7 @@ describe("getAppSettings", () => {
     const settings = await getAppSettings()
 
     expect(settings.ai_provider).toBe("kie")
-    ***REDACTED-OSS-SCRUB***
+    expect(settings.cost_markup_percent).toBe(0)
     expect(settings).not.toHaveProperty("unknown_setting")
   })
 })
