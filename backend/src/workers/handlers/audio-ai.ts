@@ -312,7 +312,8 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
     useSpeakerBoost?: boolean; seed?: number
   }
-  // modelId omitted → provider falls back to eleven_english_sts_v2 (prior default).
+  // modelId omitted → provider falls back to eleven_multilingual_sts_v2
+  // (ElevenLabs-recommended default, also required for non-English audio).
   const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed }
 
   // --- Video mode: demux audio → speech-to-speech → remux onto the original

@@ -46,11 +46,12 @@ You are a motion director. Author a narrated, VO-paced motion-graphics video usi
 
 ## Your workflow
 
-1. **Read the brief** the user gives you (one line is enough).
-2. **Pick a genre + arc** from the doctrine body below — genre: \`explainer\` or \`product-launch\`; arc: \`PAS\`, \`Future Pacing\`, \`Demo Loop\`, \`BAB\`, or \`Feature-Benefit Cascade\`.
-3. **Draft the VO script** as discrete cue phrases — a comma/dash-bounded phrase per reveal, not a run-on breath. Segment each line at natural phrase boundaries; the boundaries are the reveal cadence.
-4. **Build the \`ShotSequenceBrief\`** — the full JSON object \`{ voScript, cues, shotSequenceBrief }\` following the machine contract exactly. At most one \`revealAt: { kind: "frame", frame: 0 }\` poster; every other reveal uses \`{ kind: "cue", cueId, edge: "start" }\`. Weight reveals to the back ~50% of the VO.
-5. **Drive the Phase-0 pipeline** in order:
+1. **Confirm the brief.** If the request is a generic "explainer" with no stated visual style, ask the user which method before anything else: (a) motion-graphics typography (this pipeline — text + shapes revealing on the voiceover, fast, low cost) or (b) animated illustrated footage (\`get_recipe\` → \`video-explainer\`, AI-generated clips, ~45cr per 10-second block). If they pick (b), STOP and load that recipe instead. Also confirm target length and narration language before drafting the VO.
+2. **Read the brief** the user gives you (one line is enough).
+3. **Pick a genre + arc** from the doctrine body below — genre: \`explainer\` or \`product-launch\`; arc: \`PAS\`, \`Future Pacing\`, \`Demo Loop\`, \`BAB\`, or \`Feature-Benefit Cascade\`.
+4. **Draft the VO script** as discrete cue phrases — a comma/dash-bounded phrase per reveal, not a run-on breath. Segment each line at natural phrase boundaries; the boundaries are the reveal cadence.
+5. **Build the \`ShotSequenceBrief\`** — the full JSON object \`{ voScript, cues, shotSequenceBrief }\` following the machine contract exactly. At most one \`revealAt: { kind: "frame", frame: 0 }\` poster; every other reveal uses \`{ kind: "cue", cueId, edge: "start" }\`. Weight reveals to the back ~50% of the VO.
+6. **Drive the Phase-0 pipeline** in order:
    - \`generate_speech\` — synthesize the VO audio from \`voScript\`
    - \`forced_alignment\` — align the audio to exact word timings
    - \`resolve_shot_sequence\` — anchor cue reveals to frames using the alignment
@@ -75,11 +76,12 @@ You are a motion director. Author a narrated, VO-paced motion-graphics video usi
 
 ## Your workflow
 
-1. **Read the brief** the user gives you (one line is enough).
-2. **Pick a genre + arc** from the doctrine body below — genre: \`explainer\` or \`product-launch\`; arc: \`PAS\`, \`Future Pacing\`, \`Demo Loop\`, \`BAB\`, or \`Feature-Benefit Cascade\`.
-3. **Draft the VO script** as discrete cue phrases — a comma/dash-bounded phrase per reveal, not a run-on breath. Segment each line at natural phrase boundaries; the boundaries are the reveal cadence.
-4. **Build the \`ShotSequenceBrief\`** — the full JSON object \`{ voScript, cues, shotSequenceBrief }\` following the machine contract exactly. At most one \`revealAt: { kind: "frame", frame: 0 }\` poster; every other reveal uses \`{ kind: "cue", cueId, edge: "start" }\`. Weight reveals to the back ~50% of the VO.
-5. **Drive the Phase-0 pipeline** in order:
+1. **Confirm the brief.** If the request is a generic "explainer" with no stated visual style, ask the user which method before anything else: (a) motion-graphics typography (this pipeline — text + shapes revealing on the voiceover, fast, low cost) or (b) animated illustrated footage (\`get_recipe\` → \`video-explainer\`, AI-generated clips, ~45cr per 10-second block). If they pick (b), STOP and load that recipe instead. Also confirm target length and narration language before drafting the VO.
+2. **Read the brief** the user gives you (one line is enough).
+3. **Pick a genre + arc** from the doctrine body below — genre: \`explainer\` or \`product-launch\`; arc: \`PAS\`, \`Future Pacing\`, \`Demo Loop\`, \`BAB\`, or \`Feature-Benefit Cascade\`.
+4. **Draft the VO script** as discrete cue phrases — a comma/dash-bounded phrase per reveal, not a run-on breath. Segment each line at natural phrase boundaries; the boundaries are the reveal cadence.
+5. **Build the \`ShotSequenceBrief\`** — the full JSON object \`{ voScript, cues, shotSequenceBrief }\` following the machine contract exactly. At most one \`revealAt: { kind: "frame", frame: 0 }\` poster; every other reveal uses \`{ kind: "cue", cueId, edge: "start" }\`. Weight reveals to the back ~50% of the VO.
+6. **Drive the Phase-0 pipeline** in order:
    - \`generate_speech\` — synthesize the VO audio from \`voScript\`
    - \`forced_alignment\` — align the audio to exact word timings
    - \`resolve_shot_sequence\` — anchor cue reveals to frames using the alignment
@@ -553,7 +555,11 @@ const VIDEO_DIRECTOR_TOOL_DESCRIPTION =
   "elements should reveal in sync with a voiceover. Returns the motion-director doctrine " +
   "you MUST follow: pick a genre + arc, draft the VO as cue phrases, build a " +
   "ShotSequenceBrief, then drive generate_speech → forced_alignment → resolve_shot_sequence " +
-  "→ render_shot_sequence. Calling this tool is non-destructive, idempotent, and free."
+  "→ render_shot_sequence. Calling this tool is non-destructive, idempotent, and free. " +
+  "This pipeline is for motion-graphics/typography videos — text and shapes revealing on the " +
+  "Remotion engine, no filmed or AI-generated footage. If the user asked for an \"explainer\" " +
+  "without specifying a visual style, ask them first; for explainers told through illustrated/" +
+  "animated scenes, load the get_recipe recipe \"video-explainer\" instead."
 
 export function registerVideoDirectorTool(
   server: McpServer,

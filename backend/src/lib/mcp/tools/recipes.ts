@@ -164,7 +164,7 @@ export function registerRecipeTool(server: McpServer, _session: McpSession): voi
     {
       title: "Get Recipe",
       description:
-        "Discover and load multi-step Nodaro content recipes. Call with NO argument to list available recipes (name, description, trigger phrases). Call with `recipe` to load that recipe's full instructions; add `file` to read a bundled reference file inside it. Use before building a narrated explainer video and similar multi-step flows.",
+        "Discover and load multi-step Nodaro content recipes. Call with NO argument to list available recipes (name, description, trigger phrases). Call with `recipe` to load that recipe's full instructions; add `file` to read a bundled reference file inside it. Use before building a narrated explainer video and similar multi-step flows. The \"video-explainer\" recipe is for explainers told through generated animated footage; for kinetic-typography/motion-graphics explainers use start_video_director instead. When the user hasn't specified a style, the recipe itself asks.",
       inputSchema: {
         recipe: z.string().min(1).optional().describe("Recipe name, e.g. 'video-explainer'. Omit to list all."),
         file: z.string().min(1).optional().describe("Relative path inside the recipe folder, e.g. 'references/prompts.md'. Requires `recipe`."),

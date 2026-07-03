@@ -51,7 +51,10 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
         "Author and render a narrated, time-coded explainer video from a topic. Nodaro's video " +
         "director writes the script + shot sequence, generates the voiceover, aligns it word-by-word, " +
         "and renders an MP4 on the Remotion engine. Returns a job_id; progress and the finished " +
-        "video appear in the tool card.",
+        "video appear in the tool card. This is motion-graphics on the Remotion engine (typography " +
+        "+ shapes) — if the user wants illustrated/animated scenes, or didn't specify, do not choose " +
+        "for them: ask which style they want, then route — motion graphics stays here; " +
+        "illustrated/animated footage goes to get_recipe recipe \"video-explainer\".",
       inputSchema: {
         topic: z
           .string()

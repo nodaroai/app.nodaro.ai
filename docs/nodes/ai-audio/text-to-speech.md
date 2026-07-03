@@ -32,11 +32,19 @@ If the selected voice no longer exists on ElevenLabs (e.g. it was removed from t
 
 ### Providers
 
-| Provider | Model | Languages | Audio Tags |
-|----------|-------|-----------|------------|
-| `elevenlabs-v3` | ElevenLabs v3 (recommended) | 46 | Yes |
-| `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) |
-| `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) |
+| Provider | Model | Languages | Audio Tags | Per-request character cap |
+|----------|-------|-----------|------------|----------------------------|
+| `elevenlabs-v3` | ElevenLabs v3 (recommended) | 46 | Yes | 3,000 |
+| `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) | 40,000 |
+| `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) | 10,000 |
+
+Text past a provider's cap is clamped, not rejected. The editor's config panel
+warns before that point (warn-don't-block); direct API/SDK/MCP callers that
+omit `provider` on `POST /v1/text-to-speech` get a length-aware default: text
+within v3's 3,000-char cap defaults to `elevenlabs-v3`, longer text defaults
+to `elevenlabs-turbo` (cap 40,000) instead, so a long request never gets
+silently truncated to v3's tighter cap just because `provider` was omitted.
+An explicitly-set `provider` is always respected as-is.
 
 ### Language Support
 

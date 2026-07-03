@@ -54,7 +54,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared"
 import { AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { MappableField } from "./mappable-field"
@@ -1871,7 +1871,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
       <div>
         <Label htmlFor="vc-model">Model</Label>
         <Select
-          value={data.model || "eleven_english_sts_v2"}
+          value={data.model || DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerData["model"] })}
         >
           <SelectTrigger id="vc-model" aria-label="Model"><SelectValue /></SelectTrigger>
@@ -1882,7 +1882,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          {VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || "eleven_english_sts_v2"))?.desc}
+          {VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || DEFAULT_VOICE_CHANGER_MODEL))?.desc}
         </p>
       </div>
       <div>
@@ -2407,7 +2407,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
       <div>
         <Label>Model</Label>
         <Select
-          value={data.model ?? "eleven_english_sts_v2"}
+          value={data.model ?? DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerProData["model"] })}
         >
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>

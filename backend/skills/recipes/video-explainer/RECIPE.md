@@ -35,13 +35,21 @@ the fit policy. Do not re-implement it by hand.
 
 ## Phase 0 — Ask first (never assume)
 
-Before generating anything, ask the user for all four. Do not guess a default for any of
-them except language:
+Before generating anything, ask the user for method (below) and the four settings that
+follow. Do not guess a default for any of them except language:
 
+0. **Method** — if the user did not explicitly choose, present both options with the
+   cost/speed tradeoff and WAIT for their choice: (a) animated footage (this recipe,
+   ~45cr per 10s block ≈ 270cr/min of video, slower, illustrated scenes) vs (b) motion
+   graphics (`start_video_director`, typography + shapes revealing on the voiceover,
+   a fixed ~20cr total via `create_explainer` / ~11cr driving the tools directly,
+   length-independent, fast). If they pick (b), STOP and call `start_video_director`
+   instead of continuing this recipe.
 1. **Duration** in minutes, 1–10. This fixes the block count: **N = minutes × 6** blocks
    of 10 seconds each. (1 min → 6 blocks; 10 min → 60 blocks. 60 is the assembler's cap.)
-2. **Narration language** — default **English** if the user does not say. For any other
-   language, use `elevenlabs-multilingual` in Phase 5.
+2. **Narration language** — default **English** if the user does not say. `elevenlabs-v3`
+   is fully multilingual (Hebrew verified) — keep it for EVERY language in Phase 5; never
+   switch models for language alone.
 3. **Mascot vs faceless** — a recurring in-style character/mascot that appears across
    clips, or purely abstract/faceless visuals. NEVER assume; a mascot changes both the
    style key (Phase 1) and every SCENE.
@@ -123,8 +131,9 @@ against `list_models` if this recipe's `version` looks stale.
 
 Ask the user to pick ONE voice — **never auto-pick**. Then voice every block with
 `generate_speech`, passing the SAME `voice_id` (a premade voice name) on all N takes.
-Default model `elevenlabs-v3`; use `elevenlabs-multilingual` when the Phase-0 language is
-not English. Block N's line → take N.
+`elevenlabs-v3` for ALL languages (fully multilingual — do not switch models for
+language); `elevenlabs-multilingual` only if the chosen voice is v2-only-verified.
+Block N's line → take N.
 
 ## Phase 6 — Assemble (mandatory, automatic)
 

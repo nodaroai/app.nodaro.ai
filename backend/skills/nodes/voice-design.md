@@ -1,7 +1,7 @@
 ---
 node_type: voice-design
-generated_at: 2026-06-16T08:22:28.446Z
-generated_from: 877dfa01a
+generated_at: 2026-07-03T08:28:51.904Z
+generated_from: 487dd81ae
 ---
 
 # Voice Design
@@ -41,6 +41,7 @@ generated_from: 877dfa01a
   "label": "Voice Design",
   "text": "",
   "voiceDescription": "",
+  "model": "eleven_ttv_v3",
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -59,6 +60,7 @@ generated_from: 877dfa01a
 **Input parameters:**
 - `text`
 - `voice_description`
+- `model`
 - `loudness`
 - `guidance_scale`
 - `seed`
@@ -85,6 +87,7 @@ generated_from: 877dfa01a
     "label": "Voice Design",
     "text": "",
     "voiceDescription": "",
+    "model": "eleven_ttv_v3",
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],

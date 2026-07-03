@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet, TtsProvider } from "@nodaro/shared"
 import type { PersonValue, WardrobeValue } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
 import type { CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn } from "@nodaro/shared"
@@ -5325,10 +5325,10 @@ export interface SharedVoice {
   description: string
   use_case: string
   category: string
-  /** Cheapest v2 TTS provider the voice is verified on (turbo first). */
-  recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
-  /** All v2 TTS providers the voice is verified on; snap only when the current pick isn't in here. */
-  verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
+  /** Best TTS provider the voice is verified on (v3 preferred when verified, else cheapest v2). */
+  recommendedProvider?: TtsProvider
+  /** All TTS providers the voice is verified on; snap only when the current pick isn't in here. */
+  verifiedProviders?: TtsProvider[]
 }
 
 export interface VoiceLibraryParams {

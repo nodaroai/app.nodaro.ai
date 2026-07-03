@@ -23,8 +23,10 @@ export interface Voice {
  */
 export interface SharedVoice extends Voice {
   /**
-   * The cheapest of our TTS providers whose underlying ElevenLabs model the
-   * voice lists in `verified_languages` (turbo preferred, else multilingual).
+   * The best of our TTS providers whose underlying ElevenLabs model the
+   * voice lists in `verified_languages` (v3 preferred when verified — it's
+   * the fully-multilingual default and renders any voice unmodified —
+   * else the cheapest v2 model: turbo preferred, else multilingual).
    * Clients without a provider picker should send it as the `provider` on
    * text-to-speech so generation uses a model the voice is actually verified
    * for — rendering a voice on an unverified model is what makes output drift
@@ -32,11 +34,11 @@ export interface SharedVoice extends Voice {
    */
   recommendedProvider?: TtsProvider
   /**
-   * Every v2 TTS provider the voice is verified on (subset of
-   * `elevenlabs-turbo` / `elevenlabs-multilingual`, turbo first). Clients WITH
-   * a provider picker should only snap the provider when the current choice is
-   * NOT in this set — most voices verify both, and an explicit user choice
-   * within the set must win. (v3 renders any voice; it's never snapped.)
+   * Every TTS provider the voice is verified on (subset of `elevenlabs-v3` /
+   * `elevenlabs-turbo` / `elevenlabs-multilingual`, v3 first when present,
+   * then turbo). Clients WITH a provider picker should only snap the
+   * provider when the current choice is NOT in this set — most voices verify
+   * more than one, and an explicit user choice within the set must win.
    */
   verifiedProviders?: TtsProvider[]
 }

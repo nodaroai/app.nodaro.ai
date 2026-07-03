@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer-pro
-generated_at: 2026-06-22T12:36:45.146Z
-generated_from: 41c5c5bde
+generated_at: 2026-07-03T08:25:54.435Z
+generated_from: 1825a285d
 ---
 
 # Voice Changer Pro
@@ -66,7 +66,7 @@ generated_from: 41c5c5bde
 {
   "label": "Voice Changer Pro",
   "orderedVoices": [],
-  "model": "eleven_english_sts_v2",
+  "model": "eleven_multilingual_sts_v2",
   "preserveBackground": true,
   "removeBackgroundNoise": false,
   "fieldMappings": {},
@@ -102,7 +102,7 @@ generated_from: 41c5c5bde
   "data": {
     "label": "Voice Changer Pro",
     "orderedVoices": [],
-    "model": "eleven_english_sts_v2",
+    "model": "eleven_multilingual_sts_v2",
     "preserveBackground": true,
     "removeBackgroundNoise": false,
     "fieldMappings": {},

@@ -19,8 +19,8 @@ const voiceChangerBody = z
     videoUrl: safeUrlSchema.optional(),
     voiceId: z.string().min(1),
     // ElevenLabs speech-to-speech model. Optional: when omitted the provider
-    // falls back to eleven_english_sts_v2 (the prior hardcoded default), so
-    // existing nodes are byte-for-byte unchanged.
+    // falls back to eleven_multilingual_sts_v2 — ElevenLabs recommends it
+    // even for English audio, and it's required for non-English sources.
     model: z.enum(VOICE_CHANGER_MODEL_IDS as [string, ...string[]]).optional(),
     stability: z.number().min(0).max(1).optional(),
     similarityBoost: z.number().min(0).max(1).optional(),

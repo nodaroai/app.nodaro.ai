@@ -654,6 +654,17 @@ if ("jobId" in result) {
 > per-second `-ref` rate by the input-video plus output duration. Per-resolution
 > rates are in the [Generate Video node docs](nodes/ai-video/generate-video.md).
 
+> **Text to Speech provider default.** `run("text-to-speech", …)` and
+> `runAndWait("text-to-speech", …)` default `provider` to `elevenlabs-v3`
+> when omitted — but only when `text` is within v3's per-request cap
+> (3,000 chars; see the per-model caps table in the
+> [Text to Speech node docs](nodes/ai-audio/text-to-speech.md)). Text longer
+> than that without an explicit `provider` falls back to `elevenlabs-turbo`
+> (cap 40,000) instead, so legacy integrations that always omit `provider`
+> don't get silently truncated by v3's tighter cap. An explicit `provider` is
+> always respected regardless of text length (its own cap still clamps the
+> stored record, unchanged).
+
 > **Typed structured references.** `run("generate-image" | "generate-video", …)`
 > have typed overloads — `GenerateImageParams` / `GenerateVideoParams` (both extend
 > `StructuredReferenceParams`). Pass `connectedReferences: ConnectedReference[]` (the
@@ -2216,14 +2227,17 @@ response drives "load more" pagination.
 Each returned voice may carry model-verification hints derived from the
 library's `verified_languages` metadata:
 
-- `recommendedProvider` — the cheapest v2 TTS provider the voice is verified
-  on (`elevenlabs-turbo` preferred, else `elevenlabs-multilingual`). Apps
-  without a provider picker should send it as the `provider` when generating
-  speech with this voice, so the voice renders on a model it's verified for
-  (that's what keeps generation sounding like the library preview).
-- `verifiedProviders` — every v2 provider the voice is verified on (turbo
-  first). Apps WITH a provider picker should only override the user's choice
-  when it is **not** in this set.
+- `recommendedProvider` — the best TTS provider the voice is verified on
+  (`elevenlabs-v3` preferred when the voice is verified for it — v3 is the
+  fully-multilingual default and renders any voice unmodified — else the
+  cheapest v2 model: `elevenlabs-turbo` preferred, else
+  `elevenlabs-multilingual`). Apps without a provider picker should send it
+  as the `provider` when generating speech with this voice, so the voice
+  renders on a model it's verified for (that's what keeps generation
+  sounding like the library preview).
+- `verifiedProviders` — every provider the voice is verified on (v3 first
+  when present, then turbo). Apps WITH a provider picker should only
+  override the user's choice when it is **not** in this set.
 
 ```ts
 const { voices, hasMore } = await client.voices.searchLibrary({ search: "deep", language: "en" })

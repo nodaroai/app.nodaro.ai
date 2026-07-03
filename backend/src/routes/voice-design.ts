@@ -6,7 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { VOICE_DESIGN_MODELS } from "@nodaro/shared"
+import { VOICE_DESIGN_MODELS, DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const voiceDesignBody = z.object({
@@ -34,6 +34,10 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
     }
 
     const { text, voiceDescription, model, loudness, guidanceScale, seed, quality, shouldEnhance } = parsed.data
+    // eleven_ttv_v3 is ElevenLabs' newest text-to-voice model (all languages);
+    // default it in-handler when the caller omits it, mirroring how
+    // text-to-speech resolves its provider default (schema stays optional).
+    const resolvedModel = model ?? DEFAULT_VOICE_DESIGN_MODEL
     const userId = req.userId
 
     if (!userId) {
@@ -72,7 +76,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       jobId: job.id,
       text,
       voiceDescription,
-      model,
+      model: resolvedModel,
       loudness,
       guidanceScale,
       seed,

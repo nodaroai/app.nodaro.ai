@@ -466,7 +466,7 @@ prompt with no questions round-trip.
 | `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery, not content). |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. |
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
-| `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Returns a `voice_id`. |
+| `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Accepts `text`, `voice_description`, `model` (default `eleven_ttv_v3`; `eleven_multilingual_ttv_v2` is the legacy model), `loudness`, `guidance_scale`, `seed`, `quality`, `should_enhance`. Returns a `voice_id`. |
 | `voice_changer` | Transform the speaker identity in an audio clip to a target voice. |
 | `voice_changer_pro` | Detect each speaker in a multi-speaker clip and recast each to a chosen voice, preserving words and timing (Cloud only). |
 | `voice_remix` | Re-stylize or re-arrange an existing audio clip. |
@@ -1208,7 +1208,11 @@ is also saved to your Nodaro library.
 
 One-shot tools that author + render a narrated motion-graphics video in a single
 call (author → speech → alignment → resolve → render). The director writes the
-VO script and shot-sequence brief for you. See [Video Director](./video-director.md)
+VO script and shot-sequence brief for you. These tools are the motion-graphics
+(typography + shapes) path — for a bare "explainer" ask with no stated visual
+style, the tool descriptions instruct the LLM to confirm the method with the
+user first; illustrated/animated-footage explainers route to `get_recipe` →
+`video-explainer` instead. See [Video Director](./video-director.md)
 for credit costs, honest Phase-1 limits, and the full brief format.
 
 ### `start_video_director`
@@ -1316,7 +1320,11 @@ through a full multi-tool flow. Call with no argument to list available
 recipes (name, description, trigger phrases); pass `recipe` to load that
 recipe's full instructions; add `file` to read a bundled reference file
 inside it. Pure content delivery, no side effects — the actions a recipe
-instructs the LLM to take are scope-gated by their own tools.
+instructs the LLM to take are scope-gated by their own tools. The
+`video-explainer` recipe is for explainers told through generated animated
+footage; for kinetic-typography/motion-graphics explainers use
+`start_video_director` instead. When the user hasn't specified a style, the
+recipe itself asks (see [Content Recipes](./recipes.md)).
 
 **Input:**
 
