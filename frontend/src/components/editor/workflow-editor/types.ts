@@ -5,6 +5,7 @@ import { buildMotionCreditModelIdentifier } from "@nodaro/shared";
 import { isDefaultSelectorConfig, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { getEffectiveRepeatCount } from "@nodaro/shared";
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS } from "@nodaro/shared";
+import { buildVideoAnalysisCreditId, bucketSecondsFromCreditId, videoAnalysisBucketCredits } from "@nodaro/shared";
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
 
 /** Sentinel error thrown when a polling callback detects that the active
@@ -107,6 +108,9 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "qa-check": 5,
   "image-critic": 5,
   "web-scrape": 5,
+  // Flash floor — the real per-run cost is duration/model-bucketed (see
+  // estimateNodeCredits below + the node's live useModelCredits estimate).
+  "video-analysis": 1,
 };
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
@@ -151,6 +155,20 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
     const mode = node.data.mode === "site" ? "site" : "page"
     const modelId = buildScraperCreditId({ actor, mode })
     return SCRAPER_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["web-scrape"] ?? 0
+  }
+  if (nodeType === "video-analysis" && node.data) {
+    const model = (node.data.llmModel as string) ?? "gemini-3-flash"
+    // A probed YouTube duration is trusted only while it still matches the node's
+    // current youtubeUrl (a URL edit invalidates it). No graph context here, so a
+    // wired video's duration isn't reachable — that falls to the ceiling bucket
+    // (the node's own live estimate uses the upstream duration via the hook).
+    const probed = node.data.probedYoutube as { url: string; durationSec: number } | undefined
+    const durationSec =
+      probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined
+    const bucketSec = bucketSecondsFromCreditId(buildVideoAnalysisCreditId(model, durationSec))
+    return bucketSec !== null
+      ? videoAnalysisBucketCredits(model, bucketSec)
+      : NODE_CREDIT_COSTS["video-analysis"] ?? 0
   }
   return NODE_CREDIT_COSTS[nodeType] ?? 0
 }
@@ -270,6 +288,7 @@ export const EXECUTABLE_TYPES = new Set([
   "qa-check",
   "image-critic",
   "web-scrape",
+  "video-analysis",
   "router",
   "teleport-send",
   "teleport-receive",

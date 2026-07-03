@@ -50,6 +50,7 @@ import {
   Users,
   Waypoints,
   ArrowUpFromLine,
+  ScanSearch,
   FileText,
   Disc3,
   FastForward,
@@ -1072,6 +1073,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Captions className="h-4 w-4" />,
     category: "Processing",
     group: "Video",
+  },
+  {
+    type: "video-analysis",
+    label: "Video Analysis",
+    icon: <ScanSearch className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video",
+    keywords: ["analyze video", "scene breakdown", "shot list", "understand video", "describe video", "storyboard from video"],
   },
   // Processing — Video Production
   {

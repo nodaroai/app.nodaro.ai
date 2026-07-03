@@ -110,6 +110,25 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     description: "Fetch data from web pages, Google Search, Instagram, TikTok, or RSS feeds and emit structured JSON.",
     outputType: "data",
   },
+  {
+    type: "video-analysis",
+    label: "Video Analysis",
+    category: "processing",
+    // outputType: data — emits the scene-segmented analysis JSON via the `json` handle.
+    // Duration-bucketed pricing: <model>:60s → <model>:600s (1cr small clip → 94cr @10min gemini-3.1-pro);
+    // unknown duration reserves the 600s ceiling. See @nodaro/shared video-analysis-pricing.ts.
+    description: "Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots.",
+    outputType: "data",
+    creditCost: "1-94",
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "string" },
+        { key: "youtubeUrl", type: "string" },
+        { key: "llmModel", type: "select", options: ["gemini-3-flash", "gemini-3.1-pro"] },
+        { key: "analysisFocus", type: "string" },
+      ],
+    },
+  },
 
   {
     type: "generate-image",

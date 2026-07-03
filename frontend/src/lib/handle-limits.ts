@@ -238,5 +238,10 @@ export function getHandleConnectionLimit(
     return { limit: 1, providerLabel: "MMAudio", isMultiProviderMin: false }
   }
 
+  // Video Analysis — its `video` target analyzes exactly one source clip.
+  if (node.type === "video-analysis" && handleId === "video") {
+    return { limit: 1, providerLabel: "Video Analysis", isMultiProviderMin: false }
+  }
+
   return null
 }

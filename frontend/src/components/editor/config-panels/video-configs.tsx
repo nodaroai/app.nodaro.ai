@@ -34,9 +34,12 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
   SwitchXData,
+  VideoAnalysisNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
+import { probeVideoAnalysis } from "@/lib/api"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
@@ -4099,3 +4102,139 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 }
 
 export const VideoRetakeConfig = memo(VideoRetakeConfigImpl)
+
+// --- Video Analysis -------------------------------------------------------
+
+/** Client-side YouTube-shape check (hostname suffix) — gates the probe so we
+ *  never hit the endpoint for a non-YouTube URL (or mid-type garbage). Mirrors
+ *  the backend's YOUTUBE_HOSTS allowlist intent; the backend re-validates. */
+function isYoutubeShapedUrl(url: string): boolean {
+  try {
+    return /(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
+function formatProbedDuration(sec: number): string {
+  const s = Math.round(sec)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, "0")}`
+}
+
+export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysisNodeData>) {
+  const model = data.llmModel ?? "gemini-3-flash"
+  const url = data.youtubeUrl ?? ""
+  const [probeError, setProbeError] = useState<string | undefined>(undefined)
+  const [probing, setProbing] = useState(false)
+
+  // A stored probe is trusted only while it still matches the current URL — a
+  // URL edit invalidates it (cleared synchronously in onChange below).
+  const probed = data.probedYoutube && data.probedYoutube.url === url ? data.probedYoutube : undefined
+
+  // INTEGRITY CONTRACT: on URL change the field is written synchronously with
+  // probedYoutube cleared (below). Here we debounce ~600ms, YouTube-shape-gate,
+  // then probe — guarding the async result with a `cancelled` closure flag so an
+  // out-of-order response (stale URL) can never write a mismatched duration.
+  useEffect(() => {
+    setProbeError(undefined)
+    const v = url
+    if (!v || !isYoutubeShapedUrl(v)) {
+      setProbing(false)
+      return
+    }
+    // Already have a fresh probe for this exact URL — don't re-hit the endpoint
+    // (avoids a redundant rate-limited probe every time the panel re-opens).
+    if (data.probedYoutube?.url === v) {
+      setProbing(false)
+      return
+    }
+    let cancelled = false
+    setProbing(true)
+    const timer = setTimeout(async () => {
+      try {
+        const { durationSec } = await probeVideoAnalysis({ youtubeUrl: v })
+        if (cancelled) return
+        onUpdate({ probedYoutube: { url: v, durationSec } })
+        setProbeError(undefined)
+      } catch (err) {
+        if (cancelled) return
+        setProbeError(err instanceof Error ? err.message : "Could not read this video")
+      } finally {
+        if (!cancelled) setProbing(false)
+      }
+    }, 600)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // data.probedYoutube is read (not depended-on) so a successful probe writing
+    // it back doesn't retrigger; the URL is the only trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, onUpdate])
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Model */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="video-analysis-model">Analysis model</Label>
+        <Select value={model} onValueChange={(v) => onUpdate({ llmModel: v })}>
+          <SelectTrigger id="video-analysis-model" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VIDEO_ANALYSIS_LLM_MODELS.map((id) => (
+              <SelectItem key={id} value={id}>
+                {LLM_MODELS.find((m) => m.id === id)?.displayName ?? id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* YouTube URL (alternative to a wired video source) */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="video-analysis-url">YouTube URL</Label>
+        <Input
+          id="video-analysis-url"
+          value={url}
+          onChange={(e) => onUpdate({ youtubeUrl: e.target.value, probedYoutube: undefined })}
+          placeholder="https://youtube.com/watch?v=… (or wire a video)"
+          className="text-sm"
+        />
+        {probed ? (
+          <p className="text-[11px] text-muted-foreground">
+            Duration {formatProbedDuration(probed.durationSec)} — pricing bucket set from this length.
+          </p>
+        ) : probing ? (
+          <p className="text-[11px] text-muted-foreground">Checking video…</p>
+        ) : probeError ? (
+          <p className="text-[11px] text-red-500">{probeError}</p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            Leave blank and wire a video to the input handle to analyze an uploaded/generated clip instead.
+          </p>
+        )}
+      </div>
+
+      {/* Analysis focus */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="video-analysis-focus">Analysis focus (optional)</Label>
+        <Textarea
+          id="video-analysis-focus"
+          value={data.analysisFocus ?? ""}
+          onChange={(e) => onUpdate({ analysisFocus: e.target.value })}
+          placeholder="What should the analysis prioritize? e.g. identify product shots, on-screen text, and scene transitions."
+          maxLength={2000}
+          rows={4}
+          className="text-sm"
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Breaks a video (max 10 min) into a timestamped scene list. Cost scales with the video&apos;s duration and the chosen model.
+      </p>
+    </div>
+  )
+}

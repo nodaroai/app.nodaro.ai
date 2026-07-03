@@ -40,9 +40,11 @@ function r2Key(jobId: string, type: MediaType): string {
 }
 
 /**
- * Build the public URL for an R2 key.
+ * Build the public URL for an R2 key. Exported so callers that persist a bare
+ * R2 KEY (e.g. the video-analysis window checkpoint) can reconstruct the public
+ * URL on re-entry without re-deriving the CDN base.
  */
-function r2Url(key: string): string {
+export function r2Url(key: string): string {
   return `${config.R2_PUBLIC_URL}/${key}`
 }
 
@@ -306,6 +308,30 @@ export async function downloadR2ObjectToFile(key: string, dest: string): Promise
 }
 
 /**
+ * Read an object from the R2 ORIGIN (S3 API) fully into a Buffer — bypasses
+ * the public CDN entirely. Returns null when the object is absent (NoSuchKey)
+ * or on ANY other error, so callers treat a missing/unreadable object as
+ * "not present" instead of a thrown failure. Mirrors downloadR2ObjectToFile
+ * but buffers small internal artifacts (e.g. the video-analysis checkpoint)
+ * that must never be read through the immutable-cached CDN.
+ */
+export async function readR2ObjectBuffer(key: string): Promise<Buffer | null> {
+  try {
+    const res = await s3.send(
+      new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
+    )
+    if (!res.Body) return null
+    const chunks: Buffer[] = []
+    for await (const chunk of res.Body as Readable) {
+      chunks.push(chunk as Buffer)
+    }
+    return Buffer.concat(chunks)
+  } catch {
+    return null
+  }
+}
+
+/**
  * HEAD an R2 object and return its byte size (0 on any error). Used to backfill
  * `assets.size_bytes` for generated media — `trackStorage` already adds the real
  * bytes to the user's quota at upload, so the asset row MUST record the real
@@ -438,15 +464,27 @@ function categoryFromExt(ext: string): FileCategory {
   return "video"
 }
 
+/** A listed R2 object plus the S3 metadata ListObjectsV2 returns for it. */
+export interface R2ListedObject {
+  key: string
+  /** S3 `LastModified`. Absent only if S3 omits it (defensive — normally set). */
+  lastModified?: Date
+  /** S3 `Size` in bytes. */
+  size?: number
+}
+
 /**
- * List every R2 object key under `prefix`, following NextContinuationToken
- * until the result set is exhausted. ListObjectsV2 returns at most 1000 keys
- * per page, so the continuation loop is mandatory — a single call silently
- * truncates large prefixes (the community reaper/clone walk whole entity
- * folders and must see every asset).
+ * List every R2 object under `prefix` WITH its S3 metadata (LastModified, Size),
+ * following NextContinuationToken until the result set is exhausted.
+ * ListObjectsV2 returns at most 1000 entries per page, so the continuation loop
+ * is mandatory — a single call silently truncates large prefixes.
+ *
+ * This is the single pagination site; `listObjectsByPrefix` is the keys-only
+ * projection of it, so the two can never drift. `LastModified` powers the
+ * aged-reaper sweeps (e.g. `sweepVideoAnalysisTmp`) that delete by object age.
  */
-export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
-  const keys: string[] = []
+export async function listObjectsByPrefixWithMeta(prefix: string): Promise<R2ListedObject[]> {
+  const objects: R2ListedObject[] = []
   let ContinuationToken: string | undefined
   do {
     const res = await s3.send(
@@ -457,11 +495,20 @@ export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
       }),
     )
     for (const o of res.Contents ?? []) {
-      if (o.Key) keys.push(o.Key)
+      if (o.Key) objects.push({ key: o.Key, lastModified: o.LastModified, size: o.Size })
     }
     ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
   } while (ContinuationToken)
-  return keys
+  return objects
+}
+
+/**
+ * List every R2 object key under `prefix` (keys only). Thin projection over
+ * `listObjectsByPrefixWithMeta` — the community reaper/clone walk whole entity
+ * folders and only need the keys.
+ */
+export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
+  return (await listObjectsByPrefixWithMeta(prefix)).map((o) => o.key)
 }
 
 /**

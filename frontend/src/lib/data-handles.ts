@@ -46,6 +46,7 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "deduplicate", "merge-lists", "sort-list",
   "selector",
   "ai-writer", "llm-chat", "generate-script",
+  "video-analysis",
 ])
 
 /** True when `sourceType` can flow into a generic data input (text, list,

@@ -162,6 +162,7 @@ const SIMPLE_PARAM_FIELDS: Readonly<
   deduplicate: { field: "field" },
   reduce: { field: "strategyId" },
   "web-scrape": { field: "url", snippet: true },
+  "video-analysis": { field: "youtubeUrl", snippet: true },
   "rss-feed": { field: "feedUrl", snippet: true },
   "upload-audio": { field: "filename", snippet: true },
   "extract-frame": { field: "timestamp", suffix: "s" },

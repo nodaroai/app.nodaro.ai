@@ -14,7 +14,9 @@ import {
   resolveRefArray,
   StructuredFields,
   JOB_OUTPUT_SCHEMA,
+  uiMeta,
 } from "./_verb-helpers.js"
+import { WIDGET_URI } from "../widgets/registrar.js"
 import {
   modelIdsByKindMode,
   SEEDANCE_2_REF_LIMITS,
@@ -23,6 +25,11 @@ import {
   COMBINE_TRANSITION_IDS,
   AUDIO_CROSSFADE_CURVE_IDS,
   MOTION_TRANSFER_PROVIDERS,
+  VIDEO_ANALYSIS_LLM_MODELS,
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  VIDEO_ANALYSIS_MAX_DURATION_SEC,
+  VIDEO_ANALYSIS_MAX_SCENE_SEC,
+  videoAnalysisBucketCredits,
 } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -45,6 +52,14 @@ import { resolvePreset } from "../../presets/resolve-preset.js"
 // handler (per the "tool calls should never reject" principle).
 const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"], { includeHidden: true })
 const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true })
+
+// Credit hint for the video_analysis tool description — derived from the
+// shared duration-bucket formula (NEVER hand-write the numbers; the formula is
+// the single source of truth, pinned by packages/shared's pricing test).
+// Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 13/25/56/94 credits".
+const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_LLM_MODELS.map(
+  (m) => `${m} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => videoAnalysisBucketCredits(m, b)).join("/")} credits`,
+).join("; ")
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -2216,6 +2231,106 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         userId: session.userId,
       }
       return dispatchJob(fastify, session, { url: "/v1/speech-to-video", payload, label: "speech to video", widgetKind: "video", widgetData: { prompt: args.prompt.slice(0, 80), model: "wan-s2v", resolution: args.resolution ?? "480p" } })
+    },
+  )
+
+  // ── video_analysis ──
+  // Scene-by-scene video → structured JSON (no media output). The job-auto
+  // card renders the result; the full analysis stays in the job's output_data.
+  server.registerTool(
+    "video_analysis",
+    {
+      title: "Video Analysis",
+      description:
+        "Analyze a video into a scene-by-scene breakdown built for AI re-creation. " +
+        `Scenes are cut at natural boundaries, each at most ${VIDEO_ANALYSIS_MAX_SCENE_SEC}s ` +
+        "(one image/video generation per scene). Per scene: `visualResolved` — a " +
+        "self-contained, prompt-ready visual description and THE field downstream " +
+        "consumers read — plus shot type, camera movement, a mode-tagged audio " +
+        "track (speech quoted verbatim, music/sfx as generation-ready " +
+        "descriptions, or silence), and recurring people/objects/places extracted " +
+        "as castable entity slots so they can be re-cast with your own " +
+        "characters. Returns a job_id — poll `get_job`; the full analysis JSON " +
+        "(`meta` + `slots` + `scenes[]`) is in the job's `output_data`.\n\n" +
+        "**Source** — pass EXACTLY ONE of `video_asset_id`, `video_url`, or " +
+        `\`youtube_url\`. Maximum duration ${VIDEO_ANALYSIS_MAX_DURATION_SEC / 60} minutes ` +
+        `(${VIDEO_ANALYSIS_MAX_DURATION_SEC}s) for any source; YouTube live streams are rejected.\n\n` +
+        "**Pricing** — duration-bucketed credits per model (buckets " +
+        `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => `≤${b}s`).join(" / ")}): ` +
+        `${VIDEO_ANALYSIS_PRICING_HINT}.`,
+      inputSchema: {
+        video_asset_id: z.string().uuid().optional().describe("Nodaro video job id or uploaded-asset id."),
+        video_url: z.string().url().optional().describe("Direct URL of a video file."),
+        youtube_url: z.string().optional().describe("YouTube video URL (youtube.com / youtu.be). Max 10 minutes; no live streams."),
+        llm_model: z
+          .enum(VIDEO_ANALYSIS_LLM_MODELS as [string, ...string[]])
+          .optional()
+          .describe(`Analysis model. Default gemini-3-flash. Options: ${VIDEO_ANALYSIS_LLM_MODELS.join(", ")}.`),
+        analysis_focus: z
+          .string()
+          .max(2000)
+          .optional()
+          .describe("Optional steer for the analysis (e.g. 'focus on the product shots and on-screen text')."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) => {
+      // EXACTLY-ONE source — deliberately stricter than the route's precedence
+      // rule (there, a stale youtubeUrl in node data must not reject a wired
+      // videoUrl). MCP args are explicit, so two sources is caller ambiguity
+      // worth surfacing — name what was provided so the LLM can self-correct.
+      const provided = [
+        args.video_asset_id ? "video_asset_id" : null,
+        args.video_url ? "video_url" : null,
+        args.youtube_url ? "youtube_url" : null,
+      ].filter((s): s is string => s !== null)
+      if (provided.length !== 1) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                provided.length === 0
+                  ? "Pass exactly one of video_asset_id, video_url, or youtube_url (none provided)."
+                  : `Pass exactly one of video_asset_id, video_url, or youtube_url — got ${provided.join(" + ")}.`,
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      let videoUrl = args.video_url
+      if (args.video_asset_id) {
+        // resolveAssetId throws on not-found / foreign-user / wrong-kind ids
+        // (loud-fail, same contract as every sibling *_asset_id param).
+        videoUrl =
+          (await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })) ??
+          undefined
+        if (!videoUrl) {
+          return { content: [{ type: "text" as const, text: "Could not resolve video_asset_id to a video URL." }], isError: true }
+        }
+      }
+
+      const payload: Record<string, unknown> = {
+        ...(videoUrl ? { videoUrl } : {}),
+        ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
+        ...(args.llm_model ? { llmModel: args.llm_model } : {}),
+        ...(args.analysis_focus ? { analysisFocus: args.analysis_focus } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/video-analysis",
+        payload,
+        label: "Video analysis",
+        widgetKind: "generic",
+        widgetData: {
+          prompt: args.analysis_focus ? args.analysis_focus.slice(0, 80) : "(video analysis)",
+          model: args.llm_model ?? "gemini-3-flash",
+        },
+      })
     },
   )
 }

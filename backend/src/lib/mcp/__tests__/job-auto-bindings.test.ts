@@ -40,6 +40,7 @@ const JOB_AUTO_VERBS = [
   "transcribe",
   "suno_lyrics",
   "suno_style_boost",
+  "video_analysis",
 ]
 // create_explainer / create_launch_video are hasCredits()-gated (verbs.ts) —
 // asserted separately below only when the tools are present in the catalog.

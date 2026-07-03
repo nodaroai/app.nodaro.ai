@@ -20,6 +20,7 @@ import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveSwitchXCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import { referenceSheetCreditId } from "@nodaro/shared"
+import { buildVideoAnalysisCreditId } from "@nodaro/shared"
 import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
@@ -2970,6 +2971,39 @@ export function buildPayload(
           usageLogId,
         },
       }
+    }
+
+    case "video-analysis": {
+      // Duration-bucketed pricing is a client-writable billing input, so the
+      // reserved credit id is derived from the SAME 3-step resolution the route
+      // uses (single source of truth — orchestrated runs bypass the route):
+      //   1. resolvedInputs.videoDuration    — trusted upstream video metadata
+      //   2. data.probedYoutube.durationSec  — ONLY when URL-bound to the
+      //                                        effective youtubeUrl (exact match)
+      //   3. unknown → <model>:600s ceiling  — the only silent-ceiling path
+      // videoUrl wins over youtubeUrl (mirrors routes/video-analysis.ts), so a
+      // wired/config clip nulls youtubeUrl downstream.
+      const videoUrl = resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined)
+      const youtubeUrl = videoUrl ? undefined : (data.youtubeUrl as string | undefined)
+      const probed = data.probedYoutube as { url: string; durationSec: number } | undefined
+      const durationSec =
+        resolvedInputs.videoDuration ??
+        (youtubeUrl && probed && probed.url === youtubeUrl ? probed.durationSec : undefined)
+      const model = (data.llmModel as string | undefined) ?? "gemini-3-flash"
+      const creditId = buildVideoAnalysisCreditId(model, durationSec)
+      return simpleResult("video-analysis", creditId, {
+        jobId,
+        videoUrl,
+        youtubeUrl,
+        llmModel: model,
+        analysisFocus: data.analysisFocus,
+        reservedCreditId: creditId,
+        // nodeId echoes the route's payload key (node.id == the canvas node id the
+        // route reads from req.body). workflowId is route-only — buildPayload has
+        // no execution context and the worker consumes neither field.
+        nodeId: node.id,
+        usageLogId,
+      })
     }
 
     case "reference-sheet": {

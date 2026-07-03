@@ -633,6 +633,13 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Video-analysis: single `json` output handle carrying the scene-segmented
+  // analysis object. Mirrors the web-scrape json branch — stringify for generic
+  // text consumers; Extract Field reads state.output.json directly.
+  if (sourceType === "video-analysis" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Describe-to-picker: single `picker-json` output (a structured catalog JSON
   // object). Stringify for generic text consumers; Extract Field / the picker
   // consumer read state.output.json directly (bypassing getPrimaryOutput).
@@ -1148,6 +1155,15 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   // Web-scrape: single `json` output (object/array from the actor).
   if (type === "web-scrape") {
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
+  // Video-analysis: single `json` output (the scene-segmented analysis object,
+  // persisted on data.generatedJson). Mirrors web-scrape's json branch so a
+  // skipped / "Run from here" video-analysis hydrates the json handle from saved
+  // node data without re-running.
+  if (type === "video-analysis") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }
   }

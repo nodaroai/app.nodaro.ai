@@ -23,6 +23,12 @@ import {
   type CinematicResolution,
 } from "@nodaro/shared"
 import { resolveSwitchXCreditId } from "@nodaro/shared"
+import {
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  VIDEO_ANALYSIS_MAX_DURATION_SEC,
+  videoAnalysisBucketCredits,
+  buildVideoAnalysisCreditId,
+} from "@nodaro/shared"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -68,6 +74,39 @@ const CINEMATIC_STATIC: Record<string, number> = {}
 for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicResolution[]) {
   for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
     CINEMATIC_STATIC[cinematicCreditId(resolution, d)] = cinematicHoldCredits(resolution, d)
+  }
+}
+
+// ── Video Analysis (Gemini vision) duration-bucketed reserve holds ──
+// PROVISIONAL pricing seed (Task 18a). Values are DERIVED from the structural
+// formula `videoAnalysisBucketCredits` (packages/shared/src/video-analysis-pricing.ts)
+// — never hand-written — mirroring the FLUX2/AI_AVATAR/CINEMATIC spreads above.
+// Per model: a bare id `video-analysis:<model>` (= the 600s unknown-duration
+// ceiling) + one composite per bucket `video-analysis:<model>:<bucket>s`.
+// The two models mirror the catalog's video-analysis entries (model-catalog.ts)
+// and migration 246's rows — extend all three together if a third video+audio
+// model ships.
+//
+// Provisional output at VIDEO_ANALYSIS_[figures removed] (2×safety, $0.02/cr):
+//   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
+//   gemini-3.1-pro → bare 94 · 60s 13 · 180s 25 · 360s 56 · 600s 94
+// [econ-intel comment removed]
+// (or the measured system-prompt token count) shifts these, 18b's convergence
+// migration overrides the DB rows and this formula-derived fallback re-tracks
+// automatically when the constant is finalized.
+const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
+for (const model of ["gemini-3-flash", "gemini-3.1-pro"]) {
+  // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
+  // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
+  // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG
+  // lists `video-analysis:<model>` as each model's base pricing row.
+  VIDEO_ANALYSIS_STATIC[`video-analysis:${model}`] = videoAnalysisBucketCredits(
+    model,
+    VIDEO_ANALYSIS_MAX_DURATION_SEC,
+  )
+  for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
+    VIDEO_ANALYSIS_STATIC[`video-analysis:${model}:${bucketSec}s`] =
+      videoAnalysisBucketCredits(model, bucketSec)
   }
 }
 
@@ -214,6 +253,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Hold; actual charge metered at commit, surplus refunded.
   // Rate is an UNCONFIRMED estimate — confirm via a paid run per audit-credits ship-gate.
   ...CINEMATIC_STATIC,
+  // ── Video Analysis (Gemini vision, duration-bucketed) — PROVISIONAL (Task 18a) ──
+  // Node-type bare = estimate fallback ONLY (STATIC_CREDIT_COSTS[node.type] in
+  // estimateWorkflowCredits; never reserved). Pinned to the cheapest model's
+  // 10-min ceiling (gemini-3-flash @ 600s = 3). Per-model bares + 8 duration
+  // composites are formula-derived above (VIDEO_ANALYSIS_STATIC); see that block
+  // for the PROVISIONAL/Gate-0.5 (18b) reconciliation note.
+  "video-analysis": videoAnalysisBucketCredits("gemini-3-flash", VIDEO_ANALYSIS_MAX_DURATION_SEC),
+  ...VIDEO_ANALYSIS_STATIC,
   "flux-lora-character": 2,      // flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
   "character-lora-training": 150, // Replicate ostris/flux-dev-lora-trainer (1000 steps, one-shot). Refunded by webhook on failure/cancel.
   // ── Image Editing ──
@@ -2105,6 +2152,23 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   // Audio separation (Demucs): "best" quality costs more
   if (nodeType === "audio-separation") {
     return (data.quality as string) === "best" ? "audio-separation:best" : "audio-separation"
+  }
+
+  // Video Analysis: duration-bucketed pricing. Mirror payload-builder's
+  // `case "video-analysis"` (single source of truth = buildVideoAnalysisCreditId),
+  // minus the graph-only resolvedInputs.videoDuration this pre-execution estimate
+  // can't see: bucket from data.probedYoutube ONLY when URL-bound to the effective
+  // youtubeUrl; else the <model>:600s ceiling. videoUrl wins over youtubeUrl.
+  if (nodeType === "video-analysis") {
+    const videoUrl = data.videoUrl as string | undefined
+    const youtubeUrl = videoUrl ? undefined : (data.youtubeUrl as string | undefined)
+    const probed = data.probedYoutube as { url: string; durationSec: number } | undefined
+    const durationSec =
+      youtubeUrl && probed && probed.url === youtubeUrl ? probed.durationSec : undefined
+    return buildVideoAnalysisCreditId(
+      (data.llmModel as string | undefined) ?? "gemini-3-flash",
+      durationSec,
+    )
   }
 
   const provider = data.provider as string | undefined

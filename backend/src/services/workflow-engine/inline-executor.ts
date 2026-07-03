@@ -704,6 +704,7 @@ function detectPreviewItemType(
   if (VIDEO_SOURCE_TYPES.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
   if (nodeType === "forced-alignment") return "data"
+  if (nodeType === "video-analysis") return "data"
   if (value) {
     if (IMAGE_URL_RE.test(value)) return "image"
     if (VIDEO_URL_RE.test(value)) return "video"

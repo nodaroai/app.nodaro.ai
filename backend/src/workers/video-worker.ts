@@ -21,6 +21,7 @@ import { entityHandlers } from "./handlers/entity.js"
 import { surroundHandlers } from "./handlers/surround.js"
 import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
+import { videoAnalysisHandlers } from "./handlers/video-analysis.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 
@@ -35,6 +36,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...surroundHandlers,
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
+  ...videoAnalysisHandlers,
 }
 
 export function createVideoWorker() {

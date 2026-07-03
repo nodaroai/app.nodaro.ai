@@ -1165,3 +1165,65 @@ describe("motion_transfer verb", () => {
     expect(result.isError).toBe(true)
   })
 })
+
+describe("video_analysis verb", () => {
+  it("calls /v1/video-analysis with snake_case → camelCase translation", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {
+      video_url: "https://a/clip.mp4",
+      llm_model: "gemini-3.1-pro",
+      analysis_focus: "focus on the product shots",
+    })
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-va")
+    expect(received.body?.videoUrl).toBe("https://a/clip.mp4")
+    expect(received.body?.llmModel).toBe("gemini-3.1-pro")
+    expect(received.body?.analysisFocus).toBe("focus on the product shots")
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("forwards youtube_url as youtubeUrl", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va-yt" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {
+      youtube_url: "https://www.youtube.com/watch?v=abc123",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.youtubeUrl).toBe("https://www.youtube.com/watch?v=abc123")
+    expect(received.body?.videoUrl).toBeUndefined()
+  })
+
+  it("rejects two sources with isError naming what was provided", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {
+      video_url: "https://a/clip.mp4",
+      youtube_url: "https://youtu.be/abc123",
+    })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain("exactly one")
+    expect((result.content[0] as { text: string }).text).toContain("video_url + youtube_url")
+    expect(received.body).toBeUndefined() // never dispatched
+  })
+
+  it("rejects zero sources with isError", async () => {
+    const { fastify } = stubRoute("POST", "/v1/video-analysis", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {})
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain("none provided")
+  })
+
+  it("is omitted without workflows:execute", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("video_analysis")
+  })
+})

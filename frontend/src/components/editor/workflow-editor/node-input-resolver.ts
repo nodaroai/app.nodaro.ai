@@ -2384,6 +2384,13 @@ export function resolveNodeInputs(
     } else if (src.type === "web-scrape") {
       // json handle output arrives pre-stringified from extractNodeOutput
       inputs.prompt = output;
+    } else if (src.type === "video-analysis") {
+      // Scene-breakdown JSON arrives pre-stringified from extractNodeOutput.
+      // Route to prompt for generic text consumers; Extract Field / JSON Process
+      // read src.data.generatedJson directly. Mirrors web-scrape's json branch —
+      // without this, the src.type chain has no catch-all else and the output
+      // would be silently dropped.
+      inputs.prompt = output;
     } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
       // Route sub-workflow output by the sourceHandle to the correct media type
       const srcData = src!.data as Record<string, unknown>;

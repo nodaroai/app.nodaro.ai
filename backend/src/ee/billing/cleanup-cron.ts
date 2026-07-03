@@ -6,6 +6,7 @@ import {
   renewSubscriptionCredits,
   sendStorageWarnings,
   sweepSoftDeletedLocationAssets,
+  sweepVideoAnalysisTmp,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
 
@@ -19,6 +20,7 @@ import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
+ * - sweepVideoAnalysisTmp:      daily at 04:30 UTC (double-stall orphan reaper)
  * - sendStorageWarnings:        daily at 09:00 UTC
  *
  * All jobs are idempotent and wrapped in try/catch to prevent server crashes.
@@ -114,6 +116,28 @@ export function startCleanupCron(): void {
     }
   })
 
+  // Video-analysis tmp orphan reaper -- daily at 04:30 UTC.
+  // The video-analysis worker best-effort deletes its jobId-scoped
+  // `video-analysis-tmp/<jobId>/` intermediates in its `finally`; a
+  // double-stall / crash skips that teardown and NO DB-driven reaper covers
+  // these (they're referenced by nothing in the DB). This sweep reaps whatever
+  // is older than 24h — prefix-scoped so it can never touch real outputs.
+  cron.schedule("30 4 * * *", async () => {
+    console.log("[cron] Starting video-analysis tmp orphan sweep...")
+    const start = Date.now()
+    try {
+      const result = await sweepVideoAnalysisTmp()
+      console.log(
+        `[cron] video-analysis tmp sweep done: ` +
+        `listed=${result.objectsListed} deleted=${result.deleted} ` +
+        `failed=${result.failed} skippedOutOfPrefix=${result.skippedOutOfPrefix} ` +
+        `(${Date.now() - start}ms)`,
+      )
+    } catch (err) {
+      console.error("[cron] video-analysis tmp sweep failed:", err)
+    }
+  })
+
   // Storage warnings -- daily at 09:00 UTC
   cron.schedule("0 9 * * *", async () => {
     console.log("[cron] Starting storage warning check...")
@@ -150,5 +174,5 @@ export function startCleanupCron(): void {
   // no reconcile at all (audit B2). It now starts unconditionally from
   // server.ts via lib/reconcile/start.ts.
 
-  console.log("[cron] Billing cleanup cron jobs started (7 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
 }

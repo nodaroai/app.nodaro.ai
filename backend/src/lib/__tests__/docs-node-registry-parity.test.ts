@@ -52,7 +52,12 @@ const README_CONTENT = readFileSync(DOCS_README_PATH, "utf8")
  * entries ONLY with a comment explaining why (e.g., internal-only node).
  * The integrity check below ensures the list can't go stale.
  */
-const KNOWN_UNDOCUMENTED: ReadonlySet<string> = new Set<string>([])
+const KNOWN_UNDOCUMENTED: ReadonlySet<string> = new Set<string>([
+  // (empty) — every NODE_REGISTRY type currently has a public doc page.
+  // Add entries here ONLY with a comment explaining why (e.g., internal-only
+  // node). Test 3's integrity check forces a stale entry out once its doc page
+  // lands, so this list can't rot.
+])
 
 // ---------------------------------------------------------------------------
 // Sanity check on the docs directory walk.

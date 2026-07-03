@@ -56,6 +56,8 @@ export type ModelMode =
   | "isolation"
   | "dubbing"
   | "forced-alignment"
+  // video analysis
+  | "video-analysis"
 
 export interface PriceVariant {
   /** Composite identifier as it appears in `STATIC_CREDIT_COSTS`. */
@@ -1737,6 +1739,44 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "volcengine-lipsync:60s", credits: 120 },
       { identifier: "volcengine-lipsync:120s", credits: 240 },
       { identifier: "volcengine-lipsync:300s", credits: 600, note: "5-min ceiling" },
+    ],
+  },
+  // ── Gemini video analysis ── (Gemini-only; billed per duration bucket — the
+  // structural credit formula lives in video-analysis-pricing.ts. Composite id
+  // shape `video-analysis:<model>:<bucket>s` mirrors volcengine-lipsync: bare
+  // row = per-model namespace root at the 10-min ceiling, plus one row per bucket.)
+  "gemini-3-flash-video-analysis": {
+    id: "gemini-3-flash-video-analysis",
+    kind: "video",
+    modes: ["video-analysis"] as const,
+    family: "Google",
+    label: "Video Analysis (Gemini 3 Flash)",
+    series: "Gemini",
+    description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast Gemini tier. Billed per duration bucket.",
+    useCases: ["video-analysis", "shot-list", "fast"],
+    pricing: [
+      { identifier: "video-analysis:gemini-3-flash", credits: 3, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:gemini-3-flash:60s", credits: 1 },
+      { identifier: "video-analysis:gemini-3-flash:180s", credits: 1 },
+      { identifier: "video-analysis:gemini-3-flash:360s", credits: 2 },
+      { identifier: "video-analysis:gemini-3-flash:600s", credits: 3, note: "10-min ceiling" },
+    ],
+  },
+  "gemini-3.1-pro-video-analysis": {
+    id: "gemini-3.1-pro-video-analysis",
+    kind: "video",
+    modes: ["video-analysis"] as const,
+    family: "Google",
+    label: "Video Analysis (Gemini 3.1 Pro)",
+    series: "Gemini",
+    description: "Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket.",
+    useCases: ["video-analysis", "shot-list", "cinematic"],
+    pricing: [
+      { identifier: "video-analysis:gemini-3.1-pro", credits: 94, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:gemini-3.1-pro:60s", credits: 13 },
+      { identifier: "video-analysis:gemini-3.1-pro:180s", credits: 25 },
+      { identifier: "video-analysis:gemini-3.1-pro:360s", credits: 56 },
+      { identifier: "video-analysis:gemini-3.1-pro:600s", credits: 94, note: "10-min ceiling" },
     ],
   },
 }

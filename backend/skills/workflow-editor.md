@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-07-02T16:49:53.215Z
-generated_from: a8f6ce759
+generated_at: 2026-07-03T10:24:31.058Z
+generated_from: 25df56f4a
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -223,6 +223,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `upload-video` — Upload Video
 - `upscale-image` — Upscale Image
 - `vehicle` — Vehicle
+- `video-analysis` — Video Analysis
 - `video-composer` — Compose Video
 - `video-retake` — Retake Video
 - `video-sfx` — Video SFX
