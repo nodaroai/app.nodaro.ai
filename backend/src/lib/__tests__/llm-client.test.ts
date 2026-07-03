@@ -22,6 +22,60 @@ describe("LlmContentBlock type coverage", () => {
   })
 })
 
+describe("chat-completions wire mapping (KIE forwards ONLY image_url; drops video_url/audio_url)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("maps video AND audio blocks to `image_url` parts (Gemini ingests by MIME) — never video_url/audio_url", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        choices: [{ message: { role: "assistant", content: "ok" } }],
+        usage: { prompt_tokens: 3, completion_tokens: 1 },
+      }),
+    )
+    await llmComplete({
+      modelId: "gemini-3-flash",
+      system: "",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", url: "https://x/pic.png" },
+            { type: "video", url: "https://x/clip.mp4" },
+            { type: "audio", url: "https://x/track.mp3" },
+            { type: "text", text: "describe" },
+          ],
+        },
+      ],
+    })
+
+    const init = fetchMock.mock.calls[0]?.[1] as { body: string }
+    const body = JSON.parse(init.body) as { messages: Array<{ role: string; content: unknown }> }
+    const parts = body.messages[0].content as Array<Record<string, unknown>>
+
+    // image, video, audio ALL serialize to `image_url` — the only part KIE's
+    // chat-completions proxy actually forwards to Gemini.
+    expect(parts[0]).toEqual({ type: "image_url", image_url: { url: "https://x/pic.png" } })
+    expect(parts[1]).toEqual({ type: "image_url", image_url: { url: "https://x/clip.mp4" } })
+    expect(parts[2]).toEqual({ type: "image_url", image_url: { url: "https://x/track.mp3" } })
+    expect(parts[3]).toEqual({ type: "text", text: "describe" })
+
+    // Regression guard: the silently-dropped shapes must never appear on the wire.
+    const types = parts.map((p) => p.type)
+    expect(types).not.toContain("video_url")
+    expect(types).not.toContain("audio_url")
+  })
+})
+
 // Helper: a Response stand-in for non-streaming fetch mocks.
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
