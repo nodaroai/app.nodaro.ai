@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => {
   const mockHasCredits = { value: true }
   // Controllable admin markup for the credit-commit paths. The count-based
   // (voice-changer-pro) branch + the provider-metered branch both read this via
-  ***REDACTED-OSS-SCRUB***
+  // getAppSettings(). 25% is a representative Cloud admin markup (the code
+  // default is 0 — markup is a runtime dial set in the admin webapp).
   const mockMarkupPercent = { value: 25 }
   const mockCommitCredits = vi.fn().mockResolvedValue(undefined)
   const mockRefundCredits = vi.fn().mockResolvedValue(undefined)

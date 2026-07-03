@@ -118,8 +118,8 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
     "/v1/characters/:id/approve-portrait",
     {
       // 10 req/min/IP — gates the paid LLM caption (Claude Sonnet vision,
-      ***REDACTED-OSS-SCRUB***
-      ***REDACTED-OSS-SCRUB***
+      // per call). Mirrors `location-main-image-approval.ts`. Without
+      // this, a motivated attacker can burn /min in Anthropic credits.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (req, reply) => {

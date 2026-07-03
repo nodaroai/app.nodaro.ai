@@ -51,7 +51,7 @@ export interface VideoClipCost {
 export const VIDEO_CLIP_CREDITS: Record<string, VideoClipCost> = {
   "kling-turbo": { credits: 11, clipSeconds: 5 }, // kling-turbo:5s
   "kling": { credits: 14, clipSeconds: 5 }, // kling:5s
-  ***REDACTED-OSS-SCRUB***
+  "kling-3.0": { credits: 31, clipSeconds: 5 },
   "seedance": { credits: 7, clipSeconds: 8 }, // seedance:8s
   "seedance-2": { credits: 50, clipSeconds: 8 }, // seedance-2:8s:720p-ref
   "seedance-2-fast": { credits: 40, clipSeconds: 8 }, // seedance-2-fast:8s:720p-ref

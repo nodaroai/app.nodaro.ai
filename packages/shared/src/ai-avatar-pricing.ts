@@ -32,7 +32,7 @@ export type AiAvatarResolution = "720p" | "1080p" | "4k"
  * Credits are derived at billing time: ceil(usdCost / CREDIT_BASE_USD) with markup.
  */
 export const AI_AVATAR_RATE_USD_PER_SEC: Record<AiAvatarEngine, Record<AiAvatarResolution, number>> = {
-  ***REDACTED-OSS-SCRUB***
+  // avatar-iv: 720p anchored (live test); 1080p rounded from /min; 4k estimate.
   "avatar-iv": { "720p": 0.06, "1080p": 0.08, "4k": 0.16 },
   // avatar-v: ALL UNPINNED ESTIMATES — must be confirmed before avatar-v is default.
   "avatar-v":  { "720p": 0.08, "1080p": 0.10, "4k": 0.20 },

@@ -51,7 +51,7 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   //   z-image, grok, qwen-i2i.
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
-  ***REDACTED-OSS-SCRUB***
+  // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
   //   gpt-image, gpt-image-i2i, flux-i2i, flux-pro-i2i, ideogram-reframe.
 }
 
@@ -142,8 +142,8 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // NB: `wan-2.7` / `wan-2.7-pro` are IMAGE models (see the image registry), not
   //   video. The motion-transfer route's prompt is capped at the motion-control
   //   limit (2500) inside the route itself — its provider values are the shared
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // `kling` (→1000 here, safely tighter) / `kling-3.0` ids, not a "motion-*" id.
+  // UNVERIFIED (schema states no limit) → 8000 default: veo3, veo3.1, veo3_lite
   //   kling-3.0, kling-3-omni, runway-aleph.
 }
 
@@ -818,7 +818,7 @@ export const LIP_SYNC_PROVIDERS = [
   "heygen-lipsync-precision",
   "lipsync-2-pro",
   // Sync Lipsync v3 — fal.ai-hosted, video-input dubbing model billed per
-  ***REDACTED-OSS-SCRUB***
+  // second of output (/min). Routed through falLipSync (the worker's fal
   // branch); priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
   "sync-lipsync-v3",
   // Volcengine video-to-video lip sync — KIE-hosted, VIDEO-input AI dubbing

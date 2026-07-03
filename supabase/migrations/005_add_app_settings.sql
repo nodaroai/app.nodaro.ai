@@ -10,10 +10,13 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
     updated_by UUID REFERENCES public.profiles(id)
 );
 
--- Initial settings
+-- Initial settings.
+-- Default markup is 0 (at-cost). Cloud operators set their own markup in the
+-- admin webapp (writes app_settings.cost_markup_percent); this seed only ever
+-- applies on a fresh database (ON CONFLICT DO NOTHING).
 INSERT INTO public.app_settings (key, value) VALUES
     ('ai_provider', '"replicate"'),
-    ***REDACTED-OSS-SCRUB***
+    ('cost_markup_percent', '0')
 ON CONFLICT (key) DO NOTHING;
 
 -- RLS: Only admins can read/write

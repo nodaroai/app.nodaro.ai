@@ -115,9 +115,9 @@ export function resolveImageGenCreditIdentifier(opts: {
 // T2V-specific credit overrides: some providers have different costs for T2V
 // vs I2V/V2V due to different default resolutions or colliding with image model names.
 const T2V_CREDIT_OVERRIDES: Record<string, string> = {
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  "grok": "grok-i2v",           // T2V grok, same as I2V grok (not image grok = 4 cr)
+  "wan": "wan-t2v",             // T2V wan 1080p = (V2V wan 720p = 70 cr)
+  "wan-turbo": "wan-turbo-t2v", // T2V wan-turbo 720p = (I2V wan-turbo 480p = 40 cr)
 }
 
 /**

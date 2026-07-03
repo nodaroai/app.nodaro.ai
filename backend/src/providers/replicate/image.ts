@@ -113,8 +113,8 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
     },
   },
   // BFL Flux 2 Max — even larger sibling of Pro. Same safety_tolerance
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // lever pinned to 5 (the max for the family). Variable pricing: base
+  // + per ref image (handled via composite identifiers in
   // `buildCreditModelIdentifier`). Supports up to 8 reference images.
   "flux-2-max": {
     model: "black-forest-labs/flux-2-max",
@@ -129,7 +129,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
         resolution: `${resolutionMp(extraParams)} MP`,
       }
       // Schema field is a single `input_images` array (max 8) — NOT
-      ***REDACTED-OSS-SCRUB***
+      // image_prompt_1..N. flux-2-max charges per ref, so the count is
       // also gated at the frontend (REF_IMAGE_MAX_LIMITS) and route pricing.
       if (refs.length) input.input_images = refs.slice(0, 8)
       if (seed != null) input.seed = seed
