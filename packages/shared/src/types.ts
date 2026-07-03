@@ -188,8 +188,7 @@ export interface ConnectedReference {
   // Propagated from CharacterNodeData on the upstream character node. Used
   // by selectLoraRoutingForMentions (`@nodaro/shared` + backend mirror) to
   // decide whether to route generate-image through `flux-lora-character`
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  // instead of reference-image injection.
   readonly loraReplicateVersion?: string | null
   readonly loraTriggerWord?: string | null
   readonly loraTrainingStatus?: string | null

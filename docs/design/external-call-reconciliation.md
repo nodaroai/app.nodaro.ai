@@ -53,7 +53,6 @@ Failure modes observed:
 --
 -- Five new columns track external provider tasks so a cron can find stuck rows and
 -- either recover them (async, with provider_task_id) or sweep them (sync, no task_id).
-***REDACTED-OSS-SCRUB***
 --
 -- Decision references:
 --   D1: Single set of columns on `jobs`, not a side table (every job has ≤ 1 external call).

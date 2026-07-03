@@ -26,7 +26,6 @@
  * No scope gate: this is a content-delivery tool with no side effects, no
  * DB access, no API calls. Universal availability is the point.
  *
- ***REDACTED-OSS-SCRUB***
  * Doctrine source: backend/skills/video-director/
  */
 import { readFileSync } from "node:fs"

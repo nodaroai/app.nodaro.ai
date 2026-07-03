@@ -12,8 +12,6 @@
  * remapped Dvorak — therefore resolve by the letter the user sees, while
  * non-Latin layouts fall back to the physical key. The fix is independent of
  * which specific non-Latin glyph a layout produces.
- *
- ***REDACTED-OSS-SCRUB***
  */
 
 export type Mod = "mod" | "ctrl" | "meta" | "shift" | "alt"

@@ -1,7 +1,7 @@
 -- Gemini Omni Video (KIE) credit pricing. Mirrors STATIC_CREDIT_COSTS in
 -- backend/src/ee/billing/credits.ts. Admin /admin/models reads model_pricing
 -- from the DB only, so every base + composite id must be seeded here.
-***REDACTED-OSS-SCRUB***
+-- Lowercase "4k".
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) VALUES
   ('gemini-omni-video',         29, true, 'image-to-video'),
   ('gemini-omni-video:4',       29, true, 'image-to-video'),

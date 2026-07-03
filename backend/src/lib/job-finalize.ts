@@ -285,8 +285,6 @@ export interface FinalizeInput {
  *  - jobs.status already terminal (cancelled / completed / failed)
  *  - finalize claim lost (another finalizer is mid-flight on this job)
  *  - markJobCompleted CAS missed (concurrent cancel won)
- *
- ***REDACTED-OSS-SCRUB***
  */
 export async function finalizeJobWithMedia(
   input: FinalizeInput,

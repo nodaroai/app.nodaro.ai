@@ -1128,7 +1128,7 @@ export const SEEDANCE_2_REF_LIMITS = {
 
 /**
  * Trim-stitch parameters for the seedance-2-extend provider (spike-validated
- ***REDACTED-OSS-SCRUB***
+ * 2026-06-11):
  * the model's extension output wobbles for its first ~3 frames and the source
  * tail's last ~4 frames lead into it; dropping both and butt-joining yields a
  * seam SMOOTHER than ordinary in-clip motion (PSNR 34.4dB vs 30.6dB

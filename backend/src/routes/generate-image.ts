@@ -146,8 +146,7 @@ export const generateImageBody = z.object({
    * the route looks up `lora_replicate_version` + `lora_trigger_word`
    * server-side scoped by `req.userId`. Without this lookup, a caller
    * could submit any guessed/leaked Replicate version hash and run
-   ***REDACTED-OSS-SCRUB***
-   ***REDACTED-OSS-SCRUB***
+   * inference against ANY trained LoRA.
    */
   _internalLora: z.object({
     characterId: z.string().uuid(),

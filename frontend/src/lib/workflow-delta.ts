@@ -1,5 +1,5 @@
 /**
- ***REDACTED-OSS-SCRUB***
+ * Delta-save builder (P3).
  *
  * Changed-detection is REFERENCE diffing against the last-saved snapshot: the
  * workflow store never mutates nodes/edges (repo invariant — always copy), so

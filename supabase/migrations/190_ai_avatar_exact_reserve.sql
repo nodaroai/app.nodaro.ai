@@ -4,7 +4,7 @@
 -- credits for a clip that actually cost ~$0.75 (≈40 credits). Three compounding
 -- causes, all in the RESERVE (the metered commit was already refund-only):
 --   1. Audio mode reserved the 900s TOP bucket (audio length unknown at reserve).
-***REDACTED-OSS-SCRUB***
+--   2. The stored hold baked a *1.5 safety factor ON TOP of the admin
 --      markup that getModelCreditCostFromDB re-applies at reserve time
 --      (redundant double-buffer).
 --   3. Coarse low-end buckets (old min 30s) over-reserved short clips.

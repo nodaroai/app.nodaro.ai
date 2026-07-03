@@ -4,7 +4,7 @@
 **Status:** Approved (scope confirmed by user); pending implementation plan
 **Scope:** Bring location / object / creature(animal) studios to parity with the redesigned character studio, generalize the entity image-output handle, and surface creature voice.
 
-***REDACTED-OSS-SCRUB***
+Builds directly on the just-shipped character work: the generic `StudioShell` + `StudioNavConfig`, the plain-`image` output handle (PR #3369 + the connectivity fix in `connection-validation.ts`/`payload-builder.ts`), and the voice resource.
 
 ---
 

@@ -705,8 +705,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "volcengine-lipsync:300s": 600,        // 300s × — 5-min ceiling
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
   "replicate-mmaudio":       1,  // base/legacy default (8s bucket)
   "replicate-mmaudio:8s":    1,
   "replicate-mmaudio:15s":   1,
@@ -890,8 +888,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   //    safety-net fallback). The three rows below are unreachable when
   //    routes/loop-video.ts, routes/trim-video.ts, routes/combine-videos.ts
   //    use the computeCredits hook in creditGuard. Their model_pricing rows
-  ***REDACTED-OSS-SCRUB***
-  ***REDACTED-OSS-SCRUB***
+  //    (also 0) are likewise unreachable.
   "combine-videos": 3,
   // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
   // no provider cost). Priced by resolution. Base + resolution composites;

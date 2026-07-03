@@ -551,8 +551,8 @@ const GEMINI_OMNI_RESOLUTIONS = ["720p", "1080p", "4k"]
  *  The provider MUST report the ACTUAL tier cost — like every other provider does — so the
  *  credit-commit charges that tier. Returning a flat cheapest-tier cost (the old behavior)
  *  under-charged 4K / long / video-edit jobs. 720p and 1080p share a price band.
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
+ *  NOTE: this is an interim, per-tier-cost fix; the proper system-wide
+ *  pricing-convention cleanup is tracked separately. */
 function geminiOmniTierCostUsd(resolution: string, durationSec: number, videoConnected: boolean): number {
   const is4k = resolution === "4k"
   if (videoConnected) return is4k ? 1.8 : 1.2 // video-edit is a flat per-generation price
@@ -2051,8 +2051,8 @@ export async function kieExtendVideoVEO(
  * NOTE (2026-06 spike): Seedance 2 DOES continue videos through
  * `reference_video_urls` + the bare temporal template ("Generate the content
  * after Video 1: ..."), returning extension-only output with continued audio
- * — validated end-to-end in
- ***REDACTED-OSS-SCRUB***
+ * — validated end-to-end in a
+ * provider spike. The platform
  * ships that as the `seedance-2-extend` provider on the extend-video node
  * (worker-side template + trim-stitch in workers/handlers/video-ai.ts);
  * route pipeline work there instead of through this single-call wrapper.

@@ -16,7 +16,7 @@ INSERT INTO public.model_pricing (model_identifier, credit_cost, is_enabled, cat
 VALUES
   -- Replicate flux-dev-lora inference. Internal-only id selected by
   -- payload-builder.ts when a single trained @character is mentioned in
-  ***REDACTED-OSS-SCRUB***
+  -- generate-image.
   ('flux-lora-character',     3,   true, 'generate-image'),
   -- Replicate ostris/flux-dev-lora-trainer per-training (1000 steps).
   -- Refunded by webhook on failure/cancel. 150cr = conservative one-shot.

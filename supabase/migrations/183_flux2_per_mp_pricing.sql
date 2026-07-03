@@ -1,7 +1,7 @@
 -- Migration: seed per-MP×ref model_pricing rows for BFL Flux 2 image models
 --
 -- Replaces the old resolution-less `flux-2-max:Nref` rows (which baked in a
-***REDACTED-OSS-SCRUB***
+-- fixed 0-ref base-MP assumption and the legacy baked markup) with the correct
 -- 0%-base per-MP×ref grid derived from the canonical formula in
 -- `packages/shared/src/flux2-pricing.ts` (flux2BaseCredits).
 --

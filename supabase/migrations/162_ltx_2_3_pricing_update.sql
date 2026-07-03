@@ -3,7 +3,6 @@
 -- Source: https://replicate.com/lightricks/ltx-2.3-{pro,fast} (rendered pricing).
 -- Pro:  $0.08 / $0.16 / $0.32 per second of output video for 1080p / 2k / 4k.
 -- Fast: $0.06 / $0.12 / $0.24 per second of output video for 1080p / 2k / 4k.
-***REDACTED-OSS-SCRUB***
 -- Extend + retake are Pro-only at 1080p → 5 credits/sec.
 --
 -- Replaces (not seeded twice): migration 161_ltx_2_3_models.sql inserted placeholders

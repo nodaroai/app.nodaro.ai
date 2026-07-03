@@ -2,9 +2,6 @@
  * Studio prompt-assembly helpers. Centralizes "studio scaffolding" trailers
  * that push provider output toward studio-quality reference material, and
  * composes the two-channel prompts used by portrait + asset gen routes.
- *
- ***REDACTED-OSS-SCRUB***
- ***REDACTED-OSS-SCRUB***
  */
 
 import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeValue } from "@nodaro/shared"

@@ -1,7 +1,5 @@
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- Fix all credit costs in model_pricing to match the pricing convention
+-- in effect at the time.
 -- Dynamic (per-second) models store 0 credits; actual cost calculated at runtime.
 
 -- Skip if model_pricing table doesn't exist yet (created in 017_billing_schema.sql).

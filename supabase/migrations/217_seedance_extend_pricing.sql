@@ -3,8 +3,7 @@
 -- trim-stitches source+extension into one seamless clip (ffmpeg).
 --
 -- Rates = the seedance-2 "-ref" matrix (duration tier × resolution) + 3cr
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- ffmpeg stitch overhead baked into every row.
 --
 -- Values MUST match STATIC_CREDIT_COSTS in backend/src/ee/billing/credits.ts.
 -- Per CLAUDE.md Provider Enum Sync step 9: ON CONFLICT DO NOTHING (preserves

@@ -3,7 +3,6 @@
 **Date:** 2026-07-01
 **Status:** Approved (brainstorming) — revised after adversarial full-review; pending implementation plan
 **Branch:** `feat/character-node-default-role`
-***REDACTED-OSS-SCRUB***
 
 ## Problem
 

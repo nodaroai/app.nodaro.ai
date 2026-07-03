@@ -2373,7 +2373,7 @@ Alternative: Convert mutations to `useMutation` hooks and use `onMutate` for opt
 
 ### 4.6 Post-checkout refetch with delay
 
-***REDACTED-OSS-SCRUB***
+**Current:** `BillingPage` uses `setTimeout(3000)` after Stripe checkout redirect to refetch data.
 
 **Migration:** Keep the 3s delay but use `invalidateQueries` instead of manual refetch:
 
@@ -2546,7 +2546,7 @@ After completing the migration, verify each item:
 - [ ] AdminLayout + AppSidebar share report count poll
 - [ ] StatsOverview + ExecutionsTab + editor share stats cache
 - [ ] Character/Object/Location/Face galleries share asset cache
-***REDACTED-OSS-SCRUB***
+- [ ] Post-Stripe-checkout refetch works via `invalidateQueries`
 - [ ] Imperative credit check uses `queryClient.fetchQuery`
 - [ ] `getCachedCredits` uses `queryClient.getQueryData`
 - [ ] Edition gating (`enabled: hasCredits() / hasAdmin()`) prevents unnecessary fetches in community/business editions

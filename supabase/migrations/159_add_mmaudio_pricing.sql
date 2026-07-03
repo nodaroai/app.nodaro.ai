@@ -1,8 +1,7 @@
 -- 159_add_mmaudio_pricing.sql
 -- Seeds model_pricing for the new video-sfx node (Replicate zsxkib/mmaudio).
 -- All values are BASE credits (pre-markup); creditGuard applies cost_markup_percent
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+-- at request time.
 --
 -- Schema convention follows migration 113 (kling-avatar per-second pricing):
 --   columns = model_identifier, credit_cost, is_enabled, category

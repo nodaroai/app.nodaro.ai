@@ -1,6 +1,6 @@
-***REDACTED-OSS-SCRUB***
+-- 174: Pricing-convention re-baseline (markup is a runtime dial).
 --
-***REDACTED-OSS-SCRUB***
+-- Strips the previously-baked markup from every markup-baked model_pricing row down to
 -- the true 0%-base (ceil(rawProviderUSD / 0.02)). The markup is now applied
 -- exactly once, at reserve, by getModelCreditCostFromDB. Combined with the
 -- commit-reserved change in workers/shared.ts (commit charges the reserved tier
@@ -13,9 +13,6 @@
 -- markup-baked / double-rounded ids change; already-0%-base rows (seedance-2
 -- matrix, MMAudio, kling-avatar ladder) are untouched. The 156 "unclear"
 -- LLM/FFmpeg/voice rows already commit-reserved and are a separate pricing pass.
---
-***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
 --
 -- Idempotent: pure UPDATEs to absolute values.
 

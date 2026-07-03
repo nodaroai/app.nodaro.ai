@@ -367,7 +367,7 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 
 **Admin Storage:** `PUT /v1/admin/users/:id/storage` -- progress bar + tier presets + custom GB
 
-***REDACTED-OSS-SCRUB***
+**Change Plan:** After `stripe.subscriptions.update()` succeeds, immediately update DB. Webhook = backup reconciliation.
 
 **Library:** `GET /v1/library` -- Storage summary, filter by type, cursor pagination, bulk delete.
 Files: `backend/src/routes/library.ts`

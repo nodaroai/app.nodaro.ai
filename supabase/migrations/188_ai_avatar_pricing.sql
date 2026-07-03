@@ -6,7 +6,7 @@
 --   (900s covers the 5000-char@voiceSpeed=0.5 worst case: ceil(5000/12/0.5)=834s)
 --
 -- Hold formula: [formula removed]  — 1.5× safety factor over base credits
-***REDACTED-OSS-SCRUB***
+-- so the hold is always ≥ the actual metered charge after runtime markup.
 -- The actual charge is computed at job completion from the provider's real
 -- USD cost (durationSec × rate); commit_credits refunds any surplus.
 --
