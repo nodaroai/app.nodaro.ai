@@ -112,4 +112,55 @@ describe("directElevenLabsTTS", () => {
       directElevenLabsTTS("hi", "Kkk000Lll111Mmm222Nn", undefined, undefined),
     ).rejects.toThrow(/was not found on ElevenLabs/)
   })
+
+  it("aborts and throws a named timeout error when the TTS generation call hangs", async () => {
+    vi.useFakeTimers()
+    try {
+      // A fetch that only settles when the abort signal fires (mimics real fetch).
+      vi.stubGlobal("fetch", vi.fn((_url: string, opts?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          opts?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))
+        }),
+      ))
+
+      const pending = directElevenLabsTTS("hi", "Ooo333Ppp444Qqq555Rr", undefined, undefined)
+      const assertion = expect(pending).rejects.toThrow("ElevenLabs TTS timed out after 300s")
+      await vi.advanceTimersByTimeAsync(300_000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("doesn't fail the main TTS call when fetchStoredVoiceSettings times out (falls back to API defaults)", async () => {
+    vi.useFakeTimers()
+    try {
+      const calls: Array<{ url: string; body?: unknown }> = []
+      vi.stubGlobal("fetch", vi.fn((url: string, opts?: { signal?: AbortSignal; body?: unknown }) => {
+        const u = String(url)
+        if (u.endsWith("/settings")) {
+          // Never resolves on its own — only rejects when the caller's timeout aborts it.
+          return new Promise((_resolve, reject) => {
+            opts?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))
+          })
+        }
+        calls.push({ url: u, body: opts?.body ? JSON.parse(String(opts.body)) : undefined })
+        return Promise.resolve(audioResponse())
+      }))
+
+      // Explicit slider forces the fetchStoredVoiceSettings lookup.
+      const pending = directElevenLabsTTS("hi", "Sss666Ttt777Uuu888Vv", undefined, { speed: 1.1 })
+      await vi.advanceTimersByTimeAsync(15_000)
+      await pending
+
+      expect(calls).toHaveLength(1)
+      // Stored-settings lookup failed silently (timeout, not error) → merge falls back to
+      // API defaults, not stored values — same semantic as any other lookup failure.
+      expect((calls[0]!.body as { voice_settings: Record<string, unknown> }).voice_settings).toEqual({
+        stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 1.1,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

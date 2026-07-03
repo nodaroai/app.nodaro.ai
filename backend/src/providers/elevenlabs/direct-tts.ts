@@ -110,18 +110,31 @@ const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000
 const SETTINGS_CACHE_MAX = 500
 const storedSettingsCache = new Map<string, { value: StoredVoiceSettings | null; expiresAt: number }>()
 
+// Metadata GET — short bound, it's just a fidelity lookup (never worth hanging a worker for).
+const VOICE_SETTINGS_TIMEOUT_MS = 15_000
+// Generous bound: 40,000-char turbo narrations legitimately take minutes to synthesize.
+// Too-short would be worse than none — better to let real long-form jobs finish than to
+// abort them prematurely. Still finite so a hung connection can't idle a worker slot
+// until undici's ~300s implicit bound (this IS that bound, made explicit and attributable).
+const TTS_GENERATION_TIMEOUT_MS = 300_000
+
 async function fetchStoredVoiceSettings(voiceId: string, apiKey: string): Promise<StoredVoiceSettings | null> {
   const cached = storedSettingsCache.get(voiceId)
   if (cached && Date.now() < cached.expiresAt) return cached.value
   let value: StoredVoiceSettings | null = null
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), VOICE_SETTINGS_TIMEOUT_MS)
   try {
     const res = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/${voiceId}/settings`, {
       headers: { "xi-api-key": apiKey },
+      signal: controller.signal,
     })
     if (res.ok) value = (await res.json()) as StoredVoiceSettings
   } catch {
-    // Network failure → fall back to API defaults below; never fail the job
+    // Network failure OR timeout → fall back to API defaults below; never fail the job
     // over a fidelity lookup.
+  } finally {
+    clearTimeout(timer)
   }
   if (storedSettingsCache.size >= SETTINGS_CACHE_MAX) storedSettingsCache.clear()
   storedSettingsCache.set(voiceId, { value, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS })
@@ -174,15 +187,30 @@ export async function directElevenLabsTTS(
   }
 
   async function attempt(vid: string): Promise<Response> {
-    return fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg",
-      },
-      body: JSON.stringify(body),
-    })
+    // Hard timeout so a stalled connection can never idle a worker slot until undici's
+    // ~300s implicit bound — this makes that bound explicit and attributable. Generous
+    // because 40k-char turbo narrations legitimately take minutes to synthesize.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TTS_GENERATION_TIMEOUT_MS)
+    try {
+      return await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`, {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(`ElevenLabs TTS timed out after ${TTS_GENERATION_TIMEOUT_MS / 1000}s`)
+      }
+      throw err
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   let response = await attempt(resolvedVoiceId)

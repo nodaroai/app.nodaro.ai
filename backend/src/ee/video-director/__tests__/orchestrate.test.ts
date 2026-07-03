@@ -31,6 +31,7 @@ import {
   ALIGNMENT,
   MOCK_PLAN,
   MOCK_AUTHORED,
+  MOCK_REPAIRED,
   BASE_OPTS,
   buildDeps,
 } from "./orchestrate-fixtures.js"
@@ -123,5 +124,122 @@ describe("runVideoDirector", () => {
     const deps = buildDeps()
 
     await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/resolve/)
+  })
+
+  // -------------------------------------------------------------------------
+  // Task T2 — one-round author self-repair on resolver rejection
+  // -------------------------------------------------------------------------
+  describe("author self-repair (Task T2)", () => {
+    it("(f) bake fails once → repairs (author called twice, 2nd call carries repair.resolverError) and re-bake succeeds → pipeline continues to render", async () => {
+      const bakeErrorMsg = "scene overlap detected"
+      mockBake
+        .mockImplementationOnce(() => {
+          throw new Error(bakeErrorMsg)
+        })
+        .mockReturnValueOnce({ plan: MOCK_PLAN, warnings: [] })
+
+      const author = vi.fn().mockResolvedValueOnce(MOCK_AUTHORED).mockResolvedValueOnce(MOCK_REPAIRED)
+      const deps = buildDeps({ author })
+
+      const result = await runVideoDirector(BASE_OPTS, deps)
+
+      // author called exactly twice: the original authoring call + one repair call.
+      expect(author).toHaveBeenCalledTimes(2)
+      const secondCallOpts = author.mock.calls[1][0] as {
+        repair?: { previousBrief: unknown; resolverError: string }
+      }
+      expect(secondCallOpts.repair).toEqual({
+        previousBrief: MOCK_AUTHORED,
+        resolverError: `resolve: ${bakeErrorMsg}`,
+      })
+
+      // bakeShotSequence retried exactly once, with the REPAIRED brief.
+      expect(mockBake).toHaveBeenCalledTimes(2)
+      expect(mockBake.mock.calls[1][0]).toEqual(MOCK_REPAIRED.shotSequenceBrief)
+
+      // Pipeline continues through render with the same final shape as the happy path.
+      expect(result).toEqual({ videoUrl: VIDEO_URL, planType: "shot-sequence" })
+    })
+
+    it("(g) repaired brief with a CHANGED voScript discards the repair and throws the ORIGINAL bake error without re-baking", async () => {
+      const bakeErrorMsg = "scene overlap detected"
+      mockBake.mockImplementation(() => {
+        throw new Error(bakeErrorMsg)
+      })
+
+      const driftedRepair = { ...MOCK_REPAIRED, voScript: "Ship faster than ever." }
+      const author = vi.fn().mockResolvedValueOnce(MOCK_AUTHORED).mockResolvedValueOnce(driftedRepair)
+      const deps = buildDeps({ author })
+
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(`resolve: ${bakeErrorMsg}`)
+
+      expect(author).toHaveBeenCalledTimes(2)
+      // Re-bake must NOT run when the invariant is violated.
+      expect(mockBake).toHaveBeenCalledTimes(1)
+    })
+
+    it("(h) repaired brief with changed cue text (voScript unchanged) discards the repair and throws the ORIGINAL bake error without re-baking", async () => {
+      const bakeErrorMsg = "scene overlap detected"
+      mockBake.mockImplementation(() => {
+        throw new Error(bakeErrorMsg)
+      })
+
+      const driftedRepair = {
+        ...MOCK_REPAIRED,
+        cues: [{ id: "c1", text: "Ship slower" }],
+      }
+      const author = vi.fn().mockResolvedValueOnce(MOCK_AUTHORED).mockResolvedValueOnce(driftedRepair)
+      const deps = buildDeps({ author })
+
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(`resolve: ${bakeErrorMsg}`)
+
+      expect(author).toHaveBeenCalledTimes(2)
+      expect(mockBake).toHaveBeenCalledTimes(1)
+    })
+
+    it("(i) bake fails twice (repair still invalid) → surfaces the SECOND bake error, author called exactly twice, no infinite loop", async () => {
+      mockBake
+        .mockImplementationOnce(() => {
+          throw new Error("first overlap error")
+        })
+        .mockImplementationOnce(() => {
+          throw new Error("second overlap error")
+        })
+
+      const author = vi.fn().mockResolvedValueOnce(MOCK_AUTHORED).mockResolvedValueOnce(MOCK_REPAIRED)
+      const deps = buildDeps({ author })
+
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow("resolve: second overlap error")
+
+      expect(author).toHaveBeenCalledTimes(2)
+      expect(mockBake).toHaveBeenCalledTimes(2)
+    })
+
+    it("(j) speech/alignment/render failures do NOT trigger repair — author is called exactly once", async () => {
+      const author = vi.fn().mockResolvedValue(MOCK_AUTHORED)
+
+      let deps = buildDeps({
+        author,
+        createSpeechJob: vi.fn().mockRejectedValue(new Error("tts down")),
+      })
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/speech/)
+      expect(author).toHaveBeenCalledTimes(1)
+
+      author.mockClear()
+      deps = buildDeps({
+        author,
+        createAlignmentJob: vi.fn().mockRejectedValue(new Error("align down")),
+      })
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/alignment/)
+      expect(author).toHaveBeenCalledTimes(1)
+
+      author.mockClear()
+      deps = buildDeps({
+        author,
+        createRenderJob: vi.fn().mockRejectedValue(new Error("render down")),
+      })
+      await expect(runVideoDirector(BASE_OPTS, deps)).rejects.toThrow(/render/)
+      expect(author).toHaveBeenCalledTimes(1)
+    })
   })
 })

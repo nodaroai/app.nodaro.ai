@@ -4,7 +4,6 @@ import {
   providerKindForVideoModel,
   providerKindForVideoToVideoModel,
   providerKindForLipSyncModel,
-  providerKindForTtsModel,
   providerKindForSuno,
 } from "../provider-kind.js"
 
@@ -47,10 +46,6 @@ describe("providerKindFor*", () => {
   it("routes lip-sync uniformly to kie-lip-sync", () => {
     expect(providerKindForLipSyncModel("kling-avatar")).toBe("kie-lip-sync")
     expect(providerKindForLipSyncModel("infinitalk")).toBe("kie-lip-sync")
-  })
-
-  it("routes ElevenLabs v3 TTS to elevenlabs-sync (direct ElevenLabs API)", () => {
-    expect(providerKindForTtsModel("elevenlabs-v3")).toBe("elevenlabs-sync")
   })
 
   it("routes Suno music to kie-suno", () => {

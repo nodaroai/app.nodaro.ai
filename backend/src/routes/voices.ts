@@ -32,8 +32,9 @@ let inflight: Promise<ElevenLabsVoice[]> | null = null
 // Fallback voices (mirrors frontend TTS_VOICES when no API key)
 // ---------------------------------------------------------------------------
 
-// Only voices supported by KIE.ai's ElevenLabs TTS endpoints.
-// 21 voices accepted by name, plus Adam & Harry via their ElevenLabs UUIDs.
+// Curated "premade" voice catalog (mirrors frontend/src/lib/tts-voices.ts) —
+// all text-to-speech requests route through the direct ElevenLabs API (never
+// KIE); 21 voices accepted by name, plus Adam & Harry via their ElevenLabs UUIDs.
 const FALLBACK_VOICES: ElevenLabsVoice[] = [
   // Female voices
   { voice_id: "Alice", name: "Alice", preview_url: "", gender: "female", accent: "British", age: "middle_aged", description: "", use_case: "", category: "premade" },

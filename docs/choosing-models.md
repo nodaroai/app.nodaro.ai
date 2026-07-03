@@ -151,9 +151,9 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 1 | sfx | Generate short sound effects from a text prompt. |
-| ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 2 | tts | Fast, cheap ElevenLabs TTS via KIE. Good for narration. |
+| ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 2 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs Forced Alignment | ElevenLabs | Everyday | 3 | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
-| ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 3 | tts | Multi-language ElevenLabs TTS via KIE. |
+| ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 3 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ElevenLabs STT | ElevenLabs | Everyday | 3 | stt | Speech-to-text — transcribe audio with timestamps. |
 | ⭐ ElevenLabs v3 | ElevenLabs | Everyday | 3 | tts | Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
 | Suno v4 | Suno | Everyday | 3 | music | Suno v4 music generation — full songs with vocals, multiple genres. |

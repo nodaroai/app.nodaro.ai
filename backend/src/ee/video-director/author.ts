@@ -37,6 +37,20 @@ export interface AuthoredSequence {
   shotSequenceBrief: ShotSequenceBrief
 }
 
+/**
+ * Repair context (Task T2 — one-round author self-repair on resolver
+ * rejection). Set by `runVideoDirector` when `bakeShotSequence` throws on the
+ * FIRST attempt; asks the author for a corrected brief while holding
+ * voScript/cues fixed (speech + forced alignment were already generated from
+ * them and cannot be redone without re-billing).
+ */
+export interface AuthorRepairContext {
+  /** The full sequence authored on the attempt that failed the resolver. */
+  previousBrief: AuthoredSequence
+  /** The resolver's (bake) error message, fed back verbatim. */
+  resolverError: string
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -151,6 +165,38 @@ function tryParseAndValidate(text: string): ParseResult {
   }
 }
 
+/**
+ * Build the initial user-turn content for a self-repair authoring call
+ * (Task T2). Appends a REPAIR block to the original brief: the previous
+ * brief's full JSON + the resolver's exact error, with a hard constraint that
+ * voScript and every cue must stay byte-identical — only scene/shot/reveal
+ * structure and timing may change. `runVideoDirector` discards the repair and
+ * throws the ORIGINAL bake error if that constraint is violated.
+ */
+function buildRepairPrompt(brief: string, repair: AuthorRepairContext): string {
+  return `${brief}
+
+---
+
+## REPAIR REQUIRED
+
+Your previous brief failed the resolver with this exact error:
+
+"${repair.resolverError}"
+
+Here is the previous brief you authored (for reference only — do not return it unchanged):
+
+\`\`\`json
+${JSON.stringify(repair.previousBrief, null, 2)}
+\`\`\`
+
+Produce a corrected shotSequenceBrief that fixes ONLY the scene/shot/reveal structure and timing — e.g. scenes must be strictly non-overlapping, including reveal holds. When in doubt, prefer collapsing to ONE scene (mirroring the doctrine's own guidance).
+
+HARD CONSTRAINT: "voScript" and every entry in "cues" (id, text, and order) MUST remain EXACTLY UNCHANGED from the previous brief above — do not rewrite, rephrase, reorder, or add/remove any narration. Speech and forced alignment were already generated from them and cannot be redone. Only scene/shot/reveal structure and timing may change.
+
+Return ONLY the JSON object matching the machine contract — no prose, no markdown fences.`
+}
+
 // ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
@@ -172,6 +218,11 @@ function tryParseAndValidate(text: string): ParseResult {
  *                     (runVideoDirector) — this function does not resolve presets.
  * @param opts.llm     Injectable LLM function (defaults to llmComplete). Tests
  *                     pass a vi.fn() mock; production uses the real client.
+ * @param opts.repair  Optional one-round repair context (Task T2), set by
+ *                     runVideoDirector when the bake/resolve step rejects the
+ *                     previously authored brief. When present, the initial
+ *                     user turn is the brief + a REPAIR block (see
+ *                     buildRepairPrompt) instead of the bare brief.
  */
 export async function authorShotSequence(opts: {
   genre: VideoGenre
@@ -180,12 +231,15 @@ export async function authorShotSequence(opts: {
   tier: string
   brand?: BrandTokens
   llm?: LlmFn
+  repair?: AuthorRepairContext
 }): Promise<AuthoredSequence> {
-  const { genre, brief, brand, llm: llmFn = llmComplete } = opts
+  const { genre, brief, brand, repair, llm: llmFn = llmComplete } = opts
   const system = buildAuthorSystemPrompt(genre, brand)
 
-  // Initial turn: just the user's brief
-  let messages: LlmRequest["messages"] = [{ role: "user", content: brief }]
+  // Initial turn: the brief, or — on a repair round — the brief plus the
+  // REPAIR block asking for a corrected brief with voScript/cues held fixed.
+  const initialContent = repair ? buildRepairPrompt(brief, repair) : brief
+  let messages: LlmRequest["messages"] = [{ role: "user", content: initialContent }]
   let lastError = ""
 
   for (let attempt = 0; attempt < 2; attempt++) {

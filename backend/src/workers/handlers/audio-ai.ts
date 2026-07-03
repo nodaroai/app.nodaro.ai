@@ -3,11 +3,10 @@ import { promises as fs } from "node:fs"
 import { supabase } from "../../lib/supabase.js"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
-import { textToSpeech as routedTextToSpeech } from "../../providers/index.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
-import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
+import { KieAudioProvider } from "../../providers/kie/audio.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
@@ -35,15 +34,22 @@ import {
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/persistence.js"
-import { providerKindForTtsModel } from "../../lib/reconcile/provider-kind.js"
 
+// ALL ElevenLabs text-to-speech now routes through the direct ElevenLabs API
+// (never KIE's TTS proxy) — standing repo rule "always ElevenLabs direct,
+// never KIE's elevenlabs-* wrappers". The KIE proxy was the path responsible
+// for garbled Hebrew output and a history of queue hangs; `directElevenLabsTTS`
+// already maps every model (v3/turbo/multilingual) and resolves the 21
+// premade voice names to UUIDs. Because the call is synchronous (no polling
+// task), there is no `makeOnTaskCreated`/reconcile wiring for TTS jobs going
+// forward — the reconcile cron only ever picks up rows with a persisted
+// `provider_call_started_at`, which this path never sets.
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
+  const { text, voice, provider: rawProvider, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
     jobId: string
     text: string
     voice?: string
     provider?: string
-    voiceType?: "premade" | "custom" | "library"
     stability?: number
     similarityBoost?: number
     style?: number
@@ -51,70 +57,38 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     languageCode?: string
     allowDefaultVoiceFallback?: boolean
   }
-  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"}, voiceType: ${voiceType ?? "premade"})`)
+  // Defensive default: every current enqueuer (routes/text-to-speech.ts,
+  // payload-builder.ts's "text-to-speech" case, pipeline-generate-speech.ts,
+  // pipeline-generate-narration.ts) already resolves a concrete provider
+  // before enqueueing — this only guards a future caller that forgets to.
+  const provider = rawProvider ?? "elevenlabs-v3"
+  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
 
   const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
   const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
 
-  // Route through direct ElevenLabs API for: v3 model, custom clones, Voice Library voices,
-  // or any premade voice UUID that isn't in KIE's 21 accepted voices.
-  const useDirectApi = provider === "elevenlabs-v3" || (voice && (
-    voiceType === "custom" || voiceType === "library" || !isKieAcceptedVoice(voice)
-  ))
-
   // Strip [audio tags] from text when NOT using v3 — v2 models speak them as literal text
   const processedText = provider === "elevenlabs-v3" ? text : stripAudioTags(text)
 
-  if (useDirectApi) {
-    const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
-      ...(hasOptions ? ttsOptions : {}),
-      allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
-    })
-    await setJobProgress(job, ctx.jobId, 50)
-
-    // POST-PROVIDER: ElevenLabs already delivered the audio (we were billed) —
-    // an R2 upload failure here is post-delivery, so skip the refund.
-    const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
-    await setJobProgress(job, ctx.jobId, 100)
-
-    const { ok } = await finalizeJobWithMedia({
-      jobId: ctx.jobId,
-      jobType: "text-to-speech",
-      result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
-      mediaUrl: r2Url,
-    })
-    if (!ok) return
-    console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
-    return
-  }
-
-  const resolvedTtsProvider = provider ?? "elevenlabs-turbo"
-  const ttsOnTaskCreated = makeOnTaskCreated(
-    ctx.jobId,
-    providerKindForTtsModel(resolvedTtsProvider),
-  )
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => routedTextToSpeech(processedText, resolvedTtsProvider, voice, hasOptions ? ttsOptions : undefined, { onTaskCreated: ttsOnTaskCreated }),
-  )
+  const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
+    ...(hasOptions ? ttsOptions : {}),
+    allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
+  })
   await setJobProgress(job, ctx.jobId, 50)
 
-  // POST-PROVIDER: the TTS provider already delivered `result.url` (we were
-  // billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId))
+  // POST-PROVIDER: ElevenLabs already delivered the audio (we were billed) —
+  // an R2 upload failure here is post-delivery, so skip the refund.
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-speech",
-    result,
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
     mediaUrl: r2Url,
-    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
 }
 
 const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, ctx) {
