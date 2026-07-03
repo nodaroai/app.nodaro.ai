@@ -4,7 +4,7 @@ import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { easeOutQuad, ringAngle, popWithSettle } from "./motion"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   hubLabel: string
@@ -76,9 +76,9 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
+  const hubType = resolveHeadingType(brand, hubLabel, { weight: 700, tracking: "-0.02em" })
 
   const radius = Math.min(width, height) * 0.32
   const cx = width / 2
@@ -172,6 +172,7 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
         {nodes.map((node, i) => {
           const t = transforms[i]!
           if (t.scale <= 0) return null
+          const nodeType = resolveBodyType(brand, node.label, { weight: 500 })
           return (
             <div
               key={i}
@@ -180,9 +181,8 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
                 left: cx + t.x * radius,
                 top: cy + t.y * radius,
                 transform: `translate(-50%, -50%) scale(${t.scale})`,
-                fontFamily,
+                ...nodeType,
                 fontSize: nodeFontSize,
-                fontWeight: 500,
                 color: primaryColor,
                 padding: `${nodePadV}px ${nodePadH}px`,
                 borderRadius: 999,
@@ -206,10 +206,8 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
             left: cx,
             top: cy,
             transform: `translate(-50%, -50%) scale(${hubScale})`,
-            fontFamily,
+            ...hubType,
             fontSize: hubFontSize,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
             color: primaryColor,
             padding: `${nodePadV * 1.4}px ${nodePadH * 1.8}px`,
             borderRadius: 999,

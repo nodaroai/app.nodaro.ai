@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   title: string
@@ -36,9 +36,10 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
   const { width, height } = useVideoConfig()
 
   const progress = titlecardEntranceProgress(frame, durationInFrames)
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const subtitleColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
+  const titleType = resolveHeadingType(brand, title, { weight: 700, tracking: "-0.02em" })
+  const subtitleType = resolveBodyType(brand, subtitle ?? "", { weight: 300, tracking: "0.02em" })
 
   // Derive entrance-driven style per motion variant.
   // "wipe" keeps full opacity (clip reveals it); the others fade in.
@@ -80,11 +81,9 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
     >
       <div
         style={{
-          fontFamily,
+          ...titleType,
           fontSize: titleFontSize,
-          fontWeight: 700,
           color: primaryColor,
-          letterSpacing: "-0.02em",
           whiteSpace: "nowrap",
           textAlign: "center",
           ...entranceStyle,
@@ -97,11 +96,9 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
       {subtitle != null && (
         <div
           style={{
-            fontFamily,
+            ...subtitleType,
             fontSize: subtitleFontSize,
-            fontWeight: 300,
             color: subtitleColor,
-            letterSpacing: "0.02em",
             whiteSpace: "nowrap",
             textAlign: "center",
             marginTop: subtitleMargin,

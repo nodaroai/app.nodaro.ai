@@ -2,7 +2,7 @@ import React from "react"
 import { AbsoluteFill, Audio, Sequence, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
-import { directionStyle } from "../lib/text-direction"
+import { containsArabic, directionStyle } from "../lib/text-direction"
 import { resolveBrand, resolveFontStack, type ResolvedBrand } from "../lib/brand"
 import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
 import { easeOutQuad, easeInQuad } from "../blueprints/motion"
@@ -131,27 +131,55 @@ export function cutCurveTransform(
   return { x, y, opacity }
 }
 
-/** Font + direction CSS for a resolved text element (pure — unit-testable).
- *  `element.fontFamily` wins when set; otherwise falls back to the brand's
- *  body font; otherwise "Montserrat" (today's hardcode — byte-identical when
- *  brand is absent/has no fonts). */
+/** Font + direction + brand-body-typography CSS for a resolved text element
+ *  (pure — unit-testable). `element.fontFamily` wins when set; otherwise
+ *  falls back to the brand's body font; otherwise "Montserrat" (today's
+ *  hardcode — byte-identical when brand is absent/has no fonts). Weight,
+ *  transform, and tracking follow the same element-explicit-wins precedence
+ *  against the brand's BODY type (`brand.fonts.bodyType`):
+ *  - `fontWeight` = element's own weight, else brand body weight, else 400
+ *    (today's hardcoded default).
+ *  - `textTransform` comes ONLY from brand body casing ("none"/absent →
+ *    omitted key — elements have no casing field of their own).
+ *  - `letterSpacing`: element's own unitless px number wins verbatim (today's
+ *    behavior); else brand body tracking as an em string, suppressed for
+ *    Arabic text (breaks cursive joining); else omitted entirely (never
+ *    `"0em"` or a present-but-undefined key). */
+export interface ElementTextStyle {
+  fontFamily: string
+  direction: "rtl" | "ltr"
+  fontWeight: number
+  textTransform?: "uppercase" | "lowercase"
+  letterSpacing?: number | string
+}
+
+// This precedence intentionally parallels `resolveType` in brand.ts (element-first
+// here vs. brand-first there) — a future Arabic-edge fix should update both.
 export function elementTextStyle(
   element: Extract<ShotElement, { type: "text" }>,
   brand?: ResolvedBrand,
-): {
-  fontFamily: string
-  direction: "rtl" | "ltr"
-} {
+): ElementTextStyle {
   const fontName = element.fontFamily ?? brand?.fonts?.body ?? "Montserrat"
-  return {
+  const bodyType = brand?.fonts?.bodyType
+  const style: ElementTextStyle = {
     fontFamily: resolveFontStack(fontName, fontName),
     ...directionStyle(element.text, { explicit: element.dir }),
+    fontWeight: element.fontWeight ?? bodyType?.weight ?? 400,
   }
+  if (bodyType?.casing === "uppercase" || bodyType?.casing === "lowercase") {
+    style.textTransform = bodyType.casing
+  }
+  if (element.letterSpacing != null) {
+    style.letterSpacing = element.letterSpacing
+  } else if (bodyType?.tracking != null && !containsArabic(element.text)) {
+    style.letterSpacing = `${bodyType.tracking}em`
+  }
+  return style
 }
 
 function ElementBox({ element, style, brand }: { element: ShotElement; style: React.CSSProperties; brand?: ResolvedBrand }) {
   if (element.type === "text") {
-    const { fontFamily, direction } = elementTextStyle(element, brand)
+    const { fontFamily, direction, fontWeight, textTransform, letterSpacing } = elementTextStyle(element, brand)
     return (
       <div
         style={{
@@ -161,9 +189,10 @@ function ElementBox({ element, style, brand }: { element: ShotElement; style: Re
           fontFamily,
           direction,
           fontSize: element.fontSize,
-          fontWeight: element.fontWeight ?? 400,
+          fontWeight,
+          textTransform,
           color: element.color ?? brand?.palette?.text ?? readableTextColor(brand?.backgroundColor ?? "#000000"),
-          letterSpacing: element.letterSpacing,
+          letterSpacing,
           whiteSpace: "nowrap",
           ...style,
         }}

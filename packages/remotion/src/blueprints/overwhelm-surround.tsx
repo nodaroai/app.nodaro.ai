@@ -4,7 +4,7 @@ import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { easeOutQuad, ringAngle } from "./motion"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { blueprintFontFamily, resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   surfaces: Array<{ label: string }>
@@ -112,6 +112,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
   const markerFontSize = Math.round(height * 0.024)
   const subjectFontSize = Math.round(height * 0.034)
   const demandFontSize = Math.round(height * 0.026)
+  const subjectType = resolveHeadingType(brand, subjectLabel, { weight: 700 })
 
   return (
     <div
@@ -139,6 +140,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
         const cardOpacity = isCenter ? entrance * (1 - morphProgress) : entrance
         const reshape = isCenter ? 1 - 0.38 * morphProgress : 1
         if (cardOpacity <= 0) return null
+        const surfaceType = resolveBodyType(brand, surface.label, { weight: 600 })
         return (
           <div
             key={i}
@@ -156,9 +158,8 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontFamily,
+              ...surfaceType,
               fontSize: surfaceFontSize,
-              fontWeight: 600,
               color: primaryColor,
               ...directionStyle(surface.label),
             }}
@@ -232,9 +233,8 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
           </svg>
           <div
             style={{
-              fontFamily,
+              ...subjectType,
               fontSize: subjectFontSize,
-              fontWeight: 700,
               color: primaryColor,
               ...directionStyle(subjectLabel),
             }}
@@ -250,6 +250,7 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
         if (!bubbleEntered) return null
         const angle = ringAngle(i, demands.length)
         const arrival = Math.max(0, Math.min(1, (1 - bubbleDistance) / (1 - BUBBLE_STOP_DISTANCE)))
+        const demandType = resolveBodyType(brand, demand, { weight: 600 })
         return (
           <div
             key={i}
@@ -263,9 +264,8 @@ export function OverwhelmSurround({ params, durationInFrames, brand }: Blueprint
               borderRadius: 999,
               border: `2px solid ${emphasisColor}`,
               backgroundColor: `${emphasisColor}22`,
-              fontFamily,
+              ...demandType,
               fontSize: demandFontSize,
-              fontWeight: 600,
               color: primaryColor,
               whiteSpace: "nowrap",
               ...directionStyle(demand),

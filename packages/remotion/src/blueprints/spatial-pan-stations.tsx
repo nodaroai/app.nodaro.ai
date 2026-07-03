@@ -4,7 +4,7 @@ import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { popWithSettle } from "./motion"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { blueprintFontFamily, resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   stations: Array<{ label: string; sublabel?: string }>
@@ -183,6 +183,10 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
           // the same label/sublabel direction (only one branch renders).
           const labelDir = directionStyle(station.label)
           const sublabelDir = station.sublabel != null ? directionStyle(station.sublabel) : undefined
+          // Timeline callout and web label carry different weights (700 vs 600).
+          const labelType = resolveHeadingType(brand, station.label, { weight: variant === "timeline" ? 700 : 600 })
+          const sublabelType =
+            station.sublabel != null ? resolveBodyType(brand, station.sublabel, { weight: 300 }) : undefined
           return (
             <div key={k} style={{ position: "absolute", left: stationX(k), top: stationY(k) }}>
               {/* Marker dot on the rail / web point */}
@@ -213,9 +217,8 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                         border: `2.5px solid ${emphasisColor}`,
                         borderRadius: Math.round(height * 0.012),
                         backgroundColor: brand.backgroundColor,
-                        fontFamily,
+                        ...labelType,
                         fontSize: calloutFontSize,
-                        fontWeight: 700,
                         color: primaryColor,
                         whiteSpace: "nowrap",
                         ...labelDir,
@@ -247,9 +250,8 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                         bottom: Math.round(height * 0.14),
                         transform: `translateX(-50%) translateY(${(1 - Math.min(1, (pop - 0.5) * 2)) * 14}px)`,
                         opacity: Math.min(1, (pop - 0.5) * 2),
-                        fontFamily,
+                        ...sublabelType,
                         fontSize: sublabelFontSize,
-                        fontWeight: 300,
                         color: emphasisColor,
                         whiteSpace: "nowrap",
                         ...sublabelDir,
@@ -267,9 +269,8 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                     left: 0,
                     top: Math.round(height * 0.03),
                     transform: "translateX(-50%)",
-                    fontFamily,
+                    ...labelType,
                     fontSize: labelFontSize,
-                    fontWeight: 600,
                     color: primaryColor,
                     whiteSpace: "nowrap",
                     textAlign: "center",
@@ -280,8 +281,8 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
                   {station.sublabel != null && (
                     <div
                       style={{
+                        ...sublabelType,
                         fontSize: sublabelFontSize,
-                        fontWeight: 300,
                         color: emphasisColor,
                         marginTop: 4,
                         ...sublabelDir,

@@ -226,7 +226,7 @@ The render is frame-deterministic (Remotion + the resolver) — no randomness, n
 | `vibrant-pulse` | vibrant |
 | `pastel-calm` | calm pastel |
 
-Call `list_brand_presets` to see each preset's full palette (bg/text/accent) and font pairing (heading/body) before picking one.
+Call `list_brand_presets` to see each preset's full palette (bg/text/accent) and font pairing (heading/body) before picking one. Presets can also carry per-role typography (heading vs. body weight, casing, and letter-spacing) — that's brand-controlled and needs no extra authoring from you.
 
 ---
 

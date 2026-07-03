@@ -2,7 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle, detectBaseDirection, type TextDirection } from "../lib/text-direction"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   brand: string
@@ -69,10 +69,15 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
   const letters = brandText.split("")
   const count = letters.length
+  const letterType = resolveHeadingType(brand, brandText, { weight: 900, tracking: "0.04em" })
+  const taglineType = resolveBodyType(brand, tagline ?? "", {
+    weight: 300,
+    tracking: "0.12em",
+    casing: "uppercase",
+  })
 
   // When does the last letter finish entering?
   const staggerWindow = Math.round(durationInFrames * STAGGER_WINDOW_FRACTION)
@@ -123,11 +128,9 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
             <span
               key={i}
               style={{
-                fontFamily,
+                ...letterType,
                 fontSize: letterFontSize,
-                fontWeight: 900,
                 color: accent,
-                letterSpacing: "0.04em",
                 display: "inline-block",
                 opacity: progress,
                 transform: `translateY(${(1 - progress) * 28}px)`,
@@ -144,12 +147,9 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
       {tagline != null && (
         <div
           style={{
-            fontFamily,
+            ...taglineType,
             fontSize: taglineFontSize,
-            fontWeight: 300,
             color: accent,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
             marginTop: Math.round(height * 0.025),
             opacity: taglineOpacity * 0.7,
             transform: `translateY(${(1 - taglineOpacity) * 10}px)`,

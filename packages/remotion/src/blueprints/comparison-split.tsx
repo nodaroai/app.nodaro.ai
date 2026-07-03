@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   left: string
@@ -39,9 +39,12 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
+  const leftType = resolveHeadingType(brand, left, { weight: 700, tracking: "-0.02em" })
+  const rightType = resolveHeadingType(brand, right, { weight: 700, tracking: "-0.02em" })
+  const leftBadgeType = resolveBodyType(brand, leftBadge ?? "", { weight: 700 })
+  const rightBadgeType = resolveBodyType(brand, rightBadge ?? "", { weight: 700 })
 
   // Panel entrance — both panels slide in from their respective sides simultaneously.
   const entrance = sideEntranceProgress(frame, durationInFrames)
@@ -107,11 +110,9 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
       >
         <div
           style={{
-            fontFamily,
+            ...leftType,
             fontSize: labelFontSize,
-            fontWeight: 700,
             color: primaryColor,
-            letterSpacing: "-0.02em",
             textAlign: "center",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
@@ -137,9 +138,8 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
           >
             <div
               style={{
-                fontFamily,
+                ...leftBadgeType,
                 fontSize: badgeFontSize,
-                fontWeight: 700,
                 color: brand.backgroundColor,
                 whiteSpace: "nowrap",
                 ...directionStyle(leftBadge),
@@ -181,11 +181,9 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
       >
         <div
           style={{
-            fontFamily,
+            ...rightType,
             fontSize: labelFontSize,
-            fontWeight: 700,
             color: primaryColor,
-            letterSpacing: "-0.02em",
             textAlign: "center",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
@@ -211,9 +209,8 @@ export function ComparisonSplit({ params, durationInFrames, brand }: BlueprintPr
           >
             <div
               style={{
-                fontFamily,
+                ...rightBadgeType,
                 fontSize: badgeFontSize,
-                fontWeight: 700,
                 color: brand.backgroundColor,
                 whiteSpace: "nowrap",
                 ...directionStyle(rightBadge),

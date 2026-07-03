@@ -2,7 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   label: string
@@ -63,8 +63,9 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
+  const labelType = resolveHeadingType(brand, label, { weight: 700, tracking: "0.03em" })
+  const sublabelType = resolveBodyType(brand, sublabel ?? "", { weight: 300, tracking: "0.04em" })
 
   // ── Button entrance (scale 0.6 → 1 over first BUTTON_ENTRANCE_END frames) ──
   const entranceT = Math.max(0, Math.min(1, frame / BUTTON_ENTRANCE_END))
@@ -161,11 +162,9 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
         >
           <div
             style={{
-              fontFamily,
+              ...labelType,
               fontSize: labelFontSize,
-              fontWeight: 700,
               color: brand.backgroundColor,
-              letterSpacing: "0.03em",
               whiteSpace: "nowrap",
               textAlign: "center",
               ...directionStyle(label),
@@ -180,11 +179,9 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
       {sublabel != null && (
         <div
           style={{
-            fontFamily,
+            ...sublabelType,
             fontSize: sublabelFontSize,
-            fontWeight: 300,
             color: accent,
-            letterSpacing: "0.04em",
             marginTop: Math.round(height * 0.04),
             whiteSpace: "nowrap",
             opacity: entranceProgress * 0.65,

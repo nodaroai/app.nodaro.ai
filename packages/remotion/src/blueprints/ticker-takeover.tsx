@@ -5,7 +5,7 @@ import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { caretBlinkVisible, caretMarginStyle, typedCharCount, TYPING_FRACTION } from "./typewriter-reveal"
 import { easeOutQuad } from "./motion"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   leadIn: string
@@ -96,7 +96,6 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
 
@@ -124,6 +123,8 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
 
   const caretVisible = phase === "type" && caretBlinkVisible(frame)
   const leadInDir = directionStyle(leadIn)
+  const leadInType = resolveBodyType(brand, leadIn, { weight: 600 })
+  const heroType = resolveHeadingType(brand, hero, { weight: 800, tracking: "-0.03em" })
 
   return (
     <div
@@ -148,9 +149,8 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
           alignItems: "baseline",
           gap: Math.round(width * 0.012),
           transform: `translateX(${textGroupX * width}px)`,
-          fontFamily,
+          ...leadInType,
           fontSize: lineFontSize,
-          fontWeight: 600,
           color: primaryColor,
           whiteSpace: "nowrap",
           ...leadInDir,
@@ -212,10 +212,8 @@ export function TickerTakeover({ params, durationInFrames, brand }: BlueprintPro
           style={{
             position: "absolute",
             transform: `translateX(${heroX * width}px) scale(${heroJitterScale}) rotate(${heroJitterRot}deg)`,
-            fontFamily,
+            ...heroType,
             fontSize: heroFontSize,
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
             color: emphasisColor,
             whiteSpace: "nowrap",
             ...directionStyle(hero),

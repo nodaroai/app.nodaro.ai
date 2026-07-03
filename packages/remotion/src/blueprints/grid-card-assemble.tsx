@@ -2,7 +2,7 @@ import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType } from "../lib/brand"
 
 interface Params {
   items: { label: string }[]
@@ -45,7 +45,6 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
 
   const clipped = items.slice(0, 6)
@@ -86,6 +85,7 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
         {clipped.map((item, i) => {
           // Entrance timing is fully encapsulated inside cardEntranceProgress.
           const progress = cardEntranceProgress(frame, i, durationInFrames)
+          const labelType = resolveHeadingType(brand, item.label, { weight: 700, tracking: "-0.01em" })
 
           return (
             <div
@@ -104,13 +104,11 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
             >
               <div
                 style={{
-                  fontFamily,
+                  ...labelType,
                   fontSize: Math.round(cardH * 0.2),
-                  fontWeight: 700,
                   color: accent,
                   textAlign: "center",
                   padding: `0 ${Math.round(cardW * 0.08)}px`,
-                  letterSpacing: "-0.01em",
                   lineHeight: 1.3,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
