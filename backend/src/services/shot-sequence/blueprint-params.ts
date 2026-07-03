@@ -35,7 +35,7 @@ export const BLUEPRINT_IDS = [
 export type BlueprintId = (typeof BLUEPRINT_IDS)[number]
 
 /** Shared hex-color validator — accepts #RGB or #RRGGBB. */
-const hexColor = z
+export const hexColor = z
   .string()
   .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #RRGGBB")
 
@@ -84,7 +84,7 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
   /** 1–4 statement lines swap in by hard-cut/scale-pop; accent color for the payoff. */
   "kinetic-type-beats": z.object({
     lines: z.array(z.string().min(1)).min(1).max(4),
-    accentColor: hexColor,
+    accentColor: hexColor.optional(),
     bgColor: hexColor.optional(),
     invert: z.boolean().optional(),
   }),
@@ -128,6 +128,7 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     title: z.string().min(1),
     subtitle: z.string().optional(),
     motion: z.enum(["slide-up", "crossfade", "wipe"]).optional(),
+    accentColor: hexColor.optional(),
   }),
 
   /** Text types in character-by-character with a blinking caret; optional sublabel fades up after. */

@@ -1,14 +1,15 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   title: string
   subtitle?: string
   motion?: "slide-up" | "crossfade" | "wipe"
+  accentColor?: string
 }
 
 /** Entrance plays over at most this many frames. */
@@ -30,12 +31,14 @@ export function titlecardEntranceProgress(frame: number, durationFrames: number)
 }
 
 export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintProps) {
-  const { title, subtitle, motion = "slide-up" } = params as unknown as Params
+  const { title, subtitle, motion = "slide-up", accentColor } = params as unknown as Params
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
   const progress = titlecardEntranceProgress(frame, durationInFrames)
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
+  const primaryColor = readableTextColor(brand.backgroundColor)
+  const subtitleColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
 
   // Derive entrance-driven style per motion variant.
   // "wipe" keeps full opacity (clip reveals it); the others fade in.
@@ -80,7 +83,7 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
           fontFamily,
           fontSize: titleFontSize,
           fontWeight: 700,
-          color: readableTextColor(brand.backgroundColor),
+          color: primaryColor,
           letterSpacing: "-0.02em",
           whiteSpace: "nowrap",
           textAlign: "center",
@@ -97,7 +100,7 @@ export function TitlecardReveal({ params, durationInFrames, brand }: BlueprintPr
             fontFamily,
             fontSize: subtitleFontSize,
             fontWeight: 300,
-            color: readableTextColor(brand.backgroundColor),
+            color: subtitleColor,
             letterSpacing: "0.02em",
             whiteSpace: "nowrap",
             textAlign: "center",

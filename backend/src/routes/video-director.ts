@@ -7,6 +7,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { brandTokensSchema } from "../lib/plan-schemas.js"
 
 /**
  * Credit / model identifier for the video-director authoring run. The
@@ -20,6 +21,9 @@ const VIDEO_DIRECTOR_MODEL_ID = "video-director"
 const videoDirectorBody = z.object({
   genre: z.enum(["explainer", "product-launch"]),
   brief: z.string().min(1).max(8000),
+  // Optional brand — a preset name (string) OR inline BrandTokens. Passed
+  // opaquely to the worker/orchestrator, which calls resolveBrandInput once.
+  brand: z.union([z.string(), brandTokensSchema]).optional(),
   // Internal-secret path supplies the resource owner's id in the body; the
   // auth hook copies it to req.userId. Optional so user-JWT calls also pass.
   userId: z.string().uuid().optional(),
@@ -46,7 +50,7 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
       })
     }
 
-    const { genre, brief } = parsed.data
+    const { genre, brief, brand } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -101,6 +105,7 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
       brief,
       userId,
       tier,
+      brand,
     })
 
     return { jobId: job.id }

@@ -4,6 +4,7 @@ import {
   enterMotionSchema,
   exitMotionSchema,
   alignmentWordSchema,
+  brandTokensSchema,
 } from "../../lib/plan-schemas.js"
 import { validateBlueprintParams } from "./blueprint-params.js"
 
@@ -92,6 +93,7 @@ export const shotSequenceBriefSchema = z
     width: z.number().min(100).max(3840),
     height: z.number().min(100).max(3840),
     backgroundColor: z.string(),
+    brandTokens: brandTokensSchema.optional(),
     narration: z.object({
       script: z.string().min(1).max(20_000),
       voice: z.object({ voiceId: z.string().optional(), model: z.string().optional() }).optional(),

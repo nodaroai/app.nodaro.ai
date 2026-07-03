@@ -1,7 +1,8 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
 import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
-import { validateBlueprintParams } from "../services/shot-sequence/blueprint-params.js"
+import type { BrandTokens } from "@nodaro/shared"
+import { validateBlueprintParams, hexColor } from "../services/shot-sequence/blueprint-params.js"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -18,6 +19,40 @@ export const PLAN_TYPES = [
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
+
+// ── Brand Tokens ─────────────────────────────────────────────────────────
+
+export const brandTokensSchema = z.object({
+  palette: z.object({
+    bg: hexColor,
+    bgAlt: hexColor.optional(),
+    text: hexColor,
+    textMuted: hexColor.optional(),
+    accent: hexColor,
+    accent2: hexColor.optional(),
+    line: hexColor.optional(),
+  }),
+  fonts: z.object({
+    heading: z.enum(SUPPORTED_FONT_NAMES),
+    body: z.enum(SUPPORTED_FONT_NAMES),
+  }),
+  logo: z
+    .object({ name: z.string().min(1), tagline: z.string().optional() })
+    .optional(),
+})
+
+/**
+ * Compile-time drift guard: the Zod schema's inferred type MUST stay assignable
+ * to the shared `BrandTokens` type. If the schema and the shared type diverge,
+ * this alias fails to compile (the second arg no longer satisfies the
+ * `extends BrandTokens` constraint). Zero runtime cost.
+ *
+ * (Written as a type-level assertion rather than the expression-level
+ * `satisfies` operator, which is not valid in a type-alias position.)
+ */
+type _AssertAssignable<Expected, Actual extends Expected> = Actual
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _BrandTokensSchemaMatchesType = _AssertAssignable<BrandTokens, z.infer<typeof brandTokensSchema>>
 
 // ── After Effects Plan ──────────────────────────────────────────────────
 
@@ -530,10 +565,10 @@ const shotTextElementSchema = z.object({
   id: z.string(),
   type: z.literal("text"),
   text: z.string(),
-  fontFamily: z.enum(SUPPORTED_FONT_NAMES),
+  fontFamily: z.enum(SUPPORTED_FONT_NAMES).optional(),
   fontSize: z.number(),
   fontWeight: z.union([z.literal(300), z.literal(400), z.literal(700), z.literal(900)]).optional(),
-  color: z.string(),
+  color: z.string().optional(),
   x: z.number(),
   y: z.number(),
   letterSpacing: z.number().optional(),
@@ -636,6 +671,7 @@ export const shotSequencePlanBaseSchema = z
     height: z.number().min(100).max(3840),
     durationInFrames: z.number().min(1).max(MAX_FRAMES),
     backgroundColor: z.string(),
+    brandTokens: brandTokensSchema.optional(),
     audio: z.object({ src: safeUrlSchema, volume: z.number().min(0).max(1).optional() }),
     scenes: z.array(resolvedSceneSchema).min(1),
   })

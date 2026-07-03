@@ -1,10 +1,10 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle, detectBaseDirection } from "../lib/text-direction"
 import { easeOutQuad } from "./motion"
 import { readableTextColor } from "./color"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   text: string
@@ -42,9 +42,9 @@ export function WaterfallReveal({ params, brand }: BlueprintProps) {
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
-  const emphasisColor = accentColor ?? primaryColor
+  const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
 
   const words = splitWords(text)
   const lineDirection = detectBaseDirection(text)

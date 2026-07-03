@@ -1,4 +1,5 @@
 import type React from "react"
+import type { ResolvedBrand } from "../lib/brand"
 
 /**
  * Props every blueprint "shot-shape" component receives.
@@ -17,7 +18,7 @@ export interface BlueprintProps {
   /** The reveal's window length, in frames. */
   readonly durationInFrames: number
   /** Plan-level tokens so blueprints style consistently with the composition. */
-  readonly brand: { readonly backgroundColor: string }
+  readonly brand: ResolvedBrand
 }
 
 export type BlueprintComponent = React.FC<BlueprintProps>

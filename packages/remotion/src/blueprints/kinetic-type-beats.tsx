@@ -1,12 +1,13 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
+import { readableTextColor } from "./color"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   lines: string[]
-  accentColor: string
+  accentColor?: string
   bgColor?: string
   invert?: boolean
 }
@@ -50,7 +51,8 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
   const bg = bgColor ?? brand.backgroundColor
   const canvasBg = invert ? "#ffffff" : bg
   const defaultTextColor = invert ? bg : "#ffffff"
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
+  const accent = resolveBlueprintAccent(accentColor, brand, readableTextColor(brand.backgroundColor))
 
   return (
     <div
@@ -78,7 +80,7 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
 
         // The final line gets the accent colour and a slightly larger pop size.
         const isLast = i === count - 1
-        const color = isLast ? accentColor : defaultTextColor
+        const color = isLast ? accent : defaultTextColor
         const fontSize = isLast
           ? Math.round(height * 0.115)
           : Math.round(height * 0.1)

@@ -270,7 +270,7 @@ The unit is a **time-coded sequence of cue-anchored reveals**, not a slide. Each
 - Prefer **fewer things, each arriving on its beat** over a full canvas that animates once and freezes.
 
 **Layout & elements:**
-- \`text\` element: \`text\`, \`fontFamily\` (from the 20 supported fonts — see contract), \`fontSize\`, optional \`fontWeight\` (300/400/700/900), \`color\` (hex), \`x\`/\`y\` (pixel top-left in the width×height canvas), optional \`letterSpacing\`/\`opacity\`.
+- \`text\` element: \`text\`, \`fontFamily\` (from the 24 supported fonts — see contract), \`fontSize\`, optional \`fontWeight\` (300/400/700/900), \`color\` (hex), \`x\`/\`y\` (pixel top-left in the width×height canvas), optional \`letterSpacing\`/\`opacity\`.
 - \`shape\` element: \`shape\` (\`rectangle\`/\`circle\`/\`line\`), \`x\`/\`y\`/\`width\`/\`height\`, optional \`fill\`/\`stroke\`/\`strokeWidth\`/\`cornerRadius\`/\`opacity\`. Use shapes as dividers, underlines, accent bars, frames — structure, not decoration.
 - Establish a hierarchy: one dominant element per moment (size 2–3×, heavier weight, accent color). Keep a consistent left margin / grid; the keystone uses \`x: 140\` and stacks \`y\` down the canvas.
 - **Caption-band keep-out:** keep important content in the **top ~83%** of the canvas (leave the bottom ~17% clear) so a caption pill never collides with a reveal.
@@ -304,6 +304,25 @@ The render is frame-deterministic (Remotion + the resolver) — no randomness, n
 
 ---
 
+## Brand
+
+**Prefer a brand preset over inventing colors.** If the caller supplied a \`brand\` (a preset id or inline tokens), use its palette + fonts for **every** blueprint's \`accentColor\` and **every** text element's \`color\`/\`fontFamily\` — do not invent other colors. If no brand was supplied, choose **ONE** preset id from the list below and stay consistent across the whole video.
+
+| Preset id | Mood |
+|-----------|------|
+| \`midnight-violet\` | bold / dark tech |
+| \`editorial-cream\` | editorial / light |
+| \`cobalt-corporate\` | corporate blue |
+| \`sandstone-warm\` | warm neutral |
+| \`poster-contrast\` | high-contrast poster |
+| \`mono-slate\` | muted monochrome |
+| \`vibrant-pulse\` | vibrant |
+| \`pastel-calm\` | calm pastel |
+
+Call \`list_brand_presets\` to see each preset's full palette (bg/text/accent) and font pairing (heading/body) before picking one.
+
+---
+
 ## Machine contract
 
 Emit EXACTLY this object — nothing else. The fenced block below is the contract AND a valid worked example (the shipped keystone render).
@@ -311,7 +330,7 @@ Emit EXACTLY this object — nothing else. The fenced block below is the contrac
 **Invariants the author MUST hold:**
 - \`voScript\` is the full spoken narration. \`cues\` is the ordered phrase list, each \`{ id, text }\` with \`text\` a **whitespace-exact substring** of \`voScript\`.
 - \`voScript\` MUST equal \`shotSequenceBrief.narration.script\`; \`cues\` MUST equal \`shotSequenceBrief.narration.cues\` (mirror them verbatim — the resolver reads narration from inside the brief; the top-level copies are the pipeline's convenience handles).
-- Bounds: \`fps\` 15–60; \`width\`/\`height\` 100–3840; \`narration.cues\` 1–200; \`scenes\` 1–50; \`shots\` 1–200/scene; \`reveals\` 1–500/shot. \`fontWeight\` ∈ {300,400,700,900}. \`fontFamily\` ∈ the 20 supported fonts: \`Inter, Roboto, Open Sans, Montserrat, Poppins, Raleway, Nunito, Lato, Playfair Display, Merriweather, Lora, EB Garamond, Bebas Neue, Oswald, Anton, Dancing Script, Pacifico, Caveat, Roboto Mono, Fira Code\`.
+- Bounds: \`fps\` 15–60; \`width\`/\`height\` 100–3840; \`narration.cues\` 1–200; \`scenes\` 1–50; \`shots\` 1–200/scene; \`reveals\` 1–500/shot. \`fontWeight\` ∈ {300,400,700,900}. \`fontFamily\` ∈ the 24 supported fonts: \`Inter, Roboto, Open Sans, Montserrat, Poppins, Raleway, Nunito, Lato, Playfair Display, Merriweather, Lora, EB Garamond, Bebas Neue, Oswald, Anton, Dancing Script, Pacifico, Caveat, Roboto Mono, Fira Code, Rubik, Heebo, Cairo, Tajawal\`.
 - Scene ids and reveal ids are **globally unique** across the brief. At most ONE \`revealAt: {kind:"frame", frame:0}\` poster; every other reveal is \`{kind:"cue", cueId, edge:"start"}\`.
 
 \`\`\`json

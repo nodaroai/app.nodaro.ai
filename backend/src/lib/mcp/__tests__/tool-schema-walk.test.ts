@@ -134,6 +134,10 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // filter params (only 6 blueprints; a filter would add complexity without
   // value). Use get_shot_shape for per-blueprint detail. See shot-shapes.ts.
   "list_shot_shapes",
+  // Brand-token preset catalog listing — returns all 8 presets. No filter
+  // params (only 8 presets; a filter would add complexity without value).
+  // See brand-presets.ts.
+  "list_brand_presets",
 ])
 
 // ---------------------------------------------------------------------------

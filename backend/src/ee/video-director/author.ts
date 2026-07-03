@@ -16,6 +16,7 @@ import { shotSequenceBriefSchema, type ShotSequenceBrief } from "../../services/
 import { llmComplete, type LlmRequest, type LlmResponse } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { buildAuthorSystemPrompt, type VideoGenre } from "./prompt.js"
+import type { BrandTokens } from "@nodaro/shared"
 
 export type { VideoGenre }
 
@@ -165,6 +166,10 @@ function tryParseAndValidate(text: string): ParseResult {
  * @param opts.brief   The one-line creative brief from the caller.
  * @param opts.userId  The requesting user id (passed through for future audit).
  * @param opts.tier    The user's plan tier (passed through for future gating).
+ * @param opts.brand   Optional RESOLVED brand tokens. When present, a brand
+ *                     block is appended to the system prompt so the LLM authors
+ *                     colors/fonts FROM the palette. Resolved by the caller
+ *                     (runVideoDirector) — this function does not resolve presets.
  * @param opts.llm     Injectable LLM function (defaults to llmComplete). Tests
  *                     pass a vi.fn() mock; production uses the real client.
  */
@@ -173,10 +178,11 @@ export async function authorShotSequence(opts: {
   brief: string
   userId: string
   tier: string
+  brand?: BrandTokens
   llm?: LlmFn
 }): Promise<AuthoredSequence> {
-  const { genre, brief, llm: llmFn = llmComplete } = opts
-  const system = buildAuthorSystemPrompt(genre)
+  const { genre, brief, brand, llm: llmFn = llmComplete } = opts
+  const system = buildAuthorSystemPrompt(genre, brand)
 
   // Initial turn: just the user's brief
   let messages: LlmRequest["messages"] = [{ role: "user", content: brief }]

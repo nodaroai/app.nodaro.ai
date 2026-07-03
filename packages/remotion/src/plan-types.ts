@@ -1,3 +1,5 @@
+import type { BrandTokens } from "@nodaro/shared"
+
 // ── After Effects Plan Types ──────────────────────────────────────────
 
 export interface ColorGradeEffect {
@@ -304,10 +306,10 @@ export interface ShotTextElement {
   readonly id: string
   readonly type: "text"
   readonly text: string
-  readonly fontFamily: string
+  readonly fontFamily?: string
   readonly fontSize: number
   readonly fontWeight?: 300 | 400 | 700 | 900
-  readonly color: string
+  readonly color?: string
   readonly x: number
   readonly y: number
   readonly letterSpacing?: number
@@ -381,6 +383,7 @@ export interface ShotSequencePlan {
   readonly backgroundColor: string
   readonly audio: { readonly src: string; readonly volume?: number }
   readonly scenes: ResolvedScene[]
+  readonly brandTokens?: BrandTokens
 }
 
 // ── Composite Plan Types ─────────────────────────────────────────────

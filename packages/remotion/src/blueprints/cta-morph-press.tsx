@@ -1,8 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   label: string
@@ -59,11 +59,12 @@ export function pressCompression(frame: number, durationFrames: number): number 
 }
 
 export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProps) {
-  const { label, sublabel, accentColor = "#f5f5f7" } = params as unknown as Params
+  const { label, sublabel, accentColor } = params as unknown as Params
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
+  const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
 
   // ── Button entrance (scale 0.6 → 1 over first BUTTON_ENTRANCE_END frames) ──
   const entranceT = Math.max(0, Math.min(1, frame / BUTTON_ENTRANCE_END))
@@ -139,7 +140,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
             width: btnW,
             height: btnH,
             borderRadius: btnRadius,
-            border: `2px solid ${accentColor}`,
+            border: `2px solid ${accent}`,
             transform: `scale(${rippleScale})`,
             opacity: rippleOpacity,
             pointerEvents: "none",
@@ -152,7 +153,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
             width: btnW,
             height: btnH,
             borderRadius: btnRadius,
-            backgroundColor: accentColor,
+            backgroundColor: accent,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -182,7 +183,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
             fontFamily,
             fontSize: sublabelFontSize,
             fontWeight: 300,
-            color: accentColor,
+            color: accent,
             letterSpacing: "0.04em",
             marginTop: Math.round(height * 0.04),
             whiteSpace: "nowrap",

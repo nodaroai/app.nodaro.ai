@@ -1,10 +1,10 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { easeOutQuad, ringAngle, popWithSettle } from "./motion"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   hubLabel: string
@@ -76,9 +76,9 @@ export function ConstellationHub({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
-  const emphasisColor = accentColor ?? primaryColor
+  const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
 
   const radius = Math.min(width, height) * 0.32
   const cx = width / 2

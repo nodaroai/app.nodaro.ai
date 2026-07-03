@@ -1395,6 +1395,9 @@ export * from "./supported-fonts.js"
 // --- Entity image-handle parity (entity `image` source handle → plain image) ---
 export * from "./entity-image-handle.js"
 
+// --- Brand layer (Phase 3a): palette/fonts/logo tokens + 8-preset library ---
+export * from "./brand-tokens.js"
+
 // --- Shared video-reference resolver core (FE + BE delegate to this) ---
 export {
   resolveVideoReferenceCore,

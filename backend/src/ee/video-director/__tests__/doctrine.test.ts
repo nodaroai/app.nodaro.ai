@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, it, expect } from "vitest"
+import { BRAND_PRESET_IDS, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 const DIR = resolve(__dirname, "../../../../skills/video-director")
 const read = (f: string) => readFileSync(resolve(DIR, f), "utf-8")
 describe("video-director doctrine", () => {
@@ -32,6 +33,24 @@ describe("video-director doctrine", () => {
   it("genre addenda exist with arc + reveal palette", () => {
     for (const f of ["explainer.md","product-launch.md"]) {
       const g = read(f); expect(g).toContain("## Arc"); expect(g).toContain("## Reveal palette")
+    }
+  })
+  it("doctrine lists every shared brand preset id (drift guard vs BRAND_PRESET_IDS)", () => {
+    const d = read("doctrine.md")
+    for (const id of BRAND_PRESET_IDS) {
+      expect(d, `doctrine.md is missing brand preset "${id}" — it drifted from BRAND_PRESET_IDS`).toContain(id)
+    }
+  })
+  it("doctrine's font list stays in sync with SUPPORTED_FONT_NAMES (count + RTL faces)", () => {
+    const d = read("doctrine.md")
+    // The font-list sentence hard-codes the supported-font count; assert it matches
+    // the shared source of truth so adding/removing a font can't silently drift the doctrine.
+    expect(d, `doctrine.md must say "${SUPPORTED_FONT_NAMES.length} supported fonts"`).toContain(
+      `${SUPPORTED_FONT_NAMES.length} supported fonts`,
+    )
+    // The 4 RTL faces must be named so the LLM knows they're available.
+    for (const rtl of ["Rubik", "Heebo", "Cairo", "Tajawal"]) {
+      expect(d, `doctrine.md is missing RTL font "${rtl}"`).toContain(rtl)
     }
   })
 })
