@@ -34,7 +34,7 @@ import type { AppSettings } from "../use-app-settings-queries"
 
 const DEFAULT_SETTINGS: AppSettings = {
   ai_provider: "kie",
-  ***REDACTED-OSS-SCRUB***
+  cost_markup_percent: 0,
   carousel_video_autoplay: true,
   apps_page_video_autoplay: true,
   featured_app_ids: [],
