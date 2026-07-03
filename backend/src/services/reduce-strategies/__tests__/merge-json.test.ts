@@ -37,4 +37,28 @@ describe("merge-json strategy", () => {
     await expect(execute([`{"a":1}`, `not json`], { strategy: "deep" }, ctx))
       .rejects.toThrow(/invalid json at item 1/i)
   })
+
+  it("deep: strips __proto__/constructor/prototype keys and never pollutes Object.prototype", async () => {
+    const out = await execute(
+      [`{"safe":1,"__proto__":{"polluted":"x"},"constructor":{"y":1},"prototype":{"z":1}}`],
+      { strategy: "deep" },
+      ctx,
+    )
+    // dangerous keys must not survive into the merged output
+    expect(JSON.parse(out.result)).toEqual({ safe: 1 })
+    // and Object.prototype must be untouched
+    expect(Object.prototype).not.toHaveProperty("polluted")
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
+  it("shallow: strips __proto__/constructor/prototype keys and never pollutes Object.prototype", async () => {
+    const out = await execute(
+      [`{"safe":1}`, `{"safe":2,"__proto__":{"polluted":"x"},"constructor":{"y":1}}`],
+      { strategy: "shallow" },
+      ctx,
+    )
+    expect(JSON.parse(out.result)).toEqual({ safe: 2 })
+    expect(Object.prototype).not.toHaveProperty("polluted")
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
 })
