@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   value: number
@@ -38,11 +38,12 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const textColor = readableTextColor(brand.backgroundColor)
   // accentColor is user-configurable; fall back to the contrast-safe text color
   // so the big number is never invisible on a light brand.backgroundColor.
   const numberColor = resolveBlueprintAccent(accentColor, brand, textColor)
+  const labelType = resolveBodyType(brand, label, { weight: 400, tracking: "0.06em", casing: "uppercase" })
+  const sublabelType = resolveBodyType(brand, sublabel ?? "", { weight: 300, tracking: "0.03em" })
 
   // Animated count.
   const current = countupValue(frame, durationInFrames, value)
@@ -50,6 +51,10 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
   const displayValue = Number.isInteger(value)
     ? String(Math.round(current))
     : current.toFixed(1)
+  const numberType = resolveHeadingType(brand, `${prefix}${displayValue}${suffix}`, {
+    weight: 900,
+    tracking: "-0.04em",
+  })
 
   // Label and sublabel fade+slide up over the first 20 frames.
   const labelProgress = interpolate(frame, [0, 20], [0, 1], {
@@ -76,11 +81,9 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
       {/* Large eased counter */}
       <div
         style={{
-          fontFamily,
+          ...numberType,
           fontSize: Math.round(height * 0.22),
-          fontWeight: 900,
           color: numberColor,
-          letterSpacing: "-0.04em",
           whiteSpace: "nowrap",
           lineHeight: 1,
           ...directionStyle(`${prefix}${displayValue}${suffix}`),
@@ -92,16 +95,13 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
       {/* Primary label — fades and slides up */}
       <div
         style={{
-          fontFamily,
+          ...labelType,
           fontSize: Math.round(height * 0.055),
-          fontWeight: 400,
           color: textColor,
-          letterSpacing: "0.06em",
           whiteSpace: "nowrap",
           marginTop: Math.round(height * 0.03),
           opacity: labelProgress,
           transform: `translateY(${(1 - labelProgress) * 12}px)`,
-          textTransform: "uppercase",
           ...directionStyle(label),
         }}
       >
@@ -112,11 +112,9 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
       {sublabel != null && (
         <div
           style={{
-            fontFamily,
+            ...sublabelType,
             fontSize: Math.round(height * 0.035),
-            fontWeight: 300,
             color: "rgba(255,255,255,0.6)",
-            letterSpacing: "0.03em",
             whiteSpace: "nowrap",
             marginTop: Math.round(height * 0.015),
             opacity: labelProgress,

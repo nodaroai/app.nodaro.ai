@@ -1,6 +1,7 @@
 // packages/remotion/src/lib/brand.ts
-import type { BrandTokens, BrandPalette, BrandFonts, BrandLogo } from "@nodaro/shared"
+import type { BrandTokens, BrandPalette, BrandFonts, BrandLogo, BrandCasing, BrandTypeSpec } from "@nodaro/shared"
 import { FONT_MAP, withRtlFallback } from "./font-registry"
+import { containsArabic } from "./text-direction"
 
 /**
  * Render-time brand, resolved from a plan's optional brandTokens.
@@ -52,4 +53,55 @@ export function resolveBlueprintAccent(
   fallback: string,
 ): string {
   return paramAccent ?? brand.palette?.accent ?? fallback
+}
+
+export interface ResolvedTypeStyle {
+  fontFamily: string
+  fontWeight: number
+  textTransform?: "uppercase" | "lowercase"
+  letterSpacing?: string
+}
+
+/** The blueprint-authored fallback for a role's type spec, applied when the brand has no override. */
+type BlueprintTypeFallback = { weight: number; tracking?: string; casing?: BrandCasing }
+
+function resolveType(
+  fontFamily: string,
+  spec: BrandTypeSpec | undefined,
+  text: string,
+  fallback: BlueprintTypeFallback,
+): ResolvedTypeStyle {
+  const out: ResolvedTypeStyle = { fontFamily, fontWeight: spec?.weight ?? fallback.weight }
+  const casing = spec?.casing ?? fallback.casing
+  if (casing === "uppercase" || casing === "lowercase") out.textTransform = casing
+  if (!containsArabic(text)) {
+    const ls = spec?.tracking != null ? `${spec.tracking}em` : fallback.tracking
+    if (ls) out.letterSpacing = ls
+  }
+  return out
+}
+
+/** Script-aware heading type resolver: brand `headingType` overrides the blueprint's fallback,
+ *  Arabic text suppresses letter-spacing (breaks cursive joining), casing:"none" forces no transform. */
+export function resolveHeadingType(
+  brand: ResolvedBrand,
+  text: string,
+  fallback: BlueprintTypeFallback,
+): ResolvedTypeStyle {
+  return resolveType(blueprintFontFamily(brand), brand.fonts?.headingType, text, fallback)
+}
+
+/** The body-font stack every blueprint uses; defaults to Montserrat (today's hardcode).
+ *  Symmetric with `blueprintFontFamily` (heading). */
+export function blueprintBodyFontFamily(brand: ResolvedBrand): string {
+  return resolveFontStack(brand.fonts?.body ?? "Montserrat", "Montserrat")
+}
+
+/** Script-aware body type resolver — same precedence rules as resolveHeadingType, body font/role. */
+export function resolveBodyType(
+  brand: ResolvedBrand,
+  text: string,
+  fallback: BlueprintTypeFallback,
+): ResolvedTypeStyle {
+  return resolveType(blueprintBodyFontFamily(brand), brand.fonts?.bodyType, text, fallback)
 }

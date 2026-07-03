@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   text: string
@@ -63,9 +63,10 @@ export function TypewriterReveal({ params, durationInFrames, brand }: BlueprintP
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
+  const mainType = resolveHeadingType(brand, text, { weight: 700, tracking: "-0.02em" })
+  const sublabelType = resolveBodyType(brand, sublabel ?? "", { weight: 300, tracking: "0.02em" })
 
   const mainDir = directionStyle(text)
   const subDir = sublabel != null ? directionStyle(sublabel) : undefined
@@ -110,11 +111,9 @@ export function TypewriterReveal({ params, durationInFrames, brand }: BlueprintP
       {/* Main text + blinking caret in one inline block */}
       <div
         style={{
-          fontFamily,
+          ...mainType,
           fontSize: mainFontSize,
-          fontWeight: 700,
           color: primaryColor,
-          letterSpacing: "-0.02em",
           whiteSpace: "nowrap",
           textAlign: "center",
           ...mainDir,
@@ -137,11 +136,9 @@ export function TypewriterReveal({ params, durationInFrames, brand }: BlueprintP
       {sublabel != null && (
         <div
           style={{
-            fontFamily,
+            ...sublabelType,
             fontSize: sublabelFontSize,
-            fontWeight: 300,
             color: emphasisColor,
-            letterSpacing: "0.02em",
             whiteSpace: "nowrap",
             textAlign: "center",
             marginTop: sublabelMargin,

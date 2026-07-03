@@ -63,3 +63,9 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 |-----|----------------|
 | [film-director-skill](./film-director-skill.md) | A conversational "film director" skill that assembles an editable workflow on the canvas in real time |
 | [skill-architecture](./skill-architecture.md) | Auto-generating node skill docs from types (ts-morph) with a CI drift gate |
+
+## Video authoring & branding
+
+| Doc | What it covers |
+|-----|----------------|
+| [brand-typography-ramp](./brand-typography-ramp.md) | Per-role (heading/body) weight, casing, and tracking on top of brand font family — precedence, the Arabic tracking edge, the loaded-weight constraint |

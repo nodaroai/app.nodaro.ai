@@ -27,3 +27,60 @@ describe("elementTextStyle brand fallback", () => {
     expect(s.fontFamily).toContain("Montserrat")
   })
 })
+
+describe("elementTextStyle brand body typography (weight/transform/tracking)", () => {
+  // poster-contrast bodyType: { weight: 700, casing: "uppercase", tracking: 0.06 }
+  const posterContrast = () => resolveBrand(BRAND_PRESETS["poster-contrast"], "#000")
+
+  it("element explicit fontWeight wins over brand body weight", () => {
+    const s = elementTextStyle(el({ fontWeight: 300 }), posterContrast())
+    expect(s.fontWeight).toBe(300)
+  })
+
+  it("element without fontWeight falls back to brand body weight", () => {
+    const s = elementTextStyle(el(), posterContrast())
+    expect(s.fontWeight).toBe(700)
+  })
+
+  it("defaults fontWeight to 400 with no brand and no element weight (byte-identical)", () => {
+    const s = elementTextStyle(el(), { backgroundColor: "#000" })
+    expect(s.fontWeight).toBe(400)
+  })
+
+  it("uses brand body tracking (em) when element omits letterSpacing", () => {
+    const s = elementTextStyle(el(), posterContrast())
+    expect(s.letterSpacing).toBe("0.06em")
+  })
+
+  it("element explicit letterSpacing wins over brand tracking", () => {
+    const s = elementTextStyle(el({ letterSpacing: 2 }), posterContrast())
+    expect(s.letterSpacing).toBe(2)
+  })
+
+  it("suppresses brand tracking for Arabic element text (no letterSpacing key)", () => {
+    const s = elementTextStyle(el({ text: "مرحبا" }), posterContrast())
+    expect("letterSpacing" in s).toBe(false)
+  })
+
+  it("omits letterSpacing entirely with no brand and no element letterSpacing (byte-identical)", () => {
+    const s = elementTextStyle(el(), { backgroundColor: "#000" })
+    expect("letterSpacing" in s).toBe(false)
+  })
+
+  it("brand body casing uppercase sets textTransform", () => {
+    const s = elementTextStyle(el(), posterContrast())
+    expect(s.textTransform).toBe("uppercase")
+  })
+
+  it("omits textTransform with no brand (byte-identical)", () => {
+    const s = elementTextStyle(el(), { backgroundColor: "#000" })
+    expect("textTransform" in s).toBe(false)
+  })
+
+  it("omits textTransform when brand body has no casing", () => {
+    // midnight-violet bodyType: { weight: 400 } — no casing field
+    const brand = resolveBrand(BRAND_PRESETS["midnight-violet"], "#000")
+    const s = elementTextStyle(el(), brand)
+    expect("textTransform" in s).toBe(false)
+  })
+})

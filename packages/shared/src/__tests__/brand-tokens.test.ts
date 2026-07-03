@@ -63,3 +63,19 @@ describe("resolveBrandInput", () => {
     expect(() => resolveBrandInput("constructor")).toThrow(/unknown brand preset/i)
   })
 })
+
+test("every preset declares heading+body typography weight", () => {
+  for (const id of BRAND_PRESET_IDS) {
+    const f = BRAND_PRESETS[id].fonts
+    expect(typeof f.headingType?.weight).toBe("number")
+    expect(typeof f.bodyType?.weight).toBe("number")
+  }
+})
+test("poster-contrast forces uppercase heading + body, mono-slate wide-tracked heading", () => {
+  expect(BRAND_PRESETS["poster-contrast"].fonts.headingType?.casing).toBe("uppercase")
+  expect(BRAND_PRESETS["poster-contrast"].fonts.bodyType?.tracking).toBe(0.06)
+  expect(BRAND_PRESETS["mono-slate"].fonts.headingType?.tracking).toBe(0.12)
+})
+test("resolveBrandInput passes typography through for a preset name", () => {
+  expect(resolveBrandInput("vibrant-pulse").fonts.headingType?.weight).toBe(900)
+})

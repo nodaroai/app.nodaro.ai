@@ -16,8 +16,17 @@ describe("every blueprint is RTL-wired", () => {
     // Since the brand-fill task (Task 6), blueprints no longer call
     // withRtlFallback directly — they get it transitively via
     // blueprintFontFamily(brand), the single source of truth in lib/brand.ts
-    // (which itself unconditionally applies withRtlFallback). Either form of
-    // evidence proves the font stack is RTL-safe.
-    expect(src.includes("withRtlFallback") || src.includes("blueprintFontFamily(brand)")).toBe(true)
+    // (which itself unconditionally applies withRtlFallback). Since the
+    // typography-ramp task (Task 7), the simple blueprints route font
+    // resolution through resolveHeadingType(brand, ...)/resolveBodyType(brand, ...)
+    // instead — those wrappers call blueprintFontFamily/resolveFontStack
+    // internally, so they carry the same RTL guarantee one level removed.
+    // Any of these forms of evidence proves the font stack is RTL-safe.
+    expect(
+      src.includes("withRtlFallback") ||
+        src.includes("blueprintFontFamily(brand)") ||
+        src.includes("resolveHeadingType(brand") ||
+        src.includes("resolveBodyType(brand"),
+    ).toBe(true)
   })
 })

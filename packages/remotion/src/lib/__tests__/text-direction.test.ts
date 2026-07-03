@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { detectBaseDirection, resolveDirection, directionStyle, rowDirectionFromCaptions } from "../text-direction"
+import {
+  detectBaseDirection,
+  resolveDirection,
+  directionStyle,
+  rowDirectionFromCaptions,
+  containsArabic,
+} from "../text-direction"
 
 describe("detectBaseDirection", () => {
   it("pure Hebrew → rtl", () => expect(detectBaseDirection("שלום עולם")).toBe("rtl"))
@@ -55,4 +61,11 @@ describe("rowDirectionFromCaptions", () => {
   it("empty captions → ltr", () => {
     expect(rowDirectionFromCaptions([])).toBe("ltr")
   })
+})
+
+describe("containsArabic", () => {
+  it("pure Arabic → true", () => expect(containsArabic("مرحبا بالعالم")).toBe(true))
+  it("pure Hebrew → false (NOT Arabic)", () => expect(containsArabic("שלום עולם")).toBe(false))
+  it("pure Latin → false", () => expect(containsArabic("Hello world")).toBe(false))
+  it("mixed Latin + Arabic → true", () => expect(containsArabic("Nodaro مرحبا")).toBe(true))
 })

@@ -1203,6 +1203,19 @@ director so every blueprint accent and text style stays consistent across the
 video. Use before authoring a brief that specifies a brand to pick the right
 preset id. Zero credits.
 
+Beyond the font family, a preset's `fonts.headingType` / `fonts.bodyType` can
+each carry a `weight` (100–900), a `casing` (`"uppercase"` / `"lowercase"` /
+`"none"`), and a `tracking` (letter-spacing, in em, -0.2 to 0.5) — independent
+levers for headings vs. body text. Precedence: an explicit value on the
+element itself wins, otherwise the brand's `headingType`/`bodyType` applies,
+otherwise the blueprint's own hardcoded default. Two edge cases to know before
+authoring: letter-spacing is never applied to Arabic text (it breaks cursive
+letter joining — Hebrew is unaffected since it doesn't join), and a `weight`
+only renders if that weight is actually loaded for the chosen font family —
+requesting an unloaded weight silently snaps to the nearest one that is
+loaded. See [Brand Typography Ramp](../design/brand-typography-ramp.md) for
+the full model.
+
 **Input:** none
 
 ---

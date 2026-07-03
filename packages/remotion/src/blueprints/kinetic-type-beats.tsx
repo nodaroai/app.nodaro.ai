@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType } from "../lib/brand"
 
 interface Params {
   lines: string[]
@@ -51,7 +51,6 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
   const bg = bgColor ?? brand.backgroundColor
   const canvasBg = invert ? "#ffffff" : bg
   const defaultTextColor = invert ? bg : "#ffffff"
-  const fontFamily = blueprintFontFamily(brand)
   const accent = resolveBlueprintAccent(accentColor, brand, readableTextColor(brand.backgroundColor))
 
   return (
@@ -84,16 +83,15 @@ export function KineticTypeBeats({ params, durationInFrames, brand }: BlueprintP
         const fontSize = isLast
           ? Math.round(height * 0.115)
           : Math.round(height * 0.1)
+        const lineType = resolveHeadingType(brand, line, { weight: 700, tracking: "-0.02em" })
 
         return (
           <div
             key={i}
             style={{
-              fontFamily,
+              ...lineType,
               fontSize,
-              fontWeight: 700,
               color,
-              letterSpacing: "-0.02em",
               whiteSpace: "nowrap",
               textAlign: "center",
               transform: `scale(${scale})`,

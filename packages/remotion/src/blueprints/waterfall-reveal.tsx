@@ -4,7 +4,7 @@ import type { BlueprintProps } from "./types"
 import { directionStyle, detectBaseDirection } from "../lib/text-direction"
 import { easeOutQuad } from "./motion"
 import { readableTextColor } from "./color"
-import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
+import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
 
 interface Params {
   text: string
@@ -42,9 +42,10 @@ export function WaterfallReveal({ params, brand }: BlueprintProps) {
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
   const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
+  const mainType = resolveHeadingType(brand, text, { weight: 700 })
+  const sublabelType = resolveBodyType(brand, sublabel ?? "", { weight: 300 })
 
   const words = splitWords(text)
   const lineDirection = detectBaseDirection(text)
@@ -80,9 +81,8 @@ export function WaterfallReveal({ params, brand }: BlueprintProps) {
           flexWrap: "wrap",
           justifyContent: "center",
           gap: `0 ${Math.round(mainFontSize * 0.3)}px`,
-          fontFamily,
+          ...mainType,
           fontSize: mainFontSize,
-          fontWeight: 700,
           color: primaryColor,
           maxWidth: width * 0.85,
         }}
@@ -110,9 +110,8 @@ export function WaterfallReveal({ params, brand }: BlueprintProps) {
         <div
           style={{
             ...directionStyle(sublabel),
-            fontFamily,
+            ...sublabelType,
             fontSize: sublabelFontSize,
-            fontWeight: 300,
             color: emphasisColor,
             marginTop: Math.round(height * 0.03),
             opacity: sublabelProgress,

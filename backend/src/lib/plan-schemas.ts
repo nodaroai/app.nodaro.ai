@@ -22,6 +22,15 @@ export type PlanType = (typeof PLAN_TYPES)[number]
 
 // ── Brand Tokens ─────────────────────────────────────────────────────────
 
+/** Optional per-role typography lever (weight/casing/tracking). */
+const brandTypeSpecSchema = z
+  .object({
+    weight: z.number().int().min(100).max(900).optional(),
+    casing: z.enum(["uppercase", "lowercase", "none"]).optional(),
+    tracking: z.number().min(-0.2).max(0.5).optional(),
+  })
+  .optional()
+
 export const brandTokensSchema = z.object({
   palette: z.object({
     bg: hexColor,
@@ -35,6 +44,8 @@ export const brandTokensSchema = z.object({
   fonts: z.object({
     heading: z.enum(SUPPORTED_FONT_NAMES),
     body: z.enum(SUPPORTED_FONT_NAMES),
+    headingType: brandTypeSpecSchema,
+    bodyType: brandTypeSpecSchema,
   }),
   logo: z
     .object({ name: z.string().min(1), tagline: z.string().optional() })
@@ -53,6 +64,8 @@ export const brandTokensSchema = z.object({
 type _AssertAssignable<Expected, Actual extends Expected> = Actual
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _BrandTokensSchemaMatchesType = _AssertAssignable<BrandTokens, z.infer<typeof brandTokensSchema>>
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _SchemaMatchesBrandTokens = _AssertAssignable<z.infer<typeof brandTokensSchema>, BrandTokens>
 
 // ── After Effects Plan ──────────────────────────────────────────────────
 
