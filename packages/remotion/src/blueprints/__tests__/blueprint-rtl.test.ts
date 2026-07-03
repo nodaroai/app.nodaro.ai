@@ -13,6 +13,11 @@ describe("every blueprint is RTL-wired", () => {
     // via its in-file logoRowDirection helper (built on detectBaseDirection) —
     // either counts as "RTL-wired".
     expect(src.includes("directionStyle") || src.includes("detectBaseDirection")).toBe(true)
-    expect(src).toContain("withRtlFallback")
+    // Since the brand-fill task (Task 6), blueprints no longer call
+    // withRtlFallback directly — they get it transitively via
+    // blueprintFontFamily(brand), the single source of truth in lib/brand.ts
+    // (which itself unconditionally applies withRtlFallback). Either form of
+    // evidence proves the font stack is RTL-safe.
+    expect(src.includes("withRtlFallback") || src.includes("blueprintFontFamily(brand)")).toBe(true)
   })
 })

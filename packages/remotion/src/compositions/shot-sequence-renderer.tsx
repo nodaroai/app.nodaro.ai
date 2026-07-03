@@ -2,10 +2,11 @@ import React from "react"
 import { AbsoluteFill, Audio, Sequence, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
+import { resolveBrand, resolveFontStack, type ResolvedBrand } from "../lib/brand"
 import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
 import { easeOutQuad, easeInQuad } from "../blueprints/motion"
+import { readableTextColor } from "../blueprints/color"
 
 type CutDirection = "left" | "right" | "up" | "down"
 const DIRECTION_VECTOR: Record<CutDirection, readonly [number, number]> = {
@@ -130,20 +131,27 @@ export function cutCurveTransform(
   return { x, y, opacity }
 }
 
-/** Font + direction CSS for a resolved text element (pure — unit-testable). */
-export function elementTextStyle(element: Extract<ShotElement, { type: "text" }>): {
+/** Font + direction CSS for a resolved text element (pure — unit-testable).
+ *  `element.fontFamily` wins when set; otherwise falls back to the brand's
+ *  body font; otherwise "Montserrat" (today's hardcode — byte-identical when
+ *  brand is absent/has no fonts). */
+export function elementTextStyle(
+  element: Extract<ShotElement, { type: "text" }>,
+  brand?: ResolvedBrand,
+): {
   fontFamily: string
   direction: "rtl" | "ltr"
 } {
+  const fontName = element.fontFamily ?? brand?.fonts?.body ?? "Montserrat"
   return {
-    fontFamily: withRtlFallback(FONT_MAP[element.fontFamily] ?? element.fontFamily),
+    fontFamily: resolveFontStack(fontName, fontName),
     ...directionStyle(element.text, { explicit: element.dir }),
   }
 }
 
-function ElementBox({ element, style }: { element: ShotElement; style: React.CSSProperties }) {
+function ElementBox({ element, style, brand }: { element: ShotElement; style: React.CSSProperties; brand?: ResolvedBrand }) {
   if (element.type === "text") {
-    const { fontFamily, direction } = elementTextStyle(element)
+    const { fontFamily, direction } = elementTextStyle(element, brand)
     return (
       <div
         style={{
@@ -154,7 +162,7 @@ function ElementBox({ element, style }: { element: ShotElement; style: React.CSS
           direction,
           fontSize: element.fontSize,
           fontWeight: element.fontWeight ?? 400,
-          color: element.color,
+          color: element.color ?? brand?.palette?.text ?? readableTextColor(brand?.backgroundColor ?? "#000000"),
           letterSpacing: element.letterSpacing,
           whiteSpace: "nowrap",
           ...style,
@@ -199,7 +207,7 @@ function ElementBox({ element, style }: { element: ShotElement; style: React.CSS
   )
 }
 
-function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backgroundColor: string }) {
+function RevealView({ reveal, brand }: { reveal: ResolvedReveal; brand: ResolvedBrand }) {
   const frame = useCurrentFrame()
 
   // Blueprint branch — narrows union to ResolvedBlueprintReveal.
@@ -209,7 +217,7 @@ function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backg
     if (!Comp) throw new Error(`Unknown blueprint id: ${reveal.blueprint.id}`)
     return (
       <Sequence from={reveal.frame} durationInFrames={reveal.durationFrames} layout="none">
-        <Comp params={reveal.blueprint.params} durationInFrames={reveal.durationFrames} brand={{ backgroundColor }} />
+        <Comp params={reveal.blueprint.params} durationInFrames={reveal.durationFrames} brand={brand} />
       </Sequence>
     )
   }
@@ -262,7 +270,7 @@ function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backg
 
   return (
     <div style={{ ...exitTransform }}>
-      <ElementBox element={reveal.element} style={{ ...entranceTransform, opacity: finalOpacity }} />
+      <ElementBox element={reveal.element} style={{ ...entranceTransform, opacity: finalOpacity }} brand={brand} />
     </div>
   )
 }
@@ -273,7 +281,7 @@ function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backg
  *  in via `transitionInType`/`transitionOutType`. The plain-crossfade branch
  *  is byte-identical to the pre-cut-the-curve renderer — same function call,
  *  same output — for every scene that doesn't opt in. */
-function SceneView({ scene, backgroundColor }: { scene: ResolvedScene; backgroundColor: string }) {
+function SceneView({ scene, brand }: { scene: ResolvedScene; brand: ResolvedBrand }) {
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
   const usesCutCurve = scene.transitionInType === "cut-the-curve" || scene.transitionOutType === "cut-the-curve"
@@ -300,15 +308,16 @@ function SceneView({ scene, backgroundColor }: { scene: ResolvedScene; backgroun
       }}
     >
       {scene.shots.flatMap((shot) =>
-        shot.reveals.map((r) => <RevealView key={r.id} reveal={r} backgroundColor={backgroundColor} />),
+        shot.reveals.map((r) => <RevealView key={r.id} reveal={r} brand={brand} />),
       )}
     </AbsoluteFill>
   )
 }
 
 export function ShotSequenceRenderer({ plan }: { plan: ShotSequencePlan }) {
+  const brand = resolveBrand(plan.brandTokens, plan.backgroundColor)
   return (
-    <AbsoluteFill style={{ backgroundColor: plan.backgroundColor }}>
+    <AbsoluteFill style={{ backgroundColor: brand.backgroundColor }}>
       <Audio src={plan.audio.src} volume={plan.audio.volume ?? 1} />
       {plan.scenes.map((scene) => (
         <Sequence
@@ -318,7 +327,7 @@ export function ShotSequenceRenderer({ plan }: { plan: ShotSequencePlan }) {
           // the next scene for the cross-dissolve (window stays non-overlapping).
           durationInFrames={scene.durationInFrames + (scene.transitionOutFrames ?? 0)}
         >
-          <SceneView scene={scene} backgroundColor={plan.backgroundColor} />
+          <SceneView scene={scene} brand={brand} />
         </Sequence>
       ))}
     </AbsoluteFill>

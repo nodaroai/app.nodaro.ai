@@ -1,8 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   items: { label: string }[]
@@ -40,12 +40,13 @@ export function cardEntranceProgress(
 }
 
 export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintProps) {
-  const { items, columns: colsOverride, accentColor = "#f5f5f7" } =
+  const { items, columns: colsOverride, accentColor } =
     params as unknown as Params
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
+  const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
 
   const clipped = items.slice(0, 6)
   const count = Math.max(1, clipped.length)
@@ -93,7 +94,7 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
                 width: cardW,
                 height: cardH,
                 borderRadius: Math.round(Math.min(cardW, cardH) * 0.1),
-                border: `2px solid ${accentColor}`,
+                border: `2px solid ${accent}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -106,7 +107,7 @@ export function GridCardAssemble({ params, durationInFrames, brand }: BlueprintP
                   fontFamily,
                   fontSize: Math.round(cardH * 0.2),
                   fontWeight: 700,
-                  color: accentColor,
+                  color: accent,
                   textAlign: "center",
                   padding: `0 ${Math.round(cardW * 0.08)}px`,
                   letterSpacing: "-0.01em",

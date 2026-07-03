@@ -1,10 +1,10 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
 import { popWithSettle } from "./motion"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   stations: Array<{ label: string; sublabel?: string }>
@@ -69,9 +69,9 @@ export function SpatialPanStations({ params, durationInFrames, brand }: Blueprin
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
   const primaryColor = readableTextColor(brand.backgroundColor)
-  const emphasisColor = accentColor ?? primaryColor
+  const emphasisColor = resolveBlueprintAccent(accentColor, brand, primaryColor)
 
   const { legIndex, cameraPos, arrived, segLen } = panCamera(frame, durationInFrames, stations.length)
 

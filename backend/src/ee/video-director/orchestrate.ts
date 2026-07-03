@@ -13,6 +13,7 @@ import { authorShotSequence, type AuthoredSequence, type VideoGenre } from "./au
 import { bakeShotSequence } from "../../services/shot-sequence/baker.js"
 import { waitForJob as _waitForJob } from "../../lib/mcp/tools/_wait-for-job.js"
 import { config } from "../../lib/config.js"
+import { resolveBrandInput, type BrandTokens } from "@nodaro/shared"
 import type { FastifyInstance } from "fastify"
 import type { AlignmentWord } from "../../providers/elevenlabs/forced-alignment.js"
 import type { ShotSequencePlan } from "../../lib/plan-schemas.js"
@@ -66,16 +67,29 @@ export interface DirectorDeps {
  * message includes the failing step name (e.g. "render: endpoint 503").
  */
 export async function runVideoDirector(
-  opts: { genre: VideoGenre; brief: string; userId: string; tier: string },
+  opts: {
+    genre: VideoGenre
+    brief: string
+    userId: string
+    tier: string
+    /** Optional brand — a preset name OR inline BrandTokens. Resolved ONCE here
+     *  (via resolveBrandInput) and threaded into both the author system prompt
+     *  and the brief handed to the baker. */
+    brand?: string | BrandTokens
+  },
   deps: DirectorDeps,
 ): Promise<{ videoUrl: string; planType: "shot-sequence" }> {
   const { userId } = opts
+
+  // Resolve the caller-supplied brand ONCE (preset name → tokens, or inline
+  // tokens pass-through). Fed to the author (prompt) AND set on the brief below.
+  const resolvedBrand = opts.brand ? resolveBrandInput(opts.brand) : undefined
 
   // ── 1. Author ──────────────────────────────────────────────────────────────
   await deps.onProgress?.("authoring")
   let authored: AuthoredSequence
   try {
-    authored = await deps.author(opts)
+    authored = await deps.author({ ...opts, brand: resolvedBrand })
   } catch (err) {
     throw new Error(`authoring: ${err instanceof Error ? err.message : String(err)}`)
   }
@@ -111,10 +125,16 @@ export async function runVideoDirector(
   if (!alignment) throw new Error("alignment: no alignment in job output")
 
   // ── 4. Bake (resolve) ──────────────────────────────────────────────────────
+  // When the caller supplied a brand, set the resolved tokens on the brief so
+  // the render pipeline (baker → plan.brandTokens) honors them. When no brand
+  // was supplied, pass the brief unchanged so an author-chosen brandTokens survives.
+  const briefToBake = resolvedBrand
+    ? { ...authored.shotSequenceBrief, brandTokens: resolvedBrand }
+    : authored.shotSequenceBrief
   await deps.onProgress?.("resolve")
   let plan: ShotSequencePlan
   try {
-    const baked = bakeShotSequence(authored.shotSequenceBrief, alignment, audioUrl)
+    const baked = bakeShotSequence(briefToBake, alignment, audioUrl)
     plan = baked.plan
   } catch (err) {
     throw new Error(`resolve: ${err instanceof Error ? err.message : String(err)}`)

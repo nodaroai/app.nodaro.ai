@@ -18,6 +18,7 @@ import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
+import type { BrandTokens } from "@nodaro/shared"
 import type { FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,11 @@ export interface VideoDirectorJobPayload {
   brief: string
   userId: string
   tier: string
+  /** Optional brand — a preset name (string) OR inline brand tokens. Passed
+   *  through to the orchestrator, which resolves it once via resolveBrandInput.
+   *  (BrandTokens lives in @nodaro/shared, not ee/, so typing it precisely here
+   *  does not couple this core worker to enterprise code.) */
+  brand?: string | BrandTokens
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +76,7 @@ export async function processVideoDirectorJob(
   payload: VideoDirectorJobPayload,
   app: FastifyInstance,
 ): Promise<void> {
-  const { jobId, genre, brief, userId, tier } = payload
+  const { jobId, genre, brief, userId, tier, brand } = payload
 
   try {
     // Mark the job as processing so the MCP progress widget shows activity.
@@ -111,6 +117,8 @@ export async function processVideoDirectorJob(
         brief,
         userId,
         tier,
+        // Passed through as-is; runVideoDirector resolves it via resolveBrandInput.
+        brand,
       },
       { ...deps, onProgress },
     )

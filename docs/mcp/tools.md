@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets`, `get_node_preset` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `get_recipe`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`
 
 ---
 
@@ -1148,6 +1148,21 @@ Zero credits.
 
 **Input:** `id` (string) — blueprint id, e.g. `"titlecard-reveal"`. Call
 `list_shot_shapes` to browse all ids.
+
+---
+
+### `list_brand_presets`
+
+**Scope:** none — always visible (all editions, free).
+
+Return the catalog of all 8 brand-token presets (id, label, mood, description,
+palette summary, fonts). A brand preset is a named palette+font pairing (e.g.
+`midnight-violet`, `editorial-cream`) passed as the `brand` param to the video
+director so every blueprint accent and text style stays consistent across the
+video. Use before authoring a brief that specifies a brand to pick the right
+preset id. Zero credits.
+
+**Input:** none
 
 ---
 

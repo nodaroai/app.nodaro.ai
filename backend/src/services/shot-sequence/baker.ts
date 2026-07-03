@@ -256,6 +256,7 @@ export function bakeShotSequence(
     height: brief.height,
     durationInFrames,
     backgroundColor: brief.backgroundColor,
+    ...(brief.brandTokens ? { brandTokens: brief.brandTokens } : {}),
     audio: { src: audioUrl },
     scenes,
   }

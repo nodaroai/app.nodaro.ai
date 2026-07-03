@@ -1,38 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { bakeShotSequence, EmptyAlignmentError, SceneOverlapError } from "../baker.js"
 import type { AlignmentWord } from "../../../providers/elevenlabs/forced-alignment.js"
-import type { ShotSequenceBrief, BriefReveal } from "../brief-schema.js"
-
-const ALIGN: AlignmentWord[] = [
-  { word: "ship", start: 0, end: 1 },
-  { word: "faster", start: 1, end: 2 },
-  { word: "today", start: 2, end: 3 },
-]
-
-function brief(overrides: Partial<ShotSequenceBrief> = {}): ShotSequenceBrief {
-  return {
-    fps: 30,
-    width: 1920,
-    height: 1080,
-    backgroundColor: "#000",
-    narration: { script: "ship faster today", cues: [{ id: "c1", text: "ship" }, { id: "c2", text: "today" }] },
-    scenes: [
-      {
-        id: "s1",
-        shots: [
-          {
-            id: "sh1",
-            reveals: [
-              { id: "r1", element: { id: "t1", type: "text", text: "Ship", fontFamily: "Inter", fontSize: 80, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "cue", cueId: "c1", edge: "start" }, enter: { motion: "fade", durationFrames: 6 } },
-              { id: "r2", element: { id: "t2", type: "text", text: "Today", fontFamily: "Inter", fontSize: 80, color: "#fff", x: 0, y: 100 }, revealAt: { kind: "cue", cueId: "c2", edge: "start" }, enter: { motion: "fade", durationFrames: 6 } },
-            ],
-          },
-        ],
-      },
-    ],
-    ...overrides,
-  }
-}
+import type { BriefReveal } from "../brief-schema.js"
+import { ALIGN, brief } from "./baker-fixtures.js"
 
 describe("bakeShotSequence", () => {
   it("bakes cue starts to round(sec*fps) scene-relative frames", () => {

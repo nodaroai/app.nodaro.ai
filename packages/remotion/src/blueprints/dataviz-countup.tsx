@@ -1,9 +1,9 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle } from "../lib/text-direction"
 import { readableTextColor } from "./color"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   value: number
@@ -38,11 +38,11 @@ export function DatavizCountup({ params, durationInFrames, brand }: BlueprintPro
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
   const textColor = readableTextColor(brand.backgroundColor)
   // accentColor is user-configurable; fall back to the contrast-safe text color
   // so the big number is never invisible on a light brand.backgroundColor.
-  const numberColor = accentColor ?? textColor
+  const numberColor = resolveBlueprintAccent(accentColor, brand, textColor)
 
   // Animated count.
   const current = countupValue(frame, durationInFrames, value)

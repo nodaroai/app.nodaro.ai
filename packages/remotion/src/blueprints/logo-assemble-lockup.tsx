@@ -1,8 +1,8 @@
 import React from "react"
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
-import { FONT_MAP, withRtlFallback } from "../lib/font-registry"
 import { directionStyle, detectBaseDirection, type TextDirection } from "../lib/text-direction"
+import { blueprintFontFamily, resolveBlueprintAccent } from "../lib/brand"
 
 interface Params {
   brand: string
@@ -63,13 +63,14 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
   const {
     brand: brandText,
     tagline,
-    accentColor = "#f5f5f7",
+    accentColor,
   } = params as unknown as Params
 
   const frame = useCurrentFrame()
   const { width, height } = useVideoConfig()
 
-  const fontFamily = withRtlFallback(FONT_MAP["Montserrat"] ?? "Montserrat")
+  const fontFamily = blueprintFontFamily(brand)
+  const accent = resolveBlueprintAccent(accentColor, brand, "#f5f5f7")
   const letters = brandText.split("")
   const count = letters.length
 
@@ -125,7 +126,7 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
                 fontFamily,
                 fontSize: letterFontSize,
                 fontWeight: 900,
-                color: accentColor,
+                color: accent,
                 letterSpacing: "0.04em",
                 display: "inline-block",
                 opacity: progress,
@@ -146,7 +147,7 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
             fontFamily,
             fontSize: taglineFontSize,
             fontWeight: 300,
-            color: accentColor,
+            color: accent,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             marginTop: Math.round(height * 0.025),

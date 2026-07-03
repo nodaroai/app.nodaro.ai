@@ -2,6 +2,7 @@ import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { brandTokensSchema } from "../../plan-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 
 /**
@@ -17,6 +18,20 @@ import type { RegisterOpts } from "./verbs-image.js"
  * render job), mirroring verbs-shot-sequence.ts.
  */
 const executeGate: ToolGate = { required: ["workflows:execute"] }
+
+/**
+ * Shared `brand` MCP input — a preset name (string) OR inline brand tokens.
+ * Single source of truth for both create_explainer and create_launch_video:
+ * validating against `brandTokensSchema` (not a loose record) gives MCP clients
+ * real structural validation of inline tokens.
+ */
+const brandParamSchema = z
+  .union([z.string(), brandTokensSchema])
+  .optional()
+  .describe(
+    "Optional brand: a preset name (e.g. \"cobalt-corporate\") OR inline brand tokens " +
+      "({ palette, fonts, logo }). Applied to every scene's colors and fonts.",
+  )
 
 /** Returned verbatim when a caller passes a product `url` but no `brief`.
  *  Real-UI capture (scrape the page, screenshot the product) is a deferred
@@ -43,6 +58,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
           .min(1)
           .max(8000)
           .describe("What the explainer video should teach or cover."),
+        brand: brandParamSchema,
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -54,6 +70,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
         payload: {
           genre: "explainer",
           brief: args.topic,
+          brand: args.brand,
           mcp_client: session.clientName,
           userId: session.userId,
         },
@@ -85,6 +102,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
           .string()
           .optional()
           .describe("(Not supported yet) a product URL to capture — pass `brief` instead."),
+        brand: brandParamSchema,
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -108,6 +126,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
         payload: {
           genre: "product-launch",
           brief: args.brief,
+          brand: args.brand,
           mcp_client: session.clientName,
           userId: session.userId,
         },
