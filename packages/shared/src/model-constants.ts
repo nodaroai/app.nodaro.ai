@@ -979,6 +979,14 @@ export const VOICE_DESIGN_MODELS = [
 ] as const
 export type VoiceDesignModel = typeof VOICE_DESIGN_MODELS[number]
 
+/**
+ * ElevenLabs' newest text-to-voice model (all languages) — the default when
+ * a voice-design caller omits `model`. Single-sourced here so the route
+ * (`backend/src/routes/voice-design.ts`) and the direct-API provider
+ * (`backend/src/providers/elevenlabs/voice-design.ts`) can't drift.
+ */
+export const DEFAULT_VOICE_DESIGN_MODEL: VoiceDesignModel = "eleven_ttv_v3"
+
 /** I2I providers that support mask-based inpainting */
 export const I2I_MASK_SUPPORT = new Set(["ideogram-edit"])
 

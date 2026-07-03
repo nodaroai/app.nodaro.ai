@@ -2775,7 +2775,8 @@ export type VoiceChangerData = {
   voiceLabel: string
   voiceType: "premade" | "custom" | "library"
   /** ElevenLabs speech-to-speech model. Optional: when unset the backend falls
-   *  back to eleven_english_sts_v2 (the prior hardcoded default). */
+   *  back to eleven_multilingual_sts_v2 — ElevenLabs recommends it even for
+   *  English audio, and it's required for non-English sources. */
   model?: VoiceChangerModel
   stability: number
   similarityBoost: number
@@ -6380,7 +6381,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       voiceId: "",
       voiceLabel: "",
       voiceType: "premade",
-      model: "eleven_english_sts_v2",
+      // ElevenLabs recommends Multilingual v2 even for English audio; also
+      // required for non-English sources. Kept as a literal (not
+      // DEFAULT_VOICE_CHANGER_MODEL) because the gen-skills AST parser can
+      // only resolve `@nodaro/shared` object-literal SPREADS in defaultData
+      // (e.g. `...MUSIC_GENRE_DEFAULT_DATA`), not a plain identifier field
+      // value — see parse-node-definitions.ts's readLiteralValue.
+      model: "eleven_multilingual_sts_v2",
       stability: 0.5,
       similarityBoost: 0.75,
       removeBackgroundNoise: false,
@@ -6400,7 +6407,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Voice Changer Pro",
       orderedVoices: [],
-      model: "eleven_english_sts_v2",
+      // ElevenLabs recommends Multilingual v2 even for English audio; also
+      // required for non-English sources. Kept as a literal — see the
+      // voice-changer defaultData comment above (gen-skills parser limit).
+      model: "eleven_multilingual_sts_v2",
       preserveBackground: true,
       removeBackgroundNoise: false,
       fieldMappings: {},
@@ -6453,6 +6463,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Voice Design",
       text: "",
       voiceDescription: "",
+      // eleven_ttv_v3 is ElevenLabs' newest text-to-voice model (all languages).
+      // Kept as a literal (not DEFAULT_VOICE_DESIGN_MODEL) because the
+      // gen-skills AST parser can only resolve `@nodaro/shared` object-literal
+      // SPREADS in defaultData, not a plain identifier field value — see
+      // parse-node-definitions.ts's readLiteralValue (same reason as
+      // DEFAULT_VOICE_CHANGER_MODEL above).
+      model: "eleven_ttv_v3",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],

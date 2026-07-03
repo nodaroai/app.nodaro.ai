@@ -141,7 +141,11 @@ export function AiAvatarConfig({
     if (next === "default") {
       onUpdate({ ttsEngine: undefined })
     } else if (next === "elevenlabs") {
-      onUpdate({ ttsEngine: { engine_type: "elevenlabs" } })
+      // Seed the model the "Model" dropdown below displays as its default
+      // ("v3 (recommended)") so display=run parity holds — without this the
+      // dropdown SHOWS eleven_v3 but nothing gets sent, and HeyGen silently
+      // applies its own default engine.
+      onUpdate({ ttsEngine: { engine_type: "elevenlabs", model: "eleven_v3" } })
     } else if (next === "fish") {
       onUpdate({ ttsEngine: { engine_type: "fish" } })
     } else if (next === "starfish") {
@@ -511,17 +515,21 @@ export function AiAvatarConfig({
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Model</Label>
                     <Select
-                      value={elevenlabs?.model ?? "eleven_multilingual_v2"}
+                      // v3 is ElevenLabs' newest TTS model (all languages) — default
+                      // within this ElevenLabs engine branch. This does NOT change
+                      // the node's default ttsEngine (HeyGen default stays default;
+                      // that's a separate product decision).
+                      value={elevenlabs?.model ?? "eleven_v3"}
                       onValueChange={(v) =>
                         updateElevenlabs({ model: v as NonNullable<typeof elevenlabs>["model"] })
                       }
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="eleven_v3">v3 (recommended)</SelectItem>
                         <SelectItem value="eleven_multilingual_v2">Multilingual v2</SelectItem>
                         <SelectItem value="eleven_turbo_v2_5">Turbo v2.5</SelectItem>
                         <SelectItem value="eleven_flash_v2_5">Flash v2.5</SelectItem>
-                        <SelectItem value="eleven_v3">v3</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

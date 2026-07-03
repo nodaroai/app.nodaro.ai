@@ -9,6 +9,21 @@ tool call. The video director is a three-tool family built on the Phase-0
 - `create_explainer` — one-shot: author + render a concept-led explainer video.
 - `create_launch_video` — one-shot: author + render a product-launch video.
 
+## Motion graphics vs. animated footage
+
+`start_video_director`, `create_explainer`, and `create_launch_video` are the
+**motion-graphics** path — kinetic typography and shapes only, never
+illustrated or filmed scenes (see "What Phase-1 can produce" below). If the
+user asks for a bare "explainer" without specifying a visual style, both the
+tool descriptions and the motion-director doctrine instruct the LLM to confirm
+the method with the user *before* calling any tool: motion graphics (this
+family — a fixed **~20 credits** via `create_explainer`, or **~11 credits**
+driving the Phase-0 pipeline manually) vs. animated illustrated footage
+(`get_recipe` → `video-explainer`, **~45 credits per 10-second block**). Only
+proceed once the user has chosen, or has already stated a style in the
+original ask. See [Content Recipes](./recipes.md) for the `video-explainer`
+side of this choice.
+
 ## What Phase-1 can produce
 
 Phase-1 visuals are **kinetic typography and simple shapes** — `text` and

@@ -8,15 +8,17 @@ import {
 describe("voice-changer-models", () => {
   it("exposes the ElevenLabs speech-to-speech models", () => {
     expect(VOICE_CHANGER_MODEL_IDS).toEqual([
-      "eleven_english_sts_v2",
       "eleven_multilingual_sts_v2",
+      "eleven_english_sts_v2",
     ])
   })
 
-  it("defaults to the English model to preserve prior behavior", () => {
-    // The provider hardcoded eleven_english_sts_v2 before this lever existed;
-    // keeping it the default means existing nodes/output never change.
-    expect(DEFAULT_VOICE_CHANGER_MODEL).toBe("eleven_english_sts_v2")
+  it("defaults to the Multilingual model (ElevenLabs-recommended, even for English)", () => {
+    // ElevenLabs' docs recommend Multilingual v2 even for English source
+    // audio (it often outperforms the English-only model), and it's
+    // required for non-English audio — so it's the default. English v2
+    // remains selectable.
+    expect(DEFAULT_VOICE_CHANGER_MODEL).toBe("eleven_multilingual_sts_v2")
     expect(VOICE_CHANGER_MODEL_IDS).toContain(DEFAULT_VOICE_CHANGER_MODEL)
   })
 

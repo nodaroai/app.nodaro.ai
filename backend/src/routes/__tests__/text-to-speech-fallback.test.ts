@@ -69,6 +69,23 @@ describe("deriveVerifiedTtsProviders", () => {
     expect(deriveVerifiedTtsProviders([])).toEqual([])
     expect(deriveVerifiedTtsProviders(["eleven_english_sts_v2"])).toEqual([])
   })
+
+  it("returns v3 first when the voice is verified on eleven_v3", () => {
+    expect(deriveVerifiedTtsProviders(["eleven_v3"])).toEqual(["elevenlabs-v3"])
+  })
+
+  it("puts v3 ahead of turbo/multilingual when the voice is verified on all three", () => {
+    expect(deriveVerifiedTtsProviders(["eleven_v3", "eleven_multilingual_v2"]))
+      .toEqual(["elevenlabs-v3", "elevenlabs-multilingual"])
+    expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v3"]))
+      .toEqual(["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])
+  })
+
+  it("does NOT match v3 on turbo/flash/multilingual model ids (exact-substring guard)", () => {
+    expect(deriveVerifiedTtsProviders(["eleven_turbo_v2_5"])).toEqual(["elevenlabs-turbo"])
+    expect(deriveVerifiedTtsProviders(["eleven_flash_v2_5"])).toEqual(["elevenlabs-turbo"])
+    expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2"])).toEqual(["elevenlabs-multilingual"])
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

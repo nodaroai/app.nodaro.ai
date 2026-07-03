@@ -188,16 +188,16 @@ describe("voice-changer — directVoiceChanger", () => {
     expect(init.headers["Accept"]).toBe("audio/mpeg")
   })
 
-  it("uses default model_id = eleven_english_sts_v2", async () => {
+  it("uses default model_id = eleven_multilingual_sts_v2 (ElevenLabs-recommended, non-English-safe)", async () => {
     await directVoiceChanger(Buffer.from("input"), "voice-id-1")
     const init = fetchMock.mock.calls[0][1] as { body: FormData }
-    expect(init.body.get("model_id")).toBe("eleven_english_sts_v2")
+    expect(init.body.get("model_id")).toBe("eleven_multilingual_sts_v2")
   })
 
   it("respects custom modelId", async () => {
-    await directVoiceChanger(Buffer.from("input"), "v1", { modelId: "eleven_multilingual_sts_v2" })
+    await directVoiceChanger(Buffer.from("input"), "v1", { modelId: "eleven_english_sts_v2" })
     const init = fetchMock.mock.calls[0][1] as { body: FormData }
-    expect(init.body.get("model_id")).toBe("eleven_multilingual_sts_v2")
+    expect(init.body.get("model_id")).toBe("eleven_english_sts_v2")
   })
 
   it("appends remove_background_noise=true when set", async () => {
@@ -374,7 +374,7 @@ describe("voice-changer — voiceChangerFromUrl", () => {
 // ===========================================================================
 
 describe("voice-design — designVoice", () => {
-  it("POSTs to /v1/text-to-voice/design with required fields", async () => {
+  it("POSTs to /v1/text-to-voice/design with required fields + defaulted model_id", async () => {
     fetchMock.mockResolvedValueOnce(previewsResponse(Buffer.from("audio")))
 
     await designVoice("hello", "deep narrator")
@@ -383,7 +383,9 @@ describe("voice-design — designVoice", () => {
     expect(url).toBe(`${ELEVENLABS_BASE_URL}/v1/text-to-voice/design`)
     expect((init as { method: string }).method).toBe("POST")
     const body = JSON.parse((init as { body: string }).body)
-    expect(body).toEqual({ voice_description: "deep narrator", text: "hello" })
+    // eleven_ttv_v3 is the default when the caller omits model (newest,
+    // all languages).
+    expect(body).toEqual({ voice_description: "deep narrator", text: "hello", model_id: "eleven_ttv_v3" })
   })
 
   it("includes auth + Content-Type: application/json", async () => {

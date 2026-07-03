@@ -1,4 +1,5 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
+import { DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
 
 export interface VoiceDesignOptions {
   model?: string
@@ -29,7 +30,9 @@ export async function designVoice(
     voice_description: voiceDescription,
     text,
   }
-  if (options?.model) body.model_id = options.model
+  // eleven_ttv_v3 is ElevenLabs' newest text-to-voice model (all languages);
+  // default in-handler when the caller omits it, same as the route above.
+  body.model_id = options?.model ?? DEFAULT_VOICE_DESIGN_MODEL
   if (options?.loudness != null) body.loudness = options.loudness
   if (options?.guidanceScale != null) body.guidance_scale = options.guidanceScale
   if (options?.seed != null) body.seed = options.seed

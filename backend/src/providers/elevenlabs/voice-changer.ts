@@ -1,3 +1,4 @@
+import { DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
 
 export interface VoiceChangerOptions {
@@ -25,7 +26,10 @@ export async function directVoiceChanger(
   const formData = new FormData()
   const blob = new Blob([audioBuffer as BlobPart], { type: "audio/mpeg" })
   formData.append("audio", blob, "audio.mp3")
-  formData.append("model_id", options?.modelId ?? "eleven_english_sts_v2")
+  // ElevenLabs recommends Multilingual v2 even for English source audio (it
+  // often outperforms the English-only model) and it's required for
+  // non-English audio, so it's the default when the caller omits modelId.
+  formData.append("model_id", options?.modelId ?? DEFAULT_VOICE_CHANGER_MODEL)
 
   if (options?.removeBackgroundNoise) {
     formData.append("remove_background_noise", "true")

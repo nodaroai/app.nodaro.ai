@@ -63,9 +63,10 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { textToSpeechRoutes } from "../text-to-speech.js"
+import { textToSpeechRoutes, resolveOmittedTtsProvider } from "../text-to-speech.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { getMaxTtsChars } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -204,6 +205,148 @@ describe("POST /v1/text-to-speech", () => {
         voice: "rachel",
       })
     )
+  })
+
+  it("defaults an omitted provider to elevenlabs-v3", async () => {
+    const { mockInsert } = mockJobInsert({
+      data: { id: "job-1" },
+      error: null,
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: {
+        text: "Omitted provider test",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+
+    // input_data has no provider key — the user submitted none.
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.not.objectContaining({
+          provider: expect.anything(),
+        }),
+      })
+    )
+
+    // The BullMQ worker receives the resolved default: elevenlabs-v3.
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "text-to-speech",
+      expect.objectContaining({
+        provider: "elevenlabs-v3",
+      })
+    )
+  })
+
+  // ── length-aware omitted-provider default (non-lossy) ────────────────────
+  // v3 is the default for the common (short) case, but v3's per-request cap
+  // (3,000 chars) is far below the route's 40,000-char ceiling. Legacy
+  // callers that always omit `provider` and send long text must keep landing
+  // on turbo (cap 40,000, lossless) — not get silently truncated by v3.
+
+  it("resolveOmittedTtsProvider: v3 at and under the v3 cap, turbo beyond it", () => {
+    const v3Cap = getMaxTtsChars("elevenlabs-v3")
+    expect(v3Cap).toBe(3000)
+    expect(resolveOmittedTtsProvider("a".repeat(v3Cap))).toBe("elevenlabs-v3")
+    expect(resolveOmittedTtsProvider("a".repeat(v3Cap + 1))).toBe("elevenlabs-turbo")
+    expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v3")
+  })
+
+  it("defaults an omitted provider to elevenlabs-v3 at exactly the 3000-char v3 cap", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const text = "a".repeat(3000)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: { text, userId: "00000000-0000-4000-8000-000000000001" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "text-to-speech",
+      expect.objectContaining({ provider: "elevenlabs-v3" })
+    )
+    // At exactly the cap, the v3 clamp is a no-op — full text preserved.
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{3000}$/) }),
+      })
+    )
+  })
+
+  it("defaults an omitted provider to elevenlabs-turbo above the 3000-char v3 cap (non-lossy)", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const text = "a".repeat(3001)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: { text, userId: "00000000-0000-4000-8000-000000000001" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "text-to-speech",
+      expect.objectContaining({ provider: "elevenlabs-turbo", text })
+    )
+    // turbo's cap is 40000 — well above 3001, so the clamp is a no-op and the
+    // full text is preserved (not truncated to v3's 3000).
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{3001}$/) }),
+      })
+    )
+  })
+
+  it("respects an explicit elevenlabs-v3 provider for long text — clamp still applies", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const text = "a".repeat(3500)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: { text, provider: "elevenlabs-v3", userId: "00000000-0000-4000-8000-000000000001" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Explicit choice is respected — not overridden to turbo despite the length.
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "text-to-speech",
+      expect.objectContaining({ provider: "elevenlabs-v3" })
+    )
+    // The pre-existing per-model clamp still truncates the STORED record to
+    // v3's 3000-char cap — unchanged by this fix (only the OMITTED-provider
+    // resolution is length-aware; an explicit provider's clamp behaves as before).
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{3000}$/) }),
+      })
+    )
+  })
+
+  it("sends the CLAMPED text to the worker, not the raw pre-clamp text", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    const text = "a".repeat(3500)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: { text, provider: "elevenlabs-v3", userId: "00000000-0000-4000-8000-000000000001" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const queueCall = vi.mocked(videoQueue.add).mock.calls[0]
+    const queuedPayload = queueCall[1] as { text: string }
+    // The worker must receive the clamped text (v3 cap = 3000), not the raw
+    // 3500-char input — otherwise the per-model cap never reaches the
+    // provider call and elevenlabs rejects the over-long request.
+    expect(queuedPayload.text.length).toBe(getMaxTtsChars("elevenlabs-v3"))
+    expect(getMaxTtsChars("elevenlabs-v3")).toBe(3000)
   })
 
   it("maps legacy elevenlabs provider to elevenlabs-turbo", async () => {

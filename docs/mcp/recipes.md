@@ -42,6 +42,15 @@ a generic 404.
 |--------|-------------------|----------|
 | `video-explainer` | A narrated, non-photoreal animated explainer video: one style-locked visual key, N narration blocks each rendered as a silent clip, one consistent voice, finished via `assemble_narrated_video` | "explainer video", "animated explainer", "narrated explainer", "how-it-works video", "concept video", and similar |
 
+**`video-explainer`'s first question is method, not settings.** Before asking about
+duration, narration language, mascot, or aspect ratio, the recipe's Phase 0 asks the user
+to choose between this animated-footage path (~45cr per 10-second block ≈ 270cr/min of
+video, illustrated scenes) and the motion-graphics alternative (`start_video_director` /
+`create_explainer` — typography + shapes, a fixed ~20cr total via `create_explainer` or
+~11cr driving the pipeline manually). If the user picks motion graphics, the recipe stops
+and hands off to `start_video_director` instead of continuing. If the user already stated
+a style, the question is skipped.
+
 See [Video Director](./video-director.md) and [Shot Sequence](./shot-sequence.md) for a
 related but distinct family — those tools *execute* a narrated-video pipeline server-side
 in one call; `video-explainer` is a *recipe* the LLM follows itself, tool call by tool

@@ -23,7 +23,7 @@ In both cases the target voices' identities are applied while the original pacin
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Ordered Voices | `Array<string \| VoiceChangerProVoice>` (1–8) | `[]` | Ordered list of target voices. Voice N recasts the N-th detected speaker (first-appearance order). Speakers without a mapped voice pass through unchanged. Each entry is either a bare voice id (premade name or ElevenLabs UUID) or an object with per-voice settings (see below). Selectable via VoiceBrowser (premade, custom, or library). |
-| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_english_sts_v2"` | ElevenLabs speech-to-speech model. **English v2** is English-optimized (the default). **Multilingual v2** covers 29 languages — pick it for non-English source audio. |
+| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_multilingual_sts_v2"` | ElevenLabs speech-to-speech model. **Multilingual v2** covers 29 languages and is ElevenLabs' recommended model — including for English source audio, where it often outperforms the English-only model. **English v2** remains selectable. |
 | Preserve Background | `boolean` | `true` | **On** mixes the separated music / SFX stem back in under the new voices. **Off** drops it for clean, voice-only results. (The voice is always split out first regardless of this setting.) |
 | Separation Quality | `"fast" \| "best"` | `"fast"` | Demucs model used to split voice from music. **Fast** (`htdemucs`) preserves more of the voice and is quicker. **Best** (`htdemucs_ft`) gives finer voice/music separation. |
 | Music Volume | `"match" \| "normalize" \| "manual"` (+ `musicVolume` %) | `"match"` | Level of the **preserved background** music / SFX in the final mix — only applies when **Preserve Background** is on. **match** (default) keeps the original level; **normalize** applies EBU R128 loudnorm; **manual** sets the level to `musicVolume`% (0–200, default 100). |
@@ -95,7 +95,7 @@ Wire any talking video into the **video** input and the node will:
 ## Best Practices
 
 - Order your voices carefully — the mapping is positional (first-appearance speaker order). If you are unsure of speaker order, run the clip through a transcription node first to inspect the ordering.
-- Leave **Model** on English v2 for English audio; switch to Multilingual v2 when the source speech is in another language so pacing and pronunciation transfer cleanly.
+- Leave **Model** on Multilingual v2 (the default) — ElevenLabs recommends it even for English source audio, and it's required for non-English audio. Switch to English v2 only if you want to compare results.
 - Use **Preserve Background** on (default) to keep background music or SFX in place. Turn it off only when you want a clean, voice-only output.
 - If the music bleeds into the recast or the voice sounds thin, switch **Separation Quality** to **Best** (`htdemucs_ft`) for a cleaner voice/music split. Leave it on **Fast** when speed matters or the voice is already coming through clearly.
 - Tune per-voice **stability** / **similarityBoost** / **style** individually per speaker — each entry in Ordered Voices takes its own settings, so you can stabilize one speaker while keeping another expressive.

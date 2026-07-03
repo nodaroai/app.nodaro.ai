@@ -24,12 +24,15 @@ import { useVoiceLibrary } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
+import type { TtsProvider } from "@nodaro/shared"
 
-/** Library-voice model verification, threaded so the TTS config can snap a
- *  v2 provider the voice ISN'T verified for (preview-fidelity guard). */
+/** Library-voice model verification, threaded so the TTS config can snap to
+ *  a provider the voice IS verified for (preview-fidelity guard). Uses the
+ *  shared `TtsProvider` union (single source) rather than a hand-narrowed
+ *  copy — the voice may be verified on v3 in addition to the v2 models. */
 export interface VoiceProviderMeta {
-  readonly recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
-  readonly verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
+  readonly recommendedProvider?: TtsProvider
+  readonly verifiedProviders?: TtsProvider[]
 }
 
 interface VoiceBrowserProps {
@@ -939,9 +942,9 @@ interface VoiceListItem {
   accent: string
   description: string
   category: string
-  /** Voice Library entries only: v2 providers the voice is verified on. */
-  recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
-  verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
+  /** Voice Library entries only: providers the voice is verified on. */
+  recommendedProvider?: TtsProvider
+  verifiedProviders?: TtsProvider[]
 }
 
 function VoiceList({

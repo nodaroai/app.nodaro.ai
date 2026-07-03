@@ -459,6 +459,41 @@ describe("generateAvatarVideo", () => {
     expect(vs.engine_settings).toEqual(ttsEngine)
   })
 
+  it("defaults ElevenLabs engine to eleven_v3 when model is omitted (display=run parity)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    // Covers pre-existing saved nodes that flipped the engine to ElevenLabs
+    // before the frontend seeded a model — the UI advertises "eleven_v3" as
+    // the default, so the request sent to HeyGen must match what's displayed.
+    await generateAvatarVideo({
+      ...baseOpts,
+      ttsEngine: { engine_type: "elevenlabs" as const },
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.engine_settings).toEqual({ engine_type: "elevenlabs", model: "eleven_v3" })
+  })
+
+  it("respects an explicit ElevenLabs model over the eleven_v3 default", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      ttsEngine: { engine_type: "elevenlabs" as const, model: "eleven_flash_v2_5" as const },
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.engine_settings).toEqual({ engine_type: "elevenlabs", model: "eleven_flash_v2_5" })
+  })
+
   it("maps camelCase ElevenLabs ttsEngine fields → snake_case (workflow-DAG path)", async () => {
     fetchMock
       .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))

@@ -88,7 +88,13 @@ export function normalizeTtsEngine(raw: unknown): TtsEngineSettings | undefined 
 
   if (engineType === "elevenlabs") {
     const out: ElevenLabsEngineSettings = { engine_type: "elevenlabs" }
-    if (e.model !== undefined) out.model = e.model as ElevenLabsEngineSettings["model"]
+    // Display=run parity: the config panel advertises "eleven_v3" as the
+    // ElevenLabs engine's default model. Nodes saved before that default was
+    // wired into the seed data (or any other caller that omits `model`)
+    // would otherwise fall through to HeyGen's own default here — defaulting
+    // it in this single normalization point makes both paths correct by
+    // construction, matching what the UI shows.
+    out.model = (e.model as ElevenLabsEngineSettings["model"]) ?? "eleven_v3"
     if (e.stability !== undefined) out.stability = e.stability as number
     // Accept either snake_case (route path) or camelCase (DAG/node-data path).
     const similarityBoost = e.similarity_boost ?? e.similarityBoost

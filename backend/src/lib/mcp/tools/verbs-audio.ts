@@ -248,9 +248,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Generate speech from text using ElevenLabs. Returns a job_id.\n\n" +
         "**Picking a model**: `elevenlabs-v3` (default) supports `[audio tags]` " +
         "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
-        "for expressive narration. `elevenlabs-turbo` is cheaper for plain " +
-        "narration. `elevenlabs-multilingual` for non-English. Call " +
-        "`list_models { kind: \"audio\", mode: \"tts\" }` for the full sheet.\n\n" +
+        "for expressive narration, and it is FULLY MULTILINGUAL: use it for " +
+        "ALL languages including Hebrew/Arabic/CJK, not just English. " +
+        "`elevenlabs-turbo` is cheaper for plain narration. " +
+        "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
+        "third-party wrapper known to garble some languages (Hebrew observed) " +
+        "— only pick it when a specific library voice is verified for v2 " +
+        "only, or the text exceeds v3's ~3,000-char single-request cap (v2 " +
+        "takes ~10,000). Never switch away from v3 for language reasons " +
+        "alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` for the " +
+        "full sheet.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
         "to browse built-in delivery styles (e.g. Calm Narrator, Commercial Read, " +
         "Audiobook) + your saved presets, get_node_preset to read one's config, or " +
@@ -301,8 +308,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` " +
-            "like `[laughs]`, `[whispers]`, `[sighs]` for emotion. " +
-            "`elevenlabs-turbo` is cheaper for plain narration. Call " +
+            "like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully " +
+            "multilingual — use it for ALL languages including Hebrew/Arabic/CJK. " +
+            "`elevenlabs-turbo` is cheaper for plain narration. " +
+            "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
+            "wrapper known to garble some languages (Hebrew observed) — only " +
+            "use it for a v2-only-verified voice or text over v3's ~3,000-char " +
+            "cap (v2 allows ~10,000). Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),
@@ -888,6 +900,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .min(1)
           .max(1000)
           .describe("Free-text description of the voice (gender, age, accent, tone)."),
+        model: z
+          .enum(["eleven_ttv_v3", "eleven_multilingual_ttv_v2"])
+          .optional()
+          .describe(
+            "Default eleven_ttv_v3 (newest, all languages). " +
+              "eleven_multilingual_ttv_v2 is the legacy model.",
+          ),
         loudness: z.number().min(-1).max(1).optional(),
         guidance_scale: z.number().min(0).max(100).optional(),
         seed: z.number().int().optional(),
@@ -917,6 +936,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const payload = {
         text: args.text,
         voiceDescription: args.voice_description,
+        model: args.model,
         loudness: args.loudness,
         guidanceScale: args.guidance_scale,
         seed: args.seed,

@@ -164,17 +164,24 @@ interface SharedVoice {
 }
 
 /**
- * Map a Voice Library entry's verified ElevenLabs models to the v2 TTS
- * providers the voice is actually verified on (turbo first = cheapest).
+ * Map a Voice Library entry's verified ElevenLabs models to the TTS
+ * providers the voice is actually verified on. v3 is checked FIRST so it
+ * wins the `recommendedProvider = verified[0]` pick whenever the voice
+ * supports it — v3 is the fully-multilingual default and renders any voice
+ * unmodified, so it's strictly preferable to a v2 model when available.
  * Library previews are rendered with the voice's verified models — generating
  * with an unverified model is what makes output drift audibly from the
  * preview. Clients without a provider picker send `verified[0]` back as the
  * text-to-speech `provider` (credits then reserve at the correct per-provider
- * price up front; turbo=2cr, multilingual=3cr); clients with a picker only
- * snap when the current choice isn't in the set.
+ * price up front; v3=3cr, turbo=2cr, multilingual=3cr); clients with a picker
+ * only snap when the current choice isn't in the set.
+ *
+ * Exact-substring match on "eleven_v3" so it doesn't accidentally match
+ * "eleven_turbo_v2_5" / "eleven_flash_v2_5" / "eleven_multilingual_v2".
  */
 export function deriveVerifiedTtsProviders(modelIds: readonly string[]): TtsProvider[] {
   const verified: TtsProvider[] = []
+  if (modelIds.some((m) => m.includes("eleven_v3"))) verified.push("elevenlabs-v3")
   if (modelIds.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
   if (modelIds.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
   return verified

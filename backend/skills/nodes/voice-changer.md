@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-06-22T15:56:06.973Z
-generated_from: 910852c22
+generated_at: 2026-07-03T08:25:54.428Z
+generated_from: 1825a285d
 ---
 
 # Voice Changer
@@ -44,7 +44,7 @@ generated_from: 910852c22
   "voiceId": "",
   "voiceLabel": "",
   "voiceType": "premade",
-  "model": "eleven_english_sts_v2",
+  "model": "eleven_multilingual_sts_v2",
   "stability": 0.5,
   "similarityBoost": 0.75,
   "removeBackgroundNoise": false,
@@ -95,7 +95,7 @@ generated_from: 910852c22
     "voiceId": "",
     "voiceLabel": "",
     "voiceType": "premade",
-    "model": "eleven_english_sts_v2",
+    "model": "eleven_multilingual_sts_v2",
     "stability": 0.5,
     "similarityBoost": 0.75,
     "removeBackgroundNoise": false,

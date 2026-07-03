@@ -9,6 +9,24 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
+/**
+ * Resolve the effective TTS provider when the caller omits `provider` entirely.
+ *
+ * v3 is the default for the common case (matches the editor's default and is
+ * the highest-quality model), but v3's per-request cap
+ * (`getMaxTtsChars("elevenlabs-v3")`, currently 3,000 chars) is far below the
+ * route's 40,000-char ceiling. A legacy integration that always omits
+ * `provider` and sends long text would otherwise be silently truncated by
+ * the v3 clamp below it (previously "elevenlabs" aliased to turbo, cap
+ * 40,000, effectively lossless). Falling back to turbo once text exceeds the
+ * v3 cap preserves that legacy lossless behavior for long-text callers.
+ * Reads the cap from the shared constant (not a literal 3000) so a future
+ * change to elevenlabs-v3's cap flows through automatically.
+ */
+export function resolveOmittedTtsProvider(text: string): "elevenlabs-v3" | "elevenlabs-turbo" {
+  return text.length <= getMaxTtsChars("elevenlabs-v3") ? "elevenlabs-v3" : "elevenlabs-turbo"
+}
+
 export const textToSpeechBody = z.object({
   // Generous ceiling (eleven_turbo_v2.5 accepts 40000); the per-model cap is
   // clamped in the handler and the editor warns first (warn-don't-block).
@@ -29,7 +47,11 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-speech", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
-      const provider = (body?.provider as string) ?? "elevenlabs-turbo"
+      // v3 = fully-multilingual default; legacy "elevenlabs" alias intentionally stays on turbo.
+      // Length-aware: an omitted provider resolves to turbo (not v3) once the
+      // text exceeds v3's cap, so long legacy requests aren't under-priced
+      // for v3 credits then rejected/truncated by the v3-specific clamp.
+      const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
       // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
       return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
     }),
@@ -41,7 +63,6 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -51,13 +72,23 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     }
 
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check
-    const resolvedProvider = provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? "elevenlabs-turbo")
+    // v3 = fully-multilingual default; legacy "elevenlabs" alias intentionally stays on turbo.
+    // Same length-aware resolution as the creditGuard resolver above — kept
+    // in the one shared helper so the two seams can't drift.
+    const resolvedProvider =
+      parsed.data.provider === "elevenlabs"
+        ? "elevenlabs-turbo"
+        : (parsed.data.provider ?? resolveOmittedTtsProvider(parsed.data.text))
     const modelIdentifier = resolvedProvider
 
     // Clamp to the model's verified per-request character cap (turbo 40000 /
     // multilingual 10000 / v3 3000) so an over-long request can't be rejected by
-    // the provider. input_data is built from parsed.data below, so mutate it here.
+    // the provider. Mutate parsed.data BEFORE destructuring below so both
+    // input_data (built from parsed.data) and the queue payload (built from
+    // the destructured `text`) see the clamped value.
     parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
+
+    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
