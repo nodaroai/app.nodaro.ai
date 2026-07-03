@@ -1,6 +1,11 @@
 // backend/scripts/gate0-video-passthrough.ts
-// Gate 0 (specs/2026-07-02-video-analysis-node.md): prove KIE forwards video_url
-// (+ audio) to Gemini, at window scale, and combined with response_format.
+// Gate 0: prove Gemini-via-KIE genuinely ingests video + audio, at window scale
+// and combined with response_format. NOTE (live-verified 2026-07-03): KIE's
+// chat-completions proxy SILENTLY DROPS `video_url`/`audio_url` parts and forwards
+// ONLY `image_url`; Gemini then ingests the underlying media by MIME (mp4 =
+// frames + audio track, mp3 = audio). llm-client maps our {type:"video"|"audio"}
+// blocks to `image_url` accordingly, so this harness exercises the REAL production
+// transport (not the dropped-on-the-floor video_url path).
 // Usage: npx tsx scripts/gate0-video-passthrough.ts <shortUrl> <windowUrl> <fullUrl>
 import { z } from "zod"
 import { llmComplete, llmCompleteStructured } from "../src/lib/llm-client.js"

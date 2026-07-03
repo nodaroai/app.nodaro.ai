@@ -232,8 +232,20 @@ function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unk
         if (b.type === "text") return { type: "text", text: b.text }
         if (b.type === "image_base64") return { type: "image_url", image_url: { url: `data:${b.mediaType};base64,${b.data}` } }
         if (b.type === "image") return { type: "image_url", image_url: { url: b.url } }
-        if (b.type === "video") return { type: "video_url", video_url: { url: b.url } }
-        if (b.type === "audio") return { type: "audio_url", audio_url: { url: b.url } }
+        // KIE's OpenAI-compat chat-completions proxy forwards ONLY `image_url`
+        // content parts and SILENTLY drops `video_url`/`audio_url` (HTTP 200, no
+        // error — the model just receives the text parts). Gemini ingests whatever
+        // media the URL resolves to, keyed off its MIME type: mp4 → frames + audio
+        // track, mp3 → audio. So we route video AND audio refs through `image_url`
+        // too — that is the ONLY channel KIE actually delivers. Live-verified via
+        // direct curl 2026-07-03 (Gate 0): mp4-as-image_url = 1,972 ingestion
+        // tokens w/ correct frames; a 596s/62MB mp4 + `response_format` ingested
+        // full-length (heardAudio + accurate last-30s); mp3 = speech transcribed;
+        // `video_url`/`audio_url` (object AND string form) = silently dropped.
+        // This ONLY applies to the KIE chat-completions (Gemini) wire — the Claude
+        // `messages` and GPT `responses` builders still THROW on video/audio, which
+        // is correct (those providers genuinely cannot ingest it).
+        if (b.type === "video" || b.type === "audio") return { type: "image_url", image_url: { url: b.url } }
         const _exhaustive: never = b
         return _exhaustive
       })
