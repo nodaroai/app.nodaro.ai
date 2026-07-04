@@ -82,7 +82,7 @@ function decision(opts: {
 }): RoutingDecision {
   return {
     providerChain: opts.chain ?? ["kie"],
-    ***REDACTED-OSS-SCRUB***
+    markupPercent: opts.markup ?? 50,
     activeProvider: opts.active ?? "kie",
     // settings is part of RoutingDecision but only consulted by config helpers,
     // not by router.ts — empty object satisfies the structural type.
@@ -186,7 +186,7 @@ describe("routeAndExecute (via generateImage)", () => {
 
   it("applies markup using resolveMarkup and applyMarkup", async () => {
     const generate = vi.fn().mockResolvedValue({ url: "u", cost: 1 })
-    ***REDACTED-OSS-SCRUB***
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"], markup: 50 }))
     configMocks.resolveMarkup.mockReturnValue(40) // override
     configMocks.applyMarkup.mockImplementation((cost) => (cost === null ? null : cost * 2))
     registryMocks.supportsModel.mockReturnValue(true)
@@ -197,7 +197,7 @@ describe("routeAndExecute (via generateImage)", () => {
     const result = await generateImage("p", "m")
 
     expect(configMocks.resolveMarkup).toHaveBeenCalledWith(
-      ***REDACTED-OSS-SCRUB***
+      expect.objectContaining({ providerChain: ["kie"], markupPercent: 50 }),
       "kie",
     )
     expect(configMocks.applyMarkup).toHaveBeenCalledWith(1, 40)
