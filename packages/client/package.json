@@ -1,7 +1,7 @@
 {
   "name": "@nodaro/sdk",
   "version": "1.0.0",
-  "description": "Typed REST client for the Nodaro API \u2014 workflows, jobs, executions, apps, characters, and more.",
+  "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
