@@ -131,8 +131,9 @@ describe("getLlmModel", () => {
     expect(model!.tier).toBe("economy")
     expect(model!.vendor).toBe("google")
     expect(model!.kieFormat).toBe("chat-completions")
-    expect(model!.inputPricePerM).toBe(0.10)
-    expect(model!.outputPricePerM).toBe(0.40)
+    // [econ-intel comment removed]
+    expect(model!.inputPricePerM).toBe(0.15)
+    expect(model!.outputPricePerM).toBe(0.90)
   })
 
   it('returns model def for "claude-opus-4.7" with directFallbackModel', () => {
@@ -207,9 +208,9 @@ describe("getLlmTier", () => {
 // ---------------------------------------------------------------------------
 describe("calculateLlmCost", () => {
   it("calculates cost for gemini-3-flash by model ID string", () => {
-    // (1000 * 0.10 + 500 * 0.40) / 1_000_000 = (100 + 200) / 1_000_000 = 0.0003
+    // (1000 * 0.15 + 500 * 0.90) / 1_000_000 = (150 + 450) / 1_000_000 = 0.0006
     const cost = calculateLlmCost("gemini-3-flash", { inputTokens: 1000, outputTokens: 500 })
-    expect(cost).toBeCloseTo(0.0003, 10)
+    expect(cost).toBeCloseTo(0.0006, 10)
   })
 
   it("calculates cost for claude-sonnet-4.6 by model ID string", () => {
@@ -245,15 +246,15 @@ describe("calculateLlmCost", () => {
   })
 
   it("handles input-only usage", () => {
-    // (10_000 * 0.10) / 1_000_000 = 0.001
+    // (10_000 * 0.15) / 1_000_000 = 0.0015
     const cost = calculateLlmCost("gemini-3-flash", { inputTokens: 10_000, outputTokens: 0 })
-    expect(cost).toBeCloseTo(0.001, 10)
+    expect(cost).toBeCloseTo(0.0015, 10)
   })
 
   it("handles output-only usage", () => {
-    // (10_000 * 0.40) / 1_000_000 = 0.004
+    // (10_000 * 0.90) / 1_000_000 = 0.009
     const cost = calculateLlmCost("gemini-3-flash", { inputTokens: 0, outputTokens: 10_000 })
-    expect(cost).toBeCloseTo(0.004, 10)
+    expect(cost).toBeCloseTo(0.009, 10)
   })
 
   it("produces consistent results between model ID string and model def object", () => {

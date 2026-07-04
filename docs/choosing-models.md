@@ -102,6 +102,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 9 | i2v | Faster Bytedance Pro variant. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 10 | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 11 | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
+| Video Analysis (Gemini 3.1 Pro) | Google | Everyday | 11 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket. |
 | HappyHorse | HappyHorse | Everyday | 13 | t2v | HappyHorse text-to-video — 3–15s at 720p/1080p. |
 | HappyHorse I2V | HappyHorse | Everyday | 13 | i2v | HappyHorse image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image. |
 | Wan Flash V2V | Alibaba | Everyday | 13 | v2v | Faster Wan V2V variant. |
@@ -137,7 +138,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 Extend | Bytedance | Premium | 53 | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
 | Kling Avatar Pro | Kuaishou | Premium | 56 | lip-sync | Premium lip-sync — better mouth shape and timing. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 63 | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. Flat per-generation pricing across durations. |
-| Video Analysis (Gemini 3.1 Pro) | Google | Premium | 94 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket. |
 | OmniHuman 1.5 | ByteDance | Premium | 405 | lip-sync | Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime. |
 | Volcengine Lip Sync | Volcengine | Premium | 600 | lip-sync | Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 2000 | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
