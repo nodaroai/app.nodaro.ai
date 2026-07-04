@@ -56,7 +56,7 @@ const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true
 // Credit hint for the video_analysis tool description — derived from the
 // shared duration-bucket formula (NEVER hand-write the numbers; the formula is
 // the single source of truth, pinned by packages/shared's pricing test).
-// Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 13/25/56/94 credits".
+// Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 2/3/7/11 credits".
 const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_LLM_MODELS.map(
   (m) => `${m} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => videoAnalysisBucketCredits(m, b)).join("/")} credits`,
 ).join("; ")

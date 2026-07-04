@@ -51,8 +51,11 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 8192,
-    inputPricePerM: 0.10,
-    outputPricePerM: 0.40,
+    // [econ-intel comment removed]
+    // [econ-intel comment removed]
+    // video 596s → 1.65 cr. Video ingestion bills at the SAME per-token rate as text.
+    inputPricePerM: 0.15,
+    outputPricePerM: 0.90,
   },
   {
     id: "claude-haiku-4.5",
@@ -108,8 +111,14 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 16384,
-    inputPricePerM: 3.50,
-    outputPricePerM: 10.50,
+    // [econ-intel comment removed]
+    // [econ-intel comment removed]
+    // → 4.32 cr; out-heavy 6,178-tok → 4.33 cr) reproduce EXACTLY at 0.50/3.50 on
+    // [econ-intel comment removed]
+    // [econ-intel comment removed]
+    // [econ-intel comment removed]
+    inputPricePerM: 0.50,
+    outputPricePerM: 3.50,
   },
   {
     id: "claude-opus-4.7",

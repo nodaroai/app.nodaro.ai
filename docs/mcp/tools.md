@@ -487,13 +487,12 @@ are rejected.
 
 **Pricing** — duration-bucketed credits per model. The bucket is the smallest
 of 60s / 180s / 360s / 600s that fits the video's probed duration. The values
-below are the shared pricing formula's current outputs (*provisional until the
-[econ-intel comment removed]
+below are the shared pricing formula's current outputs:
 
 | Model | ≤60s | ≤180s | ≤360s | ≤600s |
 |-------|------|-------|-------|-------|
 | `gemini-3-flash` (default) | 1 | 1 | 2 | 3 |
-| `gemini-3.1-pro` | 13 | 25 | 56 | 94 |
+| `gemini-3.1-pro` | 2 | 3 | 7 | 11 |
 
 ---
 

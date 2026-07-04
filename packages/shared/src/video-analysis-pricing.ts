@@ -14,12 +14,20 @@ export const VIDEO_ANALYSIS_DURATION_BUCKETS = [60, 180, 360, 600] as const
  *  ffprobe floats run 0.05–2 s over. Zero tolerance fails legit videos at 1:00/3:00/6:00/10:00. */
 export const VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC = 3
 /** [econ-intel comment removed]
-export const VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS = 5_500
+ *  KIE = 3,151 prompt tokens (was a 5,500 pre-measurement placeholder). */
+export const VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS = 3_151
 export const VIDEO_ANALYSIS_MAX_DURATION_SEC = 600
 const WINDOW_LEN = 150, WINDOW_STRIDE = 145, WINDOW_OVERLAP = 5
 export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, OVERLAP: WINDOW_OVERLAP, SINGLE_MAX: 180 } as const
 const SAFETY = 2
-const TOKENS_PER_SEC = 290 // 258 tok/frame @1fps + ~32 tok/s audio
+/** [econ-intel comment removed]
+ *  [econ-intel comment removed]
+ *  live KIE bill matched those usage tokens at the standard text rate — no video
+ *  premium. If KIE ever flips to default-res sampling (258 tok/frame → ~290 tok/s),
+ *  the credit-audit skill will surface the margin squeeze; re-measure and bump. */
+const TOKENS_PER_SEC = 91
+/** Pricing assumption ABOVE the measured real-workload mean (~2.4k tok/window on the
+ *  46-min benchmark; worst single window ~8k) — the headroom is deliberate. */
 const OUTPUT_TOKENS_PER_WINDOW = 4_000
 const USD_PER_CREDIT = 0.02
 

@@ -78,22 +78,21 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 }
 
 // ── Video Analysis (Gemini vision) duration-bucketed reserve holds ──
-// PROVISIONAL pricing seed (Task 18a). Values are DERIVED from the structural
-// formula `videoAnalysisBucketCredits` (packages/shared/src/video-analysis-pricing.ts)
-// — never hand-written — mirroring the FLUX2/AI_AVATAR/CINEMATIC spreads above.
+// Values are DERIVED from the structural formula `videoAnalysisBucketCredits`
+// (packages/shared/src/video-analysis-pricing.ts) — never hand-written —
+// mirroring the FLUX2/AI_AVATAR/CINEMATIC spreads above.
 // Per model: a bare id `video-analysis:<model>` (= the 600s unknown-duration
 // ceiling) + one composite per bucket `video-analysis:<model>:<bucket>s`.
 // The two models mirror the catalog's video-analysis entries (model-catalog.ts)
-// and migration 246's rows — extend all three together if a third video+audio
-// model ships.
+// and the model_pricing rows (migrations 247+248) — extend all of them together
+// if a third video+audio model ships.
 //
-// Provisional output at VIDEO_ANALYSIS_[figures removed] (2×safety, $0.02/cr):
-//   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
-//   gemini-3.1-pro → bare 94 · 60s 13 · 180s 25 · 360s 56 · 600s 94
 // [econ-intel comment removed]
-// (or the measured system-prompt token count) shifts these, 18b's convergence
-// migration overrides the DB rows and this formula-derived fallback re-tracks
-// automatically when the constant is finalized.
+// [econ-intel comment removed]
+//   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
+//   gemini-3.1-pro → bare 11 · 60s 2 · 180s 3 · 360s 7 · 600s 11
+// The pricing test pins these worked examples; if a rate or constant shifts
+// them, ship a convergence migration (mirror 248) in the same PR.
 const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
 for (const model of ["gemini-3-flash", "gemini-3.1-pro"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling

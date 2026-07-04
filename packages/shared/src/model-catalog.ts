@@ -1772,11 +1772,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket.",
     useCases: ["video-analysis", "shot-list", "cinematic"],
     pricing: [
-      { identifier: "video-analysis:gemini-3.1-pro", credits: 94, note: "10-min ceiling (no duration given)" },
-      { identifier: "video-analysis:gemini-3.1-pro:60s", credits: 13 },
-      { identifier: "video-analysis:gemini-3.1-pro:180s", credits: 25 },
-      { identifier: "video-analysis:gemini-3.1-pro:360s", credits: 56 },
-      { identifier: "video-analysis:gemini-3.1-pro:600s", credits: 94, note: "10-min ceiling" },
+      { identifier: "video-analysis:gemini-3.1-pro", credits: 11, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:gemini-3.1-pro:60s", credits: 2 },
+      { identifier: "video-analysis:gemini-3.1-pro:180s", credits: 3 },
+      { identifier: "video-analysis:gemini-3.1-pro:360s", credits: 7 },
+      { identifier: "video-analysis:gemini-3.1-pro:600s", credits: 11, note: "10-min ceiling" },
     ],
   },
 }

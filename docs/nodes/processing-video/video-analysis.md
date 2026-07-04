@@ -122,10 +122,10 @@ pricing formula (`videoAnalysisBucketCredits` in
 | Model | ≤60s | ≤180s | ≤360s | ≤600s |
 |-------|------|-------|-------|-------|
 | `gemini-3-flash` (default) | 1 | 1 | 2 | 3 |
-| `gemini-3.1-pro` | 13 | 25 | 56 | 94 |
+| `gemini-3.1-pro` | 2 | 3 | 7 | 11 |
 
-> These values are the shared pricing formula's current outputs and are
-> **[econ-intel comment removed]
+> These values are the shared pricing formula's current outputs, with the
+> formula's token and rate constants anchored to live billing measurements.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a
 video over 180s is split into ~150-second windows), and `gemini-3.1-pro` costs

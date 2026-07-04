@@ -4,7 +4,7 @@ import {
   pickVideoAnalysisBucket, buildVideoAnalysisCreditId, bucketSecondsFromCreditId,
   videoAnalysisNumWindows, videoAnalysisBucketCredits,
 } from "../video-analysis-pricing.js"
-import { VIDEO_ANALYSIS_LLM_MODELS } from "../llm-models.js"
+import { VIDEO_ANALYSIS_LLM_MODELS, getLlmModel } from "../llm-models.js"
 
 describe("video-analysis-pricing", () => {
   it("buckets and ids", () => {
@@ -24,10 +24,20 @@ describe("video-analysis-pricing", () => {
   })
 
   // CROSS-CHECK RULE: these worked examples MUST equal the docs table
-  // [econ-intel comment removed]
+  // (docs/nodes/processing-video/video-analysis.md), model-catalog.ts variants,
+  // AND the model_pricing DB rows (migrations 247+248) — regenerate ALL on any
+  // constant/rate change.
   [econ-intel comment removed]
     expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3-flash", b))).toEqual([1, 1, 2, 3])
-    expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3.1-pro", b))).toEqual([13, 25, 56, 94])
+    expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3.1-pro", b))).toEqual([2, 3, 7, 11])
+  })
+
+  // [econ-intel comment removed]
+  // to the cent. Changing either pair shifts the bucket schedule above — if this
+  // [econ-intel comment removed]
+  it("gemini rates are pinned to measured KIE billing", () => {
+    expect(getLlmModel("gemini-3-flash")).toMatchObject({ inputPricePerM: 0.15, outputPricePerM: 0.90 })
+    expect(getLlmModel("gemini-3.1-pro")).toMatchObject({ inputPricePerM: 0.50, outputPricePerM: 3.50 })
   })
 
   it("tolerance constant is exported for the worker re-check", () => {
