@@ -3,7 +3,7 @@ import {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
   type CharacterAspectRatio,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
 import { parseCount, watchUntilTerminal } from "../util.js"

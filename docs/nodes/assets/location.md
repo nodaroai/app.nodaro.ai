@@ -242,7 +242,7 @@ Example — generate an atmospheric motion clip and auto-attach it:
 The SDK surface lives on `client.locations`:
 
 ```ts
-import { createClient } from "@nodaro/client"
+import { createClient } from "@nodaro/sdk"
 
 const client = createClient({ apiKey: process.env.NODARO_API_KEY })
 

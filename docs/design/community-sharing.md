@@ -168,7 +168,7 @@ Publish/clone run no jobs → zero credits. **Storage is Cloud-only** (`hasCredi
 ## 12. Docs & SDK
 
 - New `docs/` community page (honest safety section; admin-only publish). `docs/api-integration.md` + `docs/sdk-reference.md` for `/v1/community/*` (+ admin routes).
-- `@nodaro/client` `community` resource: browse/detail/favorites/clone/favorite/report (user surface). Publish lives on the admin surface (`requireAdmin`) — document it as admin-only. `.changeset/`.
+- `@nodaro/sdk` `community` resource: browse/detail/favorites/clone/favorite/report (user surface). Publish lives on the admin surface (`requireAdmin`) — document it as admin-only. `.changeset/`.
 - **No `gen:skills`** (no node-data-field changes in v4). `GET /v1/nodes` unaffected. MCP: out of v1.
 
 ## 13. Testing strategy

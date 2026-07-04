@@ -40,8 +40,8 @@ COPY packages/shared/tsup.config.ts ./packages/shared/
 WORKDIR /app/packages/shared
 RUN npm run build
 
-# ── Stage 2b: Build @nodaro/client (tsup) ─────────────────────────────
-# Frontend imports @nodaro/client from node_modules (workspace symlink).
+# ── Stage 2b: Build @nodaro/sdk (tsup) ─────────────────────────────
+# Frontend imports @nodaro/sdk from node_modules (workspace symlink).
 # Client depends on @nodaro/shared, so shared/dist must be in place first.
 FROM deps AS client-build
 
@@ -98,7 +98,7 @@ COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/pac
 # must be present here for the glob to match.
 COPY packages/shared/src/i18n ./packages/shared/src/i18n
 
-# Client dist (Vite imports @nodaro/client via workspace symlink → dist).
+# Client dist (Vite imports @nodaro/sdk via workspace symlink → dist).
 COPY --from=client-build /app/packages/client/dist ./packages/client/dist
 COPY --from=client-build /app/packages/client/package.json ./packages/client/package.json
 

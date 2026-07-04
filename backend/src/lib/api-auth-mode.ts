@@ -30,7 +30,7 @@ export function rejectProgrammaticAuth(
   // OAuth app tokens are ALWAYS rejected (no scope can authorize these first-party
   // routes → privilege-escalation class). Personal API tokens (the user's own
   // full-access key) are rejected too, unless the route is a supported SDK surface
-  // (allowPersonalToken — e.g. developer-app management has a @nodaro/client
+  // (allowPersonalToken — e.g. developer-app management has a @nodaro/sdk
   // resource that uses a personal token). First-party JWT sets neither field and passes.
   if (req.appAuthorization || (req.apiToken && !opts?.allowPersonalToken)) {
     reply.status(403).send({ error: { code: "forbidden", message } })

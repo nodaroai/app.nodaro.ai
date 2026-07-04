@@ -27,13 +27,13 @@ The repo is a single npm workspaces monorepo. Top-level folders:
 | `backend/` | Fastify HTTP API, BullMQ workers, orchestrator. Node 22, TypeScript. |
 | `frontend/` | Vite SPA — visual editor + presentation/app-runner + admin panel. React 19, React Router 7, React Flow. |
 | `packages/shared/` | Pure logic shared across the stack: types, model registries, prompt builders. Publishes as [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared). |
-| `packages/client/` | Typed REST SDK with three auth modes and 17 resource classes. Publishes as [`@nodaro/client`](https://www.npmjs.com/package/@nodaro/client). |
+| `packages/client/` | Typed REST SDK with three auth modes and 17 resource classes. Publishes as [`@nodaro/sdk`](https://www.npmjs.com/package/@nodaro/sdk). |
 | `packages/remotion/` | Remotion video compositions (slideshow, scene-graph, motion-graphics, etc.). |
 | `supabase/migrations/` | Database schema as forward-only SQL migrations. |
 | `docs/` | Public docs — this folder is published to GitHub Pages. |
 | `docs/design/` | Curated design notes (RFD-style) — the *why* behind key features. |
 | `scripts/` | Repo-level utilities (architecture graph generator, audits, etc.). |
-| `.changeset/` | Pending version-bump intents for `@nodaro/shared` + `@nodaro/client`. |
+| `.changeset/` | Pending version-bump intents for `@nodaro/shared` + `@nodaro/sdk`. |
 
 > Some source-code comments reference design docs by a `specs/…` path. Those design docs live in Nodaro's private planning repo; a curated public subset is published under `docs/design/`.
 
@@ -163,7 +163,7 @@ When opening a PR:
 - Include screenshots / GIFs for UI changes.
 - If the change adds or modifies a node, follow the New Node
   Registration checklist (see section 6 below).
-- If the change touches `@nodaro/shared` or `@nodaro/client`, run
+- If the change touches `@nodaro/shared` or `@nodaro/sdk`, run
   `npx changeset` and commit the generated file (see section 8).
 
 ## 5. Testing
@@ -179,7 +179,7 @@ Or per workspace:
 
 ```bash
 npm -w @nodaro/shared test     # pure-logic unit tests
-npm -w @nodaro/client test     # SDK contract tests against MSW
+npm -w @nodaro/sdk test     # SDK contract tests against MSW
 cd backend && npm test          # route + service tests
 cd frontend && npm test         # component + hook tests
 ```
@@ -225,7 +225,7 @@ The high-level shape of a new node:
   one), the executor switch in `execute-node.ts`, and the
   `EXECUTABLE_NODE_TYPES` set.
 - A new `NODE_REGISTRY` entry so the node shows up in
-  `GET /v1/nodes` (the discovery endpoint used by `@nodaro/client`).
+  `GET /v1/nodes` (the discovery endpoint used by `@nodaro/sdk`).
 
 Two unintuitive details that bite contributors:
 
@@ -268,7 +268,7 @@ providers, otherwise persisted workflows trip the route's Zod enum.
 ## 8. Releasing the SDK packages
 
 Two packages in `packages/` publish to npm: `@nodaro/shared` and
-`@nodaro/client`. The release flow is [Changesets](https://github.com/changesets/changesets):
+`@nodaro/sdk`. The release flow is [Changesets](https://github.com/changesets/changesets):
 
 ```bash
 # After making a change that affects either package
@@ -290,7 +290,7 @@ npm run release    # builds + publishes to npm
 
 You don't need to publish anything yourself — the changeset is the
 only thing the contribution flow asks for. If your PR doesn't
-touch the published packages (`@nodaro/shared` or `@nodaro/client`),
+touch the published packages (`@nodaro/shared` or `@nodaro/sdk`),
 no changeset is needed; the workspaces under `ignore` in
 `.changeset/config.json` are skipped.
 

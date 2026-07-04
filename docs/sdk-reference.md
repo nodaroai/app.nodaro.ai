@@ -1,6 +1,6 @@
-# `@nodaro/client` API Reference
+# `@nodaro/sdk` API Reference
 
-Complete reference for every public export of `@nodaro/client`. For a
+Complete reference for every public export of `@nodaro/sdk`. For a
 walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 
 ## Table of contents
@@ -40,7 +40,7 @@ Factory that returns a `NodaroClient` instance with all resource subobjects
 attached.
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -70,7 +70,7 @@ You normally call `createClient`, but the class is also exported for
 typechecking (`function takesClient(c: NodaroClient) { ... }`).
 
 ```ts
-import { NodaroClient } from "@nodaro/client"
+import { NodaroClient } from "@nodaro/sdk"
 ```
 
 ### `client.me()`
@@ -120,7 +120,7 @@ Wraps a fixed string. Use for server-side code with an OAuth access token, an
 API token (`ndr_...`), or a developer-app token (`ndr_app_...`).
 
 ```ts
-import { StaticTokenAuth } from "@nodaro/client"
+import { StaticTokenAuth } from "@nodaro/sdk"
 new StaticTokenAuth("ndr_app_abc123...")
 ```
 
@@ -132,7 +132,7 @@ Calls a user-supplied function on every request. The function may be sync or
 async, and may return `null` to skip the header (anonymous request).
 
 ```ts
-import { CallbackAuth } from "@nodaro/client"
+import { CallbackAuth } from "@nodaro/sdk"
 
 new CallbackAuth(async () => {
   const session = await sessionStore.read()
@@ -148,7 +148,7 @@ Pulls the JWT live from a Supabase v2 client. Use for browser frontends talking
 to a Nodaro instance backed by the same Supabase project.
 
 ```ts
-import { supabaseAuth } from "@nodaro/client"
+import { supabaseAuth } from "@nodaro/sdk"
 import { createClient as createSupabase } from "@supabase/supabase-js"
 
 const supabase = createSupabase(URL, ANON_KEY)
@@ -235,7 +235,7 @@ Internal helper that maps `(status, JSON body)` to the right error class and
 throws it. Exported so custom transports can reuse it. Returns `never`.
 
 ```ts
-import { throwFromResponse } from "@nodaro/client"
+import { throwFromResponse } from "@nodaro/sdk"
 throwFromResponse(403, { error: { code: "insufficient_scope", message: "...", missingScope: "workflows:execute" } })
 // → throws ForbiddenError with .missingScope === "workflows:execute"
 ```
@@ -1292,7 +1292,7 @@ const { objects: archived } = await client.objects.list({ archived: true })
 
 > `Object` shadows the JS global, which TypeScript handles cleanly via
 > local-scope resolution. Callers who need both can alias as
-> `import type { Object as NodaroObject } from "@nodaro/client"`.
+> `import type { Object as NodaroObject } from "@nodaro/sdk"`.
 
 #### `listArchived(params?)`
 
@@ -2750,7 +2750,7 @@ await client.community.report(listingId, "real_person_no_consent")
 ## Type re-exports
 
 Every type used in a public method signature is re-exported from
-`@nodaro/client`. Import them with `import type { ... }`.
+`@nodaro/sdk`. Import them with `import type { ... }`.
 
 ### Client identity
 
@@ -2838,7 +2838,7 @@ Every type used in a public method signature is re-exported from
 - `ObjectDetail` — `Object` plus in-flight `pendingJobs` bucket.
 - `ObjectCategory` — 10-value enum: `"furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"`. Distinct from location's geography-based set.
 - `ObjectReferencePhoto`, `ObjectReferencePhotoKind` — `kind` is one of `"front" | "side" | "detail" | "context" | "moodBoard" | "other"` (6 values; no PII consent unlike locations).
-- `ObjectAssetType` — 5-value enum from `@nodaro/shared`: `"angles" | "materials" | "variations" | "motion" | "custom"`. Re-exported from `@nodaro/client` so consumers don't need a second dep.
+- `ObjectAssetType` — 5-value enum from `@nodaro/shared`: `"angles" | "materials" | "variations" | "motion" | "custom"`. Re-exported from `@nodaro/sdk` so consumers don't need a second dep.
 - `ObjectAttachColumn` — 4-value enum from `@nodaro/shared`: `"angles" | "materials" | "variations" | "motion_clips"`. Re-exported alongside `OBJECT_ATTACH_COLUMNS` runtime tuple.
 - `ObjectAspectRatio` — 5-value enum: `"1:1" | "3:4" | "16:9" | "9:16" | "4:3"`. Re-exported alongside `OBJECT_ASPECT_OPTIONS` / `OBJECT_ASPECT_DEFAULTS` runtime tuples. Distinct from `CharacterAspectRatio` because objects support an extra `4:3` framing for product-showcase shots.
 - `CreateObjectInput`, `UpdateObjectInput`, `UpsertObjectInput` — bodies for `create()` / `update()` / `upsert()`. `expectedUpdatedAt` lives on `UpdateObjectInput` + `UpsertObjectInput`.

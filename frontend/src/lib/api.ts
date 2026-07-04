@@ -1712,7 +1712,7 @@ export async function removeObjectAsset(
  * MUST already be archived — active rows return 400 `not_archived` (per
  * Phase C2b — guards against curl/SDK callers bypassing the UI archive-
  * first flow). Permanent-delete is intentionally NOT mirrored on the SDK
- * (`@nodaro/client`) so programmatic callers can only soft-delete.
+ * (`@nodaro/sdk`) so programmatic callers can only soft-delete.
  */
 export async function deleteObject(
   objectId: string,
@@ -1750,7 +1750,7 @@ export async function restoreObject(objectId: string): Promise<{ id: string; nam
  * the existing DELETE route with `?permanent=true`. Mirrors
  * `permanentDeleteLocation` at api.ts:1513.
  *
- * Intentionally NOT mirrored on the SDK surface (`@nodaro/client`) — the
+ * Intentionally NOT mirrored on the SDK surface (`@nodaro/sdk`) — the
  * SDK's `delete()` always soft-deletes so programmatic callers cannot
  * accidentally destroy data. Permanent-delete is reachable only from the
  * `/library/objects` archive view.
@@ -2415,7 +2415,7 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
  * route (`DELETE /v1/locations/:id?permanent=true`) is wired by Task 15 of the
  * Location Studio PR-2 plan and removes the DB row + R2-hosted assets.
  *
- * Intentionally NOT mirrored on the SDK surface (`@nodaro/client`) — the SDK's
+ * Intentionally NOT mirrored on the SDK surface (`@nodaro/sdk`) — the SDK's
  * `delete()` always soft-deletes so programmatic callers cannot accidentally
  * destroy data. Permanent-delete is reachable only from the `/library/locations`
  * archive view.
@@ -6015,7 +6015,7 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 }
 
 // ---------------------------------------------------------------------------
-// Developer Apps (OAuth) — delegates to @nodaro/client SDK
+// Developer Apps (OAuth) — delegates to @nodaro/sdk SDK
 // ---------------------------------------------------------------------------
 
 export type {
@@ -6025,7 +6025,7 @@ export type {
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 
 export function listDeveloperApps() {
   return nodaroClient.developerApps.list()
@@ -6036,14 +6036,14 @@ export function getDeveloperApp(id: string) {
 }
 
 export function createDeveloperApp(
-  input: import("@nodaro/client").CreateDeveloperAppInput,
+  input: import("@nodaro/sdk").CreateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.create(input)
 }
 
 export function updateDeveloperApp(
   id: string,
-  input: import("@nodaro/client").UpdateDeveloperAppInput,
+  input: import("@nodaro/sdk").UpdateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.update(id, input)
 }

@@ -10,7 +10,7 @@ AI workflow editor. Compose text-to-image, image-to-video, audio synthesis, vide
 - **Visual editor** with full React Flow canvas, OR fully **headless API** for your own frontends
 - **Self-hostable** — Docker Compose + Supabase + Redis, works on any cloud
 - **OAuth 2.0** for third-party app integration with scoped consent
-- **Typed SDK** (`@nodaro/client`) — three auth modes, error hierarchy, resource classes
+- **Typed SDK** (`@nodaro/sdk`) — three auth modes, error hierarchy, resource classes
 
 ## Three ways to use Nodaro
 
@@ -28,7 +28,7 @@ Open `http://localhost:3000`. Full guide: [Community Edition Quickstart](docs/co
 ### 2. SDK against the hosted API
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const nodaro = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -54,7 +54,7 @@ nodaro projects list
 nodaro workflows run <workflowId> --watch
 ```
 
-Thin convenience wrapper around `@nodaro/client`. Supports multiple profiles (prod / staging / local), `--json` output for piping, and `--watch` for following execution status. See [`packages/cli/README.md`](./packages/cli/README.md).
+Thin convenience wrapper around `@nodaro/sdk`. Supports multiple profiles (prod / staging / local), `--json` output for piping, and `--watch` for following execution status. See [`packages/cli/README.md`](./packages/cli/README.md).
 
 ## MCP Integration
 

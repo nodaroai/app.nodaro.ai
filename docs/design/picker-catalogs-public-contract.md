@@ -12,7 +12,7 @@ Let studio and other external apps consume the parameter-picker **catalogs** (op
 The test is **"server state, or static config?"**
 
 - **`@nodaro/shared` (library)** → pure/static/deterministic: catalogs, prompt assembly, types. Nothing to round-trip a server for.
-- **`@nodaro/client` SDK + `/v1` API** → server *state*: jobs, credits, uploads, workflows, live model pricing.
+- **`@nodaro/sdk` SDK + `/v1` API** → server *state*: jobs, credits, uploads, workflows, live model pricing.
 
 Pickers are static config + pure functions → they belong in the library. An API for catalogs only earns its place if one of these appears (none apply today): **(1)** non-JS consumers (`npm install` impossible), **(2)** server-driven catalogs (plan/edition gating, A/B, personalization), **(3)** guaranteed live-parity without consumers upgrading. If any shows up, add a read-only `GET /v1/catalogs` that is a thin **projection of the same package** — one source of truth, two surfaces.
 

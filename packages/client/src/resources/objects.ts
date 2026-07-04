@@ -64,7 +64,7 @@ export interface ObjectReferencePhoto {
  *
  * `Object` shadows the JS global, which TypeScript handles cleanly via
  * local-scope resolution. Consumers who need both can alias as
- * `import type { Object as NodaroObject } from "@nodaro/client"`.
+ * `import type { Object as NodaroObject } from "@nodaro/sdk"`.
  */
 export interface Object {
   id: string

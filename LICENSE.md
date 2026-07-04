@@ -25,9 +25,9 @@ You may read, modify, and run enterprise code locally for development and testin
 The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli/` are published to npm under the **Apache License 2.0**, not the Sustainable Use License. This is intentional: the SDK and CLI are meant to be embedded in or invoked from third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
 
 The Apache 2.0 grant applies ONLY to:
-- [`packages/client/`](./packages/client/) — `@nodaro/client` (typed REST client)
+- [`packages/client/`](./packages/client/) — `@nodaro/sdk` (typed REST client)
 - [`packages/shared/`](./packages/shared/) — `@nodaro/shared` (types, model registries, prompt helpers)
-- [`packages/cli/`](./packages/cli/) — `@nodaro/cli` (terminal CLI consuming `@nodaro/client`)
+- [`packages/cli/`](./packages/cli/) — `@nodaro/cli` (terminal CLI consuming `@nodaro/sdk`)
 
 Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE), [`packages/shared/LICENSE`](./packages/shared/LICENSE), and [`packages/cli/LICENSE`](./packages/cli/LICENSE).
 
@@ -38,7 +38,7 @@ The rest of the repository — backend, frontend, `packages/remotion/`, scripts,
 When the resulting binary, container image, or distribution includes files from multiple tiers:
 
 - **Community + ee/**: the binary as a whole is governed by `ee/LICENSE`. The community-code license terms continue to govern the community files in source form.
-- **Apache 2.0 SDK packages**: when distributed independently as npm packages (`@nodaro/client`, `@nodaro/shared`), they retain Apache 2.0 terms regardless of how they are used downstream.
+- **Apache 2.0 SDK packages**: when distributed independently as npm packages (`@nodaro/sdk`, `@nodaro/shared`), they retain Apache 2.0 terms regardless of how they are used downstream.
 
 ## FAQ
 
@@ -69,7 +69,7 @@ Yes — the outputs you generate through the Platform are yours. The license res
 
 ### Q: Is the SDK Apache 2.0 grant defensive against my downstream commercial use?
 
-Yes — Apache 2.0 explicitly permits commercial use, modification, and redistribution. Embed `@nodaro/client` and `@nodaro/shared` in your products freely. The SDK does not require you to disclose source or open-source your own code.
+Yes — Apache 2.0 explicitly permits commercial use, modification, and redistribution. Embed `@nodaro/sdk` and `@nodaro/shared` in your products freely. The SDK does not require you to disclose source or open-source your own code.
 
 ## Branches
 

@@ -1,16 +1,16 @@
 ---
-name: using-nodaro-client
-description: Use when integrating the @nodaro/client TypeScript SDK into an application — server-side automation, browser frontends talking to a Nodaro instance, or third-party OAuth apps. Covers install, three auth modes (StaticTokenAuth, supabaseAuth, CallbackAuth), the 17 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth, voices, credits, uploads), and the typed error hierarchy.
+name: using-nodaro-sdk
+description: Use when integrating the @nodaro/sdk TypeScript SDK into an application — server-side automation, browser frontends talking to a Nodaro instance, or third-party OAuth apps. Covers install, three auth modes (StaticTokenAuth, supabaseAuth, CallbackAuth), the 17 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth, voices, credits, uploads), and the typed error hierarchy.
 ---
 
-# Using @nodaro/client
+# Using @nodaro/sdk
 
-`@nodaro/client` is the typed REST SDK for Nodaro. Use it instead of hand-rolling `fetch` calls.
+`@nodaro/sdk` is the typed REST SDK for Nodaro. Use it instead of hand-rolling `fetch` calls.
 
 ## Install
 
 ```bash
-npm install @nodaro/client
+npm install @nodaro/sdk
 ```
 
 (Currently not yet on public npm — will land once the project's licensing is finalized. Internal users: install from a local workspace.)
@@ -20,7 +20,7 @@ npm install @nodaro/client
 ### Server-side (most common)
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -35,7 +35,7 @@ The token can be:
 ### Browser app (your operator's frontend)
 
 ```typescript
-import { createClient, supabaseAuth } from "@nodaro/client"
+import { createClient, supabaseAuth } from "@nodaro/sdk"
 import { createClient as supa } from "@supabase/supabase-js"
 
 const supabase = supa(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -50,7 +50,7 @@ The Supabase session JWT gets sent on every request. If session is null, no auth
 ### Custom auth logic (refresh tokens, etc.)
 
 ```typescript
-import { createClient, CallbackAuth } from "@nodaro/client"
+import { createClient, CallbackAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -95,7 +95,7 @@ import {
   RateLimitedError,
   InsufficientCreditsError,
   StorageExceededError,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 
 try {
   await client.workflows.run(id)
@@ -175,7 +175,7 @@ The SDK exports types alongside resources. Common ones:
 import type {
   Workflow, Project, Job, WorkflowExecution, NodeDescriptor,
   DeveloperApp, ExchangeCodeInput, AccessTokenResponse,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 ```
 
 These match the wire shapes (e.g., `Job` uses snake_case `created_at` because that's what `sanitizeJobForPublic` returns; `Workflow` and `WorkflowExecution` use camelCase because their backend handlers map it).

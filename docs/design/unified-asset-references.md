@@ -96,7 +96,7 @@ Touchpoints:
 |---------|--------|-------|
 | **API** | ✅ done (#3683) | routes accept `connectedReferences` + `referenceOrder`, assemble via the shared core; verify Assets-entity sources resolve once Phase 1 expands them |
 | **MCP** | ✅ done (#3683) | `verbs-image` / `verbs-video` / `video-director` expose `connected_references` + `reference_order` |
-| **SDK** | ✅ done (#3683) | `@nodaro/client` `StructuredReferenceParams`, typed `run`/`runAndWait` overloads, `ConnectedReference` export |
+| **SDK** | ✅ done (#3683) | `@nodaro/sdk` `StructuredReferenceParams`, typed `run`/`runAndWait` overloads, `ConnectedReference` export |
 | **CLI** | ❌ **gap** | not touched by #3683 — add passthrough (touchpoint 8) |
 | **Editor / canvas / orchestrator** | ❌ **this feature** | Assets-handle entities (all 4) into the unified, capped `{image:N}` numbering |
 

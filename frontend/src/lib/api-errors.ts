@@ -1,4 +1,4 @@
-import { NotFoundError } from "@nodaro/client"
+import { NotFoundError } from "@nodaro/sdk"
 
 /**
  * True for a definitive HTTP 404 from any layer:

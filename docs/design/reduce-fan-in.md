@@ -284,7 +284,7 @@ Per CLAUDE.md "Public Docs Maintenance Rule":
 
 ### 10. SDK & client
 
-- Add `collect` tool to `@nodaro/client` `nodes` resource (auto-generated from `NODE_REGISTRY` if that path exists; otherwise manual).
+- Add `collect` tool to `@nodaro/sdk` `nodes` resource (auto-generated from `NODE_REGISTRY` if that path exists; otherwise manual).
 - Add usage example to `docs/sdk-quickstart.md`.
 
 ---

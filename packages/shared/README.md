@@ -18,7 +18,7 @@ npm install @nodaro/shared
 
 ## Stability
 
-The exports are re-used by `@nodaro/client` and the official Nodaro frontend. Most consumers should depend on `@nodaro/client` and use its re-exports rather than importing from `@nodaro/shared` directly.
+The exports are re-used by `@nodaro/sdk` and the official Nodaro frontend. Most consumers should depend on `@nodaro/sdk` and use its re-exports rather than importing from `@nodaro/shared` directly.
 
 ## License
 
