@@ -1,6 +1,6 @@
 {
-  "name": "@nodaro/client",
-  "version": "0.1.0",
+  "name": "@nodaro/sdk",
+  "version": "1.0.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -21,7 +21,11 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -32,7 +36,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@nodaro/shared": "*"
+    "@nodaro/shared": "^1.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",
@@ -40,6 +44,15 @@
     "typescript": "^5.7.3",
     "vitest": "^4.1.2"
   },
-  "engines": { "node": ">=20" },
-  "keywords": ["nodaro", "ai", "workflow", "sdk", "client", "oauth"]
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "nodaro",
+    "ai",
+    "workflow",
+    "sdk",
+    "client",
+    "oauth"
+  ]
 }

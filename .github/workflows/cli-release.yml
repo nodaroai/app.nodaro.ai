@@ -67,7 +67,7 @@ jobs:
       - name: Build workspace packages the CLI imports
         run: |
           npm -w @nodaro/shared run build
-          npm -w @nodaro/client run build
+          npm -w @nodaro/sdk run build
 
       - name: Compile binary
         env:

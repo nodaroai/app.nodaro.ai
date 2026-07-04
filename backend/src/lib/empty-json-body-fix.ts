@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify"
  * carries NO body, so Fastify skips JSON parsing instead of rejecting it with a
  * 400 ("Body cannot be empty when content-type is set to 'application/json'").
  *
- * The `@nodaro/client` SDK sets that header on every non-multipart request,
+ * The `@nodaro/sdk` SDK sets that header on every non-multipart request,
  * including bodyless writes (e.g. `DELETE /v1/admin/community/listings/:id` for
  * community unpublish). Stripping it only when the body is empty (content-length
  * absent or `0`) lets those succeed; requests that actually carry a body are

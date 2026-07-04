@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { CHAT_TURN_CAPS, type ChatEnabledStage } from "@nodaro/shared"
-import type { ChatTurn } from "@nodaro/client"
+import type { ChatTurn } from "@nodaro/sdk"
 import { pipelinesApi } from "@/lib/pipelines-api"
 
 /**

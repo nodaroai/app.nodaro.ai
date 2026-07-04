@@ -1,4 +1,4 @@
-import { createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/client"
+import { createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/sdk"
 import pc from "picocolors"
 import { getProfile } from "./config.js"
 

@@ -280,11 +280,11 @@ Need the wizard's guided questions in a script? Use the two-step path —
 If you're building integrations, prefer the typed SDK directly:
 
 ```bash
-npm install @nodaro/client
+npm install @nodaro/sdk
 ```
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const nodaro = createClient({
   baseUrl: "https://app.nodaro.ai",
@@ -294,7 +294,7 @@ const nodaro = createClient({
 const exec = await nodaro.workflows.run("wf_abc")
 ```
 
-The CLI is a thin convenience wrapper around `@nodaro/client`. Anything the CLI does, the SDK does too.
+The CLI is a thin convenience wrapper around `@nodaro/sdk`. Anything the CLI does, the SDK does too.
 
 ## See also
 

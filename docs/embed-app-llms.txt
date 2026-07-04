@@ -17,5 +17,5 @@
 
 ## Optional
 
-- [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): `@nodaro/client` typed client. Note: published-app endpoints (`/v1/app/:slug/run`, `/v1/app/:slug/runs/:runId`) are **not** yet wrapped by the SDK — call them via `fetch` as shown in the Embed App Guide. The SDK is useful if you also need projects/workflows/jobs/executions endpoints alongside.
+- [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): `@nodaro/sdk` typed client. Note: published-app endpoints (`/v1/app/:slug/run`, `/v1/app/:slug/runs/:runId`) are **not** yet wrapped by the SDK — call them via `fetch` as shown in the Embed App Guide. The SDK is useful if you also need projects/workflows/jobs/executions endpoints alongside.
 - [Architecture](https://nodaroai.github.io/app.nodaro.ai/architecture.md): system overview. Only relevant if you need to understand worker queues, async semantics, or self-hosting context — most embedders don't need this.

@@ -1,107 +1,207 @@
+<div align="center">
+
 # Nodaro
 
-AI workflow editor. Compose text-to-image, image-to-video, audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
+**The open, API-first studio for AI video production.**
 
-[**Hosted version: nodaro.ai**](https://nodaro.ai) · [**Documentation**](docs/README.md) · [**SDK**](docs/sdk-quickstart.md)
+Compose image generation, video generation, voice, music, and LLM steps into
+node-based workflows — run them from a visual canvas, a REST API, a typed SDK,
+or straight from your AI assistant over MCP.
 
-## Features
+[Website](https://nodaro.ai) · [Hosted App](https://app.nodaro.ai) · [Documentation](https://nodaroai.github.io/app.nodaro.ai/) · [SDK Quickstart](docs/sdk-quickstart.md) · [MCP](docs/mcp/index.md)
 
-- **100+ AI nodes** — image gen, video gen, audio synthesis, lip sync, music, LLMs, social-publish
-- **Visual editor** with full React Flow canvas, OR fully **headless API** for your own frontends
-- **Self-hostable** — Docker Compose + Supabase + Redis, works on any cloud
-- **OAuth 2.0** for third-party app integration with scoped consent
-- **Typed SDK** (`@nodaro/client`) — three auth modes, error hierarchy, resource classes
+[![CI](https://github.com/nodaroai/app.nodaro.ai/actions/workflows/ci.yml/badge.svg)](https://github.com/nodaroai/app.nodaro.ai/actions/workflows/ci.yml)
+[![License: Fair-code](https://img.shields.io/badge/license-Sustainable%20Use%20%2B%20Apache--2.0-blue)](LICENSE.md)
+[![Docs](https://img.shields.io/badge/docs-github%20pages-brightgreen)](https://nodaroai.github.io/app.nodaro.ai/)
 
-## Three ways to use Nodaro
+</div>
 
-### 1. Self-host (Community Edition)
+---
+
+Nodaro turns multi-step AI media production — *generate an image, animate it,
+voice it, lip-sync it, score it, cut it* — into workflows you can build once and
+run anywhere. The backend is **REST-first**: the included visual editor is one
+client of the API, not the product itself. Publish a workflow and it becomes an
+app with a shareable UI, an API endpoint, a webhook target, and an MCP tool —
+all at the same time.
+
+## Highlights
+
+- **100+ node types across 16 categories** — image, video, audio, music, LLM,
+  compositing, FFmpeg processing, parameter pickers, triggers — [every one
+  documented](docs/nodes/README.md).
+- **100+ AI models behind one interface** — VEO, Kling, Seedance, Hailuo, Wan,
+  LTX, Flux, Nano Banana, GPT-Image, Suno, ElevenLabs, Claude, Gemini, GPT and more,
+  routed through pluggable providers (KIE.ai, Replicate, fal, ElevenLabs,
+  HeyGen, Beeble, Apify).
+- **Server-side execution engine** — workflows run autonomously as DAGs on a
+  BullMQ orchestrator: no browser tab required, with schedules, webhook
+  triggers, sub-workflows, and per-node retry semantics.
+- **Workflows as products** — publish any workflow as a shareable app with
+  curated inputs/outputs, or call it programmatically via API / SDK / CLI / MCP.
+- **Entity studios** — reusable characters, locations, objects, and voices with
+  identity-consistent reference sets that carry across every generation.
+- **Programmatic rendering** — captions, lottie overlays, 3D titles, and
+  after-effects-style composites rendered with [Remotion](https://www.remotion.dev).
+- **Self-hostable & fair-code** — run the Community Edition on your own
+  infrastructure with your own provider keys.
+
+## Quickstart
+
+### Self-host (Community Edition)
 
 ```bash
 git clone https://github.com/nodaroai/app.nodaro.ai
 cd app.nodaro.ai
-cp .env.example .env  # fill in Supabase keys + at least one AI provider
+cp .env.example .env   # Supabase keys + at least one AI provider key
 docker compose -f docker-compose.community.yml up
 ```
 
-Open `http://localhost:3000`. Full guide: [Community Edition Quickstart](docs/community-edition-quickstart.md).
+Open `http://localhost:3000`. Full guide:
+[Community Edition Quickstart](docs/community-edition-quickstart.md).
 
-### 2. SDK against the hosted API
+### Hosted
+
+[app.nodaro.ai](https://app.nodaro.ai) — the managed instance: zero setup,
+credit-based billing, every provider pre-configured.
+
+## Use it your way
+
+### Visual editor
+
+A full React Flow canvas: drag nodes, wire media-typed handles (invalid
+connections are rejected at drag time), run single nodes or the whole graph,
+and watch results stream in live.
+
+### API + SDK
+
+Everything the editor does is a REST call. The typed TypeScript SDK is
+published as [`@nodaro/sdk`](https://www.npmjs.com/package/@nodaro/sdk)
+(Apache-2.0, source under [`packages/client`](packages/client)):
+
+```bash
+npm install @nodaro/sdk
+```
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const nodaro = createClient({
-  baseUrl: "https://nodaro.example.com",
+  baseUrl: "https://app.nodaro.ai",
   auth: new StaticTokenAuth(process.env.NODARO_TOKEN!),
 })
 
-const projects = await nodaro.projects.list()
-const exec = await nodaro.workflows.run(workflowId)
+const execution = await nodaro.workflows.run(workflowId)
+const jobs = await nodaro.jobs.list({ status: "completed" })
 ```
 
-Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
+Guides: [SDK Quickstart](docs/sdk-quickstart.md) ·
+[SDK Reference](docs/sdk-reference.md) ·
+[API Integration](docs/api-integration.md) ·
+[OAuth 2.0 flow](docs/oauth-flow.md) for third-party apps with scoped consent.
 
-### 3. Hosted product
+### CLI
 
-[nodaro.ai](https://nodaro.ai) — managed instance with credits, billing, and zero-ops setup.
-
-## CLI
+[`packages/cli`](packages/cli) wraps the SDK for terminals and CI — multiple
+profiles, `--json` output, `--watch` for following executions, and standalone
+compiled binaries on the [releases page](https://github.com/nodaroai/app.nodaro.ai/releases).
 
 ```bash
 npm install -g @nodaro/cli
+
 nodaro auth login
-nodaro projects list
 nodaro workflows run <workflowId> --watch
 ```
 
-Thin convenience wrapper around `@nodaro/client`. Supports multiple profiles (prod / staging / local), `--json` output for piping, and `--watch` for following execution status. See [`packages/cli/README.md`](./packages/cli/README.md).
+### MCP
 
-## MCP Integration
+Drive Nodaro from Claude, Cursor, Cline, Continue, or any MCP-compatible
+client — generation tools, workflow tools, and live execution widgets:
 
-Drive Nodaro tools from any MCP-compatible AI client. Paste `https://mcp.nodaro.ai/mcp`
-into Claude.ai / Cursor / Cline / Continue.dev / Goose. See [docs/mcp](./docs/mcp/index.md).
+```
+https://mcp.nodaro.ai/mcp
+```
+
+See [docs/mcp](docs/mcp/index.md).
 
 ## Editions
 
 | Edition | Self-hosted | Admin panel | Credits + billing | Use case |
 |---------|-------------|-------------|-------------------|----------|
-| **Community** | Yes | No | No | Local / single-team |
-| **Business** | Yes | Yes | No | Self-hosted with user mgmt |
-| **Cloud** | No | Yes | Yes | Powers nodaro.ai |
+| **Community** | Yes | No | No | Personal / single-team |
+| **Business** | Yes | Yes | No | Self-hosted with user management |
+| **Cloud** | — | Yes | Yes | Powers app.nodaro.ai |
 
-Set `EDITION=community|business|cloud` to switch.
+Switch with `EDITION=community|business|cloud`. Enterprise-licensed code is
+isolated under `ee/` directories — see [License](#license).
 
 ## Architecture
 
-- **Frontend**: Vite 6, React Router 7, React Flow, shadcn/ui, Tailwind
-- **Backend**: Fastify (Node.js/TypeScript), BullMQ (Redis)
-- **Database**: Supabase (PostgreSQL + Auth)
-- **Storage**: Cloudflare R2 (S3-compatible)
-- **Workflow execution**: BullMQ orchestrator + frontend DAG engine
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vite 6 · React Router 7 · [React Flow](https://reactflow.dev) · shadcn/ui · Tailwind |
+| Backend | Fastify (Node.js / TypeScript) · Zod-validated routes |
+| Execution | BullMQ orchestrator on Redis · server-side DAG engine |
+| Rendering | [Remotion](https://www.remotion.dev) compositions · FFmpeg pipelines |
+| Data | Supabase (PostgreSQL + Auth + RLS) |
+| Storage | Cloudflare R2 (S3-compatible) |
 
-See [Architecture](docs/architecture.md) for the full system overview.
+Deep dive: [Architecture](docs/architecture.md) ·
+[Deployment](docs/deployment.md) · curated design notes in
+[`docs/design/`](docs/design).
 
-## Project structure
+### Monorepo layout
 
-The repository is a monorepo with npm workspaces:
+```
+backend/            Fastify API, workers, providers, workflow engine
+frontend/           Vite SPA — visual editor, published apps, admin
+packages/shared/    Pure-logic types, model registries, prompt helpers (Apache-2.0)
+packages/client/    Typed REST SDK, published as @nodaro/sdk (Apache-2.0)
+packages/cli/       nodaro CLI, compiled binaries via bun (Apache-2.0)
+packages/remotion/  Remotion video compositions (captions, lottie, 3D titles)
+docs/               Public documentation (GitHub Pages)
+```
 
-- `backend/` — Fastify API + workers
-- `frontend/` — Vite SPA (visual editor + presentation mode + admin)
-- `packages/shared/` — pure-logic types, model registries, prompt helpers
-- `packages/client/` — typed REST SDK
-- `packages/cli/` — command-line interface (`nodaro`), built on the SDK
-- `packages/remotion/` — Remotion video compositions
+## Ecosystem
 
-See [Contributing](docs/contributing.md) for dev environment setup and standards.
+Nodaro is built alongside — and embeds — open projects:
+
+- **[FreeCut](https://github.com/nodaroai/freecut)** ([freecut.nodaro.ai](https://freecut.nodaro.ai)) —
+  a professional multi-track video editor that runs entirely in the browser.
+  Nodaro workflows export straight into a FreeCut timeline (including FCPXML)
+  for hands-on finishing.
+- **[AudioMass](https://github.com/nodaroai/audiomass)** — the web-based
+  waveform editor, embedded in Nodaro for in-place trimming and editing of
+  generated audio.
+- **[Remotion](https://www.remotion.dev)** — powers Nodaro's programmatic
+  rendering: burned captions, lottie overlays, animated 3D titles, and
+  template-based composites (see [`packages/remotion`](packages/remotion)).
+- **[studio.nodaro.ai](https://studio.nodaro.ai)** — a standalone creative
+  studio product built entirely on the public Nodaro API and SDK: proof that
+  the headless surface is complete.
+
+## Contributing
+
+Contributions are welcome — see [Contributing](docs/contributing.md) for dev
+setup, coding standards, and the node-registration checklists.
+
+Signing the [Contributor License Agreement](CLA.md) is required and automated:
+the CLA bot will prompt on your first pull request and never again after.
 
 ## License
 
-Nodaro is fair-code with three license tiers. See [`LICENSE.md`](LICENSE.md) for the full overview.
+Nodaro is **fair-code** with three license tiers — full overview in
+[`LICENSE.md`](LICENSE.md):
 
-- **Community code (default)** — [Sustainable Use License](LICENSE). Self-host for personal or internal-business use; no commercial hosting as a service to third parties.
-- **Enterprise code** (any path with an `ee` segment, any filename containing `.ee.`, or compiled artifacts derived from such files) — [Enterprise License](backend/src/ee/LICENSE). Production use requires a paid Nodaro Cloud or Nodaro Enterprise subscription. Free for development, testing, and evaluation.
-- **SDK packages** (`packages/client/`, `packages/shared/`, `packages/cli/`) — [Apache License 2.0](packages/shared/LICENSE). Embed in commercial applications freely.
+- **Community code** (default) — [Sustainable Use License](LICENSE): self-host
+  freely for personal or internal business use; not for commercial hosting as
+  a service to third parties.
+- **Enterprise code** (paths with an `ee` segment or filenames containing
+  `.ee.`) — [Enterprise License](backend/src/ee/LICENSE): free for development,
+  testing, and evaluation; production use requires a Nodaro Cloud or
+  Enterprise subscription.
+- **SDK packages** (`packages/shared`, `packages/client`, `packages/cli`) —
+  [Apache License 2.0](packages/shared/LICENSE): embed anywhere, including
+  commercial applications.
 
-Contributing requires signing the [Contributor License Agreement](CLA.md) — the same CLA covers individual and corporate contributions (Section 2 handles employer permission). The cla-assistant bot handles signing automatically on your first PR.
-
-For commercial licensing inquiries, contact license@nodaro.ai.
+Commercial licensing: [license@nodaro.ai](mailto:license@nodaro.ai)

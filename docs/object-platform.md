@@ -16,7 +16,7 @@ This guide explains the data model, the four surfaces, and the canonical
 | Surface | Reach for it when… | Lives at |
 |---|---|---|
 | REST | curl-able, language-agnostic, simplest | `/v1/objects*`, `/v1/generate-object*` |
-| SDK (`@nodaro/client`) | Building a typed integration in Node / browser / Bun / Deno | `client.objects.*` |
+| SDK (`@nodaro/sdk`) | Building a typed integration in Node / browser / Bun / Deno | `client.objects.*` |
 | CLI (`nodaro` / `@nodaro/cli`) | Terminal scripts, cron, CI, ad-hoc one-shots | `nodaro objects …` |
 | MCP | An LLM agent (Claude.ai, Cursor, etc.) is driving the work | `generate_object`, `approve_object_main_image`, etc. |
 
@@ -418,7 +418,7 @@ and reserve credits up-front before any worker job is enqueued.
 ### SDK
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",

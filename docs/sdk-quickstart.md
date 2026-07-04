@@ -1,6 +1,6 @@
 # SDK Quickstart
 
-`@nodaro/client` is a typed REST client for Nodaro. It works in Node, browsers,
+`@nodaro/sdk` is a typed REST client for Nodaro. It works in Node, browsers,
 and React Native — anywhere `fetch` exists. This walkthrough goes from "install"
 to running a workflow end-to-end.
 
@@ -11,14 +11,14 @@ If you just want a method-by-method index, see the
 ## 1. Install + first request
 
 ```bash
-npm install @nodaro/client
+npm install @nodaro/sdk
 ```
 
 The simplest possible call uses `client.nodes.list()` — it requires no scopes
 and works on any reachable Nodaro instance:
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -47,7 +47,7 @@ Use when you have a token that doesn't change for the lifetime of the process:
 - A developer-app token (prefixed `ndr_app_...`)
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -64,7 +64,7 @@ project (the included editor uses this mode). The JWT is pulled live from the
 Supabase v2 client on every request, so token refresh is automatic.
 
 ```ts
-import { createClient, supabaseAuth } from "@nodaro/client"
+import { createClient, supabaseAuth } from "@nodaro/sdk"
 import { createClient as createSupabase } from "@supabase/supabase-js"
 
 const supabase = createSupabase(
@@ -87,7 +87,7 @@ Use for refresh-token rotation, custom session stores, or anything else that
 needs to compute the token on demand:
 
 ```ts
-import { createClient, CallbackAuth } from "@nodaro/client"
+import { createClient, CallbackAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -118,7 +118,7 @@ import {
   RateLimitedError,
   InsufficientCreditsError,
   StorageExceededError,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 
 try {
   await client.workflows.run(workflowId)
@@ -177,7 +177,7 @@ Specific subclasses add fields:
 `executions.get()` until the status is terminal:
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -237,7 +237,7 @@ The typical flow: create the row, generate portrait candidates, pick one,
 then layer expression / pose / motion assets on top.
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -316,7 +316,7 @@ typical flow: create the row, generate main-image candidates, pick one,
 then layer angle / material / variation / motion assets on top.
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -490,7 +490,7 @@ console.log(`Cost: ${nanoBanana.creditCost}`)
 
 ## 5. Type safety
 
-`@nodaro/client` re-exports types for every response shape and input. Common
+`@nodaro/sdk` re-exports types for every response shape and input. Common
 imports:
 
 ```ts
@@ -502,7 +502,7 @@ import type {
   NodeDescriptor,
   DeveloperApp,
   AccessTokenResponse,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 
 const { data }: { data: Workflow } = await client.workflows.get(id)
 //        ^? Workflow with full nodes/edges/settings
@@ -516,7 +516,7 @@ to the resource type, so TypeScript autocomplete works on every field of
 
 ## 6. Browser vs Node
 
-`@nodaro/client` has zero dependencies and uses only `fetch` and `URL`. Both
+`@nodaro/sdk` has zero dependencies and uses only `fetch` and `URL`. Both
 are global in:
 
 - Node 18 or newer
@@ -538,7 +538,7 @@ checked against Supabase, not the developer-app allowlist.
 Two optional `createClient` options cover most edge cases:
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",

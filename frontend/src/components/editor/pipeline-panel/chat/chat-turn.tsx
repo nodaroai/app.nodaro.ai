@@ -1,4 +1,4 @@
-import type { ChatTurn as ChatTurnType } from "@nodaro/client"
+import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
 import { ProposedChangeCard } from "./proposed-change-card"
 
 interface Props {

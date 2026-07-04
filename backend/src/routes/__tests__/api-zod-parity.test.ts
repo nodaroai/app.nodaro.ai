@@ -4,7 +4,7 @@
  * Per the test-strategy spec: "Two sources of truth drifting: frontend
  * sends a field backend strips (silent feature loss) or omits a required
  * field (silent 400)." The long-term fix is migrating frontend api.ts to
- * the typed `@nodaro/client` SDK so TypeScript enforces parity at compile
+ * the typed `@nodaro/sdk` SDK so TypeScript enforces parity at compile
  * time. Until then, this test is the stopgap.
  *
  * Approach: for each high-value endpoint, define a fixture matching what

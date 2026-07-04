@@ -560,5 +560,5 @@ const heroText = out.text
 
 - [API Integration](./api-integration.md) — the underlying REST API (per-endpoint access, not full apps)
 - [OAuth Flow](./oauth-flow.md) — full multi-user flow, including consent UI and revocation
-- [SDK Quickstart](./sdk-quickstart.md) — `@nodaro/client` typed SDK (covers projects/workflows/jobs/executions; published-apps endpoints are not yet wrapped — call them via `fetch` as shown above)
+- [SDK Quickstart](./sdk-quickstart.md) — `@nodaro/sdk` typed SDK (covers projects/workflows/jobs/executions; published-apps endpoints are not yet wrapped — call them via `fetch` as shown above)
 - [Node Reference](./nodes/README.md) — every supported node type

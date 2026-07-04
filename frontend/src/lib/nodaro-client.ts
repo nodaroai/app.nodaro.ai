@@ -2,7 +2,7 @@ import {
   createClient as createNodaroClient,
   CallbackAuth,
   type NodaroClient,
-} from "@nodaro/client"
+} from "@nodaro/sdk"
 import { createClient as createSupabaseClient } from "./supabase"
 
 /**

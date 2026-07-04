@@ -31,7 +31,7 @@ graph TB
         Admin[Admin Panel]
     end
     subgraph "Third-party clients"
-        External["External app<br/>@nodaro/client SDK<br/>or raw REST"]
+        External["External app<br/>@nodaro/sdk SDK<br/>or raw REST"]
     end
     subgraph Backend
         API[Fastify /v1/*<br/>~138 route files]
@@ -153,7 +153,7 @@ that used to live in two places.
 
 ### Client SDK
 
-`packages/client/` (published as `@nodaro/client` on npm) is a typed
+`packages/client/` (published as `@nodaro/sdk` on npm) is a typed
 REST wrapper around the public API. Three auth strategies
 (`StaticTokenAuth`, `CallbackAuth`, `supabaseAuth`), 17 resource
 classes (`workflows`, `projects`, `jobs`, `executions`, `nodes`,

@@ -10,7 +10,7 @@ Use this skill when:
 - Users grant your app scoped access via a consent screen
 - You need access tokens that expire and can be revoked
 
-If instead you just need server-to-server access to your OWN account, use API tokens (`/v1/api-tokens`) — simpler. See the `using-nodaro-client` skill.
+If instead you just need server-to-server access to your OWN account, use API tokens (`/v1/api-tokens`) — simpler. See the `using-nodaro-sdk` skill.
 
 ## Overview
 
@@ -107,10 +107,10 @@ The user clicks "Allow" → Nodaro redirects to:
 
 **ALWAYS verify state first.** Then exchange on your server (NOT browser — secret would leak):
 
-### Via @nodaro/client SDK
+### Via @nodaro/sdk SDK
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",

@@ -1,7 +1,7 @@
 /**
  * Shared community-sharing types — the public "listing" shape for shared
  * characters/locations/objects, re-used by the backend API response, the
- * `@nodaro/client` SDK, the frontend, and the CLI so they can't drift.
+ * `@nodaro/sdk` SDK, the frontend, and the CLI so they can't drift.
  */
 
 /** The kind of shared asset a community listing wraps. */

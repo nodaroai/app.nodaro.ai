@@ -36,8 +36,8 @@ Set `EDITION=community|business|cloud` to switch.
 Three npm packages in this repo:
 
 - `@nodaro/shared` — pure-logic types, model registries, prompt helpers, [picker catalogs](./picker-catalogs.md)
-- `@nodaro/client` — typed REST client (3 auth modes, 17 resource classes)
-- `@nodaro/cli` — terminal client wrapping `@nodaro/client`; also distributed as standalone binaries via [GitHub Releases](https://github.com/nodaroai/app.nodaro.ai/releases)
+- `@nodaro/sdk` — typed REST client (3 auth modes, 17 resource classes)
+- `@nodaro/cli` — terminal client wrapping `@nodaro/sdk`; also distributed as standalone binaries via [GitHub Releases](https://github.com/nodaroai/app.nodaro.ai/releases)
 
 ## API reference
 

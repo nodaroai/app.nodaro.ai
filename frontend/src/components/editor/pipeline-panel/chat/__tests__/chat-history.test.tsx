@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
-import type { ChatTurn as ChatTurnType } from "@nodaro/client"
+import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
 import { ChatHistory } from "../chat-history"
 
 function makeTurn(over: Partial<ChatTurnType>): ChatTurnType {

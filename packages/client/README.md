@@ -1,15 +1,15 @@
-# @nodaro/client
+# @nodaro/sdk
 
 Typed REST client for the [Nodaro](https://nodaro.ai) AI workflow platform.
 
 ```bash
-npm install @nodaro/client
+npm install @nodaro/sdk
 ```
 
 ## Quick start (server-side, OAuth access token)
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -25,7 +25,7 @@ const exec = await client.workflows.run(workflowId, {
 ## Quick start (browser, Supabase JWT)
 
 ```ts
-import { createClient, supabaseAuth } from "@nodaro/client"
+import { createClient, supabaseAuth } from "@nodaro/sdk"
 import { createClient as supa } from "@supabase/supabase-js"
 
 const supabase = supa(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
@@ -41,7 +41,7 @@ const client = createClient({
 Server-side: exchange a code for an access token after the user clicks "Allow" on the consent screen.
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -65,7 +65,7 @@ const userClient = createClient({
 
 ## Errors
 
-All resource methods throw a typed error from `@nodaro/client`:
+All resource methods throw a typed error from `@nodaro/sdk`:
 
 - `UnauthorizedError` (401)
 - `ForbiddenError` (403, includes `missingScope` when applicable)
@@ -76,7 +76,7 @@ All resource methods throw a typed error from `@nodaro/client`:
 - `NodaroError` (everything else, includes `code` and `status`)
 
 ```ts
-import { ForbiddenError, InsufficientCreditsError } from "@nodaro/client"
+import { ForbiddenError, InsufficientCreditsError } from "@nodaro/sdk"
 
 try {
   await client.workflows.run(id)

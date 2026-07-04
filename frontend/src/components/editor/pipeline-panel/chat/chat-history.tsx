@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import type { ChatTurn as ChatTurnType } from "@nodaro/client"
+import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
 import { ChatTurnBubble } from "./chat-turn"
 
 interface Props {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { NotFoundError } from "@nodaro/client"
+import { NotFoundError } from "@nodaro/sdk"
 import { isNotFound } from "../api-errors"
 
 describe("isNotFound", () => {

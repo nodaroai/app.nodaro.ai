@@ -15,7 +15,7 @@ This guide explains the data model, the four surfaces, and the canonical
 | Surface | Reach for it when… | Lives at |
 |---|---|---|
 | REST | curl-able, language-agnostic, simplest | `/v1/characters*`, `/v1/generate-character*` |
-| SDK (`@nodaro/client`) | Building a typed integration in Node / browser / Bun / Deno | `client.characters.*` |
+| SDK (`@nodaro/sdk`) | Building a typed integration in Node / browser / Bun / Deno | `client.characters.*` |
 | CLI (`nodaro` / `@nodaro/cli`) | Terminal scripts, cron, CI, ad-hoc one-shots | `nodaro characters …` |
 | MCP | An LLM agent (Claude.ai, Cursor, etc.) is driving the work | `create_character`, `approve_portrait`, etc. |
 
@@ -305,7 +305,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/v1/characters/$CHAR" | jq .sour
 ### SDK
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",

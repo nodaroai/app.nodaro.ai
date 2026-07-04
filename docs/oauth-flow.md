@@ -274,7 +274,7 @@ the browser — `client_secret` would leak to anyone with devtools.
 ### Using the SDK
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 // The token endpoint is public (auth is via client_id + client_secret in
 // the body), so we pass an empty token here.
@@ -373,7 +373,7 @@ are supplied).
 Configure a per-user client with the access token:
 
 ```typescript
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const userClient = createClient({
   baseUrl: "https://nodaro.example.com",
@@ -476,7 +476,7 @@ The SDK surfaces the 403 case as `ForbiddenError` with a typed
 `missingScope` field:
 
 ```typescript
-import { ForbiddenError } from "@nodaro/client"
+import { ForbiddenError } from "@nodaro/sdk"
 
 try {
   await userClient.workflows.run(workflowId)
@@ -533,7 +533,7 @@ The fastest end-to-end test loop:
 
    ```typescript
    import express from "express"
-   import { createClient, StaticTokenAuth } from "@nodaro/client"
+   import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
    const app = express()
 

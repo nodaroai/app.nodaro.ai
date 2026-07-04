@@ -7,7 +7,7 @@ Every picker's data — its options, the prompt fragment each option contributes
 > **Library first.** Picker catalogs are static config + pure functions, so the preferred path is to `import` the data and run it locally — typed, offline, tree-shakeable, with no API round-trips. (The SDK/API is otherwise for *server state*: jobs, credits, uploads, workflows.) A read-only discovery endpoint also exists for clients that can't bundle the package (e.g. LLM agents over MCP): `GET /v1/picker-catalogs`, `client.pickerCatalogs.list()/get()`, `nodaro pickers`, and the MCP `get_picker_catalog` tool — see [API Integration §11](./api-integration.md#11-node-discovery), the [SDK Reference](./sdk-reference.md#clientpickercatalogs), the [CLI](./cli.md), and the [MCP tools](./mcp/tools.md). They return the same data this page documents.
 
 ```bash
-npm install @nodaro/shared @nodaro/client
+npm install @nodaro/shared @nodaro/sdk
 ```
 
 ## The registry
@@ -58,7 +58,7 @@ A single picker is one choice from a flat (optionally grouped) list. `options` c
 
 ```tsx
 import { getPickerCatalog, getParameterPromptHint } from "@nodaro/shared"
-import { createClient } from "@nodaro/client"
+import { createClient } from "@nodaro/sdk"
 
 const client = createClient({ apiKey: process.env.NODARO_API_KEY })
 const mood = getPickerCatalog("mood")! // { nodeType:"mood", valueField:"mood", options:[…], categoryOrder, categoryLabels }

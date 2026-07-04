@@ -1,4 +1,4 @@
-import type { ExecutionStatus, JobStatus } from "@nodaro/client"
+import type { ExecutionStatus, JobStatus } from "@nodaro/sdk"
 import { emit, info, success, type OutputOpts } from "./output.js"
 
 /**

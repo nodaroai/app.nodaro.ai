@@ -1006,11 +1006,11 @@ curl -s -X POST "$BASE/v1/freecut-export" \
 The same backend is fronted by a typed TypeScript client:
 
 ```bash
-npm install @nodaro/client
+npm install @nodaro/sdk
 ```
 
 ```ts
-import { createClient, StaticTokenAuth } from "@nodaro/client"
+import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
   baseUrl: "https://nodaro.example.com",

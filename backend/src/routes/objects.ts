@@ -532,7 +532,7 @@ export async function objectRoutes(app: FastifyInstance) {
   //                      (no-query) → restore (optional) → DELETE
   //                      ?permanent=true.
   //
-  // Permanent-delete is intentionally NOT mirrored on the SDK (`@nodaro/client`)
+  // Permanent-delete is intentionally NOT mirrored on the SDK (`@nodaro/sdk`)
   // — programmatic callers can only soft-delete.
   // ---------------------------------------------------------------------------
   app.delete("/v1/objects/:id", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {

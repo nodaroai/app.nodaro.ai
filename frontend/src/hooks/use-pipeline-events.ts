@@ -6,7 +6,7 @@ import type {
   PipelineStageName,
   SubGateName,
 } from "@nodaro/shared"
-import type { ChatTurn } from "@nodaro/client"
+import type { ChatTurn } from "@nodaro/sdk"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { getAuthHeaders } from "@/lib/api"
 import { streamGet } from "@/lib/sse-client"
