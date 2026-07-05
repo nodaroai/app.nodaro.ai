@@ -12,7 +12,7 @@
  * matches industry conventions.
  */
 
-import { pickIds } from "./multi-pick.js"
+import { pickIds } from "@nodaro/shared"
 
 export type MusicGenreCategory =
   | "hip-hop-rnb"

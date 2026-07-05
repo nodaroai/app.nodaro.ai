@@ -35,10 +35,10 @@ import {
   buildImagePrompt,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
-import { getFramingPromptHint } from "@nodaro/shared"
-import { getLightingPromptHint } from "@nodaro/shared"
-import { getLensPromptHint } from "@nodaro/shared"
-import { getCameraFormatPromptHint } from "@nodaro/shared"
+import { getFramingPromptHint } from "./framing.js"
+import { getLightingPromptHint } from "./lighting.js"
+import { getLensPromptHint } from "./lens.js"
+import { getCameraFormatPromptHint } from "./camera-format.js"
 import {
   renderStructuredFields,
   type StructuredPromptFields,

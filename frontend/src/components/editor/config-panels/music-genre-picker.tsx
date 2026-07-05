@@ -2,7 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_GENRES, MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, pickIds, togglePick, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/shared"
+import { MUSIC_GENRES, MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

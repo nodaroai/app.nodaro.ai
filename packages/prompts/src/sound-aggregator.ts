@@ -13,8 +13,8 @@
 
 import type { HintGraphContext, HintNodeLike } from "./parameter-prompt-hint.js"
 import { getParameterPromptHint } from "./parameter-prompt-hint.js"
-import { getMusicGenre, getMusicEra } from "@nodaro/shared"
-import { buildMusicMoodHints } from "@nodaro/shared"
+import { getMusicGenre, getMusicEra } from "./music-genre.js"
+import { buildMusicMoodHints } from "./music-mood.js"
 
 export type SoundConsumerType =
   | "suno-generate"

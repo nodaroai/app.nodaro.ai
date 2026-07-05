@@ -3,7 +3,7 @@
  * Composed by buildMusicMoodHints into "[energy] [emotion] [vibe]".
  */
 
-import { pickIds } from "./multi-pick.js"
+import { pickIds } from "@nodaro/shared"
 
 export interface MusicMoodEntry {
   readonly id: string

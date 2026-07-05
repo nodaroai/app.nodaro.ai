@@ -1,6 +1,6 @@
 // backend/src/prompts/prompt-wizard-system.ts
 
-import { getCategoriesForNodeType, getPromptDoctrine, PROVIDER_CAPABILITIES, REFERENCE_IMAGE_ROLES } from "@nodaro/shared"
+import { getCategoriesForNodeType, getPromptDoctrine, PROVIDER_CAPABILITIES, REFERENCE_IMAGE_ROLES } from "@nodaro/prompts"
 
 interface WizardAnalyzeContext {
   nodeType: string

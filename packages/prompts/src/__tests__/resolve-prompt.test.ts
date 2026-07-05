@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolvePrompt, computeNodePrompt, computeLlmChatFields } from "../resolve-prompt"
+import { resolvePrompt, computeNodePrompt, computeLlmChatFields } from "../resolve-prompt.js"
 const M = new Map<string, string>()
 const R = new Map([["Hero", "a knight"]])
 describe("resolvePrompt", () => {

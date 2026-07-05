@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Gem } from "lucide-react"
-import { STYLING_DIMENSION_LABELS, STYLING_DIMENSION_ORDER, STYLING_FIELD_BY_DIMENSION, getStyling, getStylingLabel, type StylingDimension } from "@nodaro/shared"
+import { STYLING_DIMENSION_LABELS, STYLING_DIMENSION_ORDER, STYLING_FIELD_BY_DIMENSION, getStyling, getStylingLabel, type StylingDimension } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getStylingEntryIcon } from "./person-styling-icon"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"

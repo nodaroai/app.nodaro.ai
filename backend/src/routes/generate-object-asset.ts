@@ -8,7 +8,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { resolveEntityAspect, OBJECT_ASSET_PRESETS, OBJECT_ASSET_PROMPTS, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
+import { resolveEntityAspect, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
+import { OBJECT_ASSET_PRESETS, OBJECT_ASSET_PROMPTS } from "@nodaro/prompts"
 import { llmComplete } from "../lib/llm-client.js"
 import {
   OBJECT_ASSET_DESCRIPTION_SYSTEM_PROMPT,

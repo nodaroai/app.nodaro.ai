@@ -3,7 +3,8 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Music } from "lucide-react"
-import { getMusicGenreLabel, getMusicSubgenre, getMusicEra, buildMusicGenreHints, pickIds } from "@nodaro/shared"
+import { getMusicGenreLabel, getMusicSubgenre, getMusicEra, buildMusicGenreHints } from "@nodaro/prompts"
+import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { MusicGenreData } from "@/types/nodes"
 

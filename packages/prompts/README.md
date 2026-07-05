@@ -1,9 +1,12 @@
 # @nodaro/prompts
 
 The prompt-engineering layer of the [Nodaro](https://app.nodaro.ai) AI video
-platform: the person / picker catalogs **with their prompt hints**,
-identity-lock clauses, entity prompt builders, brand presets, and the
-prompt/reference assembly used by the Nodaro backend, editor, and
+platform: every picker catalog **with its prompt hints** (person, framing,
+lighting, mood, pose, setting, style, music/voice families, and ~30 more),
+identity-lock clauses, entity prompt builders, provider prompting doctrine,
+prompt templates and the wizard category system, factory presets & snippets,
+brand presets, and the prompt/reference assembly used by the Nodaro backend,
+editor, and
 [`@nodaro/sdk`](https://www.npmjs.com/package/@nodaro/sdk) (which depends on
 this package and re-exports its most useful helpers).
 

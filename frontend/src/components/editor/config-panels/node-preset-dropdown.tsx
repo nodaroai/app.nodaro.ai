@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
-import { buildNodePresetExport, extractPresetData, getFactoryPresets, groupFactoryPresets, parseNodePresetExport, presetDataMatches, PRESET_APPLY_CLEAR_KEYS, type FactoryPreset } from "@nodaro/shared"
+import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetDataMatches, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { getFactoryPresets, groupFactoryPresets, type FactoryPreset } from "@nodaro/prompts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"

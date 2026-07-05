@@ -1,4 +1,4 @@
-import { resolveTemplate, applyTemplate, DEFAULT_TEMPLATES } from "@nodaro/shared"
+import { resolveTemplate, applyTemplate, DEFAULT_TEMPLATES } from "../prompt-templates.js"
 import {
   buildImagePrompt,
   expandImagePositionRefs,

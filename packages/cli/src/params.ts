@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import type { WizardSelection } from "@nodaro/shared"
+import type { WizardSelection } from "@nodaro/prompts"
 
 /**
  * Strict "true"/"false" → boolean coercion for CLI flags whose value commander

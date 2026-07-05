@@ -2,7 +2,8 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue, pickIds, togglePick } from "@nodaro/shared"
+import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"

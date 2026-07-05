@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  CHARACTER_FX,
-  CHARACTER_FX_IDS,
-  CHARACTER_FX_CATEGORY_ORDER,
-  CHARACTER_FX_CATEGORY_LABELS,
-  composeCharacterFxHintFromConnections,
-  getCharacterFx,
-  getCharacterFxLabel,
-  getCharacterFxPromptHint,
-} from "../character-fx"
+import { CHARACTER_FX, CHARACTER_FX_IDS, CHARACTER_FX_CATEGORY_ORDER, CHARACTER_FX_CATEGORY_LABELS, composeCharacterFxHintFromConnections, getCharacterFx, getCharacterFxLabel, getCharacterFxPromptHint } from "../character-fx.js"
 
 describe("character-fx catalog", () => {
   it("ships 57 unique entries", () => {

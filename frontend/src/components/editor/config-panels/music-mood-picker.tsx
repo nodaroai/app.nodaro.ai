@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/shared"
+import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

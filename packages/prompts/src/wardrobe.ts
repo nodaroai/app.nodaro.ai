@@ -1,4 +1,4 @@
-import { pickIds } from "./multi-pick.js"
+import { pickIds } from "@nodaro/shared"
 
 export type WardrobeDimension =
   | "archetype" | "top" | "bottom" | "outerwear" | "footwear"

@@ -12,7 +12,10 @@ import {
 // "../picker-analyzer-registry.js" — do NOT re-import it here (duplicate-identifier
 // error). Import only the NEW symbols, and reuse the existing buildPickerAnalyzerSpec.
 import { PICKER_TYPES, ANALYZABLE_PICKER_TYPES, isAnalyzablePicker } from "../index.js"
-import { STYLINGS, FRAMINGS, LENSES, CAMERA_FORMATS } from "@nodaro/shared"
+import { STYLINGS } from "../styling.js"
+import { FRAMINGS } from "../framing.js"
+import { LENSES } from "../lens.js"
+import { CAMERA_FORMATS } from "../camera-format.js"
 
 describe("buildPickerAnalyzerSpec(person)", () => {
   const spec = buildPickerAnalyzerSpec("person")

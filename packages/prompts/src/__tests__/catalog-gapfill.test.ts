@@ -42,7 +42,7 @@ describe("catalog gap-fill entries", () => {
 
   it.each(LOCALES)("locale %s has all new ids in its sidecars", async (locale) => {
     for (const [catalog, ids] of Object.entries(NEW_IDS)) {
-      const mod = (await import(`../i18n/${catalog}.${locale}.ts`)) as {
+      const mod = (await import(`../../../shared/src/i18n/${catalog}.${locale}.ts`)) as {
         default: Record<string, { label?: string }>
       }
       for (const id of ids) {

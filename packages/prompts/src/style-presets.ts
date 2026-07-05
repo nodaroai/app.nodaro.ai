@@ -1,4 +1,4 @@
-import type { StyleDirectives } from "./pipeline-types.js"
+import type { StyleDirectives } from "@nodaro/shared"
 
 /**
  * Style Gallery presets (north-star §6 ①).

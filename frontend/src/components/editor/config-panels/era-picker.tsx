@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ERAS, ERA_CATEGORY_LABELS, ERA_CATEGORY_ORDER, type Era, type EraCategory } from "@nodaro/shared"
+import { ERAS, ERA_CATEGORY_LABELS, ERA_CATEGORY_ORDER, type Era, type EraCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

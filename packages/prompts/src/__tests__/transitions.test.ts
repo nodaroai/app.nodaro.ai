@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  TRANSITIONS,
-  TRANSITION_IDS,
-  TRANSITION_CATEGORY_ORDER,
-  TRANSITION_CATEGORY_LABELS,
-  composeTransitionHintFromConnections,
-  getTransition,
-  getTransitionLabel,
-  getTransitionPromptHint,
-} from "../transitions"
+import { TRANSITIONS, TRANSITION_IDS, TRANSITION_CATEGORY_ORDER, TRANSITION_CATEGORY_LABELS, composeTransitionHintFromConnections, getTransition, getTransitionLabel, getTransitionPromptHint } from "../transitions.js"
 
 describe("transitions catalog", () => {
   it("ships 76 unique entries", () => {

@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Wand2 } from "lucide-react"
-import { getCompositionEffect, getCompositionEffectLabel } from "@nodaro/shared"
+import { getCompositionEffect, getCompositionEffectLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { CompositionEffectsData } from "@/types/nodes"
 

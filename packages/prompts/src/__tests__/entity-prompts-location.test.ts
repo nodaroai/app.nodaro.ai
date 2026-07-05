@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, type LocationAssetType, type LocationAttachColumn } from "@nodaro/shared"
-import { buildLocationMotionPrompt, buildLocationRefinePrompt } from "../entity-prompts"
+import { buildLocationMotionPrompt, buildLocationRefinePrompt } from "../entity-prompts.js"
 
 describe("location entity-prompts constants", () => {
   it("LOCATION_ASSET_TYPES has 6 values", () => {

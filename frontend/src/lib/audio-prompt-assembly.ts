@@ -40,8 +40,8 @@
  */
 
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { computeNodePrompt, resolveNodeRefs } from "@nodaro/shared"
-import { truncateForField, appendField, assembleSunoInput, type AssembleSunoResult, type SoundConsumerType } from "@nodaro/prompts"
+import { computeNodePrompt, truncateForField, appendField, assembleSunoInput, type AssembleSunoResult, type SoundConsumerType } from "@nodaro/prompts"
+import { resolveNodeRefs } from "@nodaro/shared"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 // The editor's field-mapping resolver — the SAME wrapper the RUN calls
 // (execute-node.ts ~892). Reused here so the Suno preview resolves `field-*`

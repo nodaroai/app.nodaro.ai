@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
-import { ACTION_FX } from "@nodaro/shared"
+import { ACTION_FX } from "../action-fx.js"
 
 describe("getParameterPromptHint — action-fx", () => {
   it("returns the catalog hint for a single id", () => {

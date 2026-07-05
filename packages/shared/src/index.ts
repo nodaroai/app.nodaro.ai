@@ -130,8 +130,6 @@ export {
 } from "./film-pricing.js"
 export type { VideoClipCost, FilmCreditEstimate } from "./film-pricing.js"
 
-export { STYLE_PRESETS, getStylePreset } from "./style-presets.js"
-export type { StylePreset } from "./style-presets.js"
 
 export { FEATURED_ENTITIES, getFeaturedEntities } from "./featured-entities.js"
 export type { FeaturedEntity } from "./featured-entities.js"
@@ -177,11 +175,6 @@ export type {
 export { describeMaskRegion } from "./inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
 
-export {
-  DEFAULT_TEMPLATES,
-  resolveTemplate,
-  applyTemplate,
-} from "./prompt-templates.js"
 
 export {
   IMAGE_REF_TYPES,
@@ -436,88 +429,12 @@ export {
 export { sortListItems } from "./list-sort.js"
 export type { SortType, SortDirection, SortListOptions } from "./list-sort.js"
 
-export {
-  CAMERA_MOTIONS,
-  CAMERA_MOTION_IDS,
-  CAMERA_MOTION_CATEGORY_ORDER,
-  CAMERA_MOTION_CATEGORY_LABELS,
-  getCameraMotion,
-  getCameraMotionLabel,
-  getCameraMotionPromptHint,
-  composeCameraMotionHintFromConnections,
-} from "./camera-motions.js"
-export type {
-  CameraMotion,
-  CameraMotionCategory,
-} from "./camera-motions.js"
 
-export {
-  FRAMINGS,
-  FRAMING_IDS,
-  FRAMING_CATEGORY_ORDER,
-  FRAMING_CATEGORY_LABELS,
-  FRAMING_FIELD_BY_CATEGORY,
-  MAX_SELECTED_BY_FRAMING_CATEGORY,
-  getFramingCategoryLimit,
-  getFraming,
-  getFramingLabel,
-  getFramingPromptHint,
-  isVantageFraming,
-  buildFramingHints,
-} from "./framing.js"
-export type { Framing, FramingCategory, FramingValue } from "./framing.js"
 
-export {
-  LENSES,
-  LENS_IDS,
-  getLens,
-  getLensLabel,
-  getLensPromptHint,
-} from "./lens.js"
-export type { Lens } from "./lens.js"
 
-export {
-  CAMERA_FORMATS,
-  CAMERA_FORMAT_IDS,
-  getCameraFormat,
-  getCameraFormatLabel,
-  getCameraFormatPromptHint,
-} from "./camera-format.js"
-export type { CameraFormat } from "./camera-format.js"
 
-export {
-  LIGHTINGS,
-  LIGHTING_IDS,
-  LIGHTING_CATEGORY_ORDER,
-  LIGHTING_CATEGORY_LABELS,
-  LIGHTING_FIELD_BY_CATEGORY,
-  getLighting,
-  getLightingLabel,
-  getLightingPromptHint,
-  buildLightingHints,
-} from "./lighting.js"
-export type { Lighting, LightingCategory, LightingValue } from "./lighting.js"
 
-export {
-  COLOR_LOOKS,
-  COLOR_LOOK_IDS,
-  COLOR_LOOK_CATEGORY_ORDER,
-  COLOR_LOOK_CATEGORY_LABELS,
-  getColorLook,
-  getColorLookLabel,
-  getColorLookPromptHint,
-} from "./color-look.js"
-export type { ColorLook, ColorLookCategory } from "./color-look.js"
 
-export {
-  ATMOSPHERES,
-  ATMOSPHERE_IDS,
-  getAtmosphere,
-  getAtmosphereLabel,
-  getAtmospherePromptHint,
-  buildAtmosphereHints,
-} from "./atmosphere.js"
-export type { Atmosphere } from "./atmosphere.js"
 
 export { SEASONS } from "./seasons.js"
 export type { Season } from "./seasons.js"
@@ -529,80 +446,12 @@ export {
 } from "./location-preset-catalog-map.js"
 export type { LocationCatalogRef } from "./location-preset-catalog-map.js"
 
-export {
-  ACTION_FX,
-  ACTION_FX_IDS,
-  ACTION_FX_CATEGORY_LABELS,
-  ACTION_FX_CATEGORY_ORDER,
-  getActionFx,
-  getActionFxLabel,
-  getActionFxPromptHint,
-  buildActionFxHints,
-} from "./action-fx.js"
-export type { ActionFx, ActionFxCategory } from "./action-fx.js"
 
-export {
-  STYLES,
-  STYLE_IDS,
-  getStyle,
-  getStyleLabel,
-  getStylePromptHint,
-} from "./style.js"
-export type { Style } from "./style.js"
 
-export {
-  TEMPORALS,
-  TEMPORAL_IDS,
-  TEMPORAL_CATEGORY_ORDER,
-  TEMPORAL_CATEGORY_LABELS,
-  TEMPORAL_FIELD_BY_CATEGORY,
-  getTemporal,
-  getTemporalLabel,
-  getTemporalPromptHint,
-  buildTemporalHints,
-} from "./temporal.js"
-export type { Temporal, TemporalCategory, TemporalValue } from "./temporal.js"
 
-export {
-  EXPOSURE_SETTINGS,
-  EXPOSURE_IDS,
-  EXPOSURE_CATEGORY_ORDER,
-  EXPOSURE_CATEGORY_LABELS,
-  EXPOSURE_FIELD_BY_CATEGORY,
-  getExposure,
-  getExposureLabel,
-  getExposurePromptHint,
-  buildExposureHints,
-} from "./exposure-settings.js"
-export type { ExposureSettings, ExposureCategory, ExposureValue } from "./exposure-settings.js"
 
-export {
-  RENDER_QUALITIES,
-  RENDER_QUALITY_IDS,
-  getRenderQuality,
-  getRenderQualityLabel,
-  getRenderQualityPromptHint,
-} from "./render-quality.js"
-export type { RenderQuality } from "./render-quality.js"
 
-export {
-  COMPOSITION_EFFECTS,
-  COMPOSITION_EFFECT_IDS,
-  getCompositionEffect,
-  getCompositionEffectLabel,
-  getCompositionEffectPromptHint,
-} from "./composition-effects.js"
-export type { CompositionEffect } from "./composition-effects.js"
 
-export {
-  POST_PROCESS_EFFECTS,
-  POST_PROCESS_EFFECT_IDS,
-  getPostProcessEffect,
-  getPostProcessEffectLabel,
-  getPostProcessEffectPromptHint,
-  buildPostProcessHints,
-} from "./post-process-effects.js"
-export type { PostProcessEffect } from "./post-process-effects.js"
 
 export {
   PARAMETER_NODE_TYPES,
@@ -660,19 +509,6 @@ export {
 
 export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
 
-export {
-  PROVIDER_CAPABILITIES,
-  REFERENCE_IMAGE_ROLES,
-  getCategoriesForNodeType,
-  isWizardSupported,
-  type WizardQuestion,
-  type WizardCategory,
-  type WizardOption,
-  type WizardSelection,
-  type RecommendedModel,
-  type WizardNodeContext,
-  type ModelChange,
-} from "./prompt-wizard-categories.js"
 
 export {
   resolveScraperCreditId,
@@ -714,7 +550,6 @@ export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-map
 export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countRefModalityEdges } from "./node-refs.js"
 export type { RefCandidate, ReferenceModality, RefModalityEdge } from "./node-refs.js"
 
-export { resolvePrompt, composeNegative, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
 
 export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
 
@@ -732,16 +567,6 @@ export type {
 } from "./social-media-specs.js"
 
 // Parameter-node dimensions (frontend pickers + backend hints)
-export {
-  AESTHETICS,
-  AESTHETIC_CATEGORY_LABELS,
-  AESTHETIC_CATEGORY_ORDER,
-  getAesthetic,
-  getAestheticLabel,
-  getAestheticPromptHint,
-  buildAestheticHints,
-} from "./aesthetic.js"
-export type { Aesthetic, AestheticCategory } from "./aesthetic.js"
 
 export {
   ANIMALS,
@@ -752,25 +577,7 @@ export {
 } from "./animals.js"
 export type { Animal, AnimalSubcategory } from "./animals.js"
 
-export {
-  BACKDROPS,
-  BACKDROP_CATEGORY_LABELS,
-  BACKDROP_CATEGORY_ORDER,
-  getBackdrop,
-  getBackdropLabel,
-  getBackdropPromptHint,
-} from "./backdrop.js"
-export type { Backdrop, BackdropCategory } from "./backdrop.js"
 
-export {
-  ERAS,
-  ERA_CATEGORY_LABELS,
-  ERA_CATEGORY_ORDER,
-  getEra,
-  getEraLabel,
-  getEraPromptHint,
-} from "./era.js"
-export type { Era, EraCategory } from "./era.js"
 
 export {
   FURNITURE,
@@ -781,130 +588,17 @@ export {
 } from "./furniture.js"
 export type { Furniture, FurnitureSubcategory } from "./furniture.js"
 
-export {
-  HELD_PROPS,
-  HELD_PROP_CATEGORY_LABELS,
-  HELD_PROP_CATEGORY_ORDER,
-  getHeldProp,
-  getHeldPropLabel,
-  getHeldPropPromptHint,
-  buildHeldPropHints,
-} from "./held-prop.js"
-export type { HeldProp, HeldPropCategory } from "./held-prop.js"
 
-export {
-  MATERIALS,
-  MATERIAL_CATEGORY_LABELS,
-  MATERIAL_CATEGORY_ORDER,
-  getMaterial,
-  getMaterialLabel,
-  getMaterialPromptHint,
-  buildMaterialHints,
-} from "./materials.js"
-export type { Material, MaterialCategory } from "./materials.js"
 
-export {
-  MOODS,
-  MOOD_CATEGORY_LABELS,
-  MOOD_CATEGORY_ORDER,
-  getMood,
-  getMoodLabel,
-  getMoodPromptHint,
-  buildMoodHints,
-} from "./mood.js"
-export type { Mood, MoodCategory, MoodValue } from "./mood.js"
 
-export {
-  WARDROBE, WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION,
-  buildWardrobeHints, getWardrobePromptHint, getWardrobeEntry, getWardrobeEntriesByDimension,
-} from "./wardrobe.js"
-export type { WardrobeValue, WardrobeEntry, WardrobeDimension } from "./wardrobe.js"
 
-export {
-  PHOTO_GENRES,
-  PHOTO_GENRE_CATEGORY_LABELS,
-  PHOTO_GENRE_CATEGORY_ORDER,
-  getPhotoGenre,
-  getPhotoGenreLabel,
-  getPhotoGenrePromptHint,
-} from "./photo-genre.js"
-export type { PhotoGenre, PhotoGenreCategory } from "./photo-genre.js"
 
-export {
-  PHOTOGRAPHERS,
-  PHOTOGRAPHER_CATEGORY_LABELS,
-  PHOTOGRAPHER_CATEGORY_ORDER,
-  getPhotographer,
-  getPhotographerLabel,
-  getPhotographerPromptHint,
-  buildPhotographerHints,
-} from "./photographer.js"
-export type { Photographer, PhotographerCategory } from "./photographer.js"
 
-export {
-  POSES,
-  POSE_CATEGORY_LABELS,
-  POSE_CATEGORY_ORDER,
-  getPose,
-  getPoseLabel,
-  getPosePromptHint,
-  buildPoseHints,
-} from "./pose.js"
-export type { Pose, PoseCategory, PoseValue } from "./pose.js"
 
-export {
-  SETTINGS,
-  SETTING_CATEGORY_LABELS,
-  getSetting,
-  getSettingLabel,
-  getSettingPromptHint,
-} from "./setting.js"
-export type { Setting, SettingCategory } from "./setting.js"
 
-export {
-  LOOP_SUBJECTS,
-  LOOP_SUBJECT_CATEGORY_ORDER,
-  LOOP_SUBJECT_CATEGORY_LABELS,
-  getLoopSubject,
-  getLoopSubjectLabel,
-  getLoopSubjectPromptHint,
-} from "./loop-subject.js"
-export type { LoopSubject, LoopSubjectCategory } from "./loop-subject.js"
 
-export {
-  STYLINGS,
-  STYLING_DIMENSION_LABELS,
-  STYLING_DIMENSION_ORDER,
-  STYLING_FIELD_BY_DIMENSION,
-  MAX_SELECTED_BY_STYLING_DIMENSION,
-  getStylingDimensionLimit,
-  getStyling,
-  getStylingLabel,
-  getStylingPromptHint,
-  buildStylingHints,
-} from "./styling.js"
-export type { Styling, StylingDimension, StylingValue } from "./styling.js"
 
-export {
-  TRANSITIONS,
-  TRANSITION_IDS,
-  TRANSITION_CATEGORY_ORDER,
-  TRANSITION_CATEGORY_LABELS,
-  getTransition,
-  getTransitionLabel,
-  getTransitionPromptHint,
-  composeTransitionHintFromConnections,
-} from "./transitions.js"
-export type {
-  Transition,
-  TransitionCategory,
-  TransitionPosition,
-  TransitionDuration,
-  TransitionIntensity,
-  TransitionTiming,
-} from "./transitions.js"
 
-export * from "./character-fx.js"
 export * from "./character-facets.js"
 
 export {
@@ -974,77 +668,10 @@ export {
 export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle } from "./caption-styles.js"
 
 // Sound parameter-node dimensions (music + voice pickers + backend hints)
-export {
-  MUSIC_GENRES,
-  MUSIC_ERAS,
-  MUSIC_GENRE_CATEGORY_ORDER,
-  MUSIC_GENRE_CATEGORY_LABELS,
-  getMusicGenre,
-  getMusicGenreLabel,
-  getMusicSubgenre,
-  getMusicEra,
-  buildMusicGenreHints,
-  MUSIC_GENRE_DEFAULT_DATA,
-} from "./music-genre.js"
-export type { MusicSubgenre, MusicGenre, MusicEra, MusicGenreCategory } from "./music-genre.js"
 
-export {
-  MUSIC_ENERGIES,
-  MUSIC_EMOTIONS,
-  MUSIC_VIBES,
-  getMusicEnergy,
-  getMusicEmotion,
-  getMusicVibe,
-  buildMusicMoodHints,
-  MUSIC_MOOD_DEFAULT_DATA,
-} from "./music-mood.js"
-export type { MusicMoodEntry } from "./music-mood.js"
 
-export {
-  INSTRUMENTS,
-  PRODUCTION_STYLES,
-  VOCAL_PRESENCE,
-  VOCAL_PRESENCE_INSTRUMENTAL_ID,
-  SINGING_STYLES,
-  INSTRUMENT_CATEGORY_ORDER,
-  INSTRUMENT_CATEGORY_LABELS,
-  getInstrument,
-  getProductionStyle,
-  getVocalPresence,
-  getSingingStyle,
-  buildInstrumentationHints,
-  isInstrumentalVocal,
-  INSTRUMENTATION_DEFAULT_DATA,
-} from "./instrumentation.js"
-export type { InstrumentationEntry, CategorizedInstrument, InstrumentCategory } from "./instrumentation.js"
 
-export {
-  VOICE_AGES,
-  VOICE_GENDERS,
-  VOICE_LANGUAGES,
-  VOICE_ACCENTS,
-  VOICE_TIMBRES,
-  getVoiceAge,
-  getVoiceGender,
-  getVoiceLanguage,
-  getVoiceAccent,
-  getVoiceTimbre,
-  buildVoiceCharacterHints,
-  VOICE_CHARACTER_DEFAULT_DATA,
-} from "./voice-character.js"
-export type { VoiceCharacterEntry } from "./voice-character.js"
 
-export {
-  VOICE_PACES,
-  VOICE_EMOTIONS,
-  VOICE_ARCHETYPES,
-  getVoicePace,
-  getVoiceEmotion,
-  getVoiceArchetype,
-  buildVoiceDeliveryHints,
-  VOICE_DELIVERY_DEFAULT_DATA,
-} from "./voice-delivery.js"
-export type { VoiceDeliveryEntry } from "./voice-delivery.js"
 
 
 // i18n
@@ -1142,7 +769,6 @@ export {
 } from "./entity-aspect-defaults.js"
 export type { EntityStudioKind } from "./entity-aspect-defaults.js"
 
-export * from "./object-asset-presets.js"
 
 export * from "./pipeline-chat.js"
 export * from "./pipeline-defaults.js"
@@ -1201,19 +827,10 @@ export type { VoiceChangerModel } from "./voice-changer-models.js"
 // --- Node presets ---
 export { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, stripTransientRuntimeData } from "./node-runtime-keys.js"
 export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"
-export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
-export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
 
 // --- Factory prompt-snippets (reusable inline prompt fragments) ---
-export * from "./factory-snippets/index.js"
 
 // --- Per-provider prompting doctrine (wizard/enhance + gen-skills + list_models) ---
-export {
-  PROVIDER_PROMPT_DOCTRINES,
-  getPromptDoctrine,
-  getPromptTips,
-  type ProviderPromptDoctrine,
-} from "./provider-prompt-doctrine.js"
 export type { ExportedPreset, NodePresetExport } from "./node-preset-export.js"
 export {
   NODE_PRESET_EXPORT_KIND,

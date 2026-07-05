@@ -25,7 +25,8 @@ export {
 // Re-export selected types from @nodaro/shared for convenience
 export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
   // GenerateVideoParams below so callers can build `connectedReferences`.
-  ConnectedReference, WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/shared"
+  ConnectedReference } from "@nodaro/shared"
+export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
 export { WorkflowsResource } from "./resources/workflows.js"

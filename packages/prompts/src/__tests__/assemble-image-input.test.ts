@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { buildImagePrompt } from "../prompt-builder.js"
-import { getFramingPromptHint, getLightingPromptHint } from "@nodaro/shared"
+import { getFramingPromptHint } from "../framing.js"
+import { getLightingPromptHint } from "../lighting.js"
 import type { ConnectedReference } from "@nodaro/shared"
 
 /**

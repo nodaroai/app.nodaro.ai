@@ -17,14 +17,8 @@
  */
 
 import { describe, it, expect } from "vitest"
-import {
-  parseCharacterMentionToken,
-  findCharacterMentionTokens,
-} from "@nodaro/shared"
-import {
-  parseLocationMentionToken,
-  findLocationMentionTokens,
-} from "@nodaro/shared"
+import { parseCharacterMentionToken, findCharacterMentionTokens } from "@nodaro/shared"
+import { parseLocationMentionToken, findLocationMentionTokens } from "@nodaro/shared"
 import { buildIdentityLockLine } from "../identity-lock.js"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"

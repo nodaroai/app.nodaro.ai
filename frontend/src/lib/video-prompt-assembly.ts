@@ -16,9 +16,9 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
-import { characterMentionSlug, extractCharacterLoraFields, characterMentionableAssetArrays, computeNodePrompt, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
+import { characterMentionSlug, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
+import { computeNodePrompt, characterLockToRefLock, collectIdentityLockClause, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
 import type { ConnectedReference } from "@nodaro/shared"
-import { characterLockToRefLock, collectIdentityLockClause, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections, collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 import { collectWiredPromptContribution } from "@/lib/node-refs"

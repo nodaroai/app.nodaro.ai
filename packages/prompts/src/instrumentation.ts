@@ -272,7 +272,7 @@ export function getSingingStyle(id: string | undefined): InstrumentationEntry | 
   return id ? SINGING_STYLE_BY_ID.get(id) : undefined
 }
 
-import { pickIds } from "./multi-pick.js"
+import { pickIds } from "@nodaro/shared"
 
 export function buildInstrumentationHints(data: {
   readonly preText?: string

@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest"
-import {
-  MAX_SELECTED_BY_STYLING_DIMENSION,
-  getStylingDimensionLimit,
-  MAX_SELECTED_BY_FRAMING_CATEGORY,
-  getFramingCategoryLimit,
-} from "../index.js"
+import { MAX_SELECTED_BY_STYLING_DIMENSION, getStylingDimensionLimit, MAX_SELECTED_BY_FRAMING_CATEGORY, getFramingCategoryLimit } from "../index.js"
 
 describe("styling dimension limits", () => {
   it("matches the picker's caps", () => {

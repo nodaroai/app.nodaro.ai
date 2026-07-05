@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, type Pose, type PoseCategory } from "@nodaro/shared"
+import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, type Pose, type PoseCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

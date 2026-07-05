@@ -1,6 +1,6 @@
 import type { NodaroClient } from "../client.js"
-import type { WizardQuestion, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/shared"
-export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/shared"
+import type { WizardQuestion, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts"
+export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts"
 
 // Re-export the canonical wizard types (SSOT in @nodaro/shared).
 

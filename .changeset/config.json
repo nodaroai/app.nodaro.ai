@@ -10,7 +10,6 @@
   "ignore": [
     "nodaro-backend",
     "frontend",
-    "@nodaro/remotion",
-    "@nodaro/prompts"
+    "@nodaro/remotion"
   ]
 }

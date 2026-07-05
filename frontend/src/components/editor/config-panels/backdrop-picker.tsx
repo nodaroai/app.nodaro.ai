@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { BACKDROPS, BACKDROP_CATEGORY_LABELS, BACKDROP_CATEGORY_ORDER, type Backdrop, type BackdropCategory } from "@nodaro/shared"
+import { BACKDROPS, BACKDROP_CATEGORY_LABELS, BACKDROP_CATEGORY_ORDER, type Backdrop, type BackdropCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

@@ -2,7 +2,7 @@
 
 import { memo, useMemo } from "react"
 import { Scissors } from "lucide-react"
-import { STYLINGS, type Styling } from "@nodaro/shared"
+import { STYLINGS, type Styling } from "@nodaro/prompts"
 import { DimensionModalBrowser } from "./dimension-modal-browser"
 import { HairIcon } from "./hair-icon"
 

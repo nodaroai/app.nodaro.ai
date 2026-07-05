@@ -7,7 +7,7 @@
  * is WHAT'S being spoken.
  */
 
-import { pickIds } from "./multi-pick.js"
+import { pickIds } from "@nodaro/shared"
 
 export interface VoiceCharacterEntry {
   readonly id: string

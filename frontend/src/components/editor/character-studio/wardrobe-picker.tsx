@@ -1,5 +1,6 @@
 import { useCallback } from "react"
-import { WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION, getWardrobeEntriesByDimension, pickIds, togglePick, type WardrobeValue, type WardrobeDimension } from "@nodaro/shared"
+import { WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION, getWardrobeEntriesByDimension, type WardrobeValue, type WardrobeDimension } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 
 const MULTI: ReadonlySet<WardrobeDimension> = new Set(["headwear", "accessories"])
 

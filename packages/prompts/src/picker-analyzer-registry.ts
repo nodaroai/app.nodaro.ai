@@ -6,10 +6,10 @@ import {
   PERSON_FIELD_BY_DIMENSION,
   getPersonDimensionLimit,
 } from "./person.js"
-import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, getStylingDimensionLimit } from "@nodaro/shared"
-import { FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, getFramingCategoryLimit } from "@nodaro/shared"
-import { LENSES } from "@nodaro/shared"
-import { CAMERA_FORMATS } from "@nodaro/shared"
+import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, getStylingDimensionLimit } from "./styling.js"
+import { FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, getFramingCategoryLimit } from "./framing.js"
+import { LENSES } from "./lens.js"
+import { CAMERA_FORMATS } from "./camera-format.js"
 
 // ─── Descriptor model ────────────────────────────────────────────────────────
 

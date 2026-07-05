@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
-import { FACTORY_SNIPPETS } from "@nodaro/shared"
+import { FACTORY_SNIPPETS } from "@nodaro/prompts"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"

@@ -4,9 +4,9 @@
  * provider-aware prompt truncation (default 5000 chars), and reference image filtering by model support.
  */
 
-import { resolveTemplate, applyTemplate } from "@nodaro/shared"
+import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
-import { getStylePromptHint } from "@nodaro/shared"
+import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"

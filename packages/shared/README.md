@@ -1,6 +1,13 @@
 # @nodaro/shared
 
-Pure-logic types, model registries, prompt templates, presentation utilities, and helpers shared across the [Nodaro](https://nodaro.ai) stack.
+Pure-logic types, the model catalog, wire contracts, structural vocabularies
+(asset types, attach columns, picker/i18n infrastructure), presentation
+utilities, and credit estimators shared across the [Nodaro](https://nodaro.ai)
+stack — the **Apache-2.0, embed-anywhere layer**.
+
+The creative layer — prompt hints, picker catalogs, prompt builders, factory
+presets/snippets — lives in [`@nodaro/prompts`](https://www.npmjs.com/package/@nodaro/prompts)
+under the Functional Source License (free for non-competing use).
 
 ```bash
 npm install @nodaro/shared

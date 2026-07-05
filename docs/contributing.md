@@ -345,6 +345,9 @@ for the full overview):
   same terms plus a paid subscription requirement for using Enterprise
   features in production, with carve-outs for development, testing,
   evaluation, and dormant inclusion in community builds.
+- Prompt layer (`packages/prompts/`):
+  [FSL-1.1-Apache-2.0](../packages/prompts/LICENSE) — free for any
+  non-competing use; not for competing products; Apache after two years.
 - SDK packages (`packages/client/`, `packages/shared/`, `packages/cli/`):
   [Apache License 2.0](../packages/shared/LICENSE) — embed in
   commercial applications freely.

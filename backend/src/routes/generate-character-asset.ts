@@ -9,8 +9,8 @@ import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identif
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, type WardrobeValue, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared"
-import { type PersonValue, characterLockToRefLock, toIdentityLockMode, type IdentityLockMode } from "@nodaro/prompts"
+import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared"
+import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, type IdentityLockMode } from "@nodaro/prompts"
 import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,

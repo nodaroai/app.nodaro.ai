@@ -1,26 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
-import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "../node-preset-extract.js"
-import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "../model-constants.js"
-import {
-  IMAGE_GEN_PROVIDERS,
-  MODIFY_IMAGE_PROVIDERS,
-  VIDEO_GEN_PROVIDERS,
-  VIDEO_TO_VIDEO_PROVIDERS,
-  MUSIC_PROVIDERS,
-  SUNO_MODELS,
-  TTS_PROVIDERS,
-  TEXT_TO_AUDIO_PROVIDERS,
-  STYLE_IDS,
-  ALL_CAPTION_STYLES,
-  COMBINE_TRANSITION_IDS,
-  AUDIO_CROSSFADE_CURVE_IDS,
-  aspectRatioOptionsByKind,
-  durationsByMode,
-  IMAGE_PROMPT_MAX,
-  MODEL_CATALOG,
-  NATIVE_NEGATIVE_VIDEO_PROVIDERS,
-} from "../index.js"
+import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
+import { STYLE_IDS } from "../index.js"
+import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, VIDEO_GEN_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, MUSIC_PROVIDERS, SUNO_MODELS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, aspectRatioOptionsByKind, durationsByMode, IMAGE_PROMPT_MAX, MODEL_CATALOG, NATIVE_NEGATIVE_VIDEO_PROVIDERS } from "@nodaro/shared"
 
 describe("FACTORY_PRESETS", () => {
   it("has presets for generate-image", () => {

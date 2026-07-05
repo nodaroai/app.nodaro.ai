@@ -1,6 +1,6 @@
 "use client"
 
-import { buildMusicGenreHints, buildMusicMoodHints, buildInstrumentationHints, buildVoiceCharacterHints, buildVoiceDeliveryHints } from "@nodaro/shared"
+import { buildMusicGenreHints, buildMusicMoodHints, buildInstrumentationHints, buildVoiceCharacterHints, buildVoiceDeliveryHints } from "@nodaro/prompts"
 import type {
   MusicGenreData, MusicMoodData, InstrumentationData,
   VoiceCharacterData, VoiceDeliveryData,

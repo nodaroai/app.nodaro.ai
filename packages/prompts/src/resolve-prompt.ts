@@ -1,5 +1,5 @@
-import { resolveNodeRefs } from "./node-refs.js"
-import { SOCIAL_POST_NODE_TYPES } from "./social-post.js"
+import { resolveNodeRefs } from "@nodaro/shared"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 
 export interface ResolvePromptArgs {
   override?: string
