@@ -88,6 +88,11 @@ jobs:
           publish: npx changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # SLSA provenance attestations. npm hard-requires a PUBLIC source
+          # repository to generate provenance, so this is variable-gated like
+          # NPM_PUBLISH_ENABLED — set NPM_PROVENANCE_ENABLED=true together
+          # with the public flip; enabling it earlier fails every publish.
+          NPM_CONFIG_PROVENANCE: ${{ vars.NPM_PROVENANCE_ENABLED == 'true' }}
       - name: Build CLI binaries for a published @nodaro/cli
         # Tags pushed with GITHUB_TOKEN don't trigger other workflows (GitHub's
         # recursion guard), so dispatch the binaries workflow explicitly.
