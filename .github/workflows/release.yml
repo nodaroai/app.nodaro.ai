@@ -18,6 +18,9 @@ name: Release (npm)
 on:
   push:
     branches: [dev, main]
+  # Manual re-run lever: republish any versions missing from the registry
+  # (e.g. after an unpublish window) without needing a new commit on main.
+  workflow_dispatch:
 
 permissions: {}
 
@@ -79,6 +82,7 @@ jobs:
       - name: Build publishable packages
         run: |
           npm -w @nodaro/shared run build
+          npm -w @nodaro/prompts run build
           npm -w @nodaro/sdk run build
           npm -w @nodaro/cli run build
       - name: Publish unpublished versions
