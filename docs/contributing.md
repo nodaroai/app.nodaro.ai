@@ -352,6 +352,15 @@ for the full overview):
   [Apache License 2.0](../packages/shared/LICENSE) — embed in
   commercial applications freely.
 
+**Placement rule for contributions:** every published version of the
+Apache packages is an irrevocable grant, so new prompt engineering,
+catalogs, doctrine, presets, and other creative/product content belongs
+in `backend/` (Community license) or `backend/src/ee/` (Enterprise) by
+default. Add to `packages/shared` only what the public API/SDK contract
+actually requires — types, wire enums, validation shared with API
+consumers — or what is deliberately published for reuse; say which in
+your PR description. When in doubt, put it in `backend/`.
+
 By submitting a contribution, you agree to the [Nodaro Contributor
 License Agreement](../CLA.md). The same CLA covers individual and
 corporate contributions — Section 2 handles employer-permission. The
