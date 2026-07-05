@@ -175,4 +175,10 @@ describe("special blueprints (Task 8) — typography routing + KEEP allowlist (d
     })
     expect(logoTagline.textTransform).toBe("uppercase")
   })
+
+  it("logo-assemble-lockup gates the image branch on brand.logo?.image", () => {
+    const src = readFileSync(join(BLUEPRINT_DIR, "logo-assemble-lockup.tsx"), "utf8")
+    expect(/chooseLogoRender\(\s*logoImage/.test(src)).toBe(true)
+    expect(src).toContain("brand.logo?.image") // reads brand.logo.image (not params)
+  })
 })

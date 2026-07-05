@@ -54,7 +54,8 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
       description:
         "Bake an authored shot-sequence brief into a render-ready plan by aligning its voiceover cues to " +
         "forced-alignment word timings. Pure + synchronous: returns the plan inline (no job). Feed the " +
-        "plan to render_shot_sequence.",
+        "plan to render_shot_sequence. A brand `logo.image` is not auto-injected here; include a " +
+        "`logo-assemble-lockup` reveal yourself if you want the logo shown.",
       inputSchema: {
         brief: z.record(z.unknown()).describe("A ShotSequenceBrief (see docs/mcp/shot-sequence.md)."),
         audio_url: z.string().url().describe("The narration audio (from generate_speech)."),

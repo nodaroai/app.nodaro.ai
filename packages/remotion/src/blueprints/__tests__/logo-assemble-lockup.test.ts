@@ -1,21 +1,24 @@
 import { describe, it, expect, vi } from "vitest"
+import React from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 
 vi.mock("remotion", () => ({
-  useCurrentFrame: () => 0,
-  useVideoConfig: () => ({ fps: 30, width: 1920, height: 1080, durationInFrames: 300 }),
-  interpolate: (v: number, [a, b]: number[], [c, d]: number[]) => {
-    if (v <= a) return c
-    if (v >= b) return d
-    return c + ((v - a) / (b - a)) * (d - c)
+  useCurrentFrame: () => 40,
+  useVideoConfig: () => ({ width: 1920, height: 1080 }),
+  interpolate: (f: number, _i: number[], o: number[]) => o[o.length - 1],
+  Easing: { out: (fn: unknown) => fn, ease: (x: number) => x },
+  Img: (props: Record<string, unknown>) => {
+    const { onError: _o, ...rest } = props
+    return React.createElement("img", rest)
   },
-  Easing: { ease: (t: number) => t, out: (fn: (t: number) => number) => fn },
 }))
 vi.mock("../../lib/font-registry", () => ({
   FONT_MAP: { Montserrat: "Montserrat, sans-serif" },
   SUPPORTED_FONTS: ["Montserrat"],
+  withRtlFallback: (fontFamily: string) => fontFamily,
 }))
 
-import { letterEntranceProgress, logoRowDirection } from "../logo-assemble-lockup"
+import { letterEntranceProgress, logoRowDirection, LogoAssembleLockup, chooseLogoRender } from "../logo-assemble-lockup"
 
 // Reference constants matching the component:
 //   LETTER_ENTRANCE_FRAMES = 12
@@ -115,5 +118,41 @@ describe("logoRowDirection", () => {
   it("falls back to ltr when there is no strong directional character", () => {
     expect(logoRowDirection("123")).toBe("ltr")
     expect(logoRowDirection("")).toBe("ltr")
+  })
+})
+
+const brandBase = {
+  backgroundColor: "#000",
+  palette: { bg: "#000", text: "#fff", accent: "#f5a" },
+  fonts: { heading: "Anton", body: "Inter" },
+}
+
+describe("chooseLogoRender", () => {
+  it("image when a URL is present and no error", () =>
+    expect(chooseLogoRender("https://cdn/x.png", false)).toBe("image"))
+  it("cascade when the image errored", () =>
+    expect(chooseLogoRender("https://cdn/x.png", true)).toBe("cascade"))
+  it("cascade when no image", () => expect(chooseLogoRender(undefined, false)).toBe("cascade"))
+})
+
+describe("LogoAssembleLockup render", () => {
+  const render = (brand: object) =>
+    renderToStaticMarkup(
+      React.createElement(LogoAssembleLockup, {
+        params: { brand: "NODARO" },
+        durationInFrames: 180,
+        brand,
+      } as never),
+    )
+  it("renders an <img> when brand.logo.image is set", () => {
+    const html = render({ ...brandBase, logo: { name: "NODARO", image: "https://cdn/logo.png" } })
+    expect(html).toContain("<img")
+    expect(html).toContain("https://cdn/logo.png")
+    expect(html).not.toContain(">N<") // cascade must be suppressed when the image branch renders
+  })
+  it("renders the letter-cascade (no <img>) when no logo image — byte-identical path", () => {
+    const html = render({ ...brandBase, logo: { name: "NODARO" } })
+    expect(html).not.toContain("<img")
+    expect(html).toContain(">N<") // first cascade letter span
   })
 })

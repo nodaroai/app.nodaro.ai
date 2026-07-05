@@ -4,35 +4,12 @@ import { Readable } from "node:stream"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
+import { isOurCdnUrl } from "../lib/cdn-host.js"
 import path from "path"
 
 const downloadQuery = z.object({
   url: safeUrlSchema,
 })
-
-// Extra allowed bucket host, configured via R2_PUBLIC_FALLBACK_DOMAIN (empty
-// by default). The primary allowlist is the origin derived from R2_PUBLIC_URL
-// below; this covers deployments that also serve assets from a raw bucket host.
-const ALLOWED_DOMAIN = config.R2_PUBLIC_FALLBACK_DOMAIN
-
-/**
- * Parse R2_PUBLIC_URL once at module load, cache its origin for constant-time
- * comparison. Previously used `url.startsWith(config.R2_PUBLIC_URL)` which is
- * a prefix-substring match: with `R2_PUBLIC_URL=https://assets.example.com` (no
- * trailing slash, as the env examples ship), an attacker URL
- * `https://assets.example.com.evil.com/payload` satisfied the check and the
- * public /v1/download route became a forced-attachment download proxy for
- * arbitrary external hosts — a phishing/malware delivery vector. Origin
- * comparison eliminates that class.
- */
-const R2_PUBLIC_ORIGIN: string | null = (() => {
-  if (!config.R2_PUBLIC_URL) return null
-  try {
-    return new URL(config.R2_PUBLIC_URL).origin
-  } catch {
-    return null
-  }
-})()
 
 export async function downloadRoutes(app: FastifyInstance) {
   app.get("/v1/download", async (req, reply) => {
@@ -45,15 +22,12 @@ export async function downloadRoutes(app: FastifyInstance) {
 
     const { url } = parsed.data
 
-    // Validate URL is from our configured asset storage. Compare parsed origin
-    // (not string prefix) so a look-alike hostname like
-    // `assets.example.com.evil.com` cannot satisfy the allowlist.
+    // Validate URL is from our configured asset storage via the shared
+    // allowlist (cdn-host.ts) — exact-origin/exact-host equality (not prefix,
+    // not substring) so a look-alike hostname like `assets.example.com.evil.com`
+    // cannot satisfy it.
     const parsedUrl = new URL(url)
-    const isAllowed =
-      (ALLOWED_DOMAIN !== "" && parsedUrl.hostname === ALLOWED_DOMAIN) ||
-      (R2_PUBLIC_ORIGIN !== null && parsedUrl.origin === R2_PUBLIC_ORIGIN)
-
-    if (!isAllowed) {
+    if (!isOurCdnUrl(url, config.R2_PUBLIC_URL, config.R2_PUBLIC_FALLBACK_DOMAIN)) {
       return reply.status(403).send({
         error: { code: "forbidden", message: "Only files from the R2 bucket can be downloaded" },
       })

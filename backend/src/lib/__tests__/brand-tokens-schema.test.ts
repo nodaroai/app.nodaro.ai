@@ -1,4 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+
+// Mirror download.test.ts's config mock so R2_PUBLIC_URL is set for the
+// logo.image refine (isOurCdnUrl reads config at parse time).
+vi.mock("../config.js", async (orig) => {
+  const actual = (await orig()) as { config: Record<string, unknown> }
+  return { config: { ...actual.config, R2_PUBLIC_URL: "https://pub-test.r2.dev", R2_PUBLIC_FALLBACK_DOMAIN: "" } }
+})
+
 import { brandTokensSchema } from "../plan-schemas.js"
 import { BRAND_PRESETS } from "@nodaro/shared"
 
@@ -57,5 +65,22 @@ describe("brandTokensSchema", () => {
       const noType = { ...base, fonts: { heading: "Anton", body: "Inter" } }
       expect(brandTokensSchema.safeParse(noType).success).toBe(true)
     })
+  })
+})
+
+describe("brandTokensSchema — logo.image (Phase 3c)", () => {
+  const base = { palette: { bg: "#000", text: "#fff", accent: "#f00" }, fonts: { heading: "Anton", body: "Inter" } }
+
+  it("RETAINS logo.image + imageBackdrop through parse (drift guard does NOT cover optional fields)", () => {
+    const url = "https://pub-test.r2.dev/logos/x.png"
+    const parsed = brandTokensSchema.parse({ ...base, logo: { name: "X", image: url, imageBackdrop: "#111" } })
+    expect(parsed.logo?.image).toBe(url) // value SURVIVES — not just .success
+    expect(parsed.logo?.imageBackdrop).toBe("#111")
+  })
+  it("rejects a non-our-CDN logo.image", () => {
+    expect(brandTokensSchema.safeParse({ ...base, logo: { name: "X", image: "https://evil.com/x.png" } }).success).toBe(false)
+  })
+  it("still accepts a logo with no image (byte-identical path)", () => {
+    expect(brandTokensSchema.parse({ ...base, logo: { name: "X" } }).logo?.image).toBeUndefined()
   })
 })

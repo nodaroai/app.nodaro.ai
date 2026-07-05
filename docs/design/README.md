@@ -69,3 +69,4 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 | Doc | What it covers |
 |-----|----------------|
 | [brand-typography-ramp](./brand-typography-ramp.md) | Per-role (heading/body) weight, casing, and tracking on top of brand font family — precedence, the Arabic tracking edge, the loaded-weight constraint |
+| [brand-image-logo](./brand-image-logo.md) | Brand `logo.image` — the URL-only CDN allowlist as the SSRF boundary shared across every render entry point, the contained-in-one-blueprint altitude, the deterministic-net guarantee the lockup scene appears, the onError→wordmark fallback, and the accepted no-dimension-cap risk |

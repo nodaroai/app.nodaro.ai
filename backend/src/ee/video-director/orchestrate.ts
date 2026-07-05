@@ -11,6 +11,7 @@
 
 import { authorShotSequence, type AuthoredSequence, type VideoGenre } from "./author.js"
 import { bakeShotSequence } from "../../services/shot-sequence/baker.js"
+import { ensureLogoLockupScene } from "./logo-lockup-net.js"
 import { waitForJob as _waitForJob } from "../../lib/mcp/tools/_wait-for-job.js"
 import { config } from "../../lib/config.js"
 import { resolveBrandInput, type BrandTokens } from "@nodaro/shared"
@@ -128,8 +129,13 @@ export async function runVideoDirector(
   // When the caller supplied a brand, set the resolved tokens on the brief so
   // the render pipeline (baker → plan.brandTokens) honors them. When no brand
   // was supplied, pass the brief unchanged so an author-chosen brandTokens survives.
-  const briefToBake = (seq: AuthoredSequence) =>
-    resolvedBrand ? { ...seq.shotSequenceBrief, brandTokens: resolvedBrand } : seq.shotSequenceBrief
+  // ensureLogoLockupScene is the deterministic backstop: if the brand supplies a
+  // logo image but the authored brief has no logo-assemble-lockup reveal, it
+  // appends a trailing branding scene with one — identity otherwise.
+  const briefToBake = (seq: AuthoredSequence) => {
+    const withBrand = resolvedBrand ? { ...seq.shotSequenceBrief, brandTokens: resolvedBrand } : seq.shotSequenceBrief
+    return ensureLogoLockupScene(withBrand, resolvedBrand)
+  }
 
   await deps.onProgress?.("resolve")
   let plan: ShotSequencePlan

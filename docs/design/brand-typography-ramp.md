@@ -109,8 +109,9 @@ just get the browser's nearest-weight substitution instead of a hard error.
 - No per-language weight/casing override — a brand's typography spec applies
   uniformly across scripts (only tracking is script-conditional, and only to
   suppress it for Arabic).
-- No image-logo support — this ramp is text typography; brand logos remain
-  text-based (`name` + optional `tagline`).
+- No image logos **in this ramp** — this document covers text typography
+  only. Brand logos later gained an optional image (`logo.image`) alongside
+  the text wordmark; see [Brand Image Logo](./brand-image-logo.md).
 
 ## Related
 
@@ -118,4 +119,6 @@ just get the browser's nearest-weight substitution instead of a hard error.
   the tool that returns brand presets, including their typography settings
 - [Video Director](../mcp/video-director.md) — the `brand` param this
   typography ramp extends
+- [Brand Image Logo](./brand-image-logo.md) — the image-logo capability
+  layered on top of the same `logo` token
 - [Shot Sequence](../mcp/shot-sequence.md) — the underlying brief/plan format

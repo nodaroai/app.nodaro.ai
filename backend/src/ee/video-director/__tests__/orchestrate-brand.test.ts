@@ -83,4 +83,24 @@ describe("runVideoDirector brand", () => {
     expect(mockBake).toHaveBeenCalledTimes(1)
     expect(bakedBrief().brandTokens).toBeUndefined()
   })
+
+  it("appends a logo-assemble-lockup scene to the baked brief when the brand has a logo image but the author omitted the reveal (deterministic net)", async () => {
+    const inline: BrandTokens = {
+      palette: { bg: "#101820", text: "#F5F5F5", accent: "#FF5A5F" },
+      fonts: { heading: "Anton", body: "Inter" },
+      logo: { name: "Acme", tagline: "Ship it", image: "https://cdn.nodaro.ai/logo.png" },
+    }
+    const deps = buildDeps()
+
+    await runVideoDirector({ ...BASE_OPTS, brand: inline }, deps)
+
+    expect(mockBake).toHaveBeenCalledTimes(1)
+    const baked = bakedBrief() as { scenes: { shots: { reveals: { blueprint?: { id: string; params: Record<string, unknown> } }[] }[] }[] }
+    // MOCK_BRIEF_OBJ (orchestrate-fixtures.ts) has exactly 1 scene with no
+    // logo-assemble-lockup reveal — the net must append a 2nd.
+    expect(baked.scenes).toHaveLength(2)
+    const appendedReveal = baked.scenes[1].shots[0].reveals[0]
+    expect(appendedReveal.blueprint?.id).toBe("logo-assemble-lockup")
+    expect(appendedReveal.blueprint?.params).toMatchObject({ brand: "Acme", tagline: "Ship it", accentColor: "#FF5A5F" })
+  })
 })
