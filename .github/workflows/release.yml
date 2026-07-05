@@ -18,6 +18,9 @@ name: Release (npm)
 on:
   push:
     branches: [dev, main]
+  # Manual re-run lever: republish any versions missing from the registry
+  # (e.g. after an unpublish window) without needing a new commit on main.
+  workflow_dispatch:
 
 permissions: {}
 
