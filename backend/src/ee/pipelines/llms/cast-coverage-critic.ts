@@ -1,9 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  CastCoverageCriticVerdictSchema,
-  type CastCoverageCriticVerdict,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { CastCoverageCriticVerdictSchema, type CastCoverageCriticVerdict, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
 const _REDACTED_PROMPT_7 = `[REDACTED — moved to private plugin, S9 extraction]`

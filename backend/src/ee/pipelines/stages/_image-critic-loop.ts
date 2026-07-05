@@ -1,8 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  IMAGE_CRITIC_MAX_RETRIES,
-  IMAGE_CRITIC_UNRESOLVABLE,
-} from "@nodaro/shared"
+import { IMAGE_CRITIC_MAX_RETRIES, IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
 import { isBlockingImageCriticFail } from "../llms/_image-critic-shared.js"
 import { pipelineEvents } from "../events.js"
 import { buildCriticFeedbackPrompt, runCriticRetryLoop } from "../_critic-retry.js"

@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
 import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 import { validateBlueprintParams, hexColor } from "../services/shot-sequence/blueprint-params.js"
 import { config } from "./config.js"
 import { isOurCdnUrl } from "./cdn-host.js"

@@ -1,12 +1,7 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier } from "@nodaro/shared";
-import { isDefaultSelectorConfig, selectListItems, type SelectorFields } from "@nodaro/shared";
-import { getEffectiveRepeatCount } from "@nodaro/shared";
-import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS } from "@nodaro/shared";
-import { buildVideoAnalysisCreditId, bucketSecondsFromCreditId, videoAnalysisBucketCredits } from "@nodaro/shared";
-import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, videoAnalysisBucketCredits, FAN_OUT_EACH_TYPES } from "@nodaro/shared"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */

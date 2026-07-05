@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react"
 import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  LOCATION_BUCKET_TO_CATALOG_ID,
-  LOCATION_PRESET_TO_CATALOG,
-} from "@nodaro/shared"
+import { LOCATION_BUCKET_TO_CATALOG_ID, LOCATION_PRESET_TO_CATALOG } from "@nodaro/shared"
 import { generateLocationAsset, removeLocationAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

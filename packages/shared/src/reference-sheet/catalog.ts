@@ -1,6 +1,6 @@
 import {
   CHARACTER_ASSET_VARIANTS, OBJECT_ASSET_VARIANTS, LOCATION_ASSET_VARIANTS,
-} from "../entity-prompts.js"
+} from "../entity-asset-types.js"
 import type { EntityKind, SectionKind, SheetType, SheetSection } from "./types.js"
 
 /** Starter presets for the NEW close-up bucket (per entity). Custom entries override. */

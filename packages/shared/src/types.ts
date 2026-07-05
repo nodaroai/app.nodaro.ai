@@ -4,7 +4,7 @@
  */
 
 import type { UsageMode } from "./character-usage-mode.js"
-import type { LocationReferencePhotoKind } from "./entity-prompts.js"
+import type { LocationReferencePhotoKind } from "./entity-asset-types.js"
 
 export interface GenericNode {
   id: string

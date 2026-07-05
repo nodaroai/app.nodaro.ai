@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
-import { isWizardSupported, type ModelChange } from "@nodaro/shared"
+import { isWizardSupported, type ModelChange } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildPromptHelperNodeContext } from "@/lib/prompt-helper-context"
 import { PromptHelperDialog } from "./prompt-helper-dialog"

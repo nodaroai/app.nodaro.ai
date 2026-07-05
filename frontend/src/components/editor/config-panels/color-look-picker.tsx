@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  COLOR_LOOKS,
-  COLOR_LOOK_CATEGORY_ORDER,
-  COLOR_LOOK_CATEGORY_LABELS,
-  type ColorLook,
-  type ColorLookCategory,
-} from "@nodaro/shared"
+import { COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

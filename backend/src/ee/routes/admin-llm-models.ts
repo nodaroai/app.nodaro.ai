@@ -4,7 +4,6 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
-
 /** Derive credit features from the shared LlmFeature type (single source of truth) */
 const LLM_CREDIT_FEATURES = Object.keys(LLM_FEATURE_DEFAULTS) as LlmFeature[]
 

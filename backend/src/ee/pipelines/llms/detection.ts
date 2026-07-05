@@ -1,9 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  DetectionResultSchema,
-  type DetectionResult,
-  type PipelineFormat,
-} from "@nodaro/shared"
+import { DetectionResultSchema, type DetectionResult, type PipelineFormat } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
 const _REDACTED_PROMPT_1 = `[REDACTED — moved to private plugin, S9 extraction]`

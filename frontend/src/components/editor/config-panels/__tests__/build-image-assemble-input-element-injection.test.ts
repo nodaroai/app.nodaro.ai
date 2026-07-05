@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { assembleImageInput } from "@nodaro/shared"
+import { assembleImageInput } from "@nodaro/prompts"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 

@@ -2,16 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  FRAMINGS,
-  FRAMING_CATEGORY_ORDER,
-  FRAMING_CATEGORY_LABELS,
-  FRAMING_FIELD_BY_CATEGORY,
-  MAX_SELECTED_BY_FRAMING_CATEGORY,
-  type Framing,
-  type FramingCategory,
-  type FramingValue,
-} from "@nodaro/shared"
+import { FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, MAX_SELECTED_BY_FRAMING_CATEGORY, type Framing, type FramingCategory, type FramingValue } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"

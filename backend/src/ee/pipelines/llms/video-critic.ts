@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
-import {
-  VideoCriticVerdictSchema,
-  type VideoCriticVerdict,
-  VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
-} from "@nodaro/shared"
+import { VideoCriticVerdictSchema, type VideoCriticVerdict, VIDEO_CRITIC_MIN_ADHERENCE_SCORE } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import { truncateCriticFields } from "./_critic-truncate.js"
 

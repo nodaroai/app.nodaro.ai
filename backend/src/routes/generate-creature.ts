@@ -7,7 +7,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildCreaturePrompt, resolveEntityAspect } from "@nodaro/shared"
+import { resolveEntityAspect } from "@nodaro/shared"
+import { buildCreaturePrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 

@@ -6,15 +6,11 @@
  * orchestrator computes.
  */
 
-import {
-  composeSoundHintFromConnections,
-  type SoundConsumerType,
-  type SoundComposition,
-} from "@nodaro/shared"
+import { composeSoundHintFromConnections, type SoundConsumerType, type SoundComposition } from "@nodaro/prompts"
+export { truncateForField, appendField } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // Re-export shared helpers so existing call sites keep working.
-export { truncateForField, appendField } from "@nodaro/shared"
 
 export function collectAudioStyleHints(
   consumer: WorkflowNode,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { resolveFieldMappings } from "../resolve-field-mappings"
-import { getEffectiveSunoCustomMode } from "@nodaro/shared"
+import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 describe("suno wired field engages custom mode (FE)", () => {

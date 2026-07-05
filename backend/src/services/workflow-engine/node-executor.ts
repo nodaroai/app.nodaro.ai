@@ -22,9 +22,10 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, pickerFanoutTargets, isSeedance2Provider } from "@nodaro/shared"
-import { getAppSettings } from "../../lib/app-settings.js"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider } from "@nodaro/shared"
+import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
+import { getAppSettings } from "../../lib/app-settings.js"
 import type {
   SimpleNode,
   SimpleEdge,

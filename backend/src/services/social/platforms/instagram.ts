@@ -1,8 +1,5 @@
 import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
-import {
-  INSTAGRAM_CAROUSEL_MIN_ITEMS,
-  INSTAGRAM_CAROUSEL_MAX_ITEMS,
-} from "@nodaro/shared"
+import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared"
 
 const GRAPH_API = "https://graph.facebook.com/v25.0"
 

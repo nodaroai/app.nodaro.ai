@@ -9,7 +9,7 @@ import {
   type SingleDimParameterPickerMeta,
   type MultiDimParameterPickerMeta,
 } from "../parameter-picker-registry"
-import { STYLINGS, STYLING_FIELD_BY_DIMENSION } from "@nodaro/shared"
+import { STYLINGS, STYLING_FIELD_BY_DIMENSION } from "@nodaro/prompts"
 import type { WorkflowNode } from "@/types/nodes"
 
 function node(type: string, data: Record<string, unknown>): WorkflowNode {

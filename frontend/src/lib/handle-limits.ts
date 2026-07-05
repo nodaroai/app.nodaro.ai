@@ -1,10 +1,5 @@
-import {
-  imageReferenceLimit,
-  VIDEO_REF_LIMITS_BY_PROVIDER,
-  getModel,
-  isAnalyzablePicker,
-  isSeedance2Provider,
-} from "@nodaro/shared"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, getModel, isSeedance2Provider } from "@nodaro/shared"
+import { isAnalyzablePicker } from "@nodaro/prompts"
 import {
   PROVIDERS_WITH_END_FRAME,
   PROVIDERS_WITH_REFERENCES,

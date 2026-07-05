@@ -1,6 +1,5 @@
 import { planSheetPanels, matchVariant } from "@nodaro/shared"
 import type { EntityKind, SheetSection, SheetFlavour, PanelRequest } from "@nodaro/shared"
-
 export interface ResolvedMotionPanel {
   section: string
   variant: string

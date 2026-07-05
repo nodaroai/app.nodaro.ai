@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveSeedance2Inputs } from "@nodaro/shared"
+import { resolveSeedance2Inputs } from "@nodaro/prompts"
 // Pure-logic guard for the indicator: the panel derives its label + directive
 // from resolveSeedance2Inputs, so this pins the mapping the UI renders.
 describe("seedance-2 mode indicator mapping", () => {

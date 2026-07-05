@@ -8,15 +8,8 @@ import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/reques
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import {
-  OBJECT_MOTION_PROVIDERS,
-  buildObjectMotionPrompt,
-  resolveObjectAspectRatio,
-  OBJECT_ASPECT_OPTIONS,
-  getDurationsForModel,
-  buildVideoCreditModelIdentifier,
-} from "@nodaro/shared"
-
+import { OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildObjectMotionPrompt } from "@nodaro/prompts"
 /**
  * Body schema for `POST /v1/generate-object-motion`.
  *

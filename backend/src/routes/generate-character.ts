@@ -12,11 +12,7 @@ import { buildPortraitPrompt } from "../lib/character-prompts.js"
 import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
-import {
-  CHARACTER_ASPECT_OPTIONS,
-  CHARACTER_REFERENCE_PHOTO_KINDS,
-  resolveCharacterAspectRatio,
-} from "@nodaro/shared"
+import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 
 const generateCharacterBody = z
   .object({

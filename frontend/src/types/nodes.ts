@@ -1,46 +1,8 @@
 import type { Node, Edge } from "@xyflow/react"
-import type {
-  ImageI2IProvider, ImageGenProvider, ImageEditProvider,
-  ModifyImageProvider, UpscaleImageProvider,
-  ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
-  VideoGenProvider,
-  VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
-  TextToAudioProvider, MusicProvider, TranscribeProvider,
-  LipSyncProvider, ScriptProvider, QaCheckProvider,
-  SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode,
-  ReduceStrategyId, ReduceMeta,
-  SelectorConfig,
-} from "@nodaro/shared"
-import type { ScraperActorId, CharacterAspectRatio, AudioFxPreset } from "@nodaro/shared"
-import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
-import type {
-  PipelineFormat,
-  PipelineMode,
-  PipelinePinnableImageModel,
-  PipelinePinnableScriptLlm,
-  PipelinePinnableVideoModel,
-  VideoCriticFrameMode,
-} from "@nodaro/shared"
-import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
-import type { PipelineState } from "@nodaro/shared"
-import type { ReferenceSheet } from "@nodaro/shared"
-import type { PersonValue, WardrobeValue } from "@nodaro/shared"
-import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
-import type { PickerApplyMode, PickerGaps } from "@nodaro/shared"
-import type { VideoAnalysisResult } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
-import {
-  MUSIC_GENRE_DEFAULT_DATA,
-  MUSIC_MOOD_DEFAULT_DATA,
-  INSTRUMENTATION_DEFAULT_DATA,
-  VOICE_CHARACTER_DEFAULT_DATA,
-  VOICE_DELIVERY_DEFAULT_DATA,
-} from "@nodaro/shared"
-import type { ExposableField, ExposableOutput } from "@nodaro/shared"
-import type { ComponentMetadata } from "@nodaro/shared"
-import type { IdentityMeta } from "@nodaro/shared"
-import type { TransitionPosition, TransitionDuration, TransitionIntensity } from "@nodaro/shared"
-import type { CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity } from "@nodaro/shared"
+import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta } from "@nodaro/shared"
+import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 

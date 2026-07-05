@@ -1,17 +1,8 @@
 "use client"
 
 import { useId, useMemo, useState, type JSX } from "react"
-import {
-  PEOPLE,
-  PERSON_DIMENSION_LABELS,
-  PERSON_FIELD_BY_DIMENSION,
-  getPersonDimensionLimit,
-  pickIds,
-  togglePick,
-  type Person,
-  type PersonDimension,
-  type PersonValue,
-} from "@nodaro/shared"
+import { PEOPLE, PERSON_DIMENSION_LABELS, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"

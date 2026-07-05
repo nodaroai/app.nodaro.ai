@@ -14,21 +14,10 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
-import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
-import { buildScenePrompt } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
-import { extractAllGeneratedResults } from "@nodaro/shared"
-import { splitGeneratedItems } from "@nodaro/shared"
-import {
-  aggregateByType,
-  getOutputType,
-  isAggregateableType,
-  isCollectInEdge,
-  parseGroupHandle,
-  type AggregationBuckets,
-  type Member,
-} from "@nodaro/shared"
-
+import { buildScenePrompt } from "@nodaro/prompts"
+export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
 
 /**
@@ -836,7 +825,6 @@ const IMAGE_RESULT_TYPES = new Set([
   "image-collage",
 ])
 
-export { extractVideoDurationFromNode } from "@nodaro/shared"
 
 /** Video-generating node types that store results in generatedVideoUrl / generatedResults */
 const VIDEO_RESULT_TYPES = new Set([

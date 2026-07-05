@@ -1,11 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  ImageCriticIssueSchema,
-  ImageCriticVerdictSchema,
-  type ImageCriticIssue,
-  type ImageCriticVerdict,
-} from "@nodaro/shared"
+import { ImageCriticIssueSchema, ImageCriticVerdictSchema, type ImageCriticIssue, type ImageCriticVerdict } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
 // Re-export the shared schemas so existing callers keep `import {…} from

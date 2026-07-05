@@ -18,6 +18,8 @@ import archiver from "archiver"
 import { uploadBufferToR2 } from "./storage.js"
 import { safeFetch } from "./safe-fetch.js"
 import { characterMentionSlug } from "@nodaro/shared"
+export { selectLoraRoutingForMentions } from "@nodaro/shared"
+export type { LoraRouting, LoraEligibleRef } from "@nodaro/shared"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Training-image aggregation
@@ -198,8 +200,6 @@ export function buildTriggerWord(name: string): string {
 // backend orchestrator and the frontend single-node Run agree byte-for-byte.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export { selectLoraRoutingForMentions } from "@nodaro/shared"
-export type { LoraRouting, LoraEligibleRef } from "@nodaro/shared"
 
 // Re-export so existing `from "./character-lora.js"` imports keep working.
 // Canonical implementation lives in `credits-job-lifecycle.ts`.

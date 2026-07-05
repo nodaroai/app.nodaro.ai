@@ -12,16 +12,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS } from "@nodaro/shared"
-import { buildVideoCreditModelIdentifier, applyDefaultVideoSelection } from "@nodaro/shared"
-import {
-  VIDEO_REF_LIMITS_BY_PROVIDER,
-  resolveVideoReferenceCore,
-  resolveReferenceTokens,
-  type ConnectedReference,
-  type VideoExtraRef,
-  type CharacterMeta,
-} from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
+import { resolveVideoReferenceCore, resolveReferenceTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"

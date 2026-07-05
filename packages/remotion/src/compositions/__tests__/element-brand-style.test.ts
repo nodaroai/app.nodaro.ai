@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { elementTextStyle } from "../shot-sequence-renderer.js"
 import { resolveBrand } from "../../lib/brand.js"
-import { BRAND_PRESETS } from "@nodaro/shared"
+import { BRAND_PRESETS } from "@nodaro/prompts"
 
 const el = (over: Record<string, unknown> = {}) => ({
   id: "e1", type: "text" as const, text: "hi", fontSize: 80, x: 0, y: 0, ...over,

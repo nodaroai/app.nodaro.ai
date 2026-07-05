@@ -2,33 +2,7 @@ import { supabase } from "../../lib/supabase.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
-import { buildLlmCreditIdentifier } from "@nodaro/shared"
-import { flux2BaseCredits, FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
-import {
-  AI_AVATAR_DURATION_BUCKETS,
-  AI_AVATAR_RATE_USD_PER_SEC,
-  aiAvatarHoldCredits,
-  resolveAiAvatarCreditId,
-  type AiAvatarEngine,
-  type AiAvatarResolution,
-} from "@nodaro/shared"
-import {
-  CINEMATIC_RATE_USD_PER_SEC,
-  CINEMATIC_MIN_DURATION_SEC,
-  CINEMATIC_MAX_DURATION_SEC,
-  cinematicCreditId,
-  cinematicHoldCredits,
-  resolveCinematicCreditId,
-  type CinematicResolution,
-} from "@nodaro/shared"
-import { resolveSwitchXCreditId } from "@nodaro/shared"
-import {
-  VIDEO_ANALYSIS_DURATION_BUCKETS,
-  VIDEO_ANALYSIS_MAX_DURATION_SEC,
-  videoAnalysisBucketCredits,
-  buildVideoAnalysisCreditId,
-} from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, flux2BaseCredits, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_RATE_USD_PER_SEC, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, cinematicHoldCredits, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, videoAnalysisBucketCredits, buildVideoAnalysisCreditId } from "@nodaro/shared"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)

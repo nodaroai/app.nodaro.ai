@@ -1,6 +1,7 @@
 import { describe, it, expect, test } from "vitest"
 import { resolveBrand, blueprintFontFamily, resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../brand.js"
-import { resolveBrandInput, BRAND_PRESETS, BRAND_PRESET_IDS, type BrandTypeSpec, type SupportedFontName } from "@nodaro/shared"
+import { type SupportedFontName } from "@nodaro/shared"
+import { resolveBrandInput, BRAND_PRESETS, BRAND_PRESET_IDS, type BrandTypeSpec } from "@nodaro/prompts"
 import { FONT_LOADED_WEIGHTS } from "../font-registry.js"
 
 /** Shared fixture: a brand with only `fonts.headingType` set (palette is fixed

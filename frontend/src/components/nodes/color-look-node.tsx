@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { SwatchBook } from "lucide-react"
-import { getColorLook, getColorLookLabel } from "@nodaro/shared"
+import { getColorLook, getColorLookLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { ColorLookPreview } from "@/components/editor/config-panels/color-look-preview"
 import type { ColorLookData } from "@/types/nodes"

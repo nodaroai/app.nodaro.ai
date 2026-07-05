@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  type AuditImagesResult,
-  type AuditImagesShotEntry,
-  type SceneNodeData,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { type AuditImagesResult, type AuditImagesShotEntry, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { runImageCritic } from "../image-critic.js"
 import { settledWithLimit } from "../../../../lib/settled-with-limit.js"
 

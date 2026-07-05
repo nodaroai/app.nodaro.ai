@@ -4,13 +4,7 @@ import { RotateCcw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import {
-  describeSlotControl,
-  rgbaArrayToHex,
-  hexToRgbaArray,
-  humanizeSlotSid,
-  type SlotControlDescriptor,
-} from "@nodaro/shared"
+import { describeSlotControl, rgbaArrayToHex, hexToRgbaArray, humanizeSlotSid, type SlotControlDescriptor } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 interface LottieSlotControlsProps {

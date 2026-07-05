@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { usePromptSnippets, usePromptSnippetMutations } from "@/hooks/queries/use-prompt-snippets-queries"
 import { PromptSnippetNameTakenError, type PromptSnippet } from "@/lib/api"
-import { SNIPPET_MEDIA_VALUES, type SnippetMedia, type SnippetTarget } from "@nodaro/shared"
+import { SNIPPET_MEDIA_VALUES, type SnippetMedia, type SnippetTarget } from "@nodaro/prompts"
 import { toast } from "sonner"
 
 interface SnippetManageDialogProps {

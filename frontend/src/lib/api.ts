@@ -2,12 +2,10 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet, TtsProvider } from "@nodaro/shared"
-import type { PersonValue, WardrobeValue } from "@nodaro/shared"
-import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
-import type { CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn } from "@nodaro/shared"
-import type { CommunityCard, CommunitySort } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
+import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
+export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
 
@@ -4018,7 +4016,7 @@ export async function describeToPickerApi(
   userId?: string,
   llmModel?: string,
   instructions?: string,
-): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/shared").PickerGaps }> {
+): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/prompts").PickerGaps }> {
   const body: Record<string, unknown> = { imageUrl, targetPickers }
   if (userId) body.userId = userId
   if (llmModel) body.llmModel = llmModel
@@ -7012,7 +7010,6 @@ export async function getTemplateFavorites(): Promise<string[]> {
 
 // Listing shape is the single source of truth in `@nodaro/shared`; re-export so
 // existing `@/lib/api` importers of `CommunityCard` keep working.
-export type { CommunityCard } from "@nodaro/shared"
 
 export async function browseCommunity(params: {
   entityType?: string; q?: string; category?: string

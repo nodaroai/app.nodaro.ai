@@ -14,13 +14,7 @@
  * `computeInjectedRefs` or `<InjectedReferenceList>`.
  */
 
-import {
-  characterMentionSlug,
-  characterMentionableAssetArrays,
-  resolveEffectiveSourceType,
-  type ConnectedReference,
-  type ReferenceSource,
-} from "@nodaro/shared"
+import { characterMentionSlug, characterMentionableAssetArrays, resolveEffectiveSourceType, type ConnectedReference, type ReferenceSource } from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type { SourceNodeInfo } from "./types"

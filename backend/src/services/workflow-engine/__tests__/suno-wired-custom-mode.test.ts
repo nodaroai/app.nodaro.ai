@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { resolveFieldMappings } from "../resolve-field-mappings.js"
-import { getEffectiveSunoCustomMode } from "@nodaro/shared"
+import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import type { NodeExecutionState, SimpleNode, SimpleEdge } from "../types.js"
 
 describe("suno wired field engages custom mode (BE)", () => {

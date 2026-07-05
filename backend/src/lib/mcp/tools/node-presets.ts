@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { getFactoryPresets } from "@nodaro/shared"
+import { getFactoryPresets } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 
 const presetsReadGate: ToolGate = { required: ["presets:read"] }

@@ -27,6 +27,7 @@ import {
  */
 const WORKSPACE_PACKAGE_ROOTS: Record<string, string> = {
   "@nodaro/shared": "packages/shared/src/index",
+  "@nodaro/prompts": "packages/prompts/src/index",
 }
 
 export interface NodeDef {

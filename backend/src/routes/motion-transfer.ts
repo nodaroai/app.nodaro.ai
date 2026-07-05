@@ -23,8 +23,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared"
-import { buildMotionCreditModelIdentifier } from "@nodaro/shared"
+import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING, buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const motionTransferBody = z.object({

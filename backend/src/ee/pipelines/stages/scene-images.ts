@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { MatchCutVerdict, PipelineConfig, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
-import { getIdentityLockClause } from "@nodaro/shared"
+import { getIdentityLockClause } from "@nodaro/prompts"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"

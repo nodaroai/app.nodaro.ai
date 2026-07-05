@@ -1,11 +1,7 @@
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import {
-  ACTIVE_SCENE_HELPERS,
-  SCENE_HELPER_NAMES,
-  type SceneHelperName,
-} from "@nodaro/shared"
+import { ACTIVE_SCENE_HELPERS, SCENE_HELPER_NAMES, type SceneHelperName } from "@nodaro/shared"
 
 /**
  * §6.11 Scene-Context helper buttons — one row of 10 actions on the SceneNode

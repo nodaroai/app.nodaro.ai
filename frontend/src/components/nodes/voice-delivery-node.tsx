@@ -3,10 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { MessageCircle } from "lucide-react"
-import {
-  getVoicePace, getVoiceEmotion, getVoiceArchetype,
-  buildVoiceDeliveryHints,
-} from "@nodaro/shared"
+import { getVoicePace, getVoiceEmotion, getVoiceArchetype, buildVoiceDeliveryHints } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { VoiceDeliveryData } from "@/types/nodes"
 

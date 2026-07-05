@@ -30,11 +30,8 @@ import type {
   ImageCriticData,
   DescribeToPickerData,
 } from "@/types/nodes"
-import {
-  IMAGE_CRITIC_MODES,
-  pickerFanoutTargets,
-  type ImageCriticMode,
-} from "@nodaro/shared"
+import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared"
+import { pickerFanoutTargets } from "@nodaro/prompts"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pickerTypeLabel, ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels"

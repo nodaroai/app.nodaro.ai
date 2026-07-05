@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CREATURE_ATTACH_COLUMNS, TTS_PROVIDERS } from "@nodaro/shared"
+import { TTS_PROVIDERS, CREATURE_ATTACH_COLUMNS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"

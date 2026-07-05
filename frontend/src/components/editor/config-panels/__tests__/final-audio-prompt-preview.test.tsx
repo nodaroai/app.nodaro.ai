@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { render } from "@testing-library/react"
-import { getEffectiveSunoCustomMode } from "@nodaro/shared"
+import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { FinalAudioPromptPreview } from "../final-audio-prompt-preview"

@@ -74,7 +74,8 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, assembleImageInput, type ConnectedReference } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, type ConnectedReference } from "@nodaro/shared"
+import { assembleImageInput } from "@nodaro/prompts"
 
 // ---------------------------------------------------------------------------
 // aspectRatio enum must cover every provider's catalog ratios. Wan 2.7 /

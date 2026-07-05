@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest"
-import {
-  MODEL_CATALOG,
-  MODEL_RECOMMENDATIONS,
-  listModels,
-  groupByFamily,
-  validateModelInput,
-} from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, validateModelInput } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 
 describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {

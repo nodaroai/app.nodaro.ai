@@ -1,5 +1,5 @@
 // packages/remotion/src/lib/brand.ts
-import type { BrandTokens, BrandPalette, BrandFonts, BrandLogo, BrandCasing, BrandTypeSpec } from "@nodaro/shared"
+import type { BrandTokens, BrandPalette, BrandFonts, BrandLogo, BrandCasing, BrandTypeSpec } from "@nodaro/prompts"
 import { FONT_MAP, withRtlFallback } from "./font-registry"
 import { containsArabic } from "./text-direction"
 

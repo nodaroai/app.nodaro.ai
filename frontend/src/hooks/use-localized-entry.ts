@@ -16,13 +16,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react"
-import {
-  ensureLocaleCatalogLoaded,
-  resolveLabel as sharedResolveLabel,
-  resolveDescription as sharedResolveDescription,
-  entryMatchesQuery,
-  type I18nCatalogId,
-} from "@nodaro/shared"
+import { ensureLocaleCatalogLoaded, resolveLabel as sharedResolveLabel, resolveDescription as sharedResolveDescription, entryMatchesQuery, type I18nCatalogId } from "@nodaro/shared"
 import { useUserLocale } from "@/lib/locale-store"
 
 export function useLocalizedCatalog(catalog: I18nCatalogId) {

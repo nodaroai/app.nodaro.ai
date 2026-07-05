@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { listBrandPresets } from "../brand-presets.js"
-import { BRAND_PRESET_IDS } from "@nodaro/shared"
+import { BRAND_PRESET_IDS } from "@nodaro/prompts"
 
 describe("listBrandPresets", () => {
   it("returns one catalog entry per preset id with label/mood + palette/font summary", () => {

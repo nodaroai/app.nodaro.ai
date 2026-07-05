@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search, Camera } from "lucide-react"
-import {
-  PHOTO_GENRES,
-  PHOTO_GENRE_CATEGORY_LABELS,
-  PHOTO_GENRE_CATEGORY_ORDER,
-  type PhotoGenre,
-  type PhotoGenreCategory,
-} from "@nodaro/shared"
+import { PHOTO_GENRES, PHOTO_GENRE_CATEGORY_LABELS, PHOTO_GENRE_CATEGORY_ORDER, type PhotoGenre, type PhotoGenreCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

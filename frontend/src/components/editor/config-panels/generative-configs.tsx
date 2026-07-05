@@ -2,19 +2,7 @@
 
 import { useState } from "react"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
-import {
-  PIPELINE_FORMATS,
-  PIPELINE_MODES,
-  PIPELINE_OUTPUT_RESOLUTIONS,
-  PIPELINE_PINNABLE_IMAGE_MODELS,
-  PIPELINE_PINNABLE_SCRIPT_LLMS,
-  PIPELINE_PINNABLE_VIDEO_MODELS,
-  VIDEO_CRITIC_FRAME_MODES,
-  validateDurationForFormat,
-  type PipelineFormat,
-  type PipelineMode,
-  type VideoCriticFrameMode,
-} from "@nodaro/shared"
+import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {

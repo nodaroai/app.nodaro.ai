@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  AddBRollResultSchema,
-  type AddBRollResult,
-  type SceneNodeData,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { AddBRollResultSchema, type AddBRollResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 
 const _REDACTED_PROMPT_13 = `[REDACTED — moved to private plugin, S9 extraction]`

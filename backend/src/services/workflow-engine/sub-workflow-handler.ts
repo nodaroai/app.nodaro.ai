@@ -7,7 +7,8 @@
  * - Cycle detection via workflowId:routeId tracking
  */
 
-import { PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/prompts"
 import { config } from "../../lib/config.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { supabase } from "../../lib/supabase.js"

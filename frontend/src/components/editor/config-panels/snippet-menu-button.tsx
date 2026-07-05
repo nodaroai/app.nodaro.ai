@@ -9,7 +9,7 @@ import { appendSnippetText, filterSnippets, groupSnippetsByCategory, type Snippe
 import { SnippetCategoryHeader, SnippetRowContent } from "./snippet-row"
 import { SnippetManageDialog } from "./snippet-manage-dialog"
 import { escapeScrollLock } from "./prompt-editor/scroll-lock-escape"
-import type { SnippetMedia, SnippetTarget } from "@nodaro/shared"
+import type { SnippetMedia, SnippetTarget } from "@nodaro/prompts"
 
 interface SnippetMenuButtonProps {
   readonly pool: readonly SnippetPoolItem[]

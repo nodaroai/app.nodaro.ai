@@ -10,13 +10,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
-import { resolveImageGenCreditIdentifier } from "@nodaro/shared"
-import {
-  assembleImageInput,
-  type AssembleImageInput,
-  type BuildImagePromptResult,
-} from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
+import { assembleImageInput, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 

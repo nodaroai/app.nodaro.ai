@@ -40,12 +40,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // tsx. Default-import the module object + destructure, which works under both.
 import jsonpatch from "fast-json-patch"
 const { applyPatch, validate: validatePatch } = jsonpatch
-import type {
-  JsonPatch,
-  PipelineStageName,
-  ShowrunnerPlan,
-} from "@nodaro/shared"
 import { STAGE_PATCH_SCHEMA } from "@nodaro/shared"
+import type { JsonPatch, PipelineStageName, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { checkReferenceIntegrity } from "./reference-integrity.js"
 

@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import { PersonPickerCompact } from "./person-picker-compact"
 import { PersonPickerDetailed } from "./person-picker-detailed"
-import type { PersonValue } from "@nodaro/shared"
+import type { PersonValue } from "@nodaro/prompts"
 
 interface PersonPickerProps {
   readonly value: PersonValue

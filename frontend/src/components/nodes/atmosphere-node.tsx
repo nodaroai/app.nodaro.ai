@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { CloudFog } from "lucide-react"
-import { getAtmosphere, getAtmosphereLabel } from "@nodaro/shared"
+import { getAtmosphere, getAtmosphereLabel } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { AtmospherePreview } from "@/components/editor/config-panels/atmosphere-preview"

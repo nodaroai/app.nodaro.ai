@@ -11,19 +11,10 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput } from "./output-extractor.js"
-import { extractGeneratedJsonAsList } from "@nodaro/shared"
-import { splitGeneratedItems } from "@nodaro/shared"
+import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
-import { resolveNodeRefs } from "@nodaro/shared"
-import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared"
-import { splitByLoopDelimiter } from "@nodaro/shared"
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
-import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared"
-import { REFERENCE_HANDLE_MAP } from "@nodaro/shared"
 
 /**
  * Resolve a node's primary output from execution state or source node data.

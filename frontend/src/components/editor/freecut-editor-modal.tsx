@@ -3,14 +3,7 @@
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Check, FilePlus } from "lucide-react"
-import {
-  NODARO_LOAD_VIDEO,
-  NODARO_IMPORT_FILES,
-  NODARO_RESET_PROJECT,
-  FREECUT_READY,
-  FREECUT_EXPORT_COMPLETE,
-  FREECUT_REQUEST_IMPORT,
-} from "@nodaro/shared"
+import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT } from "@nodaro/shared"
 
 const FREECUT_URL = import.meta.env.VITE_FREECUT_URL || "http://localhost:5174"
 const FREECUT_ORIGIN = new URL(FREECUT_URL).origin

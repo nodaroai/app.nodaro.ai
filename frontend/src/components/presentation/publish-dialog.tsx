@@ -27,8 +27,7 @@ import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-wor
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro/shared"
-import type { ExposedSetting } from "@nodaro/shared"
-import type { PresentationItem } from "@nodaro/shared"
+import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */

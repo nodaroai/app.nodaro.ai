@@ -1,9 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
-import {
-  StoryboardCohesionCriticVerdictSchema,
-  type StoryboardCohesionCriticVerdict,
-} from "@nodaro/shared"
+import { StoryboardCohesionCriticVerdictSchema, type StoryboardCohesionCriticVerdict } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
 const _REDACTED_PROMPT_24 = `[REDACTED — moved to private plugin, S9 extraction]`

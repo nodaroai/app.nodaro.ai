@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { CAMERA_FORMATS } from "@nodaro/shared"
+import { CAMERA_FORMATS } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

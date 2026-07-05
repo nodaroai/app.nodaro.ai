@@ -7,11 +7,7 @@
  * The catalog is authoritative — never hand-maintain model lists in the doc.
  * Edit `packages/shared/src/model-catalog.ts`, then `npm run gen:skills`.
  */
-import type {
-  ModelCatalogEntry,
-  ModelKind,
-  ModelRecommendation,
-} from "@nodaro/shared"
+import type { ModelCatalogEntry, ModelKind, ModelRecommendation } from "@nodaro/shared"
 
 export type CostTier = "Everyday" | "Standard" | "Premium"
 

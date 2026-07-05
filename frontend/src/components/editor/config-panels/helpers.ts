@@ -1,12 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
-import { buildScraperCreditId, isScraperActor } from "@nodaro/shared"
-import { isKineticCaptionStyle } from "@nodaro/shared"
-import { resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId } from "@nodaro/shared"
-
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
  *  visible whenever *any* text source is wired — not just a literal Text

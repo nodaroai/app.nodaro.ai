@@ -20,11 +20,7 @@ import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import zodToJsonSchema from "zod-to-json-schema"
-import {
-  windowAnalysisSchema,
-  REFERENCE_ROLE_PRESETS,
-  VIDEO_ANALYSIS_ENTITY_SOURCES,
-} from "@nodaro/shared"
+import { windowAnalysisSchema, REFERENCE_ROLE_PRESETS, VIDEO_ANALYSIS_ENTITY_SOURCES } from "@nodaro/shared"
 
 const here = dirname(fileURLToPath(import.meta.url))
 /**

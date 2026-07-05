@@ -1,4 +1,4 @@
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 import type { ShotSequenceBrief } from "../../services/shot-sequence/brief-schema.js"
 
 /**

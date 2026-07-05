@@ -9,12 +9,8 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
-import {
-  LOCATION_ATMOSPHERE_PROVIDERS,
-  buildLocationMotionPrompt,
-  CHARACTER_ASPECT_OPTIONS,
-} from "@nodaro/shared"
-
+import { LOCATION_ATMOSPHERE_PROVIDERS, CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared"
+import { buildLocationMotionPrompt } from "@nodaro/prompts"
 /**
  * Body schema for `POST /v1/generate-location-motion`.
  *

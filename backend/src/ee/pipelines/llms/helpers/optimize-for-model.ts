@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  OptimizeForModelResultSchema,
-  type OptimizeForModelResult,
-  type SceneNodeData,
-  VIDEO_MODEL_CAPS,
-} from "@nodaro/shared"
+import { OptimizeForModelResultSchema, type OptimizeForModelResult, type SceneNodeData, VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 
 const _REDACTED_PROMPT_19 = `[REDACTED — moved to private plugin, S9 extraction]`

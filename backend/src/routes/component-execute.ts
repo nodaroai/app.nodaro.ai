@@ -2,11 +2,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { executeAppRun } from "../services/app-execution.js"
+import { buildCreditModelIdentifier } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
-import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 
 

@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  PHOTOGRAPHERS,
-  PHOTOGRAPHER_CATEGORY_LABELS,
-  PHOTOGRAPHER_CATEGORY_ORDER,
-  type Photographer,
-  type PhotographerCategory,
-} from "@nodaro/shared"
+import { PHOTOGRAPHERS, PHOTOGRAPHER_CATEGORY_LABELS, PHOTOGRAPHER_CATEGORY_ORDER, type Photographer, type PhotographerCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

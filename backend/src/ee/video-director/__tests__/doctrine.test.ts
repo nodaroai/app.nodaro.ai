@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, it, expect } from "vitest"
-import { BRAND_PRESET_IDS, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import { SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import { BRAND_PRESET_IDS } from "@nodaro/prompts"
 const DIR = resolve(__dirname, "../../../../skills/video-director")
 const read = (f: string) => readFileSync(resolve(DIR, f), "utf-8")
 describe("video-director doctrine", () => {

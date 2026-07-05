@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Brush } from "lucide-react"
-import { getStyle, getStyleLabel } from "@nodaro/shared"
+import { getStyle, getStyleLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { StylePreview } from "@/components/editor/config-panels/style-preview"
 import type { StyleData } from "@/types/nodes"

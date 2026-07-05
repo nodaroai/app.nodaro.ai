@@ -1,10 +1,6 @@
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  type AnchorSceneStyleResult,
-  type SceneNodeData,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { type AnchorSceneStyleResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
 

@@ -1,4 +1,6 @@
-import type { CreatureAttachColumn, ObjectAspectRatio, TtsProvider } from "@nodaro/shared"
+import type { ObjectAspectRatio, TtsProvider, CreatureAttachColumn } from "@nodaro/shared"
+export type { CreatureAttachColumn, ObjectAspectRatio as CreatureAspectRatio } from "@nodaro/shared"
+export { CREATURE_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -34,13 +36,6 @@ export interface CreatureVoice {
  * surfaces the same enum under a creature-friendly name. The runtime tuple is
  * re-exported as `CREATURE_ASPECT_OPTIONS` / `CREATURE_ASPECT_DEFAULTS` aliases.
  */
-export type { CreatureAttachColumn } from "@nodaro/shared"
-export { CREATURE_ATTACH_COLUMNS } from "@nodaro/shared"
-export type { ObjectAspectRatio as CreatureAspectRatio } from "@nodaro/shared"
-export {
-  OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS,
-  OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS,
-} from "@nodaro/shared"
 
 /**
  * Creature asset-type enum — the kinds of variant a user can generate off a

@@ -3,10 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { User } from "lucide-react"
-import {
-  getVoiceAge, getVoiceGender, getVoiceAccent, getVoiceTimbre,
-  buildVoiceCharacterHints,
-} from "@nodaro/shared"
+import { getVoiceAge, getVoiceGender, getVoiceAccent, getVoiceTimbre, buildVoiceCharacterHints } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { VoiceCharacterData } from "@/types/nodes"
 

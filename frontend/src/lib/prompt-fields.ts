@@ -17,7 +17,7 @@
  * `prompt-edit-button.tsx` (`getPromptIcon`), the only place that renders it.
  */
 
-import type { SnippetMedia } from "@nodaro/shared"
+import type { SnippetMedia } from "@nodaro/prompts"
 
 /** Which lucide glyph a node's prompt affordance uses. Kept as a string so this
  *  module stays icon-library-free; mapped to a component in the strip button. */

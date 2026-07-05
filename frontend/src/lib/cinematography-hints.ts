@@ -1,8 +1,5 @@
-import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/shared"
+import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, getParameterPromptHint } from "@nodaro/prompts"
 import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared"
-import { composeTransitionHintFromConnections, type TransitionTiming } from "@nodaro/shared"
-import { composeCharacterFxHintFromConnections, type CharacterFxTiming } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData } from "@/types/nodes"
 import { collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 

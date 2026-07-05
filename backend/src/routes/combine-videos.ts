@@ -7,13 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import {
-  estimateCombineVideosCredits,
-  type CombineVideosEstimatorInput,
-  COMBINE_TRANSITION_IDS,
-  AUDIO_CROSSFADE_CURVE_IDS,
-  DEFAULT_AUDIO_CROSSFADE_CURVE_ID,
-} from "@nodaro/shared"
+import { estimateCombineVideosCredits, type CombineVideosEstimatorInput, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 // Zod doesn't accept a readonly string[] directly in z.enum, but the runtime

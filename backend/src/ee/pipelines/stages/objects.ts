@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
 import { resolvePipelineModel } from "@nodaro/shared"
+import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import {

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
 import { VIDEO_MODEL_CAPS } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
 const _REDACTED_PROMPT_9 = `[REDACTED — moved to private plugin, S9 extraction]`

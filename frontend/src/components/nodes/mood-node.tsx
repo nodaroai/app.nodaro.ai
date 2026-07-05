@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Smile } from "lucide-react"
-import { getMood, getMoodLabel } from "@nodaro/shared"
+import { getMood, getMoodLabel } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { MoodEmoji } from "@/components/editor/config-panels/mood-emoji"

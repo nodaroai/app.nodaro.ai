@@ -1,26 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
-import {
-  CHAT_ENABLED_STAGES,
-  CHAT_TURN_CAPS,
-  CHAT_WIRED_STAGES,
-  ENTITY_TYPES,
-  EntityRejectInputSchema,
-  IMAGE_CRITIC_UNRESOLVABLE,
-  PIPELINE_STAGE_NAMES,
-  PipelineInputSchema,
-  PipelineStageNameSchema,
-  SubGateNameSchema,
-  clearImageCriticMetadata,
-  clearVideoCriticMetadata,
-  getIdentityLockClause,
-  type ChatEnabledStage,
-  type EntityType,
-  type JsonPatch,
-  type PipelineStageName,
-  type ProposedChange,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, SubGateNameSchema, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared"
+import { getIdentityLockClause } from "@nodaro/prompts"
 import { hasCredits } from "../lib/config.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { createSSEStream } from "../lib/sse.js"

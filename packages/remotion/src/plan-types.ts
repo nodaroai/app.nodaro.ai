@@ -1,4 +1,4 @@
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 
 // ── After Effects Plan Types ──────────────────────────────────────────
 

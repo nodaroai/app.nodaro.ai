@@ -1,9 +1,8 @@
-import { resolveFieldMappings as sharedResolve } from "@nodaro/shared"
-import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+import { resolveFieldMappings as sharedResolve, PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+export { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 import { extractNodeOutput } from "./execution-graph"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
-export { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 
 export function resolveFieldMappings(
   data: Record<string, unknown>,

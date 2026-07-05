@@ -3,15 +3,8 @@
 import { memo } from "react"
 import { type NodeProps } from "@xyflow/react"
 import { UserRound } from "lucide-react"
-import {
-  PERSON_DIMENSION_LABELS,
-  PERSON_DIMENSION_ORDER,
-  PERSON_FIELD_BY_DIMENSION,
-  getPerson,
-  getPersonLabel,
-  pickIds,
-  type PersonDimension,
-} from "@nodaro/shared"
+import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_ORDER, PERSON_FIELD_BY_DIMENSION, getPerson, getPersonLabel, type PersonDimension } from "@nodaro/prompts"
+import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getPersonEntryIcon } from "./person-styling-icon"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"

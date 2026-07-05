@@ -1,6 +1,5 @@
 import { planSheetPanels, BOARD_TO_COLUMN, matchVariant } from "@nodaro/shared"
 import type { EntityKind, SheetSection, SheetFlavour, PanelRequest } from "@nodaro/shared"
-
 export type EntityBuckets = Record<string, ReadonlyArray<{ name?: string; url?: string }> | undefined>
 export interface ResolvedPanelRef { section: string; board: string; variant: string; label: string; url: string }
 export interface PanelResolution { present: ResolvedPanelRef[]; missing: PanelRequest[] }

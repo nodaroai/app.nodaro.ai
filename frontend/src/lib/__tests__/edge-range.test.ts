@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveIndex, applyRange, buildRangeLabel, migrateEdgeOutputMode } from "@nodaro/shared"
+import { resolveIndex, applyRange, buildRangeLabel, migrateEdgeOutputMode, resolveListExpression, parseListExpression, selectListItems, describeEdgeBehavior } from "@nodaro/shared"
 
 describe("resolveIndex", () => {
   it("resolves absolute 1-based index to 0-based", () => {
@@ -159,12 +159,6 @@ describe("buildRangeLabel", () => {
   })
 })
 
-import {
-  resolveListExpression,
-  parseListExpression,
-  selectListItems,
-  describeEdgeBehavior,
-} from "@nodaro/shared"
 
 describe("frontend re-export smoke test", () => {
   it("resolveListExpression is callable", () => {

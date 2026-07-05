@@ -1,13 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { DEFAULT_CHARACTER_ANGLE_COUNT, DEFAULT_CHARACTER_EXPRESSION_COUNT, SHORT_FILM_VARIANT_THRESHOLD_SEC, SHORT_FILM_ANGLE_COUNT, SHORT_FILM_EXPRESSION_COUNT, resolvePipelineModel } from "@nodaro/shared"
 import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
-import {
-  DEFAULT_CHARACTER_ANGLE_COUNT,
-  DEFAULT_CHARACTER_EXPRESSION_COUNT,
-  SHORT_FILM_VARIANT_THRESHOLD_SEC,
-  SHORT_FILM_ANGLE_COUNT,
-  SHORT_FILM_EXPRESSION_COUNT,
-  resolvePipelineModel,
-} from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { runVoiceMatcher } from "../llms/voice-matcher.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"

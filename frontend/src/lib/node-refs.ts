@@ -7,20 +7,8 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { extractNodeOutputAsList } from "@/components/editor/workflow-editor/node-input-resolver"
-import {
-  resolveIndex,
-  resolveNodeRefs,
-  parseNodeRef,
-  canonicalVarName,
-  extractReferencedLabels,
-  PARAMETER_NODE_TYPES,
-  NODE_REF_PATTERN,
-  RESERVED_TEMPLATE_VARS,
-  combineSameLabelRefs,
-  refHandleCategory,
-} from "@nodaro/shared"
-import type { PromptSegment } from "@nodaro/shared"
-
+import { resolveIndex, resolveNodeRefs, parseNodeRef, canonicalVarName, extractReferencedLabels, PARAMETER_NODE_TYPES, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, combineSameLabelRefs, refHandleCategory } from "@nodaro/shared"
+import type { PromptSegment } from "@nodaro/prompts"
 export interface NodeRefItem {
   id: string
   label: string

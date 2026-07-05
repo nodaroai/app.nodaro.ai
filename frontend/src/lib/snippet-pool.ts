@@ -1,4 +1,4 @@
-import { getFactorySnippets, type SnippetMedia, type SnippetTarget } from "@nodaro/shared"
+import { getFactorySnippets, type SnippetMedia, type SnippetTarget } from "@nodaro/prompts"
 import type { PromptSnippet } from "@/lib/api"
 
 /** One row of the merged menu pool — what the slash menu, button menu, and

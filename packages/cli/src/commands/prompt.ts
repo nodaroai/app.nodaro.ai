@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { WizardSelection } from "@nodaro/shared"
+import type { WizardSelection } from "@nodaro/prompts"
 import { buildClient, handleError } from "../client.js"
 import { emit, info, success, dim, table, warn, type OutputOpts } from "../output.js"
 import { parseSelectionPairs } from "../params.js"

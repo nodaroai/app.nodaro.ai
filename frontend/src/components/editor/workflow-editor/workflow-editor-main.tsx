@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone, filterCloneNodes } from "@nodaro/shared";
+import { isExpandedClone, filterCloneNodes, getOutputType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -95,7 +95,6 @@ import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWrite
 import { resolveManualEdit } from "./execute-node";
 import { extractNodeOutput } from "./execution-graph";
 import { orderNodesParentFirst } from "./group-coords";
-import { getOutputType } from "@nodaro/shared";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import { studioWorkflowUrl } from "@/lib/studio";
 import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";

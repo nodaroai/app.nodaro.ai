@@ -21,6 +21,7 @@ WORKDIR /app
 # Copy ONLY package manifests first to maximise Docker layer caching.
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY backend/package.json ./backend/
@@ -40,6 +41,14 @@ COPY packages/shared/tsup.config.ts ./packages/shared/
 WORKDIR /app/packages/shared
 RUN npm run build
 
+# @nodaro/prompts (private, SUL) — depends on @nodaro/shared dist.
+WORKDIR /app
+COPY packages/prompts/src ./packages/prompts/src
+COPY packages/prompts/tsconfig.json ./packages/prompts/
+COPY packages/prompts/tsup.config.ts ./packages/prompts/
+WORKDIR /app/packages/prompts
+RUN npm run build
+
 # ── Stage 2b: Build @nodaro/sdk (tsup) ─────────────────────────────
 # Frontend imports @nodaro/sdk from node_modules (workspace symlink).
 # Client depends on @nodaro/shared, so shared/dist must be in place first.
@@ -48,6 +57,8 @@ FROM deps AS client-build
 WORKDIR /app
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/package.json
 
 COPY packages/client/src ./packages/client/src
 COPY packages/client/tsconfig.json ./packages/client/
@@ -67,6 +78,8 @@ WORKDIR /app
 # Bring in the freshly built shared dist so the symlinked package resolves.
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/package.json
 
 # Backend source.
 COPY backend/ ./backend/
@@ -90,6 +103,8 @@ WORKDIR /app
 # Shared dist (Vite imports it as @nodaro/shared from package main/module).
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/package.json
 
 # i18n sidecars: frontend/src/lib/i18n-bootstrap.ts uses
 # import.meta.glob("../../../packages/shared/src/i18n/*.*.ts") so Vite can
@@ -173,6 +188,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY backend/package.json ./backend/
@@ -221,6 +237,7 @@ COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 
 # 3. Workspace package manifests (so Node's resolver knows the layout).
 COPY --chown=node:node --from=prod-deps /app/packages/shared/package.json ./packages/shared/package.json
+COPY --chown=node:node --from=prod-deps /app/packages/prompts/package.json ./packages/prompts/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/remotion/package.json ./packages/remotion/package.json
 COPY --chown=node:node --from=prod-deps /app/backend/package.json ./backend/package.json
 COPY --chown=node:node --from=prod-deps /app/frontend/package.json ./frontend/package.json
@@ -236,6 +253,7 @@ COPY --chown=node:node --from=prod-deps /app/backend/node_modules ./backend/node
 
 # 4. Built @nodaro/shared dist (resolved via the workspace symlink).
 COPY --chown=node:node --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+COPY --chown=node:node --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
 
 # 5. Backend compiled JS (flat dist/server.js because tsconfig rootDir = ./src).
 COPY --chown=node:node --from=backend-build /app/backend/dist ./backend/dist

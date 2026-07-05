@@ -22,20 +22,7 @@
 
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import {
-  IMAGE_TO_VIDEO_PROVIDERS,
-  TEXT_TO_VIDEO_PROVIDERS,
-  IMAGE_GEN_PROVIDERS,
-  IMAGE_I2I_PROVIDERS,
-  IMAGE_EDIT_PROVIDERS,
-  buildVideoCreditModelIdentifier,
-  buildMotionCreditModelIdentifier,
-  buildCreditModelIdentifier,
-  buildLlmCreditIdentifier,
-  LLM_MODELS,
-  FLUX2_RES_MP,
-  type Flux2Model,
-} from "@nodaro/shared"
+import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildCreditModelIdentifier, buildLlmCreditIdentifier, LLM_MODELS, FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Plausible-input matrices for each builder

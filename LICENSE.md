@@ -1,6 +1,6 @@
 # Nodaro License Overview
 
-Nodaro is fair-code: source-available with use-based restrictions. There are **three license tiers** in this repository.
+Nodaro is fair-code: source-available with use-based restrictions. There are **four license tiers** in this repository.
 
 ## Community code (default)
 
@@ -21,6 +21,17 @@ Files in either of the following patterns are licensed under the **Nodaro Enterp
 
 You may read, modify, and run enterprise code locally for development and testing without a subscription. Using Enterprise features in production requires a valid Nodaro Cloud or Nodaro Enterprise subscription. Enterprise code that remains dormant — no license key installed, no Enterprise features enabled — does not require a subscription (see "Combined builds" below).
 
+## Prompt layer (`packages/prompts/` — Functional Source License)
+
+The npm package [`@nodaro/prompts`](./packages/prompts/) carries Nodaro's
+prompt-engineering content (picker catalogs with hints, prompt builders,
+doctrine, presets) under the **Functional Source License,
+FSL-1.1-Apache-2.0** ([full text](./packages/prompts/LICENSE)): free for any
+non-competing use — including embedding in commercial applications built
+against the Nodaro platform — but not licensed for use in competing products
+or services. Each version additionally becomes Apache-2.0 two years after
+its release.
+
 ## Published SDK packages (Apache License 2.0)
 
 The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli/` are published to npm under the **Apache License 2.0**, not the Nodaro Sustainable Use License. This is intentional: the SDK and CLI are meant to be embedded in or invoked from third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
@@ -28,7 +39,7 @@ The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli
 The Apache 2.0 grant applies ONLY to:
 
 - [`packages/client/`](./packages/client/) — `@nodaro/sdk` (typed REST client)
-- [`packages/shared/`](./packages/shared/) — `@nodaro/shared` (types, model registries, prompt helpers)
+- [`packages/shared/`](./packages/shared/) — `@nodaro/shared` (types, model catalog, wire contracts, structural vocabularies)
 - [`packages/cli/`](./packages/cli/) — `@nodaro/cli` (terminal CLI consuming `@nodaro/sdk`)
 
 Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE), [`packages/shared/LICENSE`](./packages/shared/LICENSE), and [`packages/cli/LICENSE`](./packages/cli/LICENSE).

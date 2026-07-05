@@ -83,11 +83,9 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
-import { pickerFanoutTargets } from "@nodaro/shared";
-import { resolveEffectiveSourceType } from "@nodaro/shared";
-import { hasFeature } from "@nodaro/shared";
-import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveEffectiveSourceType, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared"
+import { composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
+import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
@@ -245,30 +243,8 @@ import {
   runCreatureGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { buildImagePrompt, assembleImageInput } from "@nodaro/shared";
-import { composeNegative } from "@nodaro/shared";
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format";
-import { LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared";
-import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
-import { characterMentionSlug } from "@nodaro/shared";
-import { characterMentionableAssetArrays } from "@nodaro/shared";
-import { selectLoraRoutingForMentions } from "@nodaro/shared";
-import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
-import { collectIdentityLockClause, characterLockToRefLock } from "@nodaro/shared";
-import { resolveSeparator } from "@nodaro/shared";
-import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
-import { spreadJsonArrayIfSingleton } from "@nodaro/shared";
-import { zipMergeLists } from "@nodaro/shared";
-import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro/shared";
-import {
-  tryParseJson,
-  evaluateCondition,
-  evaluateConditionGroup,
-  resolveConditionValue,
-} from "@nodaro/shared";
-import { sortListItems } from "@nodaro/shared";
-import { runSelector, resolveSelectorRefs } from "@nodaro/shared";
-import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
+;
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 // Video prompt-assembly building blocks — MOVED out of this module into a
 // shared lib so the final-prompt PREVIEW can compose video prompts the SAME way
@@ -280,8 +256,6 @@ import {
 } from "@/lib/video-prompt-assembly";
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
 import { probeAudioDuration } from "@/lib/audio-duration";
-import { assembleSunoInput, type AssembleSunoResult } from "@nodaro/shared";
-import { computeNodePrompt, computeLlmChatFields } from "@nodaro/shared";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
   getUpstreamDuration,

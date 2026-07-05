@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react"
 import { useShallow } from "zustand/react/shallow"
-import { buildPickerAnalyzerSpec, applyPickerJson, isAnalyzablePicker, type PickerType } from "@nodaro/shared"
+import { buildPickerAnalyzerSpec, applyPickerJson, isAnalyzablePicker, type PickerType } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { PickerConsumerData, DescribeToPickerData } from "@/types/nodes"
 

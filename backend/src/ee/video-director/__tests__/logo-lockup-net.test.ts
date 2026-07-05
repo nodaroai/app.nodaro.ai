@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 import { ensureLogoLockupScene } from "../logo-lockup-net.js"
 
 const brand = (image?: string): BrandTokens | undefined =>

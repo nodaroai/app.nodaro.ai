@@ -6,7 +6,7 @@ import {
   sunoPreviewFields,
 } from "../audio-prompt-assembly"
 import { collectAudioStyleHints } from "../audio-style-hints"
-import { appendField } from "@nodaro/shared"
+import { appendField } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 /** Build an audio consumer node of a given type. */

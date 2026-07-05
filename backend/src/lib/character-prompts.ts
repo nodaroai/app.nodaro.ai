@@ -4,7 +4,7 @@
  * composes the two-channel prompts used by portrait + asset gen routes.
  */
 
-import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeValue } from "@nodaro/shared"
+import { buildPersonHints, type PersonValue, buildWardrobeHints, type WardrobeValue } from "@nodaro/prompts"
 
 /**
  * Clothing floor. A face-referenced full-body studio shot with no outfit specified

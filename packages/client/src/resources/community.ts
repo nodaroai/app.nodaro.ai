@@ -1,10 +1,5 @@
-import type {
-  CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
-  CommunityFullDetail,
-  BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
-  FavoriteListingResult, ReportListingResult,
-  PublishListingParams, PublishListingResult, SharedListing,
-} from "@nodaro/shared"
+import type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared"
+export type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -13,13 +8,6 @@ import type { NodaroClient } from "../client.js"
  * here so SDK consumers don't have to add `@nodaro/shared` as a second
  * dependency just to typecheck `browse`/`clone`/`favorite`/`report`.
  */
-export type {
-  CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
-  CommunityFullDetail,
-  BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
-  FavoriteListingResult, ReportListingResult,
-  PublishListingParams, PublishListingResult, SharedListing,
-} from "@nodaro/shared"
 
 /**
  * Community — browse, favorite, clone, and report shared characters,

@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Repeat } from "lucide-react"
-import { getLoopSubject, getLoopSubjectLabel } from "@nodaro/shared"
+import { getLoopSubject, getLoopSubjectLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { LoopSubjectData } from "@/types/nodes"
 

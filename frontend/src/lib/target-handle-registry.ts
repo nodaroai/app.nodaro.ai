@@ -1,4 +1,4 @@
-import { ANALYZABLE_PICKER_TYPES } from "@nodaro/shared"
+import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"

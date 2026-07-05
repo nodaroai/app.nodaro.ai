@@ -1,4 +1,5 @@
-import { getFactoryPresets, extractPresetData } from "@nodaro/shared"
+import { getFactoryPresets } from "@nodaro/prompts"
+import { extractPresetData } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
 
 /**

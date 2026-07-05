@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  ACTION_FX,
-  ACTION_FX_CATEGORY_LABELS,
-  ACTION_FX_CATEGORY_ORDER,
-  type ActionFx,
-  type ActionFxCategory,
-} from "@nodaro/shared"
+import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

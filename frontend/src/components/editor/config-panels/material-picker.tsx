@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  MATERIALS,
-  MATERIAL_CATEGORY_LABELS,
-  MATERIAL_CATEGORY_ORDER,
-  type Material,
-  type MaterialCategory,
-} from "@nodaro/shared"
+import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, type Material, type MaterialCategory } from "@nodaro/prompts"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

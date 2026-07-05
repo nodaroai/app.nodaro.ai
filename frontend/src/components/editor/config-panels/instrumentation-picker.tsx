@@ -2,18 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  INSTRUMENTS,
-  PRODUCTION_STYLES,
-  VOCAL_PRESENCE,
-  VOCAL_PRESENCE_INSTRUMENTAL_ID,
-  SINGING_STYLES,
-  INSTRUMENT_CATEGORY_ORDER,
-  INSTRUMENT_CATEGORY_LABELS,
-  pickIds,
-  togglePick,
-  type InstrumentationEntry,
-} from "@nodaro/shared"
+import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, VOCAL_PRESENCE_INSTRUMENTAL_ID, SINGING_STYLES, INSTRUMENT_CATEGORY_ORDER, INSTRUMENT_CATEGORY_LABELS, type InstrumentationEntry } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

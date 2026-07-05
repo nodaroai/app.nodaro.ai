@@ -17,20 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import {
-  modelIdsByKindMode,
-  SEEDANCE_2_REF_LIMITS,
-  isSeedance2Provider,
-  ALL_CAPTION_STYLES,
-  COMBINE_TRANSITION_IDS,
-  AUDIO_CROSSFADE_CURVE_IDS,
-  MOTION_TRANSFER_PROVIDERS,
-  VIDEO_ANALYSIS_LLM_MODELS,
-  VIDEO_ANALYSIS_DURATION_BUCKETS,
-  VIDEO_ANALYSIS_MAX_DURATION_SEC,
-  VIDEO_ANALYSIS_MAX_SCENE_SEC,
-  videoAnalysisBucketCredits,
-} from "@nodaro/shared"
+import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, videoAnalysisBucketCredits } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/

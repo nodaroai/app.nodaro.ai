@@ -12,7 +12,7 @@ import {
   type SunoPreviewField,
 } from "@/lib/audio-prompt-assembly"
 import { buildNodeRefMap } from "@/lib/node-refs"
-import type { SoundConsumerType } from "@nodaro/shared"
+import type { SoundConsumerType } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 

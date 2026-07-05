@@ -1,4 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { getParameterPromptHint } from "@nodaro/prompts"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug } from "@nodaro/shared"
+import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
@@ -15,19 +18,6 @@ import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGro
 import { FAN_IN_NODE_TYPES } from "./types";
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET } from "@nodaro/shared";
-import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
-import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
-import { splitByLoopDelimiter } from "@nodaro/shared";
-import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
-import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
-import { splitGeneratedItems } from "@nodaro/shared";
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
-import { resolveSourceThroughConnectedList } from "@nodaro/shared";
-import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
-import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared";
-import { characterMentionSlug } from "@nodaro/shared";
-import type { EntityKind, ConnectedReference } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they

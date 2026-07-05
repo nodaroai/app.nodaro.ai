@@ -17,16 +17,7 @@
 
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS, CREDIT_COSTS } from "../credits.js"
-import {
-  CINEMATIC_RESERVE_IDS,
-  CINEMATIC_RATE_USD_PER_SEC,
-  CINEMATIC_MIN_DURATION_SEC,
-  CINEMATIC_MAX_DURATION_SEC,
-  cinematicHoldCredits,
-  cinematicUsdCost,
-  resolveCinematicCreditId,
-  type CinematicResolution,
-} from "@nodaro/shared"
+import { CINEMATIC_RESERVE_IDS, CINEMATIC_RATE_USD_PER_SEC, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicHoldCredits, cinematicUsdCost, resolveCinematicCreditId, type CinematicResolution } from "@nodaro/shared"
 
 const CREDIT_BASE_USD = 0.02
 // Runtime reserve: getModelCreditCostFromDB applies the admin markup to the stored hold.

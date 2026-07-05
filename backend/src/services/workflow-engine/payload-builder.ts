@@ -6,60 +6,15 @@
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
-import { collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection } from "@nodaro/shared"
-import { buildImagePrompt, assembleImageInput, buildScenePrompt } from "@nodaro/shared"
-import { composeNegative } from "@nodaro/shared"
-import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
-import { characterMentionableAssetArrays } from "@nodaro/shared"
-import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage, isVeoProvider } from "@nodaro/shared"
-import { appendMusicMeta } from "@nodaro/shared"
+import { collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore } from "@nodaro/prompts"
+import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
+import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
-import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
-import { resolveAiAvatarCreditId } from "@nodaro/shared"
-import { resolveSwitchXCreditId } from "@nodaro/shared"
-import { resolveCinematicCreditId } from "@nodaro/shared"
-import { referenceSheetCreditId } from "@nodaro/shared"
-import { buildVideoAnalysisCreditId } from "@nodaro/shared"
-import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName } from "@nodaro/shared"
-import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
-import { resolveNodeRefs } from "@nodaro/shared"
-import { resolveEffectiveSourceType } from "@nodaro/shared"
-import {
-  composeSoundHintFromConnections,
-  truncateForField,
-  appendField,
-  assembleSunoInput,
-  type SoundConsumerType,
-  type SoundComposition,
-} from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/shared"
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { computeNodePrompt } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext, CharacterMeta } from "@nodaro/shared"
-import { characterMentionSlug, characterLockToRefLock } from "@nodaro/shared"
-import { resolveVideoReferenceCore } from "@nodaro/shared"
 import { backendHybridRoles } from "../../lib/reference-format.js"
-import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
-import { PLATFORM_SPECS } from "@nodaro/shared"
-import { isSeedance2Provider, MODEL_CATALOG, hasFeature } from "@nodaro/shared"
-import { referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality } from "@nodaro/shared"
-import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
-import { buildLlmCreditIdentifier, motionGraphicsFeature } from "@nodaro/shared"
-import {
-  buildCharacterPrompt,
-  buildObjectPrompt,
-  buildCreaturePrompt,
-  buildLocationPrompt,
-  buildFaceTemplateInputs,
-  LOCATION_REFERENCE_PHOTO_KINDS,
-  locationReferencePhotoKindLabel,
-  type LocationReferencePhotoKind,
-} from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 

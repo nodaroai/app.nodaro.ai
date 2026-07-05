@@ -523,7 +523,7 @@ describe("Task 5 verb→nodeType factory-preset coverage", () => {
     ["text-to-speech"],
     ["text-to-audio"],
   ])("%s has at least one factory preset", async (nodeType) => {
-    const { getFactoryPresets } = await import("@nodaro/shared")
+    const { getFactoryPresets } = await import("@nodaro/prompts")
     expect(getFactoryPresets(nodeType).length).toBeGreaterThan(0)
   })
 })

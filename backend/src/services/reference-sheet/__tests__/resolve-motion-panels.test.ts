@@ -4,7 +4,6 @@ import { buildMotionBackgroundSections } from "../build-sections.js"
 import { sheetSlots } from "../compositor.js"
 import { MOTION_COLUMN } from "@nodaro/shared"
 import type { SheetFlavour } from "@nodaro/shared"
-
 const fl: SheetFlavour = {
   outputFormat: "motion",
   withText: true,

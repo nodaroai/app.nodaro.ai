@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { Check, Copy, Eye, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { PromptSegmentOrigin } from "@nodaro/shared"
+import type { PromptSegmentOrigin } from "@nodaro/prompts"
 
 /**
  * Display-only provenance origin. Extends the shared {@link PromptSegmentOrigin}

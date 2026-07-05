@@ -10,11 +10,7 @@
 import { readFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import {
-  LOTTIE_OVERLAY_CATALOG,
-  LEGACY_LOTTIE_HOST_REMAP,
-  resolveLottieOverlaySrc,
-} from "@nodaro/shared"
+import { LOTTIE_OVERLAY_CATALOG, LEGACY_LOTTIE_HOST_REMAP, resolveLottieOverlaySrc } from "@nodaro/shared"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../../prompts/lottie-overlay-system.js"
 
 // backend/src/lib/__tests__ → backend/assets/lottie-catalog

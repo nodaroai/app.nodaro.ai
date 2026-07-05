@@ -2,15 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  LIGHTINGS,
-  LIGHTING_CATEGORY_ORDER,
-  LIGHTING_CATEGORY_LABELS,
-  LIGHTING_FIELD_BY_CATEGORY,
-  type Lighting,
-  type LightingCategory,
-  type LightingValue,
-} from "@nodaro/shared"
+import { LIGHTINGS, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS, LIGHTING_FIELD_BY_CATEGORY, type Lighting, type LightingCategory, type LightingValue } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"

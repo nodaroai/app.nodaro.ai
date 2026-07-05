@@ -6,8 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SCRIPT_PROVIDERS } from "@nodaro/shared"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
+import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const generateScriptBody = z.object({

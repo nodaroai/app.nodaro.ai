@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react"
 import { Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  OBJECT_MOTION_PROVIDERS,
-  resolveEntityAspect,
-  aspectRatioToNumber,
-  type ObjectMotionProvider,
-} from "@nodaro/shared"
+import { OBJECT_MOTION_PROVIDERS, resolveEntityAspect, aspectRatioToNumber, type ObjectMotionProvider } from "@nodaro/shared"
 import { generateObjectMotion, removeObjectAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"

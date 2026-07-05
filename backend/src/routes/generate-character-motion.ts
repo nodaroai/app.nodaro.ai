@@ -10,13 +10,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
-import {
-  buildMotionPrompt,
-  CHARACTER_MOTION_PROVIDERS,
-  CHARACTER_ASPECT_OPTIONS,
-  resolveCharacterAspectRatio,
-} from "@nodaro/shared"
-
+import { CHARACTER_MOTION_PROVIDERS, CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio } from "@nodaro/shared"
+import { buildMotionPrompt } from "@nodaro/prompts"
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
   // Optional in v2: when the studio path runs (attachToCharacterId set), the

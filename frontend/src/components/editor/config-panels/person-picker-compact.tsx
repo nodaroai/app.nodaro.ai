@@ -2,16 +2,8 @@
 
 import { memo, useId, useMemo, useRef, useState } from "react"
 import { ChevronDown, X } from "lucide-react"
-import {
-  PERSON_DIMENSION_LABELS,
-  PERSON_DIMENSION_SECTIONS,
-  PERSON_FIELD_BY_DIMENSION,
-  getPersonLabel,
-  pickIds,
-  type PersonDimension,
-  type PersonDimensionSection,
-  type PersonValue,
-} from "@nodaro/shared"
+import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_SECTIONS, PERSON_FIELD_BY_DIMENSION, getPersonLabel, type PersonDimension, type PersonDimensionSection, type PersonValue } from "@nodaro/prompts"
+import { pickIds } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"

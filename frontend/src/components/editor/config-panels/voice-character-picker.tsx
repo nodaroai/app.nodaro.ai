@@ -2,16 +2,8 @@
 
 import { Fragment, memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  VOICE_AGES,
-  VOICE_GENDERS,
-  VOICE_LANGUAGES,
-  VOICE_ACCENTS,
-  VOICE_TIMBRES,
-  pickIds,
-  togglePick,
-  type VoiceCharacterEntry,
-} from "@nodaro/shared"
+import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES, type VoiceCharacterEntry } from "@nodaro/prompts"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
