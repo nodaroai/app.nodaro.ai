@@ -90,4 +90,4 @@ frontend/
 
 ## License
 
-Sustainable Use License - See [LICENSE](../LICENSE)
+Nodaro Sustainable Use License - See [LICENSE](../LICENSE)

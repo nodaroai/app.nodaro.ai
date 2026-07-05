@@ -5,7 +5,7 @@ The Nodaro source code is available under the licenses described in
 the Nodaro name, logo, or brand.**
 
 "Nodaro", the Nodaro logo, and related marks, wordmarks, and visual identity are
-trademarks of Nodaro. They are **not** covered by the Sustainable Use License,
+trademarks of Nodaro. They are **not** covered by the Nodaro Sustainable Use License,
 the Enterprise License, or the Apache-2.0 grant on the SDK packages.
 
 ## What this means for forks and self-hosters

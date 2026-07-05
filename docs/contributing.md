@@ -6,9 +6,10 @@ layout: default
 # Contributing to Nodaro
 
 Thanks for your interest in contributing. Nodaro is a source-available
-AI workflow editor — under the [Sustainable Use License](../LICENSE),
-anyone can run their own copy for personal or internal-business use,
-build apps on top of the REST API, or send patches upstream. This
+AI workflow editor — under the [Nodaro Sustainable Use License](../LICENSE),
+anyone can run their own copy for personal use, for development and
+evaluation, or for internal-business use in companies of up to three
+people, build apps on top of the REST API, or send patches upstream. This
 document is the entry point for the third group: people who want to
 land code in this repo.
 
@@ -332,10 +333,12 @@ In practice this means:
 Nodaro is fair-code with three license tiers (see [`LICENSE.md`](../LICENSE.md)
 for the full overview):
 
-- Community code (default): [Sustainable Use License](../LICENSE) —
-  source-available; permits personal + internal-business use +
-  self-hosting; prohibits commercial hosted-service offerings to third
-  parties.
+- Community code (default): [Nodaro Sustainable Use License](../LICENSE) —
+  source-available; permits personal use, dev/test/evaluation at any
+  company size, and internal-business self-hosting for companies of up
+  to three (3) people; prohibits commercial hosted-service offerings to
+  third parties and requires a commercial license for larger companies'
+  internal production use.
 - Enterprise code (any path with an `ee` segment, any filename
   containing `.ee.`, plus compiled artifacts derived from such files):
   [Enterprise License](../backend/src/ee/LICENSE) —

@@ -50,4 +50,4 @@ Three npm packages in this repo:
 
 ## License
 
-Sustainable Use License — see [LICENSE](../LICENSE).
+Nodaro Sustainable Use License — see [LICENSE](../LICENSE).
