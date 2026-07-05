@@ -87,7 +87,7 @@ const envSchema = z.object({
 
 export type Edition = "community" | "business" | "cloud"
 
-/** community = open source, no credits, no admin */
+/** community = source-available self-host, no credits, no admin */
 export function isCommunity(): boolean {
   return config.EDITION === "community"
 }
