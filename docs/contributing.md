@@ -267,32 +267,38 @@ providers, otherwise persisted workflows trip the route's Zod enum.
 
 ## 8. Releasing the SDK packages
 
-Two packages in `packages/` publish to npm: `@nodaro/shared` and
-`@nodaro/sdk`. The release flow is [Changesets](https://github.com/changesets/changesets):
+Three packages in `packages/` publish to npm: `@nodaro/shared`,
+`@nodaro/sdk`, and `@nodaro/cli`. The release flow is
+[Changesets](https://github.com/changesets/changesets), fully automated
+by `.github/workflows/release.yml`:
 
 ```bash
-# After making a change that affects either package
+# After making a change that affects a published package
 npx changeset
 ```
 
 The CLI prompts you to pick which packages changed, the bump type
 (patch / minor / major), and a one-line summary. It writes a
 markdown file under `.changeset/<random>.md` — commit this with
-your PR.
+your PR. CI enforces this (the **Changeset Guard** job fails PRs
+that change published packages without one); for changes that
+genuinely need no release note, use `npx changeset --empty`.
 
-When the PR merges to `dev` and ultimately `main`, a maintainer
-runs:
+From there everything is automatic:
 
-```bash
-npm run version    # bumps versions, updates CHANGELOG.md
-npm run release    # builds + publishes to npm
-```
+1. When your PR merges to `dev`, the release workflow maintains a
+   rolling **"Version Packages"** PR that applies all pending
+   changesets (version bumps + CHANGELOGs).
+2. When that PR merges and `dev` is promoted to `main`, the
+   workflow publishes any unpublished versions to npm (via npm
+   Trusted Publishing / OIDC — no tokens), tags the release,
+   creates GitHub Releases, and rebuilds the standalone CLI
+   binaries when `@nodaro/cli` was part of the batch.
 
 You don't need to publish anything yourself — the changeset is the
-only thing the contribution flow asks for. If your PR doesn't
-touch the published packages (`@nodaro/shared` or `@nodaro/sdk`),
-no changeset is needed; the workspaces under `ignore` in
-`.changeset/config.json` are skipped.
+only thing the contribution flow asks for. Workspaces under
+`ignore` in `.changeset/config.json` (backend, frontend, remotion)
+never publish and need no changesets.
 
 ## 9. Code of conduct
 

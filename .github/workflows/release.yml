@@ -1,0 +1,105 @@
+name: Release (npm)
+
+# Two-phase changesets release train, split on the dev→main promotion boundary:
+#
+#   dev push  → "Version Packages" PR into dev (version-only). Version bumps +
+#               CHANGELOGs ride the normal staging train like any other change.
+#   main push → publish any unpublished package versions to npm. Releases
+#               therefore happen exactly when code ships to production.
+#
+# Publishing authenticates via npm Trusted Publishing (GitHub OIDC) — no token
+# stored anywhere. It stays INERT until the repository variable
+# NPM_PUBLISH_ENABLED is set to "true" (same dormant-until-configured pattern
+# as the CLA bot), which should only happen after a Trusted Publisher is
+# configured on npmjs.com for @nodaro/shared, @nodaro/sdk, and @nodaro/cli
+# (package Settings → Trusted Publisher → GitHub Actions → this repo + this
+# workflow filename: release.yml).
+
+on:
+  push:
+    branches: [dev, main]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version-pr:
+    name: Version Packages PR
+    if: github.repository == 'nodaroai/app.nodaro.ai' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the changeset-release/dev branch
+      pull-requests: write # open/update the Version Packages PR
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Open / update the Version Packages PR
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: npx changeset version
+          commit: "release: version packages"
+          title: "release: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to npm (OIDC)
+    if: github.repository == 'nodaroai/app.nodaro.ai' && github.ref == 'refs/heads/main' && vars.NPM_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # changesets/action pushes release tags + creates GitHub Releases
+      actions: write # dispatch the CLI-binaries workflow when @nodaro/cli publishes
+      id-token: write # npm Trusted Publishing (OIDC provenance)
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build publishable packages
+        run: |
+          npm -w @nodaro/shared run build
+          npm -w @nodaro/sdk run build
+          npm -w @nodaro/cli run build
+      - name: Publish unpublished versions
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          publish: npx changeset publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build CLI binaries for a published @nodaro/cli
+        # Tags pushed with GITHUB_TOKEN don't trigger other workflows (GitHub's
+        # recursion guard), so dispatch the binaries workflow explicitly.
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(echo "$PUBLISHED" | jq -r '.[] | select(.name == "@nodaro/cli") | .version')
+          if [ -n "$version" ]; then
+            echo "Dispatching CLI binaries build for $version"
+            gh workflow run cli-release.yml --repo "$GITHUB_REPOSITORY" -f version="$version"
+          else
+            echo "No @nodaro/cli publish in this batch — skipping binaries"
+          fi
