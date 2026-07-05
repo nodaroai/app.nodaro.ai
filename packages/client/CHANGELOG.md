@@ -1,5 +1,14 @@
 # @nodaro/sdk
 
+## 1.0.2
+
+### Patch Changes
+
+- 6bcdb96: README overhaul for agent-first onboarding: "LLM quick start" moved directly after the server quick start and split into a **universal primer** (reusable in any project; also published raw as `sdk-agent-primer.txt` with `curl | pbcopy` one-liners) and a separate **example project brief** ("animated postcard" — image shown immediately, live % progress via `onProgress`, cancel via `AbortSignal`). The primer names recommended models (`nano-banana-2`, `seedance-2-fast` @ 4s — the platform default) and links full model lists + runtime discovery. New "Connect via MCP" section with per-client connect badges, the Claude Code one-liner, and the MCP-delivered Skills (Film Director / Video Director). Credential cells now deep-link `app.nodaro.ai/settings/api` and `/settings/developer-apps`.
+- ccc07e7: README agent primer: published as a raw copyable file (`sdk-agent-primer.txt` on the docs site) with `curl | pbcopy` one-liners, and extended with UX rules for generation apps — show intermediate results while later steps run, drive a live progress bar via `runAndWait`'s `onProgress` (or `jobs.getStatus`), and wire an `AbortSignal` for cancel.
+- Updated dependencies [6bcdb96]
+  - @nodaro/shared@1.2.0
+
 ## 1.0.1
 
 ### Patch Changes
