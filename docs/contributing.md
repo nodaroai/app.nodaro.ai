@@ -354,12 +354,15 @@ for the full overview):
 
 **Placement rule for contributions:** every published version of the
 Apache packages is an irrevocable grant, so new prompt engineering,
-catalogs, doctrine, presets, and other creative/product content belongs
-in `backend/` (Community license) or `backend/src/ee/` (Enterprise) by
-default. Add to `packages/shared` only what the public API/SDK contract
-actually requires — types, wire enums, validation shared with API
-consumers — or what is deliberately published for reuse; say which in
-your PR description. When in doubt, put it in `backend/`.
+catalogs, doctrine, and presets belong in `packages/prompts/` (FSL) or
+`backend/`/`ee/` by default. Add to `packages/shared` only what the
+public API/SDK contract actually requires — types, wire enums,
+validation shared with API consumers — or what is deliberately
+published for reuse; say which in your PR description. Recipe and
+doctrine content served by the platform itself (MCP skills, recipes
+under `backend/skills/`) stays in `backend/` under the Community
+license by default; it moves under `ee/` (with gated serving tools)
+only if it becomes a premium product asset.
 
 By submitting a contribution, you agree to the [Nodaro Contributor
 License Agreement](../CLA.md). The same CLA covers individual and
