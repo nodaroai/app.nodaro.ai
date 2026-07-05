@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 1.2.1
+
+### Patch Changes
+
+- 37f1805: No functional changes. Republish so the npm provenance attestations reference the repository's current (post-history-rewrite) source commits — earlier versions' attested commit links point at rewritten-away SHAs.
+
 ## 1.2.0
 
 ### Minor Changes

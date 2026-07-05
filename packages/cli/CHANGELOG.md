@@ -1,5 +1,14 @@
 # @nodaro/cli
 
+## 1.1.1
+
+### Patch Changes
+
+- 37f1805: No functional changes. Republish so the npm provenance attestations reference the repository's current (post-history-rewrite) source commits — earlier versions' attested commit links point at rewritten-away SHAs.
+- Updated dependencies [37f1805]
+  - @nodaro/shared@1.2.1
+  - @nodaro/sdk@1.0.3
+
 ## 1.1.0
 
 ### Minor Changes

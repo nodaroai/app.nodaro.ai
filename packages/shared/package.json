@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/shared",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Shared types, model registries, and prompt helpers for the Nodaro platform and SDK.",
   "type": "module",
   "license": "Apache-2.0",

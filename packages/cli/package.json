@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Command-line interface for Nodaro — list and run workflows, inspect jobs and executions, manage projects from the terminal.",
   "type": "module",
   "license": "Apache-2.0",
@@ -41,8 +41,8 @@
     "@inquirer/confirm": "^6.0.12",
     "@inquirer/input": "^5.0.12",
     "@inquirer/select": "^5.1.4",
-    "@nodaro/sdk": "^1.0.2",
-    "@nodaro/shared": "^1.2.0",
+    "@nodaro/sdk": "^1.0.3",
+    "@nodaro/shared": "^1.2.1",
     "commander": "^12.1.0",
     "picocolors": "^1.1.1"
   },
