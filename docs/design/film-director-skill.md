@@ -140,7 +140,7 @@ For each character in the script:
 5. Show all variants. User approves or asks for regenerations.
 6. For characters with dialogue: pick a voice. Either match an ElevenLabs premade voice (Rachel, Roger, Charlie, etc.) or call `voice_design` to create a custom one. Generate a short sample line; play it for the user.
 
-**Optional — [redacted-reference] Soul identity training.** *Trigger point: after step 2 (main image approved), before step 3.* If Soul integration is enabled for this Nodaro instance (check the user's connected providers), train a Soul identity via [redacted-reference] MCP Soul tools (exact endpoints TBD in integration design — see §10 #9) and persist the returned `reference_id` on the character node. Use that `reference_id` as the primary character reference for steps 3–4 and for all downstream scene-image generation (Stage 5). Soul training typically yields 80–90% facial fidelity versus 70–80% for reference-image conditioning alone — worth the extra step for any character that appears in 5+ shots. The fallback when Soul is unavailable or disabled is Nodaro's existing **identity-lock** mechanism (`packages/shared/src/identity-lock.ts`) — natural-language prompt clauses that Nano Banana Pro and GPT Image respect for facial preservation at inference time.
+**Optional — external identity training (provider integration TBD).** *Trigger point: after step 2 (main image approved), before step 3.* If an identity-training integration is enabled for this Nodaro instance (check the user's connected providers), train an identity via the provider's MCP tools (exact endpoints TBD in integration design — see §10 #9) and persist the returned `reference_id` on the character node. Use that `reference_id` as the primary character reference for steps 3–4 and for all downstream scene-image generation (Stage 5). Identity training typically yields 80–90% facial fidelity versus 70–80% for reference-image conditioning alone — worth the extra step for any character that appears in 5+ shots. The fallback when identity training is unavailable or disabled is Nodaro's existing **identity-lock** mechanism (`packages/shared/src/identity-lock.ts`) — natural-language prompt clauses that Nano Banana Pro and GPT Image respect for facial preservation at inference time.
 
 **Pass `workflowId` to every generation MCP call** so the resulting nodes attach directly to the user's canvas as they appear. Track asset URLs/IDs as backup so you can repair via `update_workflow_json` if any node fails to auto-attach.
 
@@ -259,7 +259,7 @@ The workflow is already on the user's canvas — it was assembled incrementally 
 - User uncertain → offer 2-3 specific options to choose between
 - Cost budget exceeded → pause and ask if they want to continue or stop
 - Critical asset missing (e.g., character ref didn't generate) → don't proceed; resolve with user first
-- Soul training fails (when Soul integration is enabled) → fall back to the default identity-lock path; use the main reference image only; tell the user once and continue. **Do not retry Soul in this session.**
+- Identity training fails (when the integration is enabled) → fall back to the default identity-lock path; use the main reference image only; tell the user once and continue. **Do not retry identity training in this session.**
 
 ## What you do NOT do
 
@@ -286,7 +286,7 @@ The skill relies on these MCP tools that already exist in Nodaro:
 | 0. Initialize workspace | `create_workflow` |
 | 1. Script | `update_workflow_json` (attach Script display node on approval) |
 | 2. Shot list | `update_workflow_json` (attach shot-list metadata) |
-| 3. Characters | `generate_character`, `image_to_image`, `voice_design` (or premade ElevenLabs voices); `update_workflow_json` for any nodes the generation tools don't auto-attach. **Optional:** [redacted-reference] MCP Soul tools when integration is enabled (specific endpoints TBD — see Stage 3 escape hatch + §10 #9) |
+| 3. Characters | `generate_character`, `image_to_image`, `voice_design` (or premade ElevenLabs voices); `update_workflow_json` for any nodes the generation tools don't auto-attach. **Optional:** external identity-training MCP tools when integration is enabled (specific endpoints TBD — see Stage 3 escape hatch + §10 #9) |
 | 4. Locations | `generate_location`, `image_to_image`; `update_workflow_json` |
 | 5. Storyboard | `image_to_image` (with character + location refs); `update_workflow_json` |
 | 6. Shot animation | `extract_frame`, `animate_image`; `update_workflow_json` |
@@ -304,7 +304,7 @@ The skill relies on these MCP tools that already exist in Nodaro:
 - `prepare_image_upload` / `upload_image_widget` — let user upload reference images mid-flow
 - `face_swap`, `modify_image`, `edit_image` — for post-generation refinements
 - `add_captions` — for captioned reels/shorts
-- **[redacted-reference] MCP Soul tools (optional, instance-dependent)** — when integration is enabled, used in Stage 3 to train a face-faithful identity model and persist a `reference_id` reusable across scene-image generation. Specific [redacted-reference] MCP endpoints TBD in integration design. See Stage 3 escape hatch for usage; see §10 #9 for integration decisions still pending.
+- **External identity-training MCP tools (optional, instance-dependent)** — when integration is enabled, used in Stage 3 to train a face-faithful identity model and persist a `reference_id` reusable across scene-image generation. Specific endpoints TBD in integration design. See Stage 3 escape hatch for usage; see §10 #9 for integration decisions still pending.
 
 **All exist today.** No new MCP tools need building.
 
@@ -389,7 +389,7 @@ For nodes that don't have a dedicated generation tool — Script display node, s
 Direct JSON manipulation for:
 - Adding edges that the generation tools didn't auto-wire
 - Repairing missing connections in Stage 9 wrap-up
-- Updating a node's `data` field (e.g., persisting Soul `reference_id` on the character node)
+- Updating a node's `data` field (e.g., persisting the identity-training `reference_id` on the character node)
 - Moving nodes around (rare; ELK.js auto-layout handles most placement)
 
 Supports optimistic concurrency via `expected_updated_at` — Claude reads first, modifies, writes back with a freshness check.
@@ -453,7 +453,7 @@ These map back to the gaps identified in the prior analysis of the manual workfl
 | 7. Audio added last | Stage 7 runs only after all videos approved |
 | 8. Provider-specific rules (Seedance, etc.) | Stage 6 "Provider-specific rules" subsection |
 
-*Optional enhancement (not a gap):* [redacted-reference] Soul integration (Stage 3 escape hatch) raises identity fidelity from ~70–80% (default identity-lock path) to ~80–90% — pairs with gap #2 (character variants) to harden character consistency across scenes. See §10 #9 for integration questions still pending.
+*Optional enhancement (not a gap):* the identity-training integration (Stage 3 escape hatch) raises identity fidelity from ~70–80% (default identity-lock path) to ~80–90% — pairs with gap #2 (character variants) to harden character consistency across scenes. See §10 #9 for integration questions still pending.
 
 ---
 
@@ -486,9 +486,9 @@ The skill should check balance via `check_balance` before expensive stages (e.g.
 
 Show clear error. Save conversation state. Suggest user retry when MCP is back.
 
-### Soul training fails or times out
+### Identity training fails or times out
 
-If [redacted-reference] Soul integration is enabled and training fails (timeout, API error, unsupported face, or `reference_id` never returns): tell the user once, fall back gracefully to the default identity-lock path, continue Stage 3 with the main reference image only. Do not retry Soul training in the same session — the user can re-attempt Soul training in a later session once the integration's retry-from-character-node UX is available (Phase 2+).
+If the identity-training integration is enabled and training fails (timeout, API error, unsupported face, or `reference_id` never returns): tell the user once, fall back gracefully to the default identity-lock path, continue Stage 3 with the main reference image only. Do not retry identity training in the same session — the user can re-attempt it in a later session once the integration's retry-from-character-node UX is available (Phase 2+).
 
 ---
 
@@ -554,15 +554,13 @@ Secondary pitch: **"Nodaro is the only platform where AI is your director, not y
 - **Demo video** — the actual reference test film, narrated as a screen recording showing the conversation
 - **Documentation** in `docs/mcp/` — public-facing how-to
 
-### Comparison to competitors
+### Positioning
 
-| (comparison table removed) |
-|-----------|-----------------|--------------------------|
-| (row removed) |
-| (row removed) |
-| (row removed) |
-| (row removed) |
-| (row removed) |
+Differentiators, stated without the head-to-head: chat-driven direction that
+produces an **editable workflow you keep** (not a black box), **multi-shot
+films up to 600s** with continuity engineering, characters with identity
+consistency, music and lip-sync — and an optional external identity-training
+escape hatch (Stage 3).
 
 ---
 
@@ -576,7 +574,7 @@ Secondary pitch: **"Nodaro is the only platform where AI is your director, not y
 6. **Should the skill be open-source?** Could be a separate npm/GitHub repo. Pros: community-extensible, Anthropic skill registry visibility. Cons: [reference removed]. Recommended: yes — publish as open-source (MIT or similar) under a `nodaro-skills` repo; the value is in Nodaro's MCP + credits + canvas, not the skill markdown itself. Community contributions add film genres / ad templates we wouldn't ship ourselves.
 7. **Programmatic mode coexistence.** If the native pipeline ships only Programmatic Mode (per the recommendation), how do these two interact? Recommended: keep them separate. Skill = interactive, Pipeline node = programmatic. No need to unify.
 8. **Backward compatibility.** When the skill is updated, old conversations don't auto-upgrade. Should ongoing sessions pin to the version that started them? Recommended: yes, version-pin per session.
-9. **[redacted-reference] Soul integration.** Several decisions deferred for the Stage 3 escape hatch: per-user opt-in vs instance-wide enablement? Cost-share / billing pass-through model for [redacted-reference] credits? Persistence of `reference_id` — per character node, per user library, or per workspace? Auto-trigger threshold (e.g., always offer Soul for characters in 5+ shots, or only on explicit user request)? Recommended: defer all of these to a Phase 2+ integration design; the escape hatch in Stage 3 keeps the door open without committing.
+9. **External identity-training integration.** Several decisions deferred for the Stage 3 escape hatch: per-user opt-in vs instance-wide enablement? Cost-share / billing pass-through model for the provider's usage? Persistence of `reference_id` — per character node, per user library, or per workspace? Auto-trigger threshold (e.g., always offer it for characters in 5+ shots, or only on explicit user request)? Recommended: defer all of these to a Phase 2+ integration design; the escape hatch in Stage 3 keeps the door open without committing.
 
 ---
 
@@ -628,7 +626,7 @@ Only if RSS-to-video / scheduled-trigger use cases prove out:
 - Personalization
 - Skill marketplace (other film genres, advertising templates, etc.)
 - Tighter Nodaro UI integration ("Open in Claude" deep links)
-- **(removed):** if the default identity-lock path proves insufficient in production (visible face drift on characters in 5+ shots), (removed). Resolve the open questions in §10 first.
+- **Evaluate the identity-training integration:** if the default identity-lock path proves insufficient in production (visible face drift on characters in 5+ shots), wire up the external provider's MCP and activate the Stage 3 escape hatch. Resolve the open questions in §10 first.
 
 ---
 
@@ -643,7 +641,7 @@ Only if RSS-to-video / scheduled-trigger use cases prove out:
 | Schema reference strategy | **Template workflow + `get_workflow_json`** | Lean, no schema duplication |
 | Marketing positioning | **"Watch your film studio build itself on your canvas while you talk to Claude"** | Live-canvas visceral demo + Anthropic partnership angle |
 | Cross-platform support | **Yes — anywhere MCP runs** | Maximize distribution |
-| [redacted-reference] Soul integration | **Escape hatch only (evaluate in Phase 2+)** | Stage 3 keeps a conditional path; default uses identity-lock at inference; open questions in §10 must be resolved before activation |
+| External identity-training integration | **Escape hatch only (evaluate in Phase 2+)** | Stage 3 keeps a conditional path; default uses identity-lock at inference; open questions in §10 must be resolved before activation |
 
 ---
 

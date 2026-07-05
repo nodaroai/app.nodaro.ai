@@ -72,7 +72,7 @@ Exported from the package root (`@nodaro/shared`). Options **reference the exist
 Investigation showed the visuals are **not** simple liftable data; they're custom React components. So:
 
 - **Data-native visuals (lift now):** emoji (`MoodEmoji`, animal/vehicle/weapon icons) and swatches/colors → expose via `icon?`. Cheap, high-value.
-- **Component-rendered visuals (NOT data):** `SettingPreview`, `ColorLookPreview`, `AtmospherePreview`, `LensPreview`, etc. render generated SVG/graphics. There is nothing to "lift." Consumers **render their own** visual from `label`/`category` — which is exactly what studio wants (it rebuilds its own pickers to match [redacted-reference]).
+- **Component-rendered visuals (NOT data):** `SettingPreview`, `ColorLookPreview`, `AtmospherePreview`, `LensPreview`, etc. render generated SVG/graphics. There is nothing to "lift." Consumers **render their own** visual from `label`/`category` — which is exactly what studio wants (it rebuilds its own pickers to match its own design language).
 - **Rich-preview parity for third parties (future, only on demand):** render each preview once → static SVG/PNG on R2 → add `thumbnailUrl` to the catalog data. This turns component-visuals into pure data for everyone, with **no** React shipped. This is the right path **instead of** shipping styled components (drags the design system + contaminates the backend, which also imports `shared`) **or** a headless kit (gives behavior, not the pretty tile).
 
 ## Non-goals (v1)
