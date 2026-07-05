@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nodaro": {
+      "type": "http",
+      "url": "https://mcp.nodaro.ai/mcp"
+    }
+  }
+}
