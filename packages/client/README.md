@@ -1,18 +1,31 @@
 # @nodaro/sdk
 
-Typed REST client for the [Nodaro](https://nodaro.ai) AI workflow platform.
+Typed REST client for the [Nodaro](https://app.nodaro.ai) AI video workflow platform — image / video / voice / music generation, entity studios, and workflows-as-APIs.
 
 ```bash
 npm install @nodaro/sdk
 ```
 
-## Quick start (server-side, OAuth access token)
+Docs: [Documentation](https://nodaroai.github.io/app.nodaro.ai/) · [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md) · [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md) · [llms.txt](https://nodaroai.github.io/app.nodaro.ai/llms.txt)
+
+## Getting credentials
+
+| You are building… | Credential | Where to get it |
+|---|---|---|
+| A script / backend / CI acting as **yourself** | Personal API token (`ndr_…`) | [app.nodaro.ai](https://app.nodaro.ai) → **Settings → API** → Generate token → `NODARO_ACCESS_TOKEN` |
+| An app acting **on behalf of other Nodaro users** | OAuth app (`client_id` + `client_secret`) | [app.nodaro.ai](https://app.nodaro.ai) → **Settings → Developer Apps** → New app (redirect URIs, origins, scopes). The `client_secret` is shown **once** — there's a rotate button if you lose it. |
+| A frontend for a Nodaro instance **you operate** (self-hosted, or first-party) | Your own Supabase project's URL + anon key | Your deployment's `.env` — see the browser quick start below |
+
+The browser/Supabase mode is **not** for third-party apps against the hosted
+app.nodaro.ai — third parties use a personal token or the OAuth flow.
+
+## Quick start (server-side, personal API token)
 
 ```ts
 import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
-  baseUrl: "https://nodaro.example.com",
+  baseUrl: "https://app.nodaro.ai",
   auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
 })
 
@@ -22,12 +35,35 @@ const exec = await client.workflows.run(workflowId, {
 })
 ```
 
-## Quick start (browser, Supabase JWT)
+## Run AI nodes directly
+
+Every generation node is callable without building a workflow. Jobs are
+async — `runAndWait` submits, polls, and resolves the output media URL:
+
+```ts
+const image = await client.nodes.runAndWait("generate-image", {
+  prompt: "a lighthouse at golden hour, cinematic",
+})
+
+const video = await client.nodes.runAndWait("generate-video", {
+  prompt: "gentle camera push-in, waves rolling",
+  imageUrl: image.imageUrl,        // start frame → image-to-video
+})
+
+console.log(video.videoUrl)
+```
+
+## Quick start (browser, Supabase JWT — self-hosted / first-party)
+
+For a frontend talking to a Nodaro deployment you operate: your users log in
+through **your** Supabase project (the same one your Nodaro backend uses), and
+their session JWT authenticates SDK calls.
 
 ```ts
 import { createClient, supabaseAuth } from "@nodaro/sdk"
 import { createClient as supa } from "@supabase/supabase-js"
 
+// Your deployment's own values (the same ones in your Nodaro .env)
 const supabase = supa(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 const client = createClient({
@@ -38,13 +74,14 @@ const client = createClient({
 
 ## OAuth flow (third-party app)
 
-Server-side: exchange a code for an access token after the user clicks "Allow" on the consent screen.
+Create the app under **Settings → Developer Apps**, send the user to the
+consent screen, then exchange the one-shot code (10-minute TTL) server-side:
 
 ```ts
 import { createClient, StaticTokenAuth } from "@nodaro/sdk"
 
 const client = createClient({
-  baseUrl: "https://nodaro.example.com",
+  baseUrl: "https://app.nodaro.ai",
   auth: new StaticTokenAuth(""),  // no auth for the token exchange itself
 })
 
@@ -58,10 +95,12 @@ const tokens = await client.oauth.exchangeCode({
 
 // Now use the access_token for subsequent calls
 const userClient = createClient({
-  baseUrl: "https://nodaro.example.com",
+  baseUrl: "https://app.nodaro.ai",
   auth: new StaticTokenAuth(tokens.access_token),
 })
 ```
+
+Full walkthrough: [OAuth flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md).
 
 ## Errors
 
@@ -97,21 +136,77 @@ try {
 |----------|---------|
 | `client.workflows` | List, get, create, update, delete, run |
 | `client.projects` | Workspace organization |
-| `client.jobs` | Status + cancellation |
-| `client.executions` | Workflow execution status + cancel/list |
-| `client.nodes` | Node metadata discovery (Phase 1's `/v1/nodes`) |
+| `client.jobs` | Job status (+ lean `getStatus` for poll loops) and cancellation |
+| `client.executions` | Workflow execution status, list, cancel |
+| `client.nodes` | Node discovery + direct `run` / `runAndWait` / `runMany` |
+| `client.apps` | Published apps: inputs, run, runs history |
+| `client.characters` | Character Studio: CRUD, portraits, assets, motion, LoRA |
+| `client.locations` | Location Studio: CRUD, assets, atmosphere motion |
+| `client.objects` | Object Studio: CRUD, assets, motion |
+| `client.creatures` | Creature Studio: CRUD, assets, motion |
+| `client.voices` | Voice design, clone, remix, recast |
+| `client.pipelines` | Showrunner pipelines: stages, approvals, chat, branch |
+| `client.reduce` | Fan-in reducer (pick-best, concat, vote, merge…) |
+| `client.promptHelper` | Prompt enhancement / wizard |
+| `client.credits` | Balance + per-model cost lookup |
+| `client.uploads` | Signed upload URLs for image / video / audio |
+| `client.library` | Generated-media library |
+| `client.presets` | Node presets (factory + user) |
+| `client.pickerCatalogs` | Parameter-picker catalog discovery |
+| `client.community` | Shared characters/locations/objects: browse, clone, favorites |
 | `client.developerApps` | Manage your own OAuth apps |
 | `client.oauth` | Code exchange, revoke, app-info |
-
-More resources (assets, credits, social-publish, triggers) coming as the SDK matures.
 
 ## Auth modes
 
 | Class | Use when |
 |-------|----------|
-| `StaticTokenAuth(token)` | You have a fixed token (OAuth access token, API token) — server-side or mobile apps |
+| `StaticTokenAuth(token)` | You have a fixed token (personal API token, OAuth access token) — server-side or mobile |
 | `supabaseAuth(supabase)` | Browser frontend talking to a Nodaro instance you operate (uses live session JWT) |
 | `CallbackAuth(fn)` | BYO logic (refresh tokens, custom auth) |
+
+## Building with an LLM
+
+Working with Claude, Cursor, or another coding agent? Paste the primer below
+into your agent and ask for what you want built. For the full API map, point
+it at [llms.txt](https://nodaroai.github.io/app.nodaro.ai/llms.txt).
+
+````text
+You are building against @nodaro/sdk (npm), the typed client for the Nodaro
+AI video platform (https://app.nodaro.ai).
+
+Setup:
+  npm install @nodaro/sdk
+  Auth: the user creates a token at app.nodaro.ai → Settings → API and sets
+  NODARO_ACCESS_TOKEN. Never hardcode tokens.
+
+Core pattern (all generation is async; runAndWait submits + polls + resolves):
+  import { createClient, StaticTokenAuth } from "@nodaro/sdk"
+  const client = createClient({
+    baseUrl: "https://app.nodaro.ai",
+    auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
+  })
+  const img = await client.nodes.runAndWait("generate-image", { prompt: "…" })
+  const vid = await client.nodes.runAndWait("generate-video", {
+    prompt: "…", imageUrl: img.imageUrl,
+  })
+  // outputs: .imageUrl / .videoUrl / .audioUrl on the resolved object
+
+Example app worth copying — "animated postcard" (text in, video out):
+  1. generate-image with the user's prompt
+  2. generate-video with { imageUrl: <step 1>, prompt: "subtle motion" }
+  3. return videoUrl
+
+Rules:
+  - Generations cost credits; catch InsufficientCreditsError (has .required /
+    .available). All errors are typed classes exported from @nodaro/sdk.
+  - Prefer client.nodes.runAndWait over hand-rolled polling; for manual loops
+    use client.jobs.getStatus(id) (lean poll endpoint).
+  - 22 resources on the client (workflows, characters, voices, pipelines, …):
+    full reference https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
+  - Node catalog + per-node params:
+    https://nodaroai.github.io/app.nodaro.ai/nodes/ (all pages exist as .md)
+````
 
 ## License
 
