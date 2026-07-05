@@ -5,8 +5,8 @@ Portions of this software are licensed as follows:
 - Content of branches other than the main branch (i.e., "main") is not
   licensed under these terms and is provided for reference and development
   purposes only.
-- Source code files that contain ".ee." in their filename, or that reside in
-  any directory whose path contains a segment named "ee" or ending with
+- Source code files that contain ".ee." in their filename, or that reside
+  in any directory whose path contains a segment named "ee" or ending with
   ".ee", are NOT licensed under the Nodaro Sustainable Use License set out
   below. To use such files in production, you must hold a valid Nodaro
   Enterprise License as defined in `backend/src/ee/LICENSE` (and its
@@ -16,16 +16,18 @@ Portions of this software are licensed as follows:
   `backend/src/ee/LICENSE` govern the artifact.
 - Source code files in `packages/client/`, `packages/shared/`, and
   `packages/cli/` are published as the npm packages `@nodaro/sdk`,
-  `@nodaro/shared`, and `@nodaro/cli` under the **Apache License 2.0**, as
-  set out in `packages/client/LICENSE`, `packages/shared/LICENSE`, and
-  `packages/cli/LICENSE`. Those files are NOT subject to the Nodaro
-  Sustainable Use License set out below, and the branch-scope restriction in
-  the first bullet does not affect their Apache 2.0 grant.
+  `@nodaro/shared`, and `@nodaro/cli` under the **Apache License 2.0**,
+  as set out in `packages/client/LICENSE`, `packages/shared/LICENSE`,
+  and `packages/cli/LICENSE`. Those files are NOT subject to the Nodaro
+  Sustainable Use License set out below, and the branch-scope
+  restriction in the first bullet does not affect their Apache 2.0
+  grant.
 - All third-party components incorporated into the Nodaro Software are
   licensed under the original license provided by the owner of the
   applicable component.
-- Content outside of the above-mentioned files or restrictions is available
-  under the **Nodaro Sustainable Use License** as defined below.
+- Content outside of the above-mentioned files or restrictions is
+  available under the **Nodaro Sustainable Use License** as defined
+  below.
 
 ---
 
@@ -37,8 +39,7 @@ Copyright (c) 2026 Nodaro LTD.
 
 ### Acceptance
 
-By using the software, you agree to all of the terms and conditions
-below.
+By using the software, you agree to all of the terms and conditions below.
 
 ### Copyright License
 
@@ -54,19 +55,19 @@ managed service**, where the service provides users with access to any
 substantial set of the features or functionality of the software.
 
 For purposes of this restriction, it is irrelevant whether you charge
-fees for access to the software itself, whether you charge fees only for
-related products or services (including without limitation hosting,
+fees for access to the software itself, whether you charge fees only
+for related products or services (including without limitation hosting,
 infrastructure, support, consulting, integration, training, or other
-software), whether you bundle the software with other paid offerings, or
-whether you provide the software at no cost. What matters is whether
+software), whether you bundle the software with other paid offerings,
+or whether you provide the software at no cost. What matters is whether
 third parties — meaning users, customers, clients, or any persons
 outside your own organization as defined under "Your company" below —
-obtain access to the features or functionality of the software through a
-service that you operate, host, or control.
+obtain access to the features or functionality of the software through
+a service that you operate, host, or control.
 
-This restriction includes, without limitation: offering the software (or
-any modified version of it) as a SaaS product; embedding it within a
-commercial product or service; white-labeling it; including it in a
+This restriction includes, without limitation: offering the software
+(or any modified version of it) as a SaaS product; embedding it within
+a commercial product or service; white-labeling it; including it in a
 bundle of paid products or services; operating it on behalf of clients;
 or otherwise making it available to end users outside of your own
 organization.
@@ -75,41 +76,48 @@ You may use or modify the software only:
 
 (a) for non-commercial or personal use;
 
-(b) for your own internal business purposes, if your company consists of
-    no more than three (3) individuals; or
+(b) for your own internal business purposes, if your company
+    consists of no more than three (3) individuals; or
 
-(c) regardless of the size of your company, for development, testing,
-    and evaluation purposes — meaning non-production use that does not
-    process production data, serve end users, or support a live business
-    workflow.
+(c) regardless of the size of your company, for development,
+    testing, and evaluation purposes — meaning non-production use
+    that does not process production data, serve end users, or
+    support a live business workflow.
 
-If your company consists of more than three (3) individuals, any use of
-the software for internal business purposes beyond what clause (c)
+If your company consists of more than three (3) individuals, any use
+of the software for internal business purposes beyond what clause (c)
 permits requires a commercial license from the licensor. Contact
 license@nodaro.ai.
 
-For the purposes of this section, the size of your company is the total
-number of natural persons working for or within your company (as defined
-under "Definitions" below, including all affiliated entities) —
-including founders, officers, employees, and independent contractors,
-whether full-time or part-time — regardless of how many of them access
-or use the software. Persons outside your company who merely receive
-content generated with the software do not count toward this number.
+For the purposes of this section, the size of your company is the
+total number of natural persons working for or within your company
+(as defined under "Definitions" below, including all affiliated
+entities) — including founders, officers, employees, and independent
+contractors, whether full-time or part-time — regardless of how many
+of them access or use the software. Persons outside your company who
+merely receive content generated with the software do not count
+toward this number.
 
-Nothing in this section permits providing the software to third parties
-as a hosted or managed service, which is prohibited above regardless of
-the size of your company.
+For clarity, use of the software by your company's own personnel to
+create content or other deliverables — including content or
+deliverables that you provide or sell to third parties — is internal
+business use, provided that those third parties do not themselves
+access the features or functionality of the software.
 
-You may distribute the software or provide it to others only if you do
-so free of charge for non-commercial purposes.
+Nothing in this section permits providing the software to third
+parties as a hosted or managed service, which is prohibited above
+regardless of the size of your company.
+
+You may distribute the software or provide it to others only if you
+do so free of charge for non-commercial purposes.
 
 You may not move, change, disable, or circumvent the license key
 functionality in the software, and you may not remove or obscure any
 functionality in the software that is protected by the license key.
 
-You may not alter, remove, or obscure any licensing, copyright, or other
-notices of the licensor in the software. Any use of the licensor's
-trademarks is subject to applicable law.
+You may not alter, remove, or obscure any licensing, copyright, or
+other notices of the licensor in the software. Any use of the
+licensor's trademarks is subject to applicable law.
 
 ### Patents
 
@@ -118,8 +126,8 @@ can license, or becomes able to license, to make, have made, use, sell,
 offer for sale, import and have imported the software, in each case
 subject to the limitations and conditions in this license. This license
 does not cover any patent claims that you cause to be infringed by
-modifications or additions to the software. If you or your company make
-any written claim that the software infringes or contributes to
+modifications or additions to the software. If you or your company
+make any written claim that the software infringes or contributes to
 infringement of any patent, your patent license for the software granted
 under these terms ends immediately. If your company makes such a claim,
 your patent license ends immediately for work on behalf of your company.
@@ -149,10 +157,10 @@ permanently.
 
 ### No Liability
 
-As far as the law allows, the software comes as is, without any warranty
-or condition, and the licensor will not be liable to you for any damages
-arising out of these terms or the use or nature of the software, under
-any kind of legal claim.
+As far as the law allows, the software comes as is, without any
+warranty or condition, and the licensor will not be liable to you for
+any damages arising out of these terms or the use or nature of the
+software, under any kind of legal claim.
 
 ### Governing Law
 
@@ -161,8 +169,8 @@ laws of the State of Israel, without regard to conflict-of-law
 principles. Any legal proceeding arising under or relating to these
 terms shall be subject to the exclusive jurisdiction of the competent
 courts in Tel Aviv-Jaffa, Israel. If you are a consumer, you may also
-benefit from any mandatory provisions of the law of the country in which
-you reside.
+benefit from any mandatory provisions of the law of the country in
+which you reside.
 
 ### Definitions
 
@@ -174,17 +182,17 @@ these terms, including any portion of it.
 **"You"** refers to the individual or entity agreeing to these terms.
 
 **"Your company"** is any legal entity, sole proprietorship, or other
-kind of organization that you work for, plus all organizations that have
-control over, are under the control of, or are under common control with
-that organization. Control means ownership of substantially all the
-assets of an entity, or the power to direct its management and policies
-by vote, contract, or otherwise. Control can be direct or indirect.
+kind of organization that you work for, plus all organizations that
+have control over, are under the control of, or are under common
+control with that organization. Control means ownership of substantially
+all the assets of an entity, or the power to direct its management and
+policies by vote, contract, or otherwise. Control can be direct or
+indirect.
 
 **"Your license"** is the license granted to you for the software under
 these terms.
 
-**"Use"** means anything you do with the software requiring your
-license.
+**"Use"** means anything you do with the software requiring your license.
 
 **"Trademark"** means trademarks, service marks, and similar rights.
 
