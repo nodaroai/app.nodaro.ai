@@ -8,7 +8,7 @@
     "frontend"
   ],
   "scripts": {
-    "build:packages": "npm -w @nodaro/shared run build && npm -w @nodaro/sdk run build",
+    "build:packages": "npm -w @nodaro/shared run build && npm -w @nodaro/prompts run build && npm -w @nodaro/sdk run build",
     "predev": "npm run build:packages",
     "dev": "cd frontend && npm run dev",
     "prebuild": "npm run build:packages",

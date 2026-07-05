@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
-import {
-  USAGE_MODES,
-  usageModeLabel,
-  type UsageMode,
-} from "@nodaro/shared"
+import { USAGE_MODES, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { BODY_MENU_CLASS } from "./body-menu-class"

@@ -8,21 +8,13 @@ import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/reques
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import {
-  // Reuse the entity-agnostic video-motion helpers (the object names are the
-  // canonical home for these — they produce a generic "Motion: …,
-  // product-showcase quality" string + resolve aspect ratios; nothing in them
+import { // Reuse the entity-agnostic video-motion helpers (the object names are the
+  // canonical home for these — they produce a generic "Motion: …, // product-showcase quality" string + resolve aspect ratios; nothing in them
   // is object-specific). Creating creature-named clones would be drift, not
   // safety, so per CLAUDE.md (single source of truth) the creature motion
   // route reuses them directly. `materials`→`poses` doesn't apply to motion.
-  OBJECT_MOTION_PROVIDERS,
-  buildObjectMotionPrompt,
-  resolveObjectAspectRatio,
-  OBJECT_ASPECT_OPTIONS,
-  getDurationsForModel,
-  buildVideoCreditModelIdentifier,
-} from "@nodaro/shared"
-
+  OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildObjectMotionPrompt } from "@nodaro/prompts"
 /**
  * Body schema for `POST /v1/generate-creature-motion`.
  *

@@ -3,10 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Activity } from "lucide-react"
-import {
-  getMusicEnergy, getMusicEmotion, getMusicVibe,
-  buildMusicMoodHints, pickIds,
-} from "@nodaro/shared"
+import { getMusicEnergy, getMusicEmotion, getMusicVibe, buildMusicMoodHints, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { MusicMoodData } from "@/types/nodes"
 

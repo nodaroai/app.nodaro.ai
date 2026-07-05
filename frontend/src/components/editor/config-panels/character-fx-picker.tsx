@@ -35,13 +35,7 @@ import {
   Sparkles,
   Shield,
 } from "lucide-react"
-import {
-  CHARACTER_FX,
-  CHARACTER_FX_CATEGORY_LABELS,
-  CHARACTER_FX_CATEGORY_ORDER,
-  type CharacterFx,
-  type CharacterFxCategory,
-} from "@nodaro/shared"
+import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

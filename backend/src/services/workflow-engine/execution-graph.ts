@@ -3,11 +3,7 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import {
-  buildChildrenByParent,
-  VIDEO_PRODUCER_TYPES,
-  AUDIO_PRODUCER_TYPES,
-} from "@nodaro/shared"
+import { buildChildrenByParent, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
 // The per-node legacy-type migration lives in normalize-node-types.ts (single

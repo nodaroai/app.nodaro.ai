@@ -1,15 +1,4 @@
-import {
-  NODE_DEFAULT_TYPES,
-  type NodeDefaultType,
-  type QualityLevel,
-  type SemanticAspectRatio,
-  mapQuality,
-  mapAspectRatio,
-  deriveLinkedFields,
-  supportedDefaultDimensions,
-  getTargetField,
-  getValidValues,
-} from "@nodaro/shared"
+import { NODE_DEFAULT_TYPES, type NodeDefaultType, type QualityLevel, type SemanticAspectRatio, mapQuality, mapAspectRatio, deriveLinkedFields, supportedDefaultDimensions, getTargetField, getValidValues } from "@nodaro/shared"
 
 export interface AdminDefault {
   node_type: string

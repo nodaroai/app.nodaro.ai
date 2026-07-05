@@ -1,9 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import {
-  LOCATION_REFERENCE_PHOTO_KINDS,
-  LOCATION_REFERENCE_PHOTO_KIND_LABELS,
-} from "@nodaro/shared"
+import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS } from "@nodaro/shared"
 import type { LocationReferencePhoto, LocationReferencePhotoKind } from "@/types/nodes"
 
 /**

@@ -3,12 +3,7 @@
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Layers, Combine } from "lucide-react"
-import {
-  COLLECT_IN_HANDLE,
-  groupHandleId,
-  isCollectInEdge,
-  presentTypes,
-} from "@nodaro/shared"
+import { COLLECT_IN_HANDLE, groupHandleId, isCollectInEdge, presentTypes } from "@nodaro/shared"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"

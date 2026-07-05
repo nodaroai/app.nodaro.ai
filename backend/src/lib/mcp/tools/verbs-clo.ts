@@ -1,10 +1,5 @@
 import { z } from "zod"
-import {
-  CHARACTER_ASSET_TYPES,
-  CHARACTER_ATTACH_COLUMNS,
-  LOCATION_ASSET_TYPES,
-  LOCATION_ATTACH_COLUMNS,
-} from "@nodaro/shared"
+import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"

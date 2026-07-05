@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  AESTHETICS,
-  AESTHETIC_CATEGORY_LABELS,
-  AESTHETIC_CATEGORY_ORDER,
-  type Aesthetic,
-  type AestheticCategory,
-} from "@nodaro/shared"
+import { AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER, type Aesthetic, type AestheticCategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

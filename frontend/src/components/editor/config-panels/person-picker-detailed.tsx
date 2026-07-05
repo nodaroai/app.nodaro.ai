@@ -2,16 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  PEOPLE,
-  PERSON_DIMENSION_ORDER,
-  PERSON_FIELD_BY_DIMENSION,
-  getPersonDimensionLimit,
-  pickIds,
-  type Person,
-  type PersonDimension,
-  type PersonValue,
-} from "@nodaro/shared"
+import { PEOPLE, PERSON_DIMENSION_ORDER, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { pickIds } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

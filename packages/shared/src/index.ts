@@ -173,12 +173,6 @@ export type {
   VideoAudioCapability,
 } from "./model-constants.js"
 
-export {
-  resolveSeedance2Inputs,
-  type Seedance2Mode,
-  type Seedance2InputsArgs,
-  type Seedance2InputsResult,
-} from "./seedance-2-inputs.js"
 
 export { describeMaskRegion } from "./inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
@@ -203,16 +197,6 @@ export type {
   ExtraRefCharacterContext,
 } from "./extra-refs.js"
 
-export {
-  DEFAULT_IDENTITY_LOCK,
-  getIdentityLockClause,
-  toIdentityLockMode,
-  characterLockToRefLock,
-  collectIdentityLockClause,
-  hasUpstreamCharacter,
-  buildIdentityLockLine,
-  type IdentityLockMode,
-} from "./identity-lock.js"
 
 export {
   buildCreditModelIdentifier,
@@ -224,44 +208,9 @@ export {
 export * from "./credit-estimators/index.js"
 export { extractVideoDurationFromNode } from "./video-duration.js"
 
-export {
-  buildImagePrompt,
-  buildImagePromptSegments,
-  buildIdentityDirectives,
-  buildReferenceBlocks,
-  expandImageRefTokens,
-  expandImagePositionRefs,
-  buildScenePrompt,
-  resolveCharacterMentions,
-  applyReferenceOrderToVideo,
-  SCENE_PROMPT_MAX_LENGTH,
-  SHOT_LABELS,
-  MOVEMENT_LABELS,
-  truncateText,
-  type BuildImagePromptConfig,
-  type BuildImagePromptResult,
-  type BuildImagePromptSegmentsResult,
-  type PromptSegment,
-  type PromptSegmentOrigin,
-  type ResolveCharacterMentionsResult,
-} from "./prompt-builder.js"
 
-export {
-  renderStructuredFields,
-  type StructuredPromptFields,
-} from "./prompt-builder-structured-fields.js"
 
-export {
-  assembleImageInput,
-  type AssembleImageInput,
-  type DirectionFields,
-} from "./assemble-image-input.js"
 
-export {
-  assembleSunoInput,
-  type AssembleSunoInput,
-  type AssembleSunoResult,
-} from "./assemble-suno-input.js"
 
 export {
   INPUT_NODE_TYPES,
@@ -386,52 +335,6 @@ export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX,
 
 export { settledWithLimit } from "./settled-with-limit.js"
 
-export {
-  buildCharacterPrompt,
-  buildObjectPrompt,
-  buildCreaturePrompt,
-  buildLocationPrompt,
-  buildLocationRefinePrompt,
-  buildFaceTemplateInputs,
-  buildMotionPrompt,
-  buildLocationMotionPrompt,
-  buildObjectMotionPrompt,
-  PLACEHOLDER_CHARACTER_NAME,
-  CHARACTER_STYLES,
-  CHARACTER_ASSET_TYPES,
-  CHARACTER_ATTACH_COLUMNS,
-  CHARACTER_ASSET_VARIANTS,
-  CHARACTER_REFERENCE_PHOTO_KINDS,
-  LOCATION_ASSET_TYPES,
-  LOCATION_ATTACH_COLUMNS,
-  LOCATION_ASSET_VARIANTS,
-  LOCATION_REFERENCE_PHOTO_KINDS,
-  LOCATION_REFERENCE_PHOTO_KIND_LABELS,
-  locationReferencePhotoKindLabel,
-  OBJECT_ASSET_TYPES,
-  OBJECT_ATTACH_COLUMNS,
-  CREATURE_ATTACH_COLUMNS,
-  OBJECT_ASSET_VARIANTS,
-  type LocationAssetType,
-  type LocationAttachColumn,
-  type LocationReferencePhotoKind,
-  type LocationMotionPromptInput,
-  type EntityStyle,
-  type CharacterAssetType,
-  type CharacterAttachColumn,
-  type CharacterReferencePhotoKind,
-  type CharacterReferencePhoto,
-  type CharacterPromptInput,
-  type ObjectPromptInput,
-  type LocationPromptInput,
-  type LocationRefinePromptInput,
-  type FacePromptInput,
-  type CharacterMotionPromptInput,
-  type ObjectAssetType,
-  type ObjectAttachColumn,
-  type CreatureAttachColumn,
-  type ObjectMotionPromptInput,
-} from "./entity-prompts.js"
 
 export {
   SURROUND_DIRECTIONS,
@@ -784,7 +687,6 @@ export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variab
 
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"
 
-export { getParameterPromptHint } from "./parameter-prompt-hint.js"
 
 export {
   applySlots,
@@ -806,24 +708,6 @@ export {
 } from "./lottie-overlay-catalog.js"
 export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
 
-export {
-  PICKER_CATALOGS,
-  getPickerCatalog,
-  listPickerCatalogs,
-  summarizePickerCatalogs,
-  projectPickerCatalog,
-} from "./picker-catalogs.js"
-export type {
-  PickerOption,
-  PickerCatalog,
-  PickerDimension,
-  PickerCatalogSummary,
-  PickerCatalogDetail,
-  ProjectPickerCatalogOptions,
-  ProjectedPickerOption,
-  ProjectedPickerDimension,
-  ProjectedPickerCatalog,
-} from "./picker-catalogs.js"
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
@@ -930,45 +814,6 @@ export {
 } from "./mood.js"
 export type { Mood, MoodCategory, MoodValue } from "./mood.js"
 
-export {
-  PEOPLE,
-  PERSON_DIMENSION_ORDER,
-  PERSON_DIMENSION_LABELS,
-  PERSON_DIMENSION_SECTIONS,
-  PERSON_FIELD_BY_DIMENSION,
-  MAX_SELECTED_BY_DIMENSION,
-  getPersonDimensionLimit,
-  getPerson,
-  getPersonLabel,
-  getPersonPromptHint,
-  buildPersonHints,
-  migratePersonValue,
-} from "./person.js"
-export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
-export {
-  buildPickerAnalyzerSpec,
-  buildPickerZodSchema,
-  buildPickerLegend,
-  getPickerAnalyzer,
-  applyPickerJson,
-  PICKER_ANALYZER_REGISTRY,
-  PICKER_TYPES,
-  ANALYZABLE_PICKER_TYPES,
-  isAnalyzablePicker,
-  GAPS_SCHEMA,
-  buildMultiPickerAnalyzerSpec,
-  pickerFanoutTargets,
-} from "./picker-analyzer-registry.js"
-export type {
-  PickerType,
-  PickerAnalyzerSpec,
-  PickerDimensionSpec,
-  PickerApplyMode,
-  PickerAnalyzer,
-  PickerAnalyzerDescriptor,
-  PickerGaps,
-  MultiPickerAnalyzerSpec,
-} from "./picker-analyzer-registry.js"
 export {
   WARDROBE, WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION,
   buildWardrobeHints, getWardrobePromptHint, getWardrobeEntry, getWardrobeEntriesByDimension,
@@ -1201,14 +1046,6 @@ export {
 } from "./voice-delivery.js"
 export type { VoiceDeliveryEntry } from "./voice-delivery.js"
 
-export {
-  composeSoundHintFromConnections,
-  appendField,
-  truncateForField,
-  getEffectiveSunoCustomMode,
-  appendMusicMeta,
-} from "./sound-aggregator.js"
-export type { SoundConsumerType, SoundCompositionFields, SoundComposition } from "./sound-aggregator.js"
 
 // i18n
 export {
@@ -1224,6 +1061,7 @@ export {
   type I18nCatalogId,
   type SidecarLoader,
 } from "./i18n/index.js"
+export { NON_EN_LOCALE_IDS, type LocaleCatalogMap } from "./i18n/types.js"
 
 export type {
   WorkflowExport,
@@ -1401,18 +1239,8 @@ export * from "./supported-fonts.js"
 export * from "./entity-image-handle.js"
 
 // --- Brand layer (Phase 3a): palette/fonts/logo tokens + 8-preset library ---
-export * from "./brand-tokens.js"
 
 // --- Shared video-reference resolver core (FE + BE delegate to this) ---
-export {
-  resolveVideoReferenceCore,
-  REF_BINDING,
-  resolveReferenceTokens,
-  type ReferenceCounts,
-  type VideoExtraRef,
-  type CharacterMeta,
-  type ResolveVideoReferenceCoreArgs,
-} from "./video-reference-resolver.js"
 
 // --- Type-aware reference-role registry (presets + default + phrase renderer) ---
 export * from "./reference-roles.js"
@@ -1422,3 +1250,6 @@ export * from "./video-analysis.js"
 
 // --- Video-analysis pricing (duration buckets + structural credit formula) ---
 export * from "./video-analysis-pricing.js"
+
+export * from "./entity-asset-types.js"
+export * from "./hint-graph-types.js"

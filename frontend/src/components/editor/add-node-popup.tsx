@@ -131,7 +131,7 @@ import {
   type AddNodeMenuTab,
 } from "@/lib/add-node-menu-tab";
 import { IMAGE_PRODUCER_TYPES } from "@/lib/generate-image-handles";
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nodaro/shared";
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nodaro/shared"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";

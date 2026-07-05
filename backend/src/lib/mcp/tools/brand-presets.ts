@@ -11,7 +11,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
-import { BRAND_PRESET_IDS, BRAND_PRESETS, BRAND_PRESET_META } from "@nodaro/shared"
+import { BRAND_PRESET_IDS, BRAND_PRESETS, BRAND_PRESET_META } from "@nodaro/prompts"
 
 /** Pure catalog builder (unit-testable without an McpServer). */
 export function listBrandPresets() {

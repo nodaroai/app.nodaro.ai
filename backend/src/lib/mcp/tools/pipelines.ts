@@ -1,18 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import {
-  PIPELINE_STAGE_NAMES,
-  PIPELINE_FORMATS,
-  PIPELINE_MODES,
-  PIPELINE_OUTPUT_RESOLUTIONS,
-  PipelineInputSchema,
-  CHAT_ENABLED_STAGES,
-  CHAT_WIRED_STAGES,
-  CHAT_TURN_CAPS,
-  type ChatEnabledStage,
-  type JsonPatch,
-  type ProposedChange,
-} from "@nodaro/shared"
+import { PIPELINE_STAGE_NAMES, PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PipelineInputSchema, CHAT_ENABLED_STAGES, CHAT_WIRED_STAGES, CHAT_TURN_CAPS, type ChatEnabledStage, type JsonPatch, type ProposedChange } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"

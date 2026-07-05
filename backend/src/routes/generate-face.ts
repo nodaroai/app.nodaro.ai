@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildFaceTemplateInputs } from "@nodaro/shared"
+import { buildFaceTemplateInputs } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 
 const generateFaceBody = z.object({

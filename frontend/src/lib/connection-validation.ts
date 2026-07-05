@@ -76,7 +76,8 @@ import {
   isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
-import { isAnalyzablePicker, resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES } from "@nodaro/shared"
+import { isAnalyzablePicker } from "@nodaro/prompts"
+import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 

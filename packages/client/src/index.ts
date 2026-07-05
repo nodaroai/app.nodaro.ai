@@ -23,17 +23,9 @@ export {
 } from "./errors.js"
 
 // Re-export selected types from @nodaro/shared for convenience
-export type {
-  GenericNode,
-  GenericEdge,
-  WorkflowExport,
-  WorkflowExportCharacter,
-  WorkflowExportObject,
-  WorkflowExportLocation,
-  // The editor's structured-reference shape, used by GenerateImageParams /
+export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
   // GenerateVideoParams below so callers can build `connectedReferences`.
-  ConnectedReference,
-} from "@nodaro/shared"
+  ConnectedReference, WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/shared"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
 export { WorkflowsResource } from "./resources/workflows.js"
@@ -156,18 +148,18 @@ export type {
   ApprovePortraitResult,
   RecaptionResult,
   CharacterAspectRatio,
-  PersonValue,
   EntityStyle,
 } from "./resources/characters.js"
 export {
   CHARACTER_ASPECT_OPTIONS,
   CHARACTER_ASPECT_DEFAULTS,
-  CHARACTER_STYLES,
   buildPersonSeedPrompt,
   buildPersonHints,
   PEOPLE,
   PERSON_DIMENSION_ORDER,
   PERSON_DIMENSION_LABELS,
+  type PersonValue,
+  CHARACTER_STYLES,
 } from "./resources/characters.js"
 
 export type {
@@ -279,13 +271,6 @@ export type {
   EnhanceInput,
   PromptResult,
 } from "./resources/prompt-helper.js"
-export type {
-  WizardQuestion,
-  WizardOption,
-  WizardSelection,
-  RecommendedModel,
-  WizardNodeContext,
-} from "@nodaro/shared"
 
 export type {
   Voice,

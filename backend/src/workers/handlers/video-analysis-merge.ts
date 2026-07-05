@@ -22,11 +22,7 @@
  *     `slotRefs`/`oversized`/`visualResolved` are computed on final values.
  *   - zero-scene windows are valid; `language` is picked by speech-seconds.
  */
-import {
-  type WindowAnalysis, type EntitySlot, type AnalyzedScene,
-  deriveSlotRefs, rewriteSlotTokens, unwrapUnresolvedTokens, renderAnalyzedScene, isOversizedScene,
-  VIDEO_ANALYSIS_WINDOW,
-} from "@nodaro/shared"
+import { type WindowAnalysis, type EntitySlot, type AnalyzedScene, deriveSlotRefs, rewriteSlotTokens, unwrapUnresolvedTokens, renderAnalyzedScene, isOversizedScene, VIDEO_ANALYSIS_WINDOW } from "@nodaro/shared"
 
 const HEAD_EPS = 1, TAIL_EPS = 1, COVER_FRACTION = 0.8
 const { STRIDE, OVERLAP, SINGLE_MAX } = VIDEO_ANALYSIS_WINDOW

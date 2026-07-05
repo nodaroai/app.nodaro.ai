@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  FURNITURE,
-  FURNITURE_SUBCATEGORY_LABELS,
-  FURNITURE_SUBCATEGORY_ORDER,
-  type Furniture,
-  type FurnitureSubcategory,
-} from "@nodaro/shared"
+import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER, type Furniture, type FurnitureSubcategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

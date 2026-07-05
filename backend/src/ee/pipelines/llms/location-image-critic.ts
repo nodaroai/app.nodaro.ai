@@ -1,9 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  IMAGE_CRITIC_MIN_ADHERENCE_SCORE,
-  LocationImageCriticVerdictSchema,
-  type LocationImageCriticVerdict,
-} from "@nodaro/shared"
+import { IMAGE_CRITIC_MIN_ADHERENCE_SCORE, LocationImageCriticVerdictSchema, type LocationImageCriticVerdict } from "@nodaro/shared"
 import {
   runImageCritic,
   type ImageCriticGlobalStyle,

@@ -8,8 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
-import { resolveImageGenCreditIdentifier } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,

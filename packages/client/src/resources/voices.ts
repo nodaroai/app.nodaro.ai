@@ -1,4 +1,5 @@
 import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
+export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -7,9 +8,7 @@ import type { NodaroClient } from "../client.js"
  * `VoiceClone`, or a `searchLibrary` call. Single source of truth lives in
  * `@nodaro/shared`.
  */
-export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
 /** Audio-FX preset union (reverb spaces / telephone / megaphone / echo / custom) — used by {@link VoiceChangerProInput.voiceFx}. */
-export type { AudioFxPreset } from "@nodaro/shared"
 
 /**
  * Read access to ElevenLabs voices: the premade catalog plus the shared

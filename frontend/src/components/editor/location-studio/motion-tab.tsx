@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react"
 import { Check, Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  LOCATION_ATMOSPHERE_PROVIDERS,
-  LOCATION_PRESET_TO_CATALOG,
-  type LocationAtmosphereProvider,
-} from "@nodaro/shared"
+import { LOCATION_ATMOSPHERE_PROVIDERS, LOCATION_PRESET_TO_CATALOG, type LocationAtmosphereProvider } from "@nodaro/shared"
 import { generateLocationMotion, removeLocationAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

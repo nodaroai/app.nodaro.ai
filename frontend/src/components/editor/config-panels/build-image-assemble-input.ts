@@ -1,4 +1,5 @@
-import type { AssembleImageInput, IdentityMeta } from "@nodaro/shared"
+import type { IdentityMeta } from "@nodaro/shared"
+import type { AssembleImageInput } from "@nodaro/prompts"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
 import type {
   WorkflowNode,

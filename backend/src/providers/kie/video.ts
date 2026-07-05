@@ -19,7 +19,8 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, resolveSeedance2Inputs, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
+import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
   runKieTask,

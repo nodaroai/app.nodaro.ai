@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { BRAND_PRESETS } from "@nodaro/shared"
+import { BRAND_PRESETS } from "@nodaro/prompts"
 import { buildBrandBlock } from "../prompt.js"
 
 /**

@@ -1,9 +1,6 @@
-import type {
-  CharacterAspectRatio,
-  LocationAssetType,
-  LocationAttachColumn,
-  SurroundDirection,
-} from "@nodaro/shared"
+import type { CharacterAspectRatio, SurroundDirection, LocationAssetType, LocationAttachColumn } from "@nodaro/shared"
+export type { LocationAssetType, LocationAttachColumn, CharacterAspectRatio, SurroundDirection } from "@nodaro/shared"
+export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, SURROUND_DIRECTIONS } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -16,11 +13,6 @@ import type { NodaroClient } from "../client.js"
  * `aspectRatio` field reuses the same 4-value enum (1:1 / 3:4 / 16:9 / 9:16)
  * as characters; the route enforces this with `z.enum(CHARACTER_ASPECT_OPTIONS)`.
  */
-export type { LocationAssetType, LocationAttachColumn } from "@nodaro/shared"
-export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
-export type { CharacterAspectRatio } from "@nodaro/shared"
-export type { SurroundDirection } from "@nodaro/shared"
-export { SURROUND_DIRECTIONS } from "@nodaro/shared"
 
 /**
  * Reference-photo kind discriminator — the mood-board roles a user can attach

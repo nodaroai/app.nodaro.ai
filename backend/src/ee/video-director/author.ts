@@ -16,7 +16,7 @@ import { shotSequenceBriefSchema, type ShotSequenceBrief } from "../../services/
 import { llmComplete, type LlmRequest, type LlmResponse } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { buildAuthorSystemPrompt, type VideoGenre } from "./prompt.js"
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 
 export type { VideoGenre }
 

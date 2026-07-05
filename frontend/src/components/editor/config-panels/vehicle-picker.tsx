@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  VEHICLES,
-  VEHICLE_SUBCATEGORY_LABELS,
-  VEHICLE_SUBCATEGORY_ORDER,
-  type Vehicle,
-  type VehicleSubcategory,
-} from "@nodaro/shared"
+import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

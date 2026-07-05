@@ -1,4 +1,4 @@
-import { isAnalyzablePicker } from "@nodaro/shared"
+import { isAnalyzablePicker } from "@nodaro/prompts"
 import type { WorkflowNode } from "@/types/nodes"
 
 /**

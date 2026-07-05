@@ -1,9 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  type FixContinuityResult,
-  type SceneNodeData,
-  type ShowrunnerPlan,
-} from "@nodaro/shared"
+import { type FixContinuityResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { runImageCritic } from "../image-critic.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
 

@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
-import { calculateProgress } from "@nodaro/shared";
+import { calculateProgress } from "@nodaro/shared"
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
 import { shouldAbandonNode } from "./abandon-guard";

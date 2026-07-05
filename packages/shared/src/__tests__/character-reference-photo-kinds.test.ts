@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   CHARACTER_REFERENCE_PHOTO_KINDS,
   type CharacterReferencePhotoKind,
-} from "../entity-prompts.js"
+} from "../entity-asset-types.js"
 
 // Guards the single schema-of-record for the 7 identity-foundation kinds now
 // shared across the generate-character/characters route Zod enums, the backend

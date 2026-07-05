@@ -3,14 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Frame } from "lucide-react"
-import {
-  FRAMING_CATEGORY_LABELS,
-  FRAMING_CATEGORY_ORDER,
-  FRAMING_FIELD_BY_CATEGORY,
-  getFraming,
-  getFramingLabel,
-  type FramingCategory,
-} from "@nodaro/shared"
+import { FRAMING_CATEGORY_LABELS, FRAMING_CATEGORY_ORDER, FRAMING_FIELD_BY_CATEGORY, getFraming, getFramingLabel, type FramingCategory } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { FramingPreview } from "@/components/editor/config-panels/framing-preview"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"

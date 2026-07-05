@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { pickerFanoutTargets } from "@nodaro/shared"
+import { pickerFanoutTargets } from "@nodaro/prompts"
 import { buildSyncHttpBody } from "../node-executor.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 

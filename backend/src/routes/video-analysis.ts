@@ -11,11 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { stripFocusCloseTag } from "../lib/video-analysis-prompt.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { ytMetadataProbe, YtUrlNotAllowedError } from "../providers/video/youtube-video.js"
-import {
-  buildVideoAnalysisCreditId,
-  VIDEO_ANALYSIS_LLM_MODELS,
-  VIDEO_ANALYSIS_MAX_DURATION_SEC,
-} from "@nodaro/shared"
+import { buildVideoAnalysisCreditId, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
 
 const DEFAULT_LLM_MODEL = "gemini-3-flash"
 

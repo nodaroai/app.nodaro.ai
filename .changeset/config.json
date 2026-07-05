@@ -7,5 +7,10 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["nodaro-backend", "frontend", "@nodaro/remotion"]
+  "ignore": [
+    "nodaro-backend",
+    "frontend",
+    "@nodaro/remotion",
+    "@nodaro/prompts"
+  ]
 }

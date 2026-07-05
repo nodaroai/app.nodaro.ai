@@ -1,12 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core"
 import { nodeInputRule, nodePasteRule } from "@tiptap/core"
 import { ReactNodeViewRenderer } from "@tiptap/react"
-import {
-  DEFAULT_LOCATION_USAGE_MODE,
-  isLocationUsageMode,
-  parseLocationMentionToken,
-  type LocationUsageMode,
-} from "@nodaro/shared"
+import { DEFAULT_LOCATION_USAGE_MODE, isLocationUsageMode, parseLocationMentionToken, type LocationUsageMode } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { LocationRefView } from "./location-ref-view"
 

@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  VIDEO_MODEL_CAPS,
-  type SceneNodeData,
-  type ShotSpec,
-  type VideoCriticFrameMode,
-} from "@nodaro/shared"
+import { VIDEO_MODEL_CAPS, type SceneNodeData, type ShotSpec, type VideoCriticFrameMode } from "@nodaro/shared"
 import { pipelineExtractFrame } from "./services/pipeline-extract-frame.js"
 import { pipelineEvents } from "./events.js"
 

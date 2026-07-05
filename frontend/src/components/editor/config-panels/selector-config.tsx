@@ -12,12 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { SelectorNodeData } from "@/types/nodes"
-import {
-  parseListExpression,
-  type FullSelectorMode,
-  type SelectorConfig as SelectorConfigShape,
-  type SelectorPredicateOp,
-} from "@nodaro/shared"
+import { parseListExpression, type FullSelectorMode, type SelectorConfig as SelectorConfigShape, type SelectorPredicateOp } from "@nodaro/shared"
 import type { ConfigProps } from "./types"
 
 const PREDICATE_OPS: { value: SelectorPredicateOp; label: string }[] = [

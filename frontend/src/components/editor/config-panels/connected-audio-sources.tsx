@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from "react"
 import { Music, Activity, Piano, User, MessageCircle, type LucideIcon } from "lucide-react"
-import { getParameterPromptHint } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 

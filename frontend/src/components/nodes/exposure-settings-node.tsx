@@ -3,14 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Aperture } from "lucide-react"
-import {
-  EXPOSURE_CATEGORY_LABELS,
-  EXPOSURE_CATEGORY_ORDER,
-  EXPOSURE_FIELD_BY_CATEGORY,
-  getExposure,
-  getExposureLabel,
-  type ExposureCategory,
-} from "@nodaro/shared"
+import { EXPOSURE_CATEGORY_LABELS, EXPOSURE_CATEGORY_ORDER, EXPOSURE_FIELD_BY_CATEGORY, getExposure, getExposureLabel, type ExposureCategory } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { ExposureSettingsData } from "@/types/nodes"
 

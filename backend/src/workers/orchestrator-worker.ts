@@ -37,15 +37,13 @@ import type {
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem, calculateMonetizationMarkup } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/prompts"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
-import { migrateEdgeOutputMode } from "@nodaro/shared"
-import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "@nodaro/shared"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { overrideInputWithListItem as applyListItem } from "./list-item-override.js"
-import { calculateMonetizationMarkup } from "@nodaro/shared"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION

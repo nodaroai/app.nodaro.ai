@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CHARACTER_REFERENCE_PHOTO_KINDS, PLACEHOLDER_CHARACTER_NAME, TTS_PROVIDERS } from "@nodaro/shared"
+import { TTS_PROVIDERS, CHARACTER_REFERENCE_PHOTO_KINDS, PLACEHOLDER_CHARACTER_NAME, CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
@@ -12,7 +12,6 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
-import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user

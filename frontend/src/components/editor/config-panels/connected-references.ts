@@ -1,17 +1,6 @@
-import type {
-  ConnectedReference,
-  ReferenceSource,
-} from "@nodaro/shared"
-import {
-  DEFAULT_LABEL_BY_SOURCE,
-  characterMentionSlug,
-  locationMentionSlug,
-  expandExtraRefsToConnectedReferences,
-  characterMentionableAssetArrays,
-  characterLockToRefLock,
-  resolveEffectiveSourceType,
-  FRAME_TARGET_HANDLES,
-} from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, characterMentionableAssetArrays, resolveEffectiveSourceType, FRAME_TARGET_HANDLES } from "@nodaro/shared"
+import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
+import { characterLockToRefLock } from "@nodaro/prompts"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type {
   CharacterNodeData,

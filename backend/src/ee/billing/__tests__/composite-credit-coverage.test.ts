@@ -21,10 +21,7 @@
 
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import {
-  VARIABLE_PRICING_MODELS,
-  buildCreditModelIdentifier,
-} from "@nodaro/shared"
+import { VARIABLE_PRICING_MODELS, buildCreditModelIdentifier } from "@nodaro/shared"
 
 /**
  * Generate every (quality, resolution, renderingSpeed, targetResolution)

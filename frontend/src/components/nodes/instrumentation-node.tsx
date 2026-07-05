@@ -3,10 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Piano } from "lucide-react"
-import {
-  getInstrument, getProductionStyle, getVocalPresence, getSingingStyle,
-  buildInstrumentationHints, pickIds,
-} from "@nodaro/shared"
+import { getInstrument, getProductionStyle, getVocalPresence, getSingingStyle, buildInstrumentationHints, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { InstrumentationData } from "@/types/nodes"
 

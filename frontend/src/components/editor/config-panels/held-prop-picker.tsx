@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  HELD_PROPS,
-  HELD_PROP_CATEGORY_LABELS,
-  HELD_PROP_CATEGORY_ORDER,
-  type HeldProp,
-  type HeldPropCategory,
-} from "@nodaro/shared"
+import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER, type HeldProp, type HeldPropCategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

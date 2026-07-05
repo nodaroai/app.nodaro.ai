@@ -23,11 +23,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import {
-  MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
-  REF_IMAGE_MAX_LIMITS,
-  MODEL_CATALOG,
-} from "@nodaro/shared"
+import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, MODEL_CATALOG } from "@nodaro/shared"
 
 /**
  * Allowlist of ref-image drifted models. Empty after the Phase 2 cleanup:

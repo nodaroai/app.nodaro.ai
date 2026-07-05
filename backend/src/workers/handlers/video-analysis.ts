@@ -20,15 +20,7 @@
  */
 import type { Job } from "bullmq"
 import { join } from "node:path"
-import {
-  windowAnalysisSchema,
-  videoAnalysisResultSchema,
-  aspectRatioFromDims,
-  bucketSecondsFromCreditId,
-  VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC,
-  VIDEO_ANALYSIS_MAX_DURATION_SEC,
-  type WindowAnalysis,
-} from "@nodaro/shared"
+import { windowAnalysisSchema, videoAnalysisResultSchema, aspectRatioFromDims, bucketSecondsFromCreditId, VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC, VIDEO_ANALYSIS_MAX_DURATION_SEC, type WindowAnalysis } from "@nodaro/shared"
 import { llmCompleteStructured, type StructuredLlmOutput } from "../../lib/llm-client.js"
 import {
   buildVideoAnalysisSystemPrompt,

@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  CAMERA_MOTIONS,
-  CAMERA_MOTION_CATEGORY_ORDER,
-  CAMERA_MOTION_CATEGORY_LABELS,
-  type CameraMotion,
-  type CameraMotionCategory,
-} from "@nodaro/shared"
+import { CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS, CREATURE_ATTACH_COLUMNS } from "../entity-prompts.js"
+import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS, CREATURE_ATTACH_COLUMNS } from "../entity-asset-types.js"
 
 describe("attach columns include the reference-sheet buckets", () => {
   it("character gains sheets, detail_closeups, outfit_variations", () => {

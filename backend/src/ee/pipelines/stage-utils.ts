@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PipelineStageName } from "@nodaro/shared"
 import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
+import type { PipelineStageName } from "@nodaro/shared"
 import { pipelineEvents } from "./events.js"
 
 /**

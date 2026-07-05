@@ -59,7 +59,8 @@
     "undici": "^6.25.0",
     "youtube-dl-exec": "^3.0.30",
     "zod": "^3.24.2",
-    "zod-to-json-schema": "^3.25.2"
+    "zod-to-json-schema": "^3.25.2",
+    "@nodaro/prompts": "*"
   },
   "engines": {
     "node": ">=22"

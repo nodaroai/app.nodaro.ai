@@ -1,10 +1,5 @@
 import { Command } from "commander"
-import type {
-  CommunityEntityType,
-  CommunityReportReason,
-  CommunitySort,
-  CommunityCard,
-} from "@nodaro/shared"
+import type { CommunityEntityType, CommunityReportReason, CommunitySort, CommunityCard } from "@nodaro/shared"
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, success, table, type OutputOpts } from "../output.js"
 

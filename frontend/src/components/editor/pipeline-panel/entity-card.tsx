@@ -1,11 +1,7 @@
 import { useMutation } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
-import type {
-  CharacterImageCriticVerdict,
-  EntityStatus,
-  PipelineMode,
-} from "@nodaro/shared"
 import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
+import type { CharacterImageCriticVerdict, EntityStatus, PipelineMode } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { Button } from "@/components/ui/button"

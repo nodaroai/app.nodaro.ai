@@ -12,7 +12,7 @@
 // the failure, so a future edit that drops the offset as "unnecessary" is
 // caught here rather than in production.
 import { describe, it, expect } from "vitest"
-import type { BrandTokens } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts"
 import { ensureLogoLockupScene } from "../logo-lockup-net.js"
 import { bakeShotSequence, SceneOverlapError } from "../../../services/shot-sequence/baker.js"
 import type { ShotSequenceBrief } from "../../../services/shot-sequence/brief-schema.js"

@@ -1,11 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  GenerateMotionResultSchema,
-  type GenerateMotionResult,
-  type SceneNodeData,
-  type ShowrunnerPlan,
-  VIDEO_MODEL_CAPS,
-} from "@nodaro/shared"
+import { GenerateMotionResultSchema, type GenerateMotionResult, type SceneNodeData, type ShowrunnerPlan, VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 
 const _REDACTED_PROMPT_17 = `[REDACTED — moved to private plugin, S9 extraction]`

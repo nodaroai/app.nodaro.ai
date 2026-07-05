@@ -6,16 +6,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
-import {
-  MODEL_CATALOG,
-  MODEL_RECOMMENDATIONS,
-  getPromptTips,
-  listModels,
-  groupByFamily,
-  type ModelCatalogEntry,
-  type ModelKind,
-  type ModelMode,
-} from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, getPromptTips, listModels, groupByFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
 

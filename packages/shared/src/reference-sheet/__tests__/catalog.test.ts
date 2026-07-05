@@ -3,7 +3,7 @@ import {
   ENTITY_SECTIONS, BOARD_VARIANTS, SECTION_BOARD, DEFAULT_SECTIONS, DETAIL_VARIANTS, WARDROBE_VARIANTS,
 } from "../catalog.js"
 import { SECTION_KINDS, SHEET_TYPES, type EntityKind } from "../types.js"
-import { CHARACTER_ASSET_VARIANTS, OBJECT_ASSET_VARIANTS, LOCATION_ASSET_VARIANTS } from "../../entity-prompts.js"
+import { CHARACTER_ASSET_VARIANTS, OBJECT_ASSET_VARIANTS, LOCATION_ASSET_VARIANTS } from "../../entity-asset-types.js"
 
 const ENTITIES: EntityKind[] = ["character", "object", "location"]
 

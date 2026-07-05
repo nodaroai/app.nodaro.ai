@@ -1,14 +1,7 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState, useEffect, useMemo, useCallback } from "react"
-import {
-  USAGE_MODES,
-  usageModeLabel,
-  LOCATION_USAGE_MODES,
-  locationUsageModeLabel,
-  type UsageMode,
-  type LocationUsageMode,
-} from "@nodaro/shared"
+import { USAGE_MODES, usageModeLabel, LOCATION_USAGE_MODES, locationUsageModeLabel, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
 import { optimizedImageUrl } from "@/lib/image"

@@ -2,13 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  ANIMALS,
-  ANIMAL_SUBCATEGORY_LABELS,
-  ANIMAL_SUBCATEGORY_ORDER,
-  type Animal,
-  type AnimalSubcategory,
-} from "@nodaro/shared"
+import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, type Animal, type AnimalSubcategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

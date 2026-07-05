@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  POSES,
-  POSE_CATEGORY_LABELS,
-  POSE_CATEGORY_ORDER,
-  getPoseLabel,
-  getPosePromptHint,
-  resolveEntityAspect,
-  aspectRatioToNumber,
-  type PoseCategory,
-} from "@nodaro/shared"
+import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, getPoseLabel, getPosePromptHint, resolveEntityAspect, aspectRatioToNumber, type PoseCategory } from "@nodaro/shared"
 import { generateCreatureAsset, removeCreatureAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useCreatureStudioJobs } from "./use-creature-studio-jobs"

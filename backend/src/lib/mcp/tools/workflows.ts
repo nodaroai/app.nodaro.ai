@@ -1,12 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
-import {
-  stripExportContent,
-  stripTransientRuntimeData,
-  type GenericNode,
-  type WorkflowExport,
-} from "@nodaro/shared"
+import { stripExportContent, stripTransientRuntimeData, type GenericNode, type WorkflowExport } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"

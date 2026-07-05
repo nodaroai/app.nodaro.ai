@@ -1,18 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared";
-import { isExpandedClone } from "@nodaro/shared";
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
-import { getParameterPromptHint } from "@nodaro/shared";
-import {
-  aggregateByType,
-  buildChildrenByParent,
-  getOutputType,
-  isAggregateableType,
-  isCollectInEdge,
-  parseGroupHandle,
-  type AggregationBuckets,
-  type Member,
-} from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -1067,7 +1055,6 @@ export function collectMediaAssets(
 }
 
 // Re-export shared constant for local use and external imports
-import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared";
 export { ASPECT_RATIO_DIMENSIONS };
 
 export function buildAutoComposition(

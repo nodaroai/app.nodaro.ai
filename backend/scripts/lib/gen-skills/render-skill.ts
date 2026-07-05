@@ -8,7 +8,8 @@ import type {
   InterfaceShape,
 } from "./parse-node-definitions.js"
 import type { CapturedSchema } from "./capture-mcp-schemas.js"
-import { PROVIDER_PROMPT_DOCTRINES, getPickerCatalog } from "@nodaro/shared"
+import { PROVIDER_PROMPT_DOCTRINES } from "@nodaro/shared"
+import { getPickerCatalog } from "@nodaro/prompts"
 
 /** Node types whose skill doc carries the per-provider prompting doctrine. */
 export const PROVIDER_PROMPTING_NODE_TYPES = new Set([

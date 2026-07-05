@@ -1,10 +1,4 @@
-import {
-  LOTTIE_SLOT_FIELD_PREFIX,
-  hexToRgbaArray,
-  deriveLottieSlotFields,
-  flattenItems,
-  type PresentationItem,
-} from "@nodaro/shared"
+import { LOTTIE_SLOT_FIELD_PREFIX, hexToRgbaArray, deriveLottieSlotFields, flattenItems, type PresentationItem } from "@nodaro/shared"
 
 /**
  * Collect the node ids that have at least one `{type:"field", field:"slot:…"}`

@@ -37,12 +37,12 @@ import type {
   VideoAnalysisNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES } from "@nodaro/shared"
-import { VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
+import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
+import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
-import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
@@ -81,7 +81,6 @@ import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
-import type { ConnectedReference } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Character @-mention autocomplete — builds the RefImageItem[] passed as

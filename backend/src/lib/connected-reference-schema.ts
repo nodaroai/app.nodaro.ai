@@ -1,11 +1,6 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
-import {
-  USAGE_MODES,
-  LOCATION_REFERENCE_PHOTO_KINDS,
-  DEFAULT_LABEL_BY_SOURCE,
-  type ReferenceSource,
-} from "@nodaro/shared"
+import { USAGE_MODES, DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 
 /**
  * Route-level Zod schema for a `@nodaro/shared` `ConnectedReference` — the SSOT

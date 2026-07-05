@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { useFinalPromptSegments } from "../use-final-prompt-segments"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
-import { assembleImageInput } from "@nodaro/shared"
+import { assembleImageInput } from "@nodaro/prompts"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 

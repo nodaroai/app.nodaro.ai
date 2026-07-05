@@ -1,9 +1,9 @@
 import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
+import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
 import type { ExposableField, PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
-import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */

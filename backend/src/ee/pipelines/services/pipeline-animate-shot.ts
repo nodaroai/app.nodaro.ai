@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  buildVideoCreditModelIdentifier,
-  isSeedance2Provider,
-  type SceneNodeData,
-  type ShotSpec,
-} from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier, isSeedance2Provider, type SceneNodeData, type ShotSpec } from "@nodaro/shared"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 import { pipelineExtendVideo } from "./pipeline-extend-video.js"
 import { replicateInterpolateFrames } from "../../../providers/replicate/video.js"

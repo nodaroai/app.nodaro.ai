@@ -20,18 +20,8 @@
  * Both produce the same NormalizedInputSchema so the run_* tools can use
  * one translation function.
  */
-import type {
-  ComponentMetadata,
-  PresentationItem,
-  InputFieldSchema,
-  LottieSlotField,
-} from "@nodaro/shared"
-import {
-  migrateToItems,
-  getInputFieldSchema,
-  deriveLottieSlotFields,
-  LOTTIE_SLOT_FIELD_PREFIX,
-} from "@nodaro/shared"
+import { migrateToItems, getInputFieldSchema, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
+import type { ComponentMetadata, PresentationItem, InputFieldSchema, LottieSlotField } from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 

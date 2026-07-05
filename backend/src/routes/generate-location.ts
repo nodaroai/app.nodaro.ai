@@ -8,7 +8,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/shared"
+import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 

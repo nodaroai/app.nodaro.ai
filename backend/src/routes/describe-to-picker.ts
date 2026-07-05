@@ -1,17 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import {
-  buildMultiPickerAnalyzerSpec,
-  PICKER_TYPES,
-  buildLlmCreditIdentifier,
-  resolveLlmCreditId,
-  getLlmModel,
-  LLM_FEATURE_DEFAULTS,
-  LLM_MODEL_IDS,
-  STRUCTURED_VISION_MODELS,
-  type PickerType,
-  type PickerGaps,
-} from "@nodaro/shared"
+import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"

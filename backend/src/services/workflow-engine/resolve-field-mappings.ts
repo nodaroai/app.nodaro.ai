@@ -1,12 +1,8 @@
-import { resolveFieldMappings as sharedResolve } from "@nodaro/shared"
+import { resolveFieldMappings as sharedResolve, PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+export { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 import { getPrimaryOutput } from "./output-extractor.js"
-import {
-  PARAMETER_NODE_TYPES,
-  getParameterValue,
-} from "@nodaro/shared"
 import type { NodeExecutionState, SimpleNode, SimpleEdge } from "./types.js"
 
-export { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 
 export function resolveFieldMappings(
   data: Record<string, unknown>,

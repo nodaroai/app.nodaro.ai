@@ -1,4 +1,4 @@
-import { PICKER_TYPES } from "@nodaro/shared"
+import { PICKER_TYPES } from "@nodaro/prompts"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 // Display labels for analyzable picker types, sourced from the canonical

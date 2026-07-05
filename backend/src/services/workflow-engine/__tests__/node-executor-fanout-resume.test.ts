@@ -34,6 +34,15 @@ vi.mock("../resolve-field-mappings.js", () => ({ resolveFieldMappings: vi.fn(), 
 vi.mock("../execution-graph.js", () => ({ isSourceNode: () => false, isSkipNode: () => false }))
 vi.mock("../inline-executor.js", () => ({}))
 vi.mock("../sub-workflow-handler.js", () => ({}))
+vi.mock("@nodaro/prompts", () => ({
+  appendField: vi.fn((a: string) => a), appendMusicMeta: vi.fn(), assembleImageInput: vi.fn(() => ({ prompt: "", referenceImageUrls: [] })),
+  assembleSunoInput: vi.fn(() => ({})), buildCharacterPrompt: vi.fn(() => ""), buildCreaturePrompt: vi.fn(() => ""),
+  buildFaceTemplateInputs: vi.fn(() => ({})), buildImagePrompt: vi.fn(() => ({ prompt: "" })), buildLocationPrompt: vi.fn(() => ""),
+  buildObjectPrompt: vi.fn(() => ""), buildScenePrompt: vi.fn(() => ""), characterLockToRefLock: vi.fn(),
+  collectIdentityLockClause: vi.fn(() => ""), composeSoundHintFromConnections: vi.fn(() => null),
+  getParameterPromptHint: vi.fn(() => ""), pickerFanoutTargets: vi.fn(() => []), resolveVideoReferenceCore: vi.fn(() => ({})),
+  truncateForField: vi.fn((s: string) => s),
+}))
 vi.mock("@nodaro/shared", () => ({
   mergeExposedSettings: vi.fn(), applyHandleInputOverride: (_e: unknown, n: unknown) => n, isHandleInputWired: () => false,
 }))

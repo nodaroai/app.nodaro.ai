@@ -1,8 +1,6 @@
-import type {
-  ObjectAssetType,
-  ObjectAttachColumn,
-  ObjectAspectRatio,
-} from "@nodaro/shared"
+import type { ObjectAspectRatio, ObjectAssetType, ObjectAttachColumn } from "@nodaro/shared"
+export type { ObjectAssetType, ObjectAttachColumn, ObjectAspectRatio } from "@nodaro/shared"
+export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -17,10 +15,6 @@ import type { NodaroClient } from "../client.js"
  * `CharacterAspectRatio` because objects support an extra 4:3 framing for
  * product-showcase shots.
  */
-export type { ObjectAssetType, ObjectAttachColumn } from "@nodaro/shared"
-export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
-export type { ObjectAspectRatio } from "@nodaro/shared"
-export { OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Reference-photo kind discriminator — the mood-board roles a user can attach

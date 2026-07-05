@@ -1,4 +1,4 @@
-import { renderStructuredFields, type StructuredPromptFields } from "@nodaro/shared"
+import { renderStructuredFields, type StructuredPromptFields } from "@nodaro/prompts"
 
 /**
  * Combine a free-text prompt with Path-1 structured fields (Phase 6 v1.1).

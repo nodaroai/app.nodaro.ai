@@ -27,17 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  USAGE_MODES,
-  DEFAULT_USAGE_MODE,
-  usageModeLabel,
-  type UsageMode,
-  CHARACTER_FACETS,
-  DEFAULT_CHARACTER_FACET,
-  REFERENCE_ROLE_PRESETS,
-  resolveDefaultRole,
-  sanitizeRole,
-} from "@nodaro/shared"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode, CHARACTER_FACETS, DEFAULT_CHARACTER_FACET, REFERENCE_ROLE_PRESETS, resolveDefaultRole, sanitizeRole } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import type { CharacterNodeData } from "@/types/nodes"
 

@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest"
-import {
-  getVideoAudioCapability,
-  VIDEO_AUDIO_CAPABILITY,
-  isVeoProvider,
-  isSeedance2Provider,
-  AUDIO_ADDON_PROVIDERS,
-} from "@nodaro/shared"
+import { getVideoAudioCapability, VIDEO_AUDIO_CAPABILITY, isVeoProvider, isSeedance2Provider, AUDIO_ADDON_PROVIDERS } from "@nodaro/shared"
 import { KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS } from "../models.js"
 
 /**

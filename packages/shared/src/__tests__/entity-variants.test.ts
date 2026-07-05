@@ -3,7 +3,7 @@ import {
   OBJECT_ASSET_VARIANTS,
   LOCATION_ASSET_VARIANTS,
   CHARACTER_ASSET_VARIANTS,
-} from "../entity-prompts.js"
+} from "../entity-asset-types.js"
 
 describe("hoisted entity variant value-lists", () => {
   it("object variants match the values currently in generate-object-asset.ts", () => {

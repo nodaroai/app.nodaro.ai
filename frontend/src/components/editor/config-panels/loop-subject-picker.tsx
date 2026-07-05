@@ -2,11 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search, Cloud, Flame, Sparkles, Waves, Star, CloudRain, Spline, Hexagon, Zap, Atom, Infinity as InfinityIcon, Tornado, CloudSnow, CloudLightning, Orbit, Sun, FlowerIcon, Droplets, Flame as FireIcon, Grid3x3, Box, BarChart3, Dna, Disc3, Aperture, RotateCw, AlertTriangle, CircleDot, Layers } from "lucide-react"
-import {
-  LOOP_SUBJECTS,
-  type LoopSubject,
-  type LoopSubjectCategory,
-} from "@nodaro/shared"
+import { LOOP_SUBJECTS, type LoopSubject, type LoopSubjectCategory } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

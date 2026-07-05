@@ -1,21 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import type {
-  PipelineEvent,
-  PipelineMode,
-  PipelinePinnableImageModel,
-  PipelinePinnableVideoModel,
-  PipelineStageName,
-  SubGateName,
-} from "@nodaro/shared"
-import {
-  PIPELINE_PINNABLE_IMAGE_MODELS,
-  PIPELINE_PINNABLE_VIDEO_MODELS,
-  STYLE_PRESETS,
-  getStylePreset,
-  getFeaturedEntities,
-  estimateFilmCredits,
-} from "@nodaro/shared"
+import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS, STYLE_PRESETS, getStylePreset, getFeaturedEntities, estimateFilmCredits } from "@nodaro/shared"
+import type { PipelineEvent, PipelineMode, PipelinePinnableImageModel, PipelinePinnableVideoModel, PipelineStageName, SubGateName } from "@nodaro/shared"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
 import {
   uploadImage,

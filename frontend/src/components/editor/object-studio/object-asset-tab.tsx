@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  MATERIALS,
-  MATERIAL_CATEGORY_LABELS,
-  MATERIAL_CATEGORY_ORDER,
-  getMaterialLabel,
-  getMaterialPromptHint,
-  resolveEntityAspect,
-  aspectRatioToNumber,
-  type MaterialCategory,
-} from "@nodaro/shared"
+import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, getMaterialLabel, getMaterialPromptHint, resolveEntityAspect, aspectRatioToNumber, type MaterialCategory } from "@nodaro/shared"
 import { generateObjectAsset, removeObjectAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"

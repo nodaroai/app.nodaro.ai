@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import type {
-  PipelineEvent,
-  PipelineDriftSummary,
-  PipelineStageName,
-  SubGateName,
-} from "@nodaro/shared"
+import type { PipelineEvent, PipelineDriftSummary, PipelineStageName, SubGateName } from "@nodaro/shared"
 import type { ChatTurn } from "@nodaro/sdk"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { getAuthHeaders } from "@/lib/api"

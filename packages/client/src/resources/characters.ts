@@ -1,5 +1,7 @@
-import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle, TtsProvider } from "@nodaro/shared"
-import { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS, type PersonValue } from "@nodaro/shared"
+import { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS, type PersonValue } from "@nodaro/prompts"
+import type { CharacterAspectRatio, TtsProvider, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
+export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared"
+export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -8,16 +10,12 @@ import type { NodaroClient } from "../client.js"
  * have to add `@nodaro/shared` as a second dependency just to typecheck the
  * `style` field. Single source of truth lives in `@nodaro/shared/entity-prompts`.
  */
-export type { EntityStyle } from "@nodaro/shared"
-export { CHARACTER_STYLES } from "@nodaro/shared"
 
 /**
  * Re-export the 4-value aspect-ratio union accepted by the generate-character*
  * routes. Single source of truth lives in `@nodaro/shared`. See
  * `CHARACTER_ASPECT_DEFAULTS` for the per-asset-type defaults.
  */
-export type { CharacterAspectRatio } from "@nodaro/shared"
-export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Structured Person composer, re-exported from `@nodaro/shared` so SDK
@@ -30,12 +28,7 @@ export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/sha
  * fragment the editor's Person picker produces (e.g. "almond-shaped eyes,
  * sharply sculpted high cheekbones, full plump lips"). Returns "" when empty.
  */
-export { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS }
-export type { PersonValue }
 
-export function buildPersonSeedPrompt(value: PersonValue): string {
-  return buildPersonHints(value as Record<string, unknown> & PersonValue).join(", ")
-}
 
 /**
  * A character record returned by Nodaro's REST API. Mirrors the camelCase
@@ -575,4 +568,17 @@ export class CharactersResource {
       `/v1/characters/${encodeURIComponent(id)}/llm-caption`,
     )
   }
+}
+
+/** Person catalog + hint helpers, re-exported from @nodaro/prompts (FSL-licensed). */
+export { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS }
+export type { PersonValue }
+
+/**
+ * Collapse a PersonValue into the comma-joined seed-prompt fragment used by
+ * `characters.generate({ seedPrompt })` — same composition the Nodaro editor
+ * performs. Powered by @nodaro/prompts.
+ */
+export function buildPersonSeedPrompt(value: PersonValue): string {
+  return buildPersonHints(value as Record<string, unknown> & PersonValue).join(", ")
 }

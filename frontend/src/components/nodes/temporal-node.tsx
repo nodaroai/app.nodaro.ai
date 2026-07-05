@@ -3,14 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Clock } from "lucide-react"
-import {
-  TEMPORAL_CATEGORY_LABELS,
-  TEMPORAL_CATEGORY_ORDER,
-  TEMPORAL_FIELD_BY_CATEGORY,
-  getTemporal,
-  getTemporalLabel,
-  type TemporalCategory,
-} from "@nodaro/shared"
+import { TEMPORAL_CATEGORY_LABELS, TEMPORAL_CATEGORY_ORDER, TEMPORAL_FIELD_BY_CATEGORY, getTemporal, getTemporalLabel, type TemporalCategory } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { TemporalPreview } from "@/components/editor/config-panels/temporal-preview"
 import type { TemporalData } from "@/types/nodes"

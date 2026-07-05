@@ -3,8 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Zap } from "lucide-react"
-import { getActionFx, getActionFxLabel } from "@nodaro/shared"
-import { pickIds } from "@nodaro/shared"
+import { getActionFx, getActionFxLabel, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { ActionFxData } from "@/types/nodes"
 

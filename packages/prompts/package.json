@@ -1,0 +1,49 @@
+{
+  "name": "@nodaro/prompts",
+  "version": "1.0.0",
+  "description": "Nodaro's prompt-engineering layer \u2014 person/picker catalogs with prompt hints, identity-lock clauses, entity prompt builders, brand presets, and prompt/reference assembly shared by the Nodaro platform and SDK.",
+  "type": "module",
+  "license": "FSL-1.1-Apache-2.0",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nodaro/shared": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodaroai/app.nodaro.ai.git",
+    "directory": "packages/prompts"
+  },
+  "homepage": "https://github.com/nodaroai/app.nodaro.ai/tree/main/packages/prompts#readme",
+  "bugs": "https://github.com/nodaroai/app.nodaro.ai/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "src",
+    "LICENSE"
+  ]
+}

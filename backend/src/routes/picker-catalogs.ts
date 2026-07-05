@@ -1,10 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import {
-  getPickerCatalog,
-  summarizePickerCatalogs,
-  projectPickerCatalog,
-} from "@nodaro/shared"
+import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts"
 
 const nodeTypeParams = z.object({ nodeType: z.string().min(1).max(64) })
 const projectionQuery = z.object({

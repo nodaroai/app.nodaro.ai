@@ -13,7 +13,7 @@
  * are mocked, exactly as orchestrate.test.ts does.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { BRAND_PRESETS, type BrandTokens } from "@nodaro/shared"
+import { BRAND_PRESETS, type BrandTokens } from "@nodaro/prompts"
 
 // ---------------------------------------------------------------------------
 // Mock bakeShotSequence BEFORE importing the module under test so vitest's

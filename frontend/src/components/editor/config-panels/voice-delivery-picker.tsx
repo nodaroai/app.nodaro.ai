@@ -2,12 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import {
-  VOICE_PACES,
-  VOICE_EMOTIONS,
-  VOICE_ARCHETYPES,
-  type VoiceDeliveryEntry,
-} from "@nodaro/shared"
+import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES, type VoiceDeliveryEntry } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

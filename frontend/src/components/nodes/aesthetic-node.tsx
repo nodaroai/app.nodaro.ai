@@ -3,8 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Sparkles } from "lucide-react"
-import { getAesthetic, getAestheticLabel } from "@nodaro/shared"
-import { pickIds } from "@nodaro/shared"
+import { getAesthetic, getAestheticLabel, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { AestheticData } from "@/types/nodes"
 

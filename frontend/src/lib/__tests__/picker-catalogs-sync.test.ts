@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { PICKER_CATALOGS } from "@nodaro/shared"
+import { PICKER_CATALOGS } from "@nodaro/prompts"
 import {
   SINGLE_PICKERS,
   MULTI_PICKERS,
