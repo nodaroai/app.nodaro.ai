@@ -6,7 +6,7 @@
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
+import { collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection } from "@nodaro/shared"
 import { buildImagePrompt, assembleImageInput, buildScenePrompt } from "@nodaro/shared"
 import { composeNegative } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
@@ -2689,7 +2689,10 @@ export function buildPayload(
     // and credit pricing without modifying them. The case lives next to its
     // legacy siblings so future provider routing tweaks stay co-located.
     case "generate-video": {
-      const provider = (data.provider as string) ?? "kling"
+      // Same default helper as the routes — the DAG default previously
+      // disagreed with the single-node default ("kling" vs "minimax").
+      const gvSel = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined })
+      const provider = gvSel.provider
       const isS2 = isSeedance2Provider(provider)
 
       // ─── LTX 2.3 task dispatch ───────────────────────────────────────────
@@ -2741,7 +2744,7 @@ export function buildPayload(
             }),
             ...(task === "audio_to_video" && { audio: resolvedInputs.audioUrl }),
             resolution: data.resolution as string | undefined,
-            duration: data.duration as number | undefined,
+            duration: gvSel.duration as number | undefined,
             aspect_ratio: data.aspectRatio as string | undefined,
             fps: data.fps as number | undefined,
             generate_audio: (data.generateAudio as boolean | undefined) ?? true,

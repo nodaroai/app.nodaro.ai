@@ -12,7 +12,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS } from "@nodaro/shared"
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier, applyDefaultVideoSelection } from "@nodaro/shared"
 import {
   VIDEO_REF_LIMITS_BY_PROVIDER,
   resolveVideoReferenceCore,
@@ -392,9 +392,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       (req) => {
         const body = req.body as Record<string, unknown>
         const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+        const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
         return buildVideoCreditModelIdentifier(
-          (body?.provider as string) ?? "minimax",
-          body?.duration as number | string | undefined,
+          sel.provider,
+          sel.duration,
           body?.sound as boolean | undefined,
           "image-to-video",
           body?.videoSize as string | undefined,
@@ -421,9 +422,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               referenceVideoUrls: b.referenceVideoUrls as unknown[],
             })
           }
+          const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
           const modelId = buildVideoCreditModelIdentifier(
-            (b?.provider as string) ?? "minimax",
-            b?.duration as number | string | undefined,
+            bSel.provider,
+            bSel.duration,
             b?.sound as boolean | undefined,
             "image-to-video",
             b?.videoSize as string | undefined,
@@ -453,7 +455,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue } = parsed.data
+    // Platform default when the request omits provider/duration — the SAME
+    // helper the DAG payload builder uses, so the two paths cannot drift.
+    const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
     let prompt = rawPrompt
 
     // Seedance 2 accepts unified inputs: pass every wired input (first/last frame,
@@ -557,7 +562,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
     const modelIdentifier = buildVideoCreditModelIdentifier(
-      provider ?? "minimax",
+      provider,
       duration,
       sound,
       "image-to-video",
@@ -671,7 +676,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         warnings: [
           {
             code: "voice_unsupported_for_provider",
-            message: `The selected model (${provider ?? "minimax"}) can't voice dialogue; the clip was generated without voice. Use a VEO 3.x or Seedance-2 model for character voice.`,
+            message: `The selected model (${provider}) can't voice dialogue; the clip was generated without voice. Use a VEO 3.x or Seedance-2 model for character voice.`,
           },
         ],
       }

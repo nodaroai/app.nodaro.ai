@@ -1865,3 +1865,46 @@ export function preferredInputModeForModel(
   if (caps.inputModes.includes("first_frame")) return "first_frame"
   return undefined
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Platform default video model (single source of truth)
+ *
+ * Applied wherever a video request omits `provider`: the generate-video and
+ * text-to-video routes (credit resolution + dispatch), the DAG payload
+ * builder, and the KIE provider's last-resort fallback. Chosen from usage
+ * data (2026-07): most-selected video model with the highest completion rate.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export const DEFAULT_VIDEO_PROVIDER = "seedance-2-fast"
+
+/**
+ * Duration paired with the default provider when BOTH provider and duration
+ * are omitted. Pins the nothing-specified request to the default model's
+ * cheapest seeded tier (4s @ 480p — resolution omission already resolves to
+ * 480p in buildVideoCreditModelIdentifier), so first-touch cost stays at
+ * entry level and longer clips are an explicit choice.
+ */
+export const DEFAULT_VIDEO_DURATION_SEC = 4
+
+/**
+ * Resolve the effective (provider, duration) for a video request.
+ *
+ *  - provider omitted → DEFAULT_VIDEO_PROVIDER
+ *  - duration omitted AND provider was omitted → DEFAULT_VIDEO_DURATION_SEC
+ *  - an explicitly chosen provider keeps its own duration semantics (an
+ *    omitted duration falls through to that model's natural default)
+ *
+ * Used by both single-node routes AND the workflow payload builder so the
+ * two execution paths cannot drift (the route/DAG default previously
+ * disagreed: "minimax" vs "kling").
+ */
+export function applyDefaultVideoSelection<D>(input: {
+  provider?: string | null
+  duration?: D
+}): { provider: string; duration: D | number | undefined } {
+  const providerOmitted = input.provider == null || input.provider === ""
+  return {
+    provider: providerOmitted ? DEFAULT_VIDEO_PROVIDER : (input.provider as string),
+    duration: input.duration ?? (providerOmitted ? DEFAULT_VIDEO_DURATION_SEC : undefined),
+  }
+}

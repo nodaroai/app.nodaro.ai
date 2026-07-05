@@ -51,6 +51,9 @@ The backend orchestrator inspects the wired inputs at job-build time and dispatc
 
 ## Providers
 
+**Default:** when a request omits `provider`, the platform uses **`seedance-2-fast`** — and when `duration` is also omitted, it defaults to **4 seconds** (the cheapest tier: `seedance-2-fast:4s:480p`, 16 credits). An explicitly chosen provider keeps its own duration semantics. The same default applies to single-node runs, API/SDK calls, and workflow (DAG) execution.
+
+
 Generate Video covers the union of the legacy image-to-video and text-to-video catalogs (`VIDEO_GEN_PROVIDERS` in `@nodaro/shared`):
 
 | Family | Models | Modes | Notes |

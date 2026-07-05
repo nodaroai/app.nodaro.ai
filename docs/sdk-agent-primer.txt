@@ -8,8 +8,8 @@ AI video platform (https://app.nodaro.ai).
 
 Setup:
   npm install @nodaro/sdk
-  Auth: the user creates a token at app.nodaro.ai → Settings → API and sets
-  NODARO_ACCESS_TOKEN. Never hardcode tokens.
+  Auth: the user creates a token at https://app.nodaro.ai/settings/api and
+  sets NODARO_ACCESS_TOKEN. Never hardcode tokens.
 
 Core pattern (all generation is async; runAndWait submits + polls + resolves):
   import { createClient, StaticTokenAuth } from "@nodaro/sdk"
@@ -17,16 +17,19 @@ Core pattern (all generation is async; runAndWait submits + polls + resolves):
     baseUrl: "https://app.nodaro.ai",
     auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
   })
-  const img = await client.nodes.runAndWait("generate-image", { prompt: "…" })
+  const img = await client.nodes.runAndWait("generate-image", {
+    prompt: "…", provider: "nano-banana-2",          // fast + cheap, great default
+  })
   const vid = await client.nodes.runAndWait("generate-video", {
     prompt: "…", imageUrl: img.imageUrl,
+    provider: "seedance-2-fast", duration: 4,        // platform default; 4/8/12/15s
   })
   // outputs: .imageUrl / .videoUrl / .audioUrl on the resolved object
 
-Example app worth copying — "animated postcard" (text in, video out):
-  1. generate-image with the user's prompt
-  2. generate-video with { imageUrl: <step 1>, prompt: "subtle motion" }
-  3. return videoUrl
+Models available (full lists with credit costs, as raw markdown):
+  image: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-image/generate-image.md
+  video: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-video/generate-video.md
+  (or at runtime: client.nodes.get(type) → data.providers + credits.modelCosts)
 
 Model choice:
   - Omitting `provider` uses the platform's default model for that node —

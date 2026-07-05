@@ -8,7 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, applyDefaultVideoSelection } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
@@ -53,9 +53,10 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       (req) => {
         const body = req.body as Record<string, unknown>
         const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+        const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
         return buildVideoCreditModelIdentifier(
-          (body?.provider as string) ?? "minimax",
-          body?.duration as number | string | undefined,
+          sel.provider,
+          sel.duration,
           body?.sound as boolean | undefined,
           "text-to-video",
           body?.mode as string | undefined,
@@ -83,9 +84,10 @@ export async function textToVideoRoutes(app: FastifyInstance) {
           }
           // Non-ref / other providers: the normal base for the resolved identifier
           // (matches how generate-video computes its non-addon base).
+          const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
           const modelId = buildVideoCreditModelIdentifier(
-            (b?.provider as string) ?? "minimax",
-            b?.duration as number | string | undefined,
+            bSel.provider,
+            bSel.duration,
             b?.sound as boolean | undefined,
             "text-to-video",
             b?.mode as string | undefined,
@@ -106,7 +108,10 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = parsed.data
+    const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = parsed.data
+    // Platform default when the request omits provider/duration (shared with
+    // generate-video and the DAG payload builder).
+    const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
     // `prompt` + `referenceImageUrls` are reassigned by the connectedReferences
     // assembly below (when present), so they're `let`, not part of the const destructure.
     let prompt = parsed.data.prompt
