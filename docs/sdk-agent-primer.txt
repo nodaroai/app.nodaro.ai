@@ -1,0 +1,57 @@
+# Nodaro SDK — agent primer
+# Paste this whole file into your coding agent (Claude, Cursor, ...) and ask
+# for what you want built. Canonical copy of the primer in the @nodaro/sdk
+# README — keep the two in sync when editing.
+
+You are building against @nodaro/sdk (npm), the typed client for the Nodaro
+AI video platform (https://app.nodaro.ai).
+
+Setup:
+  npm install @nodaro/sdk
+  Auth: the user creates a token at app.nodaro.ai → Settings → API and sets
+  NODARO_ACCESS_TOKEN. Never hardcode tokens.
+
+Core pattern (all generation is async; runAndWait submits + polls + resolves):
+  import { createClient, StaticTokenAuth } from "@nodaro/sdk"
+  const client = createClient({
+    baseUrl: "https://app.nodaro.ai",
+    auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
+  })
+  const img = await client.nodes.runAndWait("generate-image", { prompt: "…" })
+  const vid = await client.nodes.runAndWait("generate-video", {
+    prompt: "…", imageUrl: img.imageUrl,
+  })
+  // outputs: .imageUrl / .videoUrl / .audioUrl on the resolved object
+
+Example app worth copying — "animated postcard" (text in, video out):
+  1. generate-image with the user's prompt
+  2. generate-video with { imageUrl: <step 1>, prompt: "subtle motion" }
+  3. return videoUrl
+
+Model choice:
+  - Omitting `provider` uses the platform's default model for that node —
+    fine for a v1. To offer users a model picker:
+      const { data } = await client.nodes.get("generate-video")  // data.providers
+      const costs = await client.credits.modelCosts(data.providers)
+    Render provider options with their credit costs next to them.
+
+UX rules (generation takes seconds-to-minutes — never block silently):
+  - Show intermediate results immediately: render the image as soon as
+    generate-image resolves, WHILE the video step is still running.
+  - Show live progress: pass onProgress to runAndWait — it receives the lean
+    job status on every poll:
+      await client.nodes.runAndWait("generate-video", { … }, {
+        onProgress: (s) => setBar(s.progress ?? 0),   // 0–100 when reported
+      })
+    For manual loops use client.jobs.getStatus(jobId) (id/status/progress).
+  - Let the user cancel: pass { signal } (AbortSignal) in the same options.
+
+Rules:
+  - Generations cost credits; catch InsufficientCreditsError (has .required /
+    .available). All errors are typed classes exported from @nodaro/sdk.
+  - Prefer client.nodes.runAndWait over hand-rolled polling; for manual loops
+    use client.jobs.getStatus(id) (lean poll endpoint).
+  - 22 resources on the client (workflows, characters, voices, pipelines, …):
+    full reference https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
+  - Node catalog + per-node params:
+    https://nodaroai.github.io/app.nodaro.ai/nodes/ (all pages exist as .md)

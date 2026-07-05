@@ -33,6 +33,7 @@ relative_links:
 
 include:
   - llms.txt
+  - sdk-agent-primer.txt
 
 exclude:
   - .github/

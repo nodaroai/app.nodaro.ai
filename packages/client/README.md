@@ -171,6 +171,15 @@ Working with Claude, Cursor, or another coding agent? Paste the primer below
 into your agent and ask for what you want built. For the full API map, point
 it at [llms.txt](https://nodaroai.github.io/app.nodaro.ai/llms.txt).
 
+Grab it straight to your clipboard ([raw file](https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt)):
+
+```bash
+curl -s https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt | pbcopy      # macOS
+curl -s https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt | xclip -sel clip  # Linux
+```
+
+<!-- Keep the primer below in sync with docs/sdk-agent-primer.txt (canonical raw copy). -->
+
 ````text
 You are building against @nodaro/sdk (npm), the typed client for the Nodaro
 AI video platform (https://app.nodaro.ai).
@@ -196,6 +205,24 @@ Example app worth copying — "animated postcard" (text in, video out):
   1. generate-image with the user's prompt
   2. generate-video with { imageUrl: <step 1>, prompt: "subtle motion" }
   3. return videoUrl
+
+Model choice:
+  - Omitting `provider` uses the platform's default model for that node —
+    fine for a v1. To offer users a model picker:
+      const { data } = await client.nodes.get("generate-video")  // data.providers
+      const costs = await client.credits.modelCosts(data.providers)
+    Render provider options with their credit costs next to them.
+
+UX rules (generation takes seconds-to-minutes — never block silently):
+  - Show intermediate results immediately: render the image as soon as
+    generate-image resolves, WHILE the video step is still running.
+  - Show live progress: pass onProgress to runAndWait — it receives the lean
+    job status on every poll:
+      await client.nodes.runAndWait("generate-video", { … }, {
+        onProgress: (s) => setBar(s.progress ?? 0),   // 0–100 when reported
+      })
+    For manual loops use client.jobs.getStatus(jobId) (id/status/progress).
+  - Let the user cancel: pass { signal } (AbortSignal) in the same options.
 
 Rules:
   - Generations cost credits; catch InsufficientCreditsError (has .required /
