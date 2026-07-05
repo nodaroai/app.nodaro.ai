@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { openApiRegistry } from "../lib/openapi-registry.js"
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
 import { appBaseUrl } from "../lib/deployment-urls.js"
@@ -50,6 +51,25 @@ function verifyPkce(codeVerifier: string, storedChallenge: string): boolean {
   if (computed.length !== storedChallenge.length) return false
   return timingSafeEqual(Buffer.from(computed), Buffer.from(storedChallenge))
 }
+
+
+openApiRegistry.registerPath({
+  method: "post", path: "/v1/oauth/token",
+  description: "Exchange a one-shot authorization code (10-minute TTL) for an access token. No bearer auth — authenticates via client_id + client_secret.",
+  request: { body: { content: { "application/json": { schema: tokenBody } } } },
+  responses: {
+    200: { description: "Access token", content: { "application/json": { schema: z.object({
+      access_token: z.string(), token_type: z.literal("Bearer"), scope: z.string().optional(),
+    }).passthrough() } } },
+    400: { description: "Invalid code / client credentials" },
+  },
+})
+openApiRegistry.registerPath({
+  method: "get", path: "/v1/oauth/app-info",
+  description: "Public app metadata for consent screens.",
+  request: { query: z.object({ client_id: z.string() }) },
+  responses: { 200: { description: "App info" }, 404: { description: "Unknown client_id" } },
+})
 
 export async function oauthRoutes(app: FastifyInstance) {
   // GET /v1/oauth/app-info?client_id=<id> — public, returns app metadata for consent screens

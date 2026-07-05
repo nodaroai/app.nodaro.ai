@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
+import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
@@ -348,6 +349,30 @@ async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<numb
  * about to reject. (Input mode is auto-detected downstream by
  * resolveSeedance2Inputs; reference audio is always validated when present.)
  */
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/generate-video",
+  description:
+    "Generate a video (async): text-to-video, image-to-video (imageUrl = start " +
+    "frame), first+last frame, or reference mode — chosen from the inputs. " +
+    "Omitting provider uses the platform default. Returns a jobId — poll " +
+    "GET /v1/jobs/{id}/status.",
+  security: [{ bearerAuth: [] }],
+  request: { body: { content: { "application/json": { schema: generateVideoBody } } } },
+  responses: {
+    200: {
+      description: "Job created (may include non-fatal warnings)",
+      content: { "application/json": { schema: z.object({
+        jobId: z.string().uuid(),
+        warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
+      }) } },
+    },
+    401: { description: "Unauthorized" },
+    402: { description: "Insufficient credits" },
+  },
+})
+
 export async function validateSeedance2AudioPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,

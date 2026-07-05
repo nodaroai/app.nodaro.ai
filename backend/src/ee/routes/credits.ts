@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { openApiRegistry } from "../../lib/openapi-registry.js"
+import { z as zOpenApi } from "zod"
 import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
@@ -84,6 +86,19 @@ export function invalidateBalanceCache(userId: string): void {
 }
 
 export async function creditsRoutes(app: FastifyInstance) {
+  // Registered inside the route function so the path only appears in the
+  // OpenAPI doc on editions where the route actually exists (Cloud).
+  openApiRegistry.registerPath({
+    method: "post", path: "/v1/credits/model-costs",
+    description: "Batch credit-cost lookup for model identifiers (max 50 per request).",
+    security: [{ bearerAuth: [] }],
+    request: { body: { content: { "application/json": { schema: zOpenApi.object({ models: zOpenApi.array(zOpenApi.string()).max(50) }) } } } },
+    responses: { 200: { description: "Costs by identifier", content: { "application/json": { schema: zOpenApi.object({
+      data: zOpenApi.record(zOpenApi.string(), zOpenApi.number()),
+      missing: zOpenApi.array(zOpenApi.string()),
+      errors: zOpenApi.array(zOpenApi.string()),
+    }) } } } },
+  })
   /**
    * GET /v1/user/credits
    * Get current user's credit balance and tier info
