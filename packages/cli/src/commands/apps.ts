@@ -104,7 +104,7 @@ export function appsCommand(): Command {
   cmd
     .command("run [slug] [extras...]")
     .description("trigger an app run. Inputs go through --input k=v (repeat) or --params-file inputs.json. Omit <slug> for an interactive picker.")
-    .option("--input <pairs...>", "input value, repeat or space-separate (e.g. --input prompt=\"hi\" --input duration=8)", collectVariadic)
+    .option("--input <pairs...>", "input value, repeat or space-separate; JSON arrays/objects supported (e.g. --input prompt=\"hi\" --input 'tags=[\"a\",\"b\"]')", collectVariadic)
     .option("--params-file <path>", "JSON file with the full inputs object (--input flags override matching keys)")
     .option("--watch", "follow the resulting execution until completion")
     .option("--profile <name>")

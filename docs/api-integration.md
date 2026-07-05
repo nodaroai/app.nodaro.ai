@@ -1119,3 +1119,33 @@ mentions fall back to the selected provider + ref injection.
 - [SDK Reference](./sdk-reference.md) — full method index
 - [Architecture](./architecture.md) — how requests flow through the system
 - [Deployment](./deployment.md) — self-hosting your own instance
+
+## 9. OpenAPI spec & other languages (Go, Rust, Python, …)
+
+The REST surface works from any language — bearer token, JSON in/out, the
+error envelope from section 8. For typed clients, a machine-readable
+**OpenAPI 3.1** spec is served live:
+
+```
+https://app.nodaro.ai/v1/openapi.json
+```
+
+It is a **curated subset** covering the automation core: workflows (run /
+executions), jobs (status polling), node discovery (`/v1/nodes`), the
+flagship generation endpoints (`/v1/generate-image`, `/v1/generate-video` —
+every node type follows the same `POST /v1/{node-type}` shape), OAuth token
+exchange, and credit cost lookup. Generate a client:
+
+```bash
+# Go
+oapi-codegen -generate types,client -package nodaro https://app.nodaro.ai/v1/openapi.json
+
+# Rust
+openapi-generator generate -i https://app.nodaro.ai/v1/openapi.json -g rust -o nodaro-rs
+
+# Python
+openapi-generator generate -i https://app.nodaro.ai/v1/openapi.json -g python -o nodaro-py
+```
+
+Per-node request fields beyond the flagship pair are documented in the
+[node catalog](./nodes/README.md) (every page also exists as raw `.md`).

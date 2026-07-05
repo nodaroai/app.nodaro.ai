@@ -109,8 +109,7 @@ style key attached. The block-prompt template + richness rule live in
 `model: "gemini-omni-video"`, `duration: 10`, `resolution: "720p"`, the chosen aspect
 ratio, and the **style key attached as the reference image** (via `connected_references`
 — the wired-reference shape; only image-reference-capable models attach it, and
-gemini-omni does). This collapses keyframe + animate into one call per block ([redacted-reference]
-parity). Cost anchor: **45cr/block** (`gemini-omni-video:10`), i.e. 270cr of clips per
+gemini-omni does). This collapses keyframe + animate into one call per block. Cost anchor: **45cr/block** (`gemini-omni-video:10`), i.e. 270cr of clips per
 output minute. **`gemini-omni-video` output is SILENT on Nodaro** — the voice carries
 the block alone; do not rely on clip audio.
 

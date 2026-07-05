@@ -25,7 +25,7 @@ const SHARED_CSS = `
   body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   /* Card shell — subtle border + tinted background + rounded corners
      frame the result so it reads as a discrete widget against the host
-     chat (matches [redacted-reference]'s grid-shell pattern). Applies on mobile
+     chat (grid-shell widget pattern). Applies on mobile
      AND desktop; fullscreen mode strips it back to bare media. */
   .card {
     display: flex;
@@ -43,7 +43,7 @@ const SHARED_CSS = `
   /* Mobile/touch default: image renders at intrinsic ratio, capped at
      360px so portrait results don't dominate the chat viewport. Fixed
      px (not vh) because vh is unreliable for chat-embedded widgets
-     where the iframe height is host-controlled — [redacted-reference] uses fixed
+     where the iframe height is host-controlled — some hosts use fixed
      px for the same reason. Desktop refinements (500px cap, mouse hover
      affordances) live in the @media block below. */
   .preview { width: 100%; }

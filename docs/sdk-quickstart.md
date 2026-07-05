@@ -566,3 +566,14 @@ workflows take longer than any reasonable HTTP timeout.
 - [OAuth Flow](./oauth-flow.md) — third-party app consent + token exchange
 - [API Integration](./api-integration.md) — direct REST patterns without the SDK
 - [Architecture](./architecture.md) — how Nodaro executes workflows server-side
+
+## Claude Code plugin
+
+Developing with Claude Code? One install adds the Nodaro SDK skill (client
+patterns, models, credits, OAuth) **and** the hosted MCP connection:
+
+```
+/plugin marketplace add nodaroai/app.nodaro.ai
+/plugin install nodaro
+```
+

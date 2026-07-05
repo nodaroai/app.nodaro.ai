@@ -105,7 +105,7 @@ export function nodesCommand(): Command {
   cmd
     .command("run [type] [extras...]")
     .description("run a single node directly — no workflow, no DAG. Inputs go through --param k=v (repeat) or --params-file body.json. Omit <type> for an interactive picker.")
-    .option("--param <pairs...>", "input value, repeat or space-separate (e.g. --param prompt=\"a leopard\" --param resolution=2K)", collectVariadic)
+    .option("--param <pairs...>", "input value, repeat or space-separate; JSON arrays/objects supported (e.g. --param prompt=\"a leopard\" --param 'targetPickers=[\"person\"]')", collectVariadic)
     .option("--params-file <path>", "JSON file with the full input body (--param flags override matching keys)")
     .option("--watch", "if the response includes a jobId, poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)

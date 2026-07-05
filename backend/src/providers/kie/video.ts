@@ -19,7 +19,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, resolveSeedance2Inputs } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, resolveSeedance2Inputs, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -655,7 +655,7 @@ export class KieVideoProvider
     options?: ProviderOptions,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
-    const provider = model ?? "minimax"
+    const provider = model ?? DEFAULT_VIDEO_PROVIDER
     const modelConfig = KIE_VIDEO_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(
@@ -1032,7 +1032,7 @@ export class KieVideoProvider
     options?: ProviderOptions,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
-    const provider = model ?? "minimax"
+    const provider = model ?? DEFAULT_VIDEO_PROVIDER
     const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(

@@ -95,6 +95,11 @@ const execution = await nodaro.workflows.run(workflowId)
 const jobs = await nodaro.jobs.list({ status: "completed" })
 ```
 
+**Not using TypeScript?** The whole surface is plain REST, and a live
+[OpenAPI 3.1 spec](https://app.nodaro.ai/v1/openapi.json) covers the
+automation core — generate a typed client for Go / Rust / Python with one
+command: see [API Integration §9](docs/api-integration.md).
+
 Guides: [SDK Quickstart](docs/sdk-quickstart.md) ·
 [SDK Reference](docs/sdk-reference.md) ·
 [API Integration](docs/api-integration.md) ·

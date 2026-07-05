@@ -16,8 +16,8 @@ const GALLERY_CSS = `
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 13px system-ui, sans-serif; background: transparent; color: inherit; }
   /* Card shell — subtle border + tinted bg + rounded corners frame
-     the gallery as a discrete widget against the host chat (matches
-     [redacted-reference]'s grid-shell pattern + our single-job widget). */
+     the gallery as a discrete widget against the host chat (grid-shell
+     pattern, consistent with our single-job widget). */
   .card {
     display: flex;
     flex-direction: column;
@@ -28,8 +28,8 @@ const GALLERY_CSS = `
     padding: 12px;
   }
   /* Header row — small label + count on left, the count helps the
-     user gauge how much they have ([redacted-reference]'s "Generations" title
-     pattern, but with a count). */
+     user gauge how much they have (gallery title-row
+     pattern, with a count). */
   .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .header .title { font-size: 13px; font-weight: 600; opacity: 0.85; }
   .header .count { font-size: 11px; opacity: 0.6; }
@@ -40,8 +40,8 @@ const GALLERY_CSS = `
   .tile { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); cursor: pointer; }
   .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
   /* Hover overlay — Use pill stretches to fill the bottom width, with
-     a fixed-size Download icon hugging the right edge (matches
-     [redacted-reference]'s hover layout). Aligned to the BOTTOM of the tile so
+     a fixed-size Download icon hugging the right edge (standard
+     gallery hover layout). Aligned to the BOTTOM of the tile so
      the buttons sit over the dark gradient and don't obscure the
      image content. Hidden on touch devices (no hover) because the
      invisible-but-clickable overlay was grabbing taps meant to open
@@ -60,7 +60,7 @@ const GALLERY_CSS = `
     pointer-events: none;
   }
   .hover-overlay > * { pointer-events: auto; }
-  /* Use takes all the remaining width — [redacted-reference]'s full-width Use
+  /* Use takes all the remaining width — full-width Use
      pill. Centered text. Subtle bg-darken on hover (no scale — would
      look weird on a stretched button). */
   .use {
@@ -103,7 +103,7 @@ const GALLERY_CSS = `
       padding: 0;
     }
   }
-  /* Pagination — [redacted-reference]-style pill: prev chevron, dots, next chevron.
+  /* Pagination — single-pill control: prev chevron, dots, next chevron.
      Whole control sits in a single rounded shell so it reads as ONE
      widget instead of three. */
   .pagination {
@@ -126,7 +126,7 @@ const GALLERY_CSS = `
   .footer { opacity: 0.6; font-size: 11px; text-align: center; }
   .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
   /* Reference-asset overlay — small chained thumbnails in the tile's
-     top-right showing what fed this generation ([redacted-reference]'s lineage
+     top-right showing what fed this generation (lineage-chip
      pattern). Up to 2 visible; if more exist a "+N" pill caps them. */
   .refs {
     position: absolute;
@@ -341,7 +341,7 @@ const GALLERY_CSS = `
        margins so the filmstrip + actions don't span edge-to-edge.
        Padding (32px each side) guarantees a minimum gutter even when
        the viewport is narrower than max-width; max-width caps the
-       total content column on wide monitors. [redacted-reference]-style centered
+       total content column on wide monitors. Centered
        column. */
     body.fullscreen {
       padding-left: 32px;
@@ -433,8 +433,8 @@ ${uiProtocolShim()}
     // hopping over to the gallery.
     var data = { items: [], nextCursor: null, totalCount: 0, loadMoreTool: 'browse_gallery' };
     // displayMode tracks the host iframe's current size mode (inline vs
-    // fullscreen). The detail view is FULLSCREEN-ONLY (matches [redacted-reference]
-    // and our single-job widget). When the host returns the iframe to
+    // fullscreen). The detail view is FULLSCREEN-ONLY (matches
+    // our single-job widget). When the host returns the iframe to
     // inline (user closes via X overlay), selectedId clears and we render
     // the grid again.
     var state = { page: 0, displayMode: 'inline', selectedId: null };
@@ -615,7 +615,7 @@ ${uiProtocolShim()}
         tile.addEventListener('click', function() {
           state.selectedId = item.jobId;
           // Promote to fullscreen — detail view is fullscreen-only,
-          // matching [redacted-reference] + our single-job widget. Trust the host's
+          // matching our single-job widget. Trust the host's
           // applied mode (some hosts may reject fullscreen and stay
           // inline; the displayMode-changed listener catches that).
           if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
@@ -848,8 +848,8 @@ ${uiProtocolShim()}
       if (!item) { state.selectedId = null; render(); return; }
 
       // No back-row header — the host already shows its own brand+X
-      // close above the iframe in fullscreen mode ([redacted-reference] matches
-      // this; we mirror). Detail starts directly with the preview.
+      // close above the iframe in fullscreen mode (standard host
+      // convention; we mirror). Detail starts directly with the preview.
       var card = document.createElement('div');
       card.className = 'card';
 
@@ -858,7 +858,7 @@ ${uiProtocolShim()}
 
       // Prev/Next nav arrows overlaying the preview — switch the
       // selected item. Wrap-around at the ends (matches asset
-      // browsers / [redacted-reference] filmstrip behavior).
+      // browser filmstrip behavior).
       var navPrev = document.createElement('button');
       navPrev.className = 'nav-arrow prev';
       navPrev.title = 'Previous';

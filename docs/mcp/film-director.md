@@ -84,7 +84,7 @@ See the general [MCP troubleshooting guide](./troubleshooting.md). Skill-specifi
 - **Canvas stays empty after I approve a stage** — The skill batches nodes per stage and writes them in one `update_workflow_json` call after your approval. Wait for Claude to say "added to your canvas" before refreshing.
 - **The editor URL Claude shared doesn't open** — Confirm it matches your Nodaro instance. The skill constructs `<base_url>/editor/<workflowId>`; if you're on a non-default deployment, tell Claude the correct base URL up front.
 - **Out of credits mid-session** — Top up via the [pricing page](https://nodaro.ai/pricing). The skill notes the credit cost before each generation, but won't pre-check the full session budget.
-- **Claude offers [redacted-reference] Soul identity training but I don't see it** — Soul integration is instance-dependent and not enabled by default. If unavailable, the skill falls back to Nodaro's built-in identity-lock prompts (still good quality, just not LoRA-level fidelity).
+- **Claude offers external identity training but I don't see it** — that integration is instance-dependent and not enabled by default. If unavailable, the skill falls back to Nodaro's built-in identity-lock prompts (still good quality, just not LoRA-level fidelity).
 - **A shot's animation is rejected 3 times** — The skill caps retries at 3 per shot. After that it pauses for your choice: continue and revisit later via the canvas, or stop here. The unapproved shot is left as an editable node so you can iterate manually.
 
 ## Under the hood

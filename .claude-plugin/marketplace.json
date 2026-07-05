@@ -1,0 +1,26 @@
+{
+  "name": "nodaro",
+  "description": "Official Nodaro plugins: the nodaro-sdk development skill (build on the Nodaro API/SDK) + hosted MCP connection.",
+  "owner": {
+    "name": "Nodaro",
+    "url": "https://nodaro.ai"
+  },
+  "plugins": [
+    {
+      "name": "nodaro",
+      "source": "./plugins/nodaro",
+      "description": "Build on Nodaro: SDK/API development skill (typed client, models, credits, OAuth) + the hosted MCP server connection.",
+      "author": {
+        "name": "Nodaro"
+      },
+      "homepage": "https://nodaroai.github.io/app.nodaro.ai/",
+      "license": "Apache-2.0",
+      "keywords": [
+        "nodaro",
+        "ai-video",
+        "sdk",
+        "mcp"
+      ]
+    }
+  ]
+}

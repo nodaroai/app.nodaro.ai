@@ -1,5 +1,19 @@
 # @nodaro/cli
 
+## 1.1.0
+
+### Minor Changes
+
+- b9c84a0: `--param` / `--input` now accept JSON values: a value starting with `[`, `{`, or `"` is parsed as JSON (e.g. `--param 'targetPickers=["person"]'` sends a real array; `--param 'seed="123"'` forces a string). Bracket-leading values that are not valid JSON still pass through as plain strings, so prompts like `[cinematic] a leopard` are unaffected. Previously array/object parameters required `--params-file`.
+
+### Patch Changes
+
+- Updated dependencies [6bcdb96]
+- Updated dependencies [6bcdb96]
+- Updated dependencies [ccc07e7]
+  - @nodaro/shared@1.2.0
+  - @nodaro/sdk@1.0.2
+
 ## 1.0.0
 
 ### Major Changes

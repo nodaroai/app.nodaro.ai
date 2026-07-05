@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
@@ -352,6 +353,23 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   // reserve identical credits.
   return resolveImageGenCreditIdentifier({ provider: rawProvider, quality, resolution, renderingSpeed, refCount, swapToI2i: true })
 }
+
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/generate-image",
+  description:
+    "Generate an image (async). Returns a jobId — poll GET /v1/jobs/{id}/status. " +
+    "Every generation node follows this same shape: POST /v1/{node-type} with " +
+    "that node's params (see the node catalog for per-type fields).",
+  security: [{ bearerAuth: [] }],
+  request: { body: { content: { "application/json": { schema: generateImageBody } } } },
+  responses: {
+    200: { description: "Job created", content: { "application/json": { schema: z.object({ jobId: z.string().uuid() }) } } },
+    401: { description: "Unauthorized" },
+    402: { description: "Insufficient credits" },
+  },
+})
 
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", { preHandler: creditGuard(resolveImageCreditIdentifier) }, async (req, reply) => {

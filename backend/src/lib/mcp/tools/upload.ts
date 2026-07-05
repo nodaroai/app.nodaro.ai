@@ -166,7 +166,7 @@ const WIDGET_URI_FOR_KIND: Record<KindMeta["kind"], string> = {
   video: "ui://nodaro/widget/v4/upload-video",
 }
 
-/** Reasonable upper bound — [redacted-reference] supports up to ~10 in their soul-train flow. */
+/** Reasonable upper bound — identity-training flows typically accept up to ~10 photos. */
 const MAX_FILES_HARD_CAP = 10
 
 function registerWidgetUpload(

@@ -115,6 +115,9 @@ export {
   SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER,
   seedance2AudioLimitSec,
   findSeedance2AudioOverLimit,
+  DEFAULT_VIDEO_PROVIDER,
+  DEFAULT_VIDEO_DURATION_SEC,
+  applyDefaultVideoSelection,
 } from "./model-constants.js"
 
 export {
