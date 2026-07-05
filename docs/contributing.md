@@ -336,15 +336,16 @@ for the full overview):
 - Community code (default): [Nodaro Sustainable Use License](../LICENSE) —
   source-available; permits personal use, dev/test/evaluation at any
   company size, and internal-business self-hosting for companies of up
-  to three (3) people; prohibits commercial hosted-service offerings to
-  third parties and requires a commercial license for larger companies'
+  to three (3) people; prohibits hosted-service offerings to third
+  parties (free or paid) and requires a commercial license for larger companies'
   internal production use.
 - Enterprise code (any path with an `ee` segment, any filename
   containing `.ee.`, plus compiled artifacts derived from such files):
   [Enterprise License](../backend/src/ee/LICENSE) —
-  same terms plus a paid subscription requirement for production use,
-  with carve-outs for development, testing, and evaluation.
-- SDK packages (`packages/client/`, `packages/shared/`):
+  same terms plus a paid subscription requirement for using Enterprise
+  features in production, with carve-outs for development, testing,
+  evaluation, and dormant inclusion in community builds.
+- SDK packages (`packages/client/`, `packages/shared/`, `packages/cli/`):
   [Apache License 2.0](../packages/shared/LICENSE) — embed in
   commercial applications freely.
 

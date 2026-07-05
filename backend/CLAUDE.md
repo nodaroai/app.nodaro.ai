@@ -25,7 +25,7 @@ import { baz } from "../lib/baz"
 
 ## Edition Architecture (`backend/src/ee/`)
 
-The `backend/src/ee/` directory holds enterprise code (admin routes, billing/credit infrastructure, Stripe integration). It is governed by the Nodaro Enterprise License (`backend/src/ee/LICENSE`) — production use requires a Nodaro Cloud or Enterprise subscription.
+The `backend/src/ee/` directory holds enterprise code (admin routes, billing/credit infrastructure, Stripe integration). It is governed by the Nodaro Enterprise License (`backend/src/ee/LICENSE`) — using Enterprise features in production requires a Nodaro Cloud or Enterprise subscription (dormant inclusion in community builds does not).
 
 **Folder layout under `ee/`:**
 - `ee/routes/` — admin-* routes (12), billing routes (4), monetization route

@@ -12,7 +12,8 @@ filename, all files residing in any directory whose path contains a
 segment named "ee" or ending with ".ee", and any compiled artifacts
 derived from such files — may only be used in production if you (and
 any entity that you represent) hold a valid Nodaro Enterprise license
-corresponding to your usage.
+corresponding to your usage, except as expressly permitted by clause 6
+("Dormant Enterprise Software") below.
 
 Subject to the foregoing sentence, you are free to modify the Enterprise
 Software and publish patches to the Enterprise Software. You agree that
@@ -31,12 +32,10 @@ expressly excludes any use that processes production data, serves end
 users (whether internal or external), or otherwise supports a live
 business workflow.
 
-You agree that Nodaro LTD and/or its licensors (as applicable) retain
-all right, title and interest in and to all such modifications. You are
-not granted any other rights beyond what is expressly stated herein.
-Subject to the foregoing, it is forbidden to copy, merge, publish,
-distribute, sublicense, sell, white-label, or rebrand the Enterprise
-Software.
+You are not granted any other rights beyond what is expressly stated
+herein. Subject to the foregoing, it is forbidden to copy, merge,
+publish, distribute, sublicense, sell, white-label, or rebrand the
+Enterprise Software.
 
 ## Combined Builds and Linked Code
 
@@ -52,8 +51,8 @@ For the avoidance of doubt:
    minified, or distributed. Compiling Enterprise Software together
    with Community Software into a single binary, container image,
    bundle, or other artifact does not relicense the Enterprise Software
-   under the Nodaro Sustainable Use License, nor does it grant any production
-   use rights to the Enterprise Software.
+   under the Nodaro Sustainable Use License, nor does it grant any
+   production use rights to the Enterprise Software.
 
 2. Any artifact (including, without limitation, Docker images, npm
    packages, compiled binaries, server bundles, and deployed instances)
@@ -64,9 +63,9 @@ For the avoidance of doubt:
 
 3. Disabling, removing, or routing around the Enterprise Software at
    runtime does not by itself create a license to redistribute the
-   Enterprise Software. To distribute an artifact under the Sustainable
-   Use License alone, the Enterprise Software must be removed from the
-   artifact entirely.
+   Enterprise Software. To distribute an artifact under the Nodaro
+   Sustainable Use License alone, the Enterprise Software must be
+   removed from the artifact entirely.
 
 4. The Community Software, when separated from the Enterprise Software
    and distributed without it, remains governed exclusively by the
@@ -80,10 +79,35 @@ For the avoidance of doubt:
    references are actually resolved against Enterprise Software — such
    that the Enterprise Software is included in, loaded by, or executed
    as part of the artifact — falls within the scope of clauses 1
-   through 3 above. To distribute Community Software under the
-   Nodaro Sustainable Use License alone, you must either remove all such
+   through 3 above. To distribute Community Software under the Nodaro
+   Sustainable Use License alone, you must either remove all such
    references or ensure that they resolve to non-Enterprise
    replacements at build time.
+
+6. **Dormant Enterprise Software.** Notwithstanding anything to the
+   contrary in this Enterprise License, including clauses 1 through 3
+   above, deploying or running an artifact that contains Enterprise
+   Software in production does not require a Nodaro Enterprise
+   license, provided that both of the following are true:
+
+   (a) no Enterprise license key is installed, entered, or activated
+       in the deployment; and
+
+   (b) no feature or functionality of the Enterprise Software is
+       enabled or used.
+
+   The mere presence, loading, or initialization of Enterprise
+   Software within the artifact, and automated license-status checks
+   performed by the software itself, do not by themselves constitute
+   use of Enterprise features or functionality for the purposes of
+   this clause.
+
+   This exception grants production-use rights with respect to dormant
+   Enterprise Software only. It does not permit redistribution of any
+   artifact containing Enterprise Software, and it does not grant any
+   rights to the Community Software contained in the same artifact —
+   your use of the Community Software remains subject to, and requires
+   rights under, the Nodaro Sustainable Use License.
 
 ## Patent Termination
 
@@ -111,6 +135,13 @@ purposes only.
 For all third-party components incorporated into the Nodaro Software,
 those components are licensed under the original license provided by
 the owner of the applicable component.
+
+## Canonical Copy
+
+This license is maintained at `backend/src/ee/LICENSE`, with an
+identical copy at `frontend/src/ee/LICENSE`. In the event of any
+discrepancy between the two, the copy at `backend/src/ee/LICENSE`
+prevails.
 
 ## No Warranty
 

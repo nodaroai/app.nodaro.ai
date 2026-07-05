@@ -205,8 +205,9 @@ Nodaro is **fair-code** with three license tiers — full overview in
   commercial license.
 - **Enterprise code** (paths with an `ee` segment or filenames containing
   `.ee.`) — [Enterprise License](backend/src/ee/LICENSE): free for development,
-  testing, and evaluation; production use requires a Nodaro Cloud or
-  Enterprise subscription.
+  testing, and evaluation; using Enterprise features in production requires a
+  Nodaro Cloud or Enterprise subscription (dormant Enterprise code inside
+  community builds needs none).
 - **SDK packages** (`packages/shared`, `packages/client`, `packages/cli`) —
   [Apache License 2.0](packages/shared/LICENSE): embed anywhere, including
   commercial applications.
