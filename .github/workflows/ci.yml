@@ -353,3 +353,45 @@ jobs:
         run: supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  changeset-guard:
+    name: Changeset Guard
+    # Every PR that changes a published package must carry a changeset, so the
+    # release train (release.yml) learns about it. Escape hatch for changes
+    # that genuinely need no release note: `npx changeset --empty`.
+    # Skipped for the release train's own PRs (version PR consumes changesets;
+    # dev→main promos carry already-consumed ones).
+    if: github.event_name == 'pull_request' && github.head_ref != 'dev' && !startsWith(github.head_ref, 'changeset-release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Require a changeset when published packages change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pkg_changes=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA" -- \
+            packages/shared packages/client packages/cli | grep -v CHANGELOG.md || true)
+          if [ -z "$pkg_changes" ]; then
+            echo "No published-package changes — guard not applicable."
+            exit 0
+          fi
+          added_changesets=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- \
+            '.changeset/*.md' | grep -v README.md || true)
+          if [ -n "$added_changesets" ]; then
+            echo "Package changes covered by changeset(s):"
+            echo "$added_changesets"
+            exit 0
+          fi
+          echo "::error::This PR changes published packages but adds no changeset."
+          echo "Changed package files:"
+          echo "$pkg_changes"
+          echo ""
+          echo "Add one with:  npx changeset        (pick bump level + write a note)"
+          echo "Or, if this change needs no release:  npx changeset --empty"
+          exit 1

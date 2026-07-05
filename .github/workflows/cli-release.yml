@@ -18,6 +18,7 @@ on:
   push:
     tags:
       - 'cli-v*'
+      - '@nodaro/cli@*' # changesets/action tag format (release.yml train)
 
 # Deny all permissions at the workflow level; each job opts into the minimum it
 # needs (least privilege). Only the `release` job gets `contents: write`.
