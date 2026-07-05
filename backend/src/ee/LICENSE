@@ -42,7 +42,7 @@ Software.
 
 The Enterprise Software may be imported, referenced, or otherwise
 combined at build or runtime with code that is licensed under the
-Sustainable Use License set out in `LICENSE` (the **"Community
+Nodaro Sustainable Use License set out in `LICENSE` (the **"Community
 Software"**).
 
 For the avoidance of doubt:
@@ -52,7 +52,7 @@ For the avoidance of doubt:
    minified, or distributed. Compiling Enterprise Software together
    with Community Software into a single binary, container image,
    bundle, or other artifact does not relicense the Enterprise Software
-   under the Sustainable Use License, nor does it grant any production
+   under the Nodaro Sustainable Use License, nor does it grant any production
    use rights to the Enterprise Software.
 
 2. Any artifact (including, without limitation, Docker images, npm
@@ -70,7 +70,7 @@ For the avoidance of doubt:
 
 4. The Community Software, when separated from the Enterprise Software
    and distributed without it, remains governed exclusively by the
-   Sustainable Use License.
+   Nodaro Sustainable Use License.
 
 5. A file that is otherwise Community Software but contains import
    statements, references, type declarations, or other syntactic
@@ -81,7 +81,7 @@ For the avoidance of doubt:
    that the Enterprise Software is included in, loaded by, or executed
    as part of the artifact — falls within the scope of clauses 1
    through 3 above. To distribute Community Software under the
-   Sustainable Use License alone, you must either remove all such
+   Nodaro Sustainable Use License alone, you must either remove all such
    references or ensure that they resolve to non-Enterprise
    replacements at build time.
 

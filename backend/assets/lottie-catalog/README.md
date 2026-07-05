@@ -3,8 +3,8 @@
 **Provenance:** first-party assets. The 12 animations here were authored with
 Nodaro's own Lottie engine (baked — slots resolved, no `sid` refs) as
 replacements for the third-party lottie.host catalog that went dead upstream.
-They are licensed with the repository core under the root Sustainable Use
-License and carry no third-party license obligations.
+They are licensed with the repository core under the root Nodaro
+Sustainable Use License and carry no third-party license obligations.
 
 The canonical entry list (slugs, URLs, prompt copy) lives in
 `packages/shared/src/lottie-overlay-catalog.ts` — single source of truth for

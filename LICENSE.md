@@ -6,7 +6,8 @@ Nodaro is fair-code: source-available with use-based restrictions. There are **t
 
 All files **outside** the patterns listed below are licensed under the **Nodaro Sustainable Use License** in [`LICENSE`](./LICENSE) at the repository root.
 
-- You may use, modify, and self-host this code for personal projects, internal business purposes, development, testing, and evaluation.
+- You may use, modify, and self-host this code for personal projects, and for development, testing, and evaluation at any company size.
+- Internal business (production) use is free for companies of up to **three (3) individuals**; larger companies require a commercial license — contact license@nodaro.ai.
 - You may NOT offer it as a commercial hosted, managed, or SaaS service to third parties.
 - You may NOT use it as a component in products you sell or distribute to third parties without a separate commercial license.
 
@@ -22,7 +23,7 @@ You may read, modify, and run enterprise code locally for development and testin
 
 ## Published SDK packages (Apache License 2.0)
 
-The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli/` are published to npm under the **Apache License 2.0**, not the Sustainable Use License. This is intentional: the SDK and CLI are meant to be embedded in or invoked from third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
+The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli/` are published to npm under the **Apache License 2.0**, not the Nodaro Sustainable Use License. This is intentional: the SDK and CLI are meant to be embedded in or invoked from third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
 
 The Apache 2.0 grant applies ONLY to:
 - [`packages/client/`](./packages/client/) — `@nodaro/sdk` (typed REST client)
@@ -31,7 +32,7 @@ The Apache 2.0 grant applies ONLY to:
 
 Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE), [`packages/shared/LICENSE`](./packages/shared/LICENSE), and [`packages/cli/LICENSE`](./packages/cli/LICENSE).
 
-The rest of the repository — backend, frontend, `packages/remotion/`, scripts, infrastructure — remains under the root `LICENSE` (Sustainable Use License) plus the `ee/LICENSE` (Enterprise License) where applicable.
+The rest of the repository — backend, frontend, `packages/remotion/`, scripts, infrastructure — remains under the root `LICENSE` (Nodaro Sustainable Use License) plus the `ee/LICENSE` (Enterprise License) where applicable.
 
 ## Combined builds
 
@@ -59,6 +60,10 @@ The development and testing exception is not time-limited, but it is scope-limit
 
 If your environment does any of those, it is production and requires a subscription.
 
+### Q: My company has more than three people — can we still self-host?
+
+For **development, testing, and evaluation**: yes, at any company size (non-production use that does not process production data, serve end users, or support a live business workflow). For **production internal use**: a commercial license is required once your company exceeds three (3) individuals — counting founders, officers, employees, and contractors across affiliated entities, regardless of how many of them use the software. People who merely receive content you generated do not count. Contact license@nodaro.ai.
+
 ### Q: Can I use Nodaro to build a SaaS product I plan to sell?
 
 No, not under the Community license. The "internal business purposes" permission does NOT extend to building products you distribute to third parties. Contact license@nodaro.ai for a commercial license.
@@ -85,4 +90,4 @@ For Nodaro Cloud or Enterprise subscriptions, contact license@nodaro.ai.
 
 ---
 
-*License model inspired by n8n's FairCode and PostHog's hybrid OSS/EE approach. Last updated: 2026-05-05.*
+*License model inspired by n8n's FairCode and PostHog's hybrid OSS/EE approach. Last updated: 2026-07-05.*

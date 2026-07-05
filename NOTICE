@@ -2,7 +2,7 @@ Nodaro
 Copyright (c) Nodaro
 
 This product bundles and depends on third-party software. The Nodaro source
-code is licensed as described in LICENSE.md (Sustainable Use License for core,
+code is licensed as described in LICENSE.md (Nodaro Sustainable Use License for core,
 Nodaro Enterprise License for `ee/`, Apache-2.0 for the published SDK packages).
 This NOTICE enumerates third-party components whose licenses impose obligations
 or warrant attention beyond the permissive MIT/ISC/BSD/Apache-2.0 majority.

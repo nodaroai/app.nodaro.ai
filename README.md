@@ -198,9 +198,11 @@ the CLA bot will prompt on your first pull request and never again after.
 Nodaro is **fair-code** with three license tiers — full overview in
 [`LICENSE.md`](LICENSE.md):
 
-- **Community code** (default) — [Sustainable Use License](LICENSE): self-host
-  freely for personal or internal business use; not for commercial hosting as
-  a service to third parties.
+- **Community code** (default) — [Nodaro Sustainable Use License](LICENSE):
+  free for personal use, for development/testing/evaluation at any company
+  size, and for internal business use in companies of up to 3 people. Larger
+  companies and any hosted service offered to third parties require a
+  commercial license.
 - **Enterprise code** (paths with an `ee` segment or filenames containing
   `.ee.`) — [Enterprise License](backend/src/ee/LICENSE): free for development,
   testing, and evaluation; production use requires a Nodaro Cloud or

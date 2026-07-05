@@ -18,7 +18,7 @@ A few quick pointers:
   [Contributor License Agreement](CLA.md). The CLA Assistant bot handles this
   automatically on your first pull request.
 - **License:** see [LICENSE.md](LICENSE.md) for the three-tier
-  (Sustainable Use / Enterprise / Apache-2.0 SDK) overview.
+  (Nodaro Sustainable Use / Enterprise / Apache-2.0 SDK) overview.
 
 Please read [docs/contributing.md](docs/contributing.md) before opening a pull
 request.

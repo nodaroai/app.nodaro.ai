@@ -7,7 +7,7 @@ to any repository owned by Nodaro LTD, you agree to the following terms:
 1. **Grant of License.** You give Nodaro LTD, and recipients of software
    distributed by Nodaro LTD, permission to license your contributions on
    any terms Nodaro LTD chooses, including, without limitation, under the
-   Sustainable Use License set out in `LICENSE`, under the Nodaro
+   Nodaro Sustainable Use License set out in `LICENSE`, under the Nodaro
    Enterprise License set out in `backend/src/ee/LICENSE` (and its
    identical copy at `frontend/src/ee/LICENSE`), or under any future
    license terms that Nodaro LTD may adopt. You are giving Nodaro LTD
@@ -17,7 +17,7 @@ to any repository owned by Nodaro LTD, you agree to the following terms:
    **Scope of relicensing.** You acknowledge and agree that Nodaro LTD
    may, at its sole discretion and at any time, relicense, move, or
    distribute your contributions under any of the licenses listed above,
-   including moving a contribution between the Sustainable Use License
+   including moving a contribution between the Nodaro Sustainable Use License
    and the Enterprise License (in either direction), without further
    notice to you and without any obligation of compensation.
 
