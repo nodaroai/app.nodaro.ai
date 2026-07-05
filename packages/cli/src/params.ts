@@ -16,17 +16,22 @@ export function parseBoolFlag(raw: string, flagName: string): boolean {
 
 /**
  * Parse `--param key=value` (and `--input key=value` for apps) into an object.
- * Coerces obvious primitives (`true`/`false`/numbers) — leaves everything else
- * as strings. Supports multiple `=` in the value (only the first splits the
- * key from the rest, so a value can contain `=` characters).
+ * Coerces obvious primitives (`true`/`false`/numbers) and values that LOOK
+ * like JSON (leading `[`, `{`, or `"`) — leaves everything else as strings.
+ * Supports multiple `=` in the value (only the first splits the key from the
+ * rest, so a value can contain `=` characters).
  *
- *   --param prompt=hello              → { prompt: "hello" }
- *   --param duration=8                → { duration: 8 }
- *   --param generateAudio=true        → { generateAudio: true }
- *   --param prompt="a=b"              → { prompt: "a=b" }
+ *   --param prompt=hello                    → { prompt: "hello" }
+ *   --param duration=8                      → { duration: 8 }
+ *   --param generateAudio=true              → { generateAudio: true }
+ *   --param 'targetPickers=["person"]'      → { targetPickers: ["person"] }
+ *   --param 'seed="123"'                    → { seed: "123" } (force string)
+ *   --param prompt="a=b"                    → { prompt: "a=b" }
  *
- * Repeated keys overwrite (last wins). For typed JSON values (arrays, objects,
- * null), use `--params-file file.json` instead — see `loadParamsFile`.
+ * A bracket-leading value that is NOT valid JSON stays a plain string (so
+ * prompts like `[cinematic] a leopard` pass through untouched). Repeated keys
+ * overwrite (last wins). `--params-file file.json` remains available for
+ * whole-body JSON — see `loadParamsFile`.
  */
 export function parseParamPairs(pairs: string[] | undefined): Record<string, unknown> {
   if (!pairs || pairs.length === 0) return {}
@@ -71,6 +76,18 @@ function coerce(value: string): unknown {
   // Integer or float — but only if the WHOLE value is numeric
   if (/^-?\d+$/.test(value)) return Number(value)
   if (/^-?\d*\.\d+$/.test(value)) return Number(value)
+  // JSON arrays/objects (e.g. targetPickers=["person"]) and JSON-quoted
+  // strings (seed="123" forces string). Only attempted when the value LOOKS
+  // like JSON; parse failures fall through to the plain string so prompts
+  // like `[cinematic] a leopard` keep working.
+  const first = value.trimStart()[0]
+  if (first === "[" || first === "{" || first === '"') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
   return value
 }
 

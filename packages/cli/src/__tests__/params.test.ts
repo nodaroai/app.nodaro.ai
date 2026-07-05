@@ -34,6 +34,26 @@ describe("parseParamPairs", () => {
     expect(parseParamPairs(["seed=8a", "version=1.2.3"])).toEqual({ seed: "8a", version: "1.2.3" })
   })
 
+  it("parses JSON arrays", () => {
+    expect(parseParamPairs(['targetPickers=["person"]'])).toEqual({ targetPickers: ["person"] })
+    expect(parseParamPairs(["nums=[1,2,3]"])).toEqual({ nums: [1, 2, 3] })
+  })
+
+  it("parses JSON objects", () => {
+    expect(parseParamPairs(['cfg={"a":1,"b":"x"}'])).toEqual({ cfg: { a: 1, b: "x" } })
+  })
+
+  it("parses JSON-quoted strings (force-string escape hatch)", () => {
+    expect(parseParamPairs(['seed="123"'])).toEqual({ seed: "123" })
+  })
+
+  it("keeps bracket-leading values that are not valid JSON as plain strings", () => {
+    expect(parseParamPairs(["prompt=[cinematic] a leopard at dawn"])).toEqual({
+      prompt: "[cinematic] a leopard at dawn",
+    })
+    expect(parseParamPairs(["note={not json"])).toEqual({ note: "{not json" })
+  })
+
   it("preserves additional `=` characters in the value", () => {
     expect(parseParamPairs(["query=a=b=c"])).toEqual({ query: "a=b=c" })
   })
