@@ -228,6 +228,32 @@ export default function ApiSettingsPage() {
   '${window.location.origin}/v1/api/result/EXECUTION_ID'`}
           />
         </div>
+
+        <div className="mt-6 pt-4 border-t">
+          <h3 className="text-sm font-semibold mb-2">Build with this token</h3>
+          <ul className="text-sm text-muted-foreground space-y-1">
+            <li>
+              <a className="text-primary hover:underline" href="https://www.npmjs.com/package/@nodaro/sdk" target="_blank" rel="noreferrer">TypeScript SDK — @nodaro/sdk</a>
+              <span> · typed client, `nodes.runAndWait`, progress + cancel</span>
+            </li>
+            <li>
+              <a className="text-primary hover:underline" href="https://www.npmjs.com/package/@nodaro/cli" target="_blank" rel="noreferrer">CLI — @nodaro/cli</a>
+              <span> · terminal + CI, `--watch`, JSON output</span>
+            </li>
+            <li>
+              <a className="text-primary hover:underline" href={`${window.location.origin}/v1/openapi.json`} target="_blank" rel="noreferrer">OpenAPI 3.1 spec</a>
+              <span> · generate Go / Rust / Python clients</span>
+            </li>
+            <li>
+              <a className="text-primary hover:underline" href="https://nodaroai.github.io/app.nodaro.ai/api-integration.html" target="_blank" rel="noreferrer">API integration guide</a>
+              <span> · full REST reference, webhooks, rate limits</span>
+            </li>
+            <li>
+              <a className="text-primary hover:underline" href="https://nodaroai.github.io/app.nodaro.ai/mcp/" target="_blank" rel="noreferrer">MCP server</a>
+              <span> · drive Nodaro from Claude, Cursor, and other AI clients</span>
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* Create Dialog */}
