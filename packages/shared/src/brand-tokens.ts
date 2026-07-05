@@ -44,6 +44,10 @@ export interface BrandFonts {
 export interface BrandLogo {
   name: string
   tagline?: string
+  /** Optional logo image — an https URL on an allowlisted Nodaro-CDN host (v1: URL only; obtain from the upload tools). */
+  image?: string
+  /** Optional hex color for a rounded panel rendered behind the logo. */
+  imageBackdrop?: string
 }
 
 export interface BrandTokens {

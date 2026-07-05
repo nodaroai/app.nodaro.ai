@@ -169,6 +169,8 @@ Exactly **one** of \`element\` or \`blueprint\` per reveal — never both. \`dur
 { "brand": "NODARO", "tagline": "Motion. On your words.", "accentColor": "#8B5CF6" }
 \`\`\`
 
+> When the brand supplies a logo image, ALWAYS include exactly one \`logo-assemble-lockup\` (intro or outro) — it is where the logo image renders.
+
 \`cta-morph-press\` _(CTA button appears centred; cursor decelerates in and presses it)_
 \`\`\`json
 { "label": "Start free", "sublabel": "No credit card needed", "accentColor": "#8B5CF6" }

@@ -300,6 +300,24 @@ jobs:
           for i in $(seq 1 45); do
             if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
               echo "Backend booted successfully after ${i}s"
+              # Edition-gate runtime assertion: the Stripe webhook route is in
+              # the auth-hook PUBLIC whitelist, so its status is a clean
+              # registered-vs-absent signal (authed ee routes 401 before
+              # routing in both editions and can't discriminate).
+              #   community -> ee billing routes must NOT be registered (404)
+              #   cloud     -> must be registered (anything but 404)
+              WEBHOOK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:9000/v1/billing/stripe-webhook)
+              echo "stripe-webhook probe: $WEBHOOK_STATUS (edition: $EDITION)"
+              if [ "$EDITION" = "community" ] && [ "$WEBHOOK_STATUS" != "404" ]; then
+                echo "FAIL: community edition registered an ee billing route (expected 404, got $WEBHOOK_STATUS)"
+                kill $BACKEND_PID 2>/dev/null || true
+                exit 1
+              fi
+              if [ "$EDITION" = "cloud" ] && [ "$WEBHOOK_STATUS" = "404" ]; then
+                echo "FAIL: cloud edition did NOT register the ee billing route (got 404)"
+                kill $BACKEND_PID 2>/dev/null || true
+                exit 1
+              fi
               kill $BACKEND_PID 2>/dev/null || true
               exit 0
             fi

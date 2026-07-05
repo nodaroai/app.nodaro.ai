@@ -4,43 +4,12 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
+import { isOurCdnUrl } from "../lib/cdn-host.js"
 
 const proxyQuery = z.object({
   url: safeUrlSchema,
   download: z.string().optional(),
 })
-
-// Mirrors the allow-list in routes/download.ts. Only configured asset media may
-// be served with Content-Disposition: attachment, so the route can't be used
-// as a phishing/malware download proxy. Extra bucket host via
-// R2_PUBLIC_FALLBACK_DOMAIN (empty by default); the primary gate is the origin
-// derived from R2_PUBLIC_URL below.
-const ALLOWED_DOMAIN = config.R2_PUBLIC_FALLBACK_DOMAIN
-
-// Parsed origin of R2_PUBLIC_URL, cached once. Origin (protocol+host+port)
-// comparison replaces the previous `rawUrl.startsWith(config.R2_PUBLIC_URL)`
-// check — which, with the env example value `https://assets.example.com` (no
-// trailing slash), allowed look-alike hostnames like
-// `assets.example.com.evil.com` to pass the allowlist.
-const R2_PUBLIC_ORIGIN: string | null = (() => {
-  if (!config.R2_PUBLIC_URL) return null
-  try {
-    return new URL(config.R2_PUBLIC_URL).origin
-  } catch {
-    return null
-  }
-})()
-
-function isAllowedDownloadHost(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl)
-    if (ALLOWED_DOMAIN !== "" && parsed.hostname === ALLOWED_DOMAIN) return true
-    if (R2_PUBLIC_ORIGIN !== null && parsed.origin === R2_PUBLIC_ORIGIN) return true
-    return false
-  } catch {
-    return false
-  }
-}
 
 function sanitizeFilename(rawUrl: string): string {
   const pathname = new URL(rawUrl).pathname
@@ -72,7 +41,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     // ANY content type from app.nodaro.ai — an open download proxy. The
     // non-download path remains permissive (it still requires safeUrlSchema +
     // image content-type, used legitimately for cached avatar/OG previews).
-    if (isDownload && !isAllowedDownloadHost(url)) {
+    if (isDownload && !isOurCdnUrl(url, config.R2_PUBLIC_URL, config.R2_PUBLIC_FALLBACK_DOMAIN)) {
       return reply.status(403).send({
         error: { code: "forbidden", message: "Download mode is restricted to Nodaro media URLs" },
       })

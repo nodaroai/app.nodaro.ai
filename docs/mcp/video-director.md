@@ -80,6 +80,66 @@ invisible when it succeeds. If the repair either drifts the script/cues or
 still fails the resolver, the job fails exactly as it would without the
 repair attempt, with the same stage-prefixed `resolve:` error message.
 
+## Brand
+
+`create_explainer` and `create_launch_video` both accept an optional `brand`
+— either a **preset id** (see
+[`list_brand_presets`](./tools.md#list_brand_presets), e.g.
+`"cobalt-corporate"`) or an **inline token object** `{ palette, fonts, logo }`.
+Whichever you pass, its palette and fonts are applied consistently across
+every scene the director authors. See
+[Brand Typography Ramp](../design/brand-typography-ramp.md) for the full
+palette/font model, including the per-role weight/casing/tracking levers.
+
+### Logo image
+
+A brand can also carry a `logo`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `logo.name` | string | Required whenever `logo` is set. The wordmark text — used as the fallback render (see below) and in the tagline layout. |
+| `logo.tagline` | string | Optional line shown under the wordmark/logo. |
+| `logo.image` | string (https URL) | Optional. **Must be an https URL on your Nodaro CDN** — get one from `request_image_upload` or `upload_image_widget` (see [Upload tools](./tools.md#upload-tools)) before authoring the brief. Raster formats only (PNG, WebP, JPEG) — no SVG. A URL on any other host is rejected when the brief/plan is validated. |
+| `logo.imageBackdrop` | string (hex color) | Optional. Renders a rounded color panel behind the logo image — useful when the logo needs contrast against the scene background. Has no effect without `logo.image`. |
+
+When `logo.image` is set, the video director **guarantees** a
+[`logo-assemble-lockup`](./shot-sequence.md#blueprint-catalog) scene appears
+somewhere in the video — it's the only blueprint that renders the logo image.
+You don't need to explicitly request it: if the authored brief doesn't
+already include one, the pipeline appends it automatically as a closing beat.
+
+**Fallback:** if the image fails to load at render time, that scene falls
+back to the animated text wordmark (`logo.name`) instead — a bad or
+unreachable image URL never fails the render. The renderer retries a failing
+image a couple of times over a few seconds (holding the render frame each
+time) before giving up and falling back, so if you render immediately after
+uploading — before the image has finished propagating on the CDN — that
+render may still show the wordmark fallback even though the URL is valid.
+If that happens, wait briefly and render again.
+
+**Example — `create_explainer` with an inline brand + logo:**
+
+```json
+{
+  "topic": "How our new analytics dashboard works",
+  "brand": {
+    "palette": { "bg": "#0B0B12", "text": "#FFFFFF", "accent": "#8B5CF6" },
+    "fonts": { "heading": "Montserrat", "body": "Inter" },
+    "logo": {
+      "name": "NODARO",
+      "image": "https://…/uploads/logo.png",
+      "imageBackdrop": "#111111"
+    }
+  }
+}
+```
+
+**Driving the pipeline manually?** `resolve_shot_sequence`'s brief accepts
+the same tokens under `shotSequenceBrief.brandTokens` — but only as the
+resolved object shape (`{ palette, fonts, logo }`), never a preset-id string.
+Call `list_brand_presets` first and copy a preset's tokens in if you want to
+start from one.
+
 ## Tool reference
 
 ### `start_video_director`
@@ -123,6 +183,7 @@ The video is also saved to your Nodaro library.
 | Field | Type | Notes |
 |-------|------|-------|
 | `topic` | string (1–8000 chars) | What the explainer should teach or cover. Required. |
+| `brand` | string \| object | Optional. A brand preset id or inline brand tokens — see [Brand](#brand) below. |
 
 **Returns:** `{ job_id: string }`. Clients without card support poll `get_job`
 to track progress; when complete, the MP4 URL is in `output_data.videoUrl`.
@@ -152,6 +213,7 @@ your Nodaro library.
 |-------|------|-------|
 | `brief` | string (1–8000 chars) | Describe the product to launch (features, audience, tone). Required when no `url`. |
 | `url` | string | Not yet supported. Passing `url` without `brief` returns a "Real-UI capture isn't supported yet — pass `brief` instead" message. Passing both (`url` + `brief`) ignores the URL and proceeds with `brief`. |
+| `brand` | string \| object | Optional. Same shape as `create_explainer`'s `brand` — see [Brand](#brand) below. |
 
 **Returns:** `{ job_id: string }`. Clients without card support poll `get_job`
 to track progress.
@@ -198,3 +260,7 @@ rules, and element reference.
   productions
 - [MCP Tools Reference](./tools.md)
 - [Connecting Claude.ai](./connecting-claude.md)
+- [Brand Typography Ramp](../design/brand-typography-ramp.md) — the palette/font
+  model behind `brand`
+- [Brand Image Logo](../design/brand-image-logo.md) — design rationale for the
+  logo image capability

@@ -1,5 +1,5 @@
 import React from "react"
-import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
+import { useCurrentFrame, useVideoConfig, interpolate, Easing, Img } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle, detectBaseDirection, type TextDirection } from "../lib/text-direction"
 import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
@@ -57,6 +57,48 @@ export function logoRowDirection(brandText: string): TextDirection {
   return detectBaseDirection(brandText)
 }
 
+/** Pure decision: show the image only when a URL is present and it hasn't failed to load. */
+export function chooseLogoRender(image: string | undefined, hasError: boolean): "image" | "cascade" {
+  return image && !hasError ? "image" : "cascade"
+}
+
+/**
+ * Contain-fit logo image with fade+scale-in, optional backdrop panel, and
+ * onError→fallback. The entrance animation (opacity + scale) always applies
+ * to the outer wrapper — never to the inner <Img> — so the backdrop panel
+ * (when present) and the logo mark fade+scale in together as a single unit;
+ * applying it a second time on the inner <Img> would compound the opacity
+ * (opacity²) and leave the panel static while only the mark scaled.
+ */
+function BrandLogoImage(props: {
+  src: string
+  maxWidth: number
+  maxHeight: number
+  opacity: number
+  scale: number
+  backdrop?: string
+  onError: () => void
+}) {
+  const { src, maxWidth, maxHeight, opacity, scale, backdrop, onError } = props
+  return (
+    <div
+      style={{
+        opacity,
+        transform: `scale(${scale})`,
+        ...(backdrop
+          ? {
+              backgroundColor: backdrop,
+              borderRadius: Math.round(maxHeight * 0.08),
+              padding: Math.round(maxHeight * 0.08),
+            }
+          : {}),
+      }}
+    >
+      <Img src={src} onError={onError} style={{ maxWidth, maxHeight, objectFit: "contain" }} />
+    </div>
+  )
+}
+
 export function LogoAssembleLockup({ params, durationInFrames, brand }: BlueprintProps) {
   // Note: `brand` from Params (string) is destructured as `brandText` to avoid
   // shadowing `brand` from BlueprintProps (object).
@@ -96,6 +138,10 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
   const letterFontSize = Math.round(height * 0.18)
   const taglineFontSize = Math.round(height * 0.045)
 
+  const logoImage = brand.logo?.image
+  const logoBackdrop = brand.logo?.imageBackdrop
+  const [imgError, setImgError] = React.useState(false)
+
   return (
     <div
       style={{
@@ -111,37 +157,57 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
         justifyContent: "center",
       }}
     >
-      {/* Brand name — per-letter staggered entrance */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "baseline",
-          // Flips visual letter order for RTL brand names — see logoRowDirection.
-          direction: logoRowDirection(brandText),
-        }}
-      >
-        {letters.map((letter, i) => {
-          // Use the SAME formula as letterEntranceProgress (Lesson 1).
-          const progress = letterEntranceProgress(frame, i, count, durationInFrames)
-          return (
-            <span
-              key={i}
-              style={{
-                ...letterType,
-                fontSize: letterFontSize,
-                color: accent,
-                display: "inline-block",
-                opacity: progress,
-                transform: `translateY(${(1 - progress) * 28}px)`,
-                whiteSpace: "pre", // preserve space characters
-              }}
-            >
-              {letter}
-            </span>
-          )
-        })}
-      </div>
+      {/* Brand name — logo image when available, else per-letter staggered entrance */}
+      {chooseLogoRender(logoImage, imgError) === "image" ? (
+        <BrandLogoImage
+          src={logoImage!}
+          maxWidth={Math.round(width * 0.6)}
+          maxHeight={Math.round(height * 0.42)}
+          opacity={interpolate(frame, [0, 18], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+            easing: Easing.out(Easing.ease),
+          })}
+          scale={interpolate(frame, [0, 18], [0.92, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+            easing: Easing.out(Easing.ease),
+          })}
+          backdrop={logoBackdrop}
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "baseline",
+            // Flips visual letter order for RTL brand names — see logoRowDirection.
+            direction: logoRowDirection(brandText),
+          }}
+        >
+          {letters.map((letter, i) => {
+            // Use the SAME formula as letterEntranceProgress (Lesson 1).
+            const progress = letterEntranceProgress(frame, i, count, durationInFrames)
+            return (
+              <span
+                key={i}
+                style={{
+                  ...letterType,
+                  fontSize: letterFontSize,
+                  color: accent,
+                  display: "inline-block",
+                  opacity: progress,
+                  transform: `translateY(${(1 - progress) * 28}px)`,
+                  whiteSpace: "pre", // preserve space characters
+                }}
+              >
+                {letter}
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* Optional tagline — fades up after letters settle */}
       {tagline != null && (

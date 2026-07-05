@@ -48,7 +48,7 @@ A 30-second short film typically takes 20-40 minutes from prompt to delivery.
 
 ## Installing the skill
 
-The skill is open-source and lives at `.claude/skills/nodaro-film-director/SKILL.md` in the [Nodaro repo](https://github.com/nodaroai/app.nodaro.ai).
+The skill ships in the source-available repo at `.claude/skills/nodaro-film-director/SKILL.md` in the [Nodaro repo](https://github.com/nodaroai/app.nodaro.ai).
 
 For local use:
 

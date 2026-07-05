@@ -66,6 +66,9 @@ export function buildBrandBlock(brand?: BrandTokens): string {
     `- body font: ${brand.fonts.body}\n` +
     (brand.logo
       ? `- brand name: ${brand.logo.name}${brand.logo.tagline ? ` — ${brand.logo.tagline}` : ""}\n`
+      : "") +
+    (brand.logo?.image
+      ? `- A brand LOGO IMAGE is provided — you MUST include exactly one \`logo-assemble-lockup\` reveal (a product_intro or branding sign-off beat, intro or outro) so the logo is shown on screen.\n`
       : "")
   )
 }

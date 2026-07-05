@@ -3,6 +3,8 @@ import { safeUrlSchema } from "./url-validator.js"
 import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/shared"
 import { validateBlueprintParams, hexColor } from "../services/shot-sequence/blueprint-params.js"
+import { config } from "./config.js"
+import { isOurCdnUrl } from "./cdn-host.js"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -48,7 +50,18 @@ export const brandTokensSchema = z.object({
     bodyType: brandTypeSpecSchema,
   }),
   logo: z
-    .object({ name: z.string().min(1), tagline: z.string().optional() })
+    .object({
+      name: z.string().min(1),
+      tagline: z.string().optional(),
+      image: z
+        .string()
+        .url()
+        .refine((u) => isOurCdnUrl(u, config.R2_PUBLIC_URL, config.R2_PUBLIC_FALLBACK_DOMAIN), {
+          message: "logo.image must be an https URL on the Nodaro CDN",
+        })
+        .optional(),
+      imageBackdrop: hexColor.optional(),
+    })
     .optional(),
 })
 
