@@ -42,8 +42,11 @@ jobs:
           # signature commits in history.
           remote-organization-name: 'nodaroai'
           remote-repository-name: 'cla-signatures'
-          # Bots that auto-open PRs (Dependabot, Renovate, etc.) skip signing.
-          allowlist: 'dependabot[bot],renovate[bot],github-actions[bot]'
+          # Never require signing from: internal Nodaro workers (talasa,
+          # asafna2) — employees, not external contributors, so their commits
+          # and any internal dev->main promo bundling them pass automatically;
+          # and auto-PR bots (Dependabot/Renovate/Actions). Add new employees here.
+          allowlist: 'dependabot[bot],renovate[bot],github-actions[bot],talasa,asafna2'
           # The action handles event filtering internally — it inspects
           # the triggering event and fires only on relevant comment bodies.
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
