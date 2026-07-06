@@ -51,6 +51,6 @@ yet for your edition. Check back later.
 
 ## See also
 
-- [Embed App Guide](./embed-app-guide.md) — ship your own workflows as runnable apps
+- [Embed App Guide](./embed-app-guide.md) — ship your own workflows as runnable MinApps
 - [SDK Quickstart](./sdk-quickstart.md) — drive workflows from code
 - [Node Reference](./nodes/) — what each node does, and when to use it

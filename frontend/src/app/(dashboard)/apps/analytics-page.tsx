@@ -73,8 +73,8 @@ export default function AppAnalyticsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">App Analytics</h1>
-          <p className="text-sm text-muted-foreground">Performance metrics for your published app</p>
+          <h1 className="text-2xl font-bold text-foreground">MinApp Analytics</h1>
+          <p className="text-sm text-muted-foreground">Performance metrics for your published MinApp</p>
         </div>
       </div>
 

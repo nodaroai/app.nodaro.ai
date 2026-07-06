@@ -223,7 +223,7 @@ export default function AdminSettingsPage() {
         <div className="border rounded-lg p-4 bg-card">
           <div className="flex items-center gap-2 mb-4">
             <Film className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-medium">Apps Display</h2>
+            <h2 className="font-medium">MinApps Display</h2>
           </div>
 
           <div className="flex items-center justify-between">
@@ -242,7 +242,7 @@ export default function AdminSettingsPage() {
 
           <div className="flex items-center justify-between mt-3">
             <div>
-              <Label htmlFor="apps-page-autoplay">Auto-play videos in apps page</Label>
+              <Label htmlFor="apps-page-autoplay">Auto-play videos in MinApps page</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Hovering always plays regardless of this setting.
               </p>
@@ -255,7 +255,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="mt-4 space-y-2">
-            <Label htmlFor="apps-limit">Apps carousel limit</Label>
+            <Label htmlFor="apps-limit">MinApps carousel limit</Label>
             <div className="flex items-center gap-2 max-w-xs">
               <Input
                 id="apps-limit"
@@ -266,7 +266,7 @@ export default function AdminSettingsPage() {
                 onChange={(e) => setAppsLimit(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
                 className="w-24"
               />
-              <span className="text-sm text-muted-foreground">apps</span>
+              <span className="text-sm text-muted-foreground">MinApps</span>
             </div>
             <p className="text-xs text-muted-foreground">
               Maximum number of apps shown in the homepage carousel (1-50). Featured apps always appear first.

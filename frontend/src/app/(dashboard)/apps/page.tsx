@@ -171,10 +171,10 @@ export default function AppsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: queryKeys.appMarketplace.all })
-      toast.success("App deleted. Recover it from Deleted Apps.")
+      toast.success("MinApp deleted. Recover it from Deleted MinApps.")
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete app")
+      toast.error(err.message || "Failed to delete MinApp")
     },
   })
 
@@ -208,10 +208,10 @@ export default function AppsPage() {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
       setEditApp(null)
-      toast.success("App updated")
+      toast.success("MinApp updated")
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update app")
+      toast.error(err.message || "Failed to update MinApp")
     },
   })
 
@@ -252,14 +252,14 @@ export default function AppsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Apps</h1>
+          <h1 className="text-2xl font-bold text-foreground">MinApps</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Discover and run AI-powered apps, or manage your own
+            Discover and run AI-powered MinApps, or manage your own
           </p>
         </div>
         <Link to="/apps/deleted" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <Archive className="h-3 w-3" />
-          Deleted apps
+          Deleted MinApps
         </Link>
       </div>
 
@@ -293,7 +293,7 @@ export default function AppsPage() {
                   onClick={() => setViewMode("my-apps")}
                 >
                   <User className="h-3.5 w-3.5" />
-                  My Apps
+                  My MinApps
                 </button>
                 <button
                   type="button"
@@ -324,7 +324,7 @@ export default function AppsPage() {
               <PopoverContent className="w-64">
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Default Pricing</h4>
-                  <p className="text-xs text-muted-foreground">Applied to new apps when monetization is first enabled.</p>
+                  <p className="text-xs text-muted-foreground">Applied to new MinApps when monetization is first enabled.</p>
                   <div>
                     <Label className="text-xs">Flat Fee (CR)</Label>
                     <Input
@@ -364,7 +364,7 @@ export default function AppsPage() {
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search apps..."
+                placeholder="Search MinApps..."
                 className="pl-9 h-9"
               />
               {searchInput && (
@@ -463,14 +463,14 @@ export default function AppsPage() {
           <div className="text-center py-16">
             <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              {viewMode === "favorites" ? "No favorites yet" : "No apps found"}
+              {viewMode === "favorites" ? "No favorites yet" : "No MinApps found"}
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {viewMode === "favorites"
-                ? "Heart apps you like to save them here."
+                ? "Heart MinApps you like to save them here."
                 : debouncedSearch || selectedCategory || selectedOutputType
                   ? "Try adjusting your search or filters."
-                  : "Be the first to publish an app to the marketplace!"}
+                  : "Be the first to publish a MinApp to the marketplace!"}
             </p>
           </div>
         ) : (
@@ -516,9 +516,9 @@ export default function AppsPage() {
           <AlertDialog open={deleteConfirmApp !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmApp(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete this app?</AlertDialogTitle>
+                <AlertDialogTitle>Delete this MinApp?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  It'll be hidden from the marketplace and from your apps list. You can restore it any time from your Deleted Apps. The app's earnings, analytics, and run history are preserved.
+                  It'll be hidden from the marketplace and from your MinApps list. You can restore it any time from your Deleted MinApps. The MinApp's earnings, analytics, and run history are preserved.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -572,10 +572,10 @@ function MyAppsGrid({
     return (
       <div className="text-center py-16">
         <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-        <h2 className="text-lg font-semibold text-foreground mb-2">No published apps yet</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-2">No published MinApps yet</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Publish a workflow as a mini-app from the presentation mode share dialog.
-          Apps get their own URL, persistent run history, and analytics.
+          Publish a workflow as a MinApp from the presentation mode share dialog.
+          MinApps get their own URL, persistent run history, and analytics.
         </p>
       </div>
     )
@@ -789,7 +789,7 @@ function MyAppCard({
           size="sm"
           className="h-7 px-2 text-xs"
           onClick={onEdit}
-          title="Edit app settings"
+          title="Edit MinApp settings"
         >
           <Pencil className="h-3 w-3 mr-1" />
           Edit
@@ -812,7 +812,7 @@ function MyAppCard({
           size="sm"
           className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
           onClick={onDelete}
-          title="Delete app"
+          title="Delete MinApp"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -826,7 +826,7 @@ function MyAppCard({
             Allowed Embed Domains
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Add domains that can embed this app. Embedding is blocked until at least one domain is added.
+            Add domains that can embed this MinApp. Embedding is blocked until at least one domain is added.
           </p>
 
           {origins.length > 0 && (
@@ -1025,7 +1025,7 @@ function EditAppDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit App</DialogTitle>
+          <DialogTitle>Edit MinApp</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -1035,7 +1035,7 @@ function EditAppDialog({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="App name"
+              placeholder="MinApp name"
             />
           </div>
 
@@ -1045,7 +1045,7 @@ function EditAppDialog({
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this app do?"
+              placeholder="What does this MinApp do?"
             />
           </div>
 
@@ -1151,7 +1151,7 @@ function EditAppDialog({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Supports remix</p>
-              <p className="text-xs text-muted-foreground">Users can customize and remix this app</p>
+              <p className="text-xs text-muted-foreground">Users can customize and remix this MinApp</p>
             </div>
             <Switch checked={supportsRemix} onCheckedChange={setSupportsRemix} />
           </div>
@@ -1160,7 +1160,7 @@ function EditAppDialog({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Listed on marketplace</p>
-              <p className="text-xs text-muted-foreground">Make discoverable in the Apps browse page</p>
+              <p className="text-xs text-muted-foreground">Make discoverable in the MinApps browse page</p>
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
           </div>
@@ -1171,7 +1171,7 @@ function EditAppDialog({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Monetization</p>
-                  <p className="text-xs text-muted-foreground">Charge a markup when others run your app</p>
+                  <p className="text-xs text-muted-foreground">Charge a markup when others run your MinApp</p>
                 </div>
                 <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
               </div>
@@ -1203,7 +1203,7 @@ function EditAppDialog({
                   </div>
 
                   <p className="text-[11px] text-muted-foreground">
-                    If this app costs {baseCredits} CR to run, users will pay {calculatedCredits} CR
+                    If this MinApp costs {baseCredits} CR to run, users will pay {calculatedCredits} CR
                   </p>
 
                   <Button

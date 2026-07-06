@@ -51,7 +51,7 @@ const ADMIN_NAV = [
   { href: "/admin/models", label: "Models", icon: Cpu },
   { href: "/admin/node-defaults", label: "Node Defaults", icon: Sliders },
   { href: "/admin/llm-models", label: "LLM Models", icon: BrainCircuit },
-  { href: "/admin/apps", label: "Apps", icon: AppWindow },
+  { href: "/admin/minapps", label: "MinApps", icon: AppWindow },
   { href: "/admin/reports", label: "Reports", icon: Flag },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },

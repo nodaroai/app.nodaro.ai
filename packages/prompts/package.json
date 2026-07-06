@@ -1,7 +1,7 @@
 {
   "name": "@nodaro/prompts",
-  "version": "1.0.0",
-  "description": "Nodaro's prompt-engineering layer \u2014 person/picker catalogs with prompt hints, identity-lock clauses, entity prompt builders, brand presets, and prompt/reference assembly shared by the Nodaro platform and SDK.",
+  "version": "1.0.1",
+  "description": "Nodaro's prompt-engineering layer — person/picker catalogs with prompt hints, identity-lock clauses, entity prompt builders, brand presets, and prompt/reference assembly shared by the Nodaro platform and SDK.",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",
   "main": "./dist/index.cjs",

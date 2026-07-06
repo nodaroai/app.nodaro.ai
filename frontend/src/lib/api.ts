@@ -6321,7 +6321,7 @@ export async function publishApp(data: {
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     "/v1/apps/publish",
-    "Failed to publish app",
+    "Failed to publish MinApp",
     { method: "POST", body: data },
   )
 }

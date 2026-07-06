@@ -108,7 +108,7 @@ export default function AppRunnerPage() {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-2">App Not Found</h1>
+          <h1 className="text-2xl font-bold mb-2">MinApp Not Found</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
           <Link to="/projects" className="text-[#ff0073] hover:underline">
             Go to Dashboard

@@ -61,7 +61,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
     label: "WORKSPACE",
     items: [
       { href: "/projects", label: "Projects", icon: FolderOpen },
-      { href: "/apps", label: "Apps", icon: Rocket },
+      { href: "/apps", label: "MinApps", icon: Rocket },
       { href: "/templates", label: "Templates", icon: LayoutTemplate },
       { href: "/video-director", label: "Video Director", icon: Clapperboard },
       { href: "/explore", label: "Explore", icon: Compass, multiUserOnly: true },
