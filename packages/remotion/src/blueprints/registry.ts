@@ -3,7 +3,9 @@ import type { BlueprintProps } from "./types"
 import { ComparisonSplit } from "./comparison-split"
 import { ConstellationHub } from "./constellation-hub"
 import { CtaMorphPress } from "./cta-morph-press"
+import { CursorUiDemo } from "./cursor-ui-demo"
 import { DatavizCountup } from "./dataviz-countup"
+import { DeviceSurfaceShowcase } from "./device-surface-showcase"
 import { GridCardAssemble } from "./grid-card-assemble"
 import { KineticTypeBeats } from "./kinetic-type-beats"
 import { LogoAssembleLockup } from "./logo-assemble-lockup"
@@ -29,7 +31,9 @@ export const BLUEPRINT_REGISTRY: Record<string, React.FC<BlueprintProps>> = {
   "comparison-split": ComparisonSplit,
   "constellation-hub": ConstellationHub,
   "cta-morph-press": CtaMorphPress,
+  "cursor-ui-demo": CursorUiDemo,
   "dataviz-countup": DatavizCountup,
+  "device-surface-showcase": DeviceSurfaceShowcase,
   "grid-card-assemble": GridCardAssemble,
   "kinetic-type-beats": KineticTypeBeats,
   "logo-assemble-lockup": LogoAssembleLockup,

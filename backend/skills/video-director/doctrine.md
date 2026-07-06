@@ -28,8 +28,8 @@ The blueprint library covers the most common beat roles. **Default to a blueprin
 |------|----------------|
 | `hook` | `kinetic-type-beats` · `typewriter-reveal` · `constellation-hub` · `ticker-takeover` · `spatial-pan-stations` · `waterfall-reveal` |
 | `pain_point` | `dataviz-countup` · `overwhelm-surround` · `spatial-pan-stations` |
-| `product_intro` | `logo-assemble-lockup` |
-| `feature_showcase` | `grid-card-assemble` · `comparison-split` · `waterfall-reveal` |
+| `product_intro` | `logo-assemble-lockup` · `device-surface-showcase` · `cursor-ui-demo` |
+| `feature_showcase` | `grid-card-assemble` · `comparison-split` · `waterfall-reveal` · `device-surface-showcase` · `cursor-ui-demo` |
 | `benefit_highlight` | `grid-card-assemble` · `titlecard-reveal` |
 | `social_proof` | `constellation-hub` (partner logos orbit the hub) · `titlecard-reveal` ("loved by N+ teams" proof card) · `grid-card-assemble` (logo wall) |
 | `branding` | `logo-assemble-lockup` · `typewriter-reveal` · `ticker-takeover` |
@@ -115,6 +115,16 @@ Exactly **one** of `element` or `blueprint` per reveal — never both. `duration
 `spatial-pan-stations` _(labeled stations on one oversized canvas; the camera pans station to station and pops a callout at each — `"timeline"` or `"web"` variant)_
 ```json
 { "stations": [{ "label": "2019", "sublabel": "First cut" }, { "label": "2022", "sublabel": "Templates" }, { "label": "Today", "sublabel": "Directed by AI" }], "variant": "timeline", "accentColor": "#8B5CF6" }
+```
+
+`device-surface-showcase` _(a device mockup holds as hero on a styled backdrop while its screens cycle through a real flow — camera-static static-tour; side headlines swap in sync)_
+```json
+{ "deviceImage": "https://cdn.nodaro.ai/uploads/device.png", "screens": ["https://cdn.nodaro.ai/uploads/screen-1.png", "https://cdn.nodaro.ai/uploads/screen-2.png"], "headlines": ["Dashboard", "One-tap export"], "accentColor": "#8B5CF6" }
+```
+
+`cursor-ui-demo` _(a visible brand cursor drives a screenshot-based UI through clicks/hovers while the viewport chases each interaction — camera-servo-to-cursor)_
+```json
+{ "screens": ["https://cdn.nodaro.ai/uploads/ui-1.png", "https://cdn.nodaro.ai/uploads/ui-2.png"], "targets": [{ "xPct": 28, "yPct": 42 }, { "xPct": 72, "yPct": 66 }], "labels": ["Search anything", "Open the result"], "cursorColor": "#22D3EE", "accentColor": "#22D3EE" }
 ```
 
 **The one rule that separates a real video from an agent-made slideshow:** at the start, only what the VO is saying enters; every other piece waits in the timeline for its spoken cue; reveals weight to the **back ~50%**; the cardinal sin is **front-loading** (dumping the whole canvas in the first 25%, then freezing).

@@ -1,4 +1,5 @@
 import type { BrandTokens } from "@nodaro/prompts"
+import type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement } from "@nodaro/shared"
 
 // ── After Effects Plan Types ──────────────────────────────────────────
 
@@ -302,35 +303,7 @@ export interface ShotExitMotion {
   readonly direction?: "left" | "right" | "up" | "down"
 }
 
-export interface ShotTextElement {
-  readonly id: string
-  readonly type: "text"
-  readonly text: string
-  readonly fontFamily?: string
-  readonly fontSize: number
-  readonly fontWeight?: 300 | 400 | 700 | 900
-  readonly color?: string
-  readonly x: number
-  readonly y: number
-  readonly letterSpacing?: number
-  readonly opacity?: number
-  readonly dir?: "rtl" | "ltr"
-}
-export interface ShotShapeElement {
-  readonly id: string
-  readonly type: "shape"
-  readonly shape: "rectangle" | "circle" | "line"
-  readonly fill?: string
-  readonly stroke?: string
-  readonly strokeWidth?: number
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-  readonly cornerRadius?: number
-  readonly opacity?: number
-}
-export type ShotElement = ShotTextElement | ShotShapeElement
+export type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement }
 
 export interface ResolvedElementReveal {
   readonly id: string

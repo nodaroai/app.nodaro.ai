@@ -18,7 +18,8 @@ vi.mock("../../lib/font-registry", () => ({
   withRtlFallback: (fontFamily: string) => fontFamily,
 }))
 
-import { letterEntranceProgress, logoRowDirection, LogoAssembleLockup, chooseLogoRender } from "../logo-assemble-lockup"
+import { letterEntranceProgress, logoRowDirection, LogoAssembleLockup } from "../logo-assemble-lockup"
+import { chooseMediaRender } from "../../lib/media-frame"
 
 // Reference constants matching the component:
 //   LETTER_ENTRANCE_FRAMES = 12
@@ -127,12 +128,12 @@ const brandBase = {
   fonts: { heading: "Anton", body: "Inter" },
 }
 
-describe("chooseLogoRender", () => {
-  it("image when a URL is present and no error", () =>
-    expect(chooseLogoRender("https://cdn/x.png", false)).toBe("image"))
-  it("cascade when the image errored", () =>
-    expect(chooseLogoRender("https://cdn/x.png", true)).toBe("cascade"))
-  it("cascade when no image", () => expect(chooseLogoRender(undefined, false)).toBe("cascade"))
+describe("chooseMediaRender", () => {
+  it("media when a URL is present and no error", () =>
+    expect(chooseMediaRender("https://cdn/x.png", false)).toBe("media"))
+  it("fallback when the image errored", () =>
+    expect(chooseMediaRender("https://cdn/x.png", true)).toBe("fallback"))
+  it("fallback when no image", () => expect(chooseMediaRender(undefined, false)).toBe("fallback"))
 })
 
 describe("LogoAssembleLockup render", () => {

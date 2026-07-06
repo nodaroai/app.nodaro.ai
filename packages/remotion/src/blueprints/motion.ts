@@ -41,3 +41,80 @@ export function popWithSettle(e: number): number {
   }
   return POP_OVERSHOOT - (POP_OVERSHOOT - 1) * ((e - 0.7) / 0.3)
 }
+
+/** Ease-in-out (quadratic) — gentle launch and landing. */
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) * (-2 * t + 2)) / 2
+}
+
+/**
+ * Cross-fade/scale swap over normalized progress `e` (0→1): the outgoing image
+ * shrinks slightly and fades out while the incoming pulls up from 0.96→1 and
+ * fades in. Clamped.
+ */
+export function scaleSwap(e: number): { outScale: number; outOpacity: number; inScale: number; inOpacity: number } {
+  const t = e <= 0 ? 0 : e >= 1 ? 1 : e
+  return {
+    outScale: 1 - 0.04 * t,
+    outOpacity: 1 - t,
+    inScale: 0.96 + 0.04 * t,
+    inOpacity: t,
+  }
+}
+
+/**
+ * Side-headline swap over `e` (0→1): outgoing slides up (y: 0→-24) and fades;
+ * incoming rises from y:24→0 and fades in. Returns pixel y-offsets + opacities.
+ */
+export function headlineSwap(e: number): { outY: number; outOpacity: number; inY: number; inOpacity: number } {
+  const t = e <= 0 ? 0 : e >= 1 ? 1 : e
+  return {
+    outY: -24 * t,
+    outOpacity: 1 - t,
+    inY: 24 * (1 - t),
+    inOpacity: t,
+  }
+}
+
+/**
+ * Chase camera for a cursor-driven UI demo: over `durationInFrames`, the virtual
+ * camera holds on target 0 then eases to each successive `{xPct,yPct}` (percent of
+ * the surface), returning the world-container translate (so the target re-centers)
+ * plus a gentle push-in scale. Model generalized from `spatial-pan-stations`'
+ * `panCamera` (station index → arbitrary targets) with an added scale term.
+ */
+export function chaseCamera(
+  frame: number,
+  durationInFrames: number,
+  targets: readonly { xPct: number; yPct: number }[],
+  width: number,
+  height: number,
+): { translateX: number; translateY: number; scale: number } {
+  if (targets.length === 0) return { translateX: 0, translateY: 0, scale: 1 }
+  const n = Math.max(1, targets.length)
+  const segLen = durationInFrames / n
+  const legIndex = Math.max(0, Math.min(n - 1, Math.floor(frame / segLen)))
+  const PAN_FRACTION = 0.6
+
+  let pos: number // fractional target position
+  if (legIndex === 0) {
+    pos = 0
+  } else {
+    const t = (frame - legIndex * segLen) / segLen
+    pos = t >= PAN_FRACTION ? legIndex : legIndex - 1 + easeInOutQuad(t / PAN_FRACTION)
+  }
+
+  const lo = Math.floor(pos)
+  const hi = Math.min(n - 1, Math.ceil(pos))
+  const frac = pos - lo
+  const px = (k: number) => (targets[k].xPct / 100) * width
+  const py = (k: number) => (targets[k].yPct / 100) * height
+  const camX = px(lo) + (px(hi) - px(lo)) * frac
+  const camY = py(lo) + (py(hi) - py(lo)) * frac
+
+  return {
+    translateX: width / 2 - camX,
+    translateY: height / 2 - camY,
+    scale: 1 + 0.06 * (pos / Math.max(1, n - 1)),
+  }
+}

@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 import { describe, it, expect } from "vitest"
 import { SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 import { BRAND_PRESET_IDS } from "@nodaro/prompts"
+import { BLUEPRINT_IDS } from "../../../services/shot-sequence/blueprint-params.js"
 const DIR = resolve(__dirname, "../../../../skills/video-director")
 const read = (f: string) => readFileSync(resolve(DIR, f), "utf-8")
 describe("video-director doctrine", () => {
@@ -14,20 +15,15 @@ describe("video-director doctrine", () => {
     expect(d.toLowerCase()).toContain("avoid")
     expect(d).toMatch(/easeOut|easeInOut/)
   })
-  it("doctrine.md has a Blueprint picker section with all 6 blueprint ids", () => {
+  it("doctrine.md has a Blueprint picker section", () => {
     const d = read("doctrine.md")
     expect(d).toContain("## Blueprint picker")
-    for (const id of [
-      "kinetic-type-beats",
-      "dataviz-countup",
-      "grid-card-assemble",
-      "titlecard-reveal",
-      "logo-assemble-lockup",
-      "cta-morph-press",
-    ]) {
-      expect(d).toContain(id)
+  })
+  it("doctrine.md lists every blueprint id (drift guard vs BLUEPRINT_IDS)", () => {
+    const d = read("doctrine.md")
+    for (const id of BLUEPRINT_IDS) {
+      expect(d, `doctrine.md is missing blueprint "${id}" — it drifted from BLUEPRINT_IDS`).toContain(id)
     }
-    // Must include the blueprint reveal JSON shape and the escape hatch
     expect(d).toContain('"blueprint"')
     expect(d).toContain("raw")
   })

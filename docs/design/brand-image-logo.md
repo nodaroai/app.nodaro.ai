@@ -54,14 +54,21 @@ asserts that the ingress a caller is most likely to try to sneak an external
 URL through — posting a pre-baked plan straight to `/v1/render-video/plan` —
 is rejected identically to the authored-brief path.
 
-This is also, in practice, a *stricter* check than nearby fields: `audio.src`
-(which lives in the same shot-sequence plan schema) uses the general syntactic
+This is also, in practice, a *stricter* check than `audio.src` (which lives in
+the same shot-sequence plan schema): `audio.src` uses the general syntactic
 SSRF gate (`safeUrlSchema` — blocks localhost/private-IP literals but allows
-any other public http(s) host). The `image` element's `src` is not part of the
-shot-sequence plan — it lives in a separate schema (`sgMediaSegmentSchema` in
-the `sceneGraphPlanSchema`). `logo.image` goes further than both and pins the
-origin to our own CDN specifically, because unlike a Node-side download,
-nothing else re-validates the URL before Remotion's browser fetches it.
+any other public http(s) host), while `logo.image` pins the origin to our own
+CDN specifically, because unlike a Node-side download, nothing else
+re-validates the URL before Remotion's browser fetches it. The general
+`image` reveal element added since this doc shipped (see "general image
+element" below) uses that same strict gate, not a looser one —
+`shotImageElementSchema.src` is validated by `cdnMediaUrlSchema`, the exact
+same `isOurCdnUrl()` check factored into its own leaf module (`cdn-media-url.ts`)
+so both `plan-schemas.ts` and `blueprint-params.ts` can import it without a
+cycle. `logo.image`'s posture was the template, not an outlier. (An unrelated,
+same-named `image` field also exists in the separate, older scene-graph plan
+schema — `sgMediaSegmentSchema` in `sceneGraphPlanSchema` — a different
+rendering pipeline, out of scope here.)
 
 ## Contained in the blueprint
 
@@ -71,15 +78,20 @@ The image capability doesn't introduce a new element type, and the
 from the resolved `BrandTokens` object already threaded to every blueprint as
 an ambient `brand` prop, not from anything the brief author passes to this
 specific blueprint. Concretely: `LogoAssembleLockup` reads `brand.logo?.image`
-/ `brand.logo?.imageBackdrop` directly, and `chooseLogoRender()` is a pure
-decision — render the image when one is present and hasn't errored, else fall
-back to the existing per-letter cascade of `params.brand` (the wordmark
-text).
+/ `brand.logo?.imageBackdrop` directly, and `chooseMediaRender()` — a pure
+decision (render the image when one is present and hasn't errored, else fall
+back to the existing per-letter cascade of `params.brand`, the wordmark text)
+rendered via the shared `<MediaFrame>` component — makes the call.
 
-This keeps the blast radius to one file. No other blueprint, and no part of
-the shot-sequence element schema (`text` / `shape` reveals), knows that
-`logo.image` exists. That containment is deliberate — see "general image
-element" below for the generalization this deliberately defers.
+`logo.image` the **field** is still contained to one call site: no other
+blueprint, and no part of the shot-sequence element schema (`text` / `shape`
+/ `image` reveals), reads `BrandTokens.logo`. The **rendering mechanism** is
+no longer private to this file, though — `chooseMediaRender`/`MediaFrame`
+now live in a shared `lib/media-frame.tsx` module reused by
+`device-surface-showcase`, `cursor-ui-demo`, and the general `image` reveal
+element (see "general image element" below — since shipped), so a change to
+that shared decision/render logic has a blast radius across all of them, not
+just the logo lockup.
 
 ## The deterministic-net guarantee
 
@@ -119,7 +131,7 @@ authoring LLM remembered to ask for it.
 ## Fallback behavior
 
 If the image URL 404s, times out, or is otherwise unreachable at render time,
-`<Img>`'s `onError` flips `chooseLogoRender()` back to the text cascade —
+`<Img>`'s `onError` flips `chooseMediaRender()` back to the text cascade —
 the render always completes; it just falls back to the wordmark instead of
 failing the job. Remotion's `<Img>` retries a failing load (default: 2
 retries, exponential backoff) before calling `onError`, holding the render
@@ -179,12 +191,15 @@ somewhere and can paste a link to it):
 - **`logoInverse`** — a second logo variant for light-on-dark vs.
   dark-on-light scenes, swapped automatically instead of relying on one
   image plus a backdrop panel.
-- **General image element** — a first-class `image` reveal/element usable by
-  *any* blueprint or raw reveal, not just `logo-assemble-lockup`. This is the
-  generalization the "contained in the blueprint" section above deliberately
-  defers; it's a bigger surface (new element schema, new SSRF-boundary
-  call sites to keep in sync) that didn't need solving to ship a working
-  brand logo.
+- ~~**General image element**~~ — **Shipped.** A first-class `image`
+  reveal/element usable by *any* blueprint or raw reveal, not just
+  `logo-assemble-lockup`, has since landed as its own element type
+  (`ShotImageElement` in `@nodaro/shared`, CDN-gated the same way as
+  `logo.image`) — see the `device-surface-showcase` / `cursor-ui-demo`
+  blueprints and the shared `chooseMediaRender`/`MediaFrame` helpers
+  referenced above. This bullet originally described it as the deferred
+  generalization the "contained in the blueprint" section defers; it no
+  longer is.
 
 ## Related
 

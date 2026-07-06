@@ -64,6 +64,28 @@ jobs:
           json-summary-path: frontend/coverage/coverage-summary.json
           vite-config-path: frontend/vitest.config.ts
 
+  remotion-tests:
+    name: Remotion Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build shared packages
+        run: npm run build:packages
+      - name: Run remotion tests
+        run: npm run test
+        working-directory: packages/remotion
+
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest

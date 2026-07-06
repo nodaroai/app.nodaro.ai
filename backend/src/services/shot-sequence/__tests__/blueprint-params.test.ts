@@ -10,12 +10,14 @@ describe("blueprint-params", () => {
       expect(BLUEPRINT_META[id].roles.length).toBeGreaterThan(0)
     }
   })
-  it("has all 13 blueprint ids, alphabetical (Phase 2.z2 adds waterfall-reveal)", () => {
+  it("has all 15 blueprint ids, alphabetical (adds cursor-ui-demo)", () => {
     expect(BLUEPRINT_IDS).toEqual([
       "comparison-split",
       "constellation-hub",
       "cta-morph-press",
+      "cursor-ui-demo",
       "dataviz-countup",
+      "device-surface-showcase",
       "grid-card-assemble",
       "kinetic-type-beats",
       "logo-assemble-lockup",

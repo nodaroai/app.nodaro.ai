@@ -26,19 +26,21 @@ side of this choice.
 
 ## What Phase-1 can produce
 
-Phase-1 visuals are **kinetic typography and simple shapes** — `text` and
-`shape` reveal elements anchored to voiceover cues. On-screen pieces appear
-the moment the narration speaks their phrase, baked to the exact frame via
-forced alignment.
+Phase-1 visuals are **kinetic typography, simple shapes, and image media** —
+`text`, `shape`, and `image` reveal elements anchored to voiceover cues.
+On-screen pieces appear the moment the narration speaks their phrase, baked
+to the exact frame via forced alignment.
 
 **Phase-1 honest limits:**
 
-- Visuals: text + rectangle/circle/line shapes only. The ~50 named HyperFrames
-  blueprints (device-showcase, SVG-ring, push-through, cursor-demo) are **not**
-  available. A "product launch" is kinetic-type/shape-driven, not a UI showcase.
+- Visuals: text + rectangle/circle/line shapes, plus **image** media (freeform image
+  elements and the `device-surface-showcase` / `cursor-ui-demo` image blueprints).
+  Video media and the rest of the ~50 named HyperFrames blueprints are not yet available.
 - Real-UI capture: deferred. Passing a URL to `create_launch_video` without a
   `brief` returns a "not yet supported" message rather than attempting a
-  screenshot; describe the product in `brief` instead.
+  screenshot; describe the product in `brief` instead. The `device-surface-showcase` /
+  `cursor-ui-demo` blueprints render screenshots you already uploaded — they don't
+  capture a live site themselves.
 
 ## Credit costs
 

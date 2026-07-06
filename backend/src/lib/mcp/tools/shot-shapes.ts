@@ -47,11 +47,24 @@ const BLUEPRINT_EXAMPLES: Record<BlueprintId, Record<string, unknown>> = {
     sublabel: "No credit card needed",
     accentColor: "#8B5CF6",
   },
+  "cursor-ui-demo": {
+    screens: ["https://cdn.nodaro.ai/uploads/ui-1.png", "https://cdn.nodaro.ai/uploads/ui-2.png"],
+    targets: [{ xPct: 28, yPct: 42 }, { xPct: 72, yPct: 66 }],
+    labels: ["Search anything", "Open the result"],
+    cursorColor: "#22D3EE",
+    accentColor: "#22D3EE",
+  },
   "dataviz-countup": {
     value: 8,
     suffix: "hrs/day",
     label: "wasted on manual work",
     accentColor: "#EF4444",
+  },
+  "device-surface-showcase": {
+    deviceImage: "https://cdn.nodaro.ai/uploads/device.png",
+    screens: ["https://cdn.nodaro.ai/uploads/screen-1.png", "https://cdn.nodaro.ai/uploads/screen-2.png"],
+    headlines: ["Dashboard", "One-tap export"],
+    accentColor: "#8B5CF6",
   },
   "grid-card-assemble": {
     items: [{ label: "Auto-sync" }, { label: "Zero config" }, { label: "Live preview" }],

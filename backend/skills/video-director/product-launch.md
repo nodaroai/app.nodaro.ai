@@ -4,7 +4,7 @@ A delta on `doctrine.md`. The shared method, motion doctrine, and machine contra
 
 ## When to use
 
-Use when there is a **product or brand** with a problem→product→features→CTA story to tell. Output is **kinetic typography + shapes only** — a name lockup, feature lines, value phrases, a CTA — NOT a real-UI showcase. **Honest Phase-1 limit:** the device-showcase / SVG-ring / push-through / cursor-demo blueprints and real website capture are **not** available here (they are Phase 2). Author from the text brief; if you're handed a URL, you still describe the product in words — there is no screenshot capture. Don't imply a UI demo you can't render.
+Use when there is a **product or brand** with a problem→product→features→CTA story to tell. Output is **kinetic typography + shapes** — a name lockup, feature lines, value phrases, a CTA — plus the `device-surface-showcase` / `cursor-ui-demo` blueprints when the caller has already supplied real product screenshots (a device mockup + screen images, or a cursor-driven screen tour). **Honest Phase-1 limit:** the SVG-ring / push-through blueprints and real website capture are **not** available here (they are Phase 2). Author from the text brief; if you're handed a URL, you still describe the product in words (or reference screenshots the caller already uploaded) — there is no automatic screenshot capture. Don't imply a live-site capture you can't perform.
 
 ## Arc
 

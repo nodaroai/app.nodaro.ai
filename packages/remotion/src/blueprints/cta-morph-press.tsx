@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle } from "../lib/text-direction"
 import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
+import { CursorAndRipple } from "../lib/cursor-and-ripple"
 
 interface Params {
   label: string
@@ -193,29 +194,7 @@ export function CtaMorphPress({ params, durationInFrames, brand }: BlueprintProp
       )}
 
       {/* ── Cursor (filled triangle — standard pointer shape) ── */}
-      <svg
-        width={cursorSize}
-        height={Math.round(cursorSize * 1.33)}
-        viewBox="0 0 18 24"
-        style={{
-          position: "absolute",
-          left: cursorX,
-          top: cursorY,
-          overflow: "visible",
-          opacity: cProgress > 0 ? 1 : 0,
-          filter: "drop-shadow(1px 2px 3px rgba(0,0,0,0.5))",
-          pointerEvents: "none",
-        }}
-      >
-        {/* Standard mouse-pointer shape: angled tip at (0,0), body down-right */}
-        <polygon
-          points="0,0 0,18 5,14 8,22 11,21 8,13 14,13"
-          fill="#ffffff"
-          stroke="rgba(0,0,0,0.6)"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <CursorAndRipple x={cursorX} y={cursorY} size={cursorSize} color="#ffffff" visible={cProgress > 0} />
     </div>
   )
 }

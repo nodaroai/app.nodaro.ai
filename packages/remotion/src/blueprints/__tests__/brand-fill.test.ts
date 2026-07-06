@@ -178,7 +178,10 @@ describe("special blueprints (Task 8) — typography routing + KEEP allowlist (d
 
   it("logo-assemble-lockup gates the image branch on brand.logo?.image", () => {
     const src = readFileSync(join(BLUEPRINT_DIR, "logo-assemble-lockup.tsx"), "utf8")
-    expect(/chooseLogoRender\(\s*logoImage/.test(src)).toBe(true)
+    // chooseMediaRender (packages/remotion/src/lib/media-frame.tsx) replaced the
+    // blueprint-local chooseLogoRender in the MediaFrame refactor — same gate,
+    // shared name.
+    expect(/chooseMediaRender\(\s*logoImage/.test(src)).toBe(true)
     expect(src).toContain("brand.logo?.image") // reads brand.logo.image (not params)
   })
 })
