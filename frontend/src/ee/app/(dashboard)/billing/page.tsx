@@ -46,7 +46,7 @@ function EarningsSection() {
 
   return (
     <Card className="p-6">
-      <h3 className="text-sm font-medium mb-4">App Earnings</h3>
+      <h3 className="text-sm font-medium mb-4">MinApp Earnings</h3>
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div>
           <p className="text-xs text-muted-foreground">Total Lifetime</p>

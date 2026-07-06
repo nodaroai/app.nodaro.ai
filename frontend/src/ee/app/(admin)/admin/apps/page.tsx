@@ -70,8 +70,8 @@ function ExpungeModal({ app, onClose }: { app: AdminApp; onClose: () => void }) 
           <div>
             <p className="font-medium mb-1">What will be deleted:</p>
             <ul className="space-y-0.5 ml-5 list-disc text-muted-foreground">
-              <li>The app&apos;s metadata (name, description, snapshot, icon)</li>
-              <li>Other users&apos; bookmarks of this app</li>
+              <li>The MinApp&apos;s metadata (name, description, snapshot, icon)</li>
+              <li>Other users&apos; bookmarks of this MinApp</li>
               <li>All run history&apos;s user inputs and generated outputs</li>
               <li>Generated media files in storage</li>
             </ul>
@@ -79,7 +79,7 @@ function ExpungeModal({ app, onClose }: { app: AdminApp; onClose: () => void }) 
           <div>
             <p className="font-medium mb-1">What will be preserved (legal/audit obligation):</p>
             <ul className="space-y-0.5 ml-5 list-disc text-muted-foreground">
-              <li>Earnings records (with snapshotted app name + creator)</li>
+              <li>Earnings records (with snapshotted MinApp name + creator)</li>
               <li>Run records&apos; financial fields (credits, timestamps)</li>
               <li>This admin action and your reason are logged</li>
             </ul>
@@ -101,7 +101,7 @@ function ExpungeModal({ app, onClose }: { app: AdminApp; onClose: () => void }) 
 
           <div className="space-y-1.5">
             <label htmlFor="expunge-slug" className="font-medium">
-              Type the app slug{" "}
+              Type the MinApp slug{" "}
               <code className="text-xs px-1 py-0.5 bg-muted rounded">{app.slug}</code>{" "}
               to confirm:
             </label>
@@ -152,8 +152,8 @@ export default function AdminAppsPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">Published Apps</h1>
-        <span className="text-sm text-muted-foreground">{apps.length} apps</span>
+        <h1 className="text-xl font-bold">Published MinApps</h1>
+        <span className="text-sm text-muted-foreground">{apps.length} MinApps</span>
       </div>
 
       <div className="border rounded-lg overflow-hidden">
@@ -218,7 +218,7 @@ export default function AdminAppsPage() {
             {apps.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                  No published apps found.
+                  No published MinApps found.
                 </td>
               </tr>
             )}
@@ -264,7 +264,7 @@ export default function AdminAppsPage() {
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">App ID</span>
+                  <span className="text-muted-foreground">MinApp ID</span>
                   <div className="flex items-center gap-1 font-mono text-xs">
                     {selectedApp.id.slice(0, 12)}...
                     <CopyButton text={selectedApp.id} />
@@ -309,7 +309,7 @@ export default function AdminAppsPage() {
                   className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Open App ({selectedApp.slug})
+                  Open MinApp ({selectedApp.slug})
                 </a>
               </div>
 

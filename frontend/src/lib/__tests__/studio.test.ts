@@ -1,6 +1,6 @@
 // frontend/src/lib/__tests__/studio.test.ts
 import { describe, it, expect } from "vitest"
-import { isStudioWorkflowSettings, isStudioProject, studioWorkflowUrl } from "@/lib/studio"
+import { isStudioWorkflowSettings, isStudioProject, studioWorkflowUrl, studioBaseUrl } from "@/lib/studio"
 
 describe("studio helpers", () => {
   it("detects studio workflow settings (object marker)", () => {
@@ -20,5 +20,9 @@ describe("studio helpers", () => {
 
   it("builds the studio deep link from the workflow id", () => {
     expect(studioWorkflowUrl("abc-123")).toBe("https://studio.nodaro.ai/project/abc-123")
+  })
+
+  it("exposes the studio home base url", () => {
+    expect(studioBaseUrl()).toBe("https://studio.nodaro.ai")
   })
 })

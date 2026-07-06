@@ -25,3 +25,8 @@ export function isStudioProject(
 export function studioWorkflowUrl(workflowId: string): string {
   return `${STUDIO_BASE_URL}/project/${workflowId}`
 }
+
+/** Studio home (no workflow) — used by the flagship "Open Studio" action. */
+export function studioBaseUrl(): string {
+  return STUDIO_BASE_URL
+}

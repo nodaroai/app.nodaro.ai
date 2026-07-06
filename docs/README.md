@@ -17,7 +17,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Pick the right model for a task** (everyday vs premium tiers, use-case → model table) → [Choosing Models](./choosing-models.md)
 - **Enrich prompts with reusable fragments** (Identity Lock, Golden Hour, Slow Dolly-In — `/` slash menu) → [Prompt Snippets](./prompt-snippets.md)
 - **Run Nodaro from the terminal** → [CLI](./cli.md)
-- **Embed a published Nodaro app in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
+- **Embed a published Nodaro MinApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)

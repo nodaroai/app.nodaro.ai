@@ -29,15 +29,15 @@ export default function DeletedAppsPage() {
     mutationFn: ({ appId }: { appId: string }) => restoreApp(appId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-apps"] })
-      toast.success("App restored. It's in your apps list (unpublished).")
+      toast.success("MinApp restored. It's in your MinApps list (unpublished).")
     },
-    onError: () => toast.error("Failed to restore app"),
+    onError: () => toast.error("Failed to restore MinApp"),
   })
 
   if (!user) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Sign in to view your deleted apps.</p>
+        <p className="text-muted-foreground">Sign in to view your deleted MinApps.</p>
       </div>
     )
   }
@@ -49,16 +49,16 @@ export default function DeletedAppsPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <Archive className="h-6 w-6 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold">Deleted apps</h1>
+          <h1 className="text-2xl font-semibold">Deleted MinApps</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Apps you've deleted from your apps list appear here. Restore an app to bring it back to your apps list (it'll stay unpublished — you can re-publish from the edit page).
+          MinApps you've deleted from your MinApps list appear here. Restore a MinApp to bring it back to your MinApps list (it'll stay unpublished — you can re-publish from the edit page).
         </p>
         <Link
           to="/apps"
           className="text-sm text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1"
         >
-          ← Back to Apps
+          ← Back to MinApps
         </Link>
       </div>
 
@@ -68,13 +68,13 @@ export default function DeletedAppsPage() {
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load deleted apps.
+          Failed to load deleted MinApps.
         </div>
       ) : apps.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Archive className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm text-muted-foreground">
-            No deleted apps. Apps you delete from your apps list will appear here for restoration.
+            No deleted MinApps. MinApps you delete from your MinApps list will appear here for restoration.
           </p>
         </div>
       ) : (
