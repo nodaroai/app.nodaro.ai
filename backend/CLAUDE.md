@@ -45,6 +45,29 @@ The `backend/src/ee/` directory holds enterprise code (admin routes, billing/cre
 
 ---
 
+## Private Plugins (Cloud)
+
+Cloud-only proprietary features (currently: voice-changer-pro) ship from a private npm package instead of living in this repo — a closed-source counterpart to `ee/` for code that must stay private in implementation, not just license.
+
+**Key files (`backend/src/lib/private-plugins/`):**
+- `load.ts` — the only file that imports `@nodaroai/cloud-plugins` (private repo `nodaroai/nodaro-cloud-plugins`), passed to `import()` as a runtime string so `tsc` never resolves it. No-ops unless `hasCredits()`. On cloud, dynamic-imports the package and, per plugin in its `plugins[]` array, registers `registerRoutes()` (only when called with an `app`), merges `handlers()`, and additively applies `staticCreditCosts()` into `credits.ts`'s `STATIC_CREDIT_COSTS` (never overwrites a core-defined price). Called from `app.ts` (with `app`) and `workers/video-worker.ts` (without — handlers only).
+- `types.ts` — hand-synced structural mirror of the private repo's `src/contract.ts` (no shared package, no automated sync). Additive-only: a breaking change bumps `CONTRACT_VERSION` in BOTH repos; the loader refuses to register a plugin whose `contractVersion` doesn't match.
+- `toolkit.ts` — assembles `PluginToolkit` (providers/ffmpeg/media/storage/jobs/http) via DI from this app's own core modules; plugins never import an app path directly.
+
+**Fail-fast semantics:**
+1. `EDITION=cloud` + (import rejects OR `contractVersion` mismatch) => fatal `exit(1)`, in both the API server (`app.ts`) and the video worker (each calls the loader independently at boot).
+2. `PRIVATE_MODULES=optional` downgrades that to a warning + continues degraded (plugin routes/handlers simply absent).
+3. community/business (`!hasCredits()`) => always a no-op, `importer` never called.
+4. Test suites default `PRIVATE_MODULES=optional` in `backend/src/test/setup.ts`; `backend-boot-smoke` boots `EDITION=cloud` the same way, since public CI has no registry token. Real cloud fail-fast is only exercised by Railway builds.
+
+**Deploy:** Dockerfile's `prod-deps` stage installs `@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}` only when the `NPM_TOKEN` build-arg is present (unset for self-hosted/community/public CI — no-op, byte-identical image). Railway supplies both on staging and prod.
+
+**BORN-PRIVATE rule:** new cloud-secret features start life in `nodaroai/nodaro-cloud-plugins`, never as a public migration/route/handler here. Pricing is admin-seeded into `model_pricing` plus the plugin's own `staticCreditCosts()` fallback.
+
+**Guard:** `tools/check-private-leaks.mjs` (CI) greps tracked files (excluding `tools/`) for extracted implementation symbol names — a hit means private implementation detail leaked back into this public repo.
+
+---
+
 ## Credit System Pattern
 
 Credits are handled via middleware, NOT inline in route handlers:
@@ -225,7 +248,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 
 ### Replicate Cost Tracking
 - Uses `predictions.create()` + `replicate.wait()` (NOT `replicate.run()`)
-- Rate: `predictTime * 0.000225` USD per second
+- Cost is derived from measured prediction time; the per-second rate is a provider integration detail tracked outside this doc
 
 ### KIE.ai Integration
 - Base URL: https://api.kie.ai, Auth: Bearer token (KIE_API_KEY)
@@ -244,7 +267,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 - Free tier: **150** credits, 50/day cap, veo3/sora2-pro blocked, outputs watermarked
 
 ### Pricing
-- Base unit: `1 credit = $0.02` (Cloud edition; the credit conversion applies a configurable markup)
+- Credits are the Cloud-edition billing unit; the USD-per-credit conversion is an admin-configurable runtime setting, not a fixed rate in code
 - Tiers: Free ($0/150cr), Basic ($12mo/$10yr/250cr), Standard ($29mo/$24yr/850cr), Pro ($59mo/$49yr/2000cr), Business ($129mo/$109yr/4800cr)
 - Top-ups: $10/150cr, $25/450cr, $50/1000cr, $100/2200cr (never expire)
 
@@ -308,7 +331,7 @@ Per-model costs are stored in the `model_pricing` DB table and fetched at runtim
 - Special case: image-to-video with audio merge -- watermark applied to FINAL merged output only
 
 ### Cost Markup (Cloud Edition)
-- `[formula removed]` (Cloud edition; `markupPercent` is configurable)
+- Cloud edition derives the customer-facing `displayCost` from `providerCost` via an admin-configurable markup setting
 - Regular users see `cost` (display_cost). Provider/provider_cost hidden via `sanitizeJobForPublic()`
 - Admin users see full breakdown. Self-hosted: no markup, full data visible.
 
@@ -597,7 +620,7 @@ All three tiers are VEO 3.1 per [docs.kie.ai/veo3-api/generate-veo-3-video](http
 | Area | Rule |
 |------|------|
 | `packages/shared/` | Pure logic shared between frontend + backend. Frontend imports the workspace package by name (`@nodaro/shared`, resolves to `packages/shared/dist/`). Backend uses RELATIVE imports — `tsc` doesn't rewrite path aliases. Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile must copy `packages/shared/dist/` into every build stage. **i18n sidecar exception:** `frontend/src/lib/i18n-bootstrap.ts` does `import.meta.glob("../../../packages/shared/src/i18n/*.*.ts")` so Vite can code-split each locale chunk. tsup bundles everything into one `dist/index.js`, so the per-file split is lost there — the Dockerfile's `frontend-build` stage must ALSO copy `packages/shared/src/i18n/` (not just dist) or the glob returns empty and every picker silently falls back to English. |
-| Credit pricing | 1 credit = $0.02. Composite identifiers for variable pricing (`"gpt-image:high"`, `"flux:2K"`) — `VARIABLE_PRICING_MODELS` in `model-options.ts`, `buildCreditModelIdentifier()` in `helpers.ts` + route handlers. `STATIC_CREDIT_COSTS` is a runtime fallback only — admin UI reads from the `model_pricing` DB table. **Hard-fail policy (2026-05):** if neither `model_pricing` nor `STATIC_CREDIT_COSTS` has the identifier, `getModelCreditBaseCost` throws `PriceNotConfiguredError` and the route returns HTTP 503 `price_not_configured` (no silent fallback to 1 credit). Regression net: `backend/src/ee/billing/__tests__/hard-fail-coverage.test.ts`. |
+| Credit pricing | Credits are the runtime billing unit. Composite identifiers for variable pricing (`"gpt-image:high"`, `"flux:2K"`) — `VARIABLE_PRICING_MODELS` in `model-options.ts`, `buildCreditModelIdentifier()` in `helpers.ts` + route handlers. `STATIC_CREDIT_COSTS` is a runtime fallback only — admin UI reads from the `model_pricing` DB table. **Hard-fail policy (2026-05):** if neither `model_pricing` nor `STATIC_CREDIT_COSTS` has the identifier, `getModelCreditBaseCost` throws `PriceNotConfiguredError` and the route returns HTTP 503 `price_not_configured` (no silent fallback to 1 credit). Regression net: `backend/src/ee/billing/__tests__/hard-fail-coverage.test.ts`. |
 | Sub-workflow hierarchy | `parent_workflow_id` (migration 116) marks workflows that were auto-created from inside another. List endpoints (`GET /v1/projects/:id/workflows`, MCP `list_workflows`, `/v1/workflows/callable`) hide rows with `parent_workflow_id IS NOT NULL` so child workflows don't pollute project lists. Standalone workflows referenced by sub-workflow nodes (existing flow) keep `parent_workflow_id = NULL` and remain visible. Editable fullscreen sub-canvas via route-based navigation + breadcrumb (`useSubWorkflowStack`, `SubWorkflowBreadcrumb`, `useNavigateWithGuard` so dirty-state prompt fires). View modes via client-side registry at `frontend/src/components/nodes/sub-workflow-views/view-mode-registry.ts` (ships with default Ports view; storyboard/video/script land with the Story-to-Video Shot container in v2). Validation: every `sub-workflow-input` must pair with a `sub-workflow-output` sharing `routeId` and have ≥1 outputPort — enforced at workflow POST + PATCH via `validateSubWorkflowRoutes` in `@nodaro/shared`. New endpoint: `POST /v1/workflows/:parentId/sub-workflows` seeds a child with one input + one output node. |
 | Tier parallelism | `TIER_PARALLELISM` in `stripe-config.ts` + `pricing-data.ts`: free=2, basic=4, standard=6, pro=10, business=12. Self-hosted editions read `MAX_CONCURRENT_NODES_PER_EXECUTION` env (default 12) as hard ceiling. |
 | Single-node execution history | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls. Backend `extractWorkflowId(req.body)` reads it BEFORE Zod strips it. Standalone jobs (no `workflow_execution_id`) merged into execution lists as `triggerType: "single-node"`. |

@@ -254,7 +254,6 @@ export {
   getLlmModel,
   getLlmTier,
   getLlmModalityCaps,
-  calculateLlmCost,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
@@ -367,20 +366,16 @@ export {
 } from "./lip-sync-pricing.js"
 export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
 
-export { flux2CostUsd, flux2BaseCredits, isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
+export { isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
 export type { Flux2Model } from "./flux2-pricing.js"
 
 export {
-  AI_AVATAR_RATE_USD_PER_SEC,
   AI_AVATAR_MAX_DURATION_SEC,
   AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_DURATION_BUCKETS,
   AI_AVATAR_RESERVE_IDS,
-  aiAvatarUsdCost,
   aiAvatarReserveCreditId,
-  aiAvatarHoldCredits,
   resolveAiAvatarCreditId,
-  aiAvatarReserveCeilingUsd,
   estimateScriptDurationSec,
   pickAiAvatarBucket,
 } from "./ai-avatar-pricing.js"
@@ -389,17 +384,14 @@ export type { AiAvatarEngine, AiAvatarResolution, AiAvatarDurationBucket } from 
 export * from "./switchx-pricing.js"
 
 export {
-  CINEMATIC_RATE_USD_PER_SEC,
   CINEMATIC_MIN_DURATION_SEC,
   CINEMATIC_MAX_DURATION_SEC,
   CINEMATIC_DEFAULT_DURATION_SEC,
   CINEMATIC_DEFAULT_RESOLUTION,
   CINEMATIC_RESERVE_IDS,
   clampCinematicDuration,
-  cinematicUsdCost,
   cinematicCreditId,
   resolveCinematicCreditId,
-  cinematicHoldCredits,
 } from "./cinematic-avatar-pricing.js"
 export type { CinematicResolution } from "./cinematic-avatar-pricing.js"
 
@@ -852,6 +844,8 @@ export * from "./audio-fx-presets.js"
 
 // --- Remotion renderer: supported font names (shared with backend Zod validation) ---
 export * from "./supported-fonts.js"
+// --- Shot-sequence visual elements (text/shape/image; shared with backend Zod validation) ---
+export type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement } from "./shot-element.js"
 // --- Entity image-handle parity (entity `image` source handle → plain image) ---
 export * from "./entity-image-handle.js"
 

@@ -1,15 +1,12 @@
 -- 248_video_analysis_pro_reprice.sql
 -- [econ-intel comment removed]
 -- to the formula's output at the MEASURED constants. Migration 247 seeded
--- provisional values computed from a stale rate registry (gemini-3.1-pro at
--- [figures removed] — Gemini 1.5 Pro list pricing) and pre-measurement
--- token assumptions ([figures removed], ~290 tok/s ingestion).
+-- provisional values computed from a stale rate registry and pre-measurement
+-- token assumptions.
 --
 -- [econ-intel comment removed]
--- calls incl. a 596s video) measured:
---   gemini-3-flash   [figures removed]   (was assumed 0.10/0.40)
---   gemini-3.1-pro   [figures removed]   (was assumed 3.50/10.50)
---   [econ-intel comment removed]
+-- calls incl. a 596s video) measured the actual per-model token rates and
+-- ingestion throughput, superseding the assumptions migration 247 shipped with.
 --
 -- videoAnalysisBucketCredits at the measured constants emits:
 --   gemini-3-flash  → 1 / 1 / 2 / 3   (UNCHANGED — 247 rows already correct)

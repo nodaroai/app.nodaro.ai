@@ -5,7 +5,7 @@
 import { z } from "zod"
 import { MODEL_CATALOG } from "./model-catalog.js"
 
-/** Base USD cost per 1 Nodaro credit (before markup). Used for cost→credit conversion. */
+/** Base USD cost per 1 Nodaro credit, at cost. Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.02
 
 /** Max characters for the (assembled) prompt accepted by the image-generation routes
@@ -1656,8 +1656,8 @@ export type LocationAtmosphereProvider =
 /**
  * Subset of i2v providers tuned for short ambient object-motion clips (rotate,
  * hover, spin, parallax). Excludes premium models (Veo3, Veo3.1, Grok-i2v,
- * Sora2, Sora2-pro, Hailuo-2.3-pro) which are cost-prohibitive for
- * [figures removed].
+ * Sora2, Sora2-pro, Hailuo-2.3-pro) which are cost-prohibitive for the
+ * product-loop use case (several times kling-turbo's per-clip cost).
  * Phase 2 candidate for adding veo3.1 if demand for premium hero shots
  * materializes.
  */

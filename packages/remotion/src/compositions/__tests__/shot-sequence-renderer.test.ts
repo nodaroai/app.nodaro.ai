@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { computeRevealOpacity, sceneCrossfadeOpacity, cutCurveTransform, elementTextStyle } from "../shot-sequence-renderer.js"
+import type { ShotTextElement } from "../../plan-types.js"
 
 describe("computeRevealOpacity", () => {
   it("multiplies base × enter × exit", () => {
@@ -145,7 +146,7 @@ describe("cutCurveTransform", () => {
 })
 
 describe("elementTextStyle", () => {
-  const base = { id: "t", type: "text" as const, text: "", fontFamily: "Montserrat",
+  const base: ShotTextElement = { id: "t", type: "text", text: "", fontFamily: "Montserrat",
     fontSize: 80, color: "#fff", x: 0, y: 0 }
   it("Hebrew text auto-detects rtl and appends the RTL fallback", () => {
     const s = elementTextStyle({ ...base, text: "שלום" })

@@ -55,7 +55,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 3 credits |
 | flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~4 credits at 2 MP with the primary image. |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing** ($0.07/output-MP + $0.03/ref-MP): ~10 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~10 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
 ## Best Practices
 

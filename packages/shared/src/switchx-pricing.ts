@@ -1,30 +1,23 @@
-// Beeble SwitchX pricing. Anchored to Beeble's published rate 2026-06-26
-// (developer.beeble.ai/pricing): metered per 30-frame BLOCK — 720p f
-// 1080p f — with no per-job meter returned, so we reserve a block tier
-// and commit it verbatim. Tiers ARE 30-frame multiples, so a clip snaps to the
-// exact number of blocks Beeble bills (ceil(frames/30)); there is no tier
-// over-charge. Alpha mode does not affect price. 1 credit
+// Beeble SwitchX — Relight & Switch video node. Non-monetary tier bucketing
+// and credit-identifier helpers. Beeble bills per 30-frame block with no
+// per-job meter returned, so we reserve a block tier (the smallest tier that
+// covers the clip's frame count) and commit it verbatim — tiers are 30-frame
+// multiples, so a clip snaps to the exact number of blocks Beeble bills
+// (ceil(frames/30)); there is no tier over-charge.
 //
-// AT-COST: block credits = blockUSD / (5 @720p, 15 @1080p), i.e. zero
-// [comment removed]
-// cost_markup_percent (applied at reserve) rather than baking it in here.
+// The $-per-block provider rate and the credits-per-block formula derived
+// from it live in `backend/src/lib/pricing/switchx-cost.ts` (core, not ee/).
+// They were moved out of this package (published Apache-2.0 on npm — an
+// irrevocable grant) per the 2026-07-06 public-flip IP audit, S5.
 export const SWITCHX_FRAME_TIERS = [30, 60, 90, 120, 150, 180, 210, 240] as const
 
-const SWITCHX_BLOCK_FRAMES = 30
+/** Beeble's metering granularity: frames per billed block. */
+export const SWITCHX_BLOCK_FRAMES = 30
 
 export function pickSwitchXFrameTier(frames?: number): number {
   if (frames === undefined || !Number.isFinite(frames) || frames <= 0) return 240
   for (const t of SWITCHX_FRAME_TIERS) if (frames <= t) return t
   return 240
-}
-
-// At-cost credits per 30-frame block: 720p cr, 1080p cr.
-const SWITCHX_BLOCK_CREDITS: Record<720 | 1080, number> = { 720: 5, 1080: 15 }
-
-export function switchXHoldCredits(frames: number | undefined, res: 720 | 1080): number {
-  // tier is always a 30-frame multiple, so (tier / 30) is the integer block count.
-  const blocks = pickSwitchXFrameTier(frames) / SWITCHX_BLOCK_FRAMES
-  return blocks * SWITCHX_BLOCK_CREDITS[res]
 }
 
 function readMaxResolution(body: Record<string, unknown>): 720 | 1080 {

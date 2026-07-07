@@ -10,7 +10,7 @@ Cut the timeline into scenes at **shot or beat boundaries**, each **≤ 8 s** lo
 
 **Granularity must not decay along the timeline.** The last minute of a six-minute clip deserves the same ≤ 8 s shot-by-shot detail as the first. The most common failure in automated analysis is *tail decay*: the analyst starts strong with tight 3–6 s scenes, then tires and lumps the back half into a few long blocks. Keep resolving shots at full detail all the way to the final frame of the clip.
 
-> **Anti-example (do not imitate).** A competitor's analysis of a six-minute video opened with clean per-shot scenes, then collapsed the tail into scenes of **57 s, 71 s, and 83 s**. A single 83-second "scene" is not a shot — it is a chapter. No video model can regenerate a coherent 83-second take from one prompt, so those entries are dead weight. Granularity that decays along the timeline defeats the whole analysis.
+> **Anti-example (do not imitate).** Picture an analysis of that same six-minute video opening with clean per-shot scenes, then collapsing the tail into scenes of **57 s, 71 s, and 83 s**. A single 83-second "scene" is not a shot — it is a chapter. No video model can regenerate a coherent 83-second take from one prompt, so those entries are dead weight. Granularity that decays along the timeline defeats the whole analysis.
 
 If a single continuous take genuinely runs longer than 8 s (a long dolly, an unbroken monologue), split it at the strongest internal beat — a change in framing, subject action, or blocking — so no scene exceeds the cap.
 

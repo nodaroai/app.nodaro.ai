@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { cdnMediaUrlSchema } from "../../lib/cdn-media-url.js"
 
 /**
  * Single source of truth for blueprint parameter schemas and metadata.
@@ -20,7 +21,9 @@ export const BLUEPRINT_IDS = [
   "comparison-split",
   "constellation-hub",
   "cta-morph-press",
+  "cursor-ui-demo",
   "dataviz-countup",
+  "device-surface-showcase",
   "grid-card-assemble",
   "kinetic-type-beats",
   "logo-assemble-lockup",
@@ -64,6 +67,15 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     accentColor: hexColor.optional(),
   }),
 
+  /** A brand cursor drives a screenshot UI through clicks while the viewport chases each target. */
+  "cursor-ui-demo": z.object({
+    screens: z.array(cdnMediaUrlSchema).min(2).max(4),
+    targets: z.array(z.object({ xPct: z.number().min(0).max(100), yPct: z.number().min(0).max(100) })).min(2).max(4),
+    labels: z.array(z.string().min(1)).max(4).optional(),
+    cursorColor: hexColor.optional(),
+    accentColor: hexColor.optional(),
+  }),
+
   /** A big number counts up to a value with a label. */
   "dataviz-countup": z.object({
     value: z.number(),
@@ -71,6 +83,14 @@ export const BLUEPRINT_PARAM_SCHEMAS = {
     suffix: z.string().optional(),
     label: z.string().min(1),
     sublabel: z.string().optional(),
+    accentColor: hexColor.optional(),
+  }),
+
+  /** A device mockup holds as hero while its screens cycle through a real flow (static-tour). */
+  "device-surface-showcase": z.object({
+    deviceImage: cdnMediaUrlSchema,
+    screens: z.array(cdnMediaUrlSchema).min(2).max(4),
+    headlines: z.array(z.string().min(1)).optional(),
     accentColor: hexColor.optional(),
   }),
 
@@ -182,11 +202,23 @@ export const BLUEPRINT_META: Record<
     description:
       "A CTA button appears centered; a cursor decelerates in and presses it with compression + ripple feedback.",
   },
+  "cursor-ui-demo": {
+    roles: ["feature_showcase", "product_intro"],
+    defaultDurationFrames: 210,
+    description:
+      "A visible brand cursor drives a screenshot-based UI through clicks/hovers while the viewport chases each interaction (camera-servo-to-cursor).",
+  },
   "dataviz-countup": {
     roles: ["pain_point"],
     defaultDurationFrames: 240,
     description:
       "A big number counts up to a value with a label; numbers are the hero.",
+  },
+  "device-surface-showcase": {
+    roles: ["product_intro", "feature_showcase"],
+    defaultDurationFrames: 240,
+    description:
+      "A device mockup is the persistent hero on a styled backdrop while its screens cycle through a real flow (camera-static static-tour); side headlines swap in sync.",
   },
   "grid-card-assemble": {
     roles: ["feature_showcase", "benefit_highlight", "social_proof"],

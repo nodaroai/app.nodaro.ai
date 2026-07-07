@@ -1,6 +1,5 @@
-import { dirname, join } from "node:path"
+import { dirname } from "node:path"
 import { promises as fs } from "node:fs"
-import { supabase } from "../../lib/supabase.js"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
@@ -13,10 +12,7 @@ import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
 import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { createWorkDir, cleanupWorkDir, downloadFile } from "../../providers/video/ffmpeg-utils.js"
-import { mixAudio } from "../../providers/video/mix-audio.js"
-import { applyAudioFx } from "../../providers/video/audio-fx.js"
-import type { AudioFxPreset } from "@nodaro/shared"
+import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
@@ -532,8 +528,6 @@ const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(jo
   console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)
 }
 
-// Base credit cost per voice recast — mirrors the credit seed in ee/billing/credits.ts.
-// [enterprise handler removed]
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -548,5 +542,4 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "voice-remix": handleVoiceRemix,
   "voice-design": handleVoiceDesign,
   "forced-alignment": handleForcedAlignment,
-[handler entry removed]
 }

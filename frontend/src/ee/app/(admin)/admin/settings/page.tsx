@@ -19,7 +19,9 @@ export default function AdminSettingsPage() {
   const { data: settings, isLoading: loading, error: queryError } = useAdminSettings()
   const updateSettingMut = useUpdateSettingMutation()
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
-  const [markup, setMarkup] = useState<number>(25)
+  // Neutral placeholder matching the app_settings seed; the real value is
+  // DB-synced on load (and Save is disabled until settings have loaded).
+  const [markup, setMarkup] = useState<number>(0)
   const [carouselAutoplay, setCarouselAutoplay] = useState(true)
   const [appsPageAutoplay, setAppsPageAutoplay] = useState(true)
   const [appsLimit, setAppsLimit] = useState(20)
@@ -89,13 +91,16 @@ export default function AdminSettingsPage() {
     setSaving(false)
   }
 
-  const hasChanges =
-    (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
-    (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
-    carouselAutoplay !== settings?.carousel_video_autoplay ||
-    appsPageAutoplay !== settings?.apps_page_video_autoplay ||
-    appsLimit !== settings?.featured_apps_limit ||
-    autoScrollSeconds !== settings?.apps_auto_scroll_seconds
+  // Guard on settings having loaded: before that there is nothing meaningful
+  // to diff against, and saving would overwrite live values with local defaults.
+  const hasChanges = settings != null && (
+    (isFeatureEnabled("providerSelection") && provider !== settings.ai_provider) ||
+    (isFeatureEnabled("costMarkup") && markup !== settings.cost_markup_percent) ||
+    carouselAutoplay !== settings.carousel_video_autoplay ||
+    appsPageAutoplay !== settings.apps_page_video_autoplay ||
+    appsLimit !== settings.featured_apps_limit ||
+    autoScrollSeconds !== settings.apps_auto_scroll_seconds
+  )
 
   if (loading && !settings) {
     return (
@@ -205,16 +210,6 @@ export default function AdminSettingsPage() {
                 />
                 <span className="text-muted-foreground">%</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                [formula removed]
-              </p>
-            </div>
-
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground">
-                <strong>Example:</strong> [formula removed] {markup}%,
-                display cost will be ${(0.01 * (1 + markup / 100)).toFixed(4)}
-              </p>
             </div>
           </div>
         )}

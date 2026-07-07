@@ -35,8 +35,6 @@ export interface RoutingDecision {
 // ─── Constants ────────────────────────────────────────────────────
 
 // Replicate disabled — KIE.ai is the sole provider
-// /** Markup applied when KIE mode falls back to Replicate for an unsupported model */
-// const [constant removed]
 
 /**
  * Capabilities that only KIE.ai supports (no Replicate fallback exists).

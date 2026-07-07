@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
@@ -68,6 +68,7 @@ import {
   CreditsService,
   invalidateModelPricingCache,
   PriceNotConfiguredError,
+  registerStaticCreditCosts,
   STATIC_CREDIT_COSTS,
 } from "../credits.js"
 import type { CreditProfile, StorageProfile } from "../credits.js"
@@ -1056,5 +1057,57 @@ describe("CreditsService", () => {
         CreditsService.reserveCredits("user-1", "job-1", "totally-unknown-zzz", 0, 0),
       ).rejects.toThrowError(PriceNotConfiguredError)
     })
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════
+// registerStaticCreditCosts — additive registration hook for private plugins
+// (Stage 1 Task 8: backend/src/lib/private-plugins/load.ts calls this for
+// every loaded plugin's staticCreditCosts()).
+// ════════════════════════════════════════════════════════════════════════
+
+describe("registerStaticCreditCosts", () => {
+  // Use distinctive fake identifiers so these tests can never collide with a
+  // real STATIC_CREDIT_COSTS entry, and clean them up after each test so
+  // this module-level mutation never leaks into other describe blocks in
+  // this file (STATIC_CREDIT_COSTS is a shared singleton object).
+  afterEach(() => {
+    delete STATIC_CREDIT_COSTS["__test_private_plugin_new_id__"]
+    delete STATIC_CREDIT_COSTS["__test_private_plugin_existing_id__"]
+  })
+
+  it("adds an identifier that doesn't already exist", () => {
+    expect(STATIC_CREDIT_COSTS["__test_private_plugin_new_id__"]).toBeUndefined()
+
+    registerStaticCreditCosts({ "__test_private_plugin_new_id__": 7 })
+
+    expect(STATIC_CREDIT_COSTS["__test_private_plugin_new_id__"]).toBe(7)
+  })
+
+  it("does NOT overwrite an identifier that already exists (core pricing wins)", () => {
+    // "flux" is a real core STATIC_CREDIT_COSTS entry (value 2). A plugin
+    // must never be able to override core-defined pricing.
+    expect(STATIC_CREDIT_COSTS["flux"]).toBe(2)
+
+    registerStaticCreditCosts({ flux: 999 })
+
+    expect(STATIC_CREDIT_COSTS["flux"]).toBe(2)
+  })
+
+  it("is idempotent — calling twice with the same map has no additional effect", () => {
+    registerStaticCreditCosts({ "__test_private_plugin_existing_id__": 4 })
+    registerStaticCreditCosts({ "__test_private_plugin_existing_id__": 999 })
+
+    expect(STATIC_CREDIT_COSTS["__test_private_plugin_existing_id__"]).toBe(4)
+  })
+
+  it("supports multiple new identifiers in one call", () => {
+    registerStaticCreditCosts({
+      "__test_private_plugin_new_id__": 1,
+      "__test_private_plugin_existing_id__": 2,
+    })
+
+    expect(STATIC_CREDIT_COSTS["__test_private_plugin_new_id__"]).toBe(1)
+    expect(STATIC_CREDIT_COSTS["__test_private_plugin_existing_id__"]).toBe(2)
   })
 })

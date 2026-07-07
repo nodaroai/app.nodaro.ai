@@ -24,6 +24,7 @@ import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.
 import { videoAnalysisHandlers } from "./handlers/video-analysis.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
+import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
 
 const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
@@ -38,6 +39,14 @@ const allHandlers: Record<string, HandlerFn> = {
   ...motionGraphicsLottieHandlers,
   ...videoAnalysisHandlers,
 }
+
+// Merge in cloud-only proprietary handlers (e.g. voice-changer-pro) from the
+// private @nodaroai/cloud-plugins package BEFORE the worker below starts
+// consuming jobs. No `app` is passed — this process has no Fastify instance,
+// only queue handlers. No-op on community/business; on cloud, a load failure
+// is fatal (process.exit(1) inside the loader) unless PRIVATE_MODULES=optional.
+const { handlers: privatePluginHandlers } = await loadPrivatePlugins({})
+Object.assign(allHandlers, privatePluginHandlers)
 
 export function createVideoWorker() {
   initProviders()

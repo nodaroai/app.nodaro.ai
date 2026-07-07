@@ -1,8 +1,7 @@
 -- 241_beeble_switchx_anchor_pricing.sql
--- Re-anchor Beeble SwitchX pricing to the provider's PUBLISHED rate
--- (developer.beeble.ai/pricing, 2026-06-26): metered per 30-frame BLOCK —
--- 720p $0.10/30f, 1080p $0.30/30f. [note removed]:
---   block credits = blockUSD / $0.02 → 5 @720p, 15 @1080p.
+-- Re-anchor Beeble SwitchX pricing to match the provider's published per-block
+-- billing (developer.beeble.ai/pricing, 2026-06-26): metered per 30-frame BLOCK,
+-- yielding 5 credits @720p, 15 credits @1080p per block.
 -- Tiers are now 30-frame multiples (SWITCHX_FRAME_TIERS = 30..240, see
 -- packages/shared/src/switchx-pricing.ts) so a clip snaps to the EXACT number of
 -- blocks Beeble bills (ceil(frames/30)) — replacing the coarse provisional

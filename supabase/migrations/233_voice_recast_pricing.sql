@@ -1,5 +1,3 @@
--- [comment removed]
--- Per-speaker metering happens at commit; this seeds the floor for one speaker.
 -- Admin /admin/models reads model_pricing exclusively; ON CONFLICT DO NOTHING
 -- preserves any admin override. Value matches STATIC_CREDIT_COSTS
 -- (credit-pricing-migration-sync.test.ts enforces this).

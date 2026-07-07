@@ -1,9 +1,9 @@
 -- Fix model pricing from credit audit (2026-03-16)
--- Formula: ceil(kieCredits / 4) at 0% markup (matches app_settings.cost_markup_percent)
+-- Re-priced against a provider billing audit (0% markup, matches app_settings.cost_markup_percent)
 
 -- ── UNDERPRICED ──
 
--- elevenlabs-isolation: 1→4 (was estimated at ~10s audio, actual avg ~80s; 0.2 KIE cr/sec variable)
+-- elevenlabs-isolation: 1→4 (was estimated at ~10s audio; actual usage runs much longer, ~80s avg)
 UPDATE model_pricing SET credit_cost = 4 WHERE model_identifier = 'elevenlabs-isolation';
 
 -- grok-i2v duration tiers: revert to 0% formula (were correct before)
@@ -17,7 +17,7 @@ UPDATE model_pricing SET credit_cost = 21 WHERE model_identifier = 'kling-turbo:
 
 -- ── OVERPRICED ──
 
--- seedance: 32→7 (actual 3.5 KIE cr/sec, not estimated 100 KIE flat)
+-- seedance: 32→7 (re-priced from a flat per-generation estimate to actual per-second usage)
 -- Add duration-tiered pricing
 UPDATE model_pricing SET credit_cost = 7 WHERE model_identifier = 'seedance';
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, tier_restriction)
@@ -27,8 +27,8 @@ VALUES
   ('seedance:12s', 11, true, null)
 ON CONFLICT (model_identifier) DO UPDATE SET credit_cost = EXCLUDED.credit_cost;
 
--- bytedance-lite: 16→6 (actual 22.5 KIE cr, not estimated 50)
+-- bytedance-lite: 16→6 (re-priced to match actual measured usage vs. the original estimate)
 UPDATE model_pricing SET credit_cost = 6 WHERE model_identifier = 'bytedance-lite';
 
--- bytedance-pro: 22→8 (actual 30 KIE cr, not estimated 70)
+-- bytedance-pro: 22→8 (re-priced to match actual measured usage vs. the original estimate)
 UPDATE model_pricing SET credit_cost = 8 WHERE model_identifier = 'bytedance-pro';

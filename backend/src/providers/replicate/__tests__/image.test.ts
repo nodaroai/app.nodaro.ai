@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { flux2CostUsd } from "@nodaro/shared"
+import { flux2CostUsd } from "../../../lib/pricing/flux2-cost.js"
 
 const mocks = vi.hoisted(() => {
   const mockCreate = vi.fn()

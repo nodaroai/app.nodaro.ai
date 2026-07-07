@@ -1,13 +1,13 @@
 -- Grok Imagine Video 1.5 (KIE) pricing — image-to-video, per-second billing.
 -- Identifier format: grok-imagine-video-1.5:{N}s:{resolution}  (resolution = 480p | 720p)
--- Source rates (KIE.ai): 480p = 14.5 cr/s, 720p = 25 cr/s, + 2 cr per input image
--- (this model always takes exactly 1 image, so +2 is baked into every tier).
--- Nodaro credits = ceil(kie_credits / 4) at 0% markup (same methodology as Seedance-2).
+-- Credits derive from the provider's per-second billing at 0% markup (same methodology
+-- as Seedance-2), including a small per-input-image surcharge baked into every tier
+-- (this model always takes exactly 1 image).
 -- Base fallback = 8s / 480p = 30. Durations 1-15s, resolutions 480p/720p → 30 composites.
 
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) VALUES
   ('grok-imagine-video-1.5', 30, true, 'image-to-video'),
-  -- 480p (KIE 14.5 cr/s + 2)
+  -- 480p
   ('grok-imagine-video-1.5:1s:480p', 5, true, 'image-to-video'),
   ('grok-imagine-video-1.5:2s:480p', 8, true, 'image-to-video'),
   ('grok-imagine-video-1.5:3s:480p', 12, true, 'image-to-video'),
@@ -23,7 +23,7 @@ INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) 
   ('grok-imagine-video-1.5:13s:480p', 48, true, 'image-to-video'),
   ('grok-imagine-video-1.5:14s:480p', 52, true, 'image-to-video'),
   ('grok-imagine-video-1.5:15s:480p', 55, true, 'image-to-video'),
-  -- 720p (KIE 25 cr/s + 2)
+  -- 720p
   ('grok-imagine-video-1.5:1s:720p', 7, true, 'image-to-video'),
   ('grok-imagine-video-1.5:2s:720p', 13, true, 'image-to-video'),
   ('grok-imagine-video-1.5:3s:720p', 20, true, 'image-to-video'),

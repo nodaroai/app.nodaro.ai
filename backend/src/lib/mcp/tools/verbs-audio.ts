@@ -591,9 +591,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "(0–4294967295) makes that speaker's recast reproducible.\n\n" +
         "Provide ONE source: audio_url / audio_asset_id to recast audio→audio, " +
         "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
-        "Voice and music are ALWAYS separated first (ElevenLabs only ever sees " +
-        "the isolated vocals); preserve_background (default true) just controls " +
-        "whether the music/SFX bed is mixed back in under the new voices. " +
+        "Voice and music are ALWAYS separated first; preserve_background " +
+        "(default true) just controls whether the music/SFX bed is mixed " +
+        "back in under the new voices. " +
         "music_volume_mode sets the level of that preserved background — 'match' " +
         "(default) keeps the original level, 'normalize' loudnorms it, 'manual' " +
         "uses music_volume (0–200%).\n\n" +
@@ -666,7 +666,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(["fast", "best"])
           .optional()
           .describe(
-            "Demucs model used to split voice from music: 'fast' (default, htdemucs — preserves more voice) or 'best' (htdemucs_ft — finer separation).",
+            "Quality of the voice/music separation: 'fast' (default, quicker, preserves more of the voice) or 'best' (finer voice/music separation).",
           ),
         music_volume_mode: z
           .enum(["match", "normalize", "manual"])

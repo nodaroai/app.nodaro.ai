@@ -64,6 +64,28 @@ jobs:
           json-summary-path: frontend/coverage/coverage-summary.json
           vite-config-path: frontend/vitest.config.ts
 
+  remotion-tests:
+    name: Remotion Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build shared packages
+        run: npm run build:packages
+      - name: Run remotion tests
+        run: npm run test
+        working-directory: packages/remotion
+
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -233,6 +255,28 @@ jobs:
           node-version: 22
       - name: Check core does not import from ee/
         run: node tools/check-ee-imports.mjs
+      - name: Check for private-extraction symbol leaks
+        run: node tools/check-private-leaks.mjs
+
+  check-pricing-leaks:
+    # packages/shared, packages/prompts, packages/client, and packages/cli are
+    # published npm artifacts (Apache-2.0 / FSL) — every release is an
+    # IRREVOCABLE grant (npm tarballs can't be un-published). This guards
+    # against provider-$ rate figures and platform-margin/markup derivation
+    # content leaking into a future release. See the 2026-07-06 public-flip
+    # IP audit (S5) in plan.nodaro.ai.
+    name: Check Pricing Leaks
+    runs-on: ubuntu-latest
+    needs: [frontend-tests, backend-tests, typecheck]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check packages/*/src for provider-$ / margin-markup leaks
+        run: node tools/check-pricing-leaks.mjs
 
   backend-boot-smoke:
     # Catches startup crashes that vitest masks (e.g. ERR_MODULE_NOT_FOUND from
@@ -266,6 +310,12 @@ jobs:
       R2_BUCKET_NAME: stub
       R2_PUBLIC_URL: https://stub.example.com
       EDITION: ${{ matrix.edition }}
+      # Public CI is registry-token-free by design (fork PRs), so the private
+      # @nodaroai/cloud-plugins package is never installed here — boot cloud in
+      # the documented optional mode (warn + continue). Cloud plugin fail-fast
+      # is verified in Railway builds + the private repo's pairing CI. The
+      # community leg is unaffected (hasCredits() short-circuits the loader).
+      PRIVATE_MODULES: optional
       PORT: 9000
     steps:
       - uses: actions/checkout@v5
@@ -341,7 +391,7 @@ jobs:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, i18n-completeness, backend-boot-smoke]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, i18n-completeness, backend-boot-smoke]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

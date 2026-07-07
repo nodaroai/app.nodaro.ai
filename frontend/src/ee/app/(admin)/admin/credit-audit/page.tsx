@@ -209,7 +209,7 @@ export default function AdminCreditAudit() {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Credit Audit</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Compare provider costs against what we charge users ([ratio wording removed])
+        Compare provider costs against what we charge users (provider credits shown converted into our credit units)
       </p>
 
       {/* Config section */}
@@ -386,7 +386,7 @@ function TheoreticalTable({ models }: { models: AuditModel[] }) {
           <th className="text-left p-3 font-medium text-muted-foreground">Our Key</th>
           <th className="text-right p-3 font-medium text-muted-foreground">Tasks</th>
           <th className="text-right p-3 font-medium text-muted-foreground">Provider CR</th>
-          <th className="text-right p-3 font-medium text-muted-foreground">÷4</th>
+          <th className="text-right p-3 font-medium text-muted-foreground" title="Provider cost converted into our credit units">Converted</th>
           <th className="text-right p-3 font-medium text-muted-foreground">We Charge</th>
           <th className="text-right p-3 font-medium text-muted-foreground">Diff</th>
           <th className="text-right p-3 font-medium text-muted-foreground">%</th>
@@ -555,7 +555,7 @@ function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
           <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">KIE Task</th>
           <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Model</th>
           <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Our Job</th>
-          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground" title="Raw KIE credits ([ratio wording removed])">KIE cr</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground" title="Raw KIE credits">KIE cr</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Expected</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Actual</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Diff</th>

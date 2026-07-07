@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, videoAnalysisBucketCredits, FAN_OUT_EACH_TYPES } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES } from "@nodaro/shared"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -161,8 +161,10 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
     const durationSec =
       probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined
     const bucketSec = bucketSecondsFromCreditId(buildVideoAnalysisCreditId(model, durationSec))
+    // The $-derived formula moved to backend/src/lib/pricing/video-analysis-cost.ts
+    // (S5) — look up the precomputed credit table instead of computing it here.
     return bucketSec !== null
-      ? videoAnalysisBucketCredits(model, bucketSec)
+      ? VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, bucketSec)] ?? NODE_CREDIT_COSTS["video-analysis"] ?? 0
       : NODE_CREDIT_COSTS["video-analysis"] ?? 0
   }
   return NODE_CREDIT_COSTS[nodeType] ?? 0

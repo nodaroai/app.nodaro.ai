@@ -43,7 +43,7 @@ The node body shows a visual scrubber over the upstream video preview; the quick
 
 ## Credit pricing
 
-Video Retake is metered per second of the retake window. LTX 2.3 Pro on Replicate bills $0.08/sec at 1080p (retake is locked to 1080p); after our standard configured pricing factor at $0.02/credit, that's **4 credits/second**:
+Video Retake is metered per second of the retake window, at **4 credits/second** (1080p, the only supported resolution):
 
 ```
 credits = 4 × retakeDuration × repeatCount

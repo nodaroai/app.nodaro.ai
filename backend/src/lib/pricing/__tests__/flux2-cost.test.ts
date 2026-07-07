@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { flux2CostUsd, flux2BaseCredits } from "../flux2-pricing.js"
+import { flux2CostUsd, flux2BaseCredits } from "../flux2-cost.js"
 
 describe("flux2CostUsd", () => {
   it("pro: $0.015 + $0.015/MP (in+out)", () => {

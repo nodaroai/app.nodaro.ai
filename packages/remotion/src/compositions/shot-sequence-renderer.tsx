@@ -7,6 +7,7 @@ import { resolveBrand, resolveFontStack, type ResolvedBrand } from "../lib/brand
 import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
 import { easeOutQuad, easeInQuad } from "../blueprints/motion"
 import { readableTextColor } from "../blueprints/color"
+import { MediaFrame, chooseMediaRender } from "../lib/media-frame"
 
 type CutDirection = "left" | "right" | "up" | "down"
 const DIRECTION_VECTOR: Record<CutDirection, readonly [number, number]> = {
@@ -177,7 +178,7 @@ export function elementTextStyle(
   return style
 }
 
-function ElementBox({ element, style, brand }: { element: ShotElement; style: React.CSSProperties; brand?: ResolvedBrand }) {
+export function ElementBox({ element, style, brand }: { element: ShotElement; style: React.CSSProperties; brand?: ResolvedBrand }) {
   if (element.type === "text") {
     const { fontFamily, direction, fontWeight, textTransform, letterSpacing } = elementTextStyle(element, brand)
     return (
@@ -200,6 +201,10 @@ function ElementBox({ element, style, brand }: { element: ShotElement; style: Re
         {element.text}
       </div>
     )
+  }
+
+  if (element.type === "image") {
+    return <ImageElementBox element={element} style={style} />
   }
 
   // shape
@@ -233,6 +238,23 @@ function ElementBox({ element, style, brand }: { element: ShotElement; style: Re
         ...style,
       }}
     />
+  )
+}
+
+function ImageElementBox({ element, style }: { element: Extract<ShotElement, { type: "image" }>; style: React.CSSProperties }) {
+  const [hasError, setHasError] = React.useState(false)
+  if (chooseMediaRender(element.src, hasError) === "fallback") return null
+  return (
+    <div style={{ position: "absolute", left: element.x, top: element.y, ...style }}>
+      <MediaFrame
+        src={element.src}
+        fit={element.fit ?? "contain"}
+        width={element.width}
+        height={element.height}
+        radius={element.radius}
+        onError={() => setHasError(true)}
+      />
+    </div>
   )
 }
 

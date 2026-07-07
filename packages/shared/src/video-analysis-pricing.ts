@@ -1,35 +1,56 @@
 /**
  * Video-analysis pricing — shared duration-bucket credit model.
  *
- * Single source of truth for the video-analysis node's credit math: the route
- * (charge at generate-time), the worker (re-check + settle), the admin surface,
- * and the docs table all derive from these functions. NEVER hand-write bucket
- * credit values — the structural formula below is the only source, cross-checked
- * [econ-intel comment removed]
+ * Single source of truth for the video-analysis node's NON-monetary credit
+ * math: duration bucketing, the window-batching constants (also consumed by
+ * the backend workers for real chunking, not just pricing), and the
+ * composite credit-id builder. The route (charge at generate-time), the
+ * worker (re-check + settle), and the frontend node UI (via
+ * `buildVideoAnalysisCreditId` + `/v1/credits/model-cost`) all derive from
+ * these.
+ *
+ * The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
+ * formula live in `backend/src/lib/pricing/video-analysis-cost.ts` (core,
+ * not ee/ — the MCP tool description builder needs them regardless of
+ * edition). They were moved out of this package (published Apache-2.0 on
+ * npm — an irrevocable grant) per the 2026-07-06 public-flip IP audit, S5.
+ *
+ * `VIDEO_ANALYSIS_BUCKET_CREDITS` below is the precomputed OUTPUT of that
+ * backend formula for every (model × bucket) combination — a plain credit
+ * lookup table, not a formula, mirroring the same wire-contract pattern
+ * `VIDEO_CLIP_CREDITS` uses in `film-pricing.ts`. It is what the frontend's
+ * client-side cost preview (`estimateNodeCredits` in
+ * workflow-editor/types.ts) reads instead of calling the formula directly.
+ * A backend test (`video-analysis-cost.test.ts`) cross-checks this table
+ * against the live formula so it can't silently drift.
  */
-import { calculateLlmCost } from "./llm-models.js"
 
 export const VIDEO_ANALYSIS_DURATION_BUCKETS = [60, 180, 360, 600] as const
 /** Worker re-check grace: route metadata is integer-rounded, provider durations nominal;
  *  ffprobe floats run 0.05–2 s over. Zero tolerance fails legit videos at 1:00/3:00/6:00/10:00. */
 export const VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC = 3
-/** [econ-intel comment removed]
- *  KIE = 3,151 prompt tokens (was a 5,500 pre-measurement placeholder). */
-export const VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS = 3_151
 export const VIDEO_ANALYSIS_MAX_DURATION_SEC = 600
 const WINDOW_LEN = 150, WINDOW_STRIDE = 145, WINDOW_OVERLAP = 5
 export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, OVERLAP: WINDOW_OVERLAP, SINGLE_MAX: 180 } as const
-const SAFETY = 2
-/** [econ-intel comment removed]
- *  [econ-intel comment removed]
- *  live KIE bill matched those usage tokens at the standard text rate — no video
- *  premium. If KIE ever flips to default-res sampling (258 tok/frame → ~290 tok/s),
- *  the credit-audit skill will surface the margin squeeze; re-measure and bump. */
-const TOKENS_PER_SEC = 91
-/** Pricing assumption ABOVE the measured real-workload mean (~2.4k tok/window on the
- *  46-min benchmark; worst single window ~8k) — the headroom is deliberate. */
-const OUTPUT_TOKENS_PER_WINDOW = 4_000
-const USD_PER_CREDIT = 0.02
+
+/**
+ * Precomputed credit cost per (model, bucket) — the OUTPUT of the backend's
+ * `videoAnalysisBucketCredits` formula, not a formula itself. Regenerate by
+ * running that function for every `VIDEO_ANALYSIS_LLM_MODELS` × duration
+ * bucket combination whenever the underlying rate/token constants change
+ * (backend test guards drift). Keep in sync with
+ * `docs/nodes/processing-video/video-analysis.md`.
+ */
+export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
+  "video-analysis:gemini-3-flash:60s": 1,
+  "video-analysis:gemini-3-flash:180s": 1,
+  "video-analysis:gemini-3-flash:360s": 2,
+  "video-analysis:gemini-3-flash:600s": 3,
+  "video-analysis:gemini-3.1-pro:60s": 2,
+  "video-analysis:gemini-3.1-pro:180s": 3,
+  "video-analysis:gemini-3.1-pro:360s": 7,
+  "video-analysis:gemini-3.1-pro:600s": 11,
+}
 
 export function pickVideoAnalysisBucket(durationSec: number): number {
   for (const b of VIDEO_ANALYSIS_DURATION_BUCKETS) if (durationSec <= b) return b
@@ -50,13 +71,4 @@ export function bucketSecondsFromCreditId(creditId: string): number | null {
 
 export function videoAnalysisNumWindows(bucketSec: number): number {
   return bucketSec <= VIDEO_ANALYSIS_WINDOW.SINGLE_MAX ? 1 : 1 + Math.ceil((bucketSec - WINDOW_LEN) / WINDOW_STRIDE)
-}
-
-/** Structural formula (spec Pricing): never hand-write bucket values. */
-export function videoAnalysisBucketCredits(modelId: string, bucketSec: number): number {
-  const n = videoAnalysisNumWindows(bucketSec)
-  const inputTokens = Math.ceil((bucketSec + (n - 1) * WINDOW_OVERLAP) * TOKENS_PER_SEC) + n * VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS
-  const outputTokens = n * OUTPUT_TOKENS_PER_WINDOW
-  const usd = calculateLlmCost(modelId, { inputTokens, outputTokens })
-  return Math.max(1, Math.ceil((usd * SAFETY) / USD_PER_CREDIT))
 }

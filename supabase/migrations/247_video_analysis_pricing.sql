@@ -8,21 +8,21 @@
 -- default (600s ceiling); the node-type bare `video-analysis` is the
 -- workflow-estimate fallback only (never reserved).
 --
---   gemini-3-flash  economy Gemini vision  ($0.10/M in, $0.40/M out)
---   gemini-3.1-pro  premium Gemini vision  ($3.50/M in, $10.50/M out)
+--   gemini-3-flash  economy Gemini vision tier
+--   gemini-3.1-pro  premium Gemini vision tier
 --
 -- Credits are NOT per-second: the structural formula `videoAnalysisBucketCredits`
--- prices each bucket from its token footprint (windowed at ~290 tok/s + a
--- per-window system prompt), times a 2× safety factor, at 1 credit = $0.02.
+-- prices each bucket from its token footprint (windowed ingestion rate + a
+-- per-window system prompt), with a safety margin over profiled throughput.
 -- The video-analysis worker performs a NON-METERED commit (fixed/bucket-priced),
 -- so the reserved bucket is committed VERBATIM as the charge — the same
 -- kling-avatar / volcengine-lipsync convention (any providerCostUsd is recorded
 -- on the job but discarded from the charge).
 --
 -- [econ-intel comment removed]
--- formula's output at VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS = 5500 (the measured
--- provisional constant). If a real KIE-billed staging run shifts the numbers,
--- the 18b convergence migration re-anchors these rows.
+-- formula's output at a provisional system-prompt-token constant. If a real
+-- staging run shifts the numbers, the 18b convergence migration re-anchors
+-- these rows.
 --
 -- ON CONFLICT DO NOTHING preserves any admin overrides set via /admin/models
 -- (these identifiers are new, so there is no conflict on first apply).

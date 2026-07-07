@@ -1,8 +1,9 @@
 import React from "react"
-import { useCurrentFrame, useVideoConfig, interpolate, Easing, Img } from "remotion"
+import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion"
 import type { BlueprintProps } from "./types"
 import { directionStyle, detectBaseDirection, type TextDirection } from "../lib/text-direction"
 import { resolveBlueprintAccent, resolveHeadingType, resolveBodyType } from "../lib/brand"
+import { MediaFrame, chooseMediaRender } from "../lib/media-frame"
 
 interface Params {
   brand: string
@@ -55,48 +56,6 @@ export function letterEntranceProgress(
  */
 export function logoRowDirection(brandText: string): TextDirection {
   return detectBaseDirection(brandText)
-}
-
-/** Pure decision: show the image only when a URL is present and it hasn't failed to load. */
-export function chooseLogoRender(image: string | undefined, hasError: boolean): "image" | "cascade" {
-  return image && !hasError ? "image" : "cascade"
-}
-
-/**
- * Contain-fit logo image with fade+scale-in, optional backdrop panel, and
- * onError→fallback. The entrance animation (opacity + scale) always applies
- * to the outer wrapper — never to the inner <Img> — so the backdrop panel
- * (when present) and the logo mark fade+scale in together as a single unit;
- * applying it a second time on the inner <Img> would compound the opacity
- * (opacity²) and leave the panel static while only the mark scaled.
- */
-function BrandLogoImage(props: {
-  src: string
-  maxWidth: number
-  maxHeight: number
-  opacity: number
-  scale: number
-  backdrop?: string
-  onError: () => void
-}) {
-  const { src, maxWidth, maxHeight, opacity, scale, backdrop, onError } = props
-  return (
-    <div
-      style={{
-        opacity,
-        transform: `scale(${scale})`,
-        ...(backdrop
-          ? {
-              backgroundColor: backdrop,
-              borderRadius: Math.round(maxHeight * 0.08),
-              padding: Math.round(maxHeight * 0.08),
-            }
-          : {}),
-      }}
-    >
-      <Img src={src} onError={onError} style={{ maxWidth, maxHeight, objectFit: "contain" }} />
-    </div>
-  )
 }
 
 export function LogoAssembleLockup({ params, durationInFrames, brand }: BlueprintProps) {
@@ -158,24 +117,18 @@ export function LogoAssembleLockup({ params, durationInFrames, brand }: Blueprin
       }}
     >
       {/* Brand name — logo image when available, else per-letter staggered entrance */}
-      {chooseLogoRender(logoImage, imgError) === "image" ? (
-        <BrandLogoImage
-          src={logoImage!}
-          maxWidth={Math.round(width * 0.6)}
-          maxHeight={Math.round(height * 0.42)}
-          opacity={interpolate(frame, [0, 18], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-            easing: Easing.out(Easing.ease),
-          })}
-          scale={interpolate(frame, [0, 18], [0.92, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-            easing: Easing.out(Easing.ease),
-          })}
-          backdrop={logoBackdrop}
-          onError={() => setImgError(true)}
-        />
+      {chooseMediaRender(logoImage, imgError) === "media" ? (
+        <div
+          style={{
+            opacity: interpolate(frame, [0, 18], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.ease) }),
+            transform: `scale(${interpolate(frame, [0, 18], [0.92, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.ease) })})`,
+            ...(logoBackdrop
+              ? { backgroundColor: logoBackdrop, borderRadius: Math.round(Math.round(height * 0.42) * 0.08), padding: Math.round(Math.round(height * 0.42) * 0.08) }
+              : {}),
+          }}
+        >
+          <MediaFrame src={logoImage!} fit="contain" maxWidth={Math.round(width * 0.6)} maxHeight={Math.round(height * 0.42)} onError={() => setImgError(true)} />
+        </div>
       ) : (
         <div
           style={{

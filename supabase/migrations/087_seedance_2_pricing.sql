@@ -1,8 +1,8 @@
 -- Seedance 2.0 / 2.0 Fast pricing
 -- Per-second billing dimensioned by duration (4s/8s/12s/15s tiers) × resolution (480p/720p) × video-ref (none/-ref).
 -- Identifier format: seedance-2[-fast]:{tier}:{resolution}[-ref]
--- Source rates (KIE.ai): seedance-2 480p=19/11.5, 720p=41/25 cr/s; seedance-2-fast 480p=15.5/8, 720p=33/20 cr/s (no-ref/ref).
--- Nodaro credits = ceil(kie_credits / 4) at 0% markup.
+-- Credits are derived from the provider's per-second billing at 0% markup, tiered by
+-- duration/resolution/reference-video as above.
 
 -- Seedance 2.0 Standard — base fallback (8s, 480p, no ref)
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled) VALUES

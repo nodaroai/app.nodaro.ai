@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import { flux2BaseCredits, FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
+import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
+import { flux2BaseCredits } from "../../../lib/pricing/flux2-cost.js"
 
 const MODELS: Flux2Model[] = ["flux-2-klein", "flux-2-pro", "flux-2-max"]
 

@@ -109,14 +109,14 @@ Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to
 
 `omnihuman-1-5` is capped at 60s of audio (longer is auto-trimmed), so only the 15s / 30s / 60s tiers apply. Resolution (720p vs 1080p) does not change the price.
 
-HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output (priced at cost), bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
+HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output, bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
 
-| Provider | Provider cost | 15s | 30s | 1min | 2min | 5min |
-|----------|--------------:|----:|----:|-----:|-----:|-----:|
-| `volcengine-lipsync` | $0.04/s ($2.40/min) | 30 | 60 | 120 | 240 | 600 |
-| `heygen-lipsync-precision` | $0.0667/s | 51 | 101 | 201 | 401 | 1,001 |
-| `lipsync-2-pro` | $0.08325/s | 63 | 125 | 250 | 500 | 1,249 |
-| `sync-lipsync-v3` | $0.13333/s ($8/min) | 100 | 200 | 400 | 800 | 2,000 |
+| Provider | 15s | 30s | 1min | 2min | 5min |
+|----------|----:|----:|-----:|-----:|-----:|
+| `volcengine-lipsync` | 30 | 60 | 120 | 240 | 600 |
+| `heygen-lipsync-precision` | 51 | 101 | 201 | 401 | 1,001 |
+| `lipsync-2-pro` | 63 | 125 | 250 | 500 | 1,249 |
+| `sync-lipsync-v3` | 100 | 200 | 400 | 800 | 2,000 |
 
 The credit chip updates once the audio is wired (the node probes its duration). When the duration is unknown, the 5-minute tier is reserved.
 

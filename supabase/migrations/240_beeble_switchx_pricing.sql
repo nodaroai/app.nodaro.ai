@@ -9,8 +9,8 @@
 -- PROVISIONAL worst-case values (0% markup; global markup applies at reserve),
 -- deliberately HIGH so any pre-anchor Cloud usage over-reserves and never
 -- under-bills. RE-ANCHOR these before opening the gate (spec §9.2).
---   base credits = ceil(usd_per_frame[res] * tier / $0.02),
---   usd_per_frame ≈ 1080p $0.015 / 720p $0.009.
+-- Base credits are derived from an estimated per-frame provider cost, tiered by
+-- resolution (1080p/720p).
 -- The bare `beeble-switchx` row is the back-compat/worst-case default
 -- (= 240f/1080p) used when no frame count is supplied.
 --

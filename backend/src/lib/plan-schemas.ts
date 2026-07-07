@@ -2,9 +2,13 @@ import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
 import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/prompts"
+import type { ShotElement } from "@nodaro/shared"
+import { cdnMediaUrlSchema } from "./cdn-media-url.js"
 import { validateBlueprintParams, hexColor } from "../services/shot-sequence/blueprint-params.js"
 import { config } from "./config.js"
 import { isOurCdnUrl } from "./cdn-host.js"
+
+export { cdnMediaUrlSchema } from "./cdn-media-url.js"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -79,6 +83,19 @@ type _AssertAssignable<Expected, Actual extends Expected> = Actual
 type _BrandTokensSchemaMatchesType = _AssertAssignable<BrandTokens, z.infer<typeof brandTokensSchema>>
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _SchemaMatchesBrandTokens = _AssertAssignable<z.infer<typeof brandTokensSchema>, BrandTokens>
+
+/**
+ * Compile-time drift guard (same pattern as BrandTokens above): the Zod
+ * `shotElementSchema`'s inferred type MUST stay assignable both ways with
+ * the shared `ShotElement` type. Forward-references `shotElementSchema`
+ * (defined further down this file) — safe because type aliases are erased
+ * and TypeScript resolves top-level bindings across the whole module, not
+ * in textual order.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _ShotElementSchemaMatchesType = _AssertAssignable<ShotElement, z.infer<typeof shotElementSchema>>
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _TypeMatchesShotElementSchema = _AssertAssignable<z.infer<typeof shotElementSchema>, ShotElement>
 
 // ── After Effects Plan ──────────────────────────────────────────────────
 
@@ -617,10 +634,24 @@ const shotShapeElementSchema = z.object({
   opacity: z.number().min(0).max(1).optional(),
 })
 
-/** Visual element (text or shape). svg-path is deferred (Phase 0 boundary). */
+const shotImageElementSchema = z.object({
+  id: z.string(),
+  type: z.literal("image"),
+  src: cdnMediaUrlSchema,
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  fit: z.enum(["contain", "cover"]).optional(),
+  radius: z.number().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+})
+
+/** Visual element (text, shape, or image). svg-path is deferred; video is a fast-follow. */
 export const shotElementSchema = z.discriminatedUnion("type", [
   shotTextElementSchema,
   shotShapeElementSchema,
+  shotImageElementSchema,
 ])
 
 const resolvedBlueprintSchema = z.object({

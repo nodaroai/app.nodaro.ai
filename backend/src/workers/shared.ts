@@ -300,14 +300,15 @@ export async function commitJobCredits(
 
       console.log(`[worker] Credits committed for job ${jobId} (actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
     } else if (metered && extraNonProviderCredits > 0 && !(providerCostUsd && providerCostUsd > 0)) {
-      // Count-based metered actual (no provider USD cost) — e.g. voice-changer-pro,
-      // which reserves by voice count and commits by mapped-speaker count.
+      // Count-based metered actual (no provider USD cost) — used by features
+      // that reserve credits against one count and commit against a
+      // different, run-time-determined count.
       // `extraNonProviderCredits` is the BASE (pre-markup) actual; apply the
       // SAME post-markup formula the reserve path uses (credit-guard-impl.ts
       // lines ~64-68: ceil(base × (1 + markup/100)) when markup>0, from
       // getAppSettings()) so reserved and committed share one basis. Without
       // this, the count-based actual would fall through to the reserved-tier
-      // `else` and the per-speaker scaling would be silently dropped.
+      // `else` and the count-based scaling would be silently dropped.
       const baseActual = Math.max(0, extraNonProviderCredits)
       const settings = await getAppSettings()
       const actualCredits =

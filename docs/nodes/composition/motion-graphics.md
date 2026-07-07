@@ -55,13 +55,7 @@ Selecting a preset **overwrites** the prompt and canvas settings (engine, aspect
 
 ## Pricing
 
-Credits follow the standard LLM formula:
-
-```
-credits = [formula removed]
-```
-
-evaluated at each engine's typical token profile. The Lottie engine authors a much larger payload than the elements DSL, so it costs more at the same tier.
+Credits follow the standard LLM pricing tiers, evaluated at each engine's typical token profile. The Lottie engine authors a much larger payload than the elements DSL, so it costs more at the same tier.
 
 | Engine | Tier | Credits |
 |--------|------|---------|
@@ -74,15 +68,7 @@ evaluated at each engine's typical token profile. The Lottie engine authors a mu
 
 The tier is determined by the selected LLM model (Economy / Standard / Premium).
 
-**Worked example (Lottie, Standard).** Standard tier uses `claude-sonnet-4.6` (\$3 / 1M input tokens, \$15 / 1M output tokens). A Lottie author call runs at roughly **3K input + 4K output** tokens:
-
-```
-providerCost = (3,000 × $3 + 4,000 × $15) / 1,000,000 = $0.069
-$0.069 × 1.25 = $0.086
-$0.086 / $0.02 = 4.3   →   ceil   →   5 credits
-```
-
-**Elements sanity check.** The Classic engine returns a much smaller plan (~1.5K output tokens on the same Standard model), which works out to ≈1.5 → **2 credits** — the existing Classic Standard price.
+**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **5 credits** for Lottie versus **2 credits** for Classic — both derived from the same formula, evaluated at each engine's typical output size.
 
 ## Configuration
 

@@ -6,12 +6,12 @@
 -- (runVeo4kTask) to produce the 4K result — all within one job.
 --
 -- Base cost, NO markup baked in (the admin panel applies markup centrally).
--- KIE credit → our credit = ceil(KIE_cr / 4), consistent with the existing VEO
--- generation rows (veo3 = 63 = 250/4). Source: docs.kie.ai VEO 3.1 + KIE pricing
+-- Credits are derived from the provider's own per-tier billing units, consistent
+-- with the existing VEO generation rows. Source: docs.kie.ai VEO 3.1 + KIE pricing
 -- announcement 2026-06.
---   veo3 (Quality) 4K = 370 KIE cr / $1.85 → 93 credits
---   veo3.1 (Fast)  4K = 180 KIE cr / $0.90 → 45 credits
---   veo3_lite      4K = 150 KIE cr / $0.75 → 38 credits
+--   veo3 (Quality) 4K → 93 credits
+--   veo3.1 (Fast)  4K → 45 credits
+--   veo3_lite      4K → 38 credits
 --
 -- ON CONFLICT DO NOTHING preserves any admin overrides set via the admin panel.
 INSERT INTO public.model_pricing (model_identifier, credit_cost, is_enabled, category)

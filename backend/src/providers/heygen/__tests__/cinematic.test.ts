@@ -14,7 +14,7 @@ vi.mock("@/lib/config.js", () => ({
 
 import { generateCinematicAvatar } from "../cinematic.js"
 import { HeygenError } from "../client.js"
-import { cinematicUsdCost } from "@nodaro/shared"
+import { cinematicUsdCost } from "../../../lib/pricing/cinematic-avatar-cost.js"
 
 // ---------------------------------------------------------------------------
 // Helpers

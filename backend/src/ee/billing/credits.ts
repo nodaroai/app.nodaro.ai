@@ -2,7 +2,13 @@ import { supabase } from "../../lib/supabase.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, flux2BaseCredits, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_RATE_USD_PER_SEC, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, cinematicHoldCredits, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, videoAnalysisBucketCredits, buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId } from "@nodaro/shared"
+// Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
+// published Apache package). See the 2026-07-06 public-flip IP audit, S5.
+import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
+import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
+import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
+import { videoAnalysisBucketCredits } from "../../lib/pricing/video-analysis-cost.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -62,7 +68,7 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 // if a third video+audio model ships.
 //
 // [econ-intel comment removed]
-// [econ-intel comment removed]
+// throughput constants with a safety margin over measured values:
 //   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
 //   gemini-3.1-pro → bare 11 · 60s 2 · 180s 3 · 360s 7 · 600s 11
 // The pricing test pins these worked examples; if a rate or constant shifts
@@ -910,7 +916,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "object": 2,
   "location": 2,
   "voice-changer": 4,
-  "voice-changer-pro": 4,              // [comment removed]
+  "voice-changer-pro": 4,
   "dubbing": 8,
   "voice-remix": 4,
   "voice-design": 5,
@@ -1006,6 +1012,27 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "beeble-switchx:210f:720p": 35,
   "beeble-switchx:240f:1080p": 120,
   "beeble-switchx:240f:720p": 40,
+}
+
+/**
+ * Additive registration hook for private-plugin static credit costs. Called
+ * by the private-plugins loader (`backend/src/lib/private-plugins/load.ts`)
+ * once per loaded plugin that declares `staticCreditCosts()` — e.g. a future
+ * born-private plugin needing a STATIC_CREDIT_COSTS fallback entry the core
+ * app doesn't ship with.
+ *
+ * Merges into STATIC_CREDIT_COSTS WITHOUT overwriting existing keys: a
+ * plugin can only ADD pricing for identifiers core doesn't already know
+ * about, never override a core-defined (or another plugin's already
+ * registered) price. No-op for any key that already exists — idempotent to
+ * call more than once with the same map.
+ */
+export function registerStaticCreditCosts(costs: Record<string, number>): void {
+  for (const [identifier, creditCost] of Object.entries(costs)) {
+    if (!(identifier in STATIC_CREDIT_COSTS)) {
+      STATIC_CREDIT_COSTS[identifier] = creditCost
+    }
+  }
 }
 
 // ============================================================
