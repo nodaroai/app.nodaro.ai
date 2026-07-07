@@ -390,7 +390,7 @@ jobs:
   migrate:
     name: Push Database Migrations
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal' && github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, i18n-completeness, backend-boot-smoke]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
