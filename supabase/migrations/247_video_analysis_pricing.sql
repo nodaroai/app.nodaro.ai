@@ -19,10 +19,9 @@
 -- kling-avatar / volcengine-lipsync convention (any providerCostUsd is recorded
 -- on the job but discarded from the charge).
 --
--- [econ-intel comment removed]
--- formula's output at a provisional system-prompt-token constant. If a real
--- staging run shifts the numbers, the 18b convergence migration re-anchors
--- these rows.
+-- PROVISIONAL: these values are the formula's output at a provisional
+-- system-prompt-token constant. If a production run shifts the numbers, a
+-- convergence migration re-anchors these rows (see migration 248).
 --
 -- ON CONFLICT DO NOTHING preserves any admin overrides set via /admin/models
 -- (these identifiers are new, so there is no conflict on first apply).

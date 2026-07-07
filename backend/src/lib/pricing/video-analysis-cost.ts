@@ -8,36 +8,37 @@
  * constants and the $-derived credit formula.
  *
  * Moved out of `packages/shared` (published Apache-2.0 on npm — an
- * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5 (measured
- * [econ-intel comment removed]
- * (`estimateNodeCredits` in workflow-editor/types.ts) no longer calls this
- * formula directly — it looks up the precomputed
- * `VIDEO_ANALYSIS_BUCKET_CREDITS` table in `@nodaro/shared`, which this
- * file's cross-check test guards against drift (mirrors the pattern already
- * used for `VIDEO_CLIP_CREDITS` in `film-pricing.ts`).
+ * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5. The
+ * frontend's client-side cost preview (`estimateNodeCredits` in
+ * workflow-editor/types.ts) no longer calls this formula directly — it
+ * looks up the precomputed `VIDEO_ANALYSIS_BUCKET_CREDITS` table in
+ * `@nodaro/shared`, which this file's cross-check test guards against drift
+ * (mirrors the pattern already used for `VIDEO_CLIP_CREDITS` in
+ * `film-pricing.ts`).
  *
  * Single source of truth for the video-analysis node's credit math: the route
  * (charge at generate-time) and the worker (re-check + settle) both derive
  * from these functions. NEVER hand-write bucket credit values — the
  * structural formula below is the only source, cross-checked against
- * [econ-intel comment removed]
+ * `docs/nodes/processing-video/video-analysis.md`.
  */
 import { VIDEO_ANALYSIS_WINDOW, videoAnalysisNumWindows } from "@nodaro/shared"
 import { calculateLlmCost } from "./llm-cost.js"
 
 const WINDOW_OVERLAP = VIDEO_ANALYSIS_WINDOW.OVERLAP
 
-/** [econ-intel comment removed]
- *  KIE = 3,151 prompt tokens (was a 5,500 pre-measurement placeholder). */
+/** Prompt-token count for the real doctrine+footer system prompt sent to the
+ *  provider for this node (supersedes an earlier placeholder estimate). Update
+ *  via the `audit-credits` skill if the prompt text changes materially. */
 export const VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS = 3_151
-/** [econ-intel comment removed]
- *  [econ-intel comment removed]
- *  live KIE bill matched those usage tokens at the standard text rate — no video
- *  premium. If KIE ever flips to default-res sampling (258 tok/frame → ~290 tok/s),
- *  the credit-audit skill will surface the margin squeeze; re-measure and bump. */
+/** Approximate video-ingestion rate (tokens/sec) the provider bills at for this
+ *  model — video ingestion bills at the same per-token rate as text, no video
+ *  premium. If the provider changes its media-sampling behavior, the
+ *  credit-audit skill will surface the pricing drift; re-derive and update via
+ *  that skill. */
 const TOKENS_PER_SEC = 91
-/** Pricing assumption ABOVE the measured real-workload mean (~2.4k tok/window on the
- *  46-min benchmark; worst single window ~8k) — the headroom is deliberate. */
+/** Output token estimate per window, set with deliberate headroom above
+ *  typical real-workload usage. */
 const OUTPUT_TOKENS_PER_WINDOW = 4_000
 const USD_PER_CREDIT = 0.02
 const SAFETY = 2

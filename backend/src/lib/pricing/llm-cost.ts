@@ -8,22 +8,20 @@
  * from it.
  *
  * Moved out of `packages/shared` (published Apache-2.0 on npm — an
- * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5:
- * [econ-intel comment removed]
- * enum; strip prices + measurement notes."
+ * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5: keep the
+ * model-id enum in the shared package; strip provider rates into this file.
  *
  * ─── Derivation notes (gemini-3-flash) ──────────────────────────────────────
- * [econ-intel comment removed]
- * [econ-intel comment removed]
- * video 596s → 1.65 cr. Video ingestion bills at the SAME per-token rate as text.
+ * Rates are pinned to actual provider billing. Video ingestion bills at the
+ * SAME per-token rate as text.
  *
  * ─── Derivation notes (gemini-3.1-pro) ──────────────────────────────────────
- * [econ-intel comment removed]
- * [econ-intel comment removed]
- * → 4.32 cr; out-heavy 6,178-tok → 4.33 cr) reproduce EXACTLY at 0.50/3.50 on
- * [econ-intel comment removed]
- * [econ-intel comment removed]
- * [econ-intel comment removed]
+ * Rates are pinned to actual provider billing on prompt/completion tokens.
+ * The previous 3.50/10.50 rates (an earlier, less current price point) no
+ * longer matched provider billing and mispriced the video-analysis pro
+ * buckets; reconciled to the current rates via a convergence migration (see
+ * `supabase/migrations/248_video_analysis_pro_reprice.sql`), which derived
+ * [2,3,7,11].
  * ────────────────────────────────────────────────────────────────────────────
  */
 import type { LlmModelDef } from "@nodaro/shared"

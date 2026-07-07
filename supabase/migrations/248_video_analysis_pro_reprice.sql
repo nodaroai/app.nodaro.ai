@@ -1,14 +1,15 @@
 -- 248_video_analysis_pro_reprice.sql
--- [econ-intel comment removed]
--- to the formula's output at the MEASURED constants. Migration 247 seeded
--- provisional values computed from a stale rate registry and pre-measurement
--- token assumptions.
+-- Convergence migration: re-anchor the gemini-3.1-pro video-analysis rows to
+-- the formula's output at the current pricing constants (see
+-- backend/src/lib/pricing/{llm-cost,video-analysis-cost}.ts). Migration 247
+-- seeded provisional values computed from an earlier rate registry and
+-- pre-reconciliation token assumptions.
 --
--- [econ-intel comment removed]
--- calls incl. a 596s video) measured the actual per-model token rates and
--- ingestion throughput, superseding the assumptions migration 247 shipped with.
+-- Production reconciliation against actual provider billing confirmed the
+-- current per-model token rates and ingestion throughput, superseding the
+-- assumptions migration 247 shipped with.
 --
--- videoAnalysisBucketCredits at the measured constants emits:
+-- videoAnalysisBucketCredits at the current constants emits:
 --   gemini-3-flash  → 1 / 1 / 2 / 3   (UNCHANGED — 247 rows already correct)
 --   gemini-3.1-pro  → 2 / 3 / 7 / 11  (was 13 / 25 / 56 / 94)
 --

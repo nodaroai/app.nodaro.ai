@@ -7,20 +7,21 @@ import { videoAnalysisBucketCredits, VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS } from 
 // AND the model_pricing DB rows (migrations 247+248) — regenerate ALL on any
 // constant/rate change.
 describe("videoAnalysisBucketCredits", () => {
-  [econ-intel comment removed]
+  it("bucket credits — worked examples at the current pricing constants (SPT=3151, 91 tok/s, SAFETY=2)", () => {
     expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3-flash", b))).toEqual([1, 1, 2, 3])
     expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3.1-pro", b))).toEqual([2, 3, 7, 11])
   })
 
-  it("system prompt token count is measured, not a placeholder", () => {
+  it("system prompt token count reflects the real prompt, not a placeholder estimate", () => {
     expect(VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS).toBe(3_151)
   })
 })
 
-// [econ-intel comment removed]
-// to the cent. Changing either pair shifts the bucket schedule above — if this
-// [econ-intel comment removed]
-describe("gemini rates are pinned to measured KIE billing", () => {
+// These rates are pinned to actual provider billing for gemini-3-flash and
+// gemini-3.1-pro. Changing either rate shifts the bucket schedule above — if
+// this test fails, re-derive the rates via the audit-credits skill and ship a
+// convergence migration.
+describe("gemini rates are pinned to the documented bucket schedule", () => {
   it("gemini-3-flash and gemini-3.1-pro produce the documented bucket schedule", () => {
     // Rates themselves are private to this module (moved out of the published
     // @nodaro/shared package, S5) — assert via the bucket-credit OUTPUT instead
