@@ -34,6 +34,8 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mockAdd } }))
 
 import { buildToolkit } from "../toolkit.js"
 import type { PluginToolkit } from "../types.js"
+import { safeFetch } from "../../safe-fetch.js"
+import { applyImageWatermark } from "../../../utils/watermark.js"
 
 describe("buildToolkit", () => {
   let tk: PluginToolkit
@@ -66,6 +68,7 @@ describe("buildToolkit", () => {
     expect(typeof tk.media.mixAudio).toBe("function")
     expect(typeof tk.media.mergeVideoAudio).toBe("function")
     expect(typeof tk.media.applyAudioFx).toBe("function")
+    expect(typeof tk.media.applyImageWatermark).toBe("function")
   })
 
   it("storage: every member is a function", () => {
@@ -90,6 +93,7 @@ describe("buildToolkit", () => {
     expect(typeof tk.http.extractMcpClient).toBe("function")
     expect(typeof tk.http.buildJobInputData).toBe("function")
     expect(typeof tk.http.formatZodError).toBe("function")
+    expect(typeof tk.http.safeFetch).toBe("function")
     // Value (non-function) members: must exist, not be undefined.
     expect(tk.http.supabase).toBeDefined()
     expect(tk.http.videoQueue).toBeDefined()
@@ -109,6 +113,17 @@ describe("buildToolkit", () => {
   it("Task-2 carry-forward: real supabase client and real videoQueue are wired through (runtime smoke)", () => {
     expect(typeof tk.http.supabase.from).toBe("function")
     expect(typeof tk.http.videoQueue.add).toBe("function")
+  })
+
+  // -------------------------------------------------------------------------
+  // S8 plumbing: safeFetch (PluginHttpToolkit) + applyImageWatermark
+  // (PluginMediaToolkit) are direct references to the real functions — no
+  // wrapping needed since both real signatures already match the contract.
+  // -------------------------------------------------------------------------
+
+  it("S8 plumbing: tk.http.safeFetch and tk.media.applyImageWatermark are the real imported functions", () => {
+    expect(tk.http.safeFetch).toBe(safeFetch)
+    expect(tk.media.applyImageWatermark).toBe(applyImageWatermark)
   })
 
   // -------------------------------------------------------------------------

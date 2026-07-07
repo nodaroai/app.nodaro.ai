@@ -139,8 +139,12 @@ vi.mock("../handlers/entity.js", () => ({
 // lib/queue.js — this file's `bullmq` mock above only stubs `Worker`). None
 // of these tests exercise a private-plugin-contributed handler; load.ts's own
 // suite (lib/private-plugins/__tests__/load.test.ts) covers the merge logic.
+// `engines: {}` mirrors `emptyResult()`'s real shape (S8) — `video-worker.ts`
+// destructures `engines` off this result and reads `engines.surround`
+// unconditionally, so an incomplete mock here throws at module-import time,
+// not inside a test body.
 vi.mock("@/lib/private-plugins/load.js", () => ({
-  loadPrivatePlugins: vi.fn().mockResolvedValue({ handlers: {}, loaded: [] }),
+  loadPrivatePlugins: vi.fn().mockResolvedValue({ handlers: {}, loaded: [], engines: {} }),
 }))
 
 // Mock KieError — must be a real class for instanceof checks

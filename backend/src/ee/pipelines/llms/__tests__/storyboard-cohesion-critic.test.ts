@@ -4,6 +4,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
 import { runStoryboardCohesionCritic } from "../storyboard-cohesion-critic.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -35,9 +36,10 @@ describe("runStoryboardCohesionCritic", () => {
     expect(args.maxRetries).toBe(1)
     expect(args.modelId).toBe("claude-sonnet-4-6")
     expect(args.temperature).toBe(0.2)
-    expect(args.systemPrompt).toContain("Storyboard Cohesion Critic")
-    expect(args.systemPrompt).toContain("coherence_score < 4")  // score-override anchor
-    expect(args.systemPrompt.toLowerCase()).toContain("warn-only")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the exact string the registry holds for this
+    // key flows through to callLLM unmodified.
+    expect(args.systemPrompt).toBe(getPipelinePrompt(PIPELINE_PROMPT_KEYS.storyboardCohesionCritic))
   })
 
   it("userPrompt is an array with 1 image content block per scene (URL-source)", async () => {

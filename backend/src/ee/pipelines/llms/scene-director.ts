@@ -2,8 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { PIPELINE_PINNABLE_IMAGE_MODELS, SceneNodeDataSchema, type SceneNodeData, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import { pipelineEvents } from "../events.js"
-
-const _REDACTED_PROMPT_3 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunSceneDirectorArgs {
   supabase: SupabaseClient
@@ -169,6 +168,7 @@ ${imageRegistrySection}
 
 Return a SceneNodeData via the emit tool.`
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.sceneDirector)
   const result = await callLLM({
     supabase: args.supabase,
     pipelineId: args.pipelineId,
@@ -179,7 +179,7 @@ Return a SceneNodeData via the emit tool.`
     task: "shot_list",
     modelId: "claude-sonnet-4-6",
     temperature: 0.5,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: SceneNodeDataSchema,
     maxRetries: 1,

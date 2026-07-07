@@ -1177,6 +1177,10 @@ const { jobId } = await client.locations.generateAsset({
 generateSurroundContinuation(input: GenerateSurroundContinuationInput): Promise<{ jobId: string }>
 ```
 
+> **Cloud edition only.** The route is registered on every edition, but
+> Community/Business requests get an immediate `403 edition_required` before
+> any processing happens.
+
 Fires `POST /v1/generate-surround-continuation` to produce the next seamless
 360° ring view as an image-to-image continuation of `referenceImageUrl` (the
 previous ring view). The platform builds the half-carry composite server-side

@@ -18,7 +18,7 @@ import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
-import { surroundHandlers } from "./handlers/surround.js"
+import { createSurroundHandlers } from "./handlers/surround.js"
 import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
 import { videoAnalysisHandlers } from "./handlers/video-analysis.js"
@@ -34,7 +34,6 @@ const allHandlers: Record<string, HandlerFn> = {
   ...audioAIHandlers,
   ...sunoHandlers,
   ...entityHandlers,
-  ...surroundHandlers,
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
   ...videoAnalysisHandlers,
@@ -45,7 +44,16 @@ const allHandlers: Record<string, HandlerFn> = {
 // consuming jobs. No `app` is passed — this process has no Fastify instance,
 // only queue handlers. No-op on community/business; on cloud, a load failure
 // is fatal (process.exit(1) inside the loader) unless PRIVATE_MODULES=optional.
-const { handlers: privatePluginHandlers } = await loadPrivatePlugins({})
+//
+// `engines.surround` (S8) is constructed into the surround-continuation
+// handler here too — it's not a "plugin handler" (the plugin never registers
+// a queue-job entry for it), it's an additive engine capability the CORE
+// `createSurroundHandlers` factory calls into. Must come from THIS await
+// (module-load-time construction is no longer possible — see
+// `handlers/surround.ts`'s header comment), so it's built here rather than
+// alongside the other static `...xHandlers` spreads above.
+const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
+Object.assign(allHandlers, createSurroundHandlers(engines.surround))
 Object.assign(allHandlers, privatePluginHandlers)
 
 export function createVideoWorker() {

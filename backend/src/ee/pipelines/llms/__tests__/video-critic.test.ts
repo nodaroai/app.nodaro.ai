@@ -4,6 +4,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
 import { runVideoCritic } from "../video-critic.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -53,9 +54,10 @@ describe("runVideoCritic", () => {
     expect(args.maxRetries).toBe(1)
     expect(args.modelId).toBe("claude-sonnet-4-6")
     expect(args.temperature).toBe(0.2)
-    expect(args.systemPrompt).toContain("Video Critic")
-    // score-override anchor: prompt_adherence_score < MIN triggers auto-fail
-    expect(args.systemPrompt).toContain("trigger auto-fail")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the exact string the registry holds for this
+    // key flows through to callLLM unmodified.
+    expect(args.systemPrompt).toBe(getPipelinePrompt(PIPELINE_PROMPT_KEYS.videoCritic))
   })
 
   it("userPrompt is an array with prior-last-frame + N this-shot frames as image blocks (URL-source)", async () => {

@@ -26,10 +26,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { SceneSpecSchema, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 type SceneSpec = ShowrunnerPlan["scenes"][number]
-
-const _REDACTED_PROMPT_5 = `[REDACTED — moved to private plugin, S9 extraction]`
 
 export interface RunSceneRefinerArgs {
   supabase: SupabaseClient
@@ -101,6 +100,7 @@ Emit the regenerated SceneSpec via the emit tool.`
   // 3. Call the LLM. Sonnet 4.6, temp 0.4 to match Showrunner. maxRetries=1
   //    — Sonnet's roster-ref errors don't improve with auto-retry; let the
   //    user re-prompt with clearer feedback instead.
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.sceneRefiner)
   const result = await callLLM({
     supabase,
     pipelineId,
@@ -110,7 +110,7 @@ Emit the regenerated SceneSpec via the emit tool.`
     task: "regenerate_scene",
     modelId: "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: SceneSpecSchema,
     maxRetries: 1,

@@ -3,8 +3,7 @@ import { z } from "zod"
 import { VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
-
-const _REDACTED_PROMPT_9 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export const ShotListCriticIssueSchema = z.object({
   severity: z.enum(["blocking", "warning"]),
@@ -217,6 +216,7 @@ export async function runShotListCritic(args: RunShotListCriticArgs): Promise<Sh
   // do NOT short-circuit the LLM (the LLM still validates duration/dialogue/etc).
   const deterministicIssues = validateMethod3_8_10Eligibility(args.sceneNodeData)
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.shotListCritic)
   const userPrompt = `SCENE NODE DATA:
 \`\`\`json
 ${JSON.stringify(args.sceneNodeData, null, 2)}
@@ -234,7 +234,7 @@ Validate and respond as JSON.`
     task: "shot_list",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: ShotListCriticVerdictSchema,
     maxRetries: 1,

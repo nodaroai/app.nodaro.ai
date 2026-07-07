@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { AddBRollResultSchema, type AddBRollResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_13 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunAddBRollArgs {
   supabase: SupabaseClient
@@ -15,6 +14,7 @@ export interface RunAddBRollArgs {
 }
 
 export async function runAddBRoll(args: RunAddBRollArgs): Promise<AddBRollResult> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperAddBroll)
   const userPrompt = `SCENE:
 - description: ${args.scene.description}
 - emotional_beat: ${args.scene.emotional_beat}
@@ -39,7 +39,7 @@ Propose 1-4 insert shots and respond as JSON.`
     task: "add_broll",
     modelId: "claude-sonnet-4-6",
     temperature: 0.5,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: AddBRollResultSchema,
     maxRetries: 1,

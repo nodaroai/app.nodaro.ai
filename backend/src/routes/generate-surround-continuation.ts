@@ -1,14 +1,37 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { hasCredits } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, buildSurroundFillPrompt, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+
+/**
+ * S8 (2026-07): surround-continuation was ungated at birth (Community and
+ * Business could call it). Extracting its engine to the Cloud-only
+ * `@nodaroai/cloud-plugins` package makes it Cloud-only too — this is a
+ * deliberate, narrow product-scope change, not incidental to the refactor
+ * (see `.superpowers/sdd/s8-design.md` §2 "Edition scope"). Mirrors the
+ * `gateEdition()` pattern in `routes/pipelines.ts` / `routes/scene-helpers.ts`.
+ * Placed as the literal first check in the handler — before Zod parsing,
+ * before the location-ownership read, before credit reservation, before the
+ * job insert — so Community/Business get a clean, immediate, zero-side-effect
+ * 403 instead of a job that's created then always fails deep in the worker.
+ */
+function gateEdition(reply: FastifyReply): boolean {
+  if (!hasCredits()) {
+    void reply.status(403).send({
+      error: { code: "edition_required", required_edition: "cloud" },
+    })
+    return false
+  }
+  return true
+}
 
 /** Image upscale/denoise providers offered for the opt-in `refine` step. */
 const REFINE_PROVIDERS = ["recraft-upscale", "topaz-image-upscale"] as const
@@ -78,6 +101,8 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
       }),
     },
     async (req, reply) => {
+      if (!gateEdition(reply)) return
+
       const parsed = generateSurroundContinuationBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({

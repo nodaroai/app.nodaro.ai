@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ImageCriticIssueSchema, ImageCriticVerdictSchema, type ImageCriticIssue, type ImageCriticVerdict } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 // Re-export the shared schemas so existing callers keep `import {…} from
 // "../image-critic.js"` working without churn (frontend modal + 3 new Phase
@@ -12,8 +13,6 @@ export {
   type ImageCriticIssue,
   type ImageCriticVerdict,
 }
-
-const _REDACTED_PROMPT_10 = `[REDACTED — moved to private plugin, S9 extraction]`
 
 export type ImageCriticInvocation =
   | "stage_7b_pre"
@@ -107,6 +106,7 @@ export async function persistImageCriticVerdict(args: {
 export async function runImageCritic(
   args: RunImageCriticArgs,
 ): Promise<ImageCriticVerdict> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.imageCritic)
   const userPrompt = buildUserPrompt(args)
 
   const result = await callLLM({
@@ -119,7 +119,7 @@ export async function runImageCritic(
     task: "image_critic",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: ImageCriticVerdictSchema,
     maxRetries: 1,

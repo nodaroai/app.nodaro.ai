@@ -4,9 +4,11 @@ import { buildToolkit } from "./toolkit.js"
 import { CONTRACT_VERSION } from "./types.js"
 import type {
   NodaroPrivatePlugin,
+  PluginEngines,
   PluginHandlerFn,
   PluginToolkit,
   PrivatePluginsModule,
+  PromptTable,
 } from "./types.js"
 
 /**
@@ -43,6 +45,21 @@ export interface LoadPrivatePluginsOpts {
 export interface LoadPrivatePluginsResult {
   handlers: Record<string, PluginHandlerFn>
   loaded: string[]
+  /**
+   * Additive (S8). Merged from each loaded plugin's `engines(tk)` via
+   * `Object.assign` — last write wins per named engine, mirroring how
+   * `handlers` is already merged above.
+   */
+  engines: PluginEngines
+  /**
+   * Additive (S9). Merged from each loaded plugin's `prompts()` via
+   * `Object.assign` — last write wins per key, mirroring `handlers`/`engines`.
+   * ALSO forwarded into `ee/pipelines/llms/prompt-registry.ts` via
+   * `applyPipelinePrompts()` (below) so every `run*()` wrapper's
+   * `getPipelinePrompt()` call resolves. Still returned here too — kept for
+   * callers that want to inspect what was loaded without reaching into ee/.
+   */
+  prompts: PromptTable
 }
 
 function emptyResult(): LoadPrivatePluginsResult {
@@ -50,7 +67,7 @@ function emptyResult(): LoadPrivatePluginsResult {
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
   // mutable object across calls would alias that merge across processes.
-  return { handlers: {}, loaded: [] }
+  return { handlers: {}, loaded: [], engines: {}, prompts: {} }
 }
 
 function isOptionalMode(): boolean {
@@ -104,11 +121,14 @@ function makeToolkitGetter(override: PluginToolkit | undefined): () => PluginToo
  * source — see `nodaroai/nodaro-cloud-plugins`).
  *
  * - community/business (`hasCredits()` false): no-op, `importer` is never
- *   called, resolves `{ handlers: {}, loaded: [] }`.
+ *   called, resolves `{ handlers: {}, loaded: [], engines: {}, prompts: {} }`.
  * - cloud, load succeeds: registers each plugin's routes on `opts.app` (if
- *   given), merges each plugin's handlers, and applies each plugin's
+ *   given), merges each plugin's handlers, applies each plugin's
  *   `staticCreditCosts()` via the credits service's additive registration
- *   hook.
+ *   hook, merges each plugin's `engines(tk)` into `result.engines`, collects
+ *   each plugin's `prompts()` into `result.prompts`, AND forwards those same
+ *   prompts into `ee/pipelines/llms/prompt-registry.ts` via
+ *   `applyPipelinePrompts()`.
  * - cloud, load fails (import rejects, wrong `contractVersion`, or a
  *   malformed module shape): fatal — logs and calls `exit(1)` — UNLESS
  *   `PRIVATE_MODULES=optional`, in which case it warns and continues with no
@@ -152,6 +172,8 @@ export async function loadPrivatePlugins(
   const getToolkit = makeToolkitGetter(opts.toolkit)
   const handlers: Record<string, PluginHandlerFn> = {}
   const loaded: string[] = []
+  const engines: PluginEngines = {}
+  const prompts: PromptTable = {}
 
   for (const plugin of plugins) {
     if (opts.app && plugin.registerRoutes) {
@@ -163,10 +185,18 @@ export async function loadPrivatePlugins(
     if (plugin.staticCreditCosts) {
       await applyStaticCreditCosts(plugin.staticCreditCosts())
     }
+    if (plugin.engines) {
+      Object.assign(engines, plugin.engines(getToolkit()))
+    }
+    if (plugin.prompts) {
+      const pluginPrompts = plugin.prompts()
+      Object.assign(prompts, pluginPrompts)
+      await applyPipelinePrompts(pluginPrompts)
+    }
     loaded.push(plugin.name)
   }
 
-  return { handlers, loaded }
+  return { handlers, loaded, engines, prompts }
 }
 
 /**
@@ -180,4 +210,17 @@ async function applyStaticCreditCosts(costs: Record<string, number>): Promise<vo
   if (!hasCredits()) return
   const { registerStaticCreditCosts } = await import("../../ee/billing/credits.js")
   registerStaticCreditCosts(costs)
+}
+
+/**
+ * Additive registration of a plugin's pipeline doctrine prompts into
+ * `ee/pipelines/llms/prompt-registry.ts`. Dynamic `import()` gated on
+ * `hasCredits()` — mirrors `applyStaticCreditCosts` above exactly, so core
+ * (`lib/private-plugins/`) never STATICALLY imports `ee/` (enforced by
+ * `tools/check-ee-imports.mjs`).
+ */
+async function applyPipelinePrompts(prompts: PromptTable): Promise<void> {
+  if (!hasCredits()) return
+  const { registerPipelinePrompts } = await import("../../ee/pipelines/llms/prompt-registry.js")
+  registerPipelinePrompts(prompts)
 }
