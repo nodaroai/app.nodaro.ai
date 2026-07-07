@@ -1,41 +1,45 @@
-# Gated mirror: on every merge to main/dev, run the leak gates; if they pass AND
-# PUBLIC_MIRROR_TOKEN is set, fast-forward that ref to the PUBLIC app.nodaro.ai.
-# The leak gates run regardless of the token (valuable early-catch). The mirror
-# step is token-guarded, so this file is inert-but-useful until the token exists.
+# Nightly gated mirror: internal → public. BUFFERED (scheduled), not per-commit,
+# so there's a catch-window before anything is irreversibly public. The job runs
+# the leak + secret gate and prints the pending internal→public diff (the "glance"
+# record for the window). Manual "publish now" override via the Actions Run button.
+# Publishing is token-guarded: until PUBLIC_MIRROR_TOKEN is set it gates + logs the
+# delta but does not push. Gate logic lives in scripts/publish-to-public.sh (single
+# source, shared with the manual path) so the two can't drift.
 name: mirror-to-public
-on: { push: { branches: [main, dev] } }
+on:
+  schedule:
+    - cron: '23 3 * * *'   # nightly ~03:23 UTC (off the hour to dodge scheduler load; configurable)
+  workflow_dispatch: {}     # manual "publish now" override
 permissions: { contents: read }
 concurrency:
-  group: mirror-${{ github.ref }}
+  group: mirror-to-public
   cancel-in-progress: false
 jobs:
   gate-and-mirror:
+    # Internal repo only — the public mirror must never mirror to itself.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: leak gate — extracted private symbols
-        run: node tools/check-private-leaks.mjs
-      - name: leak gate — provider-$/margin in packages
-        run: node tools/check-pricing-leaks.mjs
-      - name: boundary — no core→ee imports
-        run: node tools/check-ee-imports.mjs
-      - name: secret gate — gitleaks
+      - name: install gitleaks (secret gate)
         run: |
           VER=8.30.1
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
-          ./gitleaks detect --no-banner --redact --source .
-      - name: mirror clean ref → public (token-guarded)
+          sudo mv gitleaks /usr/local/bin/gitleaks
+      - name: gate + mirror main and dev
         env:
           TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
-          REF: ${{ github.ref_name }}
         run: |
-          if [ -z "$TOK" ]; then
-            echo "PUBLIC_MIRROR_TOKEN not set — leak gates passed, skipping mirror."
-            echo "Add the token (fine-grained PAT, Contents:RW on nodaroai/app.nodaro.ai) to enable auto-publish."
-            exit 0
+          if [ -n "${TOK:-}" ]; then
+            export PUBLIC_REMOTE="https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
+          else
+            echo "PUBLIC_MIRROR_TOKEN not set — running gate-only (dry run), no publish."
+            echo "Add the token (fine-grained PAT, Contents:RW on nodaroai/app.nodaro.ai) to enable nightly auto-publish."
+            export MIRROR_DRY_RUN=1
+            export PUBLIC_REMOTE="https://github.com/nodaroai/app.nodaro.ai.git"
           fi
-          git push "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git" "HEAD:${REF}"
-          echo "mirrored ${REF} → public ✓"
+          bash scripts/publish-to-public.sh main
+          bash scripts/publish-to-public.sh dev
