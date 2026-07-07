@@ -2380,12 +2380,13 @@ loudnorm, `"manual"` uses `volume` as a percentage). A per-voice `seed`
 Pass **`audioUrl`** for audio → audio recast, or **`videoUrl`** to recast the
 audio track of a video clip (the server demuxes, recasts, and remuxes).
 
-Voice and music are **always separated first** — ElevenLabs only ever sees the
-isolated vocal stem, never the music bed. `preserveBackground` (default `true`)
-only controls whether that music/instrumental stem is mixed back under the new
-voices; set it `false` for a clean voice-only result. `separationQuality`
-selects the demucs model used for the split: `"fast"` (default, htdemucs —
-preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
+Voice and music are **always separated first** — before recasting, the source is
+split into an isolated vocal stem and a music/SFX stem. `preserveBackground`
+(default `true`) only controls whether that music/instrumental stem is mixed
+back under the new voices; set it `false` for a clean voice-only result.
+`separationQuality` selects the quality of the voice/music separation: `"fast"`
+(default, quicker — preserves more of the voice) or `"best"` (finer voice/music
+separation).
 `removeBackgroundNoise` additionally denoises the result. `musicVolumeMode` sets
 the level of the preserved background (only relevant when `preserveBackground` is
 on): `"match"` (default) keeps the original level, `"normalize"` loudnorms it,

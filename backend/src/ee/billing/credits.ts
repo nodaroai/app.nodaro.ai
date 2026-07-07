@@ -916,7 +916,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "object": 2,
   "location": 2,
   "voice-changer": 4,
-  "voice-changer-pro": 4,              // [comment removed]
+  "voice-changer-pro": 4,
   "dubbing": 8,
   "voice-remix": 4,
   "voice-design": 5,
@@ -1012,6 +1012,27 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "beeble-switchx:210f:720p": 35,
   "beeble-switchx:240f:1080p": 120,
   "beeble-switchx:240f:720p": 40,
+}
+
+/**
+ * Additive registration hook for private-plugin static credit costs. Called
+ * by the private-plugins loader (`backend/src/lib/private-plugins/load.ts`)
+ * once per loaded plugin that declares `staticCreditCosts()` — e.g. a future
+ * born-private plugin needing a STATIC_CREDIT_COSTS fallback entry the core
+ * app doesn't ship with.
+ *
+ * Merges into STATIC_CREDIT_COSTS WITHOUT overwriting existing keys: a
+ * plugin can only ADD pricing for identifiers core doesn't already know
+ * about, never override a core-defined (or another plugin's already
+ * registered) price. No-op for any key that already exists — idempotent to
+ * call more than once with the same map.
+ */
+export function registerStaticCreditCosts(costs: Record<string, number>): void {
+  for (const [identifier, creditCost] of Object.entries(costs)) {
+    if (!(identifier in STATIC_CREDIT_COSTS)) {
+      STATIC_CREDIT_COSTS[identifier] = creditCost
+    }
+  }
 }
 
 // ============================================================

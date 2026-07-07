@@ -205,13 +205,21 @@ describe("path extraction sanity", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Allowlist for known scanner artifacts. Today empty — the scanner correctly
-// resolves every api.ts path against backend. Add entries here ONLY for
-// genuine scanner false-positives (with an explanation), never to mask
-// real drift.
+// Allowlist for known scanner artifacts. Add entries here ONLY for genuine
+// scanner false-positives (with an explanation), never to mask real drift.
 // ---------------------------------------------------------------------------
 
-const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([])
+const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
+  // voice-changer-pro's route moved to the private @nodaroai/cloud-plugins
+  // package (Stage 1 VCP private extraction, 2026-07-06) — it now registers
+  // dynamically at boot via loadPrivatePlugins() (see
+  // backend/src/lib/private-plugins/load.ts), not a static file under
+  // backend/src/routes/ or backend/src/ee/routes/ that this scanner walks.
+  // Runtime behavior is unchanged: cloud edition still serves
+  // POST /v1/voice-changer-pro (401/400, not 404); community/business get
+  // 404 same as before (the route was already cloud-only pre-extraction).
+  "/v1/voice-changer-pro",
+])
 
 // ---------------------------------------------------------------------------
 // Test 1 — every frontend api.ts path resolves to a backend route.

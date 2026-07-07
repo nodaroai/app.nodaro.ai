@@ -200,6 +200,36 @@ RUN npm ci --omit=dev
 # to the root (avoids COPY failures in the runner stage).
 RUN mkdir -p /app/backend/node_modules
 
+# Optional Cloud-only private plugin (@nodaroai/cloud-plugins, proprietary —
+# see backend/src/lib/private-plugins/load.ts). This MUST install in THIS
+# stage, not `backend-build`: the runner stage below copies its shipped
+# node_modules from prod-deps (`COPY --from=prod-deps /app/node_modules` +
+# `.../backend/node_modules`), never from `backend-build`. Installing it in
+# `backend-build` instead would compile fine — the loader only ever
+# references the package name as a runtime string, never a static import tsc
+# could see — but the package would silently never reach the running
+# container.
+#
+# NPM_TOKEN/CLOUD_PLUGINS_VERSION are unset for every self-hosted/community
+# build and for public CI, so the `if` body never runs: no .npmrc is
+# created, no extra install happens, and node_modules stays byte-identical
+# to before this block existed. Railway's Cloud build supplies both as
+# Docker build args (a GitHub Packages read token scoped to
+# nodaroai/cloud-plugins + the pinned release version). The .npmrc write,
+# install, import-smoke check, and cleanup all run in ONE RUN instruction
+# (one layer) so the token-bearing file is never present in any committed
+# layer. `--no-save` keeps package.json/package-lock.json untouched, same as
+# every other install in this stage.
+ARG NPM_TOKEN
+ARG CLOUD_PLUGINS_VERSION
+RUN if [ -n "$NPM_TOKEN" ]; then \
+      echo "@nodaroai:registry=https://npm.pkg.github.com" > .npmrc && \
+      echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
+      npm install --no-save "@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}" && \
+      node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1)process.exit(1)}).catch(()=>process.exit(1))" && \
+      rm -f .npmrc; \
+    fi
+
 # ── Stage 6: Production runner ────────────────────────────────────────
 # Debian slim (glibc) — required for Remotion's chrome-headless-shell.
 # Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.

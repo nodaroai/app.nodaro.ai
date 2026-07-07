@@ -255,6 +255,8 @@ jobs:
           node-version: 22
       - name: Check core does not import from ee/
         run: node tools/check-ee-imports.mjs
+      - name: Check for private-extraction symbol leaks
+        run: node tools/check-private-leaks.mjs
 
   check-pricing-leaks:
     # packages/shared, packages/prompts, packages/client, and packages/cli are
@@ -308,6 +310,12 @@ jobs:
       R2_BUCKET_NAME: stub
       R2_PUBLIC_URL: https://stub.example.com
       EDITION: ${{ matrix.edition }}
+      # Public CI is registry-token-free by design (fork PRs), so the private
+      # @nodaroai/cloud-plugins package is never installed here — boot cloud in
+      # the documented optional mode (warn + continue). Cloud plugin fail-fast
+      # is verified in Railway builds + the private repo's pairing CI. The
+      # community leg is unaffected (hasCredits() short-circuits the loader).
+      PRIVATE_MODULES: optional
       PORT: 9000
     steps:
       - uses: actions/checkout@v5

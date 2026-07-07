@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
+import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -168,7 +169,6 @@ import { componentExecuteRoutes } from "./routes/component-execute.js"
 import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
 import { monetizationRoutes } from "./ee/routes/monetization.js"
-import { voiceChangerProRoutes } from "./ee/routes/voice-changer-pro.js"
 import { freecutExportRoutes } from "./ee/routes/freecut-export.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
@@ -460,8 +460,13 @@ export async function buildApp() {
   await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)
   if (hasCredits()) await app.register(monetizationRoutes)
-  if (hasCredits()) await app.register(voiceChangerProRoutes)
   if (hasCredits()) await app.register(freecutExportRoutes)
+  // Cloud-only proprietary features (e.g. voice-changer-pro), loaded from the
+  // private @nodaroai/cloud-plugins package. No-op on community/business
+  // (hasCredits() false); on cloud, a load failure is fatal (process.exit(1)
+  // inside the loader) unless PRIVATE_MODULES=optional. See
+  // backend/src/lib/private-plugins/load.ts.
+  await loadPrivatePlugins({ app })
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(imageCriticRoutes)

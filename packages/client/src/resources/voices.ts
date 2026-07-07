@@ -103,13 +103,14 @@ export class VoicesResource {
    * Pass `audioUrl` for audio-only recast or `videoUrl` to recast the audio
    * track of a video clip (the server demuxes, recasts, and remuxes).
    *
-   * Voice and music are ALWAYS separated first — ElevenLabs only ever sees the
-   * isolated vocal stem, never the music bed. `preserveBackground` (default
-   * `true`) only controls whether that music/instrumental stem is mixed back
-   * under the new voices; set it `false` for a clean voice-only result.
-   * `separationQuality` selects the demucs model used for that split: `"fast"`
-   * (default, htdemucs — preserves more of the voice) or `"best"` (htdemucs_ft —
-   * finer separation). `removeBackgroundNoise` additionally denoises the result.
+   * Voice and music are ALWAYS separated first — before recasting, the source
+   * is split into an isolated vocal stem and a music/SFX stem.
+   * `preserveBackground` (default `true`) only controls whether that
+   * music/instrumental stem is mixed back under the new voices; set it `false`
+   * for a clean voice-only result. `separationQuality` selects the quality of
+   * the voice/music separation: `"fast"` (default, quicker — preserves more of
+   * the voice) or `"best"` (finer voice/music separation).
+   * `removeBackgroundNoise` additionally denoises the result.
    * `musicVolumeMode` sets the level of that preserved background (only relevant
    * when `preserveBackground` is on): `"match"` (default) keeps the original
    * level, `"normalize"` loudnorms it, `"manual"` uses `musicVolume`%.
@@ -151,8 +152,8 @@ export type VoiceChangerProVoice =
       seed?: number
       /**
        * Loudness handling for this recast voice. `"match"` (default) matches the
-       * original speaker's loudness; `"normalize"` applies EBU R128 loudnorm;
-       * `"manual"` uses `volume` as a percentage.
+       * original speaker's loudness; `"normalize"` applies loudness
+       * normalization; `"manual"` uses `volume` as a percentage.
        */
       volumeMode?: "match" | "normalize" | "manual"
       /** Manual output volume as a percentage (0–200). Consulted only when `volumeMode === "manual"`. */
@@ -180,8 +181,8 @@ export interface VoiceChangerProInput {
    */
   preserveBackground?: boolean
   /**
-   * Demucs model used to split voice from music. `"fast"` (default, htdemucs —
-   * preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
+   * Quality of the voice/music separation. `"fast"` (default, quicker —
+   * preserves more of the voice) or `"best"` (finer voice/music separation).
    */
   separationQuality?: "fast" | "best"
   /** Strip background noise for a clean voice-only result. */
@@ -190,8 +191,8 @@ export interface VoiceChangerProInput {
    * Level of the preserved background music / SFX stem in the final mix. Only
    * relevant when `preserveBackground` is on (otherwise there is no background to
    * level). `"match"` (default) leaves the separated instrumental at its original
-   * level; `"normalize"` applies EBU R128 loudnorm; `"manual"` sets its level to
-   * `musicVolume`%.
+   * level; `"normalize"` applies loudness normalization; `"manual"` sets its
+   * level to `musicVolume`%.
    */
   musicVolumeMode?: "match" | "normalize" | "manual"
   /** Background music level as a percentage (0–200). Consulted only when `musicVolumeMode === "manual"`. */

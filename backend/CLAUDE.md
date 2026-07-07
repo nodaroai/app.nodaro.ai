@@ -45,6 +45,29 @@ The `backend/src/ee/` directory holds enterprise code (admin routes, billing/cre
 
 ---
 
+## Private Plugins (Cloud)
+
+Cloud-only proprietary features (currently: voice-changer-pro) ship from a private npm package instead of living in this repo — a closed-source counterpart to `ee/` for code that must stay private in implementation, not just license.
+
+**Key files (`backend/src/lib/private-plugins/`):**
+- `load.ts` — the only file that imports `@nodaroai/cloud-plugins` (private repo `nodaroai/nodaro-cloud-plugins`), passed to `import()` as a runtime string so `tsc` never resolves it. No-ops unless `hasCredits()`. On cloud, dynamic-imports the package and, per plugin in its `plugins[]` array, registers `registerRoutes()` (only when called with an `app`), merges `handlers()`, and additively applies `staticCreditCosts()` into `credits.ts`'s `STATIC_CREDIT_COSTS` (never overwrites a core-defined price). Called from `app.ts` (with `app`) and `workers/video-worker.ts` (without — handlers only).
+- `types.ts` — hand-synced structural mirror of the private repo's `src/contract.ts` (no shared package, no automated sync). Additive-only: a breaking change bumps `CONTRACT_VERSION` in BOTH repos; the loader refuses to register a plugin whose `contractVersion` doesn't match.
+- `toolkit.ts` — assembles `PluginToolkit` (providers/ffmpeg/media/storage/jobs/http) via DI from this app's own core modules; plugins never import an app path directly.
+
+**Fail-fast semantics:**
+1. `EDITION=cloud` + (import rejects OR `contractVersion` mismatch) => fatal `exit(1)`, in both the API server (`app.ts`) and the video worker (each calls the loader independently at boot).
+2. `PRIVATE_MODULES=optional` downgrades that to a warning + continues degraded (plugin routes/handlers simply absent).
+3. community/business (`!hasCredits()`) => always a no-op, `importer` never called.
+4. Test suites default `PRIVATE_MODULES=optional` in `backend/src/test/setup.ts`; `backend-boot-smoke` boots `EDITION=cloud` the same way, since public CI has no registry token. Real cloud fail-fast is only exercised by Railway builds.
+
+**Deploy:** Dockerfile's `prod-deps` stage installs `@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}` only when the `NPM_TOKEN` build-arg is present (unset for self-hosted/community/public CI — no-op, byte-identical image). Railway supplies both on staging and prod.
+
+**BORN-PRIVATE rule:** new cloud-secret features start life in `nodaroai/nodaro-cloud-plugins`, never as a public migration/route/handler here. Pricing is admin-seeded into `model_pricing` plus the plugin's own `staticCreditCosts()` fallback.
+
+**Guard:** `tools/check-private-leaks.mjs` (CI) greps tracked files (excluding `tools/`) for extracted implementation symbol names — a hit means private implementation detail leaked back into this public repo.
+
+---
+
 ## Credit System Pattern
 
 Credits are handled via middleware, NOT inline in route handlers:

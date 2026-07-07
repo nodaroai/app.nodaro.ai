@@ -133,6 +133,16 @@ vi.mock("../handlers/entity.js", () => ({
   entityHandlers: {},
 }))
 
+// Private-plugins loader (Stage 1 VCP extraction) — mocked to a no-op so this
+// suite never attempts a real `@nodaroai/cloud-plugins` import or builds the
+// real toolkit (which eagerly constructs a real BullMQ `Queue` via
+// lib/queue.js — this file's `bullmq` mock above only stubs `Worker`). None
+// of these tests exercise a private-plugin-contributed handler; load.ts's own
+// suite (lib/private-plugins/__tests__/load.test.ts) covers the merge logic.
+vi.mock("@/lib/private-plugins/load.js", () => ({
+  loadPrivatePlugins: vi.fn().mockResolvedValue({ handlers: {}, loaded: [] }),
+}))
+
 // Mock KieError — must be a real class for instanceof checks
 vi.mock("@/providers/kie/client.js", () => {
   class KieError extends Error {
