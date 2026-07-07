@@ -357,12 +357,12 @@ export default function ProjectsPage() {
     })
   }, [filteredProjects, sortBy, sortDir])
 
-  type Tab = "apps" | "minapps" | "templates" | "tutorials" | "statistics"
+  type Tab = "apps" | "miniapps" | "templates" | "tutorials" | "statistics"
   const [activeTab, setActiveTab] = useState<Tab>("apps")
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "apps", label: "Apps", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
-    { id: "minapps", label: "MinApps", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+    { id: "miniapps", label: "MiniApps", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
     { id: "templates", label: "Templates", icon: <BookOpen className="h-3.5 w-3.5" /> },
     { id: "tutorials", label: "Tutorials", icon: <BookOpen className="h-3.5 w-3.5" /> },
     { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
@@ -381,7 +381,7 @@ export default function ProjectsPage() {
     queryKey: ["featured-apps"],
     queryFn: () => browseApps({ sort: "popular", limit: 50, publishType: "app" }),
     staleTime: 60_000,
-    enabled: activeTab === "minapps",
+    enabled: activeTab === "miniapps",
   })
   const shuffledAppsRef = useRef<{ key: unknown; cacheKey: string; apps: AppBrowseCard[] }>({ key: null, cacheKey: "", apps: [] })
   const cacheKey = `${featuredAppIds.join(",")}_${appsLimit}`
@@ -432,7 +432,7 @@ export default function ProjectsPage() {
   }, [featuredApps.length, updateScrollState])
 
   useEffect(() => {
-    if (featuredApps.length <= 1 || activeTab !== "minapps" || autoScrollMs === 0) return
+    if (featuredApps.length <= 1 || activeTab !== "miniapps" || autoScrollMs === 0) return
     const timer = setInterval(() => {
       const el = appsScrollRef.current
       if (!el || isHoveringApps.current) return
@@ -533,13 +533,13 @@ export default function ProjectsPage() {
               </button>
             ))}
           </div>
-          {activeTab === "minapps" && (
+          {activeTab === "miniapps" && (
             <button
               type="button"
               onClick={() => navigate("/apps")}
               className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              See all MinApps <ArrowRight className="h-3 w-3" />
+              See all MiniApps <ArrowRight className="h-3 w-3" />
             </button>
           )}
           {activeTab === "templates" && (
@@ -555,7 +555,7 @@ export default function ProjectsPage() {
 
         {/* Tab content */}
         {activeTab === "apps" && <FlagshipApps />}
-        {activeTab === "minapps" && (
+        {activeTab === "miniapps" && (
           <div className="relative">
             {featuredAppsLoading ? (
               <div className="flex gap-2 px-2 pb-2">
@@ -614,7 +614,7 @@ export default function ProjectsPage() {
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 flex flex-col items-center justify-center gap-2 hover:bg-muted transition-colors">
                       <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                      <p className="text-xs font-medium text-muted-foreground">See all MinApps</p>
+                      <p className="text-xs font-medium text-muted-foreground">See all MiniApps</p>
                     </div>
                   </button>
                 </div>
@@ -642,7 +642,7 @@ export default function ProjectsPage() {
             ) : (
               <div className="text-center py-10 text-muted-foreground">
                 <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs font-medium">No MinApps yet</p>
+                <p className="text-xs font-medium">No MiniApps yet</p>
               </div>
             )}
           </div>

@@ -476,14 +476,14 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Publish {publishType === "component" ? "Component" : "MinApp"}</DialogTitle>
+          <DialogTitle>Publish {publishType === "component" ? "Component" : "MiniApp"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {publishType === "component"
               ? "Publish as a reusable component that can be used inside other workflows."
-              : "Publish as a standalone MinApp with its own URL, persistent run history, and versioning."}
+              : "Publish as a standalone MiniApp with its own URL, persistent run history, and versioning."}
           </p>
 
           {loadingExisting ? (
@@ -509,7 +509,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 }}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
-                Open {publishType === "component" ? "Component" : "MinApp"}
+                Open {publishType === "component" ? "Component" : "MiniApp"}
               </Button>
             </>
           ) : (
@@ -523,7 +523,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   }`}
                   onClick={() => setPublishType("app")}
                 >
-                  MinApp
+                  MiniApp
                 </button>
                 <button
                   type="button"
@@ -537,7 +537,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block">{publishType === "component" ? "Component" : "MinApp"} Name *</label>
+                <label className="text-sm font-medium mb-1 block">{publishType === "component" ? "Component" : "MiniApp"} Name *</label>
                 <Input
                   value={publishName}
                   onChange={(e) => setPublishName(e.target.value)}

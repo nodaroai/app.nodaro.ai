@@ -314,7 +314,7 @@ export function MobileAppHeader({
                     className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors disabled:opacity-50"
                   >
                     <Shuffle className="h-4 w-4" />
-                    {isRemixing ? "Remixing..." : "Remix this MinApp"}
+                    {isRemixing ? "Remixing..." : "Remix this MiniApp"}
                   </button>
                 </div>
               )}
@@ -327,7 +327,7 @@ export function MobileAppHeader({
                   className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
                 >
                   <LayoutGrid className="h-4 w-4" />
-                  More MinApps
+                  More MiniApps
                 </a>
               </div>
 
