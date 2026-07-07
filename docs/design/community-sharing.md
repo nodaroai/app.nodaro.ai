@@ -3,7 +3,7 @@
 **Status:** Design (approved)
 **Scope:** **Admins publish** characters, locations, and objects into a curated shared library; **any logged-in user browses and clones** them into their own library as independent copies.
 
-> **v4 scope change (default): only admins can share.** Publishing is admin-only (`requireAdmin`); browse + clone are for all logged-in users. This is a deliberate v1 limit — self-serve user publishing is a future expansion. With admin-only publishing there is no self-serve consent flow, no anonymous public surface, and no `gen:skills` coupling. [reference removed] (publish RPC pattern, prefix-purge pagination, idempotent refund, cursor parser, clone rollback) are folded in.
+> **v4 scope change: only admins can share.** Publishing is admin-only (`requireAdmin`); browse + clone are for all logged-in users. This is a deliberate v1 limit — self-serve user publishing is a future expansion. With admin-only publishing there is no self-serve consent flow, no anonymous public surface, and no `gen:skills` coupling.
 
 ---
 
@@ -202,7 +202,7 @@ Publish/clone run no jobs → zero credits. **Storage is Cloud-only** (`hasCredi
 
 ## 16. Risks / watch-items
 
-- **Likeness:** admin attestation + report→takedown; trusted-publisher model removes the self-serve risk. [reference removed].
+- **Likeness:** admin attestation + report→takedown; trusted-publisher model removes the self-serve risk.
 - **Storage:** quota is Cloud-only by design (Business unbounded — existing behavior, not a regression). Publish doubles the admin's storage; refunded once on purge (CAS-guarded). Lever if cost spikes: clone-time *reference* instead of copy.
 - **Re-publish/takedown blob lifecycle:** prefix-purge primitive (paginated, idempotent refund) handles takedown, re-publish, and backstop. Re-publish reuses the id and resets `r2_assets_purged_at`.
 - **Snapshot IP:** protected deny-by-default table; routes return public projection + curated `preview_images` only.

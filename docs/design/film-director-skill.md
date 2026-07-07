@@ -4,11 +4,6 @@
 **Target:** Ship in Phase 0 (2-3 weeks), before any Story-to-Video pipeline engineering
 **Last Updated:** 2026-05-14
 
-**Related specs:**
-- `[internal spec reference removed]` — the native pipeline alternative (deferred or descoped if skill succeeds)
-- `[internal spec reference removed]` — the deterministic LLM stack the skill replaces
-- `[internal spec reference removed]` — the wizard UX the skill replaces with conversational UX
-
 ---
 
 ## 1. Vision
@@ -19,13 +14,11 @@ A Claude (and ChatGPT / Gemini / Cursor) skill that drives a proven manual film-
 
 > "Watch your film studio build itself on your canvas while you talk to Claude."
 
-The skill replaces the conversational Interactive Mode of the native pipeline (architecture §3.3 + §5.1) — entirely. The native pipeline feature is descoped to handle only **Programmatic Mode** (upstream-driven automation: RSS → video → auto-post) if/when that use case proves out.
+The skill replaces the conversational Interactive Mode of the native pipeline entirely. The native pipeline feature is descoped to handle only **Programmatic Mode** (upstream-driven automation: RSS → video → auto-post) if/when that use case proves out.
 
 ---
 
 ## 2. Why a Skill Beats the Native Pipeline
-
-This compares against the spec in `[internal spec reference removed]` and `[internal spec reference removed]`.
 
 ### What the skill does better
 
@@ -47,7 +40,7 @@ This compares against the spec in `[internal spec reference removed]` and `[inte
 | Loss | Mitigation |
 |------|-----------|
 | Programmatic Mode (RSS → video → auto-post) | Still build the native pipeline node for programmatic-only — much smaller scope |
-| Users without an MCP-enabled chat client | Acceptable — MCP is the future and the marketing story is Claude-first |
+| Users without an MCP-enabled chat client | Acceptable — MCP is the future |
 | Approval-button preference | Acceptable — Auto Mode in the native pipeline still serves "walk away" users |
 
 ### Decision: ship the skill in Phase 0, descope Interactive Mode of the native pipeline, build only Programmatic Mode if needed.
@@ -140,7 +133,7 @@ For each character in the script:
 5. Show all variants. User approves or asks for regenerations.
 6. For characters with dialogue: pick a voice. Either match an ElevenLabs premade voice (Rachel, Roger, Charlie, etc.) or call `voice_design` to create a custom one. Generate a short sample line; play it for the user.
 
-**Optional — external identity training (provider integration TBD).** *Trigger point: after step 2 (main image approved), before step 3.* If an identity-training integration is enabled for this Nodaro instance (check the user's connected providers), train an identity via the provider's MCP tools (exact endpoints TBD in integration design — see §10 #9) and persist the returned `reference_id` on the character node. Use that `reference_id` as the primary character reference for steps 3–4 and for all downstream scene-image generation (Stage 5). Identity training typically yields 80–90% facial fidelity versus 70–80% for reference-image conditioning alone — worth the extra step for any character that appears in 5+ shots. The fallback when identity training is unavailable or disabled is Nodaro's existing **identity-lock** mechanism (`packages/shared/src/identity-lock.ts`) — natural-language prompt clauses that Nano Banana Pro and GPT Image respect for facial preservation at inference time.
+**Optional — external identity training (provider integration TBD).** *Trigger point: after step 2 (main image approved), before step 3.* If an identity-training integration is enabled for this Nodaro instance (check the user's connected providers), train an identity via the provider's MCP tools (exact endpoints TBD in integration design — see §10 #8) and persist the returned `reference_id` on the character node. Use that `reference_id` as the primary character reference for steps 3–4 and for all downstream scene-image generation (Stage 5). Identity training typically yields 80–90% facial fidelity versus 70–80% for reference-image conditioning alone — worth the extra step for any character that appears in 5+ shots. The fallback when identity training is unavailable or disabled is Nodaro's existing **identity-lock** mechanism (`packages/shared/src/identity-lock.ts`) — natural-language prompt clauses that Nano Banana Pro and GPT Image respect for facial preservation at inference time.
 
 **Pass `workflowId` to every generation MCP call** so the resulting nodes attach directly to the user's canvas as they appear. Track asset URLs/IDs as backup so you can repair via `update_workflow_json` if any node fails to auto-attach.
 
@@ -286,7 +279,7 @@ The skill relies on these MCP tools that already exist in Nodaro:
 | 0. Initialize workspace | `create_workflow` |
 | 1. Script | `update_workflow_json` (attach Script display node on approval) |
 | 2. Shot list | `update_workflow_json` (attach shot-list metadata) |
-| 3. Characters | `generate_character`, `image_to_image`, `voice_design` (or premade ElevenLabs voices); `update_workflow_json` for any nodes the generation tools don't auto-attach. **Optional:** external identity-training MCP tools when integration is enabled (specific endpoints TBD — see Stage 3 escape hatch + §10 #9) |
+| 3. Characters | `generate_character`, `image_to_image`, `voice_design` (or premade ElevenLabs voices); `update_workflow_json` for any nodes the generation tools don't auto-attach. **Optional:** external identity-training MCP tools when integration is enabled (specific endpoints TBD — see Stage 3 escape hatch + §10 #8) |
 | 4. Locations | `generate_location`, `image_to_image`; `update_workflow_json` |
 | 5. Storyboard | `image_to_image` (with character + location refs); `update_workflow_json` |
 | 6. Shot animation | `extract_frame`, `animate_image`; `update_workflow_json` |
@@ -304,7 +297,7 @@ The skill relies on these MCP tools that already exist in Nodaro:
 - `prepare_image_upload` / `upload_image_widget` — let user upload reference images mid-flow
 - `face_swap`, `modify_image`, `edit_image` — for post-generation refinements
 - `add_captions` — for captioned reels/shorts
-- **External identity-training MCP tools (optional, instance-dependent)** — when integration is enabled, used in Stage 3 to train a face-faithful identity model and persist a `reference_id` reusable across scene-image generation. Specific endpoints TBD in integration design. See Stage 3 escape hatch for usage; see §10 #9 for integration decisions still pending.
+- **External identity-training MCP tools (optional, instance-dependent)** — when integration is enabled, used in Stage 3 to train a face-faithful identity model and persist a `reference_id` reusable across scene-image generation. Specific endpoints TBD in integration design. See Stage 3 escape hatch for usage; see §10 #8 for integration decisions still pending.
 
 **All exist today.** No new MCP tools need building.
 
@@ -422,19 +415,17 @@ If Layers 1-3 produce too many failed JSON writes in production, add:
 
 If `update_workflow_json` fails twice in a row with validation errors, **abandon manual JSON construction and fall back to the equivalent generation MCP tool** — the tool knows its own schema and won't drift. This rule is encoded in the skill's `What you do NOT do` block: never retry a failing JSON write more than once before falling back to Layer 1.
 
-### Audit checklist (must verify before Phase 0 launch)
+### Assumptions worth verifying
 
-Several assumptions about Nodaro's current tool behavior need to be confirmed. Each is HIGH-severity blocker:
+A few assumptions about Nodaro's current tool behavior are worth confirming when working on this system:
 
-| Item | Owner note |
-|------|-------------|
-| Confirm every generation MCP tool actually auto-attaches a node when passed `workflowId` (some may not) | Audit each tool listed in §4 stage table; document gaps |
-| Confirm tools accept `refNodeIds` (or equivalent) for edge wiring at creation time | Audit; if any tool requires post-hoc edge wiring, document the Layer 3 follow-up |
-| Confirm `update_workflow_json` returns Claude-readable Zod errors (not just HTTP 400) | Test; if not, wrap errors in a friendlier shape for MCP responses |
-| Create and seed the `nodaro-internal/film-template` reference workflow with one example of every manually-constructed node type (Script display, sticky notes, etc.) | One-time curation (~2 hours) |
-| Test that `get_workflow_json` response size doesn't exceed MCP client context limits for a typical 50-node workflow | Test in Phase 0 Week 3 |
-
-These belong in the Week 1 deliverables of Phase 0 §11.
+| Item | Notes |
+|------|-------|
+| Every generation MCP tool actually auto-attaches a node when passed `workflowId` (some may not) | Audit each tool listed in §4's stage table; document gaps |
+| Tools accept `refNodeIds` (or equivalent) for edge wiring at creation time | If any tool requires post-hoc edge wiring, that's a Layer 3 follow-up |
+| `update_workflow_json` returns Claude-readable Zod errors (not just HTTP 400) | Otherwise, wrap errors in a friendlier shape for MCP responses |
+| A reference template workflow with one example of every manually-constructed node type (Script display, sticky notes, etc.) exists for Claude to consult (Layer 2, above) | One-time curation |
+| `get_workflow_json` response size doesn't exceed MCP client context limits for a typical 50-node workflow | Worth testing across MCP clients |
 
 ---
 
@@ -453,7 +444,7 @@ These map back to the gaps identified in the prior analysis of the manual workfl
 | 7. Audio added last | Stage 7 runs only after all videos approved |
 | 8. Provider-specific rules (Seedance, etc.) | Stage 6 "Provider-specific rules" subsection |
 
-*Optional enhancement (not a gap):* the identity-training integration (Stage 3 escape hatch) raises identity fidelity from ~70–80% (default identity-lock path) to ~80–90% — pairs with gap #2 (character variants) to harden character consistency across scenes. See §10 #9 for integration questions still pending.
+*Optional enhancement (not a gap):* the identity-training integration (Stage 3 escape hatch) raises identity fidelity from ~70–80% (default identity-lock path) to ~80–90% — pairs with gap #2 (character variants) to harden character consistency across scenes. See §10 #8 for integration questions still pending.
 
 ---
 
@@ -537,33 +528,6 @@ Future: per-user overrides via a `user_preferences` MCP tool. Examples:
 
 ---
 
-## 9. Marketing & Positioning
-
-### The pitch
-
-> **"Watch your film studio build itself on your canvas while you talk to Claude."**
-
-The visceral demo: split-screen video — Claude chat on the left, Nodaro canvas on the right filling up with nodes as the conversation progresses. Conversation drives canvas; canvas confirms conversation.
-
-Secondary pitch: **"Nodaro is the only platform where AI is your director, not your generator."**
-
-### Distribution channels
-
-- **[reference removed]** — [reference removed]
-- **Cross-platform** — works in ChatGPT, Gemini CLI, Cursor (anywhere with MCP)
-- **Demo video** — the actual reference test film, narrated as a screen recording showing the conversation
-- **Documentation** in `docs/mcp/` — public-facing how-to
-
-### Positioning
-
-Differentiators, stated without the head-to-head: chat-driven direction that
-produces an **editable workflow you keep** (not a black box), **multi-shot
-films up to 600s** with continuity engineering, characters with identity
-consistency, music and lip-sync — and an optional external identity-training
-escape hatch (Stage 3).
-
----
-
 ## 10. Open Questions
 
 1. **Skill discoverability inside Nodaro.** Should the Nodaro UI surface "Open this in Claude" buttons that pre-load the skill? (Could deep-link via a `claude://` URL or similar.) Recommended: yes — ship a "Make a film with Claude" CTA in the editor that deep-links into Claude with the skill pre-invoked; lifts discoverability for users not already familiar with skills.
@@ -571,62 +535,9 @@ escape hatch (Stage 3).
 3. **Multi-language support.** The target market includes Hebrew speakers. Should the skill respond in user's language? Recommended: yes for dialogue/narration text generated by `generate_speech` (ElevenLabs supports many languages), conversation tone matches user, but JSON keys + tool calls stay English.
 4. **Cost transparency mid-session.** When to show running totals? Recommended: after each stage feels right; mid-stage may be too noisy. Always show estimated cost BEFORE expensive batches (animation, music, lip-sync).
 5. **Approval UX in non-Claude clients.** Claude Desktop renders rich previews well. ChatGPT and others may render image attachments differently. Recommended: ship and test in Claude first; document known rendering quirks per platform in `docs/mcp/film-director.md` as we encounter them.
-6. **Should the skill be open-source?** Could be a separate npm/GitHub repo. Pros: community-extensible, Anthropic skill registry visibility. Cons: [reference removed]. Recommended: yes — publish as open-source (MIT or similar) under a `nodaro-skills` repo; the value is in Nodaro's MCP + credits + canvas, not the skill markdown itself. Community contributions add film genres / ad templates we wouldn't ship ourselves.
-7. **Programmatic mode coexistence.** If the native pipeline ships only Programmatic Mode (per the recommendation), how do these two interact? Recommended: keep them separate. Skill = interactive, Pipeline node = programmatic. No need to unify.
-8. **Backward compatibility.** When the skill is updated, old conversations don't auto-upgrade. Should ongoing sessions pin to the version that started them? Recommended: yes, version-pin per session.
-9. **External identity-training integration.** Several decisions deferred for the Stage 3 escape hatch: per-user opt-in vs instance-wide enablement? Cost-share / billing pass-through model for the provider's usage? Persistence of `reference_id` — per character node, per user library, or per workspace? Auto-trigger threshold (e.g., always offer it for characters in 5+ shots, or only on explicit user request)? Recommended: defer all of these to a Phase 2+ integration design; the escape hatch in Stage 3 keeps the door open without committing.
-
----
-
-## 11. Phased Rollout
-
-### Phase 0 (2-3 weeks): Ship the skill + live canvas animations
-
-Week 1 — Skill content + §5.4 Layer 1-3 audit:
-- Author `nodaro-film-director.md` (the skill content from Section 3)
-- **Audit MCP tools** per the §5.4 checklist (all are HIGH-severity gates for launch):
-  - Confirm every generation MCP tool listed in §4 actually auto-attaches a node when passed `workflowId`; document any gaps as Layer 3 follow-ups (manual edge wiring required)
-  - Confirm generation tools accept `refNodeIds` (or equivalent) for edge wiring at creation time
-  - Confirm `update_workflow_json` returns Claude-readable Zod errors (not just HTTP 400); wrap errors in a friendlier shape for MCP responses if not
-- **Create and seed the reference template workflow** at `nodaro-internal/film-template` — one example of every manually-constructed node type (Script display, shot-list metadata, sticky notes, etc.). ~2 hours of one-time curation.
-- Test end-to-end with the original successful reference workflow as the validation case
-- Document MCP tool requirements
-
-Week 2 — Live canvas infrastructure (reusable):
-- Implement node fade-in + scale-up animation on insert (~300ms)
-- Implement edge stretch animation on insert (~500ms)
-- Implement camera auto-pan to follow newly-added nodes
-- Verify Pattern B incremental workflow updates render smoothly with these animations
-- These three animations were already specced in `[internal spec reference removed]` §7.1 — they become reusable for both the skill and any future Programmatic Mode pipeline
-
-Week 3 — Polish + launch:
-- Refine skill based on test results
-- Add cost transparency hooks (`check_balance` checkpoints before expensive stages)
-- **Verify context-window headroom** (final §5.4 audit item): test that `get_workflow_json` response size doesn't exceed MCP client context limits for a typical 50-node workflow across Claude Desktop, Claude Code, ChatGPT, Gemini, Cursor
-- Write public docs in `docs/mcp/film-director.md`
-- Record the demo — split-screen (Claude chat ↔ Nodaro canvas) for the marketing pitch
-- Soft launch to test users
-
-**Ship criteria:** The skill produces a film of similar quality to the manual reference test, in a single conversation, with the editable Nodaro workflow visibly assembling on the canvas in real-time as the conversation progresses.
-
-### Phase 1 (future, if needed): Programmatic-mode pipeline node
-
-Only if RSS-to-video / scheduled-trigger use cases prove out:
-
-- Build the `GenerativePipelineNode` from the existing architecture spec, **scoped only to Programmatic Mode**
-- Drop Interactive Mode from the spec entirely (the skill replaces it)
-- Drop Auto Mode toggle (Programmatic is always auto)
-- ~3-4 weeks scope instead of 8-12
-
-**Total roadmap if Phase 1 ships: ~5-7 weeks (Phase 0 + Phase 1).**
-
-### Phase 2+: Skill evolution
-
-- Multi-language support
-- Personalization
-- Skill marketplace (other film genres, advertising templates, etc.)
-- Tighter Nodaro UI integration ("Open in Claude" deep links)
-- **Evaluate the identity-training integration:** if the default identity-lock path proves insufficient in production (visible face drift on characters in 5+ shots), wire up the external provider's MCP and activate the Stage 3 escape hatch. Resolve the open questions in §10 first.
+6. **Programmatic mode coexistence.** If the native pipeline ships only Programmatic Mode (per the recommendation), how do these two interact? Recommended: keep them separate. Skill = interactive, Pipeline node = programmatic. No need to unify.
+7. **Backward compatibility.** When the skill is updated, old conversations don't auto-upgrade. Should ongoing sessions pin to the version that started them? Recommended: yes, version-pin per session.
+8. **External identity-training integration.** Several decisions deferred for the Stage 3 escape hatch: per-user opt-in vs instance-wide enablement? Cost-share / billing pass-through model for the provider's usage? Persistence of `reference_id` — per character node, per user library, or per workspace? Auto-trigger threshold (e.g., always offer it for characters in 5+ shots, or only on explicit user request)? Recommended: defer all of these to a Phase 2+ integration design; the escape hatch in Stage 3 keeps the door open without committing.
 
 ---
 
@@ -639,31 +550,9 @@ Only if RSS-to-video / scheduled-trigger use cases prove out:
 | Keep native pipeline's Programmatic Mode? | **Conditional** | Build only if RSS-style automation is a real customer ask |
 | Workflow JSON composition pattern | **B (incremental via `create_workflow` + `update_workflow_json`)** | Enables live canvas construction during conversation — preserves the wow-factor |
 | Schema reference strategy | **Template workflow + `get_workflow_json`** | Lean, no schema duplication |
-| Marketing positioning | **"Watch your film studio build itself on your canvas while you talk to Claude"** | Live-canvas visceral demo + Anthropic partnership angle |
+| Product positioning | **"Watch your film studio build itself on your canvas while you talk to Claude"** | Live-canvas visceral demo |
 | Cross-platform support | **Yes — anywhere MCP runs** | Maximize distribution |
 | External identity-training integration | **Escape hatch only (evaluate in Phase 2+)** | Stage 3 keeps a conditional path; default uses identity-lock at inference; open questions in §10 must be resolved before activation |
-
----
-
-## 13. Embedded Chat UX (Phase 2+)
-
-By default the user has two windows side-by-side: a Claude chat client (left) and Nodaro canvas (right). This works on day one with zero integration. But the long-term UX play is tighter.
-
-### Three integration options
-
-| Option | Description | Trade-off |
-|--------|-------------|-----------|
-| **A. Side-by-side (default, Phase 0)** | User opens two windows manually | Zero work; works for every MCP-enabled client |
-| **B. Embedded Claude in Nodaro** | A Claude chat panel docks inside the Nodaro UI alongside the canvas | Tightest UX; requires Nodaro to host an MCP client; flagship demo |
-| **C. Embedded canvas in Claude** | Mini Nodaro canvas widget shown inside Claude chat via existing MCP UI widgets | Already partially possible (Nodaro MCP returns widgets); embedded canvas is small |
-
-### Recommendation
-
-- **Phase 0:** Ship Option A. No integration work. The skill is the value.
-- **Phase 1:** If usage proves out, evaluate Option C as a low-cost enhancement using existing MCP widget infrastructure.
-- **Phase 2+:** Build Option B as a flagship integration. Position as "Nodaro Studio with Claude built in." [reference removed].
-
-ChatGPT / Gemini / Cursor users always get Option A regardless, so it stays viable cross-platform.
 
 ---
 

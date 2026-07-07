@@ -4,11 +4,6 @@
 **Target:** Phase 1+ of the Nodaro skill ecosystem
 **Last Updated:** 2026-05-18
 
-**Related specs:**
-- `nodaro-film-director-skill.md` (Draft v3) — current Film Director skill spec; this design refactors its delivery
-- `2026-05-14-nodaro-film-director-implementation-plan.md` — Phase 0 plan that produced v1.0.1 → v1.0.9
-- Layer 1/2/3 context [reference removed].
-
 ---
 
 ## 1. Vision
@@ -19,7 +14,7 @@ Decompose monolithic skill content (current Film Director `SKILL.md` is ~550 lin
 - **G4 — workflow-editing skill**: `start_workflow_editor` MCP tool returns general workflow JSON/edges/handles teaching content
 - **G5 — auto-gen pipeline**: derives the per-node + workflow-editor content from the codebase, gated by CI
 
-End state: any future workflow-building skill (Film Director v2.0, future Music Video Director, Story-to-Video pipeline) is a thin orchestrator that calls `start_workflow_editor` once + `get_node_skill(<type>)` on demand. Skill content tracks the codebase automatically.
+End state: any future workflow-building skill (Film Director v2.0, future domain-specific directors and pipelines) is a thin orchestrator that calls `start_workflow_editor` once + `get_node_skill(<type>)` on demand. Skill content tracks the codebase automatically.
 
 ## 2. Architecture overview
 

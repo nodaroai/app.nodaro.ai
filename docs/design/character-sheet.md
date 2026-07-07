@@ -4,10 +4,6 @@
 **Branch:** `feat/character-sheet-redesign`
 **Status:** approved design, twice audited against the codebase → ready for implementation plan
 
-> **[reference removed]:**
-> - **Pass 1** killed the first draft's invented `SheetSection.variants` field — the engine already has an equivalent **`entries`** field, wired through the planner, both stages, AND the route Zod schema; `variants` would have been silently stripped. This spec uses `entries`.
-> - **Pass 2** (three independent lenses: refute-the-fixes / data-flow trace / blind-spots) found a **BLOCKING** panel-count overflow, a regression Pass-1's fix introduced (prepared-key shape), and a shared-tab blast radius. All folded in below.
-
 ## Problem
 
 The Character Studio "Sheet" page (shared `reference-sheet-tab.tsx`) generates a composited turnaround/reference sheet, but:
@@ -121,7 +117,7 @@ UI (recomputed live as the user toggles preset/boards and as panels get prepared
 
 - **① Prepare angles** — generates ONLY the missing panels (Stage A: `adapter.generateAsset` per `missing`, awaited; worker attaches each to the entity bucket → also visible in the Angles tab). Hidden when nothing missing. `N/M` progress.
 - **② Compose sheet** — `generateReferenceSheet` with the preset's carrier `type` + explicit `flavour.sections` (base + toggled boards) + `flavour.presetId`. Poll → surface result. **Enabled only when `missing.length === 0`**, else "Prepare N angles first." Stage B re-reads fresh DB buckets, so it sees panels prepared this session.
-- **Prepared-key tracking (required — fixes the Pass-1 regression):** the character adapter's `awaitJob` returns only a URL and never updates `staged`, and the studio refetches only on open. So as ① completes, accumulate each prepared panel as **`{ column: missing[i].attachToColumn, name: missing[i].attachName, url }`** (the URL from `awaitJob`) and merge into the **column-keyed** bucket snapshot fed to `planSheetGeneration`/`estimateSheetCost`: `buckets[column] = [...(buckets[column] ?? []), { name, url }]`. `matchVariant` requires a **non-empty URL**, so the captured URL must be injected (a synthetic placeholder is safe — Stage B re-resolves from DB). **Key by `attachToColumn`, NOT `assetType`** (`headAngles`→column `angles`; detail/wardrobe are both `custom` but land in `detail_closeups`/`outfit_variations`) — otherwise the merge writes to a column the planner never reads → Compose never enables.
+- **Prepared-key tracking (required):** the character adapter's `awaitJob` returns only a URL and never updates `staged`, and the studio refetches only on open. So as ① completes, accumulate each prepared panel as **`{ column: missing[i].attachToColumn, name: missing[i].attachName, url }`** (the URL from `awaitJob`) and merge into the **column-keyed** bucket snapshot fed to `planSheetGeneration`/`estimateSheetCost`: `buckets[column] = [...(buckets[column] ?? []), { name, url }]`. `matchVariant` requires a **non-empty URL**, so the captured URL must be injected (a synthetic placeholder is safe — Stage B re-resolves from DB). **Key by `attachToColumn`, NOT `assetType`** (`headAngles`→column `angles`; detail/wardrobe are both `custom` but land in `detail_closeups`/`outfit_variations`) — otherwise the merge writes to a column the planner never reads → Compose never enables.
 
 ### 4. Cost gating + edition boundary
 
@@ -173,4 +169,4 @@ In the character preset UI, a compact "Style" row keeps `skin` (studio default; 
 - Curated subsets via the existing **`entries`** field (verified through planner + both stages + Zod).
 - Single catalog edit `headAngles += "back"` (head `back` prompt already exists; index-7 append keeps tests green).
 - Carrier `type` per preset; `presetId` persists via `flavour` (no worker change).
-- Panel cap + prepared-key column-merge close the two Pass-2 blockers.
+- Panel cap + prepared-key column-merge close the two blocking issues found in review.

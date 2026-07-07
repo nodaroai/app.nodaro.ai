@@ -380,7 +380,7 @@ Component credit flow follows the existing app-run model, which is **two-phase**
 Each inner node in the component's workflow reserves and spends credits individually through the normal orchestrator flow. Credits come from the **consumer's** (runner's) balance. This is identical to how app runs work today.
 
 **Phase 2 — Monetization markup (at completion):**
-After the inner execution completes successfully, `orchestrator-worker.ts` calls the `process_app_monetization` RPC. At successful completion, the creator's configured markup is charged to the consumer and credited to the creator's earnings balance ([reference removed]), and an `app_earnings` record is inserted with the full breakdown.
+After the inner execution completes successfully, `orchestrator-worker.ts` calls the `process_app_monetization` RPC. At successful completion, the creator's configured markup is charged to the consumer and credited to the creator's earnings balance, and an `app_earnings` record is inserted with the full breakdown.
 
 **Pre-check:** Before execution starts, the consumer's balance is validated against `estimated_credits` to catch insufficient funds early. This is a soft check — actual costs may vary.
 

@@ -148,7 +148,7 @@ Generated assets are written back to the row via a table-specific RPC + surfaced
 
 ## 8. Frontend node registration
 
-Standard new-node steps (`[internal spec reference removed]`) — verified object touchpoints:
+Standard new-node steps (the New Node Registration checklist in the root `CLAUDE.md`) — verified object touchpoints:
 1. `types/nodes.ts` — `CreatureNodeData` + `SceneNodeData` + `SceneNodeType` unions + `NODE_DEFINITIONS` (~:6567 label) + **`NodeCategory` union (~:44) add `"creature"`**.
 2. `components/nodes/creature-node.tsx` — mirror `object-node.tsx` **including its hardcoded `style={{maxWidth:'220px'}}` (object-node:101)** — entity nodes do NOT use `video-node-defaults.ts`; the media-node-sizing invariant test excludes them (verified). Pass `category="creature"`.
 3. **`components/nodes/base-node.tsx`** — add `"creature"` to the category union (~:36) **and** a `creature` arm to the 4 category-keyed maps: `CATEGORY_HEADER` (~:107), `CATEGORY_ICON_COLOR` (~:124), accent-glow (~:504), icon-bg (~:539) — else compile error (typed union) or no styling (Record maps return undefined).

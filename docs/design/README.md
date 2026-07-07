@@ -42,7 +42,6 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 | Doc | What it covers |
 |-----|----------------|
 | [unified-asset-references](./unified-asset-references.md) | One reference model across characters, locations, objects, and creatures |
-| [unified-reference-roles](./unified-reference-roles.md) | Reference *roles* registry — how a referenced asset is used in a prompt |
 | [character-sheet](./character-sheet.md) | Character sheet redesign, driven by an adversarial design audit |
 | [character-studio](./character-studio.md) | Character studio redesign — source modes, voice panel |
 | [character-node-role-and-lock](./character-node-role-and-lock.md) | Default reference role + identity-lock on the character node |

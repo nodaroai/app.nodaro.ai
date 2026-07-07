@@ -4,10 +4,6 @@
 **Target Version:** Nodaro v1.28+
 **Last Updated:** 2026-05-14
 
-**Related specs:**
-- `[internal spec reference removed]` (Section 7.3 "Grouping / Collapse" is the prior art this replaces)
-- `[internal spec reference removed]` (consumer of the per-shot container view modes)
-
 ---
 
 ## 1. Vision
@@ -22,7 +18,7 @@ A new node type — `SubWorkflowNode` — that contains an editable sub-graph, e
 
 ## 2. Why This Replaces "Collapsible Super-Nodes"
 
-The current Story-to-Video architecture (Section 7.3) hints at this:
+An earlier design considered a simpler, visual-only abstraction:
 
 > Each scene's nodes (image + video + audio + lip-sync) can be **grouped into a collapsible super-node**. Two modes: Expanded (see every node), Collapsed (one super-node per scene).
 
@@ -330,4 +326,4 @@ Special handling: this is not a "generative" node — no credit cost, no provide
 
 ## TL;DR
 
-A `SubWorkflowNode` is a node that **is** another workflow. From outside: ports + a configurable view. From inside: a fully editable canvas. Recursive. Reuses existing workflow infrastructure (export, import, SDK, MCP). v1 ships scoped to Story-to-Video scene containers + 4 view modes. v2 adds templates, parameter binding, and canvas-wide controls. Replaces the "collapsible super-node" idea in `[internal spec reference removed]` Section 7.3 with a real structural primitive instead of a visual one.
+A `SubWorkflowNode` is a node that **is** another workflow. From outside: ports + a configurable view. From inside: a fully editable canvas. Recursive. Reuses existing workflow infrastructure (export, import, SDK, MCP). v1 ships scoped to Story-to-Video scene containers + 4 view modes. v2 adds templates, parameter binding, and canvas-wide controls. Replaces an earlier "collapsible super-node" idea with a real structural primitive instead of a visual one.
