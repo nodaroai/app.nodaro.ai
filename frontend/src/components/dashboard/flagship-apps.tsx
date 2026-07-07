@@ -9,7 +9,7 @@ import { studioBaseUrl } from "@/lib/studio"
 
 /**
  * Flagship "Apps" band — Nodaro's dedicated, purpose-built products (Studio,
- * Avatar), promoted above the marketplace MinApps. This is the content of the
+ * Avatar), promoted above the marketplace MiniApps. This is the content of the
  * default "Apps" tab in the dashboard discovery panel.
  *
  * Data is a small static array: flagships are team-curated and rarely change,
