@@ -24,17 +24,21 @@
  * Toolkit evolution is additive-only (new groups/members may be added; never
  * remove or narrow an existing member without bumping CONTRACT_VERSION).
  *
- * One deliberate departure from the plugin repo's copy: `PluginAudioFxOptions
+ * Two deliberate departures from the plugin repo's copy: (1) `PluginAudioFxOptions
  * .preset` is typed as the real `AudioFxPreset` (`@nodaro/shared`) here
  * instead of structural `string` — this app has `@nodaro/shared` natively,
  * so there's no reason to widen it. Still structurally compatible with the
  * plugin repo's `string` version at the call boundary (a narrower type is
- * always assignable to the wider one).
+ * always assignable to the wider one). (2) `PromptTable`'s doc comment names
+ * this repo's `ee/pipelines/llms/prompt-registry.ts` as "here" and the plugin
+ * repo's `src/plugins/film-studio-prompts/prompt-keys.ts` as "the plugin
+ * repo" — the plugin repo's copy of that same comment necessarily flips
+ * those two references, same vantage-point pattern as this header comment.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
-import type { AudioFxPreset } from "@nodaro/shared"
+import type { AudioFxPreset, SurroundDirection } from "@nodaro/shared"
 
 // ============================================================================
 // Job / handler shapes
@@ -190,6 +194,8 @@ export interface PluginMediaToolkit {
   mergeVideoAudio(options: PluginMergeVideoAudioOptions): Promise<string>
   /** Mirrors `applyAudioFx` (`providers/video/audio-fx.ts`). */
   applyAudioFx(opts: PluginAudioFxOptions): Promise<{ outputPath: string }>
+  /** Mirrors `applyImageWatermark` (`utils/watermark.ts`). */
+  applyImageWatermark(buffer: Buffer): Promise<Buffer>
 }
 
 // ============================================================================
@@ -305,6 +311,17 @@ export interface PluginCreditGuardOpts {
   dedup?: boolean
 }
 
+/**
+ * Minimal structural mirror of the undici `Response` subset `fetchImageBytes`
+ * actually reads: `.ok`, `.status`, `.headers.get(...)`, `.arrayBuffer()`.
+ */
+export interface PluginFetchResponse {
+  readonly ok: boolean
+  readonly status: number
+  readonly headers: { get(name: string): string | null }
+  arrayBuffer(): Promise<ArrayBuffer>
+}
+
 export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
@@ -339,6 +356,12 @@ export interface PluginHttpToolkit {
     message: string
     issues: Array<{ path: string; message: string }>
   }
+  /**
+   * Mirrors `safeFetch` (`lib/safe-fetch.ts`), narrowed: the only real call
+   * site (`fetchImageBytes`) never passes `init`, so the member omits it
+   * rather than importing undici's `SafeFetchInit`/`Response` types.
+   */
+  safeFetch(url: string): Promise<PluginFetchResponse>
 }
 
 // ============================================================================
@@ -355,14 +378,79 @@ export interface PluginToolkit {
 }
 
 // ============================================================================
+// Engines — named callables a plugin exposes for CORE code to invoke
+// directly (not a queue handler, not an HTTP route)
+// ============================================================================
+
+/**
+ * One named member per extracted engine — a plugin that exposes a callable
+ * computation for core code to invoke directly (not a queue handler, not an
+ * HTTP route). Future engine-shaped capabilities nest here as a new optional
+ * member; capabilities whose entire contribution is DATA (no callable, e.g.
+ * `prompts()`) are separate top-level `NodaroPrivatePlugin` members instead.
+ */
+export interface PluginEngines {
+  surround?: PluginSurroundEngine
+}
+
+/** Mirrors the public surface of `services/surround/index.ts` (moved to the private repo's `src/plugins/surround/`). */
+export interface PluginSurroundEngine {
+  buildSurroundComposite(opts: {
+    referenceImageUrl: string
+    direction: SurroundDirection
+    carriedFraction: number
+    jobId: string
+    userId?: string
+  }): Promise<string>
+  harmonizeSurround(opts: {
+    compositeUrl: string
+    paintedUrl: string
+    direction: SurroundDirection
+    carriedFraction: number
+    jobId: string
+    userId?: string
+    watermark: boolean
+  }): Promise<string>
+}
+
+// ============================================================================
 // Plugin registration surface
 // ============================================================================
+
+/**
+ * Additive (S9). A plugin whose entire contribution is DATA — no routes,
+ * no handlers, no pricing — implements ONLY this member. Keys are the
+ * PIPELINE_PROMPT_KEYS constants (mirrored in both repos — see
+ * `ee/pipelines/llms/prompt-registry.ts` here /
+ * `src/plugins/film-studio-prompts/prompt-keys.ts` in the plugin repo). Values
+ * are the exact doctrine string — no functions, no per-request
+ * interpolation; callers substitute any placeholders (e.g.
+ * "{{current_plan_json}}") themselves after lookup. Merged additively across
+ * plugins (last write wins per key, mirroring the Object.assign merge
+ * `handlers()` already gets) into `ee/pipelines/llms/prompt-registry.ts` via
+ * `registerPipelinePrompts()`.
+ */
+export type PromptTable = Record<string, string>
 
 export interface NodaroPrivatePlugin {
   name: string
   registerRoutes?(app: FastifyInstance, tk: PluginToolkit): Promise<void>
   handlers?(tk: PluginToolkit): Record<string, PluginHandlerFn>
   staticCreditCosts?(): Record<string, number>
+  /**
+   * Additive: named engines a plugin exposes for CORE code to call directly
+   * (not a queue handler, not an HTTP route). Used when a core worker/route
+   * must keep its own orchestration but delegate one self-contained,
+   * IP-sensitive computation to private code. Grows the same way
+   * `PluginToolkit` does — additive-only, one new optional named member per
+   * capability, never removed/narrowed without a CONTRACT_VERSION bump.
+   * Same shape as `handlers(tk)`: a function of the toolkit, so an engine's
+   * own internals can reach shared app functionality (safeFetch, storage,
+   * watermarking) through `tk` without importing an app path.
+   */
+  engines?(tk: PluginToolkit): PluginEngines
+  /** See `PromptTable`'s doc comment above for the full contract. */
+  prompts?(): PromptTable
 }
 
 export interface PrivatePluginsModule {

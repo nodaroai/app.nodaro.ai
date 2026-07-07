@@ -11,6 +11,7 @@ import {
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
+import { applyImageWatermark } from "../../utils/watermark.js"
 import { uploadBufferToR2, uploadFileToR2 } from "../storage.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import { markJobCompleted, setJobProgress, withProgressRamp, commitJobCredits } from "../../workers/shared.js"
@@ -18,6 +19,7 @@ import { supabase } from "../supabase.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { safeUrlSchema } from "../url-validator.js"
+import { safeFetch } from "../safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
@@ -66,6 +68,7 @@ export function buildToolkit(): PluginToolkit {
       mixAudio,
       mergeVideoAudio,
       applyAudioFx,
+      applyImageWatermark,
     },
     storage: {
       uploadBufferToR2,
@@ -90,6 +93,7 @@ export function buildToolkit(): PluginToolkit {
       extractMcpClient,
       buildJobInputData,
       formatZodError,
+      safeFetch,
     },
   }
 }

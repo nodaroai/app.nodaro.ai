@@ -84,7 +84,7 @@ describe("loadPrivatePlugins", () => {
 
     const result = await loadPrivatePlugins({ importer, exit })
 
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
     expect(importer).not.toHaveBeenCalled()
     expect(exit).not.toHaveBeenCalled()
   })
@@ -98,7 +98,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
 
     errorSpy.mockRestore()
   })
@@ -113,7 +113,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
 
     warnSpy.mockRestore()
   })
@@ -127,7 +127,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
 
     errorSpy.mockRestore()
   })
@@ -142,18 +142,22 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
 
     warnSpy.mockRestore()
   })
 
-  it("cloud + valid module: registers routes on the passed app, merges handlers, applies staticCreditCosts via the credits hook", async () => {
+  it("cloud + valid module: registers routes on the passed app, merges handlers, applies staticCreditCosts via the credits hook, merges engines, collects prompts", async () => {
     const registerRoutes = vi.fn().mockResolvedValue(undefined)
     const handlerFn = vi.fn()
+    const buildSurroundComposite = vi.fn()
+    const harmonizeSurround = vi.fn()
     const plugin = makePlugin({
       registerRoutes,
       handlers: () => ({ "voice-changer-pro": handlerFn }),
       staticCreditCosts: () => ({ "some-plugin-node": 3 }),
+      engines: () => ({ surround: { buildSurroundComposite, harmonizeSurround } }),
+      prompts: () => ({ "some.prompt.key": "You are a test prompt." }),
     })
     const importer = vi.fn().mockResolvedValue({ contractVersion: 1, plugins: [plugin] })
     const exit = vi.fn() as unknown as (code: number) => never
@@ -170,6 +174,31 @@ describe("loadPrivatePlugins", () => {
     expect(result.handlers["voice-changer-pro"]).toBe(handlerFn)
     expect(result.loaded).toEqual(["voice-changer-pro"])
     expect(mockRegisterStaticCreditCosts).toHaveBeenCalledWith({ "some-plugin-node": 3 })
+    expect(result.engines.surround?.buildSurroundComposite).toBe(buildSurroundComposite)
+    expect(result.engines.surround?.harmonizeSurround).toBe(harmonizeSurround)
+    expect(result.prompts).toEqual({ "some.prompt.key": "You are a test prompt." })
+  })
+
+  it("cloud + valid module + two plugins: engines and prompts merge additively (last write wins per key)", async () => {
+    const pluginA = makePlugin({
+      name: "plugin-a",
+      prompts: () => ({ "shared.key": "from A", "a.only": "only A" }),
+    })
+    const surroundEngine = { buildSurroundComposite: vi.fn(), harmonizeSurround: vi.fn() }
+    const pluginB = makePlugin({
+      name: "plugin-b",
+      engines: () => ({ surround: surroundEngine }),
+      prompts: () => ({ "shared.key": "from B", "b.only": "only B" }),
+    })
+    const importer = vi.fn().mockResolvedValue({ contractVersion: 1, plugins: [pluginA, pluginB] })
+    const exit = vi.fn() as unknown as (code: number) => never
+
+    const result = await loadPrivatePlugins({ importer, exit, toolkit: fakeToolkit })
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(result.loaded).toEqual(["plugin-a", "plugin-b"])
+    expect(result.engines.surround).toBe(surroundEngine)
+    expect(result.prompts).toEqual({ "shared.key": "from B", "a.only": "only A", "b.only": "only B" })
   })
 
   it("cloud + valid module + no app passed: does not register routes, still merges handlers (worker-only load)", async () => {
@@ -196,6 +225,6 @@ describe("loadPrivatePlugins", () => {
     const result = await loadPrivatePlugins({ app: fakeApp, importer, exit })
 
     expect(exit).not.toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [] })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
   })
 })
