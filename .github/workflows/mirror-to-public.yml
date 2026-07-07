@@ -5,7 +5,9 @@
 name: mirror-to-public
 on: { push: { branches: [main, dev] } }
 permissions: { contents: read }
-concurrency: { group: mirror-${{ github.ref }}, cancel-in-progress: false }
+concurrency:
+  group: mirror-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   gate-and-mirror:
     runs-on: ubuntu-latest
