@@ -1,0 +1,40 @@
+# Gated mirror: on every merge to main/dev, run the leak gates; if they pass AND
+# PUBLIC_MIRROR_TOKEN is set, fast-forward that ref to the PUBLIC app.nodaro.ai.
+# The leak gates run regardless of the token (valuable early-catch). The mirror
+# step is token-guarded, so this file is inert-but-useful until the token exists.
+name: mirror-to-public
+on: { push: { branches: [main, dev] } }
+permissions: { contents: read }
+concurrency: { group: mirror-${{ github.ref }}, cancel-in-progress: false }
+jobs:
+  gate-and-mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: leak gate — extracted private symbols
+        run: node tools/check-private-leaks.mjs
+      - name: leak gate — provider-$/margin in packages
+        run: node tools/check-pricing-leaks.mjs
+      - name: boundary — no core→ee imports
+        run: node tools/check-ee-imports.mjs
+      - name: secret gate — gitleaks
+        run: |
+          VER=8.30.1
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --no-banner --redact --source .
+      - name: mirror clean ref → public (token-guarded)
+        env:
+          TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+          REF: ${{ github.ref_name }}
+        run: |
+          if [ -z "$TOK" ]; then
+            echo "PUBLIC_MIRROR_TOKEN not set — leak gates passed, skipping mirror."
+            echo "Add the token (fine-grained PAT, Contents:RW on nodaroai/app.nodaro.ai) to enable auto-publish."
+            exit 0
+          fi
+          git push "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git" "HEAD:${REF}"
+          echo "mirrored ${REF} → public ✓"
