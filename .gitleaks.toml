@@ -1,0 +1,29 @@
+# gitleaks config for the public-mirror secret gate.
+# Extends the default ruleset; allowlists ONLY confirmed documentation/example
+# placeholders (verified 2026-07-07: no real secret among them). Kept surgical —
+# real secrets in these files would still be caught (patterns, not blanket paths,
+# except the two files whose entire purpose is showing API-usage examples).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Placeholder tokens in docs/UI examples (YOUR_TOKEN, universal JWT header + ellipsis)"
+regexTarget = "match"
+regexes = [
+  '''YOUR_[A-Z_]+''',                                        # curl 'Bearer YOUR_TOKEN' UI/doc examples
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.''',          # universal JWT header ({"alg":"HS256"}) + literal ... = format sample
+]
+
+[[allowlists]]
+description = "Files that exist to SHOW API-usage examples / test model-id matrices — no real secrets"
+paths = [
+  '''frontend/src/app/\(dashboard\)/settings/api/page\.tsx''',  # renders curl examples for the user's own API token
+  '''backend/scripts/kie-test-matrix\.ts''',                    # modelKey = model identifier strings (test data)
+]
+
+[[allowlists]]
+description = "curl 'Authorization:' examples inside markdown docs (CLAUDE.md, API docs) — templates, not secrets"
+matchCondition = "AND"
+paths = ['''.*\.md$''']
+regexes = ['''Authorization:''']
+regexTarget = "match"
