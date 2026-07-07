@@ -1,14 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { AI_AVATAR_RESERVE_IDS, CINEMATIC_RESERVE_IDS } from "@nodaro/shared"
 import {
   SUBSCRIPTION_TIERS,
   TOPUP_PACKAGES,
-  LLM_MODELS,
   FFMPEG_NODES,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
-  CREDIT_VALUE_USD,
-  MODEL_REFERENCE,
   detectCategory,
 } from "../pricing-data"
 import type { DBCategory } from "../pricing-data"
@@ -31,7 +27,6 @@ describe("SUBSCRIPTION_TIERS", () => {
       expect(typeof tier.priceAnnual).toBe("number")
       expect(typeof tier.credits).toBe("number")
       expect(tier.llmRequests).toBeTruthy()
-      expect(typeof tier.estimatedCost).toBe("number")
     }
   })
 
@@ -60,21 +55,6 @@ describe("TOPUP_PACKAGES", () => {
     for (let i = 1; i < TOPUP_PACKAGES.length; i++) {
       expect(TOPUP_PACKAGES[i].credits).toBeGreaterThan(TOPUP_PACKAGES[i - 1].credits)
       expect(TOPUP_PACKAGES[i].price).toBeGreaterThan(TOPUP_PACKAGES[i - 1].price)
-    }
-  })
-})
-
-describe("LLM_MODELS", () => {
-  it("has at least 1 model", () => {
-    expect(LLM_MODELS.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it("every model has required fields", () => {
-    for (const m of LLM_MODELS) {
-      expect(m.model).toBeTruthy()
-      expect(m.inputCost).toBeTruthy()
-      expect(m.outputCost).toBeTruthy()
-      expect(m.perRequest).toBeTruthy()
     }
   })
 })
@@ -144,126 +124,6 @@ describe("CATEGORY_COLORS", () => {
     for (const cat of categories) {
       expect(CATEGORY_COLORS[cat]).toMatch(/^text-/)
     }
-  })
-})
-
-describe("CREDIT_VALUE_USD", () => {
-  it("is 0.02", () => {
-    expect(CREDIT_VALUE_USD).toBe(0.02)
-  })
-})
-
-describe("MODEL_REFERENCE", () => {
-  it("has at least 20 models", () => {
-    expect(Object.keys(MODEL_REFERENCE).length).toBeGreaterThanOrEqual(20)
-  })
-
-  it("every model has provider, providerCostUsd, and markupPct", () => {
-    for (const [, ref] of Object.entries(MODEL_REFERENCE)) {
-      expect(ref.provider).toBeTruthy()
-      expect(typeof ref.markupPct).toBe("number")
-      expect(ref.providerCostUsd === null || typeof ref.providerCostUsd === "number").toBe(true)
-    }
-  })
-
-  it("self-hosted models have 0 markup", () => {
-    expect(MODEL_REFERENCE["ffmpeg"].markupPct).toBe(0)
-    expect(MODEL_REFERENCE["render-video"].markupPct).toBe(0)
-  })
-
-  it("KIE.ai video models have numeric providerCostUsd", () => {
-    expect(typeof MODEL_REFERENCE["runway-kie"].providerCostUsd).toBe("number")
-    expect(typeof MODEL_REFERENCE["runway-aleph"].providerCostUsd).toBe("number")
-  })
-
-  it("has ideogram-v3 entry", () => {
-    expect(MODEL_REFERENCE["ideogram-v3"]).toBeDefined()
-    expect(MODEL_REFERENCE["ideogram-v3"].provider).toBeTruthy()
-  })
-
-  it("has kling-3.0-motion entry", () => {
-    expect(MODEL_REFERENCE["kling-3.0-motion"]).toBeDefined()
-    expect(MODEL_REFERENCE["kling-3.0-motion"].provider).toBeTruthy()
-  })
-
-  it("has topaz-image-upscale entry", () => {
-    expect(MODEL_REFERENCE["topaz-image-upscale"]).toBeDefined()
-    expect(MODEL_REFERENCE["topaz-image-upscale"].provider).toBeTruthy()
-  })
-
-  it("has speech-to-video entry", () => {
-    expect(MODEL_REFERENCE["speech-to-video"]).toBeDefined()
-    expect(MODEL_REFERENCE["speech-to-video"].provider).toBeTruthy()
-  })
-
-  it("has suno-mashup entry", () => {
-    expect(MODEL_REFERENCE["suno-mashup"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-mashup"].provider).toBeTruthy()
-  })
-
-  it("has suno-replace-section entry", () => {
-    expect(MODEL_REFERENCE["suno-replace-section"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-replace-section"].provider).toBeTruthy()
-  })
-
-  it("has suno-style-boost entry", () => {
-    expect(MODEL_REFERENCE["suno-style-boost"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-style-boost"].provider).toBeTruthy()
-  })
-
-  it("has suno-add-instrumental entry", () => {
-    expect(MODEL_REFERENCE["suno-add-instrumental"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-add-instrumental"].provider).toBeTruthy()
-  })
-
-  it("has suno-add-vocals entry", () => {
-    expect(MODEL_REFERENCE["suno-add-vocals"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-add-vocals"].provider).toBeTruthy()
-  })
-
-  it("has suno-convert-wav entry", () => {
-    expect(MODEL_REFERENCE["suno-convert-wav"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-convert-wav"].provider).toBeTruthy()
-  })
-
-  it("has suno-upload-extend entry", () => {
-    expect(MODEL_REFERENCE["suno-upload-extend"]).toBeDefined()
-    expect(MODEL_REFERENCE["suno-upload-extend"].provider).toBeTruthy()
-  })
-
-  // Parity guard: the admin MODEL_REFERENCE must cover EVERY reserve id derived
-  // from the shared single-source-of-truth registries. This prevents the admin
-  // pricing table from drifting (phantom or missing duration buckets) when the
-  // shared bucket lists change. See @nodaro/shared ai-avatar-pricing.ts /
-  // cinematic-avatar-pricing.ts.
-  it("covers every AI_AVATAR_RESERVE_IDS id (no phantom/missing buckets)", () => {
-    expect(AI_AVATAR_RESERVE_IDS.length).toBe(60)
-    for (const id of AI_AVATAR_RESERVE_IDS) {
-      expect(MODEL_REFERENCE[id], `missing MODEL_REFERENCE entry for ${id}`).toBeDefined()
-    }
-  })
-
-  it("has no stale heygen-avatar entries beyond AI_AVATAR_RESERVE_IDS", () => {
-    const reserveSet = new Set(AI_AVATAR_RESERVE_IDS)
-    const phantom = Object.keys(MODEL_REFERENCE).filter(
-      (id) => id.startsWith("heygen-avatar-") && !reserveSet.has(id),
-    )
-    expect(phantom, `phantom heygen-avatar ids: ${phantom.join(", ")}`).toEqual([])
-  })
-
-  it("covers every CINEMATIC_RESERVE_IDS id", () => {
-    expect(CINEMATIC_RESERVE_IDS.length).toBe(24)
-    for (const id of CINEMATIC_RESERVE_IDS) {
-      expect(MODEL_REFERENCE[id], `missing MODEL_REFERENCE entry for ${id}`).toBeDefined()
-    }
-  })
-
-  it("has no stale cinematic-avatar entries beyond CINEMATIC_RESERVE_IDS", () => {
-    const reserveSet = new Set(CINEMATIC_RESERVE_IDS)
-    const phantom = Object.keys(MODEL_REFERENCE).filter(
-      (id) => id.startsWith("cinematic-avatar:") && !reserveSet.has(id),
-    )
-    expect(phantom, `phantom cinematic-avatar ids: ${phantom.join(", ")}`).toEqual([])
   })
 })
 

@@ -11,7 +11,6 @@ import {
   Search,
   Loader2,
   ExternalLink,
-  Brain,
   Save,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -21,17 +20,11 @@ import { useAdminModels, useUpdateModelPricingMutation } from "@/ee/hooks/querie
 import {
   SUBSCRIPTION_TIERS,
   TOPUP_PACKAGES,
-  LLM_MODELS,
   FFMPEG_NODES,
   detectCategory,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
-  MODEL_REFERENCE,
-  CREDIT_VALUE_USD,
-  SELL_PRICE_PER_CREDIT_MIN,
-  SELL_PRICE_PER_CREDIT_MAX,
   type DBCategory,
-  type LLMPricing,
 } from "./pricing-data"
 
 // ── DB model type (same shape as /admin/models) ─────────────────────
@@ -90,8 +83,6 @@ function computeQuickStats(models: ReadonlyArray<DBModelPricing>) {
     { label: "Enabled models", value: `${enabledModels.length} / ${models.length}` },
     { label: "All images", value: imageRange },
     { label: "FFmpeg nodes", value: "Always free" },
-    { label: "Markup", value: "25%" },
-    { label: "Sell price / credit", value: `$${SELL_PRICE_PER_CREDIT_MIN} - $${SELL_PRICE_PER_CREDIT_MAX}` },
   ] as const
 }
 
@@ -118,15 +109,6 @@ function QuickStatsCard({ models }: { readonly models: ReadonlyArray<DBModelPric
   )
 }
 
-// ── Margin color helper ─────────────────────────────────────────────
-
-function marginColor(margin: number | null): string {
-  if (margin === null) return "text-zinc-400"
-  if (margin > 40) return "text-green-600 dark:text-green-400"
-  if (margin >= 25) return "text-yellow-600 dark:text-yellow-400"
-  return "text-red-600 dark:text-red-400"
-}
-
 // ── Subscription Tiers (static) ─────────────────────────────────────
 
 function SubscriptionTiersSection() {
@@ -146,8 +128,6 @@ function SubscriptionTiersSection() {
               <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Credits</th>
               <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">$/Credit</th>
               <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">LLM Requests</th>
-              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Our Cost</th>
-              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Margin (Mo/Yr)</th>
               <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Notes</th>
             </tr>
           </thead>
@@ -160,10 +140,6 @@ function SubscriptionTiersSection() {
                 <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.credits.toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.perCredit !== null ? `$${tier.perCredit.toFixed(3)}` : "--"}</td>
                 <td className="px-4 py-2.5 text-xs">{tier.llmRequests}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs">~${tier.estimatedCost}</td>
-                <td className={`px-4 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(tier.marginAnnual)}`}>
-                  {tier.marginMonthly !== null ? `${tier.marginMonthly}/${tier.marginAnnual}%` : "loss leader"}
-                </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">{tier.notes ?? ""}</td>
               </tr>
             ))}
@@ -273,7 +249,7 @@ function InlineEditableCell({
   )
 }
 
-// ── Detailed Model Table (with base cost, markup, margin) ───────
+// ── Detailed Model Table (editable per-model credit cost) ───────────
 
 function DetailedModelTable({
   models,
@@ -335,29 +311,13 @@ function DetailedModelTable({
                 <thead className="bg-muted/20">
                   <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="text-left px-3 py-2 font-medium">Model</th>
-                    <th className="text-right px-3 py-2 font-medium">Base Cost</th>
-                    <th className="text-right px-3 py-2 font-medium">Markup</th>
-                    <th className="text-right px-3 py-2 font-medium">+Markup</th>
                     <th className="text-right px-3 py-2 font-medium">Credits</th>
-                    <th className="text-right px-3 py-2 font-medium">Sell Price</th>
-                    <th className="text-right px-3 py-2 font-medium">Margin</th>
                     <th className="px-3 py-2 w-12" />
                   </tr>
                 </thead>
                 <tbody>
                   {group.map((m) => {
-                    const ref = MODEL_REFERENCE[m.model_identifier] ?? null
-                    const providerCost = ref?.providerCostUsd ?? null
-                    const markup = ref?.markupPct ?? 0
-                    const costWithMarkup = providerCost != null ? providerCost * (1 + markup / 100) : null
                     const creditCost = pendingCosts[m.model_identifier] ?? m.credit_cost
-                    // Sell price range across tiers
-                    const sellMin = creditCost * SELL_PRICE_PER_CREDIT_MIN  // Business tier (worst)
-                    const sellMax = creditCost * SELL_PRICE_PER_CREDIT_MAX  // Basic tier (best)
-                    // Margin based on worst-case sell price (Business tier)
-                    const margin = providerCost != null && sellMin > 0
-                      ? ((sellMin - providerCost) / sellMin * 100)
-                      : null
                     const hasPending = m.model_identifier in pendingCosts
                     const isSaving = savingId === m.model_identifier
 
@@ -378,20 +338,6 @@ function DetailedModelTable({
                             </div>
                           </div>
                         </td>
-                        {/* Base cost */}
-                        <td className="px-3 py-2.5 text-right font-mono text-xs">
-                          {providerCost != null
-                            ? `$${providerCost.toFixed(3)}`
-                            : <span className="text-muted-foreground italic text-[10px]">dynamic</span>}
-                        </td>
-                        {/* Markup % */}
-                        <td className="px-3 py-2.5 text-right font-mono text-xs text-muted-foreground">
-                          {markup}%
-                        </td>
-                        {/* Cost + Markup */}
-                        <td className="px-3 py-2.5 text-right font-mono text-xs">
-                          {costWithMarkup != null ? `$${costWithMarkup.toFixed(3)}` : "--"}
-                        </td>
                         {/* Credit cost (editable) */}
                         <td className="px-3 py-2.5 text-right">
                           <InlineEditableCell
@@ -399,18 +345,6 @@ function DetailedModelTable({
                             onSave={(val) => onCostChange(m.model_identifier, val)}
                             disabled={isSaving}
                           />
-                        </td>
-                        {/* Sell price range */}
-                        <td className="px-3 py-2.5 text-right font-mono text-xs">
-                          {creditCost > 0
-                            ? <span title={`Basic: $${sellMax.toFixed(2)} / Business: $${sellMin.toFixed(2)}`}>
-                                ${sellMin.toFixed(2)} - ${sellMax.toFixed(2)}
-                              </span>
-                            : <span className="text-muted-foreground">$0</span>}
-                        </td>
-                        {/* Margin (worst case = Business tier) */}
-                        <td className={`px-3 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(margin)}`}>
-                          {margin != null ? `${margin.toFixed(0)}%` : "--"}
                         </td>
                         {/* Save */}
                         <td className="px-3 py-2.5">
@@ -442,54 +376,7 @@ function DetailedModelTable({
   )
 }
 
-// ── LLM Table (static) ──────────────────────────────────────────────
-
-function filterLLMs(models: readonly LLMPricing[], query: string): readonly LLMPricing[] {
-  if (!query.trim()) return models
-  const q = query.toLowerCase()
-  return models.filter((m) => m.model.toLowerCase().includes(q))
-}
-
-function LLMTable({ search }: { readonly search: string }) {
-  const filtered = filterLLMs(LLM_MODELS, search)
-
-  if (filtered.length === 0) {
-    return (
-      <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-        No models match &quot;{search}&quot;
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50">
-          <tr>
-            <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Model</th>
-            <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Input $/M tokens</th>
-            <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Output $/M tokens</th>
-            <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">~Cost / request</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((m) => (
-            <tr key={m.model} className="border-t hover:bg-muted/30 transition-colors">
-              <td className="px-4 py-2.5 font-medium">{m.model}</td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs">{m.inputCost}</td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs">{m.outputCost}</td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs">{m.perRequest}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 // ── AI Models Section (with inline edit + save) ─────────────────────
-
-type ViewMode = "db" | "llm"
 
 function AIModelsSection({
   models,
@@ -498,7 +385,6 @@ function AIModelsSection({
   readonly models: ReadonlyArray<DBModelPricing>
   readonly loading: boolean
 }) {
-  const [viewMode, setViewMode] = useState<ViewMode>("db")
   const [search, setSearch] = useState("")
   const [pendingCosts, setPendingCosts] = useState<Record<string, number>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -561,32 +447,9 @@ function AIModelsSection({
         </Link>
       </div>
 
-      {/* View toggle + search */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3 border-b bg-muted/20">
-        <div className="flex gap-1">
-          <button
-            onClick={() => setViewMode("db")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              viewMode === "db"
-                ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
-                : "text-muted-foreground hover:bg-muted/50 border border-transparent"
-            }`}
-          >
-            <DollarSign className="h-3.5 w-3.5" />
-            All Models ({models.length})
-          </button>
-          <button
-            onClick={() => setViewMode("llm")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              viewMode === "llm"
-                ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
-                : "text-muted-foreground hover:bg-muted/50 border border-transparent"
-            }`}
-          >
-            <Brain className="h-3.5 w-3.5" />
-            LLM
-          </button>
-        </div>
+        <span className="text-xs text-muted-foreground">{models.length} models</span>
         <div className="relative sm:ml-auto w-full sm:w-56">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -603,13 +466,6 @@ function AIModelsSection({
         <div className="flex justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : viewMode === "llm" ? (
-        <>
-          <LLMTable search={search} />
-          <div className="px-4 py-2.5 text-xs text-muted-foreground border-t bg-muted/20">
-            Included free in tier quota. After quota exhausted: 1 credit per request.
-          </div>
-        </>
       ) : (
         <>
           <DetailedModelTable
@@ -621,7 +477,7 @@ function AIModelsSection({
             savingId={savingId}
           />
           <div className="px-4 py-2.5 text-xs text-muted-foreground border-t bg-muted/20">
-            Sell Price = credits x $/credit (Basic $0.20 - Business $0.133). Margin = worst case (Business tier): (sell - cost) / sell. Click any credit value to edit.
+            Click any credit value to edit.
           </div>
         </>
       )}
@@ -718,7 +574,7 @@ export default function AdminPricingPage() {
       {/* 3. Top-Up Credits (static) */}
       <TopUpSection />
 
-      {/* 4. AI Model Pricing (from DB + reference data) */}
+      {/* 4. AI Model Pricing (from DB) */}
       <AIModelsSection models={models} loading={loading} />
 
       {/* 5. FFmpeg Post-Processing (static) */}

@@ -514,7 +514,7 @@ export function useAdminSettings() {
       const settings = data.settings as Record<string, unknown>
       return {
         ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "replicate",
-        cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
+        cost_markup_percent: (settings.cost_markup_percent as number) ?? 0,
         carousel_video_autoplay: (settings.carousel_video_autoplay as boolean) ?? true,
         apps_page_video_autoplay: (settings.apps_page_video_autoplay as boolean) ?? true,
         featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],

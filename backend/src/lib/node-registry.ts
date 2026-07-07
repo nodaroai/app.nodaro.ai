@@ -209,7 +209,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "video",
     // Duration-bucketed pricing — see `STATIC_CREDIT_COSTS["replicate-mmaudio:*"]`
     // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
-    // Range is pre-markup; user-visible cost is bucket × (1 + cost_markup_percent/100) × versions.
+    // Range is pre-markup; the admin-configured markup and version count are
+    // applied to the user-visible cost.
     creditCost: "1-11",
     providers: ["replicate-mmaudio"],
     capabilities: ["sound-effect"],
