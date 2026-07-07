@@ -2,8 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { ChatTurnResponseSchema, type ChatTurnResponse } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import type { EditorCutDecision } from "./editor.js"
-
-const _REDACTED_PROMPT_25 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunChatRefinePostMergeArgs {
   supabase: SupabaseClient
@@ -38,6 +37,7 @@ const CUT_DECISIONS_PROMPT_LIMIT = 20
 export async function runChatRefinePostMerge(
   args: RunChatRefinePostMergeArgs,
 ): Promise<{ output: ChatTurnResponse; llmCallId: string }> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.chatRefinePostmerge)
   const beatLine =
     args.beatGridUsed === null
       ? "null (no music)"
@@ -69,7 +69,7 @@ Diagnose. Reply via the emit tool.`
     task: "chat_refine_postmerge",
     modelId: "claude-sonnet-4-6",
     temperature: 0.5,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: ChatTurnResponseSchema,
     maxRetries: 2,

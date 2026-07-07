@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ImprovePromptResultSchema, type ImprovePromptInput, type ImprovePromptResult, type SceneNodeData, type ShowrunnerPlan, VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_18 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunImprovePromptArgs {
   supabase: SupabaseClient
@@ -16,6 +15,7 @@ export interface RunImprovePromptArgs {
 }
 
 export async function runImprovePrompt(args: RunImprovePromptArgs): Promise<ImprovePromptResult> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperImprovePrompt)
   const caps = VIDEO_MODEL_CAPS[args.scene.video_model]
   const promptingStyle = caps?.prompting_style ?? "natural_language"
   const targetIds =
@@ -57,7 +57,7 @@ Rewrite and respond as JSON.`
     task: "improve_prompt",
     modelId: "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: ImprovePromptResultSchema,
     maxRetries: 1,

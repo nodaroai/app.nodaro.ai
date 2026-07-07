@@ -5,6 +5,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
 import { runLocationsCoverageCritic } from "../locations-coverage-critic.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -42,7 +43,10 @@ describe("runLocationsCoverageCritic", () => {
     expect(args.maxRetries).toBe(1)
     expect(args.modelId).toBe("claude-sonnet-4-6")
     expect(args.temperature).toBe(0.2)
-    expect(args.systemPrompt).toContain("Locations Coverage Critic")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the exact string the registry holds for this
+    // key flows through to callLLM unmodified.
+    expect(args.systemPrompt).toBe(getPipelinePrompt(PIPELINE_PROMPT_KEYS.locationsCoverageCritic))
   })
 
   it("returns the parsed verdict", async () => {

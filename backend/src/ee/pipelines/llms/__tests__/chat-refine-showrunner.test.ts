@@ -5,6 +5,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
 import { runChatRefineShowrunner } from "../chat-refine-showrunner.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -54,19 +55,29 @@ describe("runChatRefineShowrunner", () => {
     expect(args.temperature).toBe(0.5)
   })
 
-  it("system prompt contains role-anchor text + embedded plan JSON", async () => {
+  it("system prompt resolves from the registry with the plan JSON substituted for the placeholder", async () => {
     vi.mocked(callLLM).mockResolvedValue({
       output: { reply: "ok", proposed_change: null },
       llmCallId: "x", costUsd: 0, inputTokens: 0, outputTokens: 0,
     } as never)
 
+    const plan = makePlan()
     await runChatRefineShowrunner({
       supabase: mockSupabase, pipelineId: "p1", stageId: "s1", userId: "u1",
-      currentPlan: makePlan(), priorTurns: [], userMessage: "msg",
+      currentPlan: plan, priorTurns: [], userMessage: "msg",
     })
 
     const args = vi.mocked(callLLM).mock.calls[0][0]
-    expect(args.systemPrompt).toContain("Showrunner Refinement Director")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the registry-resolved base template with the
+    // {{current_plan_json}} placeholder substituted, exactly as the engine
+    // (runChatRefineShowrunner's own .replace() call) is supposed to do it.
+    const expectedSystemPrompt = getPipelinePrompt(
+      PIPELINE_PROMPT_KEYS.chatRefineShowrunnerBase,
+    ).replace("{{current_plan_json}}", JSON.stringify(plan, null, 2))
+    expect(args.systemPrompt).toBe(expectedSystemPrompt)
+    // Still meaningful against a fixture template: proves the ENGINE actually
+    // substitutes the plan JSON into the placeholder (not a literal string).
     expect(args.systemPrompt).toContain('"title": "T"')
     expect(args.systemPrompt).toContain('"scene_index": 1')
   })

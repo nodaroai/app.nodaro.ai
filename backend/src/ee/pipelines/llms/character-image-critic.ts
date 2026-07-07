@@ -1,11 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { CharacterImageCriticVerdictSchema, IMAGE_CRITIC_MIN_ADHERENCE_SCORE, type CharacterImageCriticVerdict } from "@nodaro/shared"
+import { CharacterImageCriticVerdictSchema, type CharacterImageCriticVerdict } from "@nodaro/shared"
 import {
   runImageCritic,
   type ImageCriticGlobalStyle,
 } from "./_image-critic-shared.js"
-
-const _REDACTED_PROMPT_21 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunCharacterImageCriticArgs {
   supabase: SupabaseClient
@@ -23,7 +22,7 @@ export async function runCharacterImageCritic(
   return runImageCritic<CharacterImageCriticVerdict>({
     ...args,
     task: "character_image",
-    systemPrompt: '[REDACTED]',
+    systemPrompt: getPipelinePrompt(PIPELINE_PROMPT_KEYS.characterImageCritic),
     schema: CharacterImageCriticVerdictSchema,
   })
 }

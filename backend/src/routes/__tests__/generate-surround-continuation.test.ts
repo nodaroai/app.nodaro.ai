@@ -35,7 +35,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true,
-  hasCredits: () => true,
+  hasCredits: vi.fn(() => true),
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
@@ -298,5 +298,28 @@ describe("POST /v1/generate-surround-continuation", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+
+  // S8: surround-continuation's engine was extracted to the Cloud-only
+  // @nodaroai/cloud-plugins package, so the route is now Cloud-only too (it
+  // was previously ungated). The gate fires as the literal first statement in
+  // the handler — before Zod parsing, the location read, or credit reservation.
+  it("returns 403 edition_required when hasCredits() is false (Community/Business), with zero side effects", async () => {
+    const config = await import("../../lib/config.js")
+    ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      // Deliberately invalid body — proves the gate fires BEFORE Zod parsing,
+      // not just before the queue add.
+      payload: { direction: "not-a-real-direction" },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("edition_required")
+    expect(res.json().error.required_edition).toBe("cloud")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+    expect(supabase.from).not.toHaveBeenCalled()
   })
 })

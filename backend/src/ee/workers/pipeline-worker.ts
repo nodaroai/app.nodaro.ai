@@ -25,6 +25,23 @@ import { pipelineEvents } from "../pipelines/events.js"
 import { pipelineContext } from "../pipelines/pipeline-context.js"
 import { pipelineOrchestrationQueue, type PipelineOrchestrationJobData } from "../pipelines/queue.js"
 import { resumeActiveOrchestrators } from "../pipelines/resume.js"
+import { loadPrivatePlugins } from "../../lib/private-plugins/load.js"
+
+// S9 P0 fix — this worker never called loadPrivatePlugins() before, so every
+// pipeline stage (runShowrunner, runSceneDirector, the critic suite, all 8
+// helpers) would call getPipelinePrompt() against an EMPTY registry and throw
+// PipelinePromptUnavailableError on every run, in every correctly-configured
+// cloud deployment. `startPipelineWorker()` is invoked exactly once, from
+// `backend/src/pipeline-worker.ts`'s `main()`, via a dynamic
+// `import("./ee/workers/pipeline-worker.js")` — that dynamic import fully
+// evaluates this module's top level (including this awaited call) BEFORE the
+// import promise resolves, so by the time the caller can even reach
+// `startPipelineWorker()`, prompts are already registered. Mirrors
+// `workers/video-worker.ts`'s top-level-await pattern exactly (no `app` — this
+// process has no Fastify instance; only the side effect of registering
+// prompts into ee/pipelines/llms/prompt-registry.ts matters here, so the
+// return value is intentionally discarded).
+await loadPrivatePlugins({})
 
 const CONCURRENCY = Number(process.env.PIPELINE_WORKER_CONCURRENCY ?? "5")
 

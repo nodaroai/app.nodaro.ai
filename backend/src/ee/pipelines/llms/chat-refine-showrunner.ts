@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ChatTurnResponseSchema, type ChatTurnResponse, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
-
-const _REDACTED_PROMPT_12 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunChatRefineShowrunnerArgs {
   supabase: SupabaseClient
@@ -18,7 +17,7 @@ export async function runChatRefineShowrunner(args: RunChatRefineShowrunnerArgs)
   response: ChatTurnResponse
   llmCallId: string
 }> {
-  const systemPrompt = '[REDACTED]'.replace(
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.chatRefineShowrunnerBase).replace(
     "{{current_plan_json}}",
     JSON.stringify(args.currentPlan, null, 2),
   )

@@ -94,6 +94,10 @@ resurrect the row.
 
 ### Seamless 360° surround continuation
 
+> **Cloud edition only.** The route is registered on every edition, but
+> Community/Business requests get an immediate `403 edition_required` before
+> any processing happens.
+
 `POST /v1/generate-surround-continuation` builds a look-around (45°, 90°, …
 ring views) one frame at a time. Each call generates the next ring view as an
 image-to-image continuation of the previous one (`referenceImageUrl`), so a
@@ -107,10 +111,9 @@ The platform owns the whole pipeline:
 2. **Paint** — image-to-image off the composite (studio pins
    `provider: "nano-banana-pro"`, `aspectRatio: "16:9"`).
 3. **Color harmonization** — it matches the painted half's exposure / white
-   balance / color grade to the carried half and
-   feathers the seam, so there is no tonal seam down the frame's center even when
-   the model drifts warm. The carried half stays **pixel-exact**, so adjacent
-   ring views line up perfectly.
+   balance / color grade to the carried half and feathers the seam, so there is
+   no tonal seam down the frame's center even when the model drifts warm. The
+   carried half stays **pixel-exact**, so adjacent ring views line up perfectly.
 
 `direction` is `right` (turn right), `up` (tilt up), or `down` (tilt down);
 `carriedFraction` defaults to `0.5`. The result attaches to the location's
@@ -417,7 +420,7 @@ curl -s -X POST "$BASE/v1/generate-location-motion" \
 | `POST` | `/v1/locations/:id/llm-caption` | JWT / `ndr_` | Re-run LLM caption against the current main image. |
 | `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1–10 candidate establishing shots. Optional transient `userPrompt` drives an i2i edit (never written to the row). |
 | `POST` | `/v1/generate-location-asset` | JWT / `ndr_` | Generate one variant for any of the 5 image buckets (or `custom`). |
-| `POST` | `/v1/generate-surround-continuation` | JWT / `ndr_` | Generate the next seamless 360° ring view (half-carry composite + paint + color-harmonize); attaches to `angles`. |
+| `POST` | `/v1/generate-surround-continuation` | JWT / `ndr_` (Cloud only) | Generate the next seamless 360° ring view (half-carry composite + paint + color-harmonize); attaches to `angles`. |
 | `POST` | `/v1/generate-location-motion` | JWT / `ndr_` | Animate the establishing shot into an atmosphere motion clip via i2v. |
 
 All `/generate-*` routes return a `jobId` (count=1) or `jobIds[]` (count=2/4)

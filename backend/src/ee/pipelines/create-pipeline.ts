@@ -35,6 +35,24 @@ export async function createPipeline(
 ): Promise<CreatePipelineResult> {
   const { supabase, userId, input } = args
 
+  // S9 fast-fail — the FIRST check, before any other work (duration
+  // validation, DB row, credit reservation). This is the single funnel both
+  // POST /v1/pipelines and the MCP start_pipeline tool use, so gating here
+  // covers both callers. Without this, a cloud deployment whose
+  // film-studio-prompts plugin failed to load (or PRIVATE_MODULES=optional)
+  // would create a `pipelines` row + reserve credits + enqueue a BullMQ job
+  // only to fail asynchronously at Stage 1 when the first run*() wrapper
+  // calls getPipelinePrompt() against an empty registry.
+  const { pipelinePromptsAvailable } = await import("./llms/prompt-registry.js")
+  if (!pipelinePromptsAvailable()) {
+    return {
+      ok: false,
+      status: 503,
+      code: "pipeline_engine_unavailable",
+      message: "The film-studio pipeline is temporarily unavailable in this deployment.",
+    }
+  }
+
   const mode = input.mode ?? (input.auto_mode ? "auto" : "manual")
   const activation = "interactive"
 

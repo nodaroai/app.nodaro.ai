@@ -2,8 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
 import { StoryboardCohesionCriticVerdictSchema, type StoryboardCohesionCriticVerdict } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
-
-const _REDACTED_PROMPT_24 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunStoryboardCohesionCriticArgs {
   supabase: SupabaseClient
@@ -28,6 +27,7 @@ export interface RunStoryboardCohesionCriticArgs {
 export async function runStoryboardCohesionCritic(
   args: RunStoryboardCohesionCriticArgs,
 ): Promise<{ verdict: StoryboardCohesionCriticVerdict; llmCallId: string }> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.storyboardCohesionCritic)
   const introText = `SCENE SEQUENCE (in narrative order):\n\n${args.scenes
     .map(
       (s) =>
@@ -58,7 +58,7 @@ export async function runStoryboardCohesionCritic(
     task: "storyboard_cohesion",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: StoryboardCohesionCriticVerdictSchema,
     maxRetries: 1,

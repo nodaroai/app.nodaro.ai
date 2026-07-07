@@ -5,10 +5,11 @@ import type { FastifyInstance } from "fastify"
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockHasCreditsRef, mockRegisterStaticCreditCosts } = vi.hoisted(() => {
+const { mockHasCreditsRef, mockRegisterStaticCreditCosts, mockRegisterPipelinePrompts } = vi.hoisted(() => {
   return {
     mockHasCreditsRef: { value: true },
     mockRegisterStaticCreditCosts: vi.fn(),
+    mockRegisterPipelinePrompts: vi.fn(),
   }
 })
 
@@ -39,6 +40,11 @@ vi.mock("@/ee/billing/credits.js", () => ({
   registerStaticCreditCosts: mockRegisterStaticCreditCosts,
 }))
 
+// Same shim pattern (S9) for the pipeline-prompt registry.
+vi.mock("@/ee/pipelines/llms/prompt-registry.js", () => ({
+  registerPipelinePrompts: mockRegisterPipelinePrompts,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -66,6 +72,7 @@ describe("loadPrivatePlugins", () => {
   beforeEach(() => {
     mockHasCreditsRef.value = true
     mockRegisterStaticCreditCosts.mockClear()
+    mockRegisterPipelinePrompts.mockClear()
     delete process.env.PRIVATE_MODULES
   })
 
@@ -177,6 +184,9 @@ describe("loadPrivatePlugins", () => {
     expect(result.engines.surround?.buildSurroundComposite).toBe(buildSurroundComposite)
     expect(result.engines.surround?.harmonizeSurround).toBe(harmonizeSurround)
     expect(result.prompts).toEqual({ "some.prompt.key": "You are a test prompt." })
+    expect(mockRegisterPipelinePrompts).toHaveBeenCalledWith({
+      "some.prompt.key": "You are a test prompt.",
+    })
   })
 
   it("cloud + valid module + two plugins: engines and prompts merge additively (last write wins per key)", async () => {
@@ -199,6 +209,18 @@ describe("loadPrivatePlugins", () => {
     expect(result.loaded).toEqual(["plugin-a", "plugin-b"])
     expect(result.engines.surround).toBe(surroundEngine)
     expect(result.prompts).toEqual({ "shared.key": "from B", "a.only": "only A", "b.only": "only B" })
+    // registerPipelinePrompts is called once PER PLUGIN with that plugin's own
+    // slice (not the merged accumulator) — the registry itself does the
+    // additive last-write-wins merge, mirroring applyStaticCreditCosts.
+    expect(mockRegisterPipelinePrompts).toHaveBeenCalledTimes(2)
+    expect(mockRegisterPipelinePrompts).toHaveBeenNthCalledWith(1, {
+      "shared.key": "from A",
+      "a.only": "only A",
+    })
+    expect(mockRegisterPipelinePrompts).toHaveBeenNthCalledWith(2, {
+      "shared.key": "from B",
+      "b.only": "only B",
+    })
   })
 
   it("cloud + valid module + no app passed: does not register routes, still merges handlers (worker-only load)", async () => {

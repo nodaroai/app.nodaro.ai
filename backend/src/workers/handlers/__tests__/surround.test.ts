@@ -22,10 +22,10 @@ const mocks = vi.hoisted(() => ({
   getModelCreditBaseCost: vi.fn(),
 }))
 
-vi.mock("@/services/surround/index.js", () => ({
-  buildSurroundComposite: mocks.buildSurroundComposite,
-  harmonizeSurround: mocks.harmonizeSurround,
-}))
+// S8: the color-transfer/composite engine no longer lives in this repo
+// (extracted to @nodaroai/cloud-plugins) — `createSurroundHandlers` takes it
+// as an injected `PluginSurroundEngine`, so there's no module path left to
+// vi.mock for it. A plain stub object stands in for the plugin.
 vi.mock("@/providers/index.js", () => ({
   generateImage: mocks.generateImage,
   editImage: mocks.editImage,
@@ -42,9 +42,15 @@ vi.mock("@/lib/reconcile/persistence.js", () => ({ makeOnTaskCreated: mocks.make
 vi.mock("@/lib/reconcile/provider-kind.js", () => ({ providerKindForImageModel: mocks.providerKindForImageModel }))
 vi.mock("@/ee/billing/credits.js", () => ({ getModelCreditBaseCost: mocks.getModelCreditBaseCost }))
 
-import { surroundHandlers } from "../surround.js"
+import { createSurroundHandlers } from "../surround.js"
+import type { PluginSurroundEngine } from "@/lib/private-plugins/types.js"
 
-const handler = surroundHandlers["generate-surround-continuation"]
+const stubEngine: PluginSurroundEngine = {
+  buildSurroundComposite: mocks.buildSurroundComposite,
+  harmonizeSurround: mocks.harmonizeSurround,
+}
+
+const handler = createSurroundHandlers(stubEngine)["generate-surround-continuation"]
 
 function makeJob(data: Record<string, unknown>) {
   return {
@@ -107,5 +113,27 @@ describe("generate-surround-continuation handler", () => {
   it("resolves the per-direction carried fraction (tilt up → 0.12) when the payload omits it", async () => {
     await handler(makeJob({ direction: "up", carriedFraction: undefined }), ctx)
     expect(mocks.buildSurroundComposite).toHaveBeenCalledWith(expect.objectContaining({ direction: "up", carriedFraction: 0.12 }))
+  })
+})
+
+// S8: when no engine is loaded (community/business, or cloud with
+// PRIVATE_MODULES=optional and the plugin unavailable), createSurroundHandlers
+// must return a defensive stub rather than crash on an undefined import.
+describe("createSurroundHandlers(undefined) — engine not loaded", () => {
+  it("exposes exactly the generate-surround-continuation key", () => {
+    expect(Object.keys(createSurroundHandlers(undefined))).toEqual(["generate-surround-continuation"])
+  })
+
+  it("throws a clear, actionable error instead of touching any dependency", async () => {
+    const stubHandler = createSurroundHandlers(undefined)["generate-surround-continuation"]
+    await expect(stubHandler(makeJob({}), ctx)).rejects.toThrow(
+      "generate-surround-continuation: surround engine not loaded (requires @nodaroai/cloud-plugins on Cloud edition)",
+    )
+    // Fails fast — no provider call, no credit commit, no location attach.
+    expect(mocks.generateImage).not.toHaveBeenCalled()
+    expect(mocks.buildSurroundComposite).not.toHaveBeenCalled()
+    expect(mocks.harmonizeSurround).not.toHaveBeenCalled()
+    expect(mocks.commitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.autoAttachLocationAsset).not.toHaveBeenCalled()
   })
 })

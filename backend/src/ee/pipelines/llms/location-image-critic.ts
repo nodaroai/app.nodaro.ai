@@ -1,11 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { IMAGE_CRITIC_MIN_ADHERENCE_SCORE, LocationImageCriticVerdictSchema, type LocationImageCriticVerdict } from "@nodaro/shared"
+import { LocationImageCriticVerdictSchema, type LocationImageCriticVerdict } from "@nodaro/shared"
 import {
   runImageCritic,
   type ImageCriticGlobalStyle,
 } from "./_image-critic-shared.js"
-
-const _REDACTED_PROMPT_22 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunLocationImageCriticArgs {
   supabase: SupabaseClient
@@ -23,7 +22,7 @@ export async function runLocationImageCritic(
   return runImageCritic<LocationImageCriticVerdict>({
     ...args,
     task: "location_image",
-    systemPrompt: '[REDACTED]',
+    systemPrompt: getPipelinePrompt(PIPELINE_PROMPT_KEYS.locationImageCritic),
     schema: LocationImageCriticVerdictSchema,
   })
 }

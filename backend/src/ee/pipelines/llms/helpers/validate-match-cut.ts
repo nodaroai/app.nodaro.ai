@@ -4,6 +4,7 @@ import { z } from "zod"
 import { ImageCriticVerdictSchema, type SceneNodeData, type ShowrunnerPlan, type ValidateMatchCutResult } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 import { persistImageCriticVerdict, type ImageCriticInvocation } from "../image-critic.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 /**
  * §6.11.14 Validate Match Cut — Phase 1C.1 vision-keyframe helper.
@@ -35,8 +36,6 @@ const MATCH_CUT_VERDICT_SCHEMA = z.object({
   verdict: ImageCriticVerdictSchema,
   suggested_adjustments: z.string().max(300),
 })
-
-const _REDACTED_PROMPT_20 = `[REDACTED — moved to private plugin, S9 extraction]`
 
 export interface RunValidateMatchCutArgs {
   supabase: SupabaseClient
@@ -93,6 +92,7 @@ export async function runValidateMatchCut(
     shotBStartState: next.start_state,
   })
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperValidateMatchCut)
   const result = await callLLM({
     supabase: args.supabase,
     pipelineId: args.pipelineId,
@@ -103,7 +103,7 @@ export async function runValidateMatchCut(
     task: "validate_match_cut",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: MATCH_CUT_VERDICT_SCHEMA,
     maxRetries: 1,

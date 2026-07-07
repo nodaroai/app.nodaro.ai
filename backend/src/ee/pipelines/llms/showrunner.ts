@@ -2,8 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { ShowrunnerPlanSchema, type ShowrunnerPlan, type DetectionResult, type PipelineFormat, type PipelineOutputResolution, type PipelineMode, type PipelineActivationMode, type StyleDirectives, type ScriptCriticVerdict, type CastCoverageCriticVerdict, type LocationsCoverageCriticVerdict, type ObjectsValidationResult } from "@nodaro/shared"
 import { callLLM, type ProgressUpdate } from "./call-llm.js"
 import { pipelineEvents } from "../events.js"
-
-const _REDACTED_PROMPT_2 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunShowrunnerArgs {
   supabase: SupabaseClient
@@ -36,6 +35,7 @@ export interface RunShowrunnerArgs {
 }
 
 export async function runShowrunner(args: RunShowrunnerArgs): Promise<ShowrunnerPlan> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.showrunner)
   const criticPreamble = args.criticFeedback
     ? `\n\nPRIOR ATTEMPT WAS REJECTED BY THE CRITIC:\n${JSON.stringify(args.criticFeedback, null, 2)}\n\nAddress every blocking issue.\n\n`
     : ""
@@ -91,7 +91,7 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     // (quality on demand, per the script-checkpoint design).
     modelId: args.scriptLlmOverride ?? "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: ShowrunnerPlanSchema,
     maxRetries: 1,

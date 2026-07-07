@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { OptimizeForModelResultSchema, type OptimizeForModelResult, type SceneNodeData, VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_19 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunOptimizeForModelArgs {
   supabase: SupabaseClient
@@ -24,6 +23,7 @@ export async function runOptimizeForModel(
     )
   }
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperOptimizeForModel)
   const userPrompt = `TARGET MODEL: ${args.targetModel}
 TARGET PROMPTING STYLE: ${caps.prompting_style}
 
@@ -44,7 +44,7 @@ Rewrite every shot's action + motion_prompt for the new style and respond as JSO
     task: "optimize_for_model",
     modelId: "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: OptimizeForModelResultSchema,
     maxRetries: 1,

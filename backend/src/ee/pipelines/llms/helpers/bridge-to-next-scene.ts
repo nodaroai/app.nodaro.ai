@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { BridgeToNextSceneResultSchema, type BridgeToNextSceneResult, type SceneNodeData } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_16 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunBridgeToNextSceneArgs {
   supabase: SupabaseClient
@@ -40,6 +39,7 @@ TARGET SHOT (shot_id=${target.shot_id}):
 
 Write the bridge_image_prompt and respond as JSON.`
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperBridgeToNextScene)
   const result = await callLLM({
     supabase: args.supabase,
     pipelineId: args.pipelineId,
@@ -50,7 +50,7 @@ Write the bridge_image_prompt and respond as JSON.`
     task: "bridge_to_next_scene",
     modelId: "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: BridgeToNextSceneResultSchema,
     maxRetries: 1,

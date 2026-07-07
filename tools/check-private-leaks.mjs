@@ -2,16 +2,27 @@
 // Forbids private-extraction implementation symbols from leaking back into
 // this public repo's tracked files.
 //
-// Context: Stage 1 of the VCP private-extraction plan moved the
-// voice-changer-pro engine (diarization, per-speaker stem building, voice-map
-// resolution, and the worker handler that drove them) out of this repo and
-// into the proprietary `@nodaroai/cloud-plugins` package (private repo
-// `nodaroai/nodaro-cloud-plugins`). It is loaded at runtime — never via a
-// static, tsc-visible import — by `backend/src/lib/private-plugins/load.ts`
-// (see that file's header comment for why). This repo now only knows about
-// the plugin through the structural `PluginToolkit` contract
-// (`backend/src/lib/private-plugins/types.ts`); it never references these
-// symbol names again.
+// Context: two private extractions moved code out of this repo and into the
+// proprietary `@nodaroai/cloud-plugins` package (private repo
+// `nodaroai/nodaro-cloud-plugins`), loaded at runtime — never via a static,
+// tsc-visible import — by `backend/src/lib/private-plugins/load.ts` (see
+// that file's header comment for why):
+//
+//   - VCP (Stage 1): the voice-changer-pro engine (diarization, per-speaker
+//     stem building, voice-map resolution, and the worker handler that drove
+//     them).
+//   - S8: the surround-continuation color-science/compositing engine
+//     (per-channel Reinhard color transfer, half-carry seam geometry) — the
+//     worker handler and route stay in this repo (`workers/handlers/
+//     surround.ts`, `routes/generate-surround-continuation.ts`), but the two
+//     IP-sensitive functions it calls into (`buildSurroundComposite`,
+//     `harmonizeSurround`) are now reached only through the additive
+//     `engines` capability (`backend/src/lib/private-plugins/types.ts`'s
+//     `PluginSurroundEngine`).
+//
+// This repo now only knows about either plugin through the structural
+// `PluginToolkit`/`PluginEngines` contract (`backend/src/lib/private-plugins/
+// types.ts`); it never references these symbol names again.
 //
 // A hit anywhere in the tracked tree means the extracted implementation
 // detail crept back in — a revert, a stale doc, a copy-pasted comment, a test
@@ -26,12 +37,51 @@
 import { execFileSync } from "node:child_process"
 
 const SYMBOLS = [
+  // VCP
   "handleVoiceChangerPro",
   "runVoiceChangerPro",
   "buildSpeakerStemFilter",
   "directDiarize",
   "groupWordsIntoSpeakerSegments",
   "resolveSpeakerVoiceMap",
+  // S8 (surround)
+  "Reinhard",
+  "BASE_FEATHER",
+  "RESIDUAL_THRESHOLD",
+  "seamGeometry",
+  // S9 (film-studio prompts) — unlike VCP/S8, S9 moved DATA (prompt string
+  // VALUES), not code symbols; the constants that used to hold those strings
+  // were deleted from ee/pipelines/llms/** entirely (replaced by
+  // getPipelinePrompt(PIPELINE_PROMPT_KEYS.x) calls). These names guard
+  // against the constant declarations reappearing anywhere in the tracked
+  // tree (a revert, a stale doc, a copy-pasted comment). 20 of the 25 moved
+  // constant names are listed — the 21st distinct name, bare `SYSTEM_PROMPT`
+  // (shared by 5 of the 25: character-image-critic.ts, location-image-critic.ts,
+  // video-critic.ts, storyboard-cohesion-critic.ts, chat-refine-postmerge.ts),
+  // is DELIBERATELY excluded: it already collides with two unrelated,
+  // legitimate constants elsewhere in this repo
+  // (providers/script/script-generator.ts, services/reduce-strategies/
+  // pick-best-llm.ts), so adding it here would false-positive on every run.
+  "DETECTION_SYSTEM_PROMPT",
+  "SHOWRUNNER_SYSTEM_PROMPT",
+  "SCENE_DIRECTOR_SYSTEM_PROMPT",
+  "EDITOR_SYSTEM",
+  "SCENE_REFINER_SYSTEM_PROMPT",
+  "SCRIPT_CRITIC_SYSTEM_PROMPT",
+  "CAST_COVERAGE_SYSTEM_PROMPT",
+  "LOCATIONS_COVERAGE_SYSTEM_PROMPT",
+  "SHOT_LIST_CRITIC_SYSTEM_PROMPT",
+  "IMAGE_CRITIC_SYSTEM",
+  "VOICE_MATCHER_SYSTEM_PROMPT_BASE",
+  "SYSTEM_PROMPT_BASE",
+  "ADD_BROLL_SYSTEM",
+  "ANCHOR_SCENE_STYLE_SYSTEM",
+  "AUDIT_PROMPT_SYSTEM",
+  "BRIDGE_TO_NEXT_SCENE_SYSTEM",
+  "GENERATE_MOTION_SYSTEM",
+  "IMPROVE_PROMPT_SYSTEM",
+  "OPTIMIZE_FOR_MODEL_SYSTEM",
+  "VALIDATE_MATCH_CUT_SYSTEM",
 ]
 
 const PATTERN = SYMBOLS.join("|")
@@ -68,11 +118,12 @@ if (matched) {
   for (const hit of hits) console.error("  " + hit)
   console.error("")
   console.error(
-    "These symbols identify the voice-changer-pro implementation extracted to " +
-      "the proprietary @nodaroai/cloud-plugins package (VCP Stage 1 private " +
-      "extraction — see backend/src/lib/private-plugins/). They must not " +
-      "appear in this public repo outside tools/ (excluded because this " +
-      "script's own pattern list necessarily contains them).",
+    "These symbols identify implementation extracted to the proprietary " +
+      "@nodaroai/cloud-plugins package (VCP Stage 1's voice-changer-pro " +
+      "engine, or S8's surround-continuation color-transfer/composite engine " +
+      "— see backend/src/lib/private-plugins/). They must not appear in " +
+      "this public repo outside tools/ (excluded because this script's own " +
+      "pattern list necessarily contains them).",
   )
   process.exit(1)
 }

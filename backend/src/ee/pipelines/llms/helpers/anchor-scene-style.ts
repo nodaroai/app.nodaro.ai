@@ -3,12 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { type AnchorSceneStyleResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const AnchorPromptSchema = z.object({
   anchor_prompt: z.string().min(20).max(800),
 })
-
-const _REDACTED_PROMPT_14 = `[REDACTED — moved to private plugin, S9 extraction]`
 
 export interface RunAnchorSceneStyleArgs {
   supabase: SupabaseClient
@@ -24,6 +23,7 @@ export async function runAnchorSceneStyle(
   args: RunAnchorSceneStyleArgs,
 ): Promise<AnchorSceneStyleResult> {
   // 1. Plan the prompt (Sonnet).
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperAnchorSceneStyle)
   const castRefs = args.scene.cast_keys
     .map((key) => args.plan.cast.find((c) => c.key === key))
     .filter((c): c is NonNullable<typeof c> => Boolean(c))
@@ -63,7 +63,7 @@ Write the anchor_prompt and respond as JSON.`
     task: "anchor_scene_style",
     modelId: "claude-sonnet-4-6",
     temperature: 0.5,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: AnchorPromptSchema,
     maxRetries: 1,

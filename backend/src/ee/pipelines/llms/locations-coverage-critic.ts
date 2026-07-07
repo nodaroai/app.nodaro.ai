@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { LocationsCoverageCriticVerdictSchema, type LocationsCoverageCriticVerdict, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
-
-const _REDACTED_PROMPT_8 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunLocationsCoverageCriticArgs {
   supabase: SupabaseClient
@@ -15,6 +14,7 @@ export interface RunLocationsCoverageCriticArgs {
 export async function runLocationsCoverageCritic(
   args: RunLocationsCoverageCriticArgs,
 ): Promise<LocationsCoverageCriticVerdict> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.locationsCoverageCritic)
   const userPrompt = `SHOWRUNNER PLAN:
 \`\`\`json
 ${JSON.stringify(args.plan, null, 2)}
@@ -31,7 +31,7 @@ Validate locations coverage and respond as JSON.`
     task: "locations_coverage",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: LocationsCoverageCriticVerdictSchema,
     maxRetries: 1,

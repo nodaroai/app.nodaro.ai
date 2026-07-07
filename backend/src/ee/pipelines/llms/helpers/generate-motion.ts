@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { GenerateMotionResultSchema, type GenerateMotionResult, type SceneNodeData, type ShowrunnerPlan, VIDEO_MODEL_CAPS } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_17 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunGenerateMotionArgs {
   supabase: SupabaseClient
@@ -18,6 +17,7 @@ export interface RunGenerateMotionArgs {
 export async function runGenerateMotion(
   args: RunGenerateMotionArgs,
 ): Promise<GenerateMotionResult> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperGenerateMotion)
   const caps = VIDEO_MODEL_CAPS[args.scene.video_model]
   const promptingStyle = caps?.prompting_style ?? "natural_language"
   const targetIds =
@@ -52,7 +52,7 @@ Generate motion_prompt for each shot and respond as JSON.`
     task: "generate_motion",
     modelId: "claude-haiku-4-5",
     temperature: 0.5,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: GenerateMotionResultSchema,
     maxRetries: 1,

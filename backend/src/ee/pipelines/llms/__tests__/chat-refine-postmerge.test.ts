@@ -5,6 +5,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 import { callLLM } from "../call-llm.js"
 import { runChatRefinePostMerge } from "../chat-refine-postmerge.js"
 import type { EditorCutDecision } from "../editor.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -95,8 +96,10 @@ describe("runChatRefinePostMerge", () => {
     })
 
     const args = vi.mocked(callLLM).mock.calls[0][0]
-    expect(args.systemPrompt).toContain("Post-merge Refinement Director")
-    expect(args.systemPrompt).toContain("CANNOT emit edit_artifact")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the exact string the registry holds for this
+    // key flows through to callLLM unmodified.
+    expect(args.systemPrompt).toBe(getPipelinePrompt(PIPELINE_PROMPT_KEYS.chatRefinePostmerge))
   })
 
   it("userPrompt embeds final_output_url + cut_decisions JSON + chat history + user message", async () => {

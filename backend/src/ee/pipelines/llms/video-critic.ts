@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
-import { VideoCriticVerdictSchema, type VideoCriticVerdict, VIDEO_CRITIC_MIN_ADHERENCE_SCORE } from "@nodaro/shared"
+import { VideoCriticVerdictSchema, type VideoCriticVerdict } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import { truncateCriticFields } from "./_critic-truncate.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 // Per-field char caps for video-critic emits. MUST match the .max() values
 // for VideoCriticVerdictSchema in packages/shared/src/pipeline-types.ts.
@@ -10,8 +11,6 @@ const VIDEO_CRITIC_FIELD_CAPS: Record<string, number> = {
   identified_action: 500,
   approved_summary: 500,
 }
-
-const _REDACTED_PROMPT_23 = `[REDACTED — moved to private plugin, S9 extraction]`
 
 export interface RunVideoCriticArgs {
   supabase: SupabaseClient
@@ -29,6 +28,7 @@ export interface RunVideoCriticArgs {
 export async function runVideoCritic(
   args: RunVideoCriticArgs,
 ): Promise<{ verdict: VideoCriticVerdict; llmCallId: string }> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.videoCritic)
   const introText = `SHOT PROMPT: ${args.shotPrompt}\n\nSCENE: ${args.sceneIndex}, SHOT: ${args.shotIndex}\n\nCONTINUITY_FROM_PREV: ${args.continuityFromPrev ?? "(first shot — no continuity check)"}\n\n${args.priorLastFrameUrl ? "Prior shot's last frame follows, then this shot's frames in chronological order." : "This is the first shot. Only this shot's frames follow."}`
 
   const blocks: Anthropic.Messages.ContentBlockParam[] = [
@@ -61,7 +61,7 @@ export async function runVideoCritic(
     task: "video_critic",
     modelId: "claude-sonnet-4-6",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt: blocks,
     schema: VideoCriticVerdictSchema,
     maxRetries: 1,

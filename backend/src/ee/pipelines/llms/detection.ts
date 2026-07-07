@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { DetectionResultSchema, type DetectionResult, type PipelineFormat } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
-
-const _REDACTED_PROMPT_1 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 export interface RunDetectionArgs {
   supabase: SupabaseClient
@@ -16,6 +15,7 @@ export interface RunDetectionArgs {
 }
 
 export async function runDetection(args: RunDetectionArgs): Promise<DetectionResult> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.detection)
   const userPrompt = `STORY PROMPT:
 """
 ${args.storyPrompt}
@@ -36,7 +36,7 @@ Extract entities.`
     task: "detection",
     modelId: "claude-haiku-4-5",
     temperature: 0.1,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: DetectionResultSchema,
     maxRetries: 1,

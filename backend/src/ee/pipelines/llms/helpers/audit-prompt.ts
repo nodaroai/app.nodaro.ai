@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { AuditPromptResultSchema, type AuditPromptResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "../call-llm.js"
-
-const _REDACTED_PROMPT_15 = `[REDACTED — moved to private plugin, S9 extraction]`
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 export interface RunAuditPromptArgs {
   supabase: SupabaseClient
@@ -15,6 +14,7 @@ export interface RunAuditPromptArgs {
 }
 
 export async function runAuditPrompt(args: RunAuditPromptArgs): Promise<AuditPromptResult> {
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.helperAuditPrompt)
   const userPrompt = `SCENE:
 - description: ${args.scene.description}
 - emotional_beat: ${args.scene.emotional_beat}
@@ -38,7 +38,7 @@ Audit the shots and respond as JSON.`
     task: "audit_prompt",
     modelId: "claude-haiku-4-5",
     temperature: 0.2,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: AuditPromptResultSchema,
     maxRetries: 1,

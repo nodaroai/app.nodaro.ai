@@ -4,6 +4,7 @@ import { TransitionTypeSchema } from "@nodaro/shared"
 import { z } from "zod"
 import { pipelineEvents } from "../events.js"
 import { callLLM } from "./call-llm.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 /**
  * Phase 1C.2 sub-step 7h — Editor LLM.
@@ -47,10 +48,6 @@ export const EditorLLMResultSchema = z.object({
 })
 export type EditorLLMResult = z.infer<typeof EditorLLMResultSchema>
 
-/* ─── System prompt ──────────────────────────────────────────────────────── */
-
-const _REDACTED_PROMPT_4 = `[REDACTED — moved to private plugin, S9 extraction]`
-
 /* ─── Public API ─────────────────────────────────────────────────────────── */
 
 export interface EditorShotInput {
@@ -86,6 +83,7 @@ export interface RunEditorArgs {
 export async function runEditor(args: RunEditorArgs): Promise<EditorLLMResult> {
   const { supabase, pipelineId, stageId, userId, shots } = args
 
+  const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.editor)
   const userPrompt = buildEditorUserPrompt(args)
 
   const llm = await callLLM({
@@ -98,7 +96,7 @@ export async function runEditor(args: RunEditorArgs): Promise<EditorLLMResult> {
     task: "editor_llm",
     modelId: "claude-sonnet-4-6",
     temperature: 0.4,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: EditorLLMResultSchema,
     maxRetries: 1,

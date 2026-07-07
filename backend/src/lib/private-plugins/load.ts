@@ -52,11 +52,12 @@ export interface LoadPrivatePluginsResult {
    */
   engines: PluginEngines
   /**
-   * Additive (S9 plumbing). Merged from each loaded plugin's `prompts()` via
+   * Additive (S9). Merged from each loaded plugin's `prompts()` via
    * `Object.assign` — last write wins per key, mirroring `handlers`/`engines`.
-   * NOT YET wired into `ee/pipelines/llms/prompt-registry.ts` — that registry
-   * doesn't exist yet (created by a later task). Until then this is just
-   * collected here for callers to read directly.
+   * ALSO forwarded into `ee/pipelines/llms/prompt-registry.ts` via
+   * `applyPipelinePrompts()` (below) so every `run*()` wrapper's
+   * `getPipelinePrompt()` call resolves. Still returned here too — kept for
+   * callers that want to inspect what was loaded without reaching into ee/.
    */
   prompts: PromptTable
 }
@@ -124,8 +125,10 @@ function makeToolkitGetter(override: PluginToolkit | undefined): () => PluginToo
  * - cloud, load succeeds: registers each plugin's routes on `opts.app` (if
  *   given), merges each plugin's handlers, applies each plugin's
  *   `staticCreditCosts()` via the credits service's additive registration
- *   hook, merges each plugin's `engines(tk)` into `result.engines`, and
- *   collects each plugin's `prompts()` into `result.prompts`.
+ *   hook, merges each plugin's `engines(tk)` into `result.engines`, collects
+ *   each plugin's `prompts()` into `result.prompts`, AND forwards those same
+ *   prompts into `ee/pipelines/llms/prompt-registry.ts` via
+ *   `applyPipelinePrompts()`.
  * - cloud, load fails (import rejects, wrong `contractVersion`, or a
  *   malformed module shape): fatal — logs and calls `exit(1)` — UNLESS
  *   `PRIVATE_MODULES=optional`, in which case it warns and continues with no
@@ -186,10 +189,9 @@ export async function loadPrivatePlugins(
       Object.assign(engines, plugin.engines(getToolkit()))
     }
     if (plugin.prompts) {
-      // wired to prompt-registry in S9 — ee/pipelines/llms/prompt-registry.ts
-      // doesn't exist yet; collect here so a later task can redirect this
-      // into registerPipelinePrompts() without touching the loader's shape.
-      Object.assign(prompts, plugin.prompts())
+      const pluginPrompts = plugin.prompts()
+      Object.assign(prompts, pluginPrompts)
+      await applyPipelinePrompts(pluginPrompts)
     }
     loaded.push(plugin.name)
   }
@@ -208,4 +210,17 @@ async function applyStaticCreditCosts(costs: Record<string, number>): Promise<vo
   if (!hasCredits()) return
   const { registerStaticCreditCosts } = await import("../../ee/billing/credits.js")
   registerStaticCreditCosts(costs)
+}
+
+/**
+ * Additive registration of a plugin's pipeline doctrine prompts into
+ * `ee/pipelines/llms/prompt-registry.ts`. Dynamic `import()` gated on
+ * `hasCredits()` — mirrors `applyStaticCreditCosts` above exactly, so core
+ * (`lib/private-plugins/`) never STATICALLY imports `ee/` (enforced by
+ * `tools/check-ee-imports.mjs`).
+ */
+async function applyPipelinePrompts(prompts: PromptTable): Promise<void> {
+  if (!hasCredits()) return
+  const { registerPipelinePrompts } = await import("../../ee/pipelines/llms/prompt-registry.js")
+  registerPipelinePrompts(prompts)
 }

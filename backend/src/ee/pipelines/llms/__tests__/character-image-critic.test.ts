@@ -4,6 +4,7 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
 import { runCharacterImageCritic } from "../character-image-critic.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 
 const mockSupabase = {} as never
 
@@ -32,8 +33,10 @@ describe("runCharacterImageCritic", () => {
     expect(args.maxRetries).toBe(1)
     expect(args.modelId).toBe("claude-sonnet-4-6")
     expect(args.temperature).toBe(0.2)
-    expect(args.systemPrompt).toContain("Character Image Critic")
-    expect(args.systemPrompt.toLowerCase()).toContain("minor variance")
+    // The real doctrine text now lives in the plugin repo (moved by S9); here
+    // we assert the WIRING — the exact string the registry holds for this
+    // key flows through to callLLM unmodified.
+    expect(args.systemPrompt).toBe(getPipelinePrompt(PIPELINE_PROMPT_KEYS.characterImageCritic))
   })
 
   it("userPrompt is an array containing image + text content blocks", async () => {

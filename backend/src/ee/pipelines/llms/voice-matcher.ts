@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { VoiceMatchSchema, type VoiceMatch } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
 /**
  * Static ElevenLabs premade voice catalog used by the Voice Matcher LLM.
@@ -60,13 +61,6 @@ const ELEVENLABS_VOICES: readonly VoiceCatalogEntry[] = [
   { voice_id: "River",                name: "River",   gender: "non-binary", age_bracket: "young", accent: "American",      descriptors: ["calm", "thoughtful", "neutral"] },
 ]
 
-const _REDACTED_PROMPT_11 = `[REDACTED — moved to private plugin, S9 extraction]`
-
-// Compute once at module load — catalog is module-constant, JSON.stringify produces
-// the same string every call. Also helps Anthropic prompt caching since the prefix
-// is byte-identical across requests.
-const _REDACTED_PROMPT_26 = `[REDACTED — moved to private plugin, S9 extraction]`
-
 export interface RunVoiceMatcherArgs {
   supabase: SupabaseClient
   pipelineId: string
@@ -79,6 +73,16 @@ export interface RunVoiceMatcherArgs {
 }
 
 export async function runVoiceMatcher(args: RunVoiceMatcherArgs): Promise<VoiceMatch> {
+  // Base doctrine comes from the registry (getPipelinePrompt can't be called
+  // at module scope — see prompt-registry.ts's doc comment), concatenated
+  // with the (still in-app) ELEVENLABS_VOICES catalog. Inputs are unchanged
+  // across calls, so the resulting string is still byte-identical run to
+  // run — Anthropic prompt caching still applies; only the recomputation
+  // itself (a small JSON.stringify) is repeated, which is negligible.
+  const systemPrompt =
+    getPipelinePrompt(PIPELINE_PROMPT_KEYS.voiceMatcherBase) +
+    "\n\nAVAILABLE VOICES:\n" +
+    JSON.stringify(ELEVENLABS_VOICES, null, 2)
   const userPrompt = `CAST MEMBER:
 - key: ${args.castKey}
 - name: ${args.castName}
@@ -96,7 +100,7 @@ Recommend an ElevenLabs voice.`
     task: "voice_match",
     modelId: "claude-haiku-4-5",
     temperature: 0.3,
-    systemPrompt: '[REDACTED]',
+    systemPrompt,
     userPrompt,
     schema: VoiceMatchSchema,
     maxRetries: 1,
