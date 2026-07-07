@@ -200,6 +200,15 @@ RUN npm ci --omit=dev
 # to the root (avoids COPY failures in the runner stage).
 RUN mkdir -p /app/backend/node_modules
 
+# Built @nodaro/shared dist, mirroring the runner stage's own COPY: npm
+# dedupes the private plugin's `@nodaro/shared` dependency onto the workspace
+# symlink (node_modules/@nodaro/shared -> ../packages/shared), which in THIS
+# stage otherwise holds only package.json — the plugin import-smoke below
+# then fails on a missing dist even though the runner image resolves it fine
+# (staging deploy 7eccf973 failed exactly here). Copying the dist makes the
+# smoke exercise the same resolution path production uses.
+COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+
 # Optional Cloud-only private plugin (@nodaroai/cloud-plugins, proprietary —
 # see backend/src/lib/private-plugins/load.ts). This MUST install in THIS
 # stage, not `backend-build`: the runner stage below copies its shipped
@@ -226,7 +235,7 @@ RUN if [ -n "$NPM_TOKEN" ]; then \
       echo "@nodaroai:registry=https://npm.pkg.github.com" > .npmrc && \
       echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
       npm install --no-save "@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}" && \
-      node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1)process.exit(1)}).catch(()=>process.exit(1))" && \
+      node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('plugin smoke: contractVersion mismatch:',m.contractVersion);process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
       rm -f .npmrc; \
     fi
 
