@@ -253,7 +253,7 @@ app.post("/v1/collect", {
 
 ### 8. Registration checklist
 
-Cross-references `[internal spec reference removed]` (the 19-step master). All 19 standard steps apply. Steps with non-standard content:
+Cross-references the New Node Registration checklist in the root `CLAUDE.md`. All standard steps apply. Steps with non-standard content:
 
 - **Step 3 (`STATIC_CREDIT_COSTS`)** — 6 composite keys (one per strategy), not a single key. Resolver in `CREDIT_COSTS` reads `data.strategyId` to pick the key. Existing precedent for composite keys: `gpt-image:high`, `flux:2K` (per `backend/CLAUDE.md` "Variable Credit Pricing" table).
 - **Step 9 (sidebar list)** — Collect lives in the **Workflow** category in `add-node-popup.tsx` alongside list/loop/router/sub-workflow-input/sub-workflow-output/sub-workflow/teleport-send/teleport-receive.
@@ -266,7 +266,7 @@ Cross-references `[internal spec reference removed]` (the 19-step master). All 1
 - `FAN_IN_NODE_TYPES` in `backend/src/services/workflow-engine/input-resolver.ts` (sibling of `ARRAY_ACCUMULATING_TYPES` at line 661) — `Set<"collect">` for v1.
 - Same set in `frontend/src/components/editor/workflow-editor/types.ts` for parity with the frontend executor.
 
-These are net-new concepts; flag for inclusion in `[internal spec reference removed]` as Step 20 once this lands.
+These are net-new concepts; flag for inclusion in the root `CLAUDE.md` registration checklist once this lands.
 
 **Additional verification points (during implementation):**
 
