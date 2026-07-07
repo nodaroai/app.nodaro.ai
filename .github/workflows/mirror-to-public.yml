@@ -16,7 +16,6 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: npm ci
       - name: leak gate — extracted private symbols
         run: node tools/check-private-leaks.mjs
       - name: leak gate — provider-$/margin in packages
