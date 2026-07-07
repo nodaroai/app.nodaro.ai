@@ -10,6 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   gate-and-mirror:
+    # Publishing goes internal → public. This must run ONLY on the internal
+    # repo; on the public mirror it would be a meaningless self-push.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

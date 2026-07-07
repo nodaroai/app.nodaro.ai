@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
   build:
+    # GitHub Pages is served from the PUBLIC repo only.
+    if: github.repository == 'nodaroai/app.nodaro.ai'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -62,6 +64,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
 
   deploy:
+    if: github.repository == 'nodaroai/app.nodaro.ai'
     needs: build
     runs-on: ubuntu-latest
     environment:
