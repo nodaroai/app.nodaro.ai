@@ -9,8 +9,9 @@
 
 import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
+import { calculateLlmCost } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
 import type { ZodType } from "zod"

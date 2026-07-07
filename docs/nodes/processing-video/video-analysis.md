@@ -115,16 +115,18 @@ every downstream consumer should render from today.
 
 Video Analysis is **dynamically priced** by duration bucket and model. The
 bucket is the smallest of **60s / 180s / 360s / 600s** that fits the video's
-probed duration; each model has its own per-bucket price derived from the shared
-pricing formula (`videoAnalysisBucketCredits` in
-`packages/shared/src/video-analysis-pricing.ts`) — never hand-written.
+probed duration; each model has its own per-bucket price derived from the
+internal pricing formula (`videoAnalysisBucketCredits` in
+`backend/src/lib/pricing/video-analysis-cost.ts`) — never hand-written. The
+table below is published as `VIDEO_ANALYSIS_BUCKET_CREDITS` in
+`packages/shared/src/video-analysis-pricing.ts` for client-side display.
 
 | Model | ≤60s | ≤180s | ≤360s | ≤600s |
 |-------|------|-------|-------|-------|
 | `gemini-3-flash` (default) | 1 | 1 | 2 | 3 |
 | `gemini-3.1-pro` | 2 | 3 | 7 | 11 |
 
-> These values are the shared pricing formula's current outputs, with the
+> These values are the internal pricing formula's current outputs, with the
 > formula's token and rate constants anchored to live billing measurements.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a

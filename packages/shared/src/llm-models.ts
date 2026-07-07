@@ -2,7 +2,15 @@
  * LLM Model Registry — shared between frontend and backend.
  *
  * Single source of truth for available chat/LLM models routed through KIE.ai,
- * with direct Anthropic SDK fallback for Claude models.
+ * with direct Anthropic SDK fallback for Claude models. This is the
+ * NON-monetary side of the registry (model ids, capabilities, tiers,
+ * feature defaults). The provider-$ per-token rate table and the
+ * `calculateLlmCost` formula derived from it live in
+ * `backend/src/lib/pricing/llm-cost.ts` (core, not ee/ — internal LLM cost
+ * logging needs them regardless of edition). They were moved out of this
+ * package (published Apache-2.0 on npm — an irrevocable grant) per the
+ * 2026-07-06 public-flip IP audit, S5: "Keep the model-id enum; strip prices
+ * + measurement notes."
  */
 
 export type LlmTier = "economy" | "standard" | "premium"
@@ -33,10 +41,6 @@ export interface LlmModelDef {
   structuredOutputMode?: "anthropic-tool" | "kie-response-format"
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
-  /** Cost per million input tokens (USD) */
-  inputPricePerM: number
-  /** Cost per million output tokens (USD) */
-  outputPricePerM: number
 }
 
 export const LLM_MODELS: readonly LlmModelDef[] = [
@@ -51,11 +55,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 8192,
-    // [econ-intel comment removed]
-    // [econ-intel comment removed]
-    // video 596s → 1.65 cr. Video ingestion bills at the SAME per-token rate as text.
-    inputPricePerM: 0.15,
-    outputPricePerM: 0.90,
   },
   {
     id: "claude-haiku-4.5",
@@ -69,8 +68,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 8192,
     directFallbackModel: "claude-haiku-4-5-20251001",
-    inputPricePerM: 0.80,
-    outputPricePerM: 4.00,
   },
   {
     id: "claude-sonnet-4.6",
@@ -84,8 +81,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-4-6",
-    inputPricePerM: 3.00,
-    outputPricePerM: 15.00,
   },
   {
     id: "gpt-5.2",
@@ -97,8 +92,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "openai",
     supportsImages: true,
     maxOutputTokens: 16384,
-    inputPricePerM: 2.50,
-    outputPricePerM: 10.00,
   },
   {
     id: "gemini-3.1-pro",
@@ -111,14 +104,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 16384,
-    // [econ-intel comment removed]
-    // [econ-intel comment removed]
-    // → 4.32 cr; out-heavy 6,178-tok → 4.33 cr) reproduce EXACTLY at 0.50/3.50 on
-    // [econ-intel comment removed]
-    // [econ-intel comment removed]
-    // [econ-intel comment removed]
-    inputPricePerM: 0.50,
-    outputPricePerM: 3.50,
   },
   {
     id: "claude-opus-4.7",
@@ -132,8 +117,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-7",
-    inputPricePerM: 5.00,
-    outputPricePerM: 25.00,
   },
   {
     id: "gpt-5.4",
@@ -145,8 +128,6 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "openai",
     supportsImages: true,
     maxOutputTokens: 16384,
-    inputPricePerM: 10.00,
-    outputPricePerM: 40.00,
   },
 ] as const
 
@@ -161,16 +142,6 @@ export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
   (m) => m.supportsImages && m.structuredOutputMode != null,
 )
-
-/** Calculate provider cost in USD from token usage and model pricing. */
-export function calculateLlmCost(
-  modelOrId: string | LlmModelDef,
-  usage: { inputTokens: number; outputTokens: number },
-): number {
-  const model = typeof modelOrId === "string" ? getLlmModel(modelOrId) : modelOrId
-  if (!model) return 0
-  return (usage.inputTokens * model.inputPricePerM + usage.outputTokens * model.outputPricePerM) / 1_000_000
-}
 
 export type LlmFeature =
   | "ai-writer"

@@ -14,7 +14,7 @@ vi.mock("@/lib/config.js", () => ({
 
 import { generateAvatarVideo } from "../video.js"
 import { HeygenError } from "../client.js"
-import { aiAvatarUsdCost } from "@nodaro/shared"
+import { aiAvatarUsdCost } from "../../../lib/pricing/ai-avatar-cost.js"
 
 // ---------------------------------------------------------------------------
 // Helpers

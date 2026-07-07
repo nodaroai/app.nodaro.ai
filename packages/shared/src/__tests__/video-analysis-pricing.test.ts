@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest"
 import {
   VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC,
+  VIDEO_ANALYSIS_BUCKET_CREDITS,
   pickVideoAnalysisBucket, buildVideoAnalysisCreditId, bucketSecondsFromCreditId,
-  videoAnalysisNumWindows, videoAnalysisBucketCredits,
+  videoAnalysisNumWindows,
 } from "../video-analysis-pricing.js"
-import { VIDEO_ANALYSIS_LLM_MODELS, getLlmModel } from "../llm-models.js"
+import { VIDEO_ANALYSIS_LLM_MODELS } from "../llm-models.js"
+
+// The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
+// formula moved to backend/src/lib/pricing/video-analysis-cost.ts (S5) — its
+// tests (including the worked-example bucket-credit values and the
+// cross-check against VIDEO_ANALYSIS_BUCKET_CREDITS below) live in
+// backend/src/lib/pricing/__tests__/video-analysis-cost.test.ts. This file
+// covers only the NON-monetary duration-bucketing, window-batching, and
+// credit-id-construction logic that stays in the published package.
 
 describe("video-analysis-pricing", () => {
   it("buckets and ids", () => {
@@ -23,28 +32,27 @@ describe("video-analysis-pricing", () => {
     expect(videoAnalysisNumWindows(600)).toBe(5)
   })
 
-  // CROSS-CHECK RULE: these worked examples MUST equal the docs table
-  // (docs/nodes/processing-video/video-analysis.md), model-catalog.ts variants,
-  // AND the model_pricing DB rows (migrations 247+248) — regenerate ALL on any
-  // constant/rate change.
-  [econ-intel comment removed]
-    expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3-flash", b))).toEqual([1, 1, 2, 3])
-    expect([60, 180, 360, 600].map((b) => videoAnalysisBucketCredits("gemini-3.1-pro", b))).toEqual([2, 3, 7, 11])
-  })
-
-  // [econ-intel comment removed]
-  // to the cent. Changing either pair shifts the bucket schedule above — if this
-  // [econ-intel comment removed]
-  it("gemini rates are pinned to measured KIE billing", () => {
-    expect(getLlmModel("gemini-3-flash")).toMatchObject({ inputPricePerM: 0.15, outputPricePerM: 0.90 })
-    expect(getLlmModel("gemini-3.1-pro")).toMatchObject({ inputPricePerM: 0.50, outputPricePerM: 3.50 })
-  })
-
   it("tolerance constant is exported for the worker re-check", () => {
     expect(VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC).toBe(3)
   })
 
   it("model SSOT is capability-derived and Gemini-only today", () => {
     expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.1-pro"])
+  })
+
+  // Full drift-detection against the live $-formula lives in
+  // backend/src/lib/pricing/__tests__/video-analysis-cost.test.ts (this
+  // package cannot see the formula post-S5). This is a lightweight shape
+  // check that the precomputed table covers every legal id.
+  it("VIDEO_ANALYSIS_BUCKET_CREDITS has a positive-integer entry for every model × bucket id", () => {
+    for (const model of VIDEO_ANALYSIS_LLM_MODELS) {
+      for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
+        const id = buildVideoAnalysisCreditId(model, bucketSec)
+        const credits = VIDEO_ANALYSIS_BUCKET_CREDITS[id]
+        expect(credits, `missing entry for ${id}`).toBeDefined()
+        expect(Number.isInteger(credits)).toBe(true)
+        expect(credits).toBeGreaterThan(0)
+      }
+    }
   })
 })

@@ -1,7 +1,14 @@
 /**
- * Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) per-second pricing helpers.
- * Single source of truth for all cinematic-avatar billing — imported by the
- * backend provider, the route credit-guard, and the orchestrator.
+ * Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) duration-clamping +
+ * credit-identifier helpers. Single source of truth for the NON-monetary side
+ * of cinematic-avatar billing — imported by the frontend node UI and the
+ * backend route/orchestrator.
+ *
+ * The provider-$ rate table and the USD/credit cost FORMULAS derived from it
+ * live in `backend/src/lib/pricing/cinematic-avatar-cost.ts` (core, not ee/ —
+ * the HeyGen provider integration needs them regardless of edition). They
+ * were moved out of this package (published Apache-2.0 on npm — an
+ * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5.
  *
  * ─── How this differs from ai-avatar pricing ────────────────────────────────
  * Cinematic Avatar is a generative clip (Seedance-style pipeline) driven by a
@@ -11,31 +18,10 @@
  * EXACT (no duration-bucket estimation): the credit id encodes the exact
  * requested duration, and the metered true-up at commit refunds nothing in the
  * common case (provider returns the requested duration).
- *
- * ─── Rate (ESTIMATE — ship-gate) ────────────────────────────────────────────
- * CINEMATIC_RATE_USD_PER_SEC values below are UNCONFIRMED placeholders for the
- * generative Seedance pipeline. They MUST be confirmed via a PAID run before
- * cinematic-avatar ships to production (run the `audit-credits` skill + a paid
- * generation, then update this file and reseed the DB migration — follow the
- * Provider Enum Sync checklist steps 7–9).
  * ────────────────────────────────────────────────────────────────────────────
  */
 
 export type CinematicResolution = "720p" | "1080p"
-
-/**
- * Per-second USD cost that HeyGen charges Nodaro for a cinematic_avatar clip.
- * These are PROVIDER costs — NOT Nodaro credits. Credits are derived at billing
- * time: ceil(usdCost / CREDIT_BASE_USD) with markup.
- *
- * UNCONFIRMED ESTIMATE — confirm via a paid run per the audit-credits ship-gate
- * before enabling cinematic-avatar in production.
- */
-export const CINEMATIC_RATE_USD_PER_SEC: Record<CinematicResolution, number> = {
-  // ESTIMATE (generative Seedance pipeline) — UNCONFIRMED placeholders.
-  "720p": 0.15,
-  "1080p": 0.22,
-}
 
 /** Minimum / maximum / default user-selectable duration (seconds). */
 export const CINEMATIC_MIN_DURATION_SEC = 4
@@ -57,22 +43,6 @@ export function clampCinematicDuration(durationSec: number | undefined): number 
     CINEMATIC_MAX_DURATION_SEC,
     Math.max(CINEMATIC_MIN_DURATION_SEC, rounded),
   )
-}
-
-/**
- * USD cost for a single cinematic-avatar generation.
- *
- * @param resolution  Output resolution
- * @param durationSec Fractional clip duration (ceils to whole seconds)
- * @returns           Provider cost in USD, rounded to 4 decimal places
- */
-export function cinematicUsdCost(
-  resolution: CinematicResolution,
-  durationSec: number,
-): number {
-  const ratePerSec = CINEMATIC_RATE_USD_PER_SEC[resolution]
-  const billedSecs = Math.ceil(durationSec)
-  return Math.round(ratePerSec * billedSecs * 10000) / 10000
 }
 
 /**
@@ -132,38 +102,10 @@ export function resolveCinematicCreditId(
  * getModelCreditBaseCost never hard-fails (503 price_not_configured) for any
  * legal creditGuard input.
  */
-export const CINEMATIC_RESERVE_IDS: string[] = (
-  Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicResolution[]
-).flatMap((resolution) => {
+export const CINEMATIC_RESERVE_IDS: string[] = [...ALLOWED_RESOLUTIONS].flatMap((resolution) => {
   const ids: string[] = []
   for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
     ids.push(cinematicCreditId(resolution, d))
   }
   return ids
 })
-
-/**
- * Credit hold (the STORED 0%-base reserve) for a given (resolution, durationSec).
- *
- * Formula: ceil(cinematicUsdCost(resolution, durationSec) / 0.02)
- *
- * This is the at-cost base-credit value (1 credit = $0.02, CREDIT_BASE_USD).
- * It is deliberately MINIMAL — there is NO *1.5 safety factor — because the
- * admin cost-markup (~25% default) is applied to this stored value AGAIN at
- * RESERVE time by getModelCreditCostFromDB (reserved = ceil(hold * 1.25)).
- * Baking a second buffer here was a redundant double-markup.
- *
- * Refund-only invariant (verified by the pricing test): because duration is a
- * user parameter known at submit time, the reserve id encodes the EXACT
- * duration, so reserved = ceil(hold * markup) = ceil(ceil(usd/0.02) * markup)
- * equals the metered actual computed at commit from the same USD cost. They
- * coincide exactly (the provider returns the requested duration), so
- * commit_credits refunds nothing in the common case and can only ever refund,
- * never undercharge.
- */
-export function cinematicHoldCredits(
-  resolution: CinematicResolution,
-  durationSec: number,
-): number {
-  return Math.ceil(cinematicUsdCost(resolution, durationSec) / 0.02)
-}

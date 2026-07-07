@@ -19,7 +19,7 @@ function walk(dir: string): string[] {
 describe("Apache boundary", () => {
   it("no shared source file imports @nodaro/prompts", () => {
     const offenders = walk(join(__dirname, ".."))
-      .filter((f) => /from\s+["']@nodaro\/shared-internal["']/.test(readFileSync(f, "utf8")))
+      .filter((f) => /from\s+["']@nodaro\/prompts["']/.test(readFileSync(f, "utf8")))
     expect(offenders).toEqual([])
   })
 })

@@ -219,7 +219,8 @@ export function clearImageCriticMetadata(
 export const VIDEO_CRITIC_FRAME_MODES = ["first_last", "first_middle_last", "five_evenly"] as const
 export type VideoCriticFrameMode = (typeof VIDEO_CRITIC_FRAME_MODES)[number]
 
-/** Cap=1 retry per shot — cost-aware [figures removed]. */
+/** Cap=1 retry per shot — cost-aware (every retry is a full paid video
+ *  generation, the priciest step in the loop). */
 export const VIDEO_CRITIC_MAX_RETRIES = 1
 
 /** Auto-fail threshold for both prompt_adherence_score and continuity_score. */
