@@ -60,8 +60,8 @@ export interface AuthorRepairContext {
  * the full doctrine + machine contract and produces high-quality VO + reveal
  * structures in one shot, at a fraction of the Opus cost.
  *
- * [figures removed]
- *   → 9 credits per authoring call.
+ * Cost: ≈9 credits per authoring call, priced from the call's typical
+ * input/output token profile.
  * This is seeded as `STATIC_CREDIT_COSTS["video-director"]` in
  * `ee/billing/credits.ts` (no :economy/:premium composites — the model is
  * fixed and not user-selectable).

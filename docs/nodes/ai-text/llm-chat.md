@@ -110,7 +110,7 @@ The composable `items` output is the recommended path for automated workflows; t
 
 ## Credit pricing
 
-Cost depends on the selected model's tier. Formula: `[formula removed]` (1 credit = $0.02, configured pricing factor).
+Cost depends on the selected model's tier.
 
 | Tier | Example models | Credits |
 |------|----------------|---------|

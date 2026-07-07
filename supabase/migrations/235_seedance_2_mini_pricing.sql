@@ -2,10 +2,9 @@
 -- unified generate-video nodes): KIE bytedance/seedance-2-mini, budget tier.
 --
 -- Per-second billing, 480p/720p ONLY (no 1080p), split by resolution × video-ref:
---   480p:  9.5 KIE cr/s (no-ref) / 6 KIE cr/s (with reference video)
---   720p: 20.5 KIE cr/s (no-ref) / 12.5 KIE cr/s (with reference video)
--- Nodaro credits = ceil(provider_USD / $0.02); KIE cr = USD / $0.005.
--- "-ref" = a reference video was supplied (cheaper tier; "with video" on KIE).
+-- credits derive from the provider's per-second billing, tiered by resolution and
+-- whether a reference video was supplied (cheaper tier; "with video" on KIE).
+-- "-ref" = a reference video was supplied.
 --
 -- Values MUST match STATIC_CREDIT_COSTS in backend/src/ee/billing/credits.ts.
 -- Per CLAUDE.md Provider Enum Sync step 9: ON CONFLICT DO NOTHING (preserves

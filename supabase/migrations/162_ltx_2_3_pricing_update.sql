@@ -1,12 +1,11 @@
--- 2026-05-28 — LTX 2.3 model_pricing — replace placeholders with official Replicate rates.
+-- 2026-05-28 — LTX 2.3 model_pricing — replace placeholders with official provider rates.
 --
--- Source: https://replicate.com/lightricks/ltx-2.3-{pro,fast} (rendered pricing).
--- Pro:  $0.08 / $0.16 / $0.32 per second of output video for 1080p / 2k / 4k.
--- Fast: $0.06 / $0.12 / $0.24 per second of output video for 1080p / 2k / 4k.
+-- Re-anchored to Replicate's published per-second rate for LTX 2.3 Pro/Fast, tiered
+-- by resolution (1080p / 2k / 4k).
 -- Extend + retake are Pro-only at 1080p → 5 credits/sec.
 --
 -- Replaces (not seeded twice): migration 161_ltx_2_3_models.sql inserted placeholders
--- 6–10× higher. This UPDATE corrects every existing row in-place.
+-- that were significantly higher. This UPDATE corrects every existing row in-place.
 
 UPDATE model_pricing SET credit_cost = 30  WHERE model_identifier = 'ltx-2.3-pro';
 UPDATE model_pricing SET credit_cost = 30  WHERE model_identifier = 'ltx-2.3-pro:1080p:6s';

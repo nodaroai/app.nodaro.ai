@@ -5,8 +5,8 @@
 -- (Anthropic/Google/OpenAI tokens, ElevenLabs, Replicate per-model GPU runs, Apify
 -- per-result, KIE).
 --
--- Owner decisions applied: generate-music -> 18 ([figures removed],
--- was a ~6x under-charge); :premium LLM tiers repriced at [figures removed];
+-- Owner decisions applied: generate-music -> 18 (was a ~6x under-charge vs. actual
+-- provider cost); :premium LLM tiers repriced at current premium-model rates;
 -- low-confidence entries (suno-voice-create, seedream-*:high, video-retalking,
 -- elevenlabs dubbing/voice-*) HELD at current pending invoice data; pure-compute
 -- FFmpeg/pipeline fees kept as small policy floors; bare display-fallback slugs

@@ -76,8 +76,6 @@ After Stage 8 (Post-merge) completes and the pipeline reaches its final `awaitin
 
 **Turn cap**: 8 turns per pipeline (per `CHAT_TURN_CAPS.post_merge` in `@nodaro/shared`).
 
-**Cost**: [figures removed] (cached Sonnet 4.6).
-
 ### Image-level critics (Phase 1D.2c-a)
 
 Stages 2 (Characters) and 4 (Locations) each run a vision-LLM critic (Sonnet 4.6) against generated main images. The critic validates that the image matches the entity's `visual_description` from the ShowrunnerPlan:
@@ -108,7 +106,7 @@ Adds ~5 credits to the pipeline budget (1 Sonnet call with N images input).
 
 ### Video Critic (Phase 1D.2c-b-ii)
 
-After each shot's clip is rendered at Stage 7, a vision-LLM critic (Sonnet 4.6) validates the generated video. **Blocking** with cap=1 retry-with-feedback per shot (cost-aware — [figures removed]).
+After each shot's clip is rendered at Stage 7, a vision-LLM critic (Sonnet 4.6) validates the generated video. **Blocking** with cap=1 retry-with-feedback per shot (cost-aware — a retry re-generates the full video clip).
 
 The critic checks:
 - **Prompt adherence** — does the action/motion match the shot prompt?

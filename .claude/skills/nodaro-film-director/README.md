@@ -14,10 +14,9 @@ A Claude Skill that drives a 10-stage director workflow to produce a cinematic v
 
 ## Distribution
 
-Pending Phase 2+: publish to a public `nodaro-skills` repo per spec §10 Q6.
+Pending Phase 2+: publish to a public `nodaro-skills` repo.
 
 ## Architecture references
 
 - Design note: `docs/design/film-director-skill.md`
-- 4-layer workflow construction model: spec §5.4
-- Reference template workflow seed: `backend/scripts/seed-film-template-workflow.ts` (created by Phase B)
+- Reference template workflow seed: `backend/scripts/seed-film-template-workflow.ts`
