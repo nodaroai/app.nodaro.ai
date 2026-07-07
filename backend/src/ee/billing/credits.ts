@@ -67,8 +67,7 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 // and the model_pricing rows (migrations 247+248) — extend all of them together
 // if a third video+audio model ships.
 //
-// [econ-intel comment removed]
-// throughput constants with a safety margin over measured values:
+// Current formula output (see backend/src/lib/pricing/video-analysis-cost.ts):
 //   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
 //   gemini-3.1-pro → bare 11 · 60s 2 · 180s 3 · 360s 7 · 600s 11
 // The pricing test pins these worked examples; if a rate or constant shifts

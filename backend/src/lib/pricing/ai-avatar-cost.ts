@@ -13,13 +13,11 @@
  * package. See plan.nodaro.ai `specs/superpowers/2026-07-06-public-flip-ip-audit.md`.
  *
  * ─── Derivation notes ───────────────────────────────────────────────────────
- * "avatar-iv" 720p is ANCHORED by a live test:
- *   9 HeyGen credits consumed for a 3.06s clip ≈ $0.0588/s
- *   [econ-intel comment removed]
- *   Rounded conservatively to $0.06/s.
+ * "avatar-iv" 720p is CONFIRMED against an actual production run; rounded
+ *   conservatively to $0.06/s.
  *
  *   1080p: HeyGen public info ~$4/min = $0.0667/s → rounded to $0.08/s.
- *   4K: ESTIMATE ~2× 1080p = $0.16/s (no live test yet).
+ *   4K: ESTIMATE ~2× 1080p = $0.16/s (not yet confirmed against a paid run).
  *
  * "avatar-v": ALL cells are UNPINNED ESTIMATES (premium engine, not yet
  *   tested on a paid run). Must be confirmed before avatar-v becomes default.
