@@ -20,7 +20,6 @@ import {
   Pencil,
   Workflow,
   Settings,
-  Puzzle,
   Trash2,
   Archive,
 } from "lucide-react"
@@ -53,7 +52,8 @@ import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { optimizedImageUrl } from "@/lib/image"
+import { CachedImage } from "@/components/ui/cached-image"
+import { PreviewVideo } from "@/components/ui/preview-video"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
@@ -723,9 +723,9 @@ function MyAppCard({
       {app.previewMediaUrl && (
         <div className="mb-3 rounded-md overflow-hidden aspect-video bg-zinc-100 dark:bg-zinc-800">
           {app.previewMediaType === "video" ? (
-            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline preload="none" />
+            <PreviewVideo src={app.previewMediaUrl} className="w-full h-full object-cover" />
           ) : (
-            <img src={optimizedImageUrl(app.previewMediaUrl)} alt="" className="w-full h-full object-cover" />
+            <CachedImage src={app.previewMediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" thumbnail />
           )}
         </div>
       )}

@@ -867,7 +867,9 @@ List your favorited gallery items, most recent first.
 
 Fetch metadata for a single asset (job) by id, including output URL, prompt,
 provider. Visible for your own jobs (any status) and any user's public
-completed jobs.
+completed jobs. For a **failed** job it returns the failure reason plus a
+`retryable` flag — `retryable: false` (e.g. a content-policy block) means the
+same request will fail again, so change the input rather than re-running.
 
 **Input:** `{ job_id: string }`
 
@@ -877,9 +879,11 @@ completed jobs.
 
 **Scope:** `assets:read`
 
-Render an asset visually in chat (the user sees the image, not JSON). Best
-for image assets — the bound widget renders inline with Edit / Animate /
-Use-as-reference buttons. For video/audio assets returns a direct link.
+Render an asset visually in chat (the user sees the media, not JSON).
+Renders image, video, and audio assets inline via the universal job-auto
+widget; image assets also surface Animate / Edit / Recreate follow-up
+buttons and click-to-zoom fullscreen. For purely-programmatic metadata (no
+rendering) prefer `get_asset`.
 
 **Input:** `{ job_id: string }`
 
