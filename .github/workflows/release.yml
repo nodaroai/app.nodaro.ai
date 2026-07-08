@@ -59,7 +59,11 @@ jobs:
           commit: "release: version packages"
           title: "release: version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use a PAT (not GITHUB_TOKEN) so the Version Packages PR TRIGGERS CI —
+          # GitHub suppresses workflow runs on branches/PRs created by GITHUB_TOKEN
+          # (recursion guard), which would leave the version PR blocked by the
+          # required-check gate. Falls back to GITHUB_TOKEN if RELEASE_PAT is unset.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish to npm (OIDC)
