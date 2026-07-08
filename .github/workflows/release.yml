@@ -2,10 +2,13 @@ name: Release (npm)
 
 # Two-phase changesets release train, split on the dev→main promotion boundary:
 #
-#   dev push  → "Version Packages" PR into dev (version-only). Version bumps +
-#               CHANGELOGs ride the normal staging train like any other change.
-#   main push → publish any unpublished package versions to npm. Releases
-#               therefore happen exactly when code ships to production.
+#   dev push (INTERNAL) → "Version Packages" PR into dev. You merge it where you
+#               develop, so changesets are consumed on internal and never reach
+#               the public mirror unconsumed.
+#   main push (PUBLIC)  → publish unpublished versions to npm, WITH provenance
+#               (npm requires a public source repo for provenance). The bumped
+#               versions arrive on public via the nightly mirror; a leak gate
+#               runs before any package is published.
 #
 # Publishing authenticates via npm Trusted Publishing (GitHub OIDC) — no token
 # stored anywhere. It stays INERT until the repository variable
@@ -31,7 +34,7 @@ concurrency:
 jobs:
   version-pr:
     name: Version Packages PR
-    if: github.repository == 'nodaroai/app.nodaro.ai' && github.ref == 'refs/heads/dev'
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the changeset-release/dev branch
@@ -85,6 +88,16 @@ jobs:
           npm -w @nodaro/prompts run build
           npm -w @nodaro/sdk run build
           npm -w @nodaro/cli run build
+      - name: Leak gate — block publish if a package carries secrets/IP
+        # npm publish is an irreversible PUBLIC exposure, same as a mirror push.
+        # Run the same gates before any package leaves for the registry.
+        run: |
+          node tools/check-private-leaks.mjs
+          node tools/check-pricing-leaks.mjs
+          node tools/check-ee-imports.mjs
+          VER=8.30.1
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --no-banner --redact --source .
       - name: Publish unpublished versions
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
