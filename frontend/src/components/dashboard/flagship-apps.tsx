@@ -3,7 +3,7 @@ import { Layers, UserRound, ExternalLink, Bell, Film, Image as ImageIcon } from 
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { optimizedImageUrl } from "@/lib/image"
+import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
 
@@ -79,11 +79,12 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
         isVideo ? (
           <PreviewVideo src={app.media.url} autoplay className="absolute inset-0 h-full w-full object-cover" />
         ) : (
-          <img
-            src={optimizedImageUrl(app.media.url)}
+          <CachedImage
+            src={app.media.url}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
             loading="lazy"
+            thumbnail
           />
         )
       ) : (

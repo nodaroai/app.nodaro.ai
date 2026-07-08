@@ -1,5 +1,6 @@
 import { Heart, Copy, Sparkles, Coins, Layers } from "lucide-react"
 import { PreviewVideo } from "@/components/ui/preview-video"
+import { CachedImage } from "@/components/ui/cached-image"
 import { cn } from "@/lib/utils"
 import type { TemplateBrowseCard } from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity, formatCount } from "@/lib/template-utils"
@@ -33,11 +34,12 @@ export function TemplateMarketplaceCard({
           template.previewMediaType === "video" ? (
             <PreviewVideo src={template.previewMediaUrl} />
           ) : (
-            <img
+            <CachedImage
               src={template.previewMediaUrl}
               alt={template.name}
               className="w-full h-full object-cover"
               loading="lazy"
+              thumbnail
             />
           )
         ) : (

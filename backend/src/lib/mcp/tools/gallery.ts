@@ -6,6 +6,8 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
+import { isUuid } from "./_id-guard.js"
+import { isRetryableFailure } from "./_job-error.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -645,11 +647,27 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           assetKind: z.string().nullable().optional(),
           jobType: z.string().nullable().optional(),
           completedAt: z.string().nullable().optional(),
+          // Populated when status is failed/cancelled. `retryable=false`
+          // means the same request will fail again (content policy, input
+          // limit) — the caller must change the input, not just re-run.
+          errorMessage: z.string().nullable().optional(),
+          retryable: z.boolean().optional(),
           outputData: z.record(z.string(), z.unknown()).optional(),
         },
         annotations: { readOnlyHint: true },
       },
       async (args) => {
+        // Guard the uuid PK before querying — a non-UUID id would make
+        // Postgres throw `invalid input syntax for type uuid` and leak that
+        // raw error. Not a UUID → not an asset we hold.
+        if (!isUuid(args.job_id)) {
+          return {
+            content: [
+              { type: "text", text: `Asset ${args.job_id} not found (expected a job UUID)` },
+            ],
+            isError: true,
+          }
+        }
         // Visibility: caller's own jobs (any status) OR any user's public +
         // completed jobs. Mirrors browse_gallery's public-scope filter so a
         // user can `get_asset` whatever they can see in the public gallery.
@@ -659,7 +677,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .from("jobs")
           .select(
             // display_cost (USD) excluded — MCP surfaces credits only.
-            "id, status, progress, job_type, input_data, output_data, created_at, completed_at, credits, user_id",
+            // error_message is REQUIRED here: without it a failed job returns
+            // status="failed" with no reason, and the polling model assumes a
+            // transient error and re-runs a permanently-blocked request.
+            "id, status, progress, job_type, input_data, output_data, error_message, created_at, completed_at, credits, user_id",
           )
           .eq("id", args.job_id)
           .or(
@@ -714,6 +735,43 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           )
         }
 
+        const reason = (data.error_message as string | null | undefined) ?? null
+
+        // Failed / cancelled: return a plain-language verdict (the model reads
+        // `content`, not `structuredContent`) that states the reason AND
+        // whether re-running could help. Without this the model only sees
+        // status="failed", assumes it is transient, and re-runs a permanently
+        // blocked request. The widget reads the same signal off structuredContent.
+        if (data.status === "failed" || data.status === "cancelled") {
+          const retryable = isRetryableFailure(reason)
+          const guidance = retryable
+            ? "This may be transient — retrying the same request is reasonable."
+            : "This is a permanent failure for this input: do NOT retry the same " +
+              "request unchanged. Change the prompt/input, or report the reason to the user."
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `Job ${data.id} ${data.status}. ` +
+                  `Reason: ${reason ?? "no reason recorded"}. ${guidance}`,
+              },
+            ],
+            structuredContent: {
+              jobId: data.id,
+              status: data.status,
+              progress: data.progress ?? 0,
+              outputUrl,
+              assetKind,
+              jobType: data.job_type,
+              completedAt: data.completed_at,
+              errorMessage: reason,
+              retryable,
+              outputData: out,
+            },
+          }
+        }
+
         return {
           content: [{ type: "text", text: JSON.stringify({ data }, null, 2) }],
           structuredContent: {
@@ -724,6 +782,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             assetKind,
             jobType: data.job_type,
             completedAt: data.completed_at,
+            errorMessage: reason,
             // outputData is a CONTRACTUAL dependency of the job widgets: the
             // job-auto card renders text outputs (script / lyrics /
             // generatedText / alignment / text) and component handle-maps
@@ -738,49 +797,61 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
 
     // ── display_asset ──
     // Like `get_asset` but renders the asset visually in chat via the
-    // single-job widget (so the user actually SEES the image instead of
-    // getting a JSON dump). Use when the user asks "show me <id>" or
-    // "display this", or after browse_gallery when the user wants to look
-    // at a specific item full-size in chat.
+    // universal job-auto widget (so the user actually SEES the media
+    // instead of getting a JSON dump). Use when the user asks "show me
+    // <id>" or "display this", or after browse_gallery when the user wants
+    // to look at a specific item full-size in chat.
     //
     // Visibility mirrors get_asset / browse_gallery: caller's own jobs OR
     // any user's public+completed jobs.
     //
-    // The bound widget is the image variant (most gallery assets are
-    // images). For video/audio assets, the tool returns text-only with a
-    // direct link (no widget) — rendering a video URL through an <img>
-    // tag would just show a broken-image icon.
+    // The job-auto widget renders image / video / audio alike — it picks
+    // the <img> / <video> / <audio> element from `assetKind` + the output
+    // URL — so ONE static binding covers every kind. (A per-call widget
+    // swap is impossible: the host binds `_meta.ui.resourceUri` from the
+    // cached tool definition, not per response.) For images we pass
+    // `imageActions: true` so the widget also shows the Animate / Edit /
+    // Recreate follow-ups the dedicated image widget has.
     server.registerTool(
       "display_asset",
       {
         title: "Show / Display Asset",
         description:
-          "Render an asset visually in chat (the user sees the image, not JSON). " +
+          "Render an asset visually in chat (the user sees the media, not JSON). " +
           "Use when the user asks to SEE / SHOW / DISPLAY a specific asset by id, " +
           "or after `browse_gallery` when they want to look at one item full-size. " +
           "Visibility = caller's own jobs (any status) OR any user's public+completed " +
           "jobs (same surface as `browse_gallery` and `get_asset`). " +
-          "Best for IMAGE assets — the bound widget renders the image inline with " +
-          "metadata badges and Edit / Animate / Use-as-reference buttons. " +
-          "For video/audio assets the tool returns a direct link instead (no widget); " +
-          "for purely-programmatic metadata (no rendering) prefer `get_asset`.",
+          "Renders IMAGE, VIDEO, and AUDIO assets inline with metadata badges " +
+          "(images also get Animate / Edit / Recreate follow-ups). " +
+          "For purely-programmatic metadata (no rendering) prefer `get_asset`.",
         inputSchema: {
           job_id: z.string().min(1),
         },
         // No outputSchema — the SDK enforces "every response must include
-        // structuredContent" when one is declared, but our video/audio
-        // branch returns text-only (the bound image widget can't render
-        // those URLs). Text-only is valid without an outputSchema.
+        // structuredContent" when one is declared, but the not-found /
+        // not-viewable branches return text-only (isError). Text-only is
+        // valid without an outputSchema.
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v4/job-image",
+          "ui/resourceUri": "ui://nodaro/widget/v4/job-auto",
           ui: {
-            resourceUri: "ui://nodaro/widget/v4/job-image",
+            resourceUri: "ui://nodaro/widget/v4/job-auto",
             visibility: ["model", "app"],
           },
         },
       },
       async (args) => {
+        // Guard the uuid PK before querying — a non-UUID id would leak the
+        // raw `invalid input syntax for type uuid` Postgres error.
+        if (!isUuid(args.job_id)) {
+          return {
+            content: [
+              { type: "text", text: `Asset ${args.job_id} not found (expected a job UUID)` },
+            ],
+            isError: true,
+          }
+        }
         // Same OR query as get_asset — caller's own job OR any public+completed.
         const { data, error } = await supabase
           .from("jobs")
@@ -830,27 +901,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        // For non-image kinds, skip the widget — image widget would render
-        // a video/audio URL through <img> and break. Text result with the
-        // direct URL is more useful.
-        if (assetKind !== "image") {
-          const label = assetKind ?? "Asset"
-          const note = assetKind
-            ? `\n(In-chat preview rendering is image-only right now; ` +
-              `open the URL above to view this ${assetKind}.)`
-            : ""
-          return {
-            content: [
-              {
-                type: "text",
-                text: `${label} ${args.job_id}: ${outputUrl}${note}`,
-              },
-            ],
-          }
-        }
-
-        // Image kind — full widget render. Shape matches the
-        // SingleJobStructuredContent the single-job widget consumes.
+        // Every kind renders through the job-auto widget, which picks the
+        // <img> / <video> / <audio> element from `assetKind` + the output
+        // URL. Images additionally get the Animate / Edit / Recreate
+        // follow-up buttons via `imageActions`. Shape matches what the
+        // job-auto widget reads on `mcp-tool-result` (jobId + outputUrl +
+        // assetKind + prompt/model).
         const prompt = (input.prompt as string | undefined) ?? undefined
         const model =
           (input.provider as string | undefined) ??
@@ -858,11 +914,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           undefined
         const aspectRatio = (input.aspect_ratio as string | undefined) ?? undefined
         const resolution = (input.resolution as string | undefined) ?? undefined
+        const label = assetKind
+          ? assetKind.charAt(0).toUpperCase() + assetKind.slice(1)
+          : "Asset"
         return {
           content: [
             {
               type: "text",
-              text: `Image ${args.job_id}: ${outputUrl}`,
+              text: `${label} ${args.job_id}: ${outputUrl}`,
             },
           ],
           structuredContent: {
@@ -873,6 +932,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             resolution,
             outputUrl,
             assetKind,
+            imageActions: assetKind === "image",
           },
         }
       },
@@ -927,6 +987,16 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         annotations: { readOnlyHint: true },
       },
       async (args) => {
+        // Guard the uuid PK before querying — a non-UUID execution_id would
+        // leak the raw `invalid input syntax for type uuid` Postgres error.
+        if (!isUuid(args.execution_id)) {
+          return {
+            content: [
+              { type: "text", text: `Execution ${args.execution_id} not found (expected a run UUID)` },
+            ],
+            isError: true,
+          }
+        }
         const { data, error } = await supabase
           .from("workflow_executions")
           .select("id, status, node_states, created_at, completed_at, user_id")
@@ -1058,6 +1128,16 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
       },
       async (args) => {
+        // Guard the uuid PK before any query — a non-UUID id would leak the
+        // raw `invalid input syntax for type uuid` Postgres error.
+        if (!isUuid(args.job_id)) {
+          return {
+            content: [
+              { type: "text", text: `Asset ${args.job_id} not found (expected a job UUID)` },
+            ],
+            isError: true,
+          }
+        }
         if (args.favorited) {
           // Ownership gate: only allow favoriting a job the caller may see
           // (own, or public+completed). Prevents storing favorites for another

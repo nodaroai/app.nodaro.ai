@@ -4,6 +4,8 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { isUuid } from "./_id-guard.js"
+import { isRetryableFailure } from "./_job-error.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -189,6 +191,19 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       annotations: { readOnlyHint: true },
     },
     async (args) => {
+      // Guard the uuid PK before querying — a non-UUID id (KIE task id,
+      // app-run id, truncated id, pasted URL) would make Postgres throw
+      // `invalid input syntax for type uuid` and the handler would forward
+      // that raw error. A non-UUID can't be a job we hold, so it is simply
+      // "not found".
+      if (!isUuid(args.job_id)) {
+        return {
+          content: [
+            { type: "text", text: `Job ${args.job_id} not found (expected a job UUID)` },
+          ],
+          isError: true,
+        }
+      }
       const { data, error } = await supabase
         .from("jobs")
         .select(
@@ -210,8 +225,16 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           isError: true,
         }
       }
+      // On failure, add an explicit `retryable` flag (mirrors get_asset).
+      // error_message is already in `data`, but the flag makes the
+      // "content policy → do NOT re-run the same request" signal
+      // unambiguous so the model stops retrying a permanent block.
+      const failed = data.status === "failed" || data.status === "cancelled"
+      const payload = failed
+        ? { data, retryable: isRetryableFailure(data.error_message as string | null) }
+        : { data }
       return {
-        content: [{ type: "text", text: JSON.stringify({ data }, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       }
     },
   )
