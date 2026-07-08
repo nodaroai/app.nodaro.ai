@@ -1,5 +1,13 @@
 # @nodaro/sdk
 
+## 1.1.2
+
+### Patch Changes
+
+- 50e2721: Documentation-only: voice changer pro JSDoc now describes behavior without implementation internals.
+- Updated dependencies [910fd2d]
+  - @nodaro/shared@1.5.0
+
 ## 1.1.1
 
 ### Patch Changes
