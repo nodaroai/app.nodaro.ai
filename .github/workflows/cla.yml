@@ -23,7 +23,8 @@ jobs:
     # so PR checks stay clean while the operational prereqs below are pending.
     # To activate: complete the operational prerequisites at the bottom of
     # this file, then set CLA_BOT_ENABLED=true under repo Settings > Variables.
-    if: vars.CLA_BOT_ENABLED == 'true'
+    # CLA is for EXTERNAL contributors PRing to the PUBLIC repo — run there only.
+    if: github.repository == 'nodaroai/app.nodaro.ai' && vars.CLA_BOT_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: CLA Assistant

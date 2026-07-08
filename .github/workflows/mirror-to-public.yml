@@ -34,6 +34,8 @@ jobs:
           TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
         run: |
           if [ -n "${TOK:-}" ]; then
+            TOK=$(printf '%s' "$TOK" | tr -d '[:space:]')   # strip stray newline/whitespace from the secret (PATs have none)
+            echo "token access check: HTTP $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token ${TOK}" https://api.github.com/repos/nodaroai/app.nodaro.ai) — 200=has access, 404=invalid/no access"
             export PUBLIC_REMOTE="https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
           else
             echo "PUBLIC_MIRROR_TOKEN not set — running gate-only (dry run), no publish."
