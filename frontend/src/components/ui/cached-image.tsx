@@ -93,10 +93,17 @@ export function CachedImage({
   thumbnailWidth,
   raw,
   noPlaceholder,
+  priority,
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & {
   thumbnail?: boolean
   thumbnailWidth?: number
+  /** Above-the-fold / LCP image. Sets fetchpriority=high + eager loading +
+   *  async decode so the browser fetches it immediately at high priority
+   *  instead of the default "Low until layout is known" treatment. Apply ONLY
+   *  to the first row of a grid — marking every image high-priority defeats the
+   *  point (the browser can only meaningfully prioritize a few). */
+  priority?: boolean
   /** Opt out of CDN optimization and load the untouched original. Use only when
    *  exact original pixels are required — downloads should not use this
    *  component at all. */
@@ -231,6 +238,9 @@ export function CachedImage({
       }}
       style={{ opacity: loaded ? 1 : 0, transition: "opacity 0s", ...props.style }}
       {...props}
+      {...(priority
+        ? { fetchPriority: "high" as const, loading: "eager" as const, decoding: "async" as const }
+        : null)}
     />
   )
 }
