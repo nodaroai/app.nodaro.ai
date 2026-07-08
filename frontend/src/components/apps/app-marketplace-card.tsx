@@ -1,5 +1,6 @@
 import { Heart, Play, Sparkles, Coins } from "lucide-react"
 import { PreviewVideo } from "@/components/ui/preview-video"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import type { AppBrowseCard } from "@/lib/api"
@@ -41,11 +42,12 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
           app.previewMediaType === "video" ? (
             <PreviewVideo src={app.previewMediaUrl} autoplay={videoAutoplay} />
           ) : (
-            <img
+            <CachedImage
               src={app.previewMediaUrl}
               alt={app.name}
               className="w-full h-full object-cover"
               loading="lazy"
+              thumbnail
             />
           )
         ) : (
