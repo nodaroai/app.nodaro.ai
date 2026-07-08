@@ -525,7 +525,7 @@ ${uiProtocolShim()}
         return;
       }
       if (sc.status === 'failed' || sc.status === 'cancelled') {
-        statusEl.textContent = 'Job ' + sc.status;
+        statusEl.textContent = 'Job ' + sc.status + (sc.errorMessage ? ': ' + sc.errorMessage : '');
         stopPolling();
         return;
       }
