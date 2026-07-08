@@ -27,7 +27,7 @@ import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
 import { appBaseUrl } from "../../deployment-urls.js"
 
 const CARD_CSS = `
-  :root { color-scheme: light dark; }
+  :root { color-scheme: light dark; --fs-top-pad: 90px; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   .card {
@@ -65,6 +65,35 @@ const CARD_CSS = `
   button:hover { opacity: 1; }
   .media-actions { display: flex; gap: 6px; justify-content: flex-end; }
   a { color: inherit; }
+  /* Image fullscreen — enabled ONLY on the display_asset image path (the
+     click handler that toggles it is gated behind state.imageActions, and a
+     display_asset render is always a single image). Mirrors the dedicated
+     image widget: click the image → ui/request-display-mode fullscreen, the
+     host sizes the iframe to the viewport, we strip chrome + letterbox the
+     image. --fs-top-pad clears mobile host chrome; desktop resets it to 0. */
+  .outputs.image-ready img { cursor: zoom-in; }
+  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow: hidden; }
+  body.fullscreen .card { height: calc(100dvh - var(--fs-top-pad)); gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
+  body.fullscreen .meta,
+  body.fullscreen .status,
+  body.fullscreen .progress,
+  body.fullscreen .media-actions { display: none; }
+  body.fullscreen .outputs { height: calc(100dvh - var(--fs-top-pad)); }
+  body.fullscreen .outputs > div { height: 100%; display: flex; align-items: flex-start; justify-content: center; }
+  body.fullscreen .outputs img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: none;
+    border-radius: 0;
+    margin: 0;
+  }
+  body.fullscreen .outputs.image-ready img { cursor: zoom-out; }
+  @media (hover: hover) and (pointer: fine) {
+    :root { --fs-top-pad: 0px; }
+    body.fullscreen .outputs > div { align-items: start; }
+    body.fullscreen .outputs img { max-height: 86vh; }
+  }
 `
 
 /**
@@ -237,7 +266,23 @@ ${uiProtocolShim()}
   ${JOB_AUTO_CLASSIFY_JS}
   (function() {
     var ALLOWED_ORIGINS = ${JSON.stringify(WIDGET_MEDIA_ORIGINS)};
-    var state = { jobId: null, prompt: null, model: null, done: false };
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, done: false, imageActions: false, displayMode: 'inline' };
+
+    // Image-fullscreen display-mode sync (display_asset image path). The
+    // body.fullscreen class is host-driven: the click handler below requests
+    // a mode and the host echoes the applied mode back here — and pushes its
+    // own changes too (e.g. the user tapping the host X overlay to exit).
+    function applyDisplayMode() {
+      document.body.classList.toggle('fullscreen', state.displayMode === 'fullscreen');
+    }
+    window.addEventListener('mcp-ready', function(e) {
+      var ctx = (e && e.detail) || window.__MCP_HOST_CONTEXT__ || {};
+      if (ctx.displayMode) { state.displayMode = ctx.displayMode; applyDisplayMode(); }
+    });
+    window.addEventListener('mcp-host-context-changed', function(e) {
+      var ctx = (e.detail && e.detail.hostContext) || e.detail || {};
+      if (ctx.displayMode) { state.displayMode = ctx.displayMode; applyDisplayMode(); }
+    });
 
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
@@ -247,7 +292,7 @@ ${uiProtocolShim()}
 
     function renderMeta() {
       while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
-      [state.model].forEach(function(v) {
+      [state.model, state.aspectRatio, state.resolution].forEach(function(v) {
         if (!v) return;
         var span = document.createElement('span');
         span.className = 'badge';
@@ -289,6 +334,51 @@ ${uiProtocolShim()}
       return block;
     }
 
+    // ── Image follow-up buttons (Animate / Edit / Recreate) ──
+    // Ported from the dedicated image widget so display_asset keeps them
+    // when it renders an image through this universal card. Each pushes a
+    // conversational message into the chat input (NOT a direct tool call) —
+    // the user hits Enter and Claude routes the follow-up. Gated behind
+    // state.imageActions so ONLY display_asset (which sets it) shows them;
+    // every other job-auto consumer renders media exactly as before.
+    //
+    // ESCAPE NOTE: this script is inside a TS template literal, so the
+    // backslash-n below renders as a literal \\n escape in the widget JS (a
+    // leading newline before the [loop ...] trailer). A bare newline inside
+    // a single-quoted JS string would be a fatal SyntaxError — guarded by
+    // __tests__/widget-js-valid.test.ts.
+    var ASK_TRAILER = '\\n[loop ask me using q/a as needed]';
+    function buildImageContextJson(action, imageUrl) {
+      var ctx = { image_url: imageUrl };
+      if (state.prompt) ctx['original prompt'] = state.prompt;
+      if (state.model) ctx.model = state.model;
+      ctx.action = action;
+      return JSON.stringify(ctx);
+    }
+    function pushMessage(text) {
+      if (window.NodaroMCP && window.NodaroMCP.pushUserMessage) {
+        window.NodaroMCP.pushUserMessage(text);
+      }
+    }
+    function makeActionBtn(label, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    }
+    function appendImageActions(actions, imageUrl) {
+      actions.appendChild(makeActionBtn('Animate', function() {
+        pushMessage('animate this image: ' + buildImageContextJson('animate_image', imageUrl) + ASK_TRAILER);
+      }));
+      actions.appendChild(makeActionBtn('Edit', function() {
+        pushMessage('modify this image: ' + buildImageContextJson('modify_image', imageUrl) + ASK_TRAILER);
+      }));
+      if (state.prompt) {
+        actions.appendChild(makeActionBtn('Recreate', function() { pushMessage(state.prompt); }));
+      }
+    }
+
     function renderMediaBlock(item) {
       var wrap = document.createElement('div');
       var media;
@@ -312,6 +402,22 @@ ${uiProtocolShim()}
         wrap.replaceChild(renderLinkBlock(item), media);
       });
       wrap.appendChild(media);
+      // Image (display_asset path): click toggles host fullscreen <-> inline,
+      // mirroring the dedicated image widget. Gated behind imageActions so it
+      // only arms for display_asset single-image renders. Skipped for
+      // video/audio — their native controls own the click.
+      if (item.kind === 'image' && state.imageActions) {
+        outputsEl.classList.add('image-ready');
+        media.addEventListener('click', function() {
+          if (!window.NodaroMCP || !window.NodaroMCP.requestDisplayMode) return;
+          var target = state.displayMode === 'fullscreen' ? 'inline' : 'fullscreen';
+          window.NodaroMCP.requestDisplayMode(target).then(function(result) {
+            var applied = (result && result.displayMode) || target;
+            state.displayMode = applied;
+            applyDisplayMode();
+          });
+        });
+      }
       var actions = document.createElement('div');
       actions.className = 'media-actions';
       var dl = document.createElement('button');
@@ -322,6 +428,7 @@ ${uiProtocolShim()}
       });
       actions.appendChild(dl);
       actions.appendChild(copyButton(function() { return item.value; }));
+      if (item.kind === 'image' && state.imageActions) appendImageActions(actions, item.value);
       wrap.appendChild(actions);
       return wrap;
     }
@@ -412,6 +519,9 @@ ${uiProtocolShim()}
       if (sc.jobId) state.jobId = sc.jobId;
       if (sc.model) state.model = sc.model;
       if (sc.prompt) state.prompt = sc.prompt;
+      if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
+      if (sc.resolution) state.resolution = sc.resolution;
+      if (sc.imageActions) state.imageActions = true;
       renderMeta();
       if (sc.outputUrl) {
         showResult(sc);
@@ -479,7 +589,7 @@ ${uiProtocolShim()}
         statusEl.textContent = 'Working… ' + Math.round(pct) + '%';
       }
       if (sc.status === 'failed' || sc.status === 'cancelled') {
-        statusEl.textContent = 'Job ' + sc.status;
+        statusEl.textContent = 'Job ' + sc.status + (sc.errorMessage ? ': ' + sc.errorMessage : '');
         progEl.hidden = true;
         stopPolling();
         return;

@@ -168,6 +168,22 @@ describe("buildJobAutoWidget template", () => {
   it("link renderer carries the http(s) scheme guard", () => {
     expect(html).toContain("indexOf('https://') === 0 || item.value.indexOf('http://') === 0")
   })
+  it("carries the gated image follow-up buttons (display_asset image path)", () => {
+    // Buttons render only when the tool result sets imageActions (display_asset),
+    // and only on image media blocks — other job-auto consumers stay button-free.
+    expect(html).toContain("appendImageActions")
+    expect(html).toContain("item.kind === 'image' && state.imageActions")
+    expect(html).toContain("animate this image: ")
+    expect(html).toContain("modify this image: ")
+    expect(html).toContain("pushUserMessage")
+  })
+  it("arms image click-to-fullscreen only on the gated display_asset path", () => {
+    expect(html).toContain("requestDisplayMode")
+    expect(html).toContain("image-ready")
+    expect(html).toContain("classList.toggle('fullscreen'")
+    // display-mode sync so the host X overlay (exit fullscreen) round-trips.
+    expect(html).toContain("mcp-host-context-changed")
+  })
 })
 
 describe("JOB_AUTO_TEXT_OUTPUT_KEYS stays in sync with the classify source", () => {
