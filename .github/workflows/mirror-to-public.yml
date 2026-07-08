@@ -32,7 +32,15 @@ jobs:
       - name: gate + mirror main and dev
         env:
           TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+          GH_TOK: ${{ github.token }}
         run: |
+          # actions/checkout persists a github.com-wide Authorization header using
+          # GITHUB_TOKEN (scoped to THIS/internal repo). It overrides our per-URL
+          # creds on every github.com git op, so pushing to the PUBLIC repo auths as
+          # GITHUB_TOKEN → "Repository not found". Clear it, and re-point origin at an
+          # explicit token URL so internal fetches still work.
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git remote set-url origin "https://x-access-token:${GH_TOK}@github.com/${GITHUB_REPOSITORY}.git"
           if [ -n "${TOK:-}" ]; then
             TOK=$(printf '%s' "$TOK" | tr -d '[:space:]')   # strip stray newline/whitespace from the secret (PATs have none)
             echo "token access check: HTTP $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token ${TOK}" https://api.github.com/repos/nodaroai/app.nodaro.ai) — 200=has access, 404=invalid/no access"
