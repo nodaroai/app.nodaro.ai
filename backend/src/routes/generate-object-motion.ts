@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/reques
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { buildObjectMotionPrompt } from "@nodaro/prompts"
 /**
@@ -201,9 +202,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
         .single()
 
       if (error || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // ───────────────────────────────────────────────────────────────────

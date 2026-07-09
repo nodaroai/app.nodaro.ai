@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/reques
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
 import { LOCATION_ATMOSPHERE_PROVIDERS, CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared"
 import { buildLocationMotionPrompt } from "@nodaro/prompts"
@@ -140,9 +141,7 @@ export async function generateLocationMotionRoutes(app: FastifyInstance) {
         .single()
 
       if (error || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // ───────────────────────────────────────────────────────────────────

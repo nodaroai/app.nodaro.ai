@@ -8,6 +8,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { VOICE_DESIGN_MODELS, DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
@@ -63,9 +64,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-voice-design")

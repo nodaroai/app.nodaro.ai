@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
@@ -124,9 +125,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           .select("id")
 
         if (updateError) {
-          return reply.status(500).send({
-            error: { code: "internal_error", message: updateError.message },
-          })
+          return sendInternalError(reply, req, updateError, "Failed to cancel job")
         }
 
         if (!cancelledRows || cancelledRows.length === 0) {
@@ -141,9 +140,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         return { success: true, cancelled: 1, inFlight: false }
       } catch (err) {
         console.error("[cancel-job] Error:", err)
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to cancel job" },
-        })
+        return sendInternalError(reply, req, err, "Failed to cancel job")
       }
     }
   )
@@ -172,9 +169,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         .or("provider_task_id.is.null,reconcile_attempts.gt.0")
 
       if (fetchError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: fetchError.message },
-        })
+        return sendInternalError(reply, req, fetchError, "Failed to fetch jobs")
       }
 
       if (!jobs || jobs.length === 0) {
@@ -199,9 +194,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         .select("id")
 
       if (updateError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: updateError.message },
-        })
+        return sendInternalError(reply, req, updateError, "Failed to cancel jobs")
       }
 
       const cancelledIds = (cancelledRows ?? []).map((r) => r.id as string)
@@ -214,9 +207,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       return { success: true, cancelled: cancelledIds.length }
     } catch (err) {
       console.error("[cancel-all] Error:", err)
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to cancel jobs" },
-      })
+      return sendInternalError(reply, req, err, "Failed to cancel jobs")
     }
   })
 }

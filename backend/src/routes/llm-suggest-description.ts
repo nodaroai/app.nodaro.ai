@@ -6,6 +6,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId } from "../lib/request-helpers.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
   ASSET_DESCRIPTION_LLM_OPTIONS,
@@ -123,9 +124,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         .select("id")
         .single()
       if (jobError || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, CREDIT_IDENTIFIER)

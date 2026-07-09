@@ -23,6 +23,7 @@ import {
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -292,9 +293,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const creditType = sunoModelCreditType(model, "suno-generate")
@@ -372,9 +371,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const creditType = sunoModelCreditType(model, "suno-cover")
@@ -451,9 +448,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const creditType = sunoModelCreditType(model, "suno-extend")
@@ -524,9 +519,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-lyrics")
@@ -586,9 +579,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const creditType = type === "split_stem" ? "suno-separate-stem" : "suno-separate"
@@ -648,9 +639,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-music-video")
@@ -711,9 +700,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-mashup")
@@ -776,9 +763,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-replace-section")
@@ -842,9 +827,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-style-boost")
@@ -883,12 +866,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           output_data: { error: err instanceof Error ? err.message : "Style boost failed" },
         }).eq("id", job.id)
 
-        return reply.status(500).send({
-          error: {
-            code: "internal_error",
-            message: err instanceof Error ? err.message : "Style boost failed",
-          },
-        })
+        return sendInternalError(reply, req, err, "Style boost failed")
       }
     }
   )
@@ -933,9 +911,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-add-instrumental")
@@ -994,9 +970,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-add-vocals")
@@ -1055,9 +1029,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-convert-wav")
@@ -1118,9 +1090,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-upload-extend")
@@ -1332,9 +1302,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .select("id")
         .single()
       if (jobErr || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobErr?.message ?? "job_create_failed" },
-        })
+        return sendInternalError(reply, req, jobErr, "Failed to create job")
       }
 
       // Step 2 — reserve credits AGAINST the jobs row.

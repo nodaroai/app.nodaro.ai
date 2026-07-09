@@ -10,6 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, buildSurroundFillPrompt, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 /**
  * S8 (2026-07): surround-continuation was ungated at birth (Community and
@@ -169,9 +170,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

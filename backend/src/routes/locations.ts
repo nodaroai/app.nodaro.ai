@@ -10,6 +10,7 @@ import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Reference-photo kinds — mirrors the migration 124 schema. Single source of
 // truth: `LOCATION_REFERENCE_PHOTO_KINDS` from `@nodaro/shared/entity-prompts`.
@@ -261,9 +262,7 @@ export async function locationRoutes(app: FastifyInstance) {
     const { data, error } = await query
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to list locations")
     }
 
     const locations = (data ?? []).map((loc) => toCamel(loc as LocationRow))
@@ -348,9 +347,7 @@ export async function locationRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Location not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to load location")
     }
 
     type PendingJob = {
@@ -553,9 +550,7 @@ export async function locationRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to save location")
     }
 
     return { id: created.id }
@@ -604,9 +599,7 @@ export async function locationRoutes(app: FastifyInstance) {
       p_url: parsedBody.data.url,
     })
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to remove asset")
     }
     if (!removed) {
       // Wrong owner, archived row, or the url isn't in that bucket.
@@ -681,9 +674,7 @@ export async function locationRoutes(app: FastifyInstance) {
         .maybeSingle()
 
       if (fetchErr) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: fetchErr.message },
-        })
+        return sendInternalError(reply, req, fetchErr, "Failed to delete location")
       }
       if (!row) {
         return reply.status(404).send({

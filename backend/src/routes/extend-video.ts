@@ -21,6 +21,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, applyVideoNegativePrompt, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // KIE providers (veo-extend, runway-extend) need a kieTaskId from the upstream
 // generation; LTX 2.3 Pro is a Replicate model that takes a raw videoUrl. Both
@@ -161,9 +162,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(

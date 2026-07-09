@@ -7,6 +7,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const appIdParams = z.object({
   appId: z.string().uuid(),
@@ -73,9 +74,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
       .order("date", { ascending: false })
 
     if (rowsError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to fetch analytics" },
-      })
+      return sendInternalError(reply, req, rowsError, "Failed to fetch analytics")
     }
 
     const allRows = rows ?? []
@@ -171,9 +170,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
     const { data: runs, error: runsError } = await query
 
     if (runsError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to fetch runs" },
-      })
+      return sendInternalError(reply, req, runsError, "Failed to fetch runs")
     }
 
     const hasMore = (runs?.length ?? 0) > limit

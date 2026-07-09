@@ -194,6 +194,7 @@ import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installEmptyJsonBodyFix } from "./lib/empty-json-body-fix.js"
+import { registerInternalErrorSanitizer } from "./lib/http-errors.js"
 
 /**
  * Rate-limit key derivation.
@@ -247,6 +248,12 @@ export async function buildApp() {
   // Fastify skips parsing instead of 400ing on the empty body. A global parser
   // can't be used — the Stripe webhook registers its own. See the helper.
   installEmptyJsonBodyFix(app)
+
+  // Global backstop: strip raw error detail from any `internal_error` 500 body
+  // (logging the original server-side) unless the route used `sendInternalError`.
+  // Guarantees no route can leak a raw DB/provider message just by forgetting
+  // the helper. Registered early so it applies to every route below.
+  registerInternalErrorSanitizer(app)
 
   // Claude.ai MCP UI iframes get a per-instance sandbox subdomain on
   // claudemcpcontent.com. Origins look like

@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { estimateTrimVideoCredits } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const trimVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -99,7 +100,7 @@ export async function trimVideoRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     // Reserve credits

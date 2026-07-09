@@ -9,6 +9,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const ttsEngineSchema = z
   .discriminatedUnion("engine_type", [
@@ -228,9 +229,7 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // Resolve from the RAW body (not parsed.data) so the reserve matches the

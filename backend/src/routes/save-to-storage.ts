@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { uploadToR2 } from "../lib/storage.js"
@@ -86,9 +87,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
       .single()
 
     if (jobError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: jobError.message },
-      })
+      return sendInternalError(reply, req, jobError, "Failed to save to storage")
     }
 
     // Snapshot hints at how much to reserve; the authoritative check is the

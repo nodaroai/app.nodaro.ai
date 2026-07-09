@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const editImageBody = z.object({
   // imageUrl is required for every provider EXCEPT grok-upscale, which
@@ -97,9 +98,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

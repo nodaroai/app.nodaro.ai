@@ -13,6 +13,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -86,9 +87,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits

@@ -14,6 +14,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -82,9 +83,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits

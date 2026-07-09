@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -234,9 +235,7 @@ export async function jobRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
     return { jobs: data ?? [] }
@@ -413,9 +412,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: jobs, error } = await query
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
     return { data: jobs ?? [] }
@@ -443,9 +440,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { error } = await query
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to delete job")
     }
 
     return { success: true }

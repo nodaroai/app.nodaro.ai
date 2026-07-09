@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { hashSecret } from "./developer-apps.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const SECRET_TTL_DAYS = 90
 const CLIENT_ID_PREFIX = "ndr_dcr_"
@@ -164,7 +165,7 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
 
       if (error || !data) {
         req.log.error({ err: error }, "DCR insert failed")
-        return reply.status(500).send({ error: { code: "internal_error", message: "Failed to register client" } })
+        return sendInternalError(reply, req, error, "Failed to register client")
       }
 
       const issuedAtSec = Math.floor(new Date(data.created_at).getTime() / 1000)

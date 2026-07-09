@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const VALID_SPEC_KEYS = Object.keys(PLATFORM_SPECS) as [string, ...string[]]
 
@@ -56,7 +57,7 @@ export async function socialMediaFormatRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
