@@ -11,6 +11,7 @@ import crypto from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -89,9 +90,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (updateError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to enable sharing" },
-      })
+      return sendInternalError(reply, req, updateError, "Failed to enable sharing")
     }
 
     return reply.send({
@@ -127,9 +126,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (updateError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to disable sharing" },
-      })
+      return sendInternalError(reply, req, updateError, "Failed to disable sharing")
     }
 
     return reply.send({ success: true })
@@ -262,9 +259,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       .single()
 
     if (execError || !execution) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create execution" },
-      })
+      return sendInternalError(reply, req, execError, "Failed to create execution")
     }
 
     // Compute nodeIds if targeting a specific sub-workflow node

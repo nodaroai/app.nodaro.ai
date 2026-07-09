@@ -11,6 +11,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const llmChatBody = z.object({
@@ -119,9 +120,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
@@ -241,9 +240,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

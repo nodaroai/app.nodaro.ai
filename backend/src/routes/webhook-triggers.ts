@@ -12,6 +12,7 @@ import { randomBytes } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -186,9 +187,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       })
     }
     if (execError || !execution) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create execution" },
-      })
+      return sendInternalError(reply, req, execError, "Failed to create execution")
     }
 
     // Update trigger last_triggered_at
@@ -265,9 +264,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create trigger")
     }
 
     return reply.status(201).send({
@@ -301,9 +298,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch triggers")
     }
 
     return {
@@ -357,9 +352,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Trigger not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to update trigger")
     }
 
     return { data: toTriggerResponse(data) }
@@ -390,9 +383,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to delete trigger")
     }
 
     return { success: true }

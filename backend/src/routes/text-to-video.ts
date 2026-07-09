@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
@@ -193,10 +194,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         req.idempotencyKey,
       )
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return reply.status(500).send({
-        error: { code: "internal_error", message },
-      })
+      return sendInternalError(reply, req, err, "Failed to create video generation job")
     }
     const job = insertResult.row
 

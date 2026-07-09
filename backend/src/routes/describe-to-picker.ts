@@ -11,6 +11,7 @@ import { llmCompleteStructured, type LlmContentBlock } from "../lib/llm-client.j
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 
@@ -157,7 +158,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
         .select("id")
         .single()
       if (jobError) {
-        return reply.status(500).send({ error: { code: "internal_error", message: jobError.message } })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

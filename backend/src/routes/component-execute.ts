@@ -8,6 +8,7 @@ import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 
 const bodySchema = z.object({
@@ -88,7 +89,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       .single()
 
     if (jobError || !wrapperJob) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to create component job" } })
+      return sendInternalError(reply, req, jobError, "Failed to create component job")
     }
 
     // Return immediately — run inner execution in background

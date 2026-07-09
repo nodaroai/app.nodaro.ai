@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildWizardAnalyzeSystem, buildWizardGenerateSystem, buildWizardEnhanceSystem } from "../prompts/prompt-wizard-system.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -144,9 +145,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

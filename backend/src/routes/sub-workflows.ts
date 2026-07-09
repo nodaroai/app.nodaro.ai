@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Types mirroring frontend definitions
 interface SubWorkflowPort {
@@ -100,9 +101,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
     const { data: workflows, error } = await dbQuery
 
     if (error) {
-      return reply
-        .status(500)
-        .send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to fetch workflows")
     }
 
     const callableWorkflows: Array<{

@@ -7,6 +7,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { referenceSheetCreditId } from "@nodaro/shared"
 
 const TABLE: Record<string, string> = { character: "characters", object: "objects", location: "locations" }
@@ -57,7 +58,7 @@ export async function referenceSheetRoutes(app: FastifyInstance): Promise<void> 
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id").single()
-      if (jobErr || !job) return reply.status(500).send({ error: { code: "internal_error", message: jobErr?.message ?? "job_create_failed" } })
+      if (jobErr || !job) return sendInternalError(reply, req, jobErr, "Failed to create job")
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, sheetCreditId(body))
       if (reply.sent) return

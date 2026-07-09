@@ -42,7 +42,7 @@ export async function insertWithIdempotencyKey<T>(
       .insert(data)
       .select(selectColumns)
       .single()
-    if (error) throw new Error(`insert into ${table} failed: ${error.message}`)
+    if (error) throw new Error(`idempotent insert failed (${table}): ${error.message}`)
     return { row: row as unknown as T, created: true }
   }
 
@@ -55,7 +55,7 @@ export async function insertWithIdempotencyKey<T>(
     })
     .select(selectColumns)
 
-  if (error) throw new Error(`upsert into ${table} failed: ${error.message}`)
+  if (error) throw new Error(`idempotent upsert failed (${table}): ${error.message}`)
 
   if (rows && rows.length > 0) {
     return { row: rows[0] as unknown as T, created: true }

@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { assembleImageInput, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
@@ -571,10 +572,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
         req.idempotencyKey,
       )
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return reply.status(500).send({
-        error: { code: "internal_error", message },
-      })
+      return sendInternalError(reply, req, err, "Failed to create image generation job")
     }
     const job = insertResult.row
 

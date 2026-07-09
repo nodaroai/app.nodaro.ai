@@ -14,6 +14,7 @@ import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const imageCriticBody = z.object({
   imageUrl: safeUrlSchema,
@@ -145,9 +146,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError?.message ?? "job insert failed" },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

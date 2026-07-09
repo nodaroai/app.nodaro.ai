@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { requireScope } from "../lib/scopes.js"
 
 const costSummaryBody = z.object({
@@ -64,9 +65,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
     const { data: jobs, error } = await query
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch cost summary")
     }
 
     const rows = (jobs ?? []) as readonly JobRow[]

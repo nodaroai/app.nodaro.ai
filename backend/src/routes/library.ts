@@ -7,6 +7,7 @@ import { deleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // ============================================================
 // Schemas
@@ -132,9 +133,7 @@ export async function libraryRoutes(app: FastifyInstance) {
     const totalCount: number | null = countResult?.count ?? null
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to load library")
     }
 
     const rows = data ?? []
@@ -195,9 +194,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       .eq("id", id)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to promote asset")
     }
 
     return { success: true }
@@ -238,9 +235,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       .eq("id", id)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to demote asset")
     }
 
     return { success: true }
@@ -368,9 +363,7 @@ export async function libraryRoutes(app: FastifyInstance) {
         .eq("id", id)
 
       if (deleteError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: deleteError.message },
-        })
+        return sendInternalError(reply, req, deleteError, "Failed to delete asset")
       }
 
       try {
@@ -393,9 +386,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
 
     if (updateError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: updateError.message },
-      })
+      return sendInternalError(reply, req, updateError, "Failed to remove asset from library")
     }
 
     return { success: true }
@@ -473,9 +464,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
       if (existingError) {
         console.error("[save-generated] Existing check error:", existingError)
-        return reply.status(500).send({
-          error: { code: "internal_error", message: existingError.message },
-        })
+        return sendInternalError(reply, req, existingError, "Failed to save asset")
       }
 
       if (existing) {
@@ -487,9 +476,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
         if (updateError) {
           console.error("[save-generated] Update error:", updateError)
-          return reply.status(500).send({
-            error: { code: "internal_error", message: updateError.message },
-          })
+          return sendInternalError(reply, req, updateError, "Failed to save asset")
         }
 
         console.log("[save-generated] Existing asset marked in_library:", existing.id)
@@ -517,9 +504,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
       if (insertError) {
         console.error("[save-generated] Insert error:", insertError)
-        return reply.status(500).send({
-          error: { code: "internal_error", message: insertError.message },
-        })
+        return sendInternalError(reply, req, insertError, "Failed to save asset")
       }
 
       console.log("[save-generated] Success:", asset.id)

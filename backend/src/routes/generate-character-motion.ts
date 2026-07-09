@@ -12,6 +12,7 @@ import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { CHARACTER_MOTION_PROVIDERS, CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio } from "@nodaro/shared"
 import { buildMotionPrompt } from "@nodaro/prompts"
+import { sendInternalError } from "../lib/http-errors.js"
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
   // Optional in v2: when the studio path runs (attachToCharacterId set), the
@@ -301,9 +302,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         .single()
 
       if (error || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // ───────────────────────────────────────────────────────────────────

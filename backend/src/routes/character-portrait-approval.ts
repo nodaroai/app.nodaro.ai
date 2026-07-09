@@ -6,6 +6,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { meterSyncLlm } from "../lib/meter-sync-llm.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
 // llm-suggest-description) — the dedicated /llm-caption retry route is otherwise
@@ -195,7 +196,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (updateErr) {
-      return reply.status(500).send({ error: { code: "internal_error", message: updateErr.message } })
+      return sendInternalError(reply, req, updateErr, "Failed to update character")
     }
 
     return { portraitUrl, canonicalDescription }
@@ -255,7 +256,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
     if (updateErr) {
       await meter.refund()
-      return reply.status(500).send({ error: { code: "internal_error", message: updateErr.message } })
+      return sendInternalError(reply, req, updateErr, "Failed to update character")
     }
     await meter.commit()
     return { canonicalDescription }

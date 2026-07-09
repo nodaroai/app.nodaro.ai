@@ -8,6 +8,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),
@@ -56,9 +57,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     // Reserve credits

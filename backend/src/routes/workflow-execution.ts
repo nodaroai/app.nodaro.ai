@@ -22,6 +22,7 @@ import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { resolvePrimaryInputField } from "../lib/mcp/extract-app-inputs.js"
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
@@ -327,10 +328,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       execution = result.row
       dedupHit = !result.created
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return reply.status(500).send({
-        error: { code: "internal_error", message },
-      })
+      return sendInternalError(reply, req, err, "Failed to start workflow execution")
     }
 
     if (dedupHit) {
@@ -819,9 +817,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
 
     if (execResult.error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: execResult.error.message },
-      })
+      return sendInternalError(reply, req, execResult.error, "Failed to load executions")
     }
 
     // Merge both sources, sort by created_at desc, take limit + 1
@@ -941,9 +937,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
 
     if (execResult.error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: execResult.error.message },
-      })
+      return sendInternalError(reply, req, execResult.error, "Failed to load executions")
     }
 
     // Merge both sources, sort by created_at desc, take limit + 1

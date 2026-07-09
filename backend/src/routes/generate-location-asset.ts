@@ -10,6 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { CHARACTER_ASPECT_OPTIONS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Single source of truth for the asset-type and attach-column enums lives in
 // `@nodaro/shared/entity-prompts` — reused by the MCP `generate_location` verb
@@ -277,9 +278,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     // Reserve credits

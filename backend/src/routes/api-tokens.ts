@@ -29,6 +29,7 @@ import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-
 import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFieldSchema, flattenItems, migrateToItems } from "@nodaro/shared"
 import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // ---------------------------------------------------------------------------
 // Rate limiter (in-memory, per token hash)
@@ -232,9 +233,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create token" },
-      })
+      return sendInternalError(reply, req, error, "Failed to create token")
     }
 
     return reply.status(201).send({
@@ -269,9 +268,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch API tokens")
     }
 
     return { data: (data ?? []).map(formatToken) }
@@ -330,9 +327,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Token not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to update token")
     }
 
     return { data: formatToken(data) }
@@ -362,9 +357,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to delete token")
     }
 
     return { success: true }
@@ -427,9 +420,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       const { data: workflows, error } = await dbQuery
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to fetch workflows" },
-        })
+        return sendInternalError(reply, req, error, "Failed to fetch workflows")
       }
 
       const rows = workflows ?? []
@@ -670,9 +661,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         .single()
 
       if (execError || !execution) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to create execution" },
-        })
+        return sendInternalError(reply, req, execError, "Failed to create execution")
       }
 
       // Enqueue orchestration

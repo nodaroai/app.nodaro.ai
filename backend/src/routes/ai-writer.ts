@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -82,9 +83,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits
@@ -212,9 +211,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { VOICE_CHANGER_MODEL_IDS } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
@@ -72,9 +73,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to change voice")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-voice-changer")

@@ -18,6 +18,7 @@ import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -92,9 +93,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits

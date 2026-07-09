@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { extractPresetData } from "@nodaro/shared"
 import { getFactoryPresets } from "@nodaro/prompts"
@@ -126,7 +127,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     let q = supabase.from("node_presets").select("*").eq("user_id", userId)
     if (nodeType) q = q.eq("node_type", nodeType)
     const { data, error } = await q.order("created_at", { ascending: false })
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch node presets")
     return reply.send({ data: ((data ?? []) as Row[]).map(toCamel) })
   })
 
@@ -176,7 +177,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
       .eq("node_type", nodeType)
       .order("created_at", { ascending: false })
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch favorites")
     return reply.send({ data: ((data ?? []) as { preset_id: string }[]).map((r) => r.preset_id) })
   })
 
@@ -195,7 +196,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
         { user_id: userId, node_type: parsed.data.nodeType, preset_id: parsed.data.presetId },
         { onConflict: "user_id,node_type,preset_id", ignoreDuplicates: true },
       )
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to add favorite")
     return reply.send({ data: { success: true } })
   })
 
@@ -214,7 +215,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
       .eq("node_type", q.nodeType)
       .eq("preset_id", q.presetId)
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to remove favorite")
     return reply.send({ data: { success: true } })
   })
 
@@ -249,7 +250,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       if (error.code === "23505") {
         return reply.status(409).send({ error: { code: "name_taken", message: "A preset with that name already exists for this node type." } })
       }
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to create preset")
     }
     return reply.status(201).send({ data: toCamel(row as Row) })
   })
@@ -297,7 +298,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("node_presets").delete().eq("id", id).eq("user_id", userId)
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to delete preset")
     // Best-effort: drop any favorite rows pointing at this now-deleted user preset
     // (preset_id is polymorphic → no FK cascade). Non-fatal if it errors.
     await supabase.from("node_preset_favorites").delete().eq("preset_id", id).eq("user_id", userId)
@@ -340,7 +341,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
 
     if (rows.length === 0) return reply.send({ data: { imported: 0 } })
     const { error } = await supabase.from("node_presets").insert(rows)
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to import presets")
     return reply.send({ data: { imported: rows.length } })
   })
 
@@ -391,7 +392,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     }
     const results = await Promise.all(ops)
     if (results.some((r) => r.error)) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Reorder failed" } })
+      return sendInternalError(reply, req, undefined, "Reorder failed")
     }
     return reply.send({ data: { ok: true } })
   })
