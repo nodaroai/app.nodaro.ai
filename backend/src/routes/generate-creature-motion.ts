@@ -15,6 +15,7 @@ import { // Reuse the entity-agnostic video-motion helpers (the object names are
   // route reuses them directly. `materials`→`poses` doesn't apply to motion.
   OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { buildObjectMotionPrompt } from "@nodaro/prompts"
+import { sendInternalError } from "../lib/http-errors.js"
 /**
  * Body schema for `POST /v1/generate-creature-motion`.
  *
@@ -204,9 +205,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
         .single()
 
       if (error || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // ───────────────────────────────────────────────────────────────────

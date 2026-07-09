@@ -7,6 +7,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { brandTokensSchema } from "../lib/plan-schemas.js"
 
 /**
@@ -90,9 +91,7 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to start video director")
     }
 
     await reserveCreditsForJob(req, reply, job.id, VIDEO_DIRECTOR_MODEL_ID)

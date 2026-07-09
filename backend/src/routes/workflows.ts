@@ -8,6 +8,7 @@ import { requireScope } from "../lib/scopes.js"
 import type { Scope } from "../lib/scopes.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -218,12 +219,6 @@ function validationError(reply: FastifyReply, message: string) {
     .send({ error: { code: "validation_error", message } })
 }
 
-function internalError(reply: FastifyReply, message: string) {
-  return reply
-    .status(500)
-    .send({ error: { code: "internal_error", message } })
-}
-
 function notFound(reply: FastifyReply, message: string) {
   return reply.status(404).send({ error: { code: "not_found", message } })
 }
@@ -301,7 +296,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .is("parent_workflow_id", null)
       .order("created_at", { ascending: false })
 
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
     return { data: (data ?? []).map(toWorkflowMeta) }
   })
 
@@ -341,7 +336,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .select(WORKFLOW_FULL_COLS)
       .single()
 
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to create workflow")
     return reply.status(201).send({ data: toWorkflowFull(data) })
   })
 
@@ -379,7 +374,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         allQuery = allQuery.not("settings->studio", "is", null)
       }
       const { data, error } = await allQuery
-      if (error) return internalError(reply, error.message)
+      if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
 
       const rows = data ?? []
       const ownerIds = [...new Set(rows.map((r) => r.user_id as string))]
@@ -415,7 +410,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
     const { data, error } = await listQuery
 
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
     return { data: (data ?? []).map(toWorkflowMeta) }
   })
 
@@ -448,12 +443,12 @@ export async function workflowRoutes(app: FastifyInstance) {
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle()
-      if (projErr) return internalError(reply, projErr.message)
+      if (projErr) return sendInternalError(reply, req, projErr, "Failed to create workflow")
       if (!proj) return notFound(reply, "Project not found")
     } else {
       // Resolve / lazy-create the default project.
       const resolved = await ensureDefaultProject(userId)
-      if ("error" in resolved) return internalError(reply, resolved.error)
+      if ("error" in resolved) return sendInternalError(reply, req, resolved.error, "Failed to create workflow")
       projectId = resolved.projectId
     }
 
@@ -473,7 +468,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .select(WORKFLOW_FULL_COLS)
       .single()
 
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to create workflow")
     return reply.status(201).send({ data: toWorkflowFull(data) })
   })
 
@@ -494,7 +489,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (error) {
       if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return internalError(reply, error.message)
+      return sendInternalError(reply, req, error, "Failed to fetch workflow")
     }
     return { data: toWorkflowFull(data) }
   })
@@ -518,7 +513,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (error) {
       if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return internalError(reply, error.message)
+      return sendInternalError(reply, req, error, "Failed to fetch workflow")
     }
 
     const full = toWorkflowFull(data)
@@ -600,11 +595,11 @@ export async function workflowRoutes(app: FastifyInstance) {
         p_set: body.delta.set ?? null,
         p_user_id: userId,
       })
-      if (rpcError) return internalError(reply, rpcError.message)
+      if (rpcError) return sendInternalError(reply, req, rpcError, "Failed to update workflow")
       const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
         | { ok: boolean; version: number | null; updated_at: string | null }
         | undefined
-      if (!row) return internalError(reply, "apply_workflow_delta returned no row")
+      if (!row) return sendInternalError(reply, req, "apply_workflow_delta returned no row", "Failed to update workflow")
       if (!row.ok) {
         if (row.version == null) return notFound(reply, "Workflow not found")
         return reply.status(409).send({
@@ -656,7 +651,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         .eq("id", body.projectId)
         .eq("user_id", userId)
         .maybeSingle()
-      if (targetErr) return internalError(reply, targetErr.message)
+      if (targetErr) return sendInternalError(reply, req, targetErr, "Failed to update workflow")
       if (!targetProject) return notFound(reply, "Project not found")
       updates.project_id = body.projectId
       if (body.folderId === undefined) updates.folder_id = null
@@ -681,7 +676,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     // `.maybeSingle()` returns `{ data: null, error: null }` on 0 rows
     // (no PGRST116 to special-case). Any non-null error here is a real
     // DB failure — surface as 500.
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to update workflow")
     if (!data) {
       // 0 rows matched. If the caller opted into optimistic concurrency,
       // the row exists but `updated_at` shifted (another tab/device wrote
@@ -725,7 +720,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .eq("id", params.id)
       .eq("user_id", userId)
 
-    if (error) return internalError(reply, error.message)
+    if (error) return sendInternalError(reply, req, error, "Failed to delete workflow")
     return { success: true }
   })
 
@@ -750,7 +745,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (error) {
       if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return internalError(reply, error.message)
+      return sendInternalError(reply, req, error, "Failed to export workflow")
     }
 
     const rawNodes = asObjectArray(wf.nodes)
@@ -766,7 +761,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (includeAssets) {
       const ids = collectAssetIds(rawNodes)
       const assetsResult = await fetchExportAssets(ids, userId)
-      if ("error" in assetsResult) return internalError(reply, assetsResult.error)
+      if ("error" in assetsResult) return sendInternalError(reply, req, assetsResult.error, "Failed to export workflow")
       result.assets = assetsResult
     }
 
@@ -804,7 +799,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       if (result instanceof Map) {
         assetIdMap = result
       } else {
-        return internalError(reply, result.error.message)
+        return sendInternalError(reply, req, result.error, "Failed to import workflow")
       }
     }
 
@@ -829,7 +824,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .single()
 
     if (wfError || !newWorkflow) {
-      return internalError(reply, wfError?.message ?? "Failed to create workflow")
+      return sendInternalError(reply, req, wfError, "Failed to create workflow")
     }
 
     return reply
@@ -903,7 +898,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .select(WORKFLOW_FULL_COLS)
       .single()
 
-    if (childErr) return internalError(reply, childErr.message)
+    if (childErr) return sendInternalError(reply, req, childErr, "Failed to create sub-workflow")
 
     return reply.status(201).send({ data: toWorkflowFull(child) })
   })

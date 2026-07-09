@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Preset groups are read-only over the API; writes are editor-only (first-party JWT).
 const PRESETS_READ_ONLY_MSG = "Node presets are read-only over the API. Create and edit presets in the editor."
@@ -59,7 +60,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
     let q = supabase.from("node_preset_groups").select("*").eq("user_id", userId)
     if (nodeType) q = q.eq("node_type", nodeType)
     const { data, error } = await q.order("sort_order", { ascending: true })
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch preset groups")
     return reply.send({ data: ((data ?? []) as Row[]).map(toCamel) })
   })
 
@@ -84,7 +85,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
       })
       .select("*")
       .single()
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to create preset group")
     return reply.status(201).send({ data: toCamel(row as Row) })
   })
 
@@ -119,7 +120,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
     if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("node_preset_groups").delete().eq("id", id).eq("user_id", userId)
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to delete preset group")
     return reply.send({ data: { success: true } })
   })
 }

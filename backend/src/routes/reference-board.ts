@@ -6,6 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -87,8 +88,7 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
         req.idempotencyKey,           // set by creditGuard; NOT the raw header
       )
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return reply.status(500).send({ error: { code: "internal_error", message } })
+      return sendInternalError(reply, req, err, "Failed to create reference board job")
     }
     const job = insertResult.row
 

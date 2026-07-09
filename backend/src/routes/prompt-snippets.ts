@@ -4,6 +4,7 @@ import { FACTORY_SNIPPETS } from "@nodaro/prompts"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Snippets are read-only over the API (SDK/CLI/MCP expose reads only); writes
 // are editor-only (first-party JWT). Mirrors the node-presets posture.
@@ -91,7 +92,7 @@ export async function promptSnippetRoutes(app: FastifyInstance) {
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch snippets")
     return reply.send({ data: ((data ?? []) as Row[]).map(toCamel) })
   })
 
@@ -134,7 +135,7 @@ export async function promptSnippetRoutes(app: FastifyInstance) {
       if (error.code === "23505") {
         return reply.status(409).send({ error: { code: "name_taken", message: "A snippet with that name already exists." } })
       }
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to create snippet")
     }
     return reply.status(201).send({ data: toCamel(row as Row) })
   })
@@ -180,7 +181,7 @@ export async function promptSnippetRoutes(app: FastifyInstance) {
     if (rejectProgrammaticAuth(req, reply, SNIPPETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("prompt_snippets").delete().eq("id", id).eq("user_id", userId)
-    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    if (error) return sendInternalError(reply, req, error, "Failed to delete snippet")
     return reply.send({ data: { success: true } })
   })
 }

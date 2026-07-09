@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 
@@ -90,9 +91,7 @@ export async function statsRoutes(app: FastifyInstance) {
         : await supabase.rpc("get_stats", { p_user_id: userId })
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to fetch stats")
       }
 
       // The RPC function returns the stats directly
@@ -113,9 +112,7 @@ export async function statsRoutes(app: FastifyInstance) {
       return { data: stats }
     } catch (err) {
       console.error("[stats] Error fetching stats:", err)
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to fetch stats" },
-      })
+      return sendInternalError(reply, req, err, "Failed to fetch stats")
     }
   })
 }

@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { resolveEntityAspect } from "@nodaro/shared"
 import { buildObjectPrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
 
 const generateObjectBody = z.object({
@@ -212,9 +213,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
               )
             }
           }
-          return reply.status(500).send({
-            error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-          })
+          return sendInternalError(reply, req, error, "Failed to create job")
         }
         insertedJobIds.push(job.id)
       }

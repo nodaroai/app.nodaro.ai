@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { ensureDefaultProject } from "../lib/default-project.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const projectIdParams = z.object({
   id: z.string().uuid(),
@@ -69,9 +70,7 @@ export async function projectRoutes(app: FastifyInstance) {
         .order("created_at", { ascending: false })
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to fetch projects")
       }
 
       const rows = data ?? []
@@ -103,9 +102,7 @@ export async function projectRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch projects")
     }
 
     return { data: (data ?? []).map((row) => toProjectResponse(row)) }
@@ -140,9 +137,7 @@ export async function projectRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create project")
     }
 
     return reply.status(201).send({ data: toProjectResponse(data) })
@@ -181,9 +176,7 @@ export async function projectRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Project not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch project")
     }
 
     return { data: toProjectResponse(data) }
@@ -240,9 +233,7 @@ export async function projectRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Project not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to update project")
     }
 
     return { data: toProjectResponse(data) }
@@ -284,9 +275,7 @@ export async function projectRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Project not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: lookupError.message },
-      })
+      return sendInternalError(reply, req, lookupError, "Failed to delete project")
     }
 
     if (target.is_default === true) {
@@ -306,9 +295,7 @@ export async function projectRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to delete project")
     }
 
     return { success: true }
@@ -327,9 +314,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const result = await ensureDefaultProject(req.userId)
     if ("error" in result) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: result.error },
-      })
+      return sendInternalError(reply, req, result.error, "Failed to ensure default project")
     }
 
     return reply.status(result.created ? 201 : 200).send({

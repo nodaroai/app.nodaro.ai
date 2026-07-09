@@ -11,6 +11,7 @@ import { dispatchStrategy, EmptyInputError } from "../services/reduce-strategies
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
@@ -72,9 +73,7 @@ export async function reduceRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError || !job) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError?.message ?? "job insert failed" },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

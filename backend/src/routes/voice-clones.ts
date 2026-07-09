@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import multipart from "@fastify/multipart"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
@@ -55,9 +56,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to fetch voice clones")
     }
 
     const voiceClones = (data ?? []).map((v) => ({
@@ -130,9 +129,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       .single()
 
     if (jobError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: jobError.message },
-      })
+      return sendInternalError(reply, req, jobError, "Failed to create voice clone")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, "voice-clone")
@@ -298,9 +295,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       .select("id")
       .single()
     if (jobError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: jobError.message },
-      })
+      return sendInternalError(reply, req, jobError, "Failed to create voice clone")
     }
     const reservation = await reserveCreditsForJob(req, reply, job.id, "voice-clone")
     if (reply.sent) return
@@ -420,9 +415,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to update voice clone")
     }
 
     return { success: true }
@@ -456,9 +449,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Voice clone not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: fetchError.message },
-      })
+      return sendInternalError(reply, req, fetchError, "Failed to delete voice clone")
     }
 
     if (config.ELEVENLABS_API_KEY && voiceClone.elevenlabs_voice_id) {
@@ -479,9 +470,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
 
     if (deleteError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: deleteError.message },
-      })
+      return sendInternalError(reply, req, deleteError, "Failed to delete voice clone")
     }
 
     return { success: true }
