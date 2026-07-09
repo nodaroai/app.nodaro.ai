@@ -40,12 +40,17 @@ const EXTENSIONS = [Document, Paragraph, Text, LocationRefExtension]
 /** Serialize a locationRef node (given its slot attrs) to plain text via the
  *  extension's real `renderText` — what `editor.getText()` emits and what flows
  *  downstream to the shared `parseLocationMentionToken`. */
-function tokenFor(slots: {
-  role: string | null
-  usageMode: LocationRefAttrs["usageMode"]
-  bucket: string | null
-  variant: string | null
-}): string {
+function tokenFor(
+  slots: {
+    role: string | null
+    usageMode: LocationRefAttrs["usageMode"]
+    bucket?: string | null
+    variant?: string | null
+  },
+  base: { bucket: string; variant: string } | null = null,
+): string {
+  // OMITTED bucket/variant (the hasVariant slot form) fall back to the base —
+  // mirroring updateAttributes' merge on a pill holding a real variant.
   const doc: JSONContent = {
     type: "doc",
     content: [
@@ -57,8 +62,8 @@ function tokenFor(slots: {
             attrs: {
               locationSlug: "oldlibrary",
               imageIndex: 1,
-              bucket: slots.bucket,
-              variant: slots.variant,
+              bucket: "bucket" in slots ? slots.bucket : base?.bucket ?? null,
+              variant: "variant" in slots ? slots.variant : base?.variant ?? null,
               usageMode: slots.usageMode,
               role: slots.role,
             },
@@ -91,6 +96,35 @@ describe("locationSwapMenuRoles — hybrid/legacy gate", () => {
   it("LOCATION_ROLE_PRESETS mirrors the shared registry order", () => {
     expect(LOCATION_ROLE_PRESETS).toEqual(REFERENCE_ROLE_PRESETS["wired-location"])
     expect(LOCATION_ROLE_PRESETS).toEqual(locationSwapMenuRoles("hybrid"))
+  })
+})
+
+describe("roleToLocationRefSlots — with a REAL bucket/variant (Variant + Role Separation)", () => {
+  // hasVariant: the pill's bucket/variant holds a real matched variant, so a
+  // role pick PRESERVES it — the update object omits bucket/variant entirely
+  // (updateAttributes merges partials).
+  it("a genuine role preset → role slot, bucket/variant untouched (4-part :bucket/variant:role)", () => {
+    const slots = roleToLocationRefSlots("lighting", { hasVariant: true })
+    expect(slots).toEqual({ role: "lighting", usageMode: null })
+    expect("bucket" in slots).toBe(false)
+    expect("variant" in slots).toBe(false)
+  })
+
+  it("a mode-preset (style) → usageMode slot, bucket/variant untouched (4-part :bucket/variant:mode)", () => {
+    const slots = roleToLocationRefSlots("style", { hasVariant: true })
+    expect(slots).toEqual({ role: null, usageMode: "style" })
+    expect("bucket" in slots).toBe(false)
+  })
+
+  it("a Custom role is slugified into the role slot, bucket/variant untouched", () => {
+    expect(roleToLocationRefSlots("Cozy Corner", { hasVariant: true }))
+      .toEqual({ role: "cozy-corner", usageMode: null })
+  })
+
+  it("a blank role clears role+mode but keeps the variant (Default keeps the image)", () => {
+    const slots = roleToLocationRefSlots("", { hasVariant: true })
+    expect(slots).toEqual({ role: null, usageMode: null })
+    expect("bucket" in slots).toBe(false)
   })
 })
 
@@ -297,5 +331,35 @@ describe("token round-trip — role slot → literal @oldlibrary:1:<slug> → re
         }),
       ).toBe(token)
     }
+  })
+})
+
+describe("variant + role round-trip (Variant + Role Separation)", () => {
+  const base = { bucket: "weather", variant: "rain" }
+
+  it("role preset with a variant → @oldlibrary:1:weather/rain:lighting → re-parses to BOTH", () => {
+    const token = tokenFor(roleToLocationRefSlots("lighting", { hasVariant: true }), base)
+    expect(token).toBe("@oldlibrary:1:weather/rain:lighting")
+    expect(parseLocationRefMatch(token)).toMatchObject({
+      bucket: "weather",
+      variant: "rain",
+      role: "lighting",
+      usageMode: null,
+    })
+  })
+
+  it("mode preset with a variant → @oldlibrary:1:weather/rain:style (usageMode slot)", () => {
+    const token = tokenFor(roleToLocationRefSlots("style", { hasVariant: true }), base)
+    expect(token).toBe("@oldlibrary:1:weather/rain:style")
+    expect(parseLocationRefMatch(token)).toMatchObject({
+      bucket: "weather",
+      variant: "rain",
+      usageMode: "style",
+    })
+  })
+
+  it("Default (blank) with a variant keeps the variant → @oldlibrary:1:weather/rain", () => {
+    expect(tokenFor(roleToLocationRefSlots("", { hasVariant: true }), base))
+      .toBe("@oldlibrary:1:weather/rain")
   })
 })

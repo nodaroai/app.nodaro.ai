@@ -107,8 +107,13 @@ describe("parseLocationRefMatch", () => {
   })
 
   describe("rejection cases", () => {
-    it("returns null for an unknown mode in the 4-part form", () => {
-      expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:bogus")).toBeNull()
+    it("a non-mode 4th segment parses as a ROLE coexisting with the variant (Variant + Role Separation)", () => {
+      expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:bogus")).toMatchObject({
+        bucket: "weather",
+        variant: "rain",
+        usageMode: null,
+        role: "bogus",
+      })
     })
 
     it("returns null for a 4-part token without a bucket/variant 3rd segment", () => {
@@ -125,11 +130,15 @@ describe("parseLocationRefMatch", () => {
       expect(parseLocationRefMatch("@oldlibrary:0")).toBeNull()
     })
 
-    it("returns null for a 4-part token whose mode override is character-only (pose)", () => {
-      // The 4th segment must be a LocationUsageMode; `pose` (a character mode)
-      // is not in the 4-mode subset enforced by `isLocationUsageMode`. (A bare
-      // 3rd-segment `face` is now a custom role — see the accepts block above.)
-      expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:pose")).toBeNull()
+    it("a character-only mode word (pose) in the 4th segment parses as a ROLE, not a mode", () => {
+      // `pose` is not a LocationUsageMode, so it rides the widened role slot
+      // (Variant + Role Separation) rather than rejecting the token.
+      expect(parseLocationRefMatch("@oldlibrary:1:weather/rain:pose")).toMatchObject({
+        bucket: "weather",
+        variant: "rain",
+        usageMode: null,
+        role: "pose",
+      })
     })
   })
 })

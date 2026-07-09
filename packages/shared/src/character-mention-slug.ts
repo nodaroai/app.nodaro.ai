@@ -32,6 +32,16 @@ export interface CharacterMentionTokenInfo {
    */
   readonly usageMode: UsageMode | null
   /**
+   * Per-mention ROLE from a NON-MODE 4th segment (Variant + Role Separation) —
+   * coexists with a real variant: the variant picks the IMAGE, the role picks
+   * the PHRASE (`@kira:1:walking:clothes` → walking image, "the clothes from
+   * …"). Curated or custom slug, stored verbatim. OMITTED (undefined, not
+   * null) for every other shape — 2/3-part tokens and mode-bearing 4-part
+   * tokens keep their pre-existing parse byte-identically. Mirrors
+   * `LocationMentionTokenInfo.role`.
+   */
+  readonly role?: string
+  /**
    * Additive per-mention identity-lock sentinel (Unified Reference Roles,
    * Task 4 + F4). Tri-state: `true` (trailing `~lock`, force lock ON) |
    * `false` (trailing `~nolock`, force lock OFF — suppresses a ref-level
@@ -55,9 +65,11 @@ export interface CharacterMentionTokenInfo {
  *  - `@kira:1:smile`        → variant smile, default mode
  *  - `@kira:1:face`         → canonical, mode "face"  (mode is detected by
  *                              checking the 3rd segment against `USAGE_MODES`)
- *  - `@kira:1:smile:face`   → variant smile, mode "face"
- *  - `@kira:1:smile:bogus`  → null (4-part rejected when last segment is not
- *                              a valid usage mode — keeps the format strict)
+ *  - `@kira:1:smile:face`    → variant smile, mode "face"
+ *  - `@kira:1:walking:clothes` → variant walking, ROLE "clothes" (Variant +
+ *                              Role Separation: a non-mode 4th segment is a
+ *                              per-mention role — curated or custom — that
+ *                              coexists with the variant)
  *
  * Format change: as of the index-in-slug update, the index segment is required.
  * Bare `@kira` is not a mention; the autocomplete always inserts at least
@@ -71,7 +83,7 @@ export interface CharacterMentionTokenInfo {
 export function parseCharacterMentionToken(
   text: string,
   _knownCharacterSlugs?: readonly string[],
-): { characterSlug: string; imageIndex: number; variantSlug: string | null; usageMode: UsageMode | null; lock?: boolean } | null {
+): { characterSlug: string; imageIndex: number; variantSlug: string | null; usageMode: UsageMode | null; role?: string; lock?: boolean } | null {
   if (!text.startsWith("@")) return null
   let rest = text.slice(1)
   if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
@@ -123,13 +135,19 @@ export function parseCharacterMentionToken(
     return { characterSlug, imageIndex, variantSlug: third, usageMode: null, ...lockField }
   }
 
-  // 4-part: kira:1:smile:mode — variant + mode override. Both segments must
-  // satisfy their respective shape; an unknown mode kills the token entirely
-  // (callers fall back to literal text, matching unknown-character behavior).
+  // 4-part: kira:1:variant:X — variant + a 4th segment that is EITHER a
+  // usage-mode override (today's shape, routed to `usageMode` byte-identically)
+  // OR — Variant + Role Separation — any other slug, parsed as a per-mention
+  // ROLE that coexists with the variant (the variant picks the image, the role
+  // picks the phrase). The `role` key is emitted ONLY on the non-mode branch so
+  // mode-bearing tokens keep their exact pre-existing shape.
   if (parts.length === 4) {
     if (!/^[a-z][a-z0-9-]*$/.test(third)) return null
-    if (!isUsageMode(fourth)) return null
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, ...lockField }
+    if (!/^[a-z][a-z0-9-]*$/.test(fourth)) return null
+    if (isUsageMode(fourth)) {
+      return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, ...lockField }
+    }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, role: fourth, ...lockField }
   }
 
   return null

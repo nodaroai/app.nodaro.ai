@@ -121,7 +121,7 @@ describe("CharacterRefView — HYBRID role menu", () => {
     openMenu()
     fireEvent.click(screen.getByTestId("character-ref-role-menu").querySelector("[data-role='face']")!)
     expect(props.updateAttributes).toHaveBeenCalledTimes(1)
-    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: "face", variantSlug: null })
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: "face", variantSlug: null, role: null })
   })
 
   it("(b) picking a role-only preset (clothes) sets variantSlug and CLEARS usageMode", () => {
@@ -129,7 +129,7 @@ describe("CharacterRefView — HYBRID role menu", () => {
     render(<CharacterRefView {...props} />)
     openMenu()
     fireEvent.click(screen.getByTestId("character-ref-role-menu").querySelector("[data-role='clothes']")!)
-    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: "clothes" })
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: "clothes", role: null })
   })
 
   it("the Default row clears BOTH slots", () => {
@@ -137,7 +137,7 @@ describe("CharacterRefView — HYBRID role menu", () => {
     render(<CharacterRefView {...props} />)
     openMenu()
     fireEvent.click(screen.getByText("Default (from character)").closest("button")!)
-    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: null })
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: null, role: null })
   })
 
   it("(c) a Custom role is sanitized into variantSlug", () => {
@@ -148,7 +148,7 @@ describe("CharacterRefView — HYBRID role menu", () => {
     const input = screen.getByTestId("character-ref-role-custom-input") as HTMLInputElement
     fireEvent.change(input, { target: { value: "Earrings" } })
     fireEvent.keyDown(input, { key: "Enter" })
-    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: "earrings" })
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, variantSlug: "earrings", role: null })
   })
 
   it("every role preset can be picked and lands in exactly one slot", () => {
@@ -160,8 +160,8 @@ describe("CharacterRefView — HYBRID role menu", () => {
       openMenu()
       fireEvent.click(screen.getByTestId("character-ref-role-menu").querySelector(`[data-role='${role}']`)!)
       const expected = usageModeRoles.has(role)
-        ? { usageMode: role, variantSlug: null }
-        : { usageMode: null, variantSlug: role }
+        ? { usageMode: role, variantSlug: null, role: null }
+        : { usageMode: null, variantSlug: role, role: null }
       expect(props.updateAttributes).toHaveBeenCalledWith(expected)
     }
   })
@@ -189,8 +189,48 @@ describe("CharacterRefView — HYBRID role menu", () => {
     ]
     render(<CharacterRefView {...mockProps({ characterSlug: "abi", variantSlug: "walking" }, refs)} />)
     expect(document.querySelector(".character-ref-pill__name")?.textContent).toBe("@Abi")
-    // The variant is surfaced exactly once, on the badge.
-    expect(document.querySelector(".character-ref-pill__mode-badge")?.textContent).toBe("walking")
+    // A REAL variant surfaces as the "/variant" segment (Variant + Role
+    // Separation restored it in hybrid) — and NOT as a role badge.
+    expect(document.querySelector(".character-ref-pill__variant")?.textContent).toBe("/walking")
+    expect(document.querySelector(".character-ref-pill__mode-badge")).toBeNull()
+  })
+
+  it("variant + role coexist: '/walking' segment AND the role badge (Variant + Role Separation)", () => {
+    const refs: MockRefEntry[] = [
+      { url: "https://cdn/abi.png", characterSlug: "abi", label: "Abi" },
+      { url: "https://cdn/abi-walking.png", characterSlug: "abi", variantSlug: "walking", label: "Abi / walking" },
+    ]
+    const props = mockProps({ characterSlug: "abi", variantSlug: "walking" }, refs)
+    props.node.attrs.role = "clothes"
+    render(<CharacterRefView {...props} />)
+    expect(document.querySelector(".character-ref-pill__variant")?.textContent).toBe("/walking")
+    expect(document.querySelector(".character-ref-pill__mode-badge")?.textContent).toBe("clothes")
+  })
+
+  it("a role pick on a REAL-variant pill preserves the variant (routes to the 4th segment)", () => {
+    const refs: MockRefEntry[] = [
+      { url: "https://cdn/abi.png", characterSlug: "abi", label: "Abi" },
+      { url: "https://cdn/abi-walking.png", characterSlug: "abi", variantSlug: "walking", label: "Abi / walking" },
+    ]
+    const props = mockProps({ characterSlug: "abi", variantSlug: "walking" }, refs)
+    render(<CharacterRefView {...props} />)
+    openMenu()
+    fireEvent.click(screen.getByTestId("character-ref-role-menu").querySelector("[data-role='clothes']")!)
+    // variantSlug is OMITTED from the update — updateAttributes merge keeps it.
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, role: "clothes" })
+  })
+
+  it("Default on a REAL-variant pill clears the role but keeps the variant", () => {
+    const refs: MockRefEntry[] = [
+      { url: "https://cdn/abi.png", characterSlug: "abi", label: "Abi" },
+      { url: "https://cdn/abi-walking.png", characterSlug: "abi", variantSlug: "walking", label: "Abi / walking" },
+    ]
+    const props = mockProps({ characterSlug: "abi", variantSlug: "walking" }, refs)
+    props.node.attrs.role = "clothes"
+    render(<CharacterRefView {...props} />)
+    openMenu()
+    fireEvent.click(screen.getByText("Default (from character)").closest("button")!)
+    expect(props.updateAttributes).toHaveBeenCalledWith({ usageMode: null, role: null })
   })
 })
 

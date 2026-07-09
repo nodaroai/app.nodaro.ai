@@ -136,12 +136,53 @@ describe("parseCharacterMentionToken", () => {
     })
   })
 
-  it("4-part: @kira:1:smile:invalid — invalid mode rejects the entire token", () => {
-    expect(parseCharacterMentionToken("@kira:1:smile:invalid")).toBeNull()
+  // Variant + Role Separation: the 4th segment is no longer mode-only. A
+  // non-mode slug parses as a per-mention ROLE (curated or custom) that
+  // COEXISTS with the variant — the variant picks the image, the role picks
+  // the phrase. The `role` key is OMITTED (not null) for every other shape so
+  // pre-existing parses stay byte-identical.
+  it("4-part: @kira:1:walking:clothes — variant + non-mode ROLE coexist", () => {
+    expect(parseCharacterMentionToken("@kira:1:walking:clothes")).toEqual({
+      characterSlug: "kira",
+      imageIndex: 1,
+      variantSlug: "walking",
+      usageMode: null,
+      role: "clothes",
+    })
   })
 
-  it("4-part: @kira:1:smile:smile — variant-shaped 4th segment still rejects (must be a mode)", () => {
-    expect(parseCharacterMentionToken("@kira:1:smile:smile")).toBeNull()
+  it("4-part: @kira:1:smile:invalid — a custom 4th-segment slug parses as a role (was rejected)", () => {
+    expect(parseCharacterMentionToken("@kira:1:smile:invalid")).toEqual({
+      characterSlug: "kira",
+      imageIndex: 1,
+      variantSlug: "smile",
+      usageMode: null,
+      role: "invalid",
+    })
+  })
+
+  it("4-part role + lock sentinel compose: @kira:1:walking:clothes~lock", () => {
+    expect(parseCharacterMentionToken("@kira:1:walking:clothes~lock")).toEqual({
+      characterSlug: "kira",
+      imageIndex: 1,
+      variantSlug: "walking",
+      usageMode: null,
+      role: "clothes",
+      lock: true,
+    })
+  })
+
+  it("4-part mode still routes to usageMode, NOT role (back-compat)", () => {
+    const parsed = parseCharacterMentionToken("@kira:1:smile:face")
+    expect(parsed?.usageMode).toBe("face")
+    expect(parsed && "role" in parsed).toBe(false)
+  })
+
+  it("findCharacterMentionTokens surfaces the 4-part role token", () => {
+    const tokens = findCharacterMentionTokens("a shot of @kira:1:walking:clothes at dawn", ["kira"])
+    expect(tokens).toHaveLength(1)
+    expect(tokens[0].variantSlug).toBe("walking")
+    expect(tokens[0].role).toBe("clothes")
   })
 
   it("rejects 5-part tokens", () => {
@@ -191,9 +232,13 @@ describe("findCharacterMentionTokens", () => {
   it("does not parse a dash-form as a variant token", () => {
     expect(findCharacterMentionTokens("@kira-smile waves", ["kira"])).toEqual([])
   })
-  it("4-part with invalid mode is dropped (matches regex but parser rejects)", () => {
-    // The regex matches structurally but `parseCharacterMentionToken` rejects
-    // the 4th segment as an invalid mode, so the token is filtered out.
-    expect(findCharacterMentionTokens("@kira:1:smile:bogus waves", ["kira"])).toEqual([])
+  it("4-part with a non-mode 4th segment parses as variant + ROLE (Variant + Role Separation)", () => {
+    // Previously this was rejected outright; now the non-mode segment is a
+    // per-mention role coexisting with the variant.
+    const tokens = findCharacterMentionTokens("@kira:1:smile:bogus waves", ["kira"])
+    expect(tokens).toHaveLength(1)
+    expect(tokens[0].variantSlug).toBe("smile")
+    expect(tokens[0].role).toBe("bogus")
+    expect(tokens[0].usageMode).toBeNull()
   })
 })

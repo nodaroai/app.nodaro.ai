@@ -64,6 +64,19 @@ defaults — person / background / object / creature — are unchanged). A Chara
 to ref-only serializes as a plain role (`@kira:1:ref-only`) and shows a compact **ref** badge to set
 it apart from its described default.
 
+### Combining a variant with a role
+
+A character or location mention can pick **which image** (the variant) and **what to take from it**
+(the role) independently: `@abi:1:walking:clothes` attaches Abi's *walking* image and injects
+`the clothes from reference image A`. Any role works — curated, custom, or `ref-only`
+(`@abi:1:walking:ref-only` → bare `reference image A` with the walking image attached). Locations
+mirror it: `@library:1:weather/rain:lighting`.
+
+In the editor the two axes map to the chip's two controls: click the **thumbnail** to swap which
+image (canonical or a variant — swapping within the same character keeps your role), click the
+**label** to pick the role (picking a role keeps the variant; **Default** resets the role but keeps
+the image).
+
 ### Custom labels
 
 Pick **Custom…** and type anything (e.g. `dragon`, `Danny`, `hoodie`). Custom labels are sanitized

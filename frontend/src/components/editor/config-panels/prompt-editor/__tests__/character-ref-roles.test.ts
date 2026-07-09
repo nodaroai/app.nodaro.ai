@@ -29,8 +29,13 @@ import { CharacterRefExtension } from "../character-ref-extension"
 const EXTENSIONS = [Document, Paragraph, Text, CharacterRefExtension]
 
 /** Serialize a characterRef node (given its slot attrs) to plain text via the
- *  extension's real `renderText`. */
-function tokenFor(slots: { usageMode: string | null; variantSlug: string | null }): string {
+ *  extension's real `renderText`. An OMITTED `variantSlug` (the hasVariant slot
+ *  form) falls back to the provided base variant, mirroring updateAttributes'
+ *  merge semantics on a pill that already holds a real variant. */
+function tokenFor(
+  slots: { usageMode: string | null; variantSlug?: string | null; role?: string | null },
+  baseVariant: string | null = null,
+): string {
   const doc: JSONContent = {
     type: "doc",
     content: [
@@ -42,8 +47,9 @@ function tokenFor(slots: { usageMode: string | null; variantSlug: string | null 
             attrs: {
               characterSlug: "kira",
               imageIndex: 1,
-              variantSlug: slots.variantSlug,
+              variantSlug: "variantSlug" in slots ? slots.variantSlug : baseVariant,
               usageMode: slots.usageMode,
+              role: slots.role ?? null,
             },
           },
         ],
@@ -76,42 +82,42 @@ describe("characterSwapMenuRoles — hybrid/legacy gate", () => {
   })
 })
 
-describe("roleToCharacterRefSlots — role → token slot", () => {
-  it("(a) a UsageMode preset (face) → usageMode, variantSlug cleared", () => {
-    expect(roleToCharacterRefSlots("face")).toEqual({ usageMode: "face", variantSlug: null })
+describe("roleToCharacterRefSlots — role → token slot (no variant)", () => {
+  it("(a) a UsageMode preset (face) → usageMode, variantSlug + role cleared", () => {
+    expect(roleToCharacterRefSlots("face")).toEqual({ usageMode: "face", variantSlug: null, role: null })
   })
 
-  it("a UsageMode preset (pose) → usageMode, variantSlug cleared", () => {
-    expect(roleToCharacterRefSlots("pose")).toEqual({ usageMode: "pose", variantSlug: null })
+  it("a UsageMode preset (pose) → usageMode, siblings cleared", () => {
+    expect(roleToCharacterRefSlots("pose")).toEqual({ usageMode: "pose", variantSlug: null, role: null })
   })
 
-  it("a UsageMode preset (style) → usageMode, variantSlug cleared", () => {
-    expect(roleToCharacterRefSlots("style")).toEqual({ usageMode: "style", variantSlug: null })
+  it("a UsageMode preset (style) → usageMode, siblings cleared", () => {
+    expect(roleToCharacterRefSlots("style")).toEqual({ usageMode: "style", variantSlug: null, role: null })
   })
 
-  it("(b) a role-only preset (clothes) → variantSlug, usageMode cleared", () => {
-    expect(roleToCharacterRefSlots("clothes")).toEqual({ usageMode: null, variantSlug: "clothes" })
+  it("(b) a role-only preset (clothes) → variantSlug, siblings cleared", () => {
+    expect(roleToCharacterRefSlots("clothes")).toEqual({ usageMode: null, variantSlug: "clothes", role: null })
   })
 
   it("role-only presets person/hair/expression → variantSlug", () => {
-    expect(roleToCharacterRefSlots("person")).toEqual({ usageMode: null, variantSlug: "person" })
-    expect(roleToCharacterRefSlots("hair")).toEqual({ usageMode: null, variantSlug: "hair" })
-    expect(roleToCharacterRefSlots("expression")).toEqual({ usageMode: null, variantSlug: "expression" })
+    expect(roleToCharacterRefSlots("person")).toEqual({ usageMode: null, variantSlug: "person", role: null })
+    expect(roleToCharacterRefSlots("hair")).toEqual({ usageMode: null, variantSlug: "hair", role: null })
+    expect(roleToCharacterRefSlots("expression")).toEqual({ usageMode: null, variantSlug: "expression", role: null })
   })
 
   it("(c) a Custom role (Earrings) is sanitized → variantSlug", () => {
-    expect(roleToCharacterRefSlots("Earrings")).toEqual({ usageMode: null, variantSlug: "earrings" })
+    expect(roleToCharacterRefSlots("Earrings")).toEqual({ usageMode: null, variantSlug: "earrings", role: null })
   })
 
-  it("a blank role clears BOTH slots (the Default state)", () => {
-    expect(roleToCharacterRefSlots("")).toEqual({ usageMode: null, variantSlug: null })
-    expect(roleToCharacterRefSlots("   ")).toEqual({ usageMode: null, variantSlug: null })
+  it("a blank role clears ALL slots (the Default state)", () => {
+    expect(roleToCharacterRefSlots("")).toEqual({ usageMode: null, variantSlug: null, role: null })
+    expect(roleToCharacterRefSlots("   ")).toEqual({ usageMode: null, variantSlug: null, role: null })
   })
 
   it("INVARIANT: every preset lands in EXACTLY ONE slot, verbatim", () => {
     for (const role of CHARACTER_ROLE_PRESETS) {
       const slots = roleToCharacterRefSlots(role)
-      const filled = [slots.usageMode, slots.variantSlug].filter((v) => v !== null)
+      const filled = [slots.usageMode, slots.variantSlug, slots.role].filter((v) => v != null)
       // Exactly one slot is filled (never both → never an invalid 4-part token).
       expect(filled).toHaveLength(1)
       // The stored value equals the role verbatim (the D1 resolver reads it as-is).
@@ -123,6 +129,34 @@ describe("roleToCharacterRefSlots — role → token slot", () => {
         expect(slots.variantSlug).toBe(role)
       }
     }
+  })
+})
+
+describe("roleToCharacterRefSlots — with a REAL variant (Variant + Role Separation)", () => {
+  // hasVariant: the pill's variantSlug holds a real matched variant, so a role
+  // pick must PRESERVE it — the update object omits `variantSlug` entirely
+  // (updateAttributes merges partials, untouched keys survive).
+  it("a UsageMode preset → usageMode slot, variant untouched (4-part :variant:mode)", () => {
+    const slots = roleToCharacterRefSlots("face", { hasVariant: true })
+    expect(slots).toEqual({ usageMode: "face", role: null })
+    expect("variantSlug" in slots).toBe(false)
+  })
+
+  it("a role-only preset → the NEW role slot, variant untouched (4-part :variant:role)", () => {
+    const slots = roleToCharacterRefSlots("clothes", { hasVariant: true })
+    expect(slots).toEqual({ usageMode: null, role: "clothes" })
+    expect("variantSlug" in slots).toBe(false)
+  })
+
+  it("a Custom role is sanitized into the role slot, variant untouched", () => {
+    expect(roleToCharacterRefSlots("Earrings", { hasVariant: true }))
+      .toEqual({ usageMode: null, role: "earrings" })
+  })
+
+  it("a blank role clears role+mode but keeps the variant (Default keeps the image)", () => {
+    const slots = roleToCharacterRefSlots("", { hasVariant: true })
+    expect(slots).toEqual({ usageMode: null, role: null })
+    expect("variantSlug" in slots).toBe(false)
   })
 })
 
@@ -193,5 +227,22 @@ describe("token round-trip — role slot → literal @kira:1:<role>", () => {
       // Exactly two colons → 3-part token, never the invalid 4-part shape.
       expect(token.split(":")).toHaveLength(3)
     }
+  })
+
+  // Variant + Role Separation: with a REAL variant on the pill, a role pick
+  // serializes the 4-part `:variant:role` (or `:variant:mode`) form.
+  it("variant + role-only preset → @kira:1:walking:clothes", () => {
+    expect(tokenFor(roleToCharacterRefSlots("clothes", { hasVariant: true }), "walking"))
+      .toBe("@kira:1:walking:clothes")
+  })
+
+  it("variant + UsageMode preset → @kira:1:walking:face", () => {
+    expect(tokenFor(roleToCharacterRefSlots("face", { hasVariant: true }), "walking"))
+      .toBe("@kira:1:walking:face")
+  })
+
+  it("variant + Default (blank role) keeps the variant → @kira:1:walking", () => {
+    expect(tokenFor(roleToCharacterRefSlots("", { hasVariant: true }), "walking"))
+      .toBe("@kira:1:walking")
   })
 })

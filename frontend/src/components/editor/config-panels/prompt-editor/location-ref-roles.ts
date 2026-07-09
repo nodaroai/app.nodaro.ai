@@ -55,14 +55,17 @@ export function sanitizeLocationRole(raw: string): string {
     .replace(/-$/, "") // drop a trailing dash (incl. one left by the 32-cap)
 }
 
-/** The mutually-exclusive token-slot set a location role resolves into. A
- *  location token is role XOR bucket/variant XOR mode, so a role pick fills at
- *  most ONE of `role`/`usageMode` and always clears `bucket`/`variant`. */
+/** The token-slot update a location role pick produces. In the plain form a
+ *  role fills at most ONE of `role`/`usageMode` and clears `bucket`/`variant`;
+ *  in the `hasVariant` form (Variant + Role Separation) `bucket`/`variant` are
+ *  OMITTED so `updateAttributes` (which merges partials) leaves the pill's
+ *  real variant untouched — the serialized token becomes the 4-part
+ *  `:bucket/variant:role` (or `:bucket/variant:mode`). */
 export interface LocationRefRoleSlots {
   role: string | null
   usageMode: LocationUsageMode | null
-  bucket: null
-  variant: null
+  bucket?: null
+  variant?: null
 }
 
 /**
@@ -86,8 +89,20 @@ export interface LocationRefRoleSlots {
  * Mirrors `roleToCharacterRefSlots`, which likewise routes UsageMode roles to
  * the `usageMode` slot for exactly this parser-stability reason.
  */
-export function roleToLocationRefSlots(role: string): LocationRefRoleSlots {
+export function roleToLocationRefSlots(
+  role: string,
+  opts?: { hasVariant?: boolean },
+): LocationRefRoleSlots {
   const slug = sanitizeLocationRole(role)
+  // Variant + Role Separation: with a REAL bucket/variant on the pill, the
+  // role pick PRESERVES it (bucket/variant omitted → updateAttributes merge
+  // leaves them alone) and routes to the 4th segment — usageMode for the two
+  // mode-presets (parser-stable), else the role slot.
+  if (opts?.hasVariant) {
+    if (!slug) return { role: null, usageMode: null }
+    if (isLocationUsageMode(slug)) return { role: null, usageMode: slug }
+    return { role: slug, usageMode: null }
+  }
   if (!slug) return { role: null, usageMode: null, bucket: null, variant: null }
   if (isLocationUsageMode(slug)) {
     return { role: null, usageMode: slug, bucket: null, variant: null }

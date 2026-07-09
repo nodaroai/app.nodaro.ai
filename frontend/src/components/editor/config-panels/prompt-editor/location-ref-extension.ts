@@ -244,15 +244,17 @@ export const LocationRefExtension = Node.create({
   renderText({ node }) {
     const a = node.attrs as LocationRefAttrs
     const parts: string[] = [`@${a.locationSlug}:${a.imageIndex}`]
-    // 3rd segment is EITHER a `bucket/variant` pair OR a bare-slug role — they
-    // are mutually exclusive (the shared parser never sets both). `usageMode`,
-    // when present, trails as the next segment.
+    // 3rd segment: a `bucket/variant` pair when the pill holds a real variant,
+    // else a bare-slug role. With a variant, a coexisting role/mode (Variant +
+    // Role Separation) trails as the 4th segment — exactly one of usageMode /
+    // role occupies it (the slot router keeps them exclusive).
     if (a.bucket && a.variant) {
       parts.push(`${a.bucket}/${a.variant}`)
+      if (a.usageMode) parts.push(a.usageMode)
+      else if (a.role) parts.push(a.role)
     } else if (a.role) {
       parts.push(a.role)
-    }
-    if (a.usageMode) {
+    } else if (a.usageMode) {
       parts.push(a.usageMode)
     }
     // Additive tri-state lock sentinel LAST so the shared parser reads it as the

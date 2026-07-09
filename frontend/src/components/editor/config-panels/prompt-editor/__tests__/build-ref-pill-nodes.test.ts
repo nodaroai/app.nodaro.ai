@@ -25,12 +25,39 @@ describe("buildRefPillNodes", () => {
 
   it("character → characterRef using mentionIndex, variant → variantSlug, usageMode null", () => {
     expect(buildRefPillNodes(item({ source: "character", characterSlug: "kira", variantSlug: "smile" }), 7)[0])
-      .toEqual({ type: "characterRef", attrs: { characterSlug: "kira", imageIndex: 7, variantSlug: "smile", usageMode: null } })
+      .toEqual({ type: "characterRef", attrs: { characterSlug: "kira", imageIndex: 7, variantSlug: "smile", usageMode: null, role: null } })
   })
 
   it("character role routes through roleToCharacterRefSlots (face → usageMode)", () => {
     expect(buildRefPillNodes(item({ source: "character", characterSlug: "kira", role: "face" }), 3)[0].attrs)
       .toMatchObject({ usageMode: "face", variantSlug: null })
+  })
+
+  // Variant + Role Separation: a role picked on a VARIANT item (the @ drill's
+  // variant → role flow) keeps the variant — this was the reported bug
+  // ("choosing walking takes the place of person/face/…").
+  it("character VARIANT + role keeps both (@kira:N:walking:clothes)", () => {
+    const attrs = buildRefPillNodes(
+      item({ source: "character", characterSlug: "kira", variantSlug: "walking", role: "clothes" }), 3,
+    )[0].attrs
+    expect(attrs).toMatchObject({ variantSlug: "walking", usageMode: null, role: "clothes" })
+  })
+
+  it("character VARIANT + usage-mode role keeps both in the mode slot (@kira:N:walking:face)", () => {
+    const attrs = buildRefPillNodes(
+      item({ source: "character", characterSlug: "kira", variantSlug: "walking", role: "face" }), 3,
+    )[0].attrs
+    expect(attrs).toMatchObject({ variantSlug: "walking", usageMode: "face", role: null })
+  })
+
+  it("location VARIANT + role keeps both (@lib:N:weather/rain:lighting)", () => {
+    const attrs = buildRefPillNodes(
+      item({
+        source: "location", locationSlug: "lib",
+        locationVariantBucket: "weather", locationVariantSlug: "rain", role: "lighting",
+      }), 4,
+    )[0].attrs
+    expect(attrs).toMatchObject({ bucket: "weather", variant: "rain", role: "lighting", usageMode: null })
   })
 
   it("location → locationRef using mentionIndex + bucket/variant", () => {
