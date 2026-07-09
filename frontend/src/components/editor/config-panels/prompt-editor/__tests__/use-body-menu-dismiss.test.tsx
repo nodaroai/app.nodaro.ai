@@ -15,6 +15,7 @@ function Harness({ anchor, onDismiss }: { anchor: DOMRect | null; onDismiss: () 
   return (
     <div ref={ref} data-testid="menu" style={{ overflowY: "auto" }}>
       <button data-testid="inside">x</button>
+      <input data-testid="input-inside" />
     </div>
   )
 }
@@ -41,6 +42,24 @@ describe("useBodyMenuDismiss", () => {
     render(<Harness anchor={new DOMRect()} onDismiss={onDismiss} />)
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
     expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it("dismisses on Escape via a CAPTURE-phase listener even when a bubble handler would stop it", () => {
+    const onDismiss = vi.fn()
+    render(<Harness anchor={new DOMRect()} onDismiss={onDismiss} />)
+    // A bubble-phase listener that swallows Escape (mimics ProseMirror/Radix).
+    const swallow = (e: Event) => e.stopPropagation()
+    document.addEventListener("keydown", swallow)
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    expect(onDismiss).toHaveBeenCalledTimes(1) // capture ran first, unaffected
+    document.removeEventListener("keydown", swallow)
+  })
+
+  it("does NOT dismiss on Escape from a text input inside the menu (keeps the input's own Escape)", () => {
+    const onDismiss = vi.fn()
+    render(<Harness anchor={new DOMRect()} onDismiss={onDismiss} />)
+    screen.getByTestId("input-inside").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    expect(onDismiss).not.toHaveBeenCalled()
   })
 
   it("does nothing when closed (anchor null) — no listeners attached", () => {

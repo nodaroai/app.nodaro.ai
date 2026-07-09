@@ -9,6 +9,7 @@ import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { characterSwapMenuRoles, sanitizeRole } from "./character-ref-roles"
 import { locationSwapMenuRoles, sanitizeLocationRole } from "./location-ref-roles"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
+import { RefPreviewPortal } from "./ref-preview-portal"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
@@ -122,6 +123,13 @@ type DisplayRow =
   // `command({ ...item, role })`; the parent routes the role into `role` XOR
   // usageMode (bucket/variant cleared) via `roleToLocationRefSlots`.
   | { kind: "location-role"; role: string }
+
+/** The reference image URL for a row, when it has one (character/location roots
+ *  + variants + plain image-refs). Drives the large side-preview shown while
+ *  navigating the list (issue 3). Role/mode/back rows have no image → no preview. */
+function rowImageUrl(row: DisplayRow | undefined): string | undefined {
+  return row && "item" in row ? row.item.url : undefined
+}
 
 /** Active drill-in target for the character mode picker (3rd level). */
 interface DrillVariant {
@@ -1097,6 +1105,13 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             </button>
           )
         })}
+        {/* Large side-preview of the actively-selected row's image (issue 3) —
+            follows both hover and keyboard navigation via selectedIndex. */}
+        <RefPreviewPortal
+          url={rowImageUrl(displayRows[selectedIndex])}
+          anchor={listRef.current?.getBoundingClientRect() ?? null}
+          placement="side"
+        />
       </div>
     )
   },

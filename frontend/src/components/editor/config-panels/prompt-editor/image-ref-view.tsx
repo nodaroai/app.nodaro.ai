@@ -7,7 +7,9 @@ import { optimizedImageUrl } from "@/lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
-import { computeFlipPosition } from "./flip-position"
+import { RefPreviewPortal } from "./ref-preview-portal"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 interface ImageRefAttrs {
   imageIndex: number
@@ -104,6 +106,9 @@ export function ImageRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
+
   return (
     <NodeViewWrapper
       as="span"
@@ -118,8 +123,18 @@ export function ImageRefView(props: NodeViewProps) {
           alt=""
           className="image-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            // Open the swap picker; preventDefault stops ProseMirror node
+            // selection, and clear the hover preview so they don't stack.
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       )}
       <button
@@ -147,35 +162,14 @@ export function ImageRefView(props: NodeViewProps) {
       >
         ×
       </button>
-      {url && hoverAnchor && createPortal(
-        (() => {
-          const PREVIEW_MAX = 220
-          // Shares the editor's flip-above-when-cramped math; the preview div's
-          // own maxWidth/maxHeight stay local. Threshold + secondary margin
-          // reproduce the original `spaceBelow >= PREVIEW_MAX || spaceBelow >= (top - 8)`.
-          const { top, left } = computeFlipPosition(hoverAnchor, {
-            width: PREVIEW_MAX,
-            estHeight: PREVIEW_MAX,
-            margin: 8,
-            placeBelowThreshold: PREVIEW_MAX,
-            secondaryClauseMargin: 8,
-          })
-          return (
-            <div
-              style={{ position: "fixed", top, left }}
-              className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
-              aria-hidden
-            >
-              <img
-                src={optimizedImageUrl(url, { width: 480 })}
-                alt=""
-                className="block rounded object-contain"
-                style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
-              />
-            </div>
-          )
-        })(),
-        document.body,
+      <RefPreviewPortal url={url} anchor={hoverAnchor} />
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
       {menuAnchor && createPortal(
         (() => {
