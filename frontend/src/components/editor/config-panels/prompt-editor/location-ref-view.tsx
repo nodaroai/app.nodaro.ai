@@ -256,7 +256,9 @@ export function LocationRefView(props: NodeViewProps) {
         )}
         {isHybrid
           ? currentRolePhrase && (
-              <span className="location-ref-pill__mode-badge">{currentRolePhrase}</span>
+              <span className="location-ref-pill__mode-badge">
+                {currentRolePhrase === "ref-only" ? "ref" : currentRolePhrase}
+              </span>
             )
           : attrs.usageMode && (
               <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>

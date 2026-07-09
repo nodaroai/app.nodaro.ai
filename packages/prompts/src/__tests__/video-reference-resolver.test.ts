@@ -156,8 +156,7 @@ describe("REF_BINDING", () => {
 // into `@image_N`-style subject bindings (Task 2.3). Positional, 1-based against
 // the corresponding count. Out-of-range / missing count → drop to the bare label
 // (legacy `stripVideoImageTokens` strip behavior). Label-less in-range token →
-// "the subject in @kind_N" so the binding still lands. Purely additive in 2.3 —
-// defined + exported + tested here, NOT yet called by the core (that is Task 2.4).
+// the bare "@kind_N" (the ref-only default) so the binding lands with no wrapper.
 describe("resolveReferenceTokens", () => {
   const counts = { image: 4, video: 0, audio: 0 }
   it("resolves repeated labels distinctly by slot", () => {
@@ -168,8 +167,10 @@ describe("resolveReferenceTokens", () => {
   it("drops out-of-range tokens to bare label", () => {
     expect(resolveReferenceTokens("a {image:9:ghost} here", counts)).toBe("a ghost here")
   })
-  it("handles a label-less token", () => {
-    expect(resolveReferenceTokens("{image:1}", counts)).toBe("the subject in @image_1")
+  it("resolves a label-less token to the bare kind ordinal (ref-only)", () => {
+    expect(resolveReferenceTokens("{image:1}", counts)).toBe("@image_1")
+    expect(resolveReferenceTokens("{video:1}", { image: 0, video: 1, audio: 0 })).toBe("@video_1")
+    expect(resolveReferenceTokens("{audio:1}", { image: 0, video: 0, audio: 1 })).toBe("@audio_1")
   })
   it("resolves video + audio tokens against their own counts", () => {
     expect(resolveReferenceTokens("dance like {video:1:clip} to {audio:1:song}", { image: 0, video: 1, audio: 1 }))

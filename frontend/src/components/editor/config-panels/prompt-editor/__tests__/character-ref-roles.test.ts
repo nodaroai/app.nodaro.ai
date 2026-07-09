@@ -56,6 +56,7 @@ function tokenFor(slots: { usageMode: string | null; variantSlug: string | null 
 describe("characterSwapMenuRoles — hybrid/legacy gate", () => {
   it("returns the curated wired-character role presets in hybrid", () => {
     expect(characterSwapMenuRoles("hybrid")).toEqual([
+      "ref-only",
       "person",
       "face",
       "clothes",

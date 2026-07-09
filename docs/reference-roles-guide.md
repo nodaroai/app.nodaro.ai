@@ -5,7 +5,7 @@ a **Character / Location / Object / Animal** asset via the **Assets** handle —
 *which aspect* of that reference to use: its **identity**, its **outfit**, its **background**, its
 **style**, and so on. That aspect is the reference's **role label**.
 
-Every reference resolves to one uniform phrase in the final prompt:
+A **labeled** reference resolves to one uniform phrase in the final prompt:
 
 > `… the {label} from reference image A …`  *(image — references are lettered A, B, C…)*
 >
@@ -27,7 +27,10 @@ with zero configuration:
 | Object | `object` |
 | Animal / Creature | `creature` |
 | Face | `face` |
-| Plain image / upload | `object` |
+| Plain image / upload | **`ref-only`** (bare reference) |
+| Video / audio | **`ref-only`** (bare reference) |
+
+Plain images, video, and audio default to **ref-only** — see [Ref only](#ref-only) below.
 
 ## Preset roles
 
@@ -36,11 +39,11 @@ default is **bold**). **Custom…** is always available for anything not listed.
 
 | Source | Preset roles |
 |--------|--------------|
-| **Character / Person** | **person** · face · clothes · hair · pose · expression · style |
-| **Location** | **background** · atmosphere · as-is · empty background · layout · lighting · style |
+| **Character / Person** | ref-only · **person** · face · clothes · hair · pose · expression · style |
+| **Location** | ref-only · **background** · atmosphere · as-is · empty background · layout · lighting · style |
 | **Object** | **object** · shape · material · color · texture · style |
 | **Animal / Creature** | **creature** · anatomy · markings · pose · color · style |
-| **Plain image** (wired / uploaded) | **object** · person · face · clothes · background · style · pose · texture |
+| **Plain image** (wired / uploaded) | **ref-only** · object · person · face · clothes · background · style · pose · texture |
 
 A few roles read as a fuller phrase so the prompt stays natural:
 
@@ -48,6 +51,18 @@ A few roles read as a fuller phrase so the prompt stays natural:
 |------|-------------|
 | `as-is` | `reference image A, used as-is` |
 | `empty background` | `the background from reference image A (without its foreground objects)` |
+
+### Ref only
+
+**Ref only** injects the bare reference — `reference image A` on image nodes, or `@image_1` /
+`@video_1` / `@audio_1` on video nodes — with *no* `the {label} from …` phrase, so the model sees the
+reference without being told what to take from it. It's the top entry of every reference pill's menu
+and the **default** for plain image, video, and audio references.
+
+For **Character / Location / Object / Animal** assets, ref-only is an explicit choice (their described
+defaults — person / background / object / creature — are unchanged). A Character or Location pill set
+to ref-only serializes as a plain role (`@kira:1:ref-only`) and shows a compact **ref** badge to set
+it apart from its described default.
 
 ### Custom labels
 
