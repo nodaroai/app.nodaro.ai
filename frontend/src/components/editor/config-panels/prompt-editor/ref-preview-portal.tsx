@@ -55,6 +55,7 @@ export function RefPreviewPortal({
       style={{ position: "fixed", top, left }}
       className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
       aria-hidden
+      data-testid="ref-preview-portal"
     >
       <img
         src={optimizedImageUrl(url, { width: 480 })}
