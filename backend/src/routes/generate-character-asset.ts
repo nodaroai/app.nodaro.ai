@@ -20,6 +20,7 @@ import {
 } from "../lib/character-reference-set.js"
 import { entityImageRefCap } from "../lib/entity-ref-cap.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
   ASSET_DESCRIPTION_LLM_OPTIONS,
@@ -444,9 +445,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       .single()
 
     if (error || !job) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     // ─────────────────────────────────────────────────────────────────────

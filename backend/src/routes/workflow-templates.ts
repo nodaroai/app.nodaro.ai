@@ -9,6 +9,7 @@ import { copyToTemplatePreview } from "../lib/storage.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -340,7 +341,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const { data: rows, error } = await query
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to browse templates" } })
+      return sendInternalError(reply, req, error, "Failed to browse templates")
     }
 
     const items = (rows ?? []).slice(0, limit)
@@ -506,7 +507,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         .single()
 
       if (updateError || !updated) {
-        return reply.status(500).send({ error: { code: "internal_error", message: "Failed to update template" } })
+        return sendInternalError(reply, req, updateError, "Failed to update template")
       }
 
       return reply.send(toCamelCase(updated as Record<string, unknown>))
@@ -588,7 +589,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     }
 
     if (insertError || !publishedTemplate) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to publish template" } })
+      return sendInternalError(reply, req, insertError, "Failed to publish template")
     }
 
     return reply.send(toCamelCase(publishedTemplate))
@@ -608,7 +609,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch templates" } })
+      return sendInternalError(reply, req, error, "Failed to fetch templates")
     }
 
     return reply.send((templates || []).map((t: unknown) => toCamelCase(t as Record<string, unknown>)))
@@ -628,7 +629,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .maybeSingle()
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch template" } })
+      return sendInternalError(reply, req, error, "Failed to fetch template")
     }
     if (!template) {
       return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
@@ -683,7 +684,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .insert({ user_id: userId, template_id: templateId })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to favorite template" } })
+      return sendInternalError(reply, req, error, "Failed to favorite template")
     }
 
     return reply.send({ favorited: true })
@@ -703,7 +704,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch favorites" } })
+      return sendInternalError(reply, req, error, "Failed to fetch favorites")
     }
 
     return reply.send({ data: (data ?? []).map((f: { template_id: string }) => f.template_id) })
@@ -775,7 +776,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .single()
 
     if (wfError || !newWorkflow) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to clone template" } })
+      return sendInternalError(reply, req, wfError, "Failed to clone template")
     }
 
     // Increment clone_count
@@ -844,7 +845,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .single()
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to update template" } })
+      return sendInternalError(reply, req, updateError, "Failed to update template")
     }
 
     return reply.send(toCamelCase(updated as Record<string, unknown>))
@@ -879,7 +880,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .eq("id", templateId)
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to deactivate template" } })
+      return sendInternalError(reply, req, updateError, "Failed to deactivate template")
     }
 
     return reply.send({ success: true })
@@ -921,7 +922,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
     const { data: rows, error } = await query
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to list templates" } })
+      return sendInternalError(reply, req, error, "Failed to list templates")
     }
 
     const items = (rows ?? []).slice(0, limit)
@@ -974,7 +975,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         .maybeSingle()
 
       if (fetchError) {
-        return reply.status(500).send({ error: { code: "internal_error", message: fetchError.message } })
+        return sendInternalError(reply, req, fetchError, "Failed to update tutorial flag")
       }
       if (!existing) {
         return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
@@ -1002,9 +1003,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
             error: { code: "invalid_category", message: "tutorial_category_id does not reference a known category" },
           })
         }
-        return reply
-          .status(500)
-          .send({ error: { code: "internal_error", message: "Failed to update tutorial flag" } })
+        return sendInternalError(reply, req, updateError, "Failed to update tutorial flag")
       }
 
       return reply.send(toCamelCase(updated as Record<string, unknown>))

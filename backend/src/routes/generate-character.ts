@@ -13,6 +13,7 @@ import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateCharacterBody = z
   .object({
@@ -244,9 +245,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
               )
             }
           }
-          return reply.status(500).send({
-            error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-          })
+          return sendInternalError(reply, req, error, "Failed to create job")
         }
         insertedJobIds.push(job.id)
       }

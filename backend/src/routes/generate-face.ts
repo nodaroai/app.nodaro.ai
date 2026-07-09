@@ -9,6 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildFaceTemplateInputs } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -78,9 +79,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     // Reserve credits

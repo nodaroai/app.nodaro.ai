@@ -8,6 +8,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { resolveCinematicCreditId, CINEMATIC_PROMPT_MAX } from "@nodaro/shared"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // HeyGen combined reference caps (see create-video.md): at most 3 videos and 9
 // images across avatar looks + references. Avatar looks are image looks, so
@@ -108,9 +109,7 @@ export async function cinematicAvatarRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // Duration is a user parameter known at submit time → the reserve id is

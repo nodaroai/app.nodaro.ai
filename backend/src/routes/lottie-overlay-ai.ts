@@ -17,6 +17,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -89,9 +90,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
         .single()
 
       if (jobError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: jobError.message },
-        })
+        return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
       // Reserve credits

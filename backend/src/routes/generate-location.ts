@@ -11,6 +11,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),
@@ -195,9 +196,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
               )
             }
           }
-          return reply.status(500).send({
-            error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-          })
+          return sendInternalError(reply, req, error, "Failed to create job")
         }
         insertedJobIds.push(job.id)
       }

@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const imageCollageBody = z.object({
   imageUrls: z
@@ -82,9 +83,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

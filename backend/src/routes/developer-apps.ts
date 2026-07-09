@@ -8,6 +8,7 @@ import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { invalidateDynamicOriginsCache } from "../lib/dynamic-origins.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
@@ -106,7 +107,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       .single()
 
     if (error || !data) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error?.message ?? "Insert failed" } })
+      return sendInternalError(reply, req, error, "Insert failed")
     }
 
     invalidateDynamicOriginsCache()
@@ -127,7 +128,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       .eq("owner_user_id", req.userId)
       .order("created_at", { ascending: false })
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to list developer apps")
     }
     return { data: (data ?? []).map(formatApp) }
   })
@@ -229,7 +230,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       .eq("id", parsed.data.id)
       .eq("owner_user_id", req.userId)
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to delete app")
     }
     invalidateDynamicOriginsCache()
     return { success: true }

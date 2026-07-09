@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { estimateLoopVideoCredits } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const loopVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -76,7 +77,7 @@ export async function loopVideoRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

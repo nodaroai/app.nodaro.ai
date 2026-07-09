@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const contentCrawlerBody = z.object({
   actor: z.literal("content-crawler"),
@@ -79,7 +80,7 @@ export async function webScrapeRoutes(app: FastifyInstance) {
       .single()
 
     if (jobError || !job) {
-      return reply.status(500).send({ error: { code: "internal_error", message: jobError?.message ?? "job insert failed" } })
+      return sendInternalError(reply, req, jobError, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)

@@ -10,6 +10,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // Reference-photo entry — descriptive metadata in Phase 1 (the catalog of kinds
 // is open-ended for objects, unlike locations which enforces an enum). The
@@ -247,9 +248,7 @@ export async function objectRoutes(app: FastifyInstance) {
     const { data, error } = await query
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to list objects")
     }
 
     const objects = (data ?? []).map((o) => toCamel(o as ObjectRow))
@@ -293,9 +292,7 @@ export async function objectRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Object not found" },
         })
       }
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to load object")
     }
 
     return toCamel(data as ObjectRow)
@@ -452,9 +449,7 @@ export async function objectRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to save object")
     }
 
     return { id: created.id }
@@ -503,9 +498,7 @@ export async function objectRoutes(app: FastifyInstance) {
       p_url: parsedBody.data.url,
     })
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to remove asset")
     }
     if (!removed) {
       // Wrong owner, archived row, or the url isn't in that bucket.
@@ -580,9 +573,7 @@ export async function objectRoutes(app: FastifyInstance) {
         .maybeSingle()
 
       if (fetchErr) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: fetchErr.message },
-        })
+        return sendInternalError(reply, req, fetchErr, "Failed to delete object")
       }
       if (!row) {
         return reply.status(404).send({

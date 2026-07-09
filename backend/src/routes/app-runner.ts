@@ -8,6 +8,7 @@
  */
 
 import type { FastifyInstance } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
@@ -382,9 +383,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         .single()
 
       if (execError || !execution) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to create execution" },
-        })
+        return sendInternalError(reply, req, execError, "Failed to create execution")
       }
 
       const { data: updated, error: updateError } = await supabase
@@ -445,9 +444,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         status: "pending",
       })
     } catch {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create app run" },
-      })
+      return sendInternalError(reply, req, undefined, "Failed to create app run")
     }
   })
 
@@ -509,9 +506,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .single()
 
     if (runError || !run) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create run" },
-      })
+      return sendInternalError(reply, req, runError, "Failed to create run")
     }
 
     return reply.status(201).send({
@@ -662,9 +657,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: runs, error: runsError } = await query
 
     if (runsError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to fetch runs" },
-      })
+      return sendInternalError(reply, req, runsError, "Failed to fetch runs")
     }
 
     const hasMore = (runs?.length ?? 0) > limit
@@ -851,9 +844,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { data: runs, error: runsError } = await query
     if (runsError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to fetch archived runs" },
-      })
+      return sendInternalError(reply, req, runsError, "Failed to fetch archived runs")
     }
 
     const hasMore = (runs?.length ?? 0) > limit
@@ -1036,9 +1027,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .eq("runner_id", req.userId)
 
     if (deleteError) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to delete run" },
-      })
+      return sendInternalError(reply, req, deleteError, "Failed to delete run")
     }
 
     return reply.send({ success: true, permanentlyDeleted: true })

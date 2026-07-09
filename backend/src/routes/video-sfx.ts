@@ -10,6 +10,7 @@ import { hasCredits } from "../lib/config.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const SEED_MAX = 2 ** 31 - 1
 
@@ -218,9 +219,7 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
             )
           }
         }
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
       inserted.push({ jobId: job.id, inputData })
     }

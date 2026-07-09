@@ -12,6 +12,7 @@ import { stripFocusCloseTag } from "../lib/video-analysis-prompt.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { ytMetadataProbe, YtUrlNotAllowedError } from "../providers/video/youtube-video.js"
 import { buildVideoAnalysisCreditId, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const DEFAULT_LLM_MODEL = "gemini-3-flash"
 
@@ -249,9 +250,7 @@ export async function videoAnalysisRoutes(app: FastifyInstance) {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to create job")
       }
 
       // Re-resolve from the RAW body (not parsed.data): Zod stripped the

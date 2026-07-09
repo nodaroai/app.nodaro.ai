@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -176,9 +177,7 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         .single()
 
       if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
+        return sendInternalError(reply, req, error, "Failed to process video")
       }
 
       // Resolve from the RAW body (not parsed.data) so the reserve matches the

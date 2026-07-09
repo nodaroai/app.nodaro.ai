@@ -6,6 +6,7 @@ import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId, calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -291,7 +292,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const { data: rows, error } = await query
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to browse apps" } })
+      return sendInternalError(reply, req, error, "Failed to browse apps")
     }
 
     const items = (rows ?? []).slice(0, limit)
@@ -368,7 +369,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .insert({ user_id: userId, app_id: appId })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to favorite app" } })
+      return sendInternalError(reply, req, error, "Failed to favorite app")
     }
 
     return reply.send({ favorited: true })
@@ -386,7 +387,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch favorites" } })
+      return sendInternalError(reply, req, error, "Failed to fetch favorites")
     }
 
     return reply.send({ data: (data ?? []).map((f: { app_id: string }) => f.app_id) })
@@ -666,7 +667,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     if (insertError || !publishedApp) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to publish app" } })
+      return sendInternalError(reply, req, insertError, "Failed to publish app")
     }
 
     // Invalidate app cache for this slug
@@ -701,7 +702,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch apps" } })
+      return sendInternalError(reply, req, error, "Failed to fetch apps")
     }
 
     // Transform to camelCase + flatten count + extract projectId
@@ -762,7 +763,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .maybeSingle()
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch app" } })
+      return sendInternalError(reply, req, error, "Failed to fetch app")
     }
     if (!appRow) {
       return reply.status(404).send({ error: { code: "not_found", message: "No published app found" } })
@@ -847,7 +848,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .single()
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to update app" } })
+      return sendInternalError(reply, req, updateError, "Failed to update app")
     }
 
     return reply.send(toCamelCase(updated as Record<string, unknown>))
@@ -883,7 +884,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .eq("id", appId)
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to delete app" } })
+      return sendInternalError(reply, req, updateError, "Failed to delete app")
     }
 
     return reply.send({ success: true })
@@ -919,7 +920,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .eq("id", appId)
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to restore app" } })
+      return sendInternalError(reply, req, updateError, "Failed to restore app")
     }
 
     return reply.send({ success: true, restored: true })

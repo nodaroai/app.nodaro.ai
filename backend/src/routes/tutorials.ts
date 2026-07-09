@@ -6,6 +6,7 @@
 
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 interface CategoryRow {
   id: string
@@ -111,19 +112,13 @@ export async function tutorialsRoutes(app: FastifyInstance) {
     ])
 
     if (catsResult.error) {
-      return reply
-        .status(500)
-        .send({ error: { code: "internal_error", message: catsResult.error.message } })
+      return sendInternalError(reply, _req, catsResult.error, "Failed to load tutorials")
     }
     if (videosResult.error) {
-      return reply
-        .status(500)
-        .send({ error: { code: "internal_error", message: videosResult.error.message } })
+      return sendInternalError(reply, _req, videosResult.error, "Failed to load tutorials")
     }
     if (flowsResult.error) {
-      return reply
-        .status(500)
-        .send({ error: { code: "internal_error", message: flowsResult.error.message } })
+      return sendInternalError(reply, _req, flowsResult.error, "Failed to load tutorials")
     }
 
     const categories = (catsResult.data ?? []) as CategoryRow[]

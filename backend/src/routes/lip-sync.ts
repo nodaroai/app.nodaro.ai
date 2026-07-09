@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MODEL_CATALOG, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for KIE/SadTalker)
@@ -155,9 +156,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       .single()
 
     if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
+      return sendInternalError(reply, req, error, "Failed to create job")
     }
 
     const baseProvider = provider ?? "kling-avatar"

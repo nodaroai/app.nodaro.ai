@@ -12,6 +12,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -353,7 +354,7 @@ export async function characterRoutes(app: FastifyInstance) {
     const { data, error } = await query
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to list characters")
     }
 
     return { characters: (data ?? []).map(toCamel) }
@@ -389,7 +390,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (error.code === "PGRST116") {
         return reply.status(404).send({ error: { code: "not_found", message: "Character not found" } })
       }
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to load character")
     }
 
     // The three buckets below are independent (only previousCandidates needs
@@ -525,7 +526,7 @@ export async function characterRoutes(app: FastifyInstance) {
       p_user_id: userId,
     })
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to load character usage")
     }
     const rows = (data ?? []) as { workflow_id: string; workflow_name: string }[]
     return {
@@ -612,7 +613,7 @@ export async function characterRoutes(app: FastifyInstance) {
         if (error.code === "23505") {
           return reply.status(409).send({ error: { code: "name_taken", message: NAME_TAKEN_MESSAGE } })
         }
-        return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+        return sendInternalError(reply, req, error, "Failed to save character")
       }
       return { id: updated.id }
     }
@@ -682,7 +683,7 @@ export async function characterRoutes(app: FastifyInstance) {
         const existingId = await findActiveCharacterIdByName(userId, name)
         return reply.status(409).send({ error: { code: "name_taken", message: NAME_TAKEN_MESSAGE, existingId } })
       }
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to save character")
     }
     return { id: created.id, name }
   })
@@ -808,7 +809,7 @@ export async function characterRoutes(app: FastifyInstance) {
         .single()
       if (!error && updated) return { id: updated.id, name: updated.name }
       if (error && error.code !== "23505") {
-        return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+        return sendInternalError(reply, req, error, "Failed to restore character")
       }
       // Conflict — recompute and try again.
       restoredName = await deriveAvailableName("characters", userId, `${archived.name} (restored)`)
@@ -899,7 +900,7 @@ export async function characterRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
 
     if (error) {
-      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+      return sendInternalError(reply, req, error, "Failed to archive character")
     }
 
     return { success: true, archived: true }
