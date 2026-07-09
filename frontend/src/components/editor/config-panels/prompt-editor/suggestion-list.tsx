@@ -1,6 +1,6 @@
 "use client"
 
-import { forwardRef, useImperativeHandle, useState, useEffect, useMemo, useCallback } from "react"
+import { forwardRef, useImperativeHandle, useState, useEffect, useLayoutEffect, useMemo, useCallback } from "react"
 import { USAGE_MODES, usageModeLabel, LOCATION_USAGE_MODES, locationUsageModeLabel, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
@@ -9,6 +9,7 @@ import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { characterSwapMenuRoles, sanitizeRole } from "./character-ref-roles"
 import { locationSwapMenuRoles, sanitizeLocationRole } from "./location-ref-roles"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
+import { RefPreviewPortal } from "./ref-preview-portal"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
@@ -123,6 +124,13 @@ type DisplayRow =
   // usageMode (bucket/variant cleared) via `roleToLocationRefSlots`.
   | { kind: "location-role"; role: string }
 
+/** The reference image URL for a row, when it has one (character/location roots
+ *  + variants + plain image-refs). Drives the large side-preview shown while
+ *  navigating the list (issue 3). Role/mode/back rows have no image → no preview. */
+function rowImageUrl(row: DisplayRow | undefined): string | undefined {
+  return row && "item" in row ? row.item.url : undefined
+}
+
 /** Active drill-in target for the character mode picker (3rd level). */
 interface DrillVariant {
   characterSlug: string
@@ -194,6 +202,22 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
   function SuggestionList({ items, query, command, onDrillChange }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
     const listRef = useScrollActiveOptionIntoView<HTMLDivElement>(selectedIndex)
+    // The side-preview portal anchors to the list's on-screen rect. Reading the
+    // ref DURING render left the anchor null on the first commit (refs attach
+    // after commit), so the preview only appeared once the selection moved
+    // (issue 3). Measure post-commit — every commit, it's one rect read — and
+    // update state only when the rect actually moved so this can't loop.
+    const [listRect, setListRect] = useState<DOMRect | null>(null)
+    useLayoutEffect(() => {
+      const next = listRef.current?.getBoundingClientRect() ?? null
+      setListRect((prev) =>
+        prev && next
+          && prev.top === next.top && prev.left === next.left
+          && prev.width === next.width && prev.height === next.height
+          ? prev
+          : next,
+      )
+    })
     // Drill-in state — three independent levels split across two trees:
     //   `drillCharacterSlug` (character level 2: variant list).
     //   `drillVariant` (character level 3: mode picker).
@@ -1008,7 +1032,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               ? `@video:${item.index}`
               : item.source === "audio"
                 ? `@audio:${item.index}`
-                : `@image:${item.index}:${item.defaultLabel}`
+                : `@image:${item.index}${item.defaultLabel ? `:${item.defaultLabel}` : ""}`
           // In flat-search mode, the parent character label is hoisted into
           // the row so the user can distinguish identically-named variants
           // across characters ("Kira / smile" vs "Aria / smile"). The normal
@@ -1097,6 +1121,13 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             </button>
           )
         })}
+        {/* Large side-preview of the actively-selected row's image (issue 3) —
+            follows both hover and keyboard navigation via selectedIndex. */}
+        <RefPreviewPortal
+          url={rowImageUrl(displayRows[selectedIndex])}
+          anchor={listRect}
+          placement="side"
+        />
       </div>
     )
   },

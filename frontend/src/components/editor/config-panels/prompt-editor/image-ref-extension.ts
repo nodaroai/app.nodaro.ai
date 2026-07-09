@@ -42,8 +42,11 @@ export const ImageRefExtension = Mention.extend({
         renderHTML: (attrs) => ({ "data-image-index": String(attrs.imageIndex) }),
       },
       label: {
-        default: "object",
-        parseHTML: (el) => el.getAttribute("data-image-label") || "object",
+        // Empty = "ref-only" (a bare {image:N} token). This is the default for
+        // manual / wired-image references; object/creature/face image pills and
+        // hand-typed :label tokens carry an explicit label that survives here.
+        default: "",
+        parseHTML: (el) => el.getAttribute("data-image-label") || "",
         renderHTML: (attrs) => ({ "data-image-label": attrs.label }),
       },
     }

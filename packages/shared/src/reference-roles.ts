@@ -9,9 +9,9 @@ import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource } from "./types.js"
  * value (guarded by reference-roles.test.ts).
  */
 export const REFERENCE_ROLE_PRESETS: Record<ReferenceSource, readonly string[]> = {
-  "wired-character": ["person", "face", "clothes", "hair", "pose", "expression", "style"],
+  "wired-character": ["ref-only", "person", "face", "clothes", "hair", "pose", "expression", "style"],
   "wired-face": ["face", "person", "expression", "style"],
-  "wired-location": ["background", "atmosphere", "as-is", "empty background", "layout", "lighting", "style"],
+  "wired-location": ["ref-only", "background", "atmosphere", "as-is", "empty background", "layout", "lighting", "style"],
   "wired-object": ["object", "shape", "material", "color", "texture", "style"],
   "wired-creature": ["creature", "anatomy", "markings", "pose", "color", "style"],
   "wired-image": ["object", "person", "face", "clothes", "background", "style", "pose", "texture"],
@@ -35,6 +35,10 @@ export function roleToPhrase(role: string, binding: string): string {
   const r = role.trim()
   if (!r) return binding
   switch (r) {
+    case "ref-only":
+      // Bare reference pointer — no descriptive phrase. The label-less/default
+      // state for media refs; an explicit pick for character/location assets.
+      return binding
     case "as-is":
       return `${binding}, used as-is`
     case "empty background":

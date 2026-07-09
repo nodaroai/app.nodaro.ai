@@ -89,10 +89,39 @@ describe("parseLocationMentionToken", () => {
       expect(parseLocationMentionToken("@oldlibrary:1:weather:style")).toBeNull()
     })
 
-    it("returns null for 4-part with unknown 4th-segment mode", () => {
+    it("4-part with a non-mode 4th segment parses as bucket/variant + ROLE (Variant + Role Separation)", () => {
+      // Previously rejected; now the non-mode segment is a per-mention role
+      // that coexists with the variant — the variant picks the image, the
+      // role picks the phrase.
       expect(
-        parseLocationMentionToken("@oldlibrary:1:weather/rain:face"),
-      ).toBeNull()
+        parseLocationMentionToken("@oldlibrary:1:weather/rain:lighting"),
+      ).toEqual({
+        locationSlug: "oldlibrary",
+        imageIndex: 1,
+        bucket: "weather",
+        variant: "rain",
+        usageMode: null,
+        role: "lighting",
+      })
+    })
+
+    it("4-part custom role slug coexists with the variant", () => {
+      expect(
+        parseLocationMentionToken("@oldlibrary:1:weather/rain:cozy-corner"),
+      ).toEqual({
+        locationSlug: "oldlibrary",
+        imageIndex: 1,
+        bucket: "weather",
+        variant: "rain",
+        usageMode: null,
+        role: "cozy-corner",
+      })
+    })
+
+    it("4-part MODE still routes to usageMode, not role (back-compat)", () => {
+      const parsed = parseLocationMentionToken("@oldlibrary:1:weather/rain:style")
+      expect(parsed?.usageMode).toBe("style")
+      expect(parsed && "role" in parsed).toBe(false)
     })
 
     it("3-part with a bare non-mode slug parses as a custom ROLE (parser gate removed, F2)", () => {

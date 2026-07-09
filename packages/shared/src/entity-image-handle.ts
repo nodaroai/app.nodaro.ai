@@ -34,3 +34,25 @@ export function resolveEffectiveSourceType(
   }
   return rawSourceType ?? ""
 }
+
+/**
+ * The ref-assembly map key (and `ConnectedReference.id`) for a wired source.
+ *
+ * An entity's `image` handle emits a plain image that is DISTINCT from the
+ * entity's identity `*Ref` handle, yet both edges carry the SAME source node
+ * id. Every ref-assembly map that keyed by the bare node id therefore had the
+ * two edges collide — silently dropping one (identity → a literal `@abi:N`
+ * token + lost character, or the plain image → missing from the picker),
+ * non-deterministically by edge order. Scoping the entity-`image`-handle ref to
+ * `${nodeId}::image` keeps the two refs distinct so BOTH survive. Every other
+ * (type, handle) keeps the bare node id, so nothing else changes.
+ */
+export function sourceRefKey(
+  nodeId: string,
+  sourceHandleId: string | undefined | null,
+  rawSourceType: string | undefined | null,
+): string {
+  return sourceHandleId === "image" && ENTITY_IMAGE_HANDLE_TYPES.has(rawSourceType ?? "")
+    ? `${nodeId}::image`
+    : nodeId
+}

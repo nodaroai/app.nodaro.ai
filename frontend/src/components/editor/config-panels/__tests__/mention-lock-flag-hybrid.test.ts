@@ -57,12 +57,12 @@ describe("parseLocationRefMatch — ~lock / ~nolock (format-blind)", () => {
 describe("parseCharacterRefMatch — tri-state lock passthrough", () => {
   it("includes lock:true when the caller detects ~lock", () => {
     expect(parseCharacterRefMatch("@kira", "1", "face", undefined, true)).toEqual({
-      characterSlug: "kira", imageIndex: 1, variantSlug: null, usageMode: "face", lock: true,
+      characterSlug: "kira", imageIndex: 1, variantSlug: null, usageMode: "face", role: null, lock: true,
     })
   })
   it("includes lock:false when the caller detects ~nolock (Task F4)", () => {
     expect(parseCharacterRefMatch("@kira", "1", "face", undefined, false)).toEqual({
-      characterSlug: "kira", imageIndex: 1, variantSlug: null, usageMode: "face", lock: false,
+      characterSlug: "kira", imageIndex: 1, variantSlug: null, usageMode: "face", role: null, lock: false,
     })
   })
   it("BYTE-IDENTICAL: no lock key when lock arg omitted (undefined)", () => {

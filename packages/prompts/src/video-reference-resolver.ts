@@ -88,8 +88,8 @@ const REFERENCE_TOKEN_RE = /\{(image|video|audio):(\d+)(?::([a-zA-Z0-9_ -]+))?\}
  *     `stripVideoImageTokens` strip behavior: drop the token, keep the label text.
  *   - in range, label present → `REF_BINDING[kind](label, N)`
  *     (e.g. `the person from @image_2`).
- *   - in range, no label → `the subject in @${kind}_${N}` so the binding still
- *     lands even when the author didn't name the subject.
+ *   - in range, no label → the bare `@${kind}_${N}` (the ref-only default): the
+ *     binding lands with no descriptive wrapper.
  *
  * Runs of 2+ HORIZONTAL whitespace (left behind by a dropped label-less token)
  * collapse to one space, the result is trimmed, and an empty result becomes
@@ -115,7 +115,7 @@ export function resolveReferenceTokens(
         const n = parseInt(nStr, 10)
         if (n < 1 || n > counts[kind]) return label ?? ""
         if (label) return REF_BINDING[kind](label, n)
-        return `the subject in @${kind}_${n}`
+        return `@${kind}_${n}`
       })
       // Horizontal whitespace only — preserve `\n` / `\n\n` block separators.
       .replace(/[^\S\r\n]{2,}/g, " ")
@@ -309,6 +309,10 @@ function resolveVideoCharacterMentionsHybrid(
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
     if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
+    // Variant + Role Separation: an explicit 4th-segment ROLE
+    // (`@kira:1:walking:clothes`) wins outright and coexists with the variant —
+    // used VERBATIM, in lock-step with the image-side resolver.
+    const explicitRole = (t.role ?? "").trim()
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
     // Custom roles survive VERBATIM — the SAME relaxation as the image-side
     // `resolveCharacterMentionsHybrid` (Unified Reference Roles, Phase D), kept
@@ -317,9 +321,11 @@ function resolveVideoCharacterMentionsHybrid(
     // a real variant URL → role; a real variant slug or a directive-only usage
     // mode → the NODE default (`defaultRole` verbatim → `defaultUsageMode`-derived
     // → "person", via `resolveDefaultRole` — Character Node Role+Lock), mirroring
-    // the image-side mention fallback.
-    const role =
-      segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
+    // the image-side mention fallback. Precedence: seg4 role → seg3 token role →
+    // node default chain.
+    const role = explicitRole
+      ? explicitRole
+      : segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
         ? segment
         : resolveDefaultRole(match.defaultRole, match.defaultUsageMode, "wired-character")
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })

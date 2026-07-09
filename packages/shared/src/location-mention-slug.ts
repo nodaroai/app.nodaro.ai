@@ -107,11 +107,13 @@ export interface LocationMentionTokenInfo {
   readonly usageMode: LocationUsageMode | null
   /** Bare-slug ROLE (Unified Reference Roles, Phase D + F2) — any slash-less,
    *  non-mode 3rd segment (`background`, `empty-background`, `as-is`, … or a
-   *  CUSTOM slug), stored verbatim in slug form. Absent (undefined) for canonical /
-   *  bucket-variant / mode tokens. The hybrid resolver + role pill map it back to
-   *  the phrase key via `normalizeRoleSlug` (custom slugs pass through). Optional so
-   *  canonical/variant/mode tokens stay shape-identical to the pre-Phase-D parser
-   *  output. */
+   *  CUSTOM slug), stored verbatim in slug form — OR (Variant + Role
+   *  Separation) a non-mode 4th segment coexisting with a bucket/variant
+   *  (`@lib:1:weather/rain:lighting` → rain image, lighting phrase). Absent
+   *  (undefined) for canonical / bare-variant / mode tokens. The hybrid
+   *  resolver + role pill map it back to the phrase key via `normalizeRoleSlug`
+   *  (custom slugs pass through). Optional so those tokens stay
+   *  shape-identical to the pre-Phase-D parser output. */
   readonly role?: string
   /**
    * Additive per-mention identity-lock sentinel (Unified Reference Roles,
@@ -235,7 +237,11 @@ export function parseLocationMentionToken(
     }
   }
 
-  // 4-part: @oldlibrary:1:bucket/variant:mode.
+  // 4-part: @oldlibrary:1:bucket/variant:X — X is EITHER a mode override
+  // (today's shape, byte-identical) OR — Variant + Role Separation — any other
+  // slug, parsed as a per-mention ROLE coexisting with the bucket/variant (the
+  // variant picks the image, the role picks the phrase). The `role` key is
+  // emitted only on the non-mode branch, mirroring the character parser.
   if (parts.length === 4) {
     if (!third.includes("/")) return null
     const slashAt = third.indexOf("/")
@@ -243,8 +249,11 @@ export function parseLocationMentionToken(
     const variant = third.slice(slashAt + 1)
     if (!/^[a-z][a-z0-9-]*$/.test(bucket)) return null
     if (!/^[a-z][a-z0-9-]*$/.test(variant)) return null
-    if (!isLocationUsageMode(fourth)) return null
-    return { locationSlug, imageIndex, bucket, variant, usageMode: fourth, ...lockField }
+    if (!/^[a-z][a-z0-9-]*$/.test(fourth)) return null
+    if (isLocationUsageMode(fourth)) {
+      return { locationSlug, imageIndex, bucket, variant, usageMode: fourth, ...lockField }
+    }
+    return { locationSlug, imageIndex, bucket, variant, usageMode: null, role: fourth, ...lockField }
   }
 
   return null

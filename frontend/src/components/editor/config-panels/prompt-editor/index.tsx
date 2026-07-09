@@ -13,10 +13,9 @@ import { ImageRefExtension } from "./image-ref-extension"
 import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
-import { roleToCharacterRefSlots } from "./character-ref-roles"
-import { roleToLocationRefSlots } from "./location-ref-roles"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
+import { buildRefPillNodes, nextMentionIndex } from "./build-ref-pill-nodes"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList } from "./variable-suggestion-list"
 import { VariableHighlightExtension, VARIABLE_HIGHLIGHT_META } from "./variable-highlight-extension"
@@ -25,7 +24,7 @@ import { SnippetSuggestionList } from "./snippet-suggestion-list"
 import { SnippetPillExtension } from "./snippet-pill-extension"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { matchSnippetRanges, type MatchableSnippet } from "@/lib/snippet-matching"
-import { DEFAULT_USAGE_MODE, canonicalVarName, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
+import { canonicalVarName } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
@@ -564,190 +563,27 @@ export function PromptEditor({
             // The shape on the right matches the LOCATION grammar (a strict
             // superset of the CHARACTER grammar — each optional segment can
             // be either a plain slug OR a `bucket/variant` pair).
-            const computeNextMentionIndex = (): number => {
-              const currentText = ed.getText({ blockSeparator: "\n" })
-              const seg = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
-              const regex = new RegExp(
-                `(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\\d+)(?::${seg})?(?::${seg})?`,
-                "g",
-              )
-              let maxIdx = 0
-              for (const match of currentText.matchAll(regex)) {
-                const n = parseInt(match[1], 10)
-                if (Number.isInteger(n) && n > maxIdx) maxIdx = n
-              }
-              return maxIdx + 1
-            }
+            const computeNextMentionIndex = (): number =>
+              nextMentionIndex(ed.getText({ blockSeparator: "\n" }))
 
-            // Location refs: insert as an atomic `locationRef` TipTap node
-            // (rendered as a cyan pill with thumbnail). The pill's
-            // `renderText` serializes back to the literal
-            // `@<slug>:N(:<bucket>/<variant>)?(:<mode>)?` format that
-            // `findLocationMentionTokens` (shared) recognizes — so the
-            // visual pill is a pure presentation layer and the downstream
-            // prompt-builder sees the exact same text it would have seen
-            // for a hand-typed slug.
-            if (item.source === "location" && item.locationSlug) {
-              const nextIdx = computeNextMentionIndex()
-              // Slot resolution. In HYBRID the 3rd-level drill picks a ROLE
-              // (`item.role`): a location token is role XOR bucket/variant XOR
-              // mode, so the Plan-D `roleToLocationRefSlots` helper fills at
-              // most one of role/usageMode and ALWAYS clears bucket/variant
-              // (never an invalid multi-segment token). The helper is the
-              // single source of truth for the role→slot mapping — do not
-              // re-derive it here.
-              //
-              // Otherwise (legacy drill, or a level-2 variant / canonical pick
-              // in either format) the existing path is byte-identical to
-              // before: bucket/variant come from the picked entry, and the
-              // mode is emitted ONLY when explicitly chosen via the mode drill
-              // (4th segment for bucketed variants — `@oldlibrary:1:weather/rain:style`;
-              // 3rd segment for canonical — `@oldlibrary:1:style`). When no
-              // mode was picked (`locationUsageMode` undefined) the extension's
-              // `renderText` emits a clean 2-or-3-part slug and the runtime
-              // path falls back to the location node's default mode (or the
-              // global `DEFAULT_LOCATION_USAGE_MODE` "identical").
-              let bucket: string | null
-              let variant: string | null
-              let roleForNode: string | null
-              let locModeForNode: LocationUsageMode | null
-              if (item.role != null) {
-                const slots = roleToLocationRefSlots(item.role)
-                bucket = slots.bucket
-                variant = slots.variant
-                roleForNode = slots.role
-                locModeForNode = slots.usageMode
-              } else {
-                bucket = item.locationVariantBucket ?? null
-                variant = item.locationVariantSlug ?? null
-                roleForNode = null
-                const explicitLocMode = item.locationUsageMode
-                locModeForNode = explicitLocMode != null ? explicitLocMode : null
-              }
-              ed
-                .chain()
-                .focus()
-                .deleteRange(range)
-                .insertContent([
-                  {
-                    type: "locationRef",
-                    attrs: {
-                      locationSlug: item.locationSlug,
-                      imageIndex: nextIdx,
-                      bucket,
-                      variant,
-                      usageMode: locModeForNode,
-                      role: roleForNode,
-                    },
-                  },
-                  // Trailing space — matches the character path so the
-                  // cursor lands ready for the user to keep typing.
-                  { type: "text", text: " " },
-                ])
-                .run()
-              return
-            }
-            // Character refs: insert as an atomic `characterRef` TipTap node
-            // (rendered as a violet pill with thumbnail). The pill's
-            // `renderText` serializes back to the literal
-            // `@<slug>:N(:<variant>)(:<mode>)` format that
-            // `findCharacterMentionTokens` (shared) recognizes — so the visual
-            // pill is a pure presentation layer and the downstream
-            // prompt-builder sees the exact same text it would have seen for
-            // a hand-typed slug.
-            //
-            // Non-character refs continue to use the existing TipTap `imageRef`
-            // atomic node so the visual pill + `{image:N:label}` round-trip
-            // behavior is preserved.
-            if (item.source === "character" && item.characterSlug) {
-              const nextIdx = computeNextMentionIndex()
-              // Slot resolution. In HYBRID the 3rd-level drill picks a ROLE
-              // (`item.role`), which occupies EXACTLY ONE of usageMode /
-              // variantSlug — routed through the Plan-D `roleToCharacterRefSlots`
-              // helper (the single source of truth for the role→slot mapping;
-              // do not re-derive it here). It clears the sibling slot so a role
-              // pick can never emit an invalid 4-part token.
-              //
-              // Otherwise (legacy drill, or a level-2 variant pick) the mode
-              // resolution is byte-identical to before:
-              //   1. `item.usageMode` — set by the legacy 3rd-level mode drill;
-              //      ALWAYS emitted as the 4th slug segment (even when equal to
-              //      the default) so the user's explicit choice round-trips.
-              //   2. character node's `defaultUsageMode` — emitted only when
-              //      non-default, keeping the common case (`identical`) clean as
-              //      the legacy 2/3-part form.
-              // The extension's `renderText` only emits a 4th segment when
-              // `usageMode` is non-null, so a null keeps the pill clean and
-              // defers mode resolution to the character node at runtime.
-              let variantSlugForNode: string | null
-              let modeForNode: UsageMode | null
-              if (item.role != null) {
-                const slots = roleToCharacterRefSlots(item.role)
-                variantSlugForNode = slots.variantSlug
-                modeForNode = slots.usageMode
-              } else {
-                variantSlugForNode = item.variantSlug ?? null
-                const explicitMode = item.usageMode
-                const defaultMode = item.defaultUsageMode
-                const includeMode = explicitMode != null
-                  ? true
-                  : defaultMode != null && defaultMode !== DEFAULT_USAGE_MODE
-                modeForNode = includeMode ? (explicitMode ?? defaultMode ?? null) : null
-              }
-              ed
-                .chain()
-                .focus()
-                .deleteRange(range)
-                .insertContent([
-                  {
-                    type: "characterRef",
-                    attrs: {
-                      characterSlug: item.characterSlug,
-                      imageIndex: nextIdx,
-                      variantSlug: variantSlugForNode,
-                      usageMode: modeForNode,
-                    },
-                  },
-                  // Trailing space — matches the legacy plain-text insertion
-                  // so the cursor lands ready for the user to keep typing.
-                  { type: "text", text: " " },
-                ])
-                .run()
-              return
-            }
-            // Reference-VIDEO / reference-AUDIO refs: insert the atomic
-            // `videoRef` / `audioRef` pill (Task 5.1). Mirrors the imageRef
-            // insertion exactly — uses the builder's positional `item.index`
-            // (NOT computeNextMentionIndex; that counter is for `@<slug>:N`
-            // character/location mentions), and the SAME attr names the 5.1
-            // extension declares (`refIndex` + `label`). `defaultLabel` is ""
-            // so the pill lands as a clean `{video:N}` / `{audio:N}`.
-            if (item.source === "video" || item.source === "audio") {
-              ed
-                .chain()
-                .focus()
-                .insertContentAt(range, [
-                  {
-                    type: item.source === "video" ? "videoRef" : "audioRef",
-                    attrs: { refIndex: item.index, label: item.defaultLabel },
-                  },
-                  { type: "text", text: " " },
-                ])
-                .run()
-              return
-            }
-            // Non-character/non-location ref: keep the existing atomic
-            // `imageRef` node.
+            // The per-source pill shape lives in the shared `buildRefPillNodes`
+            // (single source of truth, also used by the thumbnail swap-picker),
+            // so the `@`-insert and in-place swap can never drift. Character +
+            // location mentions use the unified `@<slug>:N` counter; image /
+            // video / audio use the item's positional `index` (handled inside
+            // the builder). `insertContentAt(range, …)` replaces the `@query`
+            // with the pill (+ trailing space) exactly as the prior per-branch
+            // `deleteRange`/`insertContent` did.
+            const needsMentionIndex =
+              (item.source === "location" && !!item.locationSlug) ||
+              (item.source === "character" && !!item.characterSlug)
             ed
               .chain()
               .focus()
-              .insertContentAt(range, [
-                {
-                  type: "imageRef",
-                  attrs: { imageIndex: item.index, label: item.defaultLabel },
-                },
-                { type: "text", text: " " },
-              ])
+              .insertContentAt(
+                range,
+                buildRefPillNodes(item, needsMentionIndex ? computeNextMentionIndex() : 0),
+              )
               .run()
           },
           render: createFloatingSuggestionRenderer<{

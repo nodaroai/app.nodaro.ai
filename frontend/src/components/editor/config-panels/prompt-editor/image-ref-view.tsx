@@ -7,7 +7,9 @@ import { optimizedImageUrl } from "@/lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
-import { computeFlipPosition } from "./flip-position"
+import { RefPreviewPortal } from "./ref-preview-portal"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 interface ImageRefAttrs {
   imageIndex: number
@@ -95,6 +97,18 @@ export function ImageRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
+  // "Ref only": clear the label so the token is bare `{image:N}`, which the
+  // resolver injects as just "reference image A" (no descriptive role phrase).
+  const clearLabel = useCallback(() => {
+    props.updateAttributes({ label: "" })
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props])
+
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
+
   return (
     <NodeViewWrapper
       as="span"
@@ -109,8 +123,18 @@ export function ImageRefView(props: NodeViewProps) {
           alt=""
           className="image-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            // Open the swap picker; preventDefault stops ProseMirror node
+            // selection, and clear the hover preview so they don't stack.
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       )}
       <button
@@ -138,35 +162,14 @@ export function ImageRefView(props: NodeViewProps) {
       >
         ×
       </button>
-      {url && hoverAnchor && createPortal(
-        (() => {
-          const PREVIEW_MAX = 220
-          // Shares the editor's flip-above-when-cramped math; the preview div's
-          // own maxWidth/maxHeight stay local. Threshold + secondary margin
-          // reproduce the original `spaceBelow >= PREVIEW_MAX || spaceBelow >= (top - 8)`.
-          const { top, left } = computeFlipPosition(hoverAnchor, {
-            width: PREVIEW_MAX,
-            estHeight: PREVIEW_MAX,
-            margin: 8,
-            placeBelowThreshold: PREVIEW_MAX,
-            secondaryClauseMargin: 8,
-          })
-          return (
-            <div
-              style={{ position: "fixed", top, left }}
-              className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
-              aria-hidden
-            >
-              <img
-                src={optimizedImageUrl(url, { width: 480 })}
-                alt=""
-                className="block rounded object-contain"
-                style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
-              />
-            </div>
-          )
-        })(),
-        document.body,
+      <RefPreviewPortal url={url} anchor={hoverAnchor} />
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
       {menuAnchor && createPortal(
         (() => {
@@ -174,7 +177,7 @@ export function ImageRefView(props: NodeViewProps) {
           // Estimate menu height: presets list + separator + custom button or
           // input, ~32px per row. Used to flip the menu above the anchor when
           // the viewport doesn't have room below.
-          const MENU_H_ESTIMATE = (LABEL_PRESETS.length + 2) * 32 + 16
+          const MENU_H_ESTIMATE = (LABEL_PRESETS.length + 3) * 32 + 16
           const MARGIN = 4
           const vh = window.innerHeight
           const vw = window.innerWidth
@@ -202,6 +205,24 @@ export function ImageRefView(props: NodeViewProps) {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              <button
+                key="__ref-only__"
+                type="button"
+                role="menuitem"
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                  attrs.label === ""
+                    ? "bg-pink-500/15 text-pink-700 dark:text-pink-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearLabel()
+                }}
+              >
+                <span>Ref only</span>
+                {attrs.label === "" && <span aria-hidden>✓</span>}
+              </button>
+              <div className="my-1 border-t border-border/60" />
               {LABEL_PRESETS.map((preset) => (
                 <button
                   key={preset}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES } from "../entity-image-handle.js"
+import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES, sourceRefKey } from "../entity-image-handle.js"
 
 const ENTITY_REF_HANDLE: Record<string, string> = {
   character: "characterRef",
@@ -39,5 +39,26 @@ describe("resolveEffectiveSourceType (entity image handle → upload-image)", ()
     expect([...ENTITY_IMAGE_HANDLE_TYPES].sort()).toEqual(
       ["character", "creature", "location", "object"],
     )
+  })
+})
+
+describe("sourceRefKey (handle-scoped ref key — prevents node-id collision)", () => {
+  it("scopes an entity's image handle to `${id}::image`", () => {
+    for (const entity of ENTITY_IMAGE_HANDLE_TYPES) {
+      expect(sourceRefKey("n1", "image", entity)).toBe("n1::image")
+    }
+  })
+
+  it("keeps the bare node id for the identity handle so the two refs stay distinct", () => {
+    expect(sourceRefKey("n1", "characterRef", "character")).toBe("n1")
+    // Identity vs image handle of the SAME node → distinct keys (the fix).
+    expect(sourceRefKey("n1", "characterRef", "character"))
+      .not.toBe(sourceRefKey("n1", "image", "character"))
+  })
+
+  it("leaves non-entity image producers and the no-handle case on the bare node id", () => {
+    expect(sourceRefKey("n1", "image", "generate-image")).toBe("n1")
+    expect(sourceRefKey("n1", "image", "upload-image")).toBe("n1")
+    expect(sourceRefKey("n1", undefined, "character")).toBe("n1")
   })
 })

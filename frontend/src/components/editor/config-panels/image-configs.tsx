@@ -50,7 +50,7 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
@@ -1106,8 +1106,11 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       }
       const url = entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
-      map.set(s.id, {
-        id: s.id,
+      // Handle-scoped key so an entity node wired via both its identity handle
+      // and its `image` handle produces two refs, not one clobbering the other.
+      const refKey = sourceRefKey(s.id, s.sourceHandle, s.type)
+      map.set(refKey, {
+        id: refKey,
         defaultName: s.label || s.type,
         source: wiredSourceTypeMap[effectiveType],
         description: nd.description as string | undefined,

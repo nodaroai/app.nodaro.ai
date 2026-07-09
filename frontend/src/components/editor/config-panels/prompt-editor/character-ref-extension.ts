@@ -10,6 +10,12 @@ export interface CharacterRefAttrs {
   imageIndex: number
   variantSlug: string | null
   usageMode: UsageMode | null
+  /** Per-mention ROLE from a non-mode 4th segment (Variant + Role Separation) —
+   *  coexists with a REAL variant: the variant picks the image, the role picks
+   *  the phrase (`@kira:1:walking:clothes`). Slot-routing keeps it exclusive
+   *  with `usageMode`; when the pill has no real variant the role lives in the
+   *  `variantSlug` slot instead (the pre-existing 3-part encoding). */
+  role: string | null
   /** Per-mention identity-lock (Unified Reference Roles, Task 4 + F4).
    *  Tri-state: `true` → pill serializes `~lock` (force ON); `false` → pill
    *  serializes `~nolock` (force OFF, suppresses a ref-level enabled lock);
@@ -109,21 +115,24 @@ function parseMatchAttrs(
 
   // 2-part: @kira:1
   if (third === undefined && fourth === undefined) {
-    return { characterSlug, imageIndex, variantSlug: null, usageMode: null, ...lockField }
+    return { characterSlug, imageIndex, variantSlug: null, usageMode: null, role: null, ...lockField }
   }
   // 3-part: @kira:1:X — X is mode OR variant.
   if (fourth === undefined && third !== undefined) {
     if (isUsageMode(third)) {
-      return { characterSlug, imageIndex, variantSlug: null, usageMode: third, ...lockField }
+      return { characterSlug, imageIndex, variantSlug: null, usageMode: third, role: null, ...lockField }
     }
     // Plain variant slug (alpha-prefix already enforced by the regex).
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, ...lockField }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, role: null, ...lockField }
   }
-  // 4-part: @kira:1:smile:mode — both must be set; final segment must be a
-  // valid usage mode (matching parseCharacterMentionToken behavior).
+  // 4-part: @kira:1:variant:X — X is a usage mode (today's shape) OR — Variant
+  // + Role Separation — any other slug, a per-mention ROLE coexisting with the
+  // variant (matching the widened parseCharacterMentionToken).
   if (third !== undefined && fourth !== undefined) {
-    if (!isUsageMode(fourth)) return null
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, ...lockField }
+    if (isUsageMode(fourth)) {
+      return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, role: null, ...lockField }
+    }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, role: fourth, ...lockField }
   }
   return null
 }
@@ -178,6 +187,16 @@ export const CharacterRefExtension = Node.create({
             ? { "data-usage-mode": String(attrs.usageMode) }
             : {},
       },
+      // Per-mention 4th-segment ROLE (Variant + Role Separation) — set only
+      // alongside a real variant; exclusive with usageMode via the slot router.
+      role: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-role") || null,
+        renderHTML: (attrs) =>
+          attrs.role
+            ? { "data-role": String(attrs.role) }
+            : {},
+      },
       // Per-mention identity-lock (Task 4 + F4). Tri-state true/false/undefined;
       // default undefined (inherit) so a lock-less pill renders NO `data-lock`
       // and NO sentinel (byte-identical). `data-lock` is emitted only for an
@@ -230,7 +249,11 @@ export const CharacterRefExtension = Node.create({
     const a = node.attrs as CharacterRefAttrs
     const parts: string[] = [`@${a.characterSlug}:${a.imageIndex}`]
     if (a.variantSlug) parts.push(a.variantSlug)
+    // Exactly one of usageMode / role occupies the 4th segment (slot router
+    // keeps them exclusive). A defensive role-without-variant degrades to the
+    // 3-part role form, which the resolver reads identically.
     if (a.usageMode) parts.push(a.usageMode)
+    else if (a.role) parts.push(a.role)
     // Additive tri-state lock sentinel LAST (after all colon segments) so the
     // shared parser reads it as the trailing per-mention lock flag: `true` →
     // `~lock`, `false` → `~nolock`, `undefined` → nothing (byte-identical).

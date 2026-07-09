@@ -236,7 +236,7 @@ describe("hybrid @-autocomplete drill — CHARACTER role picker (level 3)", () =
     const payload = command.mock.calls[0][0]
     expect(payload).toMatchObject({ source: "character", characterSlug: "kira", role: "face" })
     // The role occupies usageMode, variantSlug cleared → clean 3-part token.
-    expect(roleToCharacterRefSlots(payload.role!)).toEqual({ usageMode: "face", variantSlug: null })
+    expect(roleToCharacterRefSlots(payload.role!)).toEqual({ usageMode: "face", variantSlug: null, role: null })
     expect(charToken(payload.role!)).toBe("@kira:1:face")
   })
 
@@ -245,7 +245,7 @@ describe("hybrid @-autocomplete drill — CHARACTER role picker (level 3)", () =
     fireEvent.mouseDown(document.querySelector("[data-role='clothes']")!)
     const payload = command.mock.calls[0][0]
     expect(payload.role).toBe("clothes")
-    expect(roleToCharacterRefSlots(payload.role!)).toEqual({ usageMode: null, variantSlug: "clothes" })
+    expect(roleToCharacterRefSlots(payload.role!)).toEqual({ usageMode: null, variantSlug: "clothes", role: null })
     expect(charToken(payload.role!)).toBe("@kira:1:clothes")
   })
 
