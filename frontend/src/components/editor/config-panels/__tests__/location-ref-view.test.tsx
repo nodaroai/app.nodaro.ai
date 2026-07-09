@@ -232,3 +232,23 @@ describe("LocationRefView — mode menu", () => {
     }
   })
 })
+
+describe("LocationRefView — bare name for a variant pick", () => {
+  beforeEach(() => cleanup())
+
+  it("renders the BARE location name (not the composite 'Name / variant')", () => {
+    // Same regression as the character pill: resolveRef returns the VARIANT
+    // entry whose `label` is the composite "Old Library / reading-room"; the
+    // @-name must show only the location so the variant isn't duplicated.
+    const refs: MockRefEntry[] = [
+      { url: "https://cdn/lib.png", locationSlug: "oldlibrary", label: "Old Library" },
+      {
+        url: "https://cdn/lib-reading.png", locationSlug: "oldlibrary",
+        locationVariantBucket: "areas", locationVariantSlug: "reading-room",
+        label: "Old Library / reading-room",
+      },
+    ]
+    render(<LocationRefView {...mockProps({ locationSlug: "oldlibrary", bucket: "areas", variant: "reading-room" }, refs)} />)
+    expect(document.querySelector(".location-ref-pill__name")?.textContent).toBe("@Old Library")
+  })
+})

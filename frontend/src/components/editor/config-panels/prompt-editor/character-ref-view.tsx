@@ -167,7 +167,17 @@ export function CharacterRefView(props: NodeViewProps) {
     props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
-  const characterDisplay = ref?.label ?? attrs.characterSlug
+  // The @-name must be the BARE character name. `resolveRef` may return a
+  // VARIANT entry whose `label` is the composite "Name / variant" (built in
+  // image-configs.tsx); using it verbatim duplicated the variant — once in the
+  // name and once in the role/variant badge (the "@abi/walking:1 walking" bug).
+  // Prefer the canonical (variant-less) entry's label; else strip a trailing
+  // " / variant" off whatever resolved.
+  const canonicalNameEntry = list.find(
+    (r) => r.characterSlug === attrs.characterSlug && !r.variantSlug && r.label,
+  )
+  const characterDisplay =
+    canonicalNameEntry?.label ?? ref?.label?.split(" / ")[0] ?? attrs.characterSlug
   // Legacy: variantSlug is a real character variant → show the "/variant"
   // segment. Hybrid: that slot holds a ROLE, surfaced via the badge below, so
   // the segment is suppressed (no duplicate "/clothes" + "clothes" badge).
