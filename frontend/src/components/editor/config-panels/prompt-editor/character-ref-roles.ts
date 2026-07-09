@@ -32,25 +32,44 @@ export function characterSwapMenuRoles(
  */
 export { sanitizeRole }
 
+/** The partial attr update a role pick produces. `variantSlug` is OMITTED in
+ *  the `hasVariant` form so `updateAttributes` (which merges partials) leaves
+ *  the pill's real variant untouched. */
+export interface CharacterRefRoleSlots {
+  usageMode: UsageMode | null
+  variantSlug?: string | null
+  role: string | null
+}
+
 /**
- * Map a hybrid role string to the character-ref token slot it occupies. A role
- * goes in EXACTLY ONE slot (mutually exclusive), which is precisely why the D1
- * hybrid resolver reads `usageMode ?? variantSlug` verbatim:
+ * Map a hybrid role string to the character-ref token slot it occupies.
  *
+ * WITHOUT a real variant (`opts.hasVariant` falsy — the pre-existing behavior):
  *   - the role IS a `UsageMode` (`face` / `pose` / `style`) → `usageMode`,
  *     clearing `variantSlug`;
- *   - otherwise (`person` / `clothes` / `hair` / `expression` / a Custom role)
- *     → `variantSlug`, clearing `usageMode`.
+ *   - otherwise (`person` / `clothes` / … / a Custom role) → `variantSlug`,
+ *     clearing `usageMode`.
+ *   A blank role clears all slots (the "Default" state). `role` is always
+ *   cleared on this path — the 4th-segment slot is only meaningful with a
+ *   variant in front of it.
  *
- * Clearing the sibling slot guarantees a role pick can never emit an invalid
- * 4-part `@kira:1:variant:mode` token (which requires a real variant AND a real
- * mode together). An empty/blank role clears both (the "Default" state).
+ * WITH a real variant (`opts.hasVariant` — Variant + Role Separation): the
+ * variant is PRESERVED (the update omits `variantSlug` entirely) and the role
+ * routes to the 4th segment — `usageMode` when it is a mode (`:variant:mode`,
+ * today's valid shape), else the new `role` attr (`:variant:role`). A blank
+ * role clears role+mode but keeps the variant (Default keeps the image).
  */
 export function roleToCharacterRefSlots(
   role: string,
-): { usageMode: UsageMode | null; variantSlug: string | null } {
+  opts?: { hasVariant?: boolean },
+): CharacterRefRoleSlots {
   const r = sanitizeRole(role)
-  if (!r) return { usageMode: null, variantSlug: null }
-  if (isUsageMode(r)) return { usageMode: r, variantSlug: null }
-  return { usageMode: null, variantSlug: r }
+  if (opts?.hasVariant) {
+    if (!r) return { usageMode: null, role: null }
+    if (isUsageMode(r)) return { usageMode: r, role: null }
+    return { usageMode: null, role: r }
+  }
+  if (!r) return { usageMode: null, variantSlug: null, role: null }
+  if (isUsageMode(r)) return { usageMode: r, variantSlug: null, role: null }
+  return { usageMode: null, variantSlug: r, role: null }
 }

@@ -92,15 +92,22 @@ export function CharacterRefView(props: NodeViewProps) {
 
   // Hybrid gate: in "hybrid" format the swap-menu offers curated ROLE presets
   // (+ a Custom… input + Default); in "legacy" it keeps the EXISTING usage-mode
-  // menu unchanged. `roleMenuPresets` is null in legacy. The role lives in
-  // exactly one token slot — `usageMode` XOR `variantSlug` — so the active role
-  // is whichever slot is set (the D1 resolver reads `usageMode ?? variantSlug`).
+  // menu unchanged. `roleMenuPresets` is null in legacy.
   const roleMenuPresets = characterSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
   const isHybrid = roleMenuPresets !== null
   // Non-null in hybrid (the gate returned presets); `[]` in legacy — a single
   // local so the `readonly string[]` cast isn't repeated at each use site.
   const rolePresets: readonly string[] = roleMenuPresets ?? []
-  const currentRole = isHybrid ? (attrs.usageMode ?? attrs.variantSlug) : null
+  // Variant + Role Separation: the pill's variantSlug holds a REAL variant when
+  // it matched an actual variant entry in the wired list (resolveRef returned
+  // that exact entry); otherwise the slot is carrying a ROLE (the pre-existing
+  // 3-part encoding). A real variant shows as the "/variant" segment and role
+  // picks PRESERVE it (4-part token); the active role is the 4th-segment
+  // `role` → `usageMode` → the seg3 role-in-variant-slot.
+  const isRealVariant = !!attrs.variantSlug && ref?.variantSlug === attrs.variantSlug
+  const currentRole = isHybrid
+    ? (attrs.role ?? attrs.usageMode ?? (isRealVariant ? null : attrs.variantSlug))
+    : null
   const isCustomRole = !!currentRole && !CHARACTER_ROLE_PRESETS.includes(currentRole)
 
   // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
@@ -139,25 +146,32 @@ export function CharacterRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
-  // Hybrid role pick: route the role into its single token slot (UsageMode →
-  // usageMode, else variantSlug) and CLEAR the sibling so the slots stay
-  // mutually exclusive (never an invalid 4-part token). Presets pass through
-  // sanitizeRole as a no-op; Custom values get grammar-conformed.
+  // Hybrid role pick. With a REAL variant on the pill the pick PRESERVES it —
+  // the role routes to the 4th segment (usageMode when it's a mode, else the
+  // `role` attr), yielding `@kira:1:walking:clothes` (Variant + Role
+  // Separation). Without one, the pre-existing single-slot routing applies.
+  // Presets pass through sanitizeRole as a no-op; Custom values get
+  // grammar-conformed.
   const setRole = useCallback((role: string) => {
-    props.updateAttributes(roleToCharacterRefSlots(role))
+    props.updateAttributes(roleToCharacterRefSlots(role, { hasVariant: isRealVariant }))
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
 
-  // Hybrid "Default" pick: clear BOTH slots so the token falls back to the
-  // source's default role at execution time (a clean @kira:1).
+  // Hybrid "Default" pick: clear the ROLE slots so the token falls back to the
+  // source's default role. A real variant is KEPT (Default changes what to
+  // take, not which image — swap the image via the thumbnail picker).
   const clearRole = useCallback(() => {
-    props.updateAttributes({ usageMode: null, variantSlug: null })
+    props.updateAttributes(
+      isRealVariant
+        ? { usageMode: null, role: null }
+        : { usageMode: null, variantSlug: null, role: null },
+    )
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
 
   // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
   // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
@@ -180,10 +194,12 @@ export function CharacterRefView(props: NodeViewProps) {
   )
   const characterDisplay =
     canonicalNameEntry?.label ?? ref?.label?.split(" / ")[0] ?? attrs.characterSlug
-  // Legacy: variantSlug is a real character variant → show the "/variant"
-  // segment. Hybrid: that slot holds a ROLE, surfaced via the badge below, so
-  // the segment is suppressed (no duplicate "/clothes" + "clothes" badge).
-  const variantDisplay = !isHybrid && attrs.variantSlug
+  // The "/variant" segment shows whenever variantSlug holds a REAL variant —
+  // legacy (always was) AND hybrid (Variant + Role Separation restores it, now
+  // that the variant coexists with the role badge instead of being the role).
+  // A role-in-variant-slot (hybrid, no real variant) stays suppressed — it
+  // surfaces via the badge, never as a duplicate "/clothes" segment.
+  const variantDisplay = (!isHybrid || isRealVariant) && attrs.variantSlug
     ? (ref?.variantDisplayName && ref.variantDisplayName !== "canonical"
         ? ref.variantDisplayName
         : attrs.variantSlug)
@@ -191,6 +207,7 @@ export function CharacterRefView(props: NodeViewProps) {
 
   const tooltip = [
     `@${attrs.characterSlug}:${attrs.imageIndex}`,
+    isHybrid && isRealVariant && `variant: ${attrs.variantSlug}`,
     isHybrid
       ? currentRole && `role: ${currentRole}`
       : attrs.variantSlug && `variant: ${attrs.variantSlug}`,

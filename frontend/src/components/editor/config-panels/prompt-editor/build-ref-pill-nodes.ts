@@ -57,9 +57,14 @@ export function buildRefPillNodes(
     let roleForNode: string | null
     let locModeForNode: LocationUsageMode | null
     if (item.role != null) {
-      const slots = roleToLocationRefSlots(item.role)
-      bucket = slots.bucket
-      variant = slots.variant
+      // Variant + Role Separation: a role picked on a VARIANT item keeps the
+      // variant — the variant picks the image, the role picks the phrase
+      // (`@lib:1:weather/rain:lighting`). Role-on-canonical keeps the
+      // pre-existing routing (role XOR mode, bucket/variant cleared).
+      const hasVariant = !!(item.locationVariantBucket && item.locationVariantSlug)
+      const slots = roleToLocationRefSlots(item.role, { hasVariant })
+      bucket = hasVariant ? item.locationVariantBucket ?? null : null
+      variant = hasVariant ? item.locationVariantSlug ?? null : null
       roleForNode = slots.role
       locModeForNode = slots.usageMode
     } else {
@@ -92,10 +97,17 @@ export function buildRefPillNodes(
   if (item.source === "character" && item.characterSlug) {
     let variantSlugForNode: string | null
     let modeForNode: UsageMode | null
+    let roleForNode: string | null = null
     if (item.role != null) {
-      const slots = roleToCharacterRefSlots(item.role)
-      variantSlugForNode = slots.variantSlug
+      // Variant + Role Separation: a role picked on a VARIANT item keeps the
+      // variant — the variant picks the image, the role picks the phrase
+      // (`@kira:1:walking:clothes`). Role-on-canonical keeps the pre-existing
+      // routing (usageMode XOR variantSlug).
+      const hasVariant = !!item.variantSlug
+      const slots = roleToCharacterRefSlots(item.role, { hasVariant })
+      variantSlugForNode = hasVariant ? item.variantSlug ?? null : slots.variantSlug ?? null
       modeForNode = slots.usageMode
+      roleForNode = slots.role
     } else {
       variantSlugForNode = item.variantSlug ?? null
       const explicitMode = item.usageMode
@@ -113,6 +125,7 @@ export function buildRefPillNodes(
           imageIndex: mentionIndex,
           variantSlug: variantSlugForNode,
           usageMode: modeForNode,
+          role: roleForNode,
         },
       },
       ...trailing,

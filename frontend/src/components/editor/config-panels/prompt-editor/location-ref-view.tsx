@@ -162,26 +162,36 @@ export function LocationRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
-  // Hybrid role pick: route the role into its single token slot (a
-  // LocationUsageMode → `usageMode`, else `role`) and CLEAR every sibling so
-  // the slots stay mutually exclusive (never an invalid multi-segment token).
-  // Presets pass through sanitizeLocationRole as a no-op; Custom values get
-  // grammar-conformed to the bare-slug segment.
-  const setRole = useCallback((rolePhrase: string) => {
-    props.updateAttributes(roleToLocationRefSlots(rolePhrase))
-    setMenuAnchor(null)
-    setCustomMode(false)
-    setCustomText("")
-  }, [props])
+  // Variant + Role Separation: bucket/variant only ever hold a REAL variant on
+  // location pills (roles live in `role`/`usageMode`), so their presence IS the
+  // has-variant signal.
+  const isRealVariant = !!(attrs.bucket && attrs.variant)
 
-  // Hybrid "Default" pick: clear ALL override slots so the pill falls back to
-  // the location's canonical reference (a clean @loc:1) at execution time.
-  const clearRole = useCallback(() => {
-    props.updateAttributes({ role: null, usageMode: null, bucket: null, variant: null })
+  // Hybrid role pick. With a REAL bucket/variant the pick PRESERVES it — the
+  // role routes to the 4th segment (`@lib:1:weather/rain:lighting`). Without
+  // one, the pre-existing single-slot routing applies. Presets pass through
+  // sanitizeLocationRole as a no-op; Custom values get grammar-conformed.
+  const setRole = useCallback((rolePhrase: string) => {
+    props.updateAttributes(roleToLocationRefSlots(rolePhrase, { hasVariant: isRealVariant }))
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
+
+  // Hybrid "Default" pick: clear the ROLE slots so the pill falls back to the
+  // location's default at execution time. A real bucket/variant is KEPT
+  // (Default changes what to take, not which image — swap the image via the
+  // thumbnail picker).
+  const clearRole = useCallback(() => {
+    props.updateAttributes(
+      isRealVariant
+        ? { role: null, usageMode: null }
+        : { role: null, usageMode: null, bucket: null, variant: null },
+    )
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props, isRealVariant])
 
   // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
   // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
