@@ -89,7 +89,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {filtered.map((wf) => (
+          {filtered.map((wf, i) => (
             <div
               key={wf.id}
               className="group relative rounded-lg border bg-card hover:bg-accent/30 transition-colors overflow-hidden"
@@ -98,7 +98,9 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
                 to={`/projects/${wf.projectId}/workflows/${wf.id}`}
                 className="block"
               >
-                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} />
+                {/* First row (xl:grid-cols-5) is the LCP candidate — fetch it
+                    at high priority. */}
+                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} priority={i < 5} />
                 <div className="px-3 py-2">
                   <p className="text-sm font-medium truncate">{wf.name}</p>
                   <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
