@@ -17,6 +17,8 @@ import {
   sanitizeRole,
 } from "./character-ref-roles"
 import type { CharacterRefAttrs } from "./character-ref-extension"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 /** Subset of `RefImageItem` the pill needs to render. Loose shape because the
  *  extension stores the autocomplete list keyed by `characterSlug + variantSlug`
@@ -90,15 +92,22 @@ export function CharacterRefView(props: NodeViewProps) {
 
   // Hybrid gate: in "hybrid" format the swap-menu offers curated ROLE presets
   // (+ a Custom… input + Default); in "legacy" it keeps the EXISTING usage-mode
-  // menu unchanged. `roleMenuPresets` is null in legacy. The role lives in
-  // exactly one token slot — `usageMode` XOR `variantSlug` — so the active role
-  // is whichever slot is set (the D1 resolver reads `usageMode ?? variantSlug`).
+  // menu unchanged. `roleMenuPresets` is null in legacy.
   const roleMenuPresets = characterSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
   const isHybrid = roleMenuPresets !== null
   // Non-null in hybrid (the gate returned presets); `[]` in legacy — a single
   // local so the `readonly string[]` cast isn't repeated at each use site.
   const rolePresets: readonly string[] = roleMenuPresets ?? []
-  const currentRole = isHybrid ? (attrs.usageMode ?? attrs.variantSlug) : null
+  // Variant + Role Separation: the pill's variantSlug holds a REAL variant when
+  // it matched an actual variant entry in the wired list (resolveRef returned
+  // that exact entry); otherwise the slot is carrying a ROLE (the pre-existing
+  // 3-part encoding). A real variant shows as the "/variant" segment and role
+  // picks PRESERVE it (4-part token); the active role is the 4th-segment
+  // `role` → `usageMode` → the seg3 role-in-variant-slot.
+  const isRealVariant = !!attrs.variantSlug && ref?.variantSlug === attrs.variantSlug
+  const currentRole = isHybrid
+    ? (attrs.role ?? attrs.usageMode ?? (isRealVariant ? null : attrs.variantSlug))
+    : null
   const isCustomRole = !!currentRole && !CHARACTER_ROLE_PRESETS.includes(currentRole)
 
   // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
@@ -137,25 +146,32 @@ export function CharacterRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
-  // Hybrid role pick: route the role into its single token slot (UsageMode →
-  // usageMode, else variantSlug) and CLEAR the sibling so the slots stay
-  // mutually exclusive (never an invalid 4-part token). Presets pass through
-  // sanitizeRole as a no-op; Custom values get grammar-conformed.
+  // Hybrid role pick. With a REAL variant on the pill the pick PRESERVES it —
+  // the role routes to the 4th segment (usageMode when it's a mode, else the
+  // `role` attr), yielding `@kira:1:walking:clothes` (Variant + Role
+  // Separation). Without one, the pre-existing single-slot routing applies.
+  // Presets pass through sanitizeRole as a no-op; Custom values get
+  // grammar-conformed.
   const setRole = useCallback((role: string) => {
-    props.updateAttributes(roleToCharacterRefSlots(role))
+    props.updateAttributes(roleToCharacterRefSlots(role, { hasVariant: isRealVariant }))
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
 
-  // Hybrid "Default" pick: clear BOTH slots so the token falls back to the
-  // source's default role at execution time (a clean @kira:1).
+  // Hybrid "Default" pick: clear the ROLE slots so the token falls back to the
+  // source's default role. A real variant is KEPT (Default changes what to
+  // take, not which image — swap the image via the thumbnail picker).
   const clearRole = useCallback(() => {
-    props.updateAttributes({ usageMode: null, variantSlug: null })
+    props.updateAttributes(
+      isRealVariant
+        ? { usageMode: null, role: null }
+        : { usageMode: null, variantSlug: null, role: null },
+    )
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
 
   // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
   // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
@@ -167,11 +183,23 @@ export function CharacterRefView(props: NodeViewProps) {
     props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
-  const characterDisplay = ref?.label ?? attrs.characterSlug
-  // Legacy: variantSlug is a real character variant → show the "/variant"
-  // segment. Hybrid: that slot holds a ROLE, surfaced via the badge below, so
-  // the segment is suppressed (no duplicate "/clothes" + "clothes" badge).
-  const variantDisplay = !isHybrid && attrs.variantSlug
+  // The @-name must be the BARE character name. `resolveRef` may return a
+  // VARIANT entry whose `label` is the composite "Name / variant" (built in
+  // image-configs.tsx); using it verbatim duplicated the variant — once in the
+  // name and once in the role/variant badge (the "@abi/walking:1 walking" bug).
+  // Prefer the canonical (variant-less) entry's label; else strip a trailing
+  // " / variant" off whatever resolved.
+  const canonicalNameEntry = list.find(
+    (r) => r.characterSlug === attrs.characterSlug && !r.variantSlug && r.label,
+  )
+  const characterDisplay =
+    canonicalNameEntry?.label ?? ref?.label?.split(" / ")[0] ?? attrs.characterSlug
+  // The "/variant" segment shows whenever variantSlug holds a REAL variant —
+  // legacy (always was) AND hybrid (Variant + Role Separation restores it, now
+  // that the variant coexists with the role badge instead of being the role).
+  // A role-in-variant-slot (hybrid, no real variant) stays suppressed — it
+  // surfaces via the badge, never as a duplicate "/clothes" segment.
+  const variantDisplay = (!isHybrid || isRealVariant) && attrs.variantSlug
     ? (ref?.variantDisplayName && ref.variantDisplayName !== "canonical"
         ? ref.variantDisplayName
         : attrs.variantSlug)
@@ -179,6 +207,7 @@ export function CharacterRefView(props: NodeViewProps) {
 
   const tooltip = [
     `@${attrs.characterSlug}:${attrs.imageIndex}`,
+    isHybrid && isRealVariant && `variant: ${attrs.variantSlug}`,
     isHybrid
       ? currentRole && `role: ${currentRole}`
       : attrs.variantSlug && `variant: ${attrs.variantSlug}`,
@@ -188,6 +217,9 @@ export function CharacterRefView(props: NodeViewProps) {
   ]
     .filter(Boolean)
     .join(" • ")
+
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
 
   return (
     <NodeViewWrapper
@@ -208,11 +240,29 @@ export function CharacterRefView(props: NodeViewProps) {
           alt=""
           className="character-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       ) : (
-        <span className="character-ref-pill__thumb-broken" aria-hidden>?</span>
+        <span
+          className="character-ref-pill__thumb-broken"
+          aria-hidden
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
+        >?</span>
       )}
       <button
         type="button"
@@ -233,7 +283,9 @@ export function CharacterRefView(props: NodeViewProps) {
         )}
         {isHybrid
           ? currentRole && (
-              <span className="character-ref-pill__mode-badge">{currentRole}</span>
+              <span className="character-ref-pill__mode-badge">
+                {currentRole === "ref-only" ? "ref" : currentRole}
+              </span>
             )
           : attrs.usageMode && (
               <span className="character-ref-pill__mode-badge">{usageModeLabel(attrs.usageMode)}</span>
@@ -485,6 +537,14 @@ export function CharacterRefView(props: NodeViewProps) {
           )
         })(),
         document.body,
+      )}
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
     </NodeViewWrapper>
   )

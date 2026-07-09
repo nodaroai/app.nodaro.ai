@@ -289,6 +289,12 @@ function resolveCharacterMentionsHybrid(
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
     if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
+    // Variant + Role Separation: an explicit 4th-segment ROLE
+    // (`@kira:1:walking:clothes`) wins outright and coexists with the variant —
+    // the variant picked the image (variantMatch above), the role picks the
+    // phrase. Used VERBATIM (curated or custom), mirroring the seg3 custom-role
+    // relaxation below.
+    const explicitRole = (t.role ?? "").trim()
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
     // Custom roles survive VERBATIM (Unified Reference Roles, Phase D). A
     // non-empty segment is the role when it is a curated preset (face/pose/style
@@ -299,10 +305,11 @@ function resolveCharacterMentionsHybrid(
     // face-pose/emotion/name/none) fall back to the NODE default: the character
     // node's `defaultRole` (hybrid dropdown pick, verbatim) → its
     // `defaultUsageMode`-derived role → the source default ("person") — via
-    // `resolveDefaultRole` (Character Node Role+Lock). Precedence: per-mention
-    // token role → node defaultRole → defaultUsageMode-derived → source default.
-    const role =
-      segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
+    // `resolveDefaultRole` (Character Node Role+Lock). Precedence: seg4 role →
+    // seg3 token role → node defaultRole → defaultUsageMode-derived → source default.
+    const role = explicitRole
+      ? explicitRole
+      : segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
         ? segment
         : resolveDefaultRole(match.defaultRole, match.defaultUsageMode, "wired-character")
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })

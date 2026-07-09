@@ -451,3 +451,13 @@ describe("SuggestionList — flat search (any query)", () => {
     expect(command.mock.calls[0][0].locationUsageMode).toBeUndefined()
   })
 })
+
+describe("initial side-preview (issue 3)", () => {
+  it("shows the selected row's preview immediately on open — no interaction required", () => {
+    // Regression: the preview anchor was read from listRef DURING render, so it
+    // was null on the first commit (refs attach after commit) and the preview
+    // only appeared after the selection moved. It must be there on open.
+    renderList()
+    expect(screen.getByTestId("ref-preview-portal")).toBeInTheDocument()
+  })
+})

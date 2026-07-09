@@ -17,6 +17,8 @@ import {
   sanitizeLocationRole,
 } from "./location-ref-roles"
 import type { LocationRefAttrs } from "./location-ref-extension"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 /**
  * Subset of `RefImageItem` the location pill needs to render. Loose shape
@@ -160,26 +162,36 @@ export function LocationRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
-  // Hybrid role pick: route the role into its single token slot (a
-  // LocationUsageMode → `usageMode`, else `role`) and CLEAR every sibling so
-  // the slots stay mutually exclusive (never an invalid multi-segment token).
-  // Presets pass through sanitizeLocationRole as a no-op; Custom values get
-  // grammar-conformed to the bare-slug segment.
-  const setRole = useCallback((rolePhrase: string) => {
-    props.updateAttributes(roleToLocationRefSlots(rolePhrase))
-    setMenuAnchor(null)
-    setCustomMode(false)
-    setCustomText("")
-  }, [props])
+  // Variant + Role Separation: bucket/variant only ever hold a REAL variant on
+  // location pills (roles live in `role`/`usageMode`), so their presence IS the
+  // has-variant signal.
+  const isRealVariant = !!(attrs.bucket && attrs.variant)
 
-  // Hybrid "Default" pick: clear ALL override slots so the pill falls back to
-  // the location's canonical reference (a clean @loc:1) at execution time.
-  const clearRole = useCallback(() => {
-    props.updateAttributes({ role: null, usageMode: null, bucket: null, variant: null })
+  // Hybrid role pick. With a REAL bucket/variant the pick PRESERVES it — the
+  // role routes to the 4th segment (`@lib:1:weather/rain:lighting`). Without
+  // one, the pre-existing single-slot routing applies. Presets pass through
+  // sanitizeLocationRole as a no-op; Custom values get grammar-conformed.
+  const setRole = useCallback((rolePhrase: string) => {
+    props.updateAttributes(roleToLocationRefSlots(rolePhrase, { hasVariant: isRealVariant }))
     setMenuAnchor(null)
     setCustomMode(false)
     setCustomText("")
-  }, [props])
+  }, [props, isRealVariant])
+
+  // Hybrid "Default" pick: clear the ROLE slots so the pill falls back to the
+  // location's default at execution time. A real bucket/variant is KEPT
+  // (Default changes what to take, not which image — swap the image via the
+  // thumbnail picker).
+  const clearRole = useCallback(() => {
+    props.updateAttributes(
+      isRealVariant
+        ? { role: null, usageMode: null }
+        : { role: null, usageMode: null, bucket: null, variant: null },
+    )
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props, isRealVariant])
 
   // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
   // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
@@ -191,7 +203,16 @@ export function LocationRefView(props: NodeViewProps) {
     props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
-  const locationDisplay = ref?.label ?? attrs.locationSlug
+  // Bare location name for the @-label (same fix as the character pill):
+  // `resolveRef` may return a VARIANT entry whose `label` is the composite
+  // "Name / variant" (built in image-configs.tsx); using it verbatim duplicated
+  // the variant — once in the name and once in the /variant segment. Prefer the
+  // canonical (variant-less) entry's label; else strip a trailing " / variant".
+  const canonicalNameEntry = list.find(
+    (r) => r.locationSlug === attrs.locationSlug && !r.locationVariantBucket && r.label,
+  )
+  const locationDisplay =
+    canonicalNameEntry?.label ?? ref?.label?.split(" / ")[0] ?? attrs.locationSlug
   const variantDisplay = attrs.bucket && attrs.variant
     ? (ref?.locationVariantDisplayName && ref.locationVariantDisplayName !== "canonical"
         ? ref.locationVariantDisplayName
@@ -210,6 +231,9 @@ export function LocationRefView(props: NodeViewProps) {
   ]
     .filter(Boolean)
     .join(" • ")
+
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
 
   return (
     <NodeViewWrapper
@@ -231,11 +255,29 @@ export function LocationRefView(props: NodeViewProps) {
           alt=""
           className="location-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       ) : (
-        <span className="location-ref-pill__thumb-broken" aria-hidden>?</span>
+        <span
+          className="location-ref-pill__thumb-broken"
+          aria-hidden
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
+        >?</span>
       )}
       <button
         type="button"
@@ -256,7 +298,9 @@ export function LocationRefView(props: NodeViewProps) {
         )}
         {isHybrid
           ? currentRolePhrase && (
-              <span className="location-ref-pill__mode-badge">{currentRolePhrase}</span>
+              <span className="location-ref-pill__mode-badge">
+                {currentRolePhrase === "ref-only" ? "ref" : currentRolePhrase}
+              </span>
             )
           : attrs.usageMode && (
               <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>
@@ -510,6 +554,14 @@ export function LocationRefView(props: NodeViewProps) {
           )
         })(),
         document.body,
+      )}
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
     </NodeViewWrapper>
   )

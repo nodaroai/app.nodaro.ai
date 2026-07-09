@@ -1,4 +1,4 @@
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, characterMentionableAssetArrays, resolveEffectiveSourceType, FRAME_TARGET_HANDLES } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, characterMentionableAssetArrays, resolveEffectiveSourceType, sourceRefKey, FRAME_TARGET_HANDLES } from "@nodaro/shared"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
 import { characterLockToRefLock } from "@nodaro/prompts"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
@@ -234,8 +234,12 @@ export function buildImageConnectedReferences(params: {
     // approved main image lives in that field rather than generatedImageUrl.
     const url = entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) || ""
     if (!url) continue
-    map.set(s.id, {
-      id: s.id,
+    // Handle-scoped key so an entity node wired via BOTH its identity handle
+    // (keyed by node id above) and its `image` handle (here, demoted to
+    // wired-image) produces TWO refs instead of one clobbering the other.
+    const refKey = sourceRefKey(s.id, s.sourceHandle, s.type)
+    map.set(refKey, {
+      id: refKey,
       defaultName: s.label || s.type,
       source: wiredSourceTypeMap[effectiveType],
       description: nd.description as string | undefined,
