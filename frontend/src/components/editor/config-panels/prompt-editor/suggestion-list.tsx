@@ -1,6 +1,6 @@
 "use client"
 
-import { forwardRef, useImperativeHandle, useState, useEffect, useMemo, useCallback } from "react"
+import { forwardRef, useImperativeHandle, useState, useEffect, useLayoutEffect, useMemo, useCallback } from "react"
 import { USAGE_MODES, usageModeLabel, LOCATION_USAGE_MODES, locationUsageModeLabel, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
@@ -202,6 +202,22 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
   function SuggestionList({ items, query, command, onDrillChange }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
     const listRef = useScrollActiveOptionIntoView<HTMLDivElement>(selectedIndex)
+    // The side-preview portal anchors to the list's on-screen rect. Reading the
+    // ref DURING render left the anchor null on the first commit (refs attach
+    // after commit), so the preview only appeared once the selection moved
+    // (issue 3). Measure post-commit — every commit, it's one rect read — and
+    // update state only when the rect actually moved so this can't loop.
+    const [listRect, setListRect] = useState<DOMRect | null>(null)
+    useLayoutEffect(() => {
+      const next = listRef.current?.getBoundingClientRect() ?? null
+      setListRect((prev) =>
+        prev && next
+          && prev.top === next.top && prev.left === next.left
+          && prev.width === next.width && prev.height === next.height
+          ? prev
+          : next,
+      )
+    })
     // Drill-in state — three independent levels split across two trees:
     //   `drillCharacterSlug` (character level 2: variant list).
     //   `drillVariant` (character level 3: mode picker).
@@ -1109,7 +1125,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             follows both hover and keyboard navigation via selectedIndex. */}
         <RefPreviewPortal
           url={rowImageUrl(displayRows[selectedIndex])}
-          anchor={listRef.current?.getBoundingClientRect() ?? null}
+          anchor={listRect}
           placement="side"
         />
       </div>
