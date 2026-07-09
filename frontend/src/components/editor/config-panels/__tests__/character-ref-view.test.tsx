@@ -178,6 +178,20 @@ describe("CharacterRefView — HYBRID role menu", () => {
     // In hybrid the variant slot holds a role — no duplicate "/clothes" segment.
     expect(document.querySelector(".character-ref-pill__variant")).toBeNull()
   })
+
+  it("renders the BARE character name for a variant pick — variant shows once (not '@abi/walking:1 walking')", () => {
+    // Regression: resolveRef returns the VARIANT entry whose `label` is the
+    // composite "Abi / walking" (built in image-configs.tsx). Using it verbatim
+    // as the @-name duplicated the variant — once in the name, once in the badge.
+    const refs: MockRefEntry[] = [
+      { url: "https://cdn/abi.png", characterSlug: "abi", label: "Abi" },
+      { url: "https://cdn/abi-walking.png", characterSlug: "abi", variantSlug: "walking", label: "Abi / walking" },
+    ]
+    render(<CharacterRefView {...mockProps({ characterSlug: "abi", variantSlug: "walking" }, refs)} />)
+    expect(document.querySelector(".character-ref-pill__name")?.textContent).toBe("@Abi")
+    // The variant is surfaced exactly once, on the badge.
+    expect(document.querySelector(".character-ref-pill__mode-badge")?.textContent).toBe("walking")
+  })
 })
 
 describe("CharacterRefView — LEGACY menu unchanged", () => {

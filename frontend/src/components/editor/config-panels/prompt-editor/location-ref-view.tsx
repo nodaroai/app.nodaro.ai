@@ -191,7 +191,16 @@ export function LocationRefView(props: NodeViewProps) {
     props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
-  const locationDisplay = ref?.label ?? attrs.locationSlug
+  // Bare location name for the @-label (same fix as the character pill):
+  // `resolveRef` may return a VARIANT entry whose `label` is the composite
+  // "Name / variant" (built in image-configs.tsx); using it verbatim duplicated
+  // the variant — once in the name and once in the /variant segment. Prefer the
+  // canonical (variant-less) entry's label; else strip a trailing " / variant".
+  const canonicalNameEntry = list.find(
+    (r) => r.locationSlug === attrs.locationSlug && !r.locationVariantBucket && r.label,
+  )
+  const locationDisplay =
+    canonicalNameEntry?.label ?? ref?.label?.split(" / ")[0] ?? attrs.locationSlug
   const variantDisplay = attrs.bucket && attrs.variant
     ? (ref?.locationVariantDisplayName && ref.locationVariantDisplayName !== "canonical"
         ? ref.locationVariantDisplayName
