@@ -5,9 +5,13 @@ import { PreviewVideo } from "@/components/ui/preview-video"
 
 interface WorkflowThumbnailProps {
   readonly thumbnailUrl: string | null
+  /** Above-the-fold thumbnail (first row of a grid). Fetches the image at high
+   *  priority so it can be the LCP element without waiting behind other
+   *  requests. See CachedImage's `priority` prop. */
+  readonly priority?: boolean
 }
 
-export function WorkflowThumbnail({ thumbnailUrl }: WorkflowThumbnailProps) {
+export function WorkflowThumbnail({ thumbnailUrl, priority }: WorkflowThumbnailProps) {
   return (
     <div className="aspect-[4/3] bg-muted/50 overflow-hidden">
       {thumbnailUrl ? (
@@ -22,6 +26,7 @@ export function WorkflowThumbnail({ thumbnailUrl }: WorkflowThumbnailProps) {
             className="w-full h-full object-cover"
             thumbnail
             thumbnailWidth={320}
+            priority={priority}
           />
         )
       ) : (
