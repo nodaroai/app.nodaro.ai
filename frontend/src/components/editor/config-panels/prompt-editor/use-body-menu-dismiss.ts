@@ -41,14 +41,27 @@ export function useBodyMenuDismiss(
       onDismissRef.current()
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onDismissRef.current()
+      if (e.key !== "Escape") return
+      // Let a text field INSIDE the menu keep its own Escape (e.g. the Custom…
+      // input's Escape-to-cancel) — don't dismiss the whole menu from there.
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA") && menuRef.current?.contains(t)) return
+      // CAPTURE phase (+ stopPropagation): the ProseMirror editor — and a host
+      // Radix dialog — consume Escape on the BUBBLE path before a bubble-phase
+      // document listener ever sees it, so these body-portaled menus never
+      // closed on Escape. Capture runs first, regardless of where focus is, and
+      // stopPropagation keeps Escape from also hitting the editor / closing the
+      // dialog. (Verified: the keydown reaches document capture with the menu open.)
+      e.preventDefault()
+      e.stopPropagation()
+      onDismissRef.current()
     }
     window.addEventListener("pointerdown", onDown, { capture: true })
-    document.addEventListener("keydown", onKey)
+    document.addEventListener("keydown", onKey, { capture: true })
     const detachScroll = menuRef.current ? escapeScrollLock(menuRef.current) : undefined
     return () => {
       window.removeEventListener("pointerdown", onDown, { capture: true })
-      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("keydown", onKey, { capture: true })
       detachScroll?.()
     }
   }, [menuAnchor, menuRef])

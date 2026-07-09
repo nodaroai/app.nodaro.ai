@@ -17,6 +17,8 @@ import {
   sanitizeRole,
 } from "./character-ref-roles"
 import type { CharacterRefAttrs } from "./character-ref-extension"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 /** Subset of `RefImageItem` the pill needs to render. Loose shape because the
  *  extension stores the autocomplete list keyed by `characterSlug + variantSlug`
@@ -199,6 +201,9 @@ export function CharacterRefView(props: NodeViewProps) {
     .filter(Boolean)
     .join(" • ")
 
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
+
   return (
     <NodeViewWrapper
       as="span"
@@ -218,11 +223,29 @@ export function CharacterRefView(props: NodeViewProps) {
           alt=""
           className="character-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       ) : (
-        <span className="character-ref-pill__thumb-broken" aria-hidden>?</span>
+        <span
+          className="character-ref-pill__thumb-broken"
+          aria-hidden
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
+        >?</span>
       )}
       <button
         type="button"
@@ -497,6 +520,14 @@ export function CharacterRefView(props: NodeViewProps) {
           )
         })(),
         document.body,
+      )}
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
     </NodeViewWrapper>
   )

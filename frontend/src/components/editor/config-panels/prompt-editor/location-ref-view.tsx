@@ -17,6 +17,8 @@ import {
   sanitizeLocationRole,
 } from "./location-ref-roles"
 import type { LocationRefAttrs } from "./location-ref-extension"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 /**
  * Subset of `RefImageItem` the location pill needs to render. Loose shape
@@ -220,6 +222,9 @@ export function LocationRefView(props: NodeViewProps) {
     .filter(Boolean)
     .join(" • ")
 
+  // Thumbnail click → the reference swap picker (issue 4).
+  const picker = useReferenceSwapPicker(props)
+
   return (
     <NodeViewWrapper
       as="span"
@@ -240,11 +245,29 @@ export function LocationRefView(props: NodeViewProps) {
           alt=""
           className="location-ref-pill__thumb"
           draggable={false}
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
           onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
           onMouseLeave={() => setHoverAnchor(null)}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setHoverAnchor(null)
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
         />
       ) : (
-        <span className="location-ref-pill__thumb-broken" aria-hidden>?</span>
+        <span
+          className="location-ref-pill__thumb-broken"
+          aria-hidden
+          style={{ cursor: "pointer" }}
+          title="Click to swap reference"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            picker.openPicker(e.currentTarget.getBoundingClientRect())
+          }}
+        >?</span>
       )}
       <button
         type="button"
@@ -521,6 +544,14 @@ export function LocationRefView(props: NodeViewProps) {
           )
         })(),
         document.body,
+      )}
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
     </NodeViewWrapper>
   )

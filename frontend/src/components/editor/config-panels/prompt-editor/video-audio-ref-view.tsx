@@ -7,6 +7,8 @@ import { Film, Music } from "lucide-react"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
+import { ReferencePickerMenu } from "./reference-picker-menu"
+import { useReferenceSwapPicker } from "./use-reference-picker"
 
 /**
  * React node view for the `{video:N:label}` / `{audio:N:label}` atomic pills —
@@ -112,6 +114,10 @@ export function VideoAudioRefView(props: NodeViewProps) {
 
   const Icon = kind === "audio" ? Music : Film
 
+  // Icon click → the reference swap picker (issue 4). Video/audio chips have no
+  // still thumbnail, so the modality icon is the swap target.
+  const picker = useReferenceSwapPicker(props)
+
   return (
     <NodeViewWrapper
       as="span"
@@ -121,7 +127,16 @@ export function VideoAudioRefView(props: NodeViewProps) {
       data-ref-label={attrs.label}
       title={`${kind} ${attrs.refIndex}`}
     >
-      <Icon className={`${kind}-ref-pill__icon`} aria-hidden />
+      <Icon
+        className={`${kind}-ref-pill__icon`}
+        aria-hidden
+        style={{ cursor: "pointer" }}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          picker.openPicker(e.currentTarget.getBoundingClientRect())
+        }}
+      />
       <button
         type="button"
         className={`${kind}-ref-pill__label`}
@@ -273,6 +288,14 @@ export function VideoAudioRefView(props: NodeViewProps) {
           )
         })(),
         document.body,
+      )}
+      {picker.pickerAnchor && (
+        <ReferencePickerMenu
+          items={picker.items}
+          anchor={picker.pickerAnchor}
+          onSelect={picker.swap}
+          onClose={picker.closePicker}
+        />
       )}
     </NodeViewWrapper>
   )
