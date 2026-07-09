@@ -101,6 +101,15 @@ export function VideoAudioRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
+  // "Ref only": clear the label so the token is bare `{video:N}` / `{audio:N}`,
+  // which the resolver injects as just "@video_N" / "@audio_N" (no wrapper).
+  const clearLabel = useCallback(() => {
+    props.updateAttributes({ label: "" })
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props])
+
   const Icon = kind === "audio" ? Music : Film
 
   return (
@@ -144,7 +153,7 @@ export function VideoAudioRefView(props: NodeViewProps) {
           // Estimate menu height: presets list + separator + custom row,
           // ~32px per row. Used to flip the menu above when the viewport
           // doesn't have room below.
-          const MENU_H_ESTIMATE = (presets.length + 2) * 32 + 16
+          const MENU_H_ESTIMATE = (presets.length + 3) * 32 + 16
           const MARGIN = 4
           const vh = window.innerHeight
           const vw = window.innerWidth
@@ -169,6 +178,24 @@ export function VideoAudioRefView(props: NodeViewProps) {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              <button
+                key="__ref-only__"
+                type="button"
+                role="menuitem"
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                  attrs.label === ""
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearLabel()
+                }}
+              >
+                <span>Ref only</span>
+                {attrs.label === "" && <span aria-hidden>✓</span>}
+              </button>
+              <div className="my-1 border-t border-border/60" />
               {presets.map((preset) => (
                 <button
                   key={preset}

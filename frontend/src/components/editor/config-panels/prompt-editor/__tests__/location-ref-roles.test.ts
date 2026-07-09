@@ -73,6 +73,7 @@ function tokenFor(slots: {
 describe("locationSwapMenuRoles — hybrid/legacy gate", () => {
   it("returns the curated wired-location role presets in hybrid", () => {
     expect(locationSwapMenuRoles("hybrid")).toEqual([
+      "ref-only",
       "background",
       "atmosphere",
       "as-is",

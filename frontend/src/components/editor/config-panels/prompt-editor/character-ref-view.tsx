@@ -233,7 +233,9 @@ export function CharacterRefView(props: NodeViewProps) {
         )}
         {isHybrid
           ? currentRole && (
-              <span className="character-ref-pill__mode-badge">{currentRole}</span>
+              <span className="character-ref-pill__mode-badge">
+                {currentRole === "ref-only" ? "ref" : currentRole}
+              </span>
             )
           : attrs.usageMode && (
               <span className="character-ref-pill__mode-badge">{usageModeLabel(attrs.usageMode)}</span>

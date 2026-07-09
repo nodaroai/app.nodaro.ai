@@ -205,8 +205,11 @@ export interface ConnectedReference {
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */
 export const DEFAULT_LABEL_BY_SOURCE: Record<ReferenceSource, string> = {
-  "manual": "object",
-  "wired-image": "object",
+  // Media references default to "ref-only" — the empty label, i.e. a bare
+  // {image:N} token that injects only "reference image A" (image) / "@image_N"
+  // (video) with no descriptive role phrase. Pick a role on the pill to change.
+  "manual": "",
+  "wired-image": "",
   "wired-character": "person",
   "wired-face": "face",
   "wired-object": "object",

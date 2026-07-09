@@ -1008,7 +1008,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               ? `@video:${item.index}`
               : item.source === "audio"
                 ? `@audio:${item.index}`
-                : `@image:${item.index}:${item.defaultLabel}`
+                : `@image:${item.index}${item.defaultLabel ? `:${item.defaultLabel}` : ""}`
           // In flat-search mode, the parent character label is hoisted into
           // the row so the user can distinguish identically-named variants
           // across characters ("Kira / smile" vs "Aria / smile"). The normal

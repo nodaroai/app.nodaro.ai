@@ -95,6 +95,15 @@ export function ImageRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
+  // "Ref only": clear the label so the token is bare `{image:N}`, which the
+  // resolver injects as just "reference image A" (no descriptive role phrase).
+  const clearLabel = useCallback(() => {
+    props.updateAttributes({ label: "" })
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props])
+
   return (
     <NodeViewWrapper
       as="span"
@@ -174,7 +183,7 @@ export function ImageRefView(props: NodeViewProps) {
           // Estimate menu height: presets list + separator + custom button or
           // input, ~32px per row. Used to flip the menu above the anchor when
           // the viewport doesn't have room below.
-          const MENU_H_ESTIMATE = (LABEL_PRESETS.length + 2) * 32 + 16
+          const MENU_H_ESTIMATE = (LABEL_PRESETS.length + 3) * 32 + 16
           const MARGIN = 4
           const vh = window.innerHeight
           const vw = window.innerWidth
@@ -202,6 +211,24 @@ export function ImageRefView(props: NodeViewProps) {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              <button
+                key="__ref-only__"
+                type="button"
+                role="menuitem"
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                  attrs.label === ""
+                    ? "bg-pink-500/15 text-pink-700 dark:text-pink-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearLabel()
+                }}
+              >
+                <span>Ref only</span>
+                {attrs.label === "" && <span aria-hidden>✓</span>}
+              </button>
+              <div className="my-1 border-t border-border/60" />
               {LABEL_PRESETS.map((preset) => (
                 <button
                   key={preset}

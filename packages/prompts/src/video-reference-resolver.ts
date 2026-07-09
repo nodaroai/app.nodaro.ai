@@ -88,8 +88,8 @@ const REFERENCE_TOKEN_RE = /\{(image|video|audio):(\d+)(?::([a-zA-Z0-9_ -]+))?\}
  *     `stripVideoImageTokens` strip behavior: drop the token, keep the label text.
  *   - in range, label present → `REF_BINDING[kind](label, N)`
  *     (e.g. `the person from @image_2`).
- *   - in range, no label → `the subject in @${kind}_${N}` so the binding still
- *     lands even when the author didn't name the subject.
+ *   - in range, no label → the bare `@${kind}_${N}` (the ref-only default): the
+ *     binding lands with no descriptive wrapper.
  *
  * Runs of 2+ HORIZONTAL whitespace (left behind by a dropped label-less token)
  * collapse to one space, the result is trimmed, and an empty result becomes
@@ -115,7 +115,7 @@ export function resolveReferenceTokens(
         const n = parseInt(nStr, 10)
         if (n < 1 || n > counts[kind]) return label ?? ""
         if (label) return REF_BINDING[kind](label, n)
-        return `the subject in @${kind}_${n}`
+        return `@${kind}_${n}`
       })
       // Horizontal whitespace only — preserve `\n` / `\n\n` block separators.
       .replace(/[^\S\r\n]{2,}/g, " ")
