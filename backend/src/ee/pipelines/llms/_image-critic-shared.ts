@@ -42,7 +42,7 @@ export interface RunImageCriticArgs<TVerdict> {
   globalStyle: ImageCriticGlobalStyle
   task: "character_image" | "location_image"
   systemPrompt: string
-  schema: z.ZodType<TVerdict, z.ZodTypeDef, unknown>
+  schema: z.ZodType<TVerdict, unknown>
 }
 
 export async function runImageCritic<TVerdict>(

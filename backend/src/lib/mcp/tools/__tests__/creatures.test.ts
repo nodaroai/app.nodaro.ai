@@ -23,7 +23,7 @@ vi.mock("../../../config.js", () => ({
 const { registerCreatureTools } = await import("../creatures.js")
 
 const DRAGON_ID = "11111111-1111-4111-8111-111111111111"
-const CANDIDATE_JOB_ID = "00000000-0000-0000-0000-000000000099"
+const CANDIDATE_JOB_ID = "00000000-0000-4000-8000-000000000099"
 
 beforeEach(() => {
   vi.clearAllMocks()

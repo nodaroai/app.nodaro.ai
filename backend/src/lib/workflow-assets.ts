@@ -87,9 +87,9 @@ export const workflowExportSchema = z.object({
   version: z.literal(1),
   exportedAt: z.string().optional(),
   name: z.string().min(1).max(200),
-  nodes: z.array(z.record(z.unknown())),
-  edges: z.array(z.record(z.unknown())),
-  settings: z.record(z.unknown()).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())),
+  edges: z.array(z.record(z.string(), z.unknown())),
+  settings: z.record(z.string(), z.unknown()).optional(),
   assets: z
     .object({
       characters: z.array(exportCharacterSchema),

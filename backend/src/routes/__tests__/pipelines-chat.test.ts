@@ -77,10 +77,10 @@ vi.mock("../../ee/pipelines/llms/chat-refine-postmerge.js", () => ({
 // the `set*` helpers below.
 // ---------------------------------------------------------------------------
 
-const PIPELINE_ID = "00000000-0000-0000-0000-000000000111"
-const STAGE_ID = "00000000-0000-0000-0000-000000000222"
-const USER_TURN_ID = "00000000-0000-0000-0000-000000000333"
-const ASSISTANT_TURN_ID = "00000000-0000-0000-0000-000000000444"
+const PIPELINE_ID = "00000000-0000-4000-8000-000000000111"
+const STAGE_ID = "00000000-0000-4000-8000-000000000222"
+const USER_TURN_ID = "00000000-0000-4000-8000-000000000333"
+const ASSISTANT_TURN_ID = "00000000-0000-4000-8000-000000000444"
 const TEST_USER_ID = "user-1"
 const OTHER_USER_ID = "user-2"
 

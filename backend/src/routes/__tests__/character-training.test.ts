@@ -63,8 +63,8 @@ vi.mock("../../lib/character-lora.js", () => ({
 
 vi.mock("../../lib/storage.js", () => ({ deleteFromR2: vi.fn().mockResolvedValue(undefined) }))
 
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
-const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000002"
+const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+const TEST_CHARACTER_ID = "00000000-0000-4000-8000-000000000002"
 
 let app: FastifyInstance
 

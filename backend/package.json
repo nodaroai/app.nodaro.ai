@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
-    "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@aws-sdk/client-s3": "^3.980.0",
     "@aws-sdk/lib-storage": "^3.991.0",
     "@aws-sdk/s3-request-presigner": "^3.1039.0",
@@ -58,8 +58,7 @@
     "stripe": "^20.4.1",
     "undici": "^6.25.0",
     "youtube-dl-exec": "^3.0.30",
-    "zod": "^3.24.2",
-    "zod-to-json-schema": "^3.25.2",
+    "zod": "^4.4.0",
     "@nodaro/prompts": "*"
   },
   "engines": {

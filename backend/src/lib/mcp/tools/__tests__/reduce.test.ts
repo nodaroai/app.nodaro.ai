@@ -112,7 +112,7 @@ describe("reduce MCP tool", () => {
       inputs: ["x"],
     })
     expect(result.isError).toBe(true)
-    expect(result.content[0]?.text).toContain("invalid_enum_value")
+    expect(result.content[0]?.text).toContain("invalid_value")
     expect(result.content[0]?.text).toContain("strategyId")
   })
 

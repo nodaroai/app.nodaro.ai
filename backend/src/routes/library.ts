@@ -29,7 +29,7 @@ const saveGeneratedBody = z.object({
   url: safeUrlSchema,
   type: z.enum(["image", "video", "audio"]),
   filename: z.string().max(255).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   isLibraryItem: z.boolean().optional().default(false),
 })
 
