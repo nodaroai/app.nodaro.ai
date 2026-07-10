@@ -1235,6 +1235,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
+      bucket: ref.bucket,
       locationSlug: ref.locationSlug,
       locationVariantBucket: ref.locationVariantBucket,
       locationVariantSlug: ref.locationVariantSlug,

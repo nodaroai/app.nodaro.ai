@@ -119,3 +119,64 @@ export function characterMentionableAssetArrays(
     boards: characterBoardItems(data),
   }
 }
+
+/**
+ * DISPLAY order for character asset groups in picker menus (swap-picker,
+ * `@` autocomplete) — boards first (the highest-value identity reference),
+ * then sheets, then the variant buckets in data order.
+ *
+ * DISPLAY ONLY. The data-record key order of
+ * {@link characterMentionableAssetArrays} is payload-numbering-bearing
+ * (`{image:N}` / `@name:N` are positional) and MUST NOT change; menus sort
+ * their rendered rows by this rank instead. The guard test asserts this
+ * list's key set stays identical to the data record's.
+ */
+export const CHARACTER_PICKER_DISPLAY_ORDER: readonly string[] = [
+  "boards",
+  "sheets",
+  ...CHARACTER_VARIANT_ASSET_BUCKETS,
+]
+
+/**
+ * Display rank for a character entry's asset bucket. Canonical entries
+ * (no bucket — the portrait row) lead, then buckets per
+ * {@link CHARACTER_PICKER_DISPLAY_ORDER}; unknown buckets sink to the end.
+ */
+export function characterBucketDisplayRank(bucket: string | undefined): number {
+  if (bucket === undefined) return -1
+  const i = CHARACTER_PICKER_DISPLAY_ORDER.indexOf(bucket)
+  return i === -1 ? CHARACTER_PICKER_DISPLAY_ORDER.length : i
+}
+
+/**
+ * Sort picker entries for display: within each CONTIGUOUS run of entries
+ * sharing a `characterSlug`, order by {@link characterBucketDisplayRank}
+ * (stable within a rank); entries without a slug — and run boundaries —
+ * stay exactly where they are. Runs (not a global sort) because the flat
+ * reference list interleaves characters with uploads/wired images whose
+ * positions are meaningful.
+ */
+export function sortCharacterEntriesForDisplay<
+  T extends { readonly characterSlug?: string; readonly bucket?: string },
+>(items: readonly T[]): T[] {
+  const out: T[] = []
+  let i = 0
+  while (i < items.length) {
+    const slug = items[i].characterSlug
+    if (!slug) {
+      out.push(items[i])
+      i++
+      continue
+    }
+    let j = i
+    while (j < items.length && items[j].characterSlug === slug) j++
+    const run = items.slice(i, j)
+    const ranked = run
+      .map((it, k) => ({ it, k, r: characterBucketDisplayRank(it.bucket) }))
+      .sort((a, b) => a.r - b.r || a.k - b.k)
+      .map((x) => x.it)
+    out.push(...ranked)
+    i = j
+  }
+  return out
+}

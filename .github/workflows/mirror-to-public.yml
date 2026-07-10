@@ -26,8 +26,15 @@ jobs:
         with: { node-version: 22 }
       - name: install gitleaks (secret gate)
         run: |
+          set -euo pipefail
           VER=8.30.1
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          # Pin + verify the gitleaks release artifact (supply-chain integrity):
+          # sha256 from the official gitleaks_${VER}_checksums.txt. `set -e` fails
+          # the step if the download is tampered/corrupted before it is ever run.
+          SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          curl -sSL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
+          echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
       - name: gate + mirror main and dev
         env:
