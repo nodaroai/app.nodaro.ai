@@ -3445,6 +3445,8 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
 
 export async function voiceChangerProApi(
   audioUrl: string | undefined,
+  // A null entry means "keep this speaker's original voice" (cloud-plugins
+  // orderedVoices keep-slot contract) — forwarded positionally as-is.
   orderedVoices: Array<{
     voiceId: string
     stability?: number
@@ -3454,7 +3456,7 @@ export async function voiceChangerProApi(
     volumeMode?: "match" | "normalize" | "manual"
     volume?: number
     seed?: number
-  }>,
+  } | null>,
   userId?: string,
   model?: string,
   preserveBackground?: boolean,

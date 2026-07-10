@@ -98,7 +98,10 @@ export class VoicesResource {
    * ElevenLabs UUID) OR a {@link VoiceChangerProVoice} object carrying per-voice
    * ElevenLabs speech-to-speech settings (stability / similarityBoost / style /
    * useSpeakerBoost / `seed`) plus a loudness `volumeMode` (and a manual
-   * `volume`). A per-voice `seed` makes that speaker's recast reproducible.
+   * `volume`) — OR `null`, meaning keep this speaker's original voice (requires
+   * a platform running cloud-plugins with keep-slot support). At least one
+   * entry must be non-null. A per-voice `seed` makes that speaker's recast
+   * reproducible.
    *
    * Pass `audioUrl` for audio-only recast or `videoUrl` to recast the audio
    * track of a video clip (the server demuxes, recasts, and remuxes).
@@ -169,9 +172,12 @@ export interface VoiceChangerProInput {
   /**
    * Voices in speaker-detection order. Speaker N is mapped to `orderedVoices[N]`;
    * speakers beyond the array keep their original voice. Each entry is a bare
-   * voice id OR a {@link VoiceChangerProVoice} object with per-voice settings.
+   * voice id OR a {@link VoiceChangerProVoice} object with per-voice settings —
+   * OR `null`, meaning keep this speaker's original voice (requires a platform
+   * running cloud-plugins with keep-slot support). At least one entry must be
+   * non-null.
    */
-  orderedVoices: Array<VoiceChangerProVoice>
+  orderedVoices: Array<VoiceChangerProVoice | null>
   /** Model to use for speech-to-speech. Defaults to the server-configured default when omitted. */
   model?: string
   /**

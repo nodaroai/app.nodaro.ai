@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer-pro
-generated_at: 2026-07-03T08:25:54.435Z
-generated_from: 1825a285d
+generated_at: 2026-07-10T12:44:23.118Z
+generated_from: 61bf327a
 ---
 
 # Voice Changer Pro
@@ -33,7 +33,7 @@ generated_from: 1825a285d
     /** Per-voice generation seed for reproducible recasts. Integer in
      *  [0, 4294967295]. Omitted ⇒ random (the backend default). */
     seed?: number
-  }>`
+  } | null>`
 - `preserveBackground: boolean`
 - `removeBackgroundNoise: boolean`
 - `fieldMappings: FieldMappings`
