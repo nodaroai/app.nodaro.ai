@@ -454,7 +454,7 @@ export async function characterRoutes(app: FastifyInstance) {
 
     type PendingJob = {
       jobId: string
-      assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"
+      assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions" | "boards"
       name: string
     }
     const pendingJobs: PendingJob[] = []
@@ -471,6 +471,11 @@ export async function characterRoutes(app: FastifyInstance) {
         if (col === "expressions" || col === "poses" || col === "angles") assetType = col
         else if (col === "body_angles") assetType = "bodyAngles"
         else if (col === "lighting_variations") assetType = "lighting"
+      } else if (jobType === "image-collage") {
+        // Identity-board collage jobs carry attachToColumn === "boards"
+        // (route Zod pins the literal); plain collages have no attach fields
+        // and are skipped by the attachName guard above.
+        if (inp.attachToColumn === "boards") assetType = "boards"
       }
       if (!assetType) continue
       pendingJobs.push({ jobId: row.id, assetType, name: attachName })

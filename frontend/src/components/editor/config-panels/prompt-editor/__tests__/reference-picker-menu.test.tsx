@@ -71,4 +71,32 @@ describe("ReferencePickerMenu", () => {
     render(<ReferencePickerMenu items={[]} anchor={anchor()} onSelect={() => {}} onClose={() => {}} />)
     expect(screen.getByText(/no references/i)).toBeInTheDocument()
   })
+
+  it("displays a character's board rows before its variant rows (display-only sort)", () => {
+    const items = [
+      img({ label: "Upload 1", source: "uploaded", index: 1 }),
+      img({ label: "Kira", source: "character", index: 2, characterSlug: "kira" }),
+      img({ label: "Kira / smile", source: "character", index: 2, characterSlug: "kira", variantSlug: "smile", bucket: "expressions" }),
+      img({ label: "Kira / Base", source: "character", index: 2, characterSlug: "kira", variantSlug: "base", bucket: "boards" }),
+    ]
+    render(<ReferencePickerMenu items={items} anchor={anchor()} onSelect={() => {}} onClose={() => {}} />)
+    const labels = screen.getAllByRole("menuitem").map((el) => el.textContent)
+    const boardPos = labels.findIndex((t) => t?.includes("Base"))
+    const smilePos = labels.findIndex((t) => t?.includes("smile"))
+    expect(boardPos).toBeGreaterThan(-1)
+    expect(boardPos).toBeLessThan(smilePos)
+  })
+
+  it("shows a 'board' badge on board rows only", () => {
+    const items = [
+      img({ label: "Kira / smile", source: "character", index: 1, characterSlug: "kira", variantSlug: "smile", bucket: "expressions" }),
+      img({ label: "Kira / Base", source: "character", index: 1, characterSlug: "kira", variantSlug: "base", bucket: "boards" }),
+    ]
+    render(<ReferencePickerMenu items={items} anchor={anchor()} onSelect={() => {}} onClose={() => {}} />)
+    const rows = screen.getAllByRole("menuitem")
+    const boardRow = rows.find((r) => r.textContent?.includes("Base"))!
+    const smileRow = rows.find((r) => r.textContent?.includes("smile"))!
+    expect(boardRow.textContent).toMatch(/board/i)
+    expect(smileRow.textContent).not.toMatch(/board/i)
+  })
 })

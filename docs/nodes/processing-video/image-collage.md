@@ -23,6 +23,19 @@ Each image is fit inside its cell (centered, no distortion, no crop). It's a loc
 
 In **grid** mode the canvas is exactly `resolution` (long edge) × `aspectRatio` — e.g. 4K + 16:9 = 3840×2160, 2K + 1:1 = 2560×2560, 4K + 4:3 = 3840×2880. In **smart** mode the width comes from that same target but the **height floats** so no image is cropped (bounded to at most 2× the target long edge; extreme inputs are uniformly scaled down, never cropped).
 
+### Auto-Attach to a Character Board (API)
+
+Not exposed in the node's canvas config panel — these are request-body-only fields on `POST /v1/image-collage`, used by the Character Studio's **Board** page (see the [Character](../assets/character.md) node) and available to direct API callers.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `attachToCharacterId` | uuid | *(none)* | Character to attach the finished collage to. Combine with `attachToColumn` + `attachName` so the worker appends the result to that character on completion — even if the caller disconnects mid-generation. |
+| `attachToColumn` | `"boards"` | *(none)* | The only valid attach target from this route. |
+| `attachName` | string | *(none)* | Name the board is saved under. The Character Studio auto-suffixes on collision (e.g. "Evening gown 2"); the API does not dedupe for you. |
+| `attachBoardType` | `"identity"` \| `"looks"` | *(none)* | Board kind recorded on the entry. The Character Studio's Board page always sends `"identity"`. |
+
+All four are optional and independent of `layout`/`resolution`/`aspectRatio`/`gap`/`backgroundColor` — pricing (below) is unaffected by whether the result is attached.
+
 ## Inputs & Outputs
 
 **Inputs:** Image (2–30, required) — accepts any image producer or a List of image URLs on a single multi-input handle.

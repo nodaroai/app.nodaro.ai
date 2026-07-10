@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Film, Music } from "lucide-react"
+import { sortCharacterEntriesForDisplay } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
 import type { RefImageItem } from "../tag-textarea"
 import { BODY_MENU_CLASS } from "./body-menu-class"
@@ -52,6 +53,10 @@ export function ReferencePickerMenu({
   const activeRowRef = useRef<HTMLButtonElement | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
 
+  // Boards-first display order within each character's run — DISPLAY ONLY
+  // (item objects, and thus their payload indices, are untouched).
+  const displayItems = useMemo(() => sortCharacterEntriesForDisplay(items), [items])
+
   useBodyMenuDismiss(menuRef, anchor, onClose)
 
   // Own the keyboard via a CAPTURE-phase document listener rather than the
@@ -62,8 +67,8 @@ export function ReferencePickerMenu({
   // where focus is, and `stopPropagation` keeps Escape/arrows from also
   // reaching the editor or closing the dialog. Latest state via refs so the
   // listener registers once.
-  const stateRef = useRef({ items, onClose, onSelect, selectedIndex })
-  stateRef.current = { items, onClose, onSelect, selectedIndex }
+  const stateRef = useRef({ items: displayItems, onClose, onSelect, selectedIndex })
+  stateRef.current = { items: displayItems, onClose, onSelect, selectedIndex }
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const s = stateRef.current
@@ -94,7 +99,7 @@ export function ReferencePickerMenu({
     const MARGIN = 8
     const vh = window.innerHeight
     const vw = window.innerWidth
-    const contentH = items.length * ROW_H + 8
+    const contentH = displayItems.length * ROW_H + 8
     const spaceBelow = vh - anchor.bottom - MARGIN
     const spaceAbove = anchor.top - MARGIN
     // Open toward the side with more room; the height is the content height
@@ -109,12 +114,12 @@ export function ReferencePickerMenu({
     const top = Math.max(MARGIN, Math.min(rawTop, vh - mh - MARGIN))
     const left = Math.min(Math.max(MARGIN, anchor.left), vw - MENU_W - MARGIN)
     return { top, left, maxHeight: mh }
-  }, [anchor, items.length])
+  }, [anchor, displayItems.length])
 
   // Preview anchored to the MENU (not a row), so it shows the selected item's
   // image from the moment the menu opens. Media rows have no still → no preview.
   const menuRect = { top, left, right: left + MENU_W, bottom: top + maxHeight, width: MENU_W, height: maxHeight, x: left, y: top } as DOMRect
-  const active = items[selectedIndex]
+  const active = displayItems[selectedIndex]
   const previewUrl = active && !isMediaRef(active) ? active.url : undefined
 
   return createPortal(
@@ -125,7 +130,7 @@ export function ReferencePickerMenu({
         style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
         className={BODY_MENU_CLASS}
         role="menu"
-        aria-activedescendant={items.length ? `ref-pick-${selectedIndex}` : undefined}
+        aria-activedescendant={displayItems.length ? `ref-pick-${selectedIndex}` : undefined}
         data-testid="reference-picker-menu"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
@@ -133,7 +138,7 @@ export function ReferencePickerMenu({
         {items.length === 0 ? (
           <div className="px-2.5 py-2 text-[11px] text-muted-foreground italic">No references wired</div>
         ) : (
-          items.map((item, i) => (
+          displayItems.map((item, i) => (
             <button
               key={rowKey(item, i)}
               id={`ref-pick-${i}`}
@@ -162,6 +167,11 @@ export function ReferencePickerMenu({
                 />
               )}
               <span className="truncate">{item.label}</span>
+              {item.bucket === "boards" && (
+                <span className="ml-1 rounded bg-primary/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                  board
+                </span>
+              )}
             </button>
           ))
         )}
