@@ -3709,8 +3709,11 @@ export function buildPayload(
       // actually commits on multi-speaker (>1 voice) runs. Follow-up: wire
       // a dynamic per-node credit override into the orchestrator (same
       // class of fix as the route's).
-      const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string }>
-      const orderedVoices = rawVoices.map((v) => v.voiceId)
+      // A null entry means "keep this speaker's original voice" (cloud-plugins
+      // orderedVoices contract) — preserve it positionally instead of reading
+      // .voiceId off it.
+      const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string } | null>
+      const orderedVoices = rawVoices.map((v) => (v === null ? null : v.voiceId))
       return simpleResult("voice-changer-pro", "voice-changer-pro", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,

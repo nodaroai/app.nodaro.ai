@@ -2734,6 +2734,10 @@ export function executeNode(
     // applies its defaults (stability 0.5, similarity 0.75, style 0,
     // speakerBoost true, volume 100%).
     const orderedVoicePayload = d.orderedVoices.map((v) => {
+      // A null slot means "keep this speaker's original voice" (cloud-plugins
+      // orderedVoices contract) — preserve it positionally instead of reading
+      // .voiceId off it.
+      if (v === null) return null;
       const entry: {
         voiceId: string;
         stability?: number;

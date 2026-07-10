@@ -199,4 +199,32 @@ describe("voices.recast", () => {
       }),
     )
   })
+
+  // Keep-slot: a null entry means "keep this speaker's original voice"
+  // (requires a platform running cloud-plugins with keep-slot support). The
+  // request body forwards it as-is, positionally — this is a type-acceptance
+  // test as much as a runtime one (orderedVoices must type-check with null).
+  it("accepts a null keep-original slot in orderedVoices and POSTs it positionally", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job_recast_456" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.voices.recast({
+      audioUrl: "https://cdn.example.com/dialogue.mp3",
+      orderedVoices: [null, "Aria"],
+    })
+    expect(result).toEqual({ jobId: "job_recast_456" })
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/v1/voice-changer-pro",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          audioUrl: "https://cdn.example.com/dialogue.mp3",
+          orderedVoices: [null, "Aria"],
+        }),
+      }),
+    )
+  })
 })

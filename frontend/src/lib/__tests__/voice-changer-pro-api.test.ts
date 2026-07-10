@@ -186,6 +186,21 @@ describe("voiceChangerProApi", () => {
     expect("voiceFx" in body2).toBe(false)
   })
 
+  // Keep-slot: a null entry means "keep this speaker's original voice"
+  // (cloud-plugins orderedVoices contract). voiceChangerProApi forwards the
+  // array as-is, so the only guard needed is the param TYPE accepting null —
+  // exercised here at both runtime (positional passthrough) and compile time.
+  it("passes a null keep-original slot through positionally", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jn" })
+    vi.stubGlobal("fetch", mock)
+
+    await voiceChangerProApi("https://r2/a.mp3", [null, { voiceId: "vB" }])
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.orderedVoices).toEqual([null, { voiceId: "vB" }])
+  })
+
   it("throws on error response", async () => {
     noSession()
     vi.stubGlobal(
