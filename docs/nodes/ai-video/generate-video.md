@@ -68,7 +68,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Grok Imagine 1 | `grok-i2v` (one picker row; remaps to `grok` for T2V) | T2V + I2V — mode auto-selected by image presence | 6 / 10s; resolution + mode (fun/normal/spicy) |
 | Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
 | Wan | `wan-i2v` (Wan 2.6), `wan-2.7-i2v` (Wan 2.7), `wan-turbo` | T2V + I2V — Wan 2.6/2.7 are one picker row each (remap to `wan` / `wan-2.7-t2v` for T2V); `wan-turbo` fixed 5s | 5 / 10 / 15s |
-| HappyHorse | `happyhorse-i2v` (one picker row; remaps to `happyhorse` for T2V), `happyhorse-ref2v` | T2V + I2V — mode auto-selected by image presence; Ref2V is reference-only (image required) | 3–15s; 720p / 1080p |
+| HappyHorse 1.1 | `happyhorse-i2v` (one picker row; remaps to `happyhorse` for T2V), `happyhorse-ref2v` | T2V + I2V — mode auto-selected by image presence; Ref2V is reference-only (image required) | 3–15s; 720p / 1080p; per-second pricing; 9 aspect ratios (T2V/Ref2V) incl. 4:5 / 5:4 / 21:9 / 9:21 |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
 | Kling 3 Omni | `kling-3-omni` | I2V (input image required) | 3–15s; 720p / 1080p; end frame + up to 7 reference images; native audio; runs on Replicate |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
@@ -204,8 +204,13 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
 | `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
 | `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |
+| `happyhorse-i2v` | 5s | 720p | i2v | — | 29 |
+| `happyhorse-i2v` | 5s | 1080p | i2v | — | 37 |
+| `happyhorse-ref2v` | 15s | 1080p | i2v | 1–9 ref images | 109 |
 
 **Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = `ceil((rate × seconds + 2) / 4)`, where the per-second rate is 14.5 @ 480p and 25 @ 720p and the `+2` covers the required input image. Examples: 4s/480p = 15, 8s/480p = 30, 8s/720p = 51, 15s/720p = 95.
+
+**HappyHorse 1.1** (`happyhorse` T2V / `happyhorse-i2v` / `happyhorse-ref2v`) is per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 3–15, resolution = `720p` / `1080p`), with identical rates across all three modes. Credits = `ceil(rate × seconds / 4)`, where the per-second rate is 22.5 @ 720p and 29 @ 1080p. Examples: 5s/720p = 29, 5s/1080p = 37, 10s/720p = 57, 15s/1080p = 109. When resolution is unspecified the run renders and bills at 720p.
 
 **Seedance 2** (full `seedance-2`) is per-second priced via the composite identifier `seedance-2:<N>s:<resolution>` (no-ref) or `seedance-2:<N>s:<resolution>-ref` (any reference wired). Credits = `ceil(KIE_per_sec × duration / 4)`, where the per-second KIE rate depends on resolution and whether a reference is present:
 
