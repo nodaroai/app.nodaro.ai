@@ -13,6 +13,7 @@ import { hasCredits } from "../lib/config.js"
 import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -411,7 +412,7 @@ export async function characterRoutes(app: FastifyInstance) {
         .from("jobs")
         .select("id, input_data")
         .eq("user_id", userId)
-        .in("status", ["pending", "running"])
+        .in("status", [...IN_FLIGHT_JOB_STATUSES])
         .filter("input_data->>attachToCharacterId", "eq", id)
         .limit(50),
       // portraitCandidates: in-flight `generate-character` jobs for THIS row.
@@ -425,7 +426,7 @@ export async function characterRoutes(app: FastifyInstance) {
         .from("jobs")
         .select("id, status, progress, output_data, input_data")
         .eq("user_id", userId)
-        .in("status", ["pending", "running"])
+        .in("status", [...IN_FLIGHT_JOB_STATUSES])
         .filter("input_data->>type", "eq", "generate-character")
         .filter("input_data->>attachToCharacterId", "eq", id)
         .limit(50),

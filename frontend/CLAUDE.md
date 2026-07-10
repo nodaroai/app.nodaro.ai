@@ -49,6 +49,8 @@ Vite dev server proxy in `frontend/vite.config.ts` forwards `/v1/*` to the backe
 
 **Node Colors (MiniMap)** (`workflow-canvas.tsx`): AI/Scene=#ff0073 (brand pink), Input=#38BDF8 (cyan), Parameter=#818CF8 (indigo), Processing=#475569 (steel grey), Output=#22c55e (green), Character=#F472B6 (pink), Face=#FB923C (orange), Object=#34D399 (emerald), Location=#22D3EE (cyan), Sticky=transparent
 
+**Dialogs opened from inside a studio modal** (character/location/creature/object): the studios render opaque at `STUDIO_MODAL_Z` (`z-[100]`), so any `Dialog`/`AlertDialog` opened from a studio page MUST pass `STUDIO_CHILD_DIALOG_Z` (`studio-shell/studio-modal-z.ts`) as BOTH `className` AND `overlayClassName` — the stock `z-50` buries the dialog behind the studio and the trigger looks dead (recurring bug: Browse Voices #3389-era, board composer). Guard tests: `voice-browser-zindex.test.ts`, `board-dialogs-zindex.test.tsx`.
+
 ---
 
 ## Credit Components

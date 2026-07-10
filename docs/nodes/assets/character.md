@@ -142,7 +142,9 @@ Named composite reference boards — a different compositing paradigm from Sheet
 
 - **New board** opens a full-screen picker showing every image the character owns, grouped by category. Click to select 2–12 images; a number badge shows the collage order. **Generate** composites them at the Image Collage node's 4K rate.
 - **Duplicate** (identity boards only) reopens the picker with that board's source images pre-selected, so you can iterate on a look without rebuilding the selection from scratch. Generating still costs the same 4K rate; the result saves under a free, auto-suffixed name ("Evening gown 2") — the original is never overwritten.
+- **Rename** — click a board's caption to edit its name in place (Enter or click away saves, Escape cancels). Names that collide with another board auto-suffix, same as Duplicate. Unnamed boards show an "Add name…" affordance. Renaming applies to boards on the character's boards list; legacy studio-app boards keep their read-only caption.
 - **Delete** removes a board, with confirmation. It's available for any board stored on the character's boards list, even one without recorded source images. Duplicate always needs recorded source images. Legacy boards from the studio app — not part of the boards list — are view-only here: no Duplicate, no Delete.
+- **Cancel** on a generating tile stops the run and refunds the reserved credits.
 - Up to **12 boards per character**. Like other studio assets, generation continues server-side if you close the studio mid-run — the finished board attaches to the character automatically, and its pending tile reappears on reopen until it lands.
 - In reference pickers — the `@` mention menu and the pill thumbnail swap picker — a character's boards are listed **first**, tagged "board".
 

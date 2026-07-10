@@ -6,6 +6,7 @@
 // background:
 //   - Browse Voices dialog        z-[110]   (voice-browser.tsx)
 //   - its filter Select menus      z-[120]   (voice-browser.tsx)
+//   - studio child dialogs         z-[110]   (STUDIO_CHILD_DIALOG_Z below)
 //   - MultiImageLightbox           z-[100]   (same tier → wins on DOM order)
 //   - PublishDialog                z-[10000] (raises itself explicitly)
 //
@@ -21,3 +22,11 @@
 // keep the literal here so the constant is the single place that defines it.
 export const STUDIO_MODAL_Z_VALUE = 100
 export const STUDIO_MODAL_Z = "z-[100]"
+
+// The tier for dialogs opened FROM INSIDE a studio (board composer, delete
+// confirmations, …) — same value as the proven Browse Voices tier: clears the
+// opaque studio modal, stays below its nested Select tier (z-[120]) and the
+// toast/critical tier. Apply to BOTH the dialog content AND its overlay
+// (`overlayClassName`) — the stock shadcn z-50 buries them behind the studio,
+// which reads as "the button does nothing" (see board-dialogs-zindex.test.tsx).
+export const STUDIO_CHILD_DIALOG_Z = "z-[110]"

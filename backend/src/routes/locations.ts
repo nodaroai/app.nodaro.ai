@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
 
 // Reference-photo kinds — mirrors the migration 124 schema. Single source of
 // truth: `LOCATION_REFERENCE_PHOTO_KINDS` from `@nodaro/shared/entity-prompts`.
@@ -314,7 +315,7 @@ export async function locationRoutes(app: FastifyInstance) {
         .from("jobs")
         .select("id, input_data, status")
         .eq("user_id", userId)
-        .in("status", ["pending", "running"])
+        .in("status", [...IN_FLIGHT_JOB_STATUSES])
         .filter("input_data->>attachToLocationId", "eq", id)
         .order("created_at", { ascending: false })
         .limit(100),
