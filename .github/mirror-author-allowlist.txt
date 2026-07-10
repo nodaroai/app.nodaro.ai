@@ -1,0 +1,12 @@
+# Author/committer emails allowed on NEW commits published to the public mirror.
+# The publish gate (scripts/publish-to-public.sh, "author-identity gate") blocks
+# a publish when any newly-published commit carries an email not on this list —
+# private/personal addresses must never reach public history. Every entry here
+# is an already-public GitHub identity (noreply addresses / bots). When a new
+# legitimate identity starts landing commits (contributor credit, a new bot),
+# add its email via PR.
+10135422+talasa@users.noreply.github.com
+46425736+asafna2@users.noreply.github.com
+41898282+github-actions[bot]@users.noreply.github.com
+49699333+dependabot[bot]@users.noreply.github.com
+noreply@github.com
