@@ -1643,7 +1643,7 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
   multiShot?: boolean
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
@@ -1746,7 +1746,7 @@ export type TextToVideoData = {
   prompt: string
   provider: TextToVideoProvider
   duration: number
-  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive"
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1798,7 +1798,7 @@ export type GenerateVideoNodeData =
   & {
     provider: VideoGenProvider
     /** Unified aspect ratio — superset of i2v and t2v values. */
-    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
     /** Loosened from required (text-to-video) to optional, matching i2v. */
     prompt?: string
     /** Loosened from required (text-to-video) to optional, matching i2v. */

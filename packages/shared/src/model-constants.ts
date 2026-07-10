@@ -1077,6 +1077,9 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "seedance-2-fast",
   "seedance-2-mini",
   "grok-imagine-video-1.5",
+  "happyhorse",
+  "happyhorse-i2v",
+  "happyhorse-ref2v",
 ])
 
 /**
@@ -1243,6 +1246,13 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // seedance-2-extend always uses a video ref, so pricing has no -ref
   // dimension — duration tier + ":res" only (rates = seedance-2 -ref + stitch).
   "seedance-2-extend": ["480p", "720p", "1080p"],
+  // HappyHorse 1.1 — per-second billing at two published resolution rates
+  // (kie.ai/happyhorse-1-1: 22.5 cr/s @720p, 29 cr/s @1080p, uniform across
+  // t2v/i2v/ref2v). 720p first = billing default; the KIE-side default is
+  // pinned to 720p via extraParams in backend kie/models.ts so render matches.
+  "happyhorse": ["720p", "1080p"],
+  "happyhorse-i2v": ["720p", "1080p"],
+  "happyhorse-ref2v": ["720p", "1080p"],
 }
 
 /**
@@ -1489,6 +1499,13 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "grok-imagine-video-1.5": "duration+resolution",
 }
 
+/** HappyHorse 1.1 per-second tiers — one per allowed duration (3–15s), shared
+ *  by all three modes (t2v/i2v/ref2v) which bill at identical published rates. */
+const HAPPYHORSE_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 13 },
+  (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
+
 /**
  * Duration tier breakpoints for variable-priced video models.
  * Maps provider → array of { maxSeconds, suffix } in ascending order.
@@ -1588,6 +1605,14 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 14, suffix: "14s" },
     { maxSeconds: 15, suffix: "15s" },
   ],
+  // HappyHorse 1.1 (t2v / i2v / ref2v) — true per-second billing (KIE 22.5 cr/s
+  // @720p, 29 cr/s @1080p, published on kie.ai/happyhorse-1-1). One tier per
+  // allowed second (3–15s) so the composite identifier maps 1:1 to the seeded
+  // price, combined with RESOLUTION_DURATION_PRICING for the ":720p"/":1080p"
+  // suffix (e.g. "happyhorse-i2v:5s:720p").
+  "happyhorse": HAPPYHORSE_DURATION_TIERS,
+  "happyhorse-i2v": HAPPYHORSE_DURATION_TIERS,
+  "happyhorse-ref2v": HAPPYHORSE_DURATION_TIERS,
 }
 
 /**
