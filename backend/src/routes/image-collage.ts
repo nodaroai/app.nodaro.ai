@@ -10,7 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-const imageCollageBody = z.object({
+export const imageCollageBody = z.object({
   imageUrls: z
     .array(safeUrlSchema)
     .min(2, "At least 2 images required")
@@ -32,6 +32,18 @@ const imageCollageBody = z.object({
     .regex(/^#?[0-9a-fA-F]{6}$/, "Expected a #RRGGBB hex color")
     .optional()
     .default("#ffffff"),
+  /**
+   * Character Studio auto-attach (identity boards): when all three of
+   * attachToCharacterId/attachToColumn/attachName are present, the worker
+   * appends the finished collage to the character row server-side (same
+   * pattern as generate-character-asset), so closing the studio mid-
+   * generation never orphans the board. `boards` is the only valid target
+   * from this route; `sourceImages` are the request's own imageUrls.
+   */
+  attachToCharacterId: z.string().uuid().optional(),
+  attachToColumn: z.literal("boards").optional(),
+  attachName: z.string().max(200).optional(),
+  attachBoardType: z.enum(["looks", "identity"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -57,7 +69,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         })
       }
 
-      const { imageUrls, layout, resolution, aspectRatio, gap, backgroundColor } = parsed.data
+      const { imageUrls, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = parsed.data
       const userId = req.userId
       if (!userId) {
         return reply.status(401).send({
@@ -98,6 +110,10 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         aspectRatio,
         gap,
         backgroundColor,
+        attachToCharacterId,
+        attachToColumn,
+        attachName,
+        attachBoardType,
         usageLogId,
       })
 

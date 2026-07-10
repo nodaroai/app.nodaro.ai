@@ -97,7 +97,7 @@ The studio opens on **Profile** and organizes everything into a config-driven si
 |-------|-------|
 | **Resources** | References · Pickers · LoRA *(Cloud edition only)* |
 | **Identity** | Profile · Appearance |
-| **Visuals** | Expressions · Poses · Motions · Sheet |
+| **Visuals** | Expressions · Poses · Motions · Sheet · Board |
 | **Character** | Voice · Personality |
 
 ### Resources → References
@@ -135,6 +135,16 @@ Angle and lighting variations of the approved portrait, in three sub-sections, e
 - **Poses** — same layout as Expressions. Presets: standing, walking, sitting, running, crouching, pointing, fighting stance, jumping, turning.
 - **Motions** — short **video clips** generated from the portrait via image-to-video providers (Kling / Wan: `kling`, `kling-turbo`, `kling-3.0`, `wan-i2v`, `wan-2.7-i2v`). Requires a portrait first — without one, Generate is disabled with a tooltip. Cards show video thumbnails with a ▶ overlay, an editable name, ↻ regenerate same / ＋ add variation buttons, and a ✕ delete; there is **no** img2img refine on motions (video refinement is a future release) and **no** "Generate All". The Generate button shows the current motion provider's credit cost inline. Presets: walking, running, waving, sitting down, fighting stance, jumping, turning around, dancing, talking gesture.
 - **Sheet** — composite a turnaround / expression / reference sheet from the character's assets. See the [Reference Sheet](../ai-image/reference-sheet.md) node for the composition details.
+
+### Visuals → Board
+
+Named composite reference boards — a different compositing paradigm from Sheet. An **identity board** composites 2–12 of the character's own images (portrait, expressions, poses, angles, body angles, lighting, wardrobe, close-ups, reference sheets, real-life reference photos) into one dense 4K sheet using the same engine as the [Image Collage](../processing-video/image-collage.md) node (smart layout, 4:3 target) — the strongest single-image identity anchor for downstream generations.
+
+- **New board** opens a full-screen picker showing every image the character owns, grouped by category. Click to select 2–12 images; a number badge shows the collage order. **Generate** composites them at the Image Collage node's 4K rate.
+- **Duplicate** (identity boards only) reopens the picker with that board's source images pre-selected, so you can iterate on a look without rebuilding the selection from scratch. Generating still costs the same 4K rate; the result saves under a free, auto-suffixed name ("Evening gown 2") — the original is never overwritten.
+- **Delete** removes a board, with confirmation. It's available for any board stored on the character's boards list, even one without recorded source images. Duplicate always needs recorded source images. Legacy boards from the studio app — not part of the boards list — are view-only here: no Duplicate, no Delete.
+- Up to **12 boards per character**. Like other studio assets, generation continues server-side if you close the studio mid-run — the finished board attaches to the character automatically, and its pending tile reappears on reopen until it lands.
+- In reference pickers — the `@` mention menu and the pill thumbnail swap picker — a character's boards are listed **first**, tagged "board".
 
 ### Character → Voice, Personality
 

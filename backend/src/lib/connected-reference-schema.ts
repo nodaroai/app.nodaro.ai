@@ -42,6 +42,12 @@ export const connectedReferenceSchema = z.object({
   url: safeUrlSchema,
   characterSlug: z.string().optional(),
   variantSlug: z.string().optional(),
+  /**
+   * Which character asset bucket this entry came from ("boards", "sheets",
+   * "expressions", …); undefined = the canonical portrait entry. DISPLAY
+   * metadata only — never affects payload numbering or prompt assembly.
+   */
+  bucket: z.string().optional(),
   characterCanonicalDescription: z.string().nullable().optional(),
   elementInjection: z.string().nullable().optional(),
   locationCanonicalDescription: z.string().nullable().optional(),

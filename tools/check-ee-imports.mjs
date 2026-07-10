@@ -104,6 +104,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/character-studio/pages/profile-page.tsx",
   "frontend/src/components/editor/character-studio/asset-card.tsx",
   "frontend/src/components/editor/character-studio/generation-bar.tsx",
+  "frontend/src/components/editor/character-studio/board-create-modal.tsx",
   "frontend/src/components/editor/config-panel.tsx",
   "frontend/src/components/editor/config-panels/entity-configs.tsx",
   "frontend/src/components/editor/config-panels/image-configs.tsx",

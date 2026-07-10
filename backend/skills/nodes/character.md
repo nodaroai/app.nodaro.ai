@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-07-01T19:51:21.752Z
-generated_from: c65209366
+generated_at: 2026-07-09T23:04:34.173Z
+generated_from: a2d6a080
 ---
 
 # Character
@@ -61,7 +61,7 @@ generated_from: c65209366
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: CharacterAssetItem[]`
 - `outfitVariations?: CharacterAssetItem[]`
-- `boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>`
+- `boards?: ReadonlyArray<CharacterBoardEntry>`
 - `selectedAssetByVariant?: Readonly<Record<string, string>>`
 - `person?: PersonValue`
 - `wardrobe?: WardrobeValue`

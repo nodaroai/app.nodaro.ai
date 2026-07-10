@@ -41,6 +41,7 @@ import {
   type JobContext,
 } from "../shared.js"
 import { isKineticCaptionStyle } from "@nodaro/shared"
+import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
   const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = job.data as {
@@ -681,7 +682,7 @@ const handleRemoveAudio: HandlerFn = async function handleRemoveAudio(job, ctx) 
 }
 
 const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx) {
-  const { imageUrls, layout, resolution, aspectRatio, gap, backgroundColor } = job.data as {
+  const { imageUrls, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = job.data as {
     jobId: string
     imageUrls: string[]
     layout?: "smart" | "grid"
@@ -689,6 +690,10 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
     aspectRatio?: string
     gap?: number
     backgroundColor?: string
+    attachToCharacterId?: string
+    attachToColumn?: string
+    attachName?: string
+    attachBoardType?: "looks" | "identity"
   }
   console.log(`[worker] image-collage ${ctx.jobId}: ${imageUrls.length} images, layout=${layout ?? "smart"}, ${resolution ?? "2K"} ${aspectRatio ?? "1:1"}`)
 
@@ -707,6 +712,27 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
   if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
+
+  // Character Studio auto-attach (identity boards) — same pattern as
+  // image-ai.ts. Best-effort: attachAssetToCharacter logs + swallows failures
+  // (the collage still lives on jobs.output_data; the studio's poll resolves).
+  if (attachToCharacterId && attachToColumn && attachName && ctx.jobUserId) {
+    const column = resolveAssetColumn(attachToColumn)
+    if (column) {
+      await attachAssetToCharacter({
+        characterId: attachToCharacterId,
+        userId: ctx.jobUserId,
+        column,
+        item: {
+          name: attachName,
+          url: r2Url,
+          ...(attachBoardType ? { type: attachBoardType } : {}),
+          sourceImages: imageUrls,
+        },
+      })
+    }
+  }
+
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 

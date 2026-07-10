@@ -23,6 +23,35 @@ import { baz } from "../lib/baz"
 
 ---
 
+## Error Responses — Sanitized `internal_error` 500s (CRITICAL)
+
+**Never echo a raw error message to the client in a 500 body.** Raw Supabase/provider error messages leak schema details (table/column/constraint/RPC names, type hints). A global `onSend` net (`lib/http-errors.ts`, registered in `app.ts`) rewrites the body of ANY `internal_error` 500 to a generic `"Internal server error"` on the wire — logging the original message + route path server-side — UNLESS the route produced it via the helper. So a route that forgets to sanitize **cannot** leak, and new routes are covered by default.
+
+**For a friendly per-route message + full error/stack logging, use the helper** (this is the default for any new `internal_error` 500):
+
+```typescript
+import { sendInternalError } from "../lib/http-errors.js"
+
+app.post("/v1/my-route", async (req, reply) => {
+  try {
+    // ...
+  } catch (err) {
+    return sendInternalError(reply, req, err, "Failed to create job")
+  }
+})
+```
+
+`sendInternalError(reply, req, err, clientMessage)` logs `err` (with stack) via `req.log.error`, sends `{ error: { code: "internal_error", message: clientMessage } }`, and marks the reply (via a `WeakSet`) so the net leaves the curated message intact. **`clientMessage` is sent verbatim** — keep it generic (`"Failed to <operation>"`); never interpolate a raw `.message`, table/column, or RPC name (pass those as the `err` arg to be logged, not shown).
+
+**Scope / non-goals:**
+- The net only touches `statusCode === 500` + `code === "internal_error"`. Structured errors (402 `insufficient_credits`, 403 `forbidden`, 409 `name_taken`, …) have different codes/statuses and pass through untouched — keep sending those explicitly via `reply.status(...).send(...)`.
+- SSE writes to `reply.raw` and bypasses `onSend`; SSE errors use the `error` event, not this path.
+- Behavior-neutral for consumers: the SDK (`throwFromResponse`), CLI, frontend (`throwApiError`), and studio all dispatch on `error.code` / HTTP status, never message text — so the message is display-only.
+- Returned-object / message-less `internal_error` forms (a few legacy routes) stay net-covered; convert them to the helper opportunistically.
+- Guarded by `lib/__tests__/http-errors.test.ts`.
+
+---
+
 ## Edition Architecture (`backend/src/ee/`)
 
 The `backend/src/ee/` directory holds enterprise code (admin routes, billing/credit infrastructure, Stripe integration). It is governed by the Nodaro Enterprise License (`backend/src/ee/LICENSE`) — using Enterprise features in production requires a Nodaro Cloud or Enterprise subscription (dormant inclusion in community builds does not).

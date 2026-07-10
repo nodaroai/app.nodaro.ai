@@ -99,6 +99,7 @@ export function buildConnectedRefsFromSources(
               url: item.url,
               characterSlug: slug,
               variantSlug,
+              bucket: arrayName,
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: item.description ?? null,
               variantDisplayName: item.name,
