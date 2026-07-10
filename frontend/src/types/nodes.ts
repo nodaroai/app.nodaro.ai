@@ -2772,7 +2772,9 @@ export type VoiceChangerProData = {
   /** Ordered target voices; voice i recasts the i-th speaker (first-appearance order).
    *  Per-voice ElevenLabs voice-settings are optional; when omitted the backend
    *  applies its defaults (stability 0.5, similarity 0.75, style 0, speakerBoost
-   *  true, volume 100%). */
+   *  true, volume 100%). A `null` entry means "keep this speaker's original
+   *  voice" (cloud-plugins orderedVoices keep-slot contract) — requires a
+   *  platform running cloud-plugins with keep-slot support. */
   orderedVoices: Array<{
     voiceId: string
     voiceLabel: string
@@ -2791,7 +2793,7 @@ export type VoiceChangerProData = {
     /** Per-voice generation seed for reproducible recasts. Integer in
      *  [0, 4294967295]. Omitted ⇒ random (the backend default). */
     seed?: number
-  }>
+  } | null>
   model?: VoiceChangerModel
   preserveBackground: boolean
   /** How the preserved background music's level is set when mixed back under the

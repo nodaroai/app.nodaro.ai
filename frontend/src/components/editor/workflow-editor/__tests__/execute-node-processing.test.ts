@@ -51,6 +51,7 @@ const mockAdjustVolumeApi = vi.fn()
 const mockAddCaptionsApi = vi.fn()
 const mockMixAudioApi = vi.fn()
 const mockSpeechToVideoApi = vi.fn()
+const mockVoiceChangerProApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -133,6 +134,7 @@ vi.mock("@/lib/api", () => ({
   addCaptionsApi: (...args: unknown[]) => mockAddCaptionsApi(...args),
   mixAudioApi: (...args: unknown[]) => mockMixAudioApi(...args),
   speechToVideoApi: (...args: unknown[]) => mockSpeechToVideoApi(...args),
+  voiceChangerProApi: (...args: unknown[]) => mockVoiceChangerProApi(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
   imageToImage: vi.fn(),
@@ -1373,6 +1375,73 @@ describe("speech-to-video", () => {
       shift: undefined,
       userId: "u1",
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-changer-pro
+// ---------------------------------------------------------------------------
+
+describe("voice-changer-pro", () => {
+  it("rejects when no audio or video input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("voice-changer-pro", { orderedVoices: [{ voiceId: "v1" }] }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("rejects when no voices configured", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    const promise = executeNode(
+      makeNode("voice-changer-pro", { orderedVoices: [] }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No voices")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  // Keep-slot: a null entry means "keep this speaker's original voice"
+  // (cloud-plugins orderedVoices contract). The per-voice settings map must
+  // preserve it positionally instead of crashing on `v.voiceId`.
+  it("calls voiceChangerProApi with a null keep-original slot preserved positionally", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockVoiceChangerProApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer-pro", {
+        orderedVoices: [null, { voiceId: "v2", stability: 0.8 }],
+        preserveBackground: true,
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Voice Changer Pro",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockVoiceChangerProApi).toHaveBeenCalledWith(
+      "http://audio.mp3",
+      [null, { voiceId: "v2", stability: 0.8 }],
+      "u1",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    )
   })
 })
 

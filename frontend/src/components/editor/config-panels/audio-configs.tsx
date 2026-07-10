@@ -2296,7 +2296,9 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
     onUpdate({ orderedVoices: next })
   }
   // Immutably patch one voice entry's per-voice settings (copy array + entry).
-  const updateVoice = (i: number, patch: Partial<VoiceChangerProData["orderedVoices"][number]>) => {
+  // Never invoked for a null "keep original" slot — its row hides the
+  // settings drawer that calls this, per the render guard below.
+  const updateVoice = (i: number, patch: Partial<NonNullable<VoiceChangerProData["orderedVoices"][number]>>) => {
     const next = voices.map((v, idx) => (idx === i ? { ...v, ...patch } : v))
     onUpdate({ orderedVoices: next })
   }
@@ -2316,14 +2318,19 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
       </div>
       <div className="flex flex-col gap-1">
         {voices.map((v, i) => (
-          <div key={`${v.voiceId}-${i}`} className="rounded border">
+          // A null entry means "keep this speaker's original voice"
+          // (cloud-plugins orderedVoices keep-slot contract) — it has no
+          // per-voice settings to tune, so the details drawer below is
+          // skipped entirely for it.
+          <div key={v ? `${v.voiceId}-${i}` : `keep-${i}`} className="rounded border">
             <div className="flex items-center gap-2 px-2 py-1">
               <span className="text-xs text-muted-foreground w-16">Speaker {i + 1}</span>
-              <span className="text-sm flex-1 truncate">{v.voiceLabel}</span>
+              <span className="text-sm flex-1 truncate">{v ? v.voiceLabel : "Keep original"}</span>
               <button aria-label="Move up" onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
               <button aria-label="Move down" onClick={() => move(i, 1)} className="text-xs px-1">↓</button>
               <button aria-label="Remove voice" onClick={() => removeVoice(i)} className="text-xs px-1">✕</button>
             </div>
+            {v && (
             <details className="border-t px-2 py-1">
               <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">Voice settings</summary>
               <div className="flex flex-col gap-2 pt-2">
@@ -2355,7 +2362,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   <Label htmlFor={`volume-mode-${i}`}>Volume</Label>
                   <Select
                     value={v.volumeMode ?? "match"}
-                    onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceChangerProData["orderedVoices"][number]["volumeMode"]> })}
+                    onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceChangerProData["orderedVoices"][number]>["volumeMode"] })}
                   >
                     <SelectTrigger id={`volume-mode-${i}`} aria-label={`Volume mode for speaker ${i + 1}`} className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -2400,6 +2407,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                 </div>
               </div>
             </details>
+            )}
           </div>
         ))}
       </div>

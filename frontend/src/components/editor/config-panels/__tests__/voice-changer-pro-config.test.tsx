@@ -235,6 +235,57 @@ describe("VoiceChangerProConfig", () => {
     expect(arg[0]).not.toBe(original[0])
   })
 
+  // Keep-slot: a null entry means "keep this speaker's original voice"
+  // (cloud-plugins orderedVoices contract). The per-voice row must render a
+  // "Keep original" label and hide the (inapplicable) settings drawer instead
+  // of crashing on `v.voiceLabel` / `v.stability` etc.
+  it("renders 'Keep original' for a null slot without crashing, and hides its settings", () => {
+    renderPanel({
+      orderedVoices: [
+        null,
+        { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+      ],
+    })
+    expect(screen.getByText(/Speaker 1/)).toBeInTheDocument()
+    expect(screen.getByText("Keep original")).toBeInTheDocument()
+    expect(screen.getByText(/Speaker 2/)).toBeInTheDocument()
+    expect(screen.getByText("Two")).toBeInTheDocument()
+    // A keep-slot has nothing to configure — only the real voice gets a
+    // "Voice settings" drawer.
+    expect(screen.getAllByText("Voice settings")).toHaveLength(1)
+  })
+
+  it("removes a null keep-slot by index like any other voice", () => {
+    const onUpdate = vi.fn()
+    renderPanel({
+      orderedVoices: [
+        null,
+        { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+      ],
+    }, onUpdate)
+    fireEvent.click(screen.getAllByLabelText("Remove voice")[0])
+    expect(onUpdate).toHaveBeenCalledWith({
+      orderedVoices: [{ voiceId: "v2", voiceLabel: "Two", voiceType: "premade" }],
+    })
+  })
+
+  it("reorders a null keep-slot with a real voice positionally", () => {
+    const onUpdate = vi.fn()
+    renderPanel({
+      orderedVoices: [
+        { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
+        null,
+      ],
+    }, onUpdate)
+    fireEvent.click(screen.getAllByLabelText("Move up")[1])
+    expect(onUpdate).toHaveBeenCalledWith({
+      orderedVoices: [
+        null,
+        { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
+      ],
+    })
+  })
+
   it("defaults separation quality to 'fast' and updates on change", () => {
     const onUpdate = vi.fn()
     renderPanel({}, onUpdate)

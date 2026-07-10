@@ -105,4 +105,80 @@ describe("BoardPage (managed)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i })) // confirm dialog
     expect(state.patchWith).toHaveBeenCalled()
   })
+
+  // Regression (live bug): a column board saved with name "" (studio.nodaro.ai
+  // identity sheets do this) is renamed to "board" by characterBoardItems, so
+  // the page's NAME-based column-shadow filter missed it and the same board
+  // rendered twice — once managed, once as a phantom "legacy" tile.
+  it("renders an empty-name column board exactly once", () => {
+    const state = makeState({
+      boards: [{ name: "", url: "https://r2/unnamed.png", type: "identity", sourceImages: ["https://r2/p.png", "https://r2/s.png"] }],
+    })
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    expect(screen.getAllByRole("figure")).toHaveLength(1)
+  })
+
+  it("still renders a genuine legacy shim board (view-only, no Delete)", () => {
+    const state = makeState({
+      boards: [],
+      selectedAssetByVariant: { "studioBoard:Old look": "https://r2/old.png" },
+    })
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    expect(screen.getByText("Old look")).toBeInTheDocument()
+    expect(screen.getAllByRole("figure")).toHaveLength(1)
+    expect(screen.queryByRole("button", { name: /delete board old look/i })).not.toBeInTheDocument()
+  })
+
+  // A shim entry that duplicates a column board's URL under a DIFFERENT name
+  // (e.g. the legacy unnamed `studioBoard` key next to its column copy) is the
+  // same board — the column tile wins.
+  it("hides a shim entry whose URL matches a column board", () => {
+    const state = makeState({
+      boards: [{ name: "Base", url: "https://r2/base.png", type: "identity", sourceImages: ["https://r2/p.png"] }],
+      selectedAssetByVariant: { studioBoard: "https://r2/base.png" },
+    })
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    expect(screen.getAllByRole("figure")).toHaveLength(1)
+  })
+
+  it("renames a column board via the click-to-edit caption", () => {
+    const state = makeState()
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    fireEvent.click(screen.getByRole("button", { name: /rename board base/i }))
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "Evening gown" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(state.patchWith).toHaveBeenCalledTimes(1)
+    const updater = (state.patchWith as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(updater(state.staged).boards).toEqual([
+      { name: "Evening gown", url: "https://r2/base.png", type: "identity", sourceImages: ["https://r2/p.png", "https://r2/s.png"] },
+      { name: "Studio look", url: "https://r2/looks.png" },
+    ])
+  })
+
+  it("collision-suffixes a rename that collides with another board's name", () => {
+    const state = makeState()
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    fireEvent.click(screen.getByRole("button", { name: /rename board base/i }))
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "Studio look" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    const updater = (state.patchWith as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(updater(state.staged).boards[0].name).toBe("Studio look 2")
+  })
+
+  it("offers an Add name affordance on unnamed column boards; Escape cancels without saving", () => {
+    const state = makeState({
+      boards: [{ name: "", url: "https://r2/unnamed.png", type: "identity", sourceImages: ["https://r2/p.png"] }],
+    })
+    render(<BoardPage state={state} jobs={makeJobs()} />)
+    const affordance = screen.getByRole("button", { name: /rename board/i })
+    expect(affordance).toHaveTextContent(/add name/i)
+    fireEvent.click(affordance)
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "abandoned" } })
+    fireEvent.keyDown(input, { key: "Escape" })
+    expect(state.patchWith).not.toHaveBeenCalled()
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
+  })
 })

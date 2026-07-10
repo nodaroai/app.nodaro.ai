@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
+import { IN_FLIGHT_JOB_STATUSES } from "../../lib/job-status.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -467,7 +468,7 @@ describe("GET /v1/characters/:id", () => {
     expect(charsByIdChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     // Pending-jobs query scopes by user + status + character id.
     expect(jobs.pendingChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
-    expect(jobs.pendingChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
+    expect(jobs.pendingChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
     expect(jobs.pendingChain.chain.filter).toHaveBeenCalledWith(
       "input_data->>attachToCharacterId",
       "eq",
@@ -649,6 +650,29 @@ describe("GET /v1/characters/:id", () => {
     ])
   })
 
+  // Regression: both in-flight queries filtered on ["pending", "running"], but
+  // the media workers write "processing" (and MCP paths "queued") — "running"
+  // has never been a jobs.status. Refreshing mid-generation lost the studio
+  // spinner because the rehydration query couldn't see processing jobs.
+  it("selects in-flight jobs by the statuses workers actually write (incl. processing)", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+
+    expect(jobs.pendingChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
+    expect(jobs.portraitChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
+  })
+
   // -------------------------------------------------------------------------
   // portraitCandidates: pending/running `generate-character` jobs scoped to
   // THIS character. The studio re-attaches spinners on reopen by polling
@@ -697,7 +721,7 @@ describe("GET /v1/characters/:id", () => {
     ])
     // Scope: user + status set + type + character id.
     expect(jobs.portraitChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
-    expect(jobs.portraitChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
+    expect(jobs.portraitChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
     expect(jobs.portraitChain.chain.filter).toHaveBeenCalledWith(
       "input_data->>type",
       "eq",

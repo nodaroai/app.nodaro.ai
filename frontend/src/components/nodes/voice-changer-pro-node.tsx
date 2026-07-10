@@ -203,7 +203,11 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex justify-between text-muted-foreground">
             <span>Voice Changer Pro</span>
             {nodeData.orderedVoices?.length > 0 && (
-              <span className="text-xs truncate max-w-[80px]">{nodeData.orderedVoices[0].voiceLabel}</span>
+              <span className="text-xs truncate max-w-[80px]">
+                {/* A null slot means "keep this speaker's original voice"
+                    (cloud-plugins orderedVoices keep-slot contract). */}
+                {nodeData.orderedVoices[0] ? nodeData.orderedVoices[0].voiceLabel : "Keep original"}
+              </span>
             )}
           </div>
         </div>
