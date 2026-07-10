@@ -57,7 +57,7 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
         "plan to render_shot_sequence. A brand `logo.image` is not auto-injected here; include a " +
         "`logo-assemble-lockup` reveal yourself if you want the logo shown.",
       inputSchema: {
-        brief: z.record(z.unknown()).describe("A ShotSequenceBrief (see docs/mcp/shot-sequence.md)."),
+        brief: z.record(z.string(), z.unknown()).describe("A ShotSequenceBrief (see docs/mcp/shot-sequence.md)."),
         audio_url: z.string().url().describe("The narration audio (from generate_speech)."),
         alignment: z
           .array(z.object({ word: z.string(), start: z.number(), end: z.number() }))
@@ -101,7 +101,7 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
         "Render a resolved shot-sequence plan to an MP4 on Nodaro's Remotion engine. Returns a job_id; " +
         "progress and the finished video appear in the tool card.",
       inputSchema: {
-        plan: z.record(z.unknown()).describe("A resolved ShotSequencePlan from resolve_shot_sequence."),
+        plan: z.record(z.string(), z.unknown()).describe("A resolved ShotSequencePlan from resolve_shot_sequence."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

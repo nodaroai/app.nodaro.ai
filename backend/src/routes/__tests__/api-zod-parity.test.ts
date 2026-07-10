@@ -66,7 +66,7 @@ describe("generate-image — frontend payload × backend Zod", () => {
       renderingSpeed: "BALANCED",
       styleType: "AUTO",
       expandPrompt: true,
-      userId: "00000000-0000-0000-0000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000001",
     })
     expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true)
   })

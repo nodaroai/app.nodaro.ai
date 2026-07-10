@@ -581,13 +581,13 @@ describe("approve_portrait tool", () => {
     registerCharacterTools({ server, session: writeSession(), fastify })
     const result = await callTool(server, "approve_portrait", {
       character_id: KIRA_ID,
-      candidate_job_id: "00000000-0000-0000-0000-000000000099",
+      candidate_job_id: "00000000-0000-4000-8000-000000000099",
     })
 
     expect(result.isError).toBeUndefined()
     expect(result.structuredContent?.portraitUrl).toBe(PORTRAIT_URL)
     expect(result.structuredContent?.canonicalDescription).toBe("a young protagonist")
-    expect(received?.candidateJobId).toBe("00000000-0000-0000-0000-000000000099")
+    expect(received?.candidateJobId).toBe("00000000-0000-4000-8000-000000000099")
     expect(received?.userId).toBe("u1")
   })
 
@@ -603,7 +603,7 @@ describe("approve_portrait tool", () => {
     registerCharacterTools({ server, session: writeSession(), fastify })
     const result = await callTool(server, "approve_portrait", {
       character_id: KIRA_ID,
-      candidate_job_id: "00000000-0000-0000-0000-000000000099",
+      candidate_job_id: "00000000-0000-4000-8000-000000000099",
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.text).toContain("candidate_not_ready")

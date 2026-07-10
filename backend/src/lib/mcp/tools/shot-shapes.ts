@@ -13,9 +13,9 @@
  * Param schema rendered via `zod-to-json-schema` (already a backend dep).
  */
 import { z } from "zod"
-import zodToJsonSchema from "zod-to-json-schema"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
+import { restrictObjectSchemas } from "../../json-schema-strict.js"
 import {
   BLUEPRINT_IDS,
   BLUEPRINT_META,
@@ -190,7 +190,9 @@ export function registerShotShapeTools(
       }
       const id = args.id as BlueprintId
       const schema = BLUEPRINT_PARAM_SCHEMAS[id]
-      const paramSchema = zodToJsonSchema(schema, { target: "openApi3" })
+      const paramSchema = restrictObjectSchemas(
+        z.toJSONSchema(schema, { target: "openapi-3.0", unrepresentable: "any", io: "input" }),
+      )
       const example = BLUEPRINT_EXAMPLES[id]
       return {
         content: [

@@ -1,11 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
-import zodToJsonSchema from "zod-to-json-schema"
 import { getAnthropicClient } from "./anthropic.js"
+import { restrictObjectSchemas } from "./json-schema-strict.js"
 import { llmBlockToAnthropic, type LlmContentBlock } from "./llm-client.js"
 
 export interface StructuredLlmArgs<T> {
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>
+  schema: z.ZodType<T, unknown>
   /** Anthropic SDK model id (use the model's directFallbackModel). */
   modelId: string
   system: string
@@ -38,7 +38,12 @@ export async function callStructuredLlm<T>(args: StructuredLlmArgs<T>): Promise<
   const anthropic = getAnthropicClient()
 
   // Draft-7: Anthropic's Messages API rejects OpenAPI extensions like nullable.
-  const jsonSchema = zodToJsonSchema(args.schema, { target: "jsonSchema7" }) as Record<string, unknown>
+  // io:"input" mirrors zod-to-json-schema's semantics: defaulted fields stay
+  // optional in the schema the LLM sees (it emits the INPUT side of the schema).
+  const jsonSchema = restrictObjectSchemas(
+    z.toJSONSchema(args.schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
+  )
+  delete jsonSchema.$schema
   const toolDef: Anthropic.Messages.Tool = {
     name: toolName,
     description: "Emit the structured result.",

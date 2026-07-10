@@ -1,4 +1,4 @@
-import { z, type ZodType, type ZodTypeDef } from "zod"
+import { z, type ZodType } from "zod"
 // Reuse the canonical `OutputType` from presentation-utils so a single union
 // is the source of truth across the package. Re-exporting it here would
 // collide with the explicit named re-export in `index.ts`.
@@ -13,7 +13,7 @@ export type ReduceStrategy<TConfig = unknown> = {
   readonly label: string
   readonly description: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly configSchema: ZodType<TConfig, ZodTypeDef, any>
+  readonly configSchema: ZodType<TConfig, any>
   readonly defaultConfig: TConfig
   readonly outputType: OutputType
   readonly creditCostKey: string

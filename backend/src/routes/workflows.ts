@@ -72,9 +72,9 @@ const createWorkflowBody = z.object({
   name: z.string().min(1, "Name is required").max(200),
   description: z.string().max(2000).optional(),
   folderId: z.string().uuid().nullable().optional(),
-  nodes: z.array(z.record(z.unknown())).optional(),
-  edges: z.array(z.record(z.unknown())).optional(),
-  settings: z.record(z.unknown()).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())).optional(),
+  edges: z.array(z.record(z.string(), z.unknown())).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
 })
 
@@ -92,9 +92,9 @@ const updateWorkflowBody = z.object({
   // to a single project (FK ON DELETE SET NULL would orphan otherwise).
   projectId: z.string().uuid().optional(),
   folderId: z.string().uuid().nullable().optional(),
-  nodes: z.array(z.record(z.unknown())).optional(),
-  edges: z.array(z.record(z.unknown())).optional(),
-  settings: z.record(z.unknown()).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())).optional(),
+  edges: z.array(z.record(z.string(), z.unknown())).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
   thumbnailUrl: z.string().url().nullable().optional(),
   // Optimistic concurrency token — when supplied, the row is updated
@@ -113,14 +113,14 @@ const updateWorkflowBody = z.object({
   delta: z
     .object({
       baseVersion: z.number().int().min(1),
-      upsertNodes: z.array(z.record(z.unknown())).optional(),
+      upsertNodes: z.array(z.record(z.string(), z.unknown())).optional(),
       deleteNodeIds: z.array(z.string()).optional(),
-      upsertEdges: z.array(z.record(z.unknown())).optional(),
+      upsertEdges: z.array(z.record(z.string(), z.unknown())).optional(),
       deleteEdgeIds: z.array(z.string()).optional(),
       set: z
         .object({
           name: z.string().min(1).max(200).optional(),
-          settings: z.record(z.unknown()).optional(),
+          settings: z.record(z.string(), z.unknown()).optional(),
         })
         .optional(),
     })

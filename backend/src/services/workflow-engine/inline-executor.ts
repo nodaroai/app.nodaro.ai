@@ -856,7 +856,7 @@ export async function executeWebhookOutput(
   if (!url) {
     throw new Error("No webhook URL configured")
   }
-  // SSRF gate: workflow node data is persisted unvalidated (`nodes: z.record(z.unknown())`),
+  // SSRF gate: workflow node data is persisted unvalidated (`nodes: z.record(z.string(), z.unknown())`),
   // so this URL is attacker-controllable. safeUrlSchema rejects literal localhost/private
   // hosts at this boundary; safeFetch (below) re-validates the resolved IP at connect time
   // (and each redirect hop), defeating DNS-rebinding. This mirrors the hardened single-node

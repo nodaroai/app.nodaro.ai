@@ -53,7 +53,7 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
             "One of: pick-best-llm, concat, first-non-empty, count, vote, merge-json",
           ),
         strategyConfig: z
-          .record(z.unknown())
+          .record(z.string(), z.unknown())
           .optional()
           .describe(
             "Strategy-specific config. `pick-best-llm`: { criteria: string, inputKind?: 'text'|'image-url' }. " +

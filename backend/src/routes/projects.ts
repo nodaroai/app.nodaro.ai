@@ -13,14 +13,14 @@ const projectIdParams = z.object({
 const createProjectBody = z.object({
   name: z.string().min(1, "Name is required").max(200),
   description: z.string().max(2000).optional(),
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
 })
 
 const updateProjectBody = z
   .object({
     name: z.string().min(1).max(200).optional(),
     description: z.string().max(2000).optional(),
-    settings: z.record(z.unknown()).optional(),
+    settings: z.record(z.string(), z.unknown()).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",

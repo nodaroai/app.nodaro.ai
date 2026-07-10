@@ -1,9 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
-import zodToJsonSchema from "zod-to-json-schema"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
 import { getPipelineSignal } from "../pipeline-context.js"
+import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
@@ -19,7 +19,7 @@ const TEMPERATURE_UNSUPPORTED_MODELS = new Set<string>([
 
 // Accept any Zod schema whose PARSED OUTPUT is T. The schema's INPUT type may
 // diverge from T (e.g. ZodDefault makes input optional but output required),
-// which is the case for ShowrunnerPlanSchema. zodToJsonSchema + safeParse only
+// which is the case for ShowrunnerPlanSchema. z.toJSONSchema + safeParse only
 // touch the input/output ends, so widening the middle generics is safe.
 export interface CallLLMArgs<T> {
   supabase: SupabaseClient
@@ -33,7 +33,7 @@ export interface CallLLMArgs<T> {
   temperature?: number
   systemPrompt: string
   userPrompt: string | Anthropic.Messages.ContentBlockParam[]
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>
+  schema: z.ZodType<T, unknown>
   maxRetries?: number
   cacheSystemPrompt?: boolean
   /**
@@ -123,7 +123,11 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   // .nullable() / .nullish() emit that under target=openApi3, breaking every
   // tool call). Draft 7 is a compatible subset of 2020-12 and uses
   // `"type": [..., "null"]` for nullable fields, which Anthropic accepts.
-  const jsonSchema = zodToJsonSchema(schema, { target: "jsonSchema7" }) as Record<string, unknown>
+  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
+  const jsonSchema = restrictObjectSchemas(
+    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
+  )
+  delete jsonSchema.$schema
 
   const toolDef: Anthropic.Messages.Tool = {
     name: "emit",

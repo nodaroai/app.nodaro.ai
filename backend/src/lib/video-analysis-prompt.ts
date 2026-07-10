@@ -19,7 +19,8 @@
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import zodToJsonSchema from "zod-to-json-schema"
+import { z } from "zod"
+import { restrictObjectSchemas } from "./json-schema-strict.js"
 import { windowAnalysisSchema, REFERENCE_ROLE_PRESETS, VIDEO_ANALYSIS_ENTITY_SOURCES } from "@nodaro/shared"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -51,7 +52,9 @@ function validRolesBySource(): Record<string, readonly string[]> {
  */
 export function buildVideoAnalysisSystemPrompt(): string {
   const doctrine = readFileSync(DOCTRINE_PATH, "utf-8")
-  const schema = zodToJsonSchema(windowAnalysisSchema)
+  const schema = restrictObjectSchemas(
+    z.toJSONSchema(windowAnalysisSchema, { target: "draft-7", unrepresentable: "any", io: "input" }),
+  )
   const footer = [
     "---",
     "",

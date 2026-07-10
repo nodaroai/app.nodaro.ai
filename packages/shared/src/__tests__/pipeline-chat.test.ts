@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { default as zodToJsonSchema } from "zod-to-json-schema"
+import { z } from "zod"
 import { ChatTurnResponseSchema, STAGE_PATCH_SCHEMA } from "../pipeline-chat.js"
 import { PIPELINE_STAGE_NAMES } from "../pipeline-events.js"
 
@@ -61,7 +61,7 @@ describe("ChatTurnResponseSchema", () => {
   })
 
   it("produces JSON Schema with root type:object (Anthropic-valid)", () => {
-    const js = zodToJsonSchema(ChatTurnResponseSchema, { target: "jsonSchema7" })
+    const js = z.toJSONSchema(ChatTurnResponseSchema, { target: "draft-7", unrepresentable: "any", io: "input" })
     expect((js as { type?: string }).type).toBe("object")
   })
 

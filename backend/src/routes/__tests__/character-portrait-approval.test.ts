@@ -24,9 +24,9 @@ vi.mock("../../lib/config.js", () => ({
   config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
 }))
 
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
-const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000002"
-const TEST_JOB_ID = "00000000-0000-0000-0000-000000000003"
+const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+const TEST_CHARACTER_ID = "00000000-0000-4000-8000-000000000002"
+const TEST_JOB_ID = "00000000-0000-4000-8000-000000000003"
 
 let app: FastifyInstance
 let meter: { jobId: string; usageLogId?: string; commit: ReturnType<typeof vi.fn>; refund: ReturnType<typeof vi.fn> }

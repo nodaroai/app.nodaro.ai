@@ -31,7 +31,7 @@ const KIND = z.enum(["seed-prompt", "asset-description", "motion-description"])
 
 const body = z.object({
   kind: KIND,
-  context: z.record(z.unknown()),
+  context: z.record(z.string(), z.unknown()),
 })
 
 type Kind = z.infer<typeof KIND>
