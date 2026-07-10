@@ -789,6 +789,7 @@ export async function saveCharacter(data: {
   angles?:      { name: string; url: string }[]
   bodyAngles?:  { name: string; url: string }[]
   motions?:     { name: string; url: string }[]
+  boards?: { name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }[]
   voice?:       { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   person?:      PersonValue | null
   wardrobe?:    WardrobeValue | null
@@ -839,7 +840,7 @@ export async function getCharacter(id: string): Promise<{
   // Uploaded reference videos keyed by emotion/variant (Record<variant, urls[]>).
   referenceVideosByVariant?: Record<string, string[]>
   // Named composite reference boards (the `boards` JSONB column, migration 212).
-  boards?: { name: string; url: string }[]
+  boards?: { name: string; url: string; type?: "looks" | "identity"; sourceImages?: string[] }[]
   // Per-variant selection map — also the LEGACY home of boards born before the
   // `boards` column (reserved `studioBoard` / `studioBoard:<name>` keys). Needed
   // to surface those shim boards (studio merges column + shim on read).
@@ -853,7 +854,7 @@ export async function getCharacter(id: string): Promise<{
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
   identityLock?: "off" | "soft" | "strict"
-  pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"; name: string }[]
+  pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions" | "boards"; name: string }[]
   readonly portraitCandidates?: ReadonlyArray<{
     readonly jobId: string
     readonly status: string
@@ -2834,6 +2835,11 @@ export async function imageCollageApi(
     gap?: number
     backgroundColor?: string
     userId?: string
+    /** Character Studio boards auto-attach (see backend image-collage route). */
+    attachToCharacterId?: string
+    attachToColumn?: "boards"
+    attachName?: string
+    attachBoardType?: "looks" | "identity"
   } = {},
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrls }
@@ -2843,6 +2849,10 @@ export async function imageCollageApi(
   if (typeof opts.gap === "number") body.gap = opts.gap
   if (opts.backgroundColor) body.backgroundColor = opts.backgroundColor
   if (opts.userId) body.userId = opts.userId
+  if (opts.attachToCharacterId) body.attachToCharacterId = opts.attachToCharacterId
+  if (opts.attachToColumn) body.attachToColumn = opts.attachToColumn
+  if (opts.attachName) body.attachName = opts.attachName
+  if (opts.attachBoardType) body.attachBoardType = opts.attachBoardType
   return apiJson("/v1/image-collage", {
     body,
     workflowId: true,

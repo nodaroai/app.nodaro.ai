@@ -3638,6 +3638,16 @@ export interface CharacterPersonality {
  */
 export type EntityArtStyle = string
 
+/** One named composite reference board on a character (the `boards` JSONB
+ *  column). `type` and `sourceImages` are set on image-collage identity
+ *  sheets (migration 250 worker attach); absent on legacy/looks boards. */
+export interface CharacterBoardEntry {
+  readonly name: string
+  readonly url: string
+  readonly type?: "looks" | "identity"
+  readonly sourceImages?: ReadonlyArray<string>
+}
+
 export type CharacterNodeData = {
   [key: string]: unknown
   label: string
@@ -3732,7 +3742,7 @@ export type CharacterNodeData = {
   readonly outfitVariations?: CharacterAssetItem[]
   // Named composite reference boards (the `boards` JSONB column, migration 212) —
   // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
-  readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
+  readonly boards?: ReadonlyArray<CharacterBoardEntry>
   // Per-variant selection map. Also the LEGACY home of pre-column boards
   // (reserved `studioBoard` / `studioBoard:<name>` keys) — surfaced as boards.
   readonly selectedAssetByVariant?: Readonly<Record<string, string>>

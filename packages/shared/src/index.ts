@@ -706,6 +706,9 @@ export {
   characterSheetRefItems,
   characterBoardItems,
   characterMentionableAssetArrays,
+  CHARACTER_PICKER_DISPLAY_ORDER,
+  characterBucketDisplayRank,
+  sortCharacterEntriesForDisplay,
 } from "./character-variant-assets.js"
 export type {
   CharacterVariantAssetBucket,

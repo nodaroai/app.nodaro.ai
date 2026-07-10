@@ -1,7 +1,7 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState, useEffect, useLayoutEffect, useMemo, useCallback } from "react"
-import { USAGE_MODES, usageModeLabel, LOCATION_USAGE_MODES, locationUsageModeLabel, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
+import { USAGE_MODES, usageModeLabel, LOCATION_USAGE_MODES, locationUsageModeLabel, sortCharacterEntriesForDisplay, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
 import { optimizedImageUrl } from "@/lib/image"
@@ -257,6 +257,13 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         } else {
           others.push(item)
         }
+      }
+      // Boards-first display order within each character's group — DISPLAY
+      // ONLY (item objects, and thus their payload indices, are untouched).
+      // Sorted once here so every downstream consumer (flat search AND the
+      // level-2 drill-down variant list) inherits the order.
+      for (const [slug, g] of charGroups) {
+        charGroups.set(slug, sortCharacterEntriesForDisplay(g))
       }
       return { characterGroups: charGroups, locationGroups: locGroups, nonCharacterItems: others }
     }, [items])
@@ -1088,6 +1095,11 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                       </>
                 }
               </span>
+              {row.kind === "variant" && item.bucket === "boards" && (
+                <span className="ml-1 rounded bg-primary/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                  board
+                </span>
+              )}
               <span
                 className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
                   isSelected

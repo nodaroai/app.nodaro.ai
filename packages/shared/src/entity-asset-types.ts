@@ -68,6 +68,9 @@ export const CHARACTER_ATTACH_COLUMNS = [
   "sheets",
   "detail_closeups",
   "outfit_variations",
+  // Named composite reference boards (migration 250) — identity-collage
+  // sheets auto-attached by the ffmpeg image-collage worker.
+  "boards",
 ] as const
 export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
 

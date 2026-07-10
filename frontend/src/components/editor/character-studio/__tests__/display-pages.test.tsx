@@ -1,11 +1,21 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { BoardPage } from "../pages/board-page"
 import { EmotionVideosPage } from "../pages/emotion-videos-page"
 import type { CharacterStudioState } from "../use-character-studio"
 import type { CharacterStudioJobs } from "../use-character-studio-jobs"
 
-const jobs = {} as CharacterStudioJobs
+// BoardPage now always mounts BoardCreateModal (open or not — the modal's own
+// useModelCredits() hook runs on every render regardless of its `open` prop),
+// which needs these two mocked the same way board-page.test.tsx does.
+vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 4 }))
+vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
+
+// BoardPage became the MANAGED page in Task 9 (create/duplicate/delete) and
+// now reads jobs.pending/failed unconditionally on every render — the bare
+// `{}` stub that sufficed for the old read-only page throws. Widening it to
+// empty Maps is a no-op for EmotionVideosPage below (it never reads `jobs`).
+const jobs = { pending: new Map(), failed: new Map() } as unknown as CharacterStudioJobs
 function state(staged: Record<string, unknown>): CharacterStudioState {
   return { staged } as unknown as CharacterStudioState
 }
@@ -24,7 +34,7 @@ describe("BoardPage (display first)", () => {
 
   it("shows an empty state when there are no boards", () => {
     render(<BoardPage state={state({})} jobs={jobs} />)
-    expect(screen.queryByText(/no reference boards/i)).not.toBeNull()
+    expect(screen.queryByText(/no boards yet/i)).not.toBeNull()
   })
 })
 

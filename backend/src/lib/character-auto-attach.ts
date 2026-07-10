@@ -46,6 +46,21 @@ export interface CharacterAssetItem {
   description?: string
   motionDescription?: string
   realLifeRefs?: string[]
+  /**
+   * Board entries only: "looks" (AI preset sheet) vs "identity" (image
+   * collage). Typed as `string`, not the narrower `"looks" | "identity"`
+   * literal union: this field is also reused (with a disjoint value domain,
+   * `SheetType`) by the pre-existing `sheets` bucket via
+   * `reference-sheet.ts`'s `SheetItem = CharacterAssetItem &
+   * Record<string, unknown>`, so a literal union here would make that
+   * intersection un-assignable. The `"looks" | "identity"` domain is still
+   * enforced end-to-end for boards by the route's `attachBoardType` Zod
+   * enum and the worker's locally-typed destructure.
+   */
+  type?: string
+  /** Board entries only: the source image URLs the sheet was collaged from
+   *  (enables the studio's duplicate-from-board pre-selection). */
+  sourceImages?: string[]
 }
 
 /**

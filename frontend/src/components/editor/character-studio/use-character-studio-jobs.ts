@@ -8,6 +8,7 @@ export type StudioAssetType =
   | "bodyAngles"
   | "lighting"
   | "motions"
+  | "boards"
 
 interface PendingJob {
   assetType: StudioAssetType
@@ -22,17 +23,26 @@ interface PendingJob {
    *  `abort()` removes it. Lets the spinner card appear the instant the user
    *  clicks, instead of after the ensureSaved + generate round-trips. */
   optimistic?: boolean
+  /** Opaque per-job payload the caller stashes at begin()/track() time and
+   *  gets back on resolve/fail — boards use it to carry {sourceImages} so the
+   *  resolve handler can persist the full identity entry (and Retry can
+   *  re-fire) without any name-keyed shared state. */
+  meta?: Record<string, unknown>
 }
 
 interface ResolvedAsset {
   assetType: StudioAssetType
   name: string
   url: string
+  /** Echoes the `meta` passed to `begin()`/`track()` for this job. */
+  meta?: Record<string, unknown>
 }
 
 interface FailedJob {
   assetType: StudioAssetType
   name: string
+  /** Echoes the `meta` passed to `begin()`/`track()` for this job. */
+  meta?: Record<string, unknown>
 }
 
 export interface CharacterStudioJobs {
@@ -52,14 +62,14 @@ export interface CharacterStudioJobs {
    *  call this synchronously on click, BEFORE awaiting ensureSaved/generate,
    *  so the UI reacts instantly. Follow with `settle(tempId, realJobId)` once
    *  the generate request returns, or `abort(tempId)` if it throws. */
-  begin: (assetType: StudioAssetType, name: string) => string
+  begin: (assetType: StudioAssetType, name: string, meta?: Record<string, unknown>) => string
   /** Replace an optimistic placeholder with its real jobId so the poll loop
    *  picks it up. No-op if the placeholder was cancelled/aborted meanwhile. */
   settle: (tempId: string, jobId: string) => void
   /** Drop an optimistic placeholder (the generate request failed). */
   abort: (tempId: string) => void
   /** add a job to track */
-  track: (jobId: string, assetType: StudioAssetType, name: string) => void
+  track: (jobId: string, assetType: StudioAssetType, name: string, meta?: Record<string, unknown>) => void
   /** Like `track`, but also returns a Promise that resolves with the asset URL
    *  when the job completes (or rejects when it fails / is cancelled). Wires
    *  through the SAME poll cycle as `track` so callers get the spinner card
@@ -106,19 +116,19 @@ export function useCharacterStudioJobs(
   // bumping it never re-renders and ids stay unique for the hook's lifetime.
   const optimisticSeq = useRef(0)
 
-  const track = useCallback((jobId: string, assetType: StudioAssetType, name: string) => {
+  const track = useCallback((jobId: string, assetType: StudioAssetType, name: string, meta?: Record<string, unknown>) => {
     setPending((prev) => {
       const next = new Map(prev)
-      next.set(jobId, { assetType, name, progress: 0 })
+      next.set(jobId, { assetType, name, progress: 0, meta })
       return next
     })
   }, [])
 
-  const begin = useCallback((assetType: StudioAssetType, name: string): string => {
+  const begin = useCallback((assetType: StudioAssetType, name: string, meta?: Record<string, unknown>): string => {
     const tempId = `optimistic:${optimisticSeq.current++}`
     setPending((prev) => {
       const next = new Map(prev)
-      next.set(tempId, { assetType, name, progress: 0, optimistic: true })
+      next.set(tempId, { assetType, name, progress: 0, optimistic: true, meta })
       return next
     })
     return tempId
@@ -131,7 +141,7 @@ export function useCharacterStudioJobs(
       if (!cur) return prev
       const next = new Map(prev)
       next.delete(tempId)
-      next.set(jobId, { assetType: cur.assetType, name: cur.name, progress: 0 })
+      next.set(jobId, { assetType: cur.assetType, name: cur.name, progress: 0, meta: cur.meta })
       return next
     })
   }, [])
@@ -217,7 +227,7 @@ export function useCharacterStudioJobs(
           if (job.status === "completed") {
             const out = job.output_data as { imageUrl?: string; videoUrl?: string } | undefined
             const resolvedUrl = meta.assetType === "motions" ? out?.videoUrl : out?.imageUrl
-            if (resolvedUrl) onResolvedRef.current({ assetType: meta.assetType, name: meta.name, url: resolvedUrl })
+            if (resolvedUrl) onResolvedRef.current({ assetType: meta.assetType, name: meta.name, url: resolvedUrl, meta: meta.meta })
             const waiter = waitersRef.current.get(jobId)
             if (waiter) {
               waitersRef.current.delete(jobId)
@@ -233,7 +243,7 @@ export function useCharacterStudioJobs(
               onFailedRef.current(jobId, meta.assetType)
               setFailed((prev) => {
                 const n = new Map(prev)
-                n.set(jobId, { assetType: meta.assetType, name: meta.name })
+                n.set(jobId, { assetType: meta.assetType, name: meta.name, meta: meta.meta })
                 return n
               })
             }

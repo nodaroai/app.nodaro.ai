@@ -143,6 +143,9 @@ interface VideoRefAutocompleteEntry {
   readonly characterSlug?: string
   readonly variantSlug?: string
   readonly variantDisplayName?: string
+  /** Character asset bucket this entry came from ("boards", "expressions", …);
+   *  undefined = canonical. Display-only (menu ordering + Board badge). */
+  readonly bucket?: string
   /**
    * Location fields, populated for `source === "wired-location"` entries.
    * Mirror the analogous character fields. The canonical entry has only
@@ -214,6 +217,7 @@ export function buildVideoRefAutocomplete(
               targetHandle: s.targetHandle,
               characterSlug: slug,
               variantSlug,
+              bucket: arrayName,
               variantDisplayName: item.name,
               defaultUsageMode,
               loraTrainingStatus,
@@ -336,6 +340,7 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,
+    bucket: ref.bucket,
     locationSlug: ref.locationSlug,
     locationVariantBucket: ref.locationVariantBucket,
     locationVariantSlug: ref.locationVariantSlug,

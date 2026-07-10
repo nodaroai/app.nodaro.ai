@@ -82,6 +82,13 @@ export interface ConnectedReference {
   readonly characterSlug?: string
   /** Variant slug (e.g. "smile"). undefined = canonical/default. */
   readonly variantSlug?: string
+  /**
+   * Which character asset bucket this entry came from ("boards", "sheets",
+   * "expressions", …); undefined = the canonical portrait entry. DISPLAY
+   * metadata only — menus use it to rank rows (boards first) via
+   * `sortCharacterEntriesForDisplay`; it never affects payload numbering.
+   */
+  readonly bucket?: string
   /** Character's canonical_description. Set on every entry from the same character (used for dedup). */
   readonly characterCanonicalDescription?: string | null
   /**

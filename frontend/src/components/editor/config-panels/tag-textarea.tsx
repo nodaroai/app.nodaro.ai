@@ -130,6 +130,9 @@ export interface RefImageItem {
   readonly variantSlug?: string
   /** Variant display name for the autocomplete (e.g. "smile", "canonical"). */
   readonly variantDisplayName?: string
+  /** Character asset bucket this entry came from ("boards", "expressions", …);
+   *  undefined = canonical. Display-only (menu ordering + Board badge). */
+  readonly bucket?: string
   /**
    * When `source === "location"`, the slug for the location (e.g. "old-library").
    * Mirrors `characterSlug` — used by the location-aware autocomplete to group

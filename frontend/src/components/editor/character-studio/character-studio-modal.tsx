@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
 import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
+import { getCharacter } from "@/lib/api"
 import type { CharacterNodeData } from "@/types/nodes"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
@@ -30,15 +31,106 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   bodyAngles: "bodyAngles",
   lighting: "lightingVariations",
   motions: "motions",
+  boards: "boards",
+}
+
+// Boards refetch delay: the worker marks the job completed BEFORE the
+// attach RPC lands, so a resolve-triggered refetch waits a beat.
+const BOARD_REFETCH_DELAY_MS = 1500
+
+/**
+ * Meta-absent boards resolve (job seeded from a previous session's
+ * pendingJobs, so the originating selection is gone): adopt the server's
+ * boards array after the attach-write gap.
+ *
+ * Debounced on `timerRef` (clear-before-set: several resolves inside one
+ * window collapse into ONE trailing refetch, which is correct because it
+ * adopts the FULL fresh array) and guarded by `closedRef`. The guard is
+ * load-bearing: React still runs a functional setState updater dispatched
+ * after unmount, so without it a modal close during the delay/fetch would
+ * run `patchWith` against the hook's FROZEN post-unmount `stagedRef`
+ * (render-body assignment), mark `boards` dirty, and schedule a debounced
+ * PATCH of the stale pre-completion array — a full-column replace that
+ * ERASES the board the worker just attached. The worker's write is
+ * authoritative; the next studio open refetches it anyway.
+ *
+ * Exported for tests — mounting CharacterStudioModal itself needs a
+ * disproportionate harness (workflow store, auth, shell, portrait
+ * candidates), so the branch is unit-tested directly
+ * (see __tests__/board-refetch-adoption.test.ts).
+ */
+export function scheduleBoardsRefetchAdoption(opts: {
+  dbId: string
+  timerRef: { current: ReturnType<typeof setTimeout> | null }
+  closedRef: { current: boolean }
+  patchWith: CharacterStudioState["patchWith"]
+}): void {
+  const { dbId, timerRef, closedRef, patchWith } = opts
+  if (timerRef.current) clearTimeout(timerRef.current)
+  timerRef.current = setTimeout(() => {
+    getCharacter(dbId)
+      .then((fresh) => {
+        if (closedRef.current) return
+        patchWith(() => ({ boards: (fresh.boards ?? []) as CharacterNodeData["boards"] }))
+      })
+      .catch(() => { /* next studio open refetches anyway */ })
+  }, BOARD_REFETCH_DELAY_MS)
 }
 
 export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const studio = useCharacterStudio(nodeId)
   const [errored, setErrored] = useState<Set<string>>(new Set())
 
+  // Boards delayed-refetch lifecycle: the timer AND the in-flight fetch must
+  // die with the modal (see scheduleBoardsRefetchAdoption — a post-unmount
+  // patchWith silently erases the worker's DB write).
+  const boardRefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closedRef = useRef(false)
+  useEffect(() => {
+    // Reset on mount: StrictMode (on in main.tsx) runs mount→cleanup→mount,
+    // and without this the fake unmount would trip the guard for the whole
+    // session, silently disabling boards adoption in dev.
+    closedRef.current = false
+    return () => {
+      closedRef.current = true
+      if (boardRefetchTimer.current) clearTimeout(boardRefetchTimer.current)
+    }
+  }, [])
+
   const onResolved = useCallback(
-    (a: { assetType: StudioAssetType; name: string; url: string }) => {
+    (a: { assetType: StudioAssetType; name: string; url: string; meta?: Record<string, unknown> }) => {
       if (!studio) return
+      if (a.assetType === "boards") {
+        const sourceImages = Array.isArray(a.meta?.sourceImages)
+          ? (a.meta.sourceImages as string[])
+          : undefined
+        if (sourceImages) {
+          // Same-session completion: append the FULL identity entry locally
+          // (instant UX). The worker attached the identical entry server-side;
+          // URL-dedup + the debounced boards PATCH converge on one copy.
+          studio.patchWith((prev) => {
+            const arr = prev.boards ?? []
+            if (arr.some((b) => b.url === a.url)) return {}
+            return {
+              boards: [...arr, { name: a.name, url: a.url, type: "identity" as const, sourceImages }],
+            }
+          })
+        } else {
+          // Reopened-mid-flight (seeded from pendingJobs): the originating
+          // session's selection is gone. The worker attached the full entry —
+          // adopt the server's array after the attach-write gap. Debounced +
+          // unmount-guarded via the modal-owned refs (see the helper's doc).
+          const dbId = studio.staged.characterDbId
+          if (!dbId) return
+          scheduleBoardsRefetchAdoption({
+            dbId,
+            timerRef: boardRefetchTimer,
+            closedRef,
+            patchWith: studio.patchWith,
+          })
+        }
+        return
+      }
       const field = ASSET_FIELD[a.assetType]
       const arr = (studio.staged[field] as { name: string; url: string }[] | undefined) ?? []
       // Local merge for instant UX. The backend has also auto-attached the asset

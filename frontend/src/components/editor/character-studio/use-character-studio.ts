@@ -55,6 +55,7 @@ type DirtyTrackedField =
   | "bodyAngles"
   | "lightingVariations"
   | "motions"
+  | "boards"
 
 const DIRTY_TRACKED_FIELDS: ReadonlySet<DirtyTrackedField> = new Set([
   "sourceImageUrl",
@@ -66,13 +67,14 @@ const DIRTY_TRACKED_FIELDS: ReadonlySet<DirtyTrackedField> = new Set([
   "bodyAngles",
   "lightingVariations",
   "motions",
+  "boards",
 ])
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
 export type StudioPendingJobSeed = {
   jobId: string
-  assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"
+  assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions" | "boards"
   name: string
 }
 
@@ -138,6 +140,7 @@ function buildInsertPayload(nodeId: string, d: CharacterNodeData) {
     canonicalDescription: d.canonicalDescription,
     realLifeRefsByVariant: d.realLifeRefsByVariant,
     identityLock: d.identityLock,
+    boards: d.boards ? [...d.boards.map((b) => ({ ...b, sourceImages: b.sourceImages ? [...b.sourceImages] : undefined }))] : undefined,
   }
 }
 
@@ -173,6 +176,7 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
   if (dirty.has("motions")) payload.motions = d.motions
   if (dirty.has("canonicalDescription")) payload.canonicalDescription = d.canonicalDescription
   if (dirty.has("realLifeRefsByVariant")) payload.realLifeRefsByVariant = d.realLifeRefsByVariant
+  if (dirty.has("boards")) payload.boards = d.boards ? d.boards.map((b) => ({ ...b, sourceImages: b.sourceImages ? [...b.sourceImages] : undefined })) : undefined
   return payload
 }
 
