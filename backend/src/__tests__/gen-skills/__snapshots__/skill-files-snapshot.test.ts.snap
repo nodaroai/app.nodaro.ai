@@ -288,7 +288,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`extraRefs?: readonly ExtraRef[]\`
 - \`videoPlayState?: "loop" | "paused" | "stopped"\`
 - \`pausedAtTime?: number\`
-- \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"\`
+- \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"\`
 - \`referenceImageOrder?: readonly string[]\`
 
 **Default data:**
@@ -410,7 +410,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`generatedVideoUrl?: string\`
 - \`generatedResults?: GeneratedResult[]\`
 - \`activeResultIndex?: number\`
-- \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"\`
+- \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"\`
 - \`multiShot?: boolean\`
 - \`resolution?: string\`
 - \`grokMode?: "fun" | "normal" | "spicy"\`

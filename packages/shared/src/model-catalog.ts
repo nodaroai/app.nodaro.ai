@@ -187,6 +187,10 @@ const VIDEO_RATIOS_HVS345 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // (docs.kie.ai/market/bytedance/seedance-2). Kept separate from HVS so the
 // wider set can't leak to models that don't support it.
 const VIDEO_RATIOS_SEEDANCE_2 = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"] as const
+// HappyHorse 1.1 (t2v + ref2v) — the model's full 9-ratio set incl. 4:5/5:4
+// portrait-social and 21:9/9:21 cinematic (docs.kie.ai/market/happyhorse-1-1).
+// Kept separate so the wider set can't leak to models that don't support it.
+const VIDEO_RATIOS_HAPPYHORSE_11 = ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1377,21 +1381,22 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "wan-2.7-t2v", credits: 19, note: "5s 720p default" },
     ],
   },
-  // ── HappyHorse ──
+  // ── HappyHorse (1.1 — ids kept version-less; repointed in place when KIE
+  // delisted 1.0, same param surface, so saved workflows keep working) ──
   "happyhorse": {
     id: "happyhorse",
     kind: "video",
     modes: ["t2v"] as const,
     family: "HappyHorse",
-    label: "HappyHorse",
+    label: "HappyHorse 1.1",
     series: "HappyHorse",
-    description: "HappyHorse text-to-video — 3–15s at 720p/1080p.",
+    description: "HappyHorse 1.1 text-to-video — 3–15s at 720p/1080p, 9 aspect ratios incl. 21:9/9:21, per-second pricing.",
     useCases: ["motion", "creative"],
-    aspectRatios: VIDEO_RATIOS_HVS345,
+    aspectRatios: VIDEO_RATIOS_HAPPYHORSE_11,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse", credits: 13, note: "5s 720p default" },
+      { identifier: "happyhorse", credits: 29, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
   },
   "happyhorse-i2v": {
@@ -1399,14 +1404,14 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["i2v"] as const,
     family: "HappyHorse",
-    label: "HappyHorse I2V",
+    label: "HappyHorse 1.1 I2V",
     series: "HappyHorse",
-    description: "HappyHorse image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image.",
+    description: "HappyHorse 1.1 image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image, per-second pricing.",
     useCases: ["motion", "creative"],
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse-i2v", credits: 13, note: "5s 720p default" },
+      { identifier: "happyhorse-i2v", credits: 29, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
   },
   "happyhorse-ref2v": {
@@ -1414,16 +1419,16 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["i2v"] as const,
     family: "HappyHorse",
-    label: "HappyHorse Ref2V",
+    label: "HappyHorse 1.1 Ref2V",
     series: "HappyHorse",
-    description: "HappyHorse reference-to-video — 1–9 reference images, 3–15s at 720p/1080p.",
+    description: "HappyHorse 1.1 reference-to-video — 1–9 reference images, 3–15s at 720p/1080p, per-second pricing.",
     useCases: ["motion", "reference"],
-    aspectRatios: VIDEO_RATIOS_HVS345,
+    aspectRatios: VIDEO_RATIOS_HAPPYHORSE_11,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     features: ["reference-image"],
     pricing: [
-      { identifier: "happyhorse-ref2v", credits: 15, note: "5s 720p default" },
+      { identifier: "happyhorse-ref2v", credits: 29, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
   },
   "happyhorse-edit": {
@@ -1437,7 +1442,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["v2v", "restyle"],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse-edit", credits: 20, note: "720p default" },
+      { identifier: "happyhorse-edit", credits: 35, note: "720p default (5s-equivalent flat rate)" },
     ],
   },
   // ── Bytedance video lite/pro ──

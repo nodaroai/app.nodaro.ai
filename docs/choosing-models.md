@@ -103,11 +103,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Wan 2.2 Turbo | Alibaba | Everyday | 10 | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 11 | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Video Analysis (Gemini 3.1 Pro) | Google | Everyday | 11 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket. |
-| HappyHorse | HappyHorse | Everyday | 13 | t2v | HappyHorse text-to-video — 3–15s at 720p/1080p. |
-| HappyHorse I2V | HappyHorse | Everyday | 13 | i2v | HappyHorse image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image. |
 | Wan Flash V2V | Alibaba | Everyday | 13 | v2v | Faster Wan V2V variant. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 15 | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
-| HappyHorse Ref2V | HappyHorse | Everyday | 15 | i2v | HappyHorse reference-to-video — 1–9 reference images, 3–15s at 720p/1080p. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 15 | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |
 | ⭐ VEO 3.1 Fast | Google | Everyday | 15 | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
 | Bytedance Pro I2V | Bytedance | Standard | 18 | i2v, t2v | Pro Bytedance video tier — better quality. |
@@ -119,16 +116,19 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Wan 2.7 I2V | Alibaba | Standard | 19 | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Standard | 19 | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 20 | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
-| HappyHorse Edit | HappyHorse | Standard | 20 | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
 | Gemini Omni | Google | Standard | 23 | i2v, t2v | Google multimodal video with native audio; text/image-to-video + video-edit. |
 | Kling 3 Omni | Kuaishou | Standard | 25 | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
 | Kling 2.6 | Kuaishou | Standard | 28 | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |
 | Kling Avatar Standard | Kuaishou | Standard | 28 | lip-sync | Lip-sync a still portrait to driving audio. Standard quality. |
+| HappyHorse 1.1 | HappyHorse | Standard | 29 | t2v | HappyHorse 1.1 text-to-video — 3–15s at 720p/1080p, 9 aspect ratios incl. 21:9/9:21, per-second pricing. |
+| HappyHorse 1.1 I2V | HappyHorse | Standard | 29 | i2v | HappyHorse 1.1 image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image, per-second pricing. |
+| HappyHorse 1.1 Ref2V | HappyHorse | Standard | 29 | i2v | HappyHorse 1.1 reference-to-video — 1–9 reference images, 3–15s at 720p/1080p, per-second pricing. |
 | Grok Imagine Video 1.5 | xAI | Standard | 30 | i2v | Grok Imagine 1.5 image-to-video — 1–15s, 480p/720p, per-second pricing. Requires an input image. |
 | Kling 3.0 Motion Transfer | Kuaishou | Standard | 30 | motion-transfer | Premium motion transfer via Kling 3.0. |
 | Seedance 2 Fast | Bytedance | Standard | 31 | i2v, t2v | Cheaper / quicker Seedance 2 tier. |
 | Runway Extend | Runway | Standard | 32 | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 32 | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
+| HappyHorse Edit | HappyHorse | Standard | 35 | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
 | Runway Aleph V2V | Runway | Standard | 35 | v2v | Runway Aleph — video-to-video conversion. |
 | Seedance 2 | Bytedance | Standard | 38 | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Standard | 38 | video-upscale | Upscale VEO output to 4K. |

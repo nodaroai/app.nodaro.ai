@@ -36,6 +36,7 @@ export interface KieModelConfig {
   defaultResolution?: string               // KIE resolution value when none supplied
   supportsFastMode?: boolean               // emit pe_fast_mode from options
   supportsSeed?: boolean                   // emit seed from options
+  omitSeed?: boolean                       // NEVER send seed — model schema rejects it (additionalProperties: false)
 }
 
 // =============================================================================
@@ -614,25 +615,36 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // HappyHorse I2V — image_urls array (single-element), 3–15s, AR inferred from image
-  // See: docs.kie.ai/market/happyhorse/image-to-video.md
+  // HappyHorse 1.1 I2V — image_urls array (single-element), 3–15s, AR inferred from image.
+  // Per-second billing: KIE 22.5 cr/s @720p, 29 cr/s @1080p (published). The Nodaro
+  // charge is seeded per (duration × resolution) in STATIC_CREDIT_COSTS + model_pricing;
+  // `credits`/`cost` below are the KIE-side default tier (5s @720p) for audit logging.
+  // resolution is pinned so the render default matches the billing default (KIE would
+  // otherwise default to 1080p). 1.1 removed `seed` (additionalProperties: false).
+  // See: docs.kie.ai/market/happyhorse-1-1/image-to-video.md
   "happyhorse-i2v": {
-    model: "happyhorse/image-to-video",
-    credits: 50,
-    cost: 0.250,  // (5s 720p)
+    model: "happyhorse-1-1/image-to-video",
+    credits: 112.5,          // KIE: 22.5 × 5 (5s @720p default tier)
+    cost: 0.5625,
     imageParam: "image_urls",  // array format (single-element)
+    extraParams: { resolution: "720p" },
+    omitSeed: true,
     supportsEndFrame: false,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // HappyHorse Ref2V — reference_image array (1–9 ref images), 3–15s
-  // See: docs.kie.ai/market/happyhorse/reference-to-video.md
+  // HappyHorse 1.1 Ref2V — reference_image array (1–9 ref images), 3–15s.
+  // Billing identical to happyhorse-i2v (see above). Prompt can address refs as
+  // "[Image 1]"…"[Image 9]" in media-array order.
+  // See: docs.kie.ai/market/happyhorse-1-1/reference-to-video.md
   "happyhorse-ref2v": {
-    model: "happyhorse/reference-to-video",
-    credits: 60,
-    cost: 0.300,  // (5s 720p)
+    model: "happyhorse-1-1/reference-to-video",
+    credits: 112.5,          // KIE: 22.5 × 5 (5s @720p default tier)
+    cost: 0.5625,
     imageParam: "reference_image",  // array of up to 9 ref image URLs
     maxRefImages: 9,
+    extraParams: { resolution: "720p" },
+    omitSeed: true,
     supportsEndFrame: false,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
@@ -948,12 +960,18 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // HappyHorse T2V — 3–15s, 720p/1080p
-  // See: docs.kie.ai/market/happyhorse/text-to-video.md
+  // HappyHorse 1.1 T2V — 3–15s, 720p/1080p, 9 aspect ratios (incl. 4:5/5:4/21:9/9:21).
+  // Per-second billing: KIE 22.5 cr/s @720p, 29 cr/s @1080p (published); Nodaro charge
+  // seeded per (duration × resolution) — `credits`/`cost` are the 5s @720p default tier
+  // for audit logging. resolution pinned to keep render = billed default; `seed` was
+  // removed in 1.1 (additionalProperties: false), hence omitSeed.
+  // See: docs.kie.ai/market/happyhorse-1-1/text-to-video.md
   "happyhorse": {
-    model: "happyhorse/text-to-video",
-    credits: 50,
-    cost: 0.250,  // (5s 720p)
+    model: "happyhorse-1-1/text-to-video",
+    credits: 112.5,          // KIE: 22.5 × 5 (5s @720p default tier)
+    cost: 0.5625,
+    extraParams: { resolution: "720p" },
+    omitSeed: true,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 }
@@ -1018,15 +1036,19 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: {},
   },
 
-  // HappyHorse Video Edit — video-to-video, up to 60s input, 720p/1080p
-  // Initial release: video URL only. ref images param TBD from KIE API testing.
+  // HappyHorse Video Edit — video-to-video, up to 60s input, 720p/1080p.
+  // Stays on the 1.0 endpoint: the 1.1 release has NO video-edit mode. KIE bills
+  // per second (published: 28 cr/s @720p, 48 cr/s @1080p); we charge a flat
+  // 5s-@720p-equivalent because the input clip's duration isn't known at credit
+  // reservation time (see STATIC_CREDIT_COSTS note). resolution pinned to 720p
+  // so the render default matches the billed assumption.
   // See: docs.kie.ai/market/happyhorse/video-edit.md
   "happyhorse-edit": {
     model: "happyhorse/video-edit",
-    credits: 80,
-    cost: 0.400,
+    credits: 140,            // KIE: 28 × 5 (5s @720p equivalent)
+    cost: 0.700,
     imageParam: "video_url",  // input video URL (single string)
-    extraParams: {},
+    extraParams: { resolution: "720p" },
   },
 }
 

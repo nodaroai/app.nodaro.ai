@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-06-29T17:01:42.002Z
-generated_from: ef9c0616e
+generated_at: 2026-07-10T13:39:33.164Z
+generated_from: de3f9958
 ---
 
 # image-to-video
@@ -31,7 +31,7 @@ generated_from: ef9c0616e
 - `generatedVideoUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
-- `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"`
+- `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"`
 - `multiShot?: boolean`
 - `resolution?: string`
 - `grokMode?: "fun" | "normal" | "spicy"`

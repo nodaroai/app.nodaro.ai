@@ -560,18 +560,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "wan-2.7-pro:2K": 6,     // ( est.)
   "wan-2.7-pro:4K": 12,    // ( est.)
 
-  // ⚠️ UNDERCHARGE (deferred — needs owner cost data): the wan-2.7-i2v/t2v and
-  // happyhorse/-i2v/-ref2v entries below are FLAT prices for "5s 720p", but the
-  // nodes expose 2–15s (wan-2.7) / 3–15s (happyhorse) durations and 720p/1080p
-  // (KIE default 1080p). These providers are NOT in DURATION_PRICED_PROVIDERS /
-  // VIDEO_DURATION_TIERS / the resolution-tier sets (model-constants.ts), so
-  // buildVideoCreditModelIdentifier returns the bare key and any duration/res is
-  // charged the 5s-720p flat rate — an undercharge vs KIE (the sibling wan-i2v
-  // correctly tiers 5/10/15s). FIX requires KIE's actual per-duration/per-1080p
-  // rates for wan-2.7 + happyhorse (NOT published in the OpenAPI docs / dashboard
-  // only); do NOT guess linear — if KIE bills flat-per-generation, linear tiers
-  // would OVERCHARGE users on long clips. Wire tiers + composite keys (mirror
-  // wan-i2v / seedance-2) once rates are confirmed, then run `audit-credits`.
+  // ⚠️ UNDERCHARGE (deferred — needs owner cost data): the wan-2.7-i2v/t2v
+  // entries below are FLAT prices for "5s 720p", but the nodes expose 2–15s
+  // durations and 720p/1080p (KIE default 1080p). wan-2.7 is NOT in
+  // DURATION_PRICED_PROVIDERS / VIDEO_DURATION_TIERS / the resolution-tier sets
+  // (model-constants.ts), so buildVideoCreditModelIdentifier returns the bare
+  // key and any duration/res is charged the 5s-720p flat rate — an undercharge
+  // vs KIE (the sibling wan-i2v correctly tiers 5/10/15s). FIX requires KIE's
+  // actual per-duration/per-1080p rates for wan-2.7 (NOT published in the
+  // OpenAPI docs / dashboard only); do NOT guess linear — if KIE bills
+  // flat-per-generation, linear tiers would OVERCHARGE users on long clips.
+  // Wire tiers + composite keys (mirror wan-i2v / happyhorse) once rates are
+  // confirmed, then run `audit-credits`.
 
   // Wan 2.7 I2V (estimated)
   "wan-2.7-i2v": 19,    // (5s 720p)
@@ -579,11 +579,53 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Wan 2.7 T2V (estimated)
   "wan-2.7-t2v": 19,    // (5s 720p)
 
-  // HappyHorse (estimated)
-  "happyhorse": 13,        // (5s 720p)
-  "happyhorse-i2v": 13,    // (5s 720p)
-  "happyhorse-ref2v": 15,  // (5s 720p)
-  "happyhorse-edit": 20,
+  // HappyHorse 1.1 (t2v / i2v / ref2v) — true per-second billing, published on
+  // kie.ai/happyhorse-1-1: 22.5 KIE cr/s @720p, 29 KIE cr/s @1080p, identical
+  // across all three modes. Seeded per (duration × resolution) like
+  // grok-imagine-video-1.5; base fallback = 5s @720p.
+  "happyhorse": 29,        // (5s 720p fallback)
+  // 720p — ceil(22.5 × s ÷ 4)
+  "happyhorse:3s:720p": 17, "happyhorse:4s:720p": 23, "happyhorse:5s:720p": 29,
+  "happyhorse:6s:720p": 34, "happyhorse:7s:720p": 40, "happyhorse:8s:720p": 45,
+  "happyhorse:9s:720p": 51, "happyhorse:10s:720p": 57, "happyhorse:11s:720p": 62,
+  "happyhorse:12s:720p": 68, "happyhorse:13s:720p": 74, "happyhorse:14s:720p": 79,
+  "happyhorse:15s:720p": 85,
+  // 1080p — ceil(29 × s ÷ 4)
+  "happyhorse:3s:1080p": 22, "happyhorse:4s:1080p": 29, "happyhorse:5s:1080p": 37,
+  "happyhorse:6s:1080p": 44, "happyhorse:7s:1080p": 51, "happyhorse:8s:1080p": 58,
+  "happyhorse:9s:1080p": 66, "happyhorse:10s:1080p": 73, "happyhorse:11s:1080p": 80,
+  "happyhorse:12s:1080p": 87, "happyhorse:13s:1080p": 95, "happyhorse:14s:1080p": 102,
+  "happyhorse:15s:1080p": 109,
+  "happyhorse-i2v": 29,    // (5s 720p fallback)
+  "happyhorse-i2v:3s:720p": 17, "happyhorse-i2v:4s:720p": 23, "happyhorse-i2v:5s:720p": 29,
+  "happyhorse-i2v:6s:720p": 34, "happyhorse-i2v:7s:720p": 40, "happyhorse-i2v:8s:720p": 45,
+  "happyhorse-i2v:9s:720p": 51, "happyhorse-i2v:10s:720p": 57, "happyhorse-i2v:11s:720p": 62,
+  "happyhorse-i2v:12s:720p": 68, "happyhorse-i2v:13s:720p": 74, "happyhorse-i2v:14s:720p": 79,
+  "happyhorse-i2v:15s:720p": 85,
+  "happyhorse-i2v:3s:1080p": 22, "happyhorse-i2v:4s:1080p": 29, "happyhorse-i2v:5s:1080p": 37,
+  "happyhorse-i2v:6s:1080p": 44, "happyhorse-i2v:7s:1080p": 51, "happyhorse-i2v:8s:1080p": 58,
+  "happyhorse-i2v:9s:1080p": 66, "happyhorse-i2v:10s:1080p": 73, "happyhorse-i2v:11s:1080p": 80,
+  "happyhorse-i2v:12s:1080p": 87, "happyhorse-i2v:13s:1080p": 95, "happyhorse-i2v:14s:1080p": 102,
+  "happyhorse-i2v:15s:1080p": 109,
+  "happyhorse-ref2v": 29,  // (5s 720p fallback)
+  "happyhorse-ref2v:3s:720p": 17, "happyhorse-ref2v:4s:720p": 23, "happyhorse-ref2v:5s:720p": 29,
+  "happyhorse-ref2v:6s:720p": 34, "happyhorse-ref2v:7s:720p": 40, "happyhorse-ref2v:8s:720p": 45,
+  "happyhorse-ref2v:9s:720p": 51, "happyhorse-ref2v:10s:720p": 57, "happyhorse-ref2v:11s:720p": 62,
+  "happyhorse-ref2v:12s:720p": 68, "happyhorse-ref2v:13s:720p": 74, "happyhorse-ref2v:14s:720p": 79,
+  "happyhorse-ref2v:15s:720p": 85,
+  "happyhorse-ref2v:3s:1080p": 22, "happyhorse-ref2v:4s:1080p": 29, "happyhorse-ref2v:5s:1080p": 37,
+  "happyhorse-ref2v:6s:1080p": 44, "happyhorse-ref2v:7s:1080p": 51, "happyhorse-ref2v:8s:1080p": 58,
+  "happyhorse-ref2v:9s:1080p": 66, "happyhorse-ref2v:10s:1080p": 73, "happyhorse-ref2v:11s:1080p": 80,
+  "happyhorse-ref2v:12s:1080p": 87, "happyhorse-ref2v:13s:1080p": 95, "happyhorse-ref2v:14s:1080p": 102,
+  "happyhorse-ref2v:15s:1080p": 109,
+  // HappyHorse Edit stays on the 1.0 endpoint (1.1 has no video-edit mode).
+  // KIE bills per second (published: 28 cr/s @720p, 48 cr/s @1080p) but the
+  // input clip's duration isn't known at reservation time (the v2v route has
+  // no duration probe), so this is a flat 5s-@720p-equivalent: ceil(28×5÷4).
+  // The render default is pinned to 720p in kie/models.ts to match. Longer
+  // inputs still under-bill — wiring duration-aware pricing needs an input
+  // probe (deferred; watch `audit-credits`).
+  "happyhorse-edit": 35,
   "luma-modify": 32,             // (not in KIE pricing data)
   "runway-aleph": 35,             // (V2V conversion)
   "topaz-video": 19,             // (12 cr/sec * ~5s)
