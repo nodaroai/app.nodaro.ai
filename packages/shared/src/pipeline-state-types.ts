@@ -148,7 +148,7 @@ export const StageAwaitingSubGateEventSchema = z.object({
   pipelineId: z.string().uuid(),
   stageName: z.enum(["animate_audio_edit", "scene_images"]),
   subGate: SubGateNameSchema,
-  payload: z.record(z.unknown()).optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
 })
 export type StageAwaitingSubGateEvent = z.infer<typeof StageAwaitingSubGateEventSchema>
 

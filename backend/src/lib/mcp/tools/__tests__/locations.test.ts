@@ -24,7 +24,7 @@ const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>
 
 const ALLEY_ID = "11111111-1111-4111-8111-111111111111"
 const ROOFTOP_ID = "22222222-2222-4222-8222-222222222222"
-const CANDIDATE_JOB_ID = "00000000-0000-0000-0000-000000000099"
+const CANDIDATE_JOB_ID = "00000000-0000-4000-8000-000000000099"
 
 beforeEach(() => {
   vi.clearAllMocks()

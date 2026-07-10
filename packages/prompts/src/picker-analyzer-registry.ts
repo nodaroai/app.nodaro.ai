@@ -188,7 +188,7 @@ export function buildPickerAnalyzerSpec(pickerType: PickerType): PickerAnalyzerS
  *  (multi). `.strict()` blocks unknown keys. Mirrors the field cardinality. */
 export function buildPickerZodSchema(
   spec: PickerAnalyzerSpec,
-): z.ZodType<Record<string, string | string[]>, z.ZodTypeDef, unknown> {
+): z.ZodType<Record<string, string | string[]>, unknown> {
   const shape: Record<string, z.ZodTypeAny> = {}
   for (const d of spec.dimensions) {
     const ids = d.entryIds as unknown as [string, ...string[]]
@@ -196,16 +196,12 @@ export function buildPickerZodSchema(
     shape[d.dimension] = d.limit > 1 ? z.array(enumZ).max(d.limit).optional() : enumZ.optional()
   }
   // dynamic shape → Zod can't infer the narrowed output type; runtime-validated by picker-analyzer-registry.test.ts
-  return z.object(shape).strict() as unknown as z.ZodType<
-    Record<string, string | string[]>,
-    z.ZodTypeDef,
-    unknown
-  >
+  return z.object(shape).strict() as unknown as z.ZodType<Record<string, string | string[]>, unknown>
 }
 
 export interface PickerAnalyzer {
   readonly spec: PickerAnalyzerSpec
-  readonly schema: z.ZodType<Record<string, string | string[]>, z.ZodTypeDef, unknown>
+  readonly schema: z.ZodType<Record<string, string | string[]>, unknown>
   readonly legend: string
 }
 
@@ -265,7 +261,7 @@ export interface PickerGaps {
 }
 
 export interface MultiPickerAnalyzerSpec {
-  readonly schema: z.ZodType<Record<string, unknown>, z.ZodTypeDef, unknown>
+  readonly schema: z.ZodType<Record<string, unknown>, unknown>
   readonly toolName: string
   readonly legend: string
 }

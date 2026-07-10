@@ -81,7 +81,7 @@ const upsertCreatureBody = z.object({
   // value = the chosen URL. User-owned (flows through INSERT + UPDATE). Validate
   // values are strings; caps + verbatim-key passthrough happen in
   // `capSelectedAssetByVariant` (soft-capped, overflow dropped — NOT a 400).
-  selectedAssetByVariant: z.record(z.string()).optional(),
+  selectedAssetByVariant: z.record(z.string(), z.string()).optional(),
   // Optimistic-concurrency token: when present, UPDATE only succeeds if the
   // row's `updated_at` still matches. On mismatch we return 409 so the Studio
   // can re-fetch + merge instead of silently overwriting a worker write.

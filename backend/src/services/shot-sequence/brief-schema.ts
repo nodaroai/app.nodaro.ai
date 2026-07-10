@@ -31,7 +31,7 @@ const revealAnchorSchema = z.discriminatedUnion("kind", [
 
 const briefBlueprintSchema = z.object({
   id: z.string(),
-  params: z.record(z.unknown()),
+  params: z.record(z.string(), z.unknown()),
 })
 
 export const briefRevealSchema = z

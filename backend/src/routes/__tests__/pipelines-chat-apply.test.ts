@@ -67,11 +67,11 @@ vi.mock("../../ee/pipelines/chat/apply-stage-edit.js", () => ({
 // Supabase fixtures.
 // ---------------------------------------------------------------------------
 
-const PIPELINE_ID = "00000000-0000-0000-0000-000000000111"
-const STAGE_ID = "00000000-0000-0000-0000-000000000222"
-const TURN_ID = "00000000-0000-0000-0000-000000000333"
-const FOLLOWUP_TURN_ID = "00000000-0000-0000-0000-000000000444"
-const NEW_ATTEMPT_ID = "00000000-0000-0000-0000-000000000555"
+const PIPELINE_ID = "00000000-0000-4000-8000-000000000111"
+const STAGE_ID = "00000000-0000-4000-8000-000000000222"
+const TURN_ID = "00000000-0000-4000-8000-000000000333"
+const FOLLOWUP_TURN_ID = "00000000-0000-4000-8000-000000000444"
+const NEW_ATTEMPT_ID = "00000000-0000-4000-8000-000000000555"
 const TEST_USER_ID = "user-1"
 const OTHER_USER_ID = "user-2"
 
@@ -302,7 +302,7 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply", (
     setHappyPathFixtures()
     turnFixture = {
       ...turnFixture!,
-      applied_to_attempt_id: "00000000-0000-0000-0000-00000000aaaa",
+      applied_to_attempt_id: "00000000-0000-4000-8000-00000000aaaa",
     }
     const app = await makeApp()
     const res = await app.inject({ method: "POST", url: URL() })

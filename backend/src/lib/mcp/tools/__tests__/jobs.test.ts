@@ -84,7 +84,7 @@ describe("list_jobs tool", () => {
 describe("get_job tool", () => {
   it("returns single job row when owned", async () => {
     mockGetJob({
-      id: "11111111-1111-1111-1111-111111111111",
+      id: "11111111-1111-4111-8111-111111111111",
       user_id: "u1",
       status: "completed",
       output_data: { imageUrl: "https://r2/x.png" },
@@ -100,15 +100,15 @@ describe("get_job tool", () => {
       fastify: Fastify(),
     })
     const result = await callTool(server, "get_job", {
-      job_id: "11111111-1111-1111-1111-111111111111",
+      job_id: "11111111-1111-4111-8111-111111111111",
     })
     expect(result.isError).toBeUndefined()
-    expect(result.content[0]?.text).toContain("11111111-1111-1111-1111-111111111111")
+    expect(result.content[0]?.text).toContain("11111111-1111-4111-8111-111111111111")
   })
 
   it("adds retryable=false for a content-policy failure", async () => {
     mockGetJob({
-      id: "22222222-2222-2222-2222-222222222222",
+      id: "22222222-2222-4222-8222-222222222222",
       user_id: "u1",
       status: "failed",
       error_message:
@@ -125,7 +125,7 @@ describe("get_job tool", () => {
       fastify: Fastify(),
     })
     const result = await callTool(server, "get_job", {
-      job_id: "22222222-2222-2222-2222-222222222222",
+      job_id: "22222222-2222-4222-8222-222222222222",
     })
     expect(result.isError).toBeUndefined()
     expect(result.content[0]?.text).toContain('"retryable": false')

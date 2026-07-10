@@ -18,7 +18,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 // JSON object here.
 const reduceBody = z.object({
   strategyId: z.enum(REDUCE_STRATEGY_IDS as [string, ...string[]]),
-  strategyConfig: z.record(z.unknown()).default({}),
+  strategyConfig: z.record(z.string(), z.unknown()).default({}),
   inputs: z.array(z.string()).max(1000),
 })
 

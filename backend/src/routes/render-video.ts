@@ -147,7 +147,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 
 const renderPlanBody = z.object({
   planType: z.enum(PLAN_TYPES),
-  plan: z.record(z.unknown()),
+  plan: z.record(z.string(), z.unknown()),
   userId: z.string().uuid().optional(),
 })
 

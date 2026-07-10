@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { referenceSheetBody } from "../reference-sheet.schema.js"
 const base = {
-  entityKind: "character", entityDbId: "11111111-1111-1111-1111-111111111111",
+  entityKind: "character", entityDbId: "11111111-1111-4111-8111-111111111111",
   type: "turnaround", skin: "studio",
   flavour: { outputFormat: "still", withText: true, showLabels: true, aspect: "landscape", background: "grey", sections: [{ kind: "head-turnaround" }] },
 }

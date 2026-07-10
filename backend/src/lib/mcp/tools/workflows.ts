@@ -233,9 +233,9 @@ export function registerWorkflows({
         inputSchema: {
           name: z.string().min(1).max(200),
           description: z.string().max(2000).optional(),
-          nodes: z.array(z.record(z.unknown())).optional(),
-          edges: z.array(z.record(z.unknown())).optional(),
-          settings: z.record(z.unknown()).optional(),
+          nodes: z.array(z.record(z.string(), z.unknown())).optional(),
+          edges: z.array(z.record(z.string(), z.unknown())).optional(),
+          settings: z.record(z.string(), z.unknown()).optional(),
         },
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
@@ -305,9 +305,9 @@ export function registerWorkflows({
           "Update a workflow in the mcp project: replace its node graph (nodes + edges together), and/or its settings, and/or its thumbnail_url. All content fields are optional — e.g. pass only thumbnail_url to set the preview image without re-sending the graph. Supply expected_updated_at or expected_version (from get_workflow_json) to enable optimistic concurrency control.",
         inputSchema: {
           workflow_id: z.string().uuid(),
-          nodes: z.array(z.record(z.unknown())).optional(),
-          edges: z.array(z.record(z.unknown())).optional(),
-          settings: z.record(z.unknown()).optional(),
+          nodes: z.array(z.record(z.string(), z.unknown())).optional(),
+          edges: z.array(z.record(z.string(), z.unknown())).optional(),
+          settings: z.record(z.string(), z.unknown()).optional(),
           thumbnail_url: z
             .string()
             .url()
