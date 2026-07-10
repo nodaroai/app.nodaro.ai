@@ -625,6 +625,33 @@ describe("transcribe — provider: elevenlabs-stt", () => {
 
     expect(mocks.predictionsCreate).not.toHaveBeenCalled()
   })
+
+  it("maps KIE words to Caption-shaped words with speaker", async () => {
+    mocks.speechToText.mockResolvedValueOnce({
+      text: "hi there", language: "en", cost: 0.01,
+      words: [
+        { text: "hi", start: 0.12, end: 0.5, speaker: "speaker_1" },
+        { text: "there", start: 0.55, end: 0.9, speaker: "speaker_2" },
+      ],
+    })
+
+    const result = await transcribe("https://r2.example/a.mp3", "elevenlabs-stt", undefined, { diarize: true })
+
+    expect(result.words).toEqual([
+      { text: "hi", startMs: 120, endMs: 500, timestampMs: null, confidence: null, speaker: "speaker_1" },
+      { text: "there", startMs: 550, endMs: 900, timestampMs: null, confidence: null, speaker: "speaker_2" },
+    ])
+  })
+
+  it("omits words when the provider returns none", async () => {
+    mocks.speechToText.mockResolvedValueOnce({
+      text: "hi", language: "en", cost: 0.01, words: undefined,
+    })
+
+    const result = await transcribe("https://r2.example/a.mp3", "elevenlabs-stt")
+
+    expect(result.words).toBeUndefined()
+  })
 })
 
 // ===========================================================================
