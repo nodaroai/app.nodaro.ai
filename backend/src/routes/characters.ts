@@ -142,7 +142,7 @@ export const upsertCharacterBody = z.object({
       { message: "Each non-`other` kind may appear at most once" },
     ),
   realLifeRefsByVariant: z
-    .record(z.array(safeUrlSchema).max(5))
+    .record(z.string(), z.array(safeUrlSchema).max(5))
     .optional()
     .refine((obj) => !obj || Object.keys(obj).length <= 20, {
       message: "real_life_refs_by_variant: max 20 keys",
@@ -152,7 +152,7 @@ export const upsertCharacterBody = z.object({
   // shape + caps (20 keys, 5 URLs each). Read back off the row to feed
   // generate-video's `referenceVideoUrls`.
   referenceVideosByVariant: z
-    .record(z.array(safeUrlSchema).max(5))
+    .record(z.string(), z.array(safeUrlSchema).max(5))
     .optional()
     .refine((obj) => !obj || Object.keys(obj).length <= 20, {
       message: "reference_videos_by_variant: max 20 keys",
@@ -162,7 +162,7 @@ export const upsertCharacterBody = z.object({
   // value = the chosen URL. Validate values are strings; caps + key passthrough
   // happen in `capSelectedAssetByVariant` (soft-capped, overflow dropped — NOT a
   // 400), so unlike `referenceVideosByVariant` we DON'T normalize keys or refine.
-  selectedAssetByVariant: z.record(z.string()).optional(),
+  selectedAssetByVariant: z.record(z.string(), z.string()).optional(),
 })
 
 const deleteCharacterParams = z.object({

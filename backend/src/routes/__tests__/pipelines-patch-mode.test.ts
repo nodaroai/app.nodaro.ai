@@ -59,7 +59,7 @@ vi.mock("../../ee/pipelines/events.js", () => ({
 // assert which field gets mutated.
 // ---------------------------------------------------------------------------
 
-const PIPELINE_ID = "00000000-0000-0000-0000-000000000111"
+const PIPELINE_ID = "00000000-0000-4000-8000-000000000111"
 const TEST_USER_ID = "user-1"
 const OTHER_USER_ID = "user-2"
 

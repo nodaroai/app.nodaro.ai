@@ -14,9 +14,9 @@ import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
 import { calculateLlmCost } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
-import type { ZodType } from "zod"
-import zodToJsonSchema from "zod-to-json-schema"
+import { z, type ZodType } from "zod"
 import { extractJsonFromAIResponse } from "./json-utils.js"
+import { restrictObjectSchemas } from "./json-schema-strict.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
@@ -138,7 +138,10 @@ export async function llmCompleteStructured<T>(
   const schemaName = opts?.schemaName ?? "result"
   const retries = Math.max(0, opts?.maxRetries ?? 2)
   // Draft-7 keeps Anthropic's tool input_schema happy; strip the $schema marker.
-  const jsonSchema = zodToJsonSchema(schema, { target: "jsonSchema7" }) as Record<string, unknown>
+  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
+  const jsonSchema = restrictObjectSchemas(
+    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
+  )
   delete jsonSchema.$schema
 
   let messages = req.messages

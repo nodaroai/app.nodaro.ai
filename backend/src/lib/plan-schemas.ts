@@ -426,9 +426,9 @@ export const lottieGraphicPlanSchema = z
     height: z.number().min(100).max(3840),
     durationInFrames: z.number().min(1).max(54000),
     backgroundColor: z.string(),
-    lottie: z.record(z.unknown()),
-    slots: z.record(z.unknown()).default({}),
-    slotValues: z.record(z.unknown()).default({}),
+    lottie: z.record(z.string(), z.unknown()),
+    slots: z.record(z.string(), z.unknown()).default({}),
+    slotValues: z.record(z.string(), z.unknown()).default({}),
   })
   .passthrough()
 
@@ -656,7 +656,7 @@ export const shotElementSchema = z.discriminatedUnion("type", [
 
 const resolvedBlueprintSchema = z.object({
   id: z.string(),
-  params: z.record(z.unknown()),
+  params: z.record(z.string(), z.unknown()),
 })
 
 const resolvedRevealSchema = z

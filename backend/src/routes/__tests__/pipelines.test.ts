@@ -57,7 +57,7 @@ vi.mock("../../ee/pipelines/events.js", () => ({
 // must be self-contained (no top-level variables captured from the test file).
 // ---------------------------------------------------------------------------
 
-const PIPELINE_ID = "00000000-0000-0000-0000-000000000111"
+const PIPELINE_ID = "00000000-0000-4000-8000-000000000111"
 const TEST_USER_ID = "user-1"
 
 vi.mock("../../lib/supabase.js", () => {
@@ -67,7 +67,7 @@ vi.mock("../../lib/supabase.js", () => {
     if (table === "pipelines") {
       return {
         insert: (row: Record<string, unknown>) => {
-          const id = "00000000-0000-0000-0000-000000000111"
+          const id = "00000000-0000-4000-8000-000000000111"
           pipelinesById.set(id, { id, ...row })
           return {
             select: () => ({
@@ -603,7 +603,7 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/approve-description", () =>
   it("returns 404 when pipeline is owned by a different user", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/v1/pipelines/00000000-0000-0000-0000-000000000999/entities/e1/approve-description`,
+      url: `/v1/pipelines/00000000-0000-4000-8000-000000000999/entities/e1/approve-description`,
       payload: { mode: "llm" },
     })
     expect(res.statusCode).toBe(404)
@@ -698,7 +698,7 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/skip", () => {
   it("returns 404 when pipeline is owned by a different user", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/v1/pipelines/00000000-0000-0000-0000-000000000999/entities/e1/skip`,
+      url: `/v1/pipelines/00000000-0000-4000-8000-000000000999/entities/e1/skip`,
     })
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe("not_found")

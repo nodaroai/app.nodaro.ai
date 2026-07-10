@@ -89,7 +89,7 @@ export const ShotSpecSchema = z.object({
   camera_path_directive: z
     .object({
       path_kind: z.enum(["orbit", "dolly", "crane", "arc", "reveal"]),
-      parameters: z.record(z.unknown()).optional(),
+      parameters: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
 

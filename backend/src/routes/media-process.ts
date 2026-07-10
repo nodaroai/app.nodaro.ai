@@ -74,7 +74,7 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: {
           code: "validation_error",
-          message: parsed.error.errors.map((e) => e.message).join(", "),
+          message: parsed.error.issues.map((e) => e.message).join(", "),
         },
       })
     }

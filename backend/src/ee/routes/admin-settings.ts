@@ -5,7 +5,7 @@ import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 
 const updateSettingBody = z.object({
-  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.unknown())]),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.string(), z.unknown())]),
 })
 
 const settingKeyParams = z.object({

@@ -374,7 +374,7 @@ describe("STRIPE_FIXTURES × STRIPE_EVENT_SHAPES", () => {
         result.success,
         result.success
           ? ""
-          : `Fixture for "${eventType}" failed schema validation. ${result.success ? "" : JSON.stringify(result.error.errors, null, 2)}`,
+          : `Fixture for "${eventType}" failed schema validation. ${result.success ? "" : JSON.stringify(result.error.issues, null, 2)}`,
       ).toBe(true)
     },
   )

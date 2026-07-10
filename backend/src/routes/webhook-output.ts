@@ -8,7 +8,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 
 const sendSchema = z.object({
   url: safeUrlSchema,
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   workflowId: z.string().uuid().optional(),
   forcePrivate: z.boolean().optional(),
 })

@@ -15,8 +15,8 @@ const { supabase } = await import("../../../supabase.js")
 const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>
 
 const MCP_PROJECT_ID = "11111111-1111-4111-8111-111111111111"
-const WORKFLOW_ID = "00000000-0000-0000-0000-000000000001"
-const OTHER_WORKFLOW_ID = "00000000-0000-0000-0000-000000000002"
+const WORKFLOW_ID = "00000000-0000-4000-8000-000000000001"
+const OTHER_WORKFLOW_ID = "00000000-0000-4000-8000-000000000002"
 
 beforeEach(() => {
   vi.clearAllMocks()
