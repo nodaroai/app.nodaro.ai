@@ -73,6 +73,7 @@ jobs:
       contents: write # changesets/action pushes release tags + creates GitHub Releases
       actions: write # dispatch the CLI-binaries workflow when @nodaro/cli publishes
       id-token: write # npm Trusted Publishing (OIDC provenance)
+      pull-requests: write # if a changeset ever reaches the mirror's main, changesets/action opens a Version Packages PR instead of publishing — without this it 403s and the publish run fails (see the 2026-07-10 sdk@1.2.0 stall). Lets it degrade gracefully rather than blocking every publish behind a stray changeset.
     steps:
       - uses: actions/checkout@v5
         with:
