@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { STUDIO_CHILD_DIALOG_Z } from "../studio-shell/studio-modal-z"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { hasCredits } from "@/lib/edition"
 import { optimizedImageUrl } from "@/lib/image"
@@ -105,7 +106,13 @@ export function BoardCreateModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="flex max-h-[85vh] w-[min(64rem,92vw)] max-w-5xl flex-col gap-3">
+      {/* STUDIO_CHILD_DIALOG_Z on content + overlay: the composer opens from
+          inside the opaque z-[100] studio modal — at the stock z-50 it lands
+          BEHIND the studio and "New board" looks dead. */}
+      <DialogContent
+        className={`flex max-h-[85vh] w-[min(64rem,92vw)] max-w-5xl flex-col gap-3 ${STUDIO_CHILD_DIALOG_Z}`}
+        overlayClassName={STUDIO_CHILD_DIALOG_Z}
+      >
         <DialogHeader>
           <DialogTitle>Create identity board</DialogTitle>
         </DialogHeader>
@@ -138,7 +145,9 @@ export function BoardCreateModal({
                   className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:border-primary/60"
                 >
                   <LayoutGrid className="size-3.5 text-muted-foreground" />
-                  <span className="max-w-32 truncate">{b.name}</span>
+                  {/* Unnamed boards (legacy studio sheets) fall back to "board"
+                      so the chip never renders as a bare icon. */}
+                  <span className="max-w-32 truncate">{b.name || "board"}</span>
                 </button>
               ))}
             </div>

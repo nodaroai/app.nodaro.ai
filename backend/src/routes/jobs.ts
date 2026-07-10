@@ -5,6 +5,7 @@ import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { JOB_STATUSES } from "../lib/job-status.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -22,7 +23,7 @@ const batchStatusQuery = z.object({
 const JobSummary = z
   .object({
     id: z.string().uuid(),
-    status: z.enum(["pending", "queued", "processing", "completed", "failed", "cancelled"]),
+    status: z.enum(JOB_STATUSES),
     progress: z.number().min(0).max(100),
     user_id: z.string().uuid(),
     input_data: z.unknown(),
@@ -49,7 +50,7 @@ const JobSummary = z
 const JobStatus = z
   .object({
     id: z.string().uuid(),
-    status: z.enum(["pending", "queued", "processing", "completed", "failed", "cancelled"]),
+    status: z.enum(JOB_STATUSES),
     progress: z.number().min(0).max(100),
     output_data: z.unknown(),
     error_message: z.string().nullable(),
