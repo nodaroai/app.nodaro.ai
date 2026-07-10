@@ -41,7 +41,8 @@ interface TranscribeResult {
     end: number
     text: string
   }>
-  words?: Caption[]
+  /** Caption-shaped words (ms). `speaker` present only on diarized elevenlabs-stt runs. */
+  words?: Array<Caption & { speaker?: string }>
 }
 
 const TRANSCRIBE_MODELS: Record<string, string> = {
@@ -67,18 +68,25 @@ export async function transcribe(
   console.log(`[transcribe] Audio URL: "${audioUrl}", Language: ${language ?? "auto"}`)
 
   if (resolvedProvider === "elevenlabs-stt") {
-    // TODO(kinetic-captions): pipe wordTimestamps through KieAudioProvider.speechToText
-    // and use @remotion/elevenlabs::elevenLabsTranscriptToCaptions to populate `words`.
     const kieAudio = new KieAudioProvider()
     const result = await kieAudio.speechToText(audioUrl, {
       languageCode: language && language !== "auto" ? language : undefined,
       diarize: options?.diarize,
       tagAudioEvents: options?.tagAudioEvents,
     })
+    const words = result.words?.map((w) => ({
+      text: w.text,
+      startMs: Math.round(w.start * 1000),
+      endMs: Math.round(w.end * 1000),
+      timestampMs: null,
+      confidence: null,
+      ...(w.speaker ? { speaker: w.speaker } : {}),
+    }))
     return {
       text: result.text,
       language: result.language,
       cost: result.cost,
+      ...(words && words.length ? { words } : {}),
     }
   }
 
