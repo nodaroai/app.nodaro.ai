@@ -878,6 +878,26 @@ describe("buildPayload", () => {
       expect(result.payload.voiceId).toBe("v1")
     })
 
+    it("voice-changer-pro maps ordered voice objects to voiceId strings", () => {
+      const n = node("n1", "voice-changer-pro", {
+        orderedVoices: [{ voiceId: "v1" }, { voiceId: "v2" }],
+      })
+      const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })
+      expect(result.jobName).toBe("voice-changer-pro")
+      expect(result.payload.orderedVoices).toEqual(["v1", "v2"])
+    })
+
+    // Keep-slot: a null entry means "keep this speaker's original voice"
+    // (cloud-plugins orderedVoices contract). The map must preserve it
+    // positionally instead of crashing on `v.voiceId`.
+    it("voice-changer-pro preserves a null keep-original slot positionally", () => {
+      const n = node("n1", "voice-changer-pro", {
+        orderedVoices: [null, { voiceId: "v2" }],
+      })
+      const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })
+      expect(result.payload.orderedVoices).toEqual([null, "v2"])
+    })
+
     it("dubbing", () => {
       const n = node("n1", "dubbing", { targetLanguage: "es" })
       const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })

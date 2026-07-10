@@ -231,9 +231,16 @@ COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 # every other install in this stage.
 ARG NPM_TOKEN
 ARG CLOUD_PLUGINS_VERSION
-RUN if [ -n "$NPM_TOKEN" ]; then \
+# NOTE: read NPM_TOKEN via `$(printenv NPM_TOKEN)`, NOT `${NPM_TOKEN}`. A build
+# ARG referenced as `$VAR`/`${VAR}` is substituted by the Dockerfile frontend
+# INTO the command string BuildKit prints, so with Railway's plain build logs
+# the token would leak in plaintext. The ARG is also exported to the RUN shell
+# env, and BuildKit does not touch `$(...)` command substitution — so this reads
+# the same value at runtime while the printed command stays `$(printenv …)`.
+# CLOUD_PLUGINS_VERSION is just a version string; leaving it substituted is fine.
+RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
       echo "@nodaroai:registry=https://npm.pkg.github.com" > .npmrc && \
-      echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
+      echo "//npm.pkg.github.com/:_authToken=$(printenv NPM_TOKEN)" >> .npmrc && \
       npm install --no-save "@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}" && \
       node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('plugin smoke: contractVersion mismatch:',m.contractVersion);process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
       rm -f .npmrc; \

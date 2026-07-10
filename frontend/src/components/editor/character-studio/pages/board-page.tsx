@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Copy, LayoutGrid, Loader2, Plus, RefreshCw, Star, Trash2, X } from "lucide-react"
+import { Copy, LayoutGrid, Loader2, Pencil, Plus, RefreshCw, Star, Trash2, X } from "lucide-react"
 import type { StudioPageProps } from "../../studio-shell/types"
 import type { CharacterStudioState } from "../use-character-studio"
 import type { CharacterStudioJobs } from "../use-character-studio-jobs"
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "../inject-helpers"
 import { BoardCreateModal } from "../board-create-modal"
+import { STUDIO_CHILD_DIALOG_Z } from "../../studio-shell/studio-modal-z"
 import {
   BOARD_COLLAGE_PARAMS,
   MAX_CHARACTER_BOARDS,
@@ -42,12 +43,15 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
   const defaultUrl = (state.staged as { defaultAssetUrl?: string }).defaultAssetUrl
   const columnBoards = (state.staged.boards ?? []) as readonly CharacterBoardEntry[]
 
-  // Legacy shim boards (pre-column studioBoard:* keys) not shadowed by a
-  // column board of the same name — view-only rows.
+  // Legacy shim boards (pre-column studioBoard:* keys) — view-only rows.
+  // characterBoardItems returns column + shim MERGED, renaming empty-name
+  // column boards to "board", so subtract the column by URL (its identity):
+  // a name-based subtraction misses the renamed copy and double-renders the
+  // board (live bug — studio.nodaro.ai saves identity sheets with name "").
   const legacyBoards = useMemo(() => {
-    const columnNames = new Set(columnBoards.map((b) => b.name.toLowerCase()))
+    const columnUrls = new Set(columnBoards.map((b) => b.url))
     return characterBoardItems(state.staged as unknown as Record<string, unknown>)
-      .filter((b) => !columnNames.has(b.name.toLowerCase()))
+      .filter((b) => !columnUrls.has(b.url))
       .map((b): CharacterBoardEntry => ({ name: b.name, url: b.url }))
   }, [columnBoards, state.staged])
 
@@ -112,6 +116,21 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
     state.patchWith((prev) => ({
       boards: (prev.boards ?? []).filter((x) => !(x.name === b.name && x.url === b.url)),
     }))
+  }
+
+  function renameBoard(b: CharacterBoardEntry, newName: string) {
+    state.patchWith((prev) => {
+      const arr = prev.boards ?? []
+      // Suffix against every OTHER board + in-flight names, same policy as
+      // create/duplicate — board names shadow legacy shim entries and feed
+      // uniqueBoardName everywhere, so collisions must stay impossible.
+      const taken = [
+        ...arr.filter((x) => !(x.name === b.name && x.url === b.url)).map((x) => x.name),
+        ...generatingNames,
+      ]
+      const finalName = uniqueBoardName(newName, taken)
+      return { boards: arr.map((x) => (x.name === b.name && x.url === b.url ? { ...x, name: finalName } : x)) }
+    })
   }
 
   function retryFailed(jobId: string, name: string, meta: Record<string, unknown> | undefined) {
@@ -203,8 +222,12 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
                     </button>
                   )}
                 </div>
-                {b.name && (
-                  <figcaption className="truncate px-2 py-1.5 text-xs text-muted-foreground">{b.name}</figcaption>
+                {isColumn ? (
+                  <BoardCaption name={b.name} onRename={(next) => renameBoard(b, next)} />
+                ) : (
+                  b.name && (
+                    <figcaption className="truncate px-2 py-1.5 text-xs text-muted-foreground">{b.name}</figcaption>
+                  )
                 )}
               </figure>
             )
@@ -219,7 +242,12 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
               <span className="px-2 text-center text-xs">
                 Generating "{p.name}"… {p.progress > 0 ? `${p.progress}%` : ""}
               </span>
-              <button type="button" className="text-[11px] underline" onClick={() => void jobs.cancel(jobId)}>
+              <button
+                type="button"
+                title="Cancel this generation — reserved credits are refunded"
+                className="text-[11px] underline"
+                onClick={() => void jobs.cancel(jobId)}
+              >
                 Cancel
               </button>
             </div>
@@ -268,7 +296,83 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
         }}
         title="Delete board?"
         description={confirmDelete ? `"${confirmDelete.name}" will be removed from this character.` : undefined}
+        className={STUDIO_CHILD_DIALOG_Z}
+        overlayClassName={STUDIO_CHILD_DIALOG_Z}
       />
     </div>
+  )
+}
+
+/**
+ * Column-board caption — click-to-edit rename, mirroring asset-card's
+ * NameLabel interaction: clicking the name (or pencil) swaps in an input;
+ * Enter/blur commits the trimmed value (empty → keep the old name), Escape
+ * cancels. Unnamed boards (studio.nodaro.ai identity sheets save with
+ * name "") get an "Add name…" affordance instead of no caption at all.
+ */
+function BoardCaption({ name, onRename }: { name: string; onRename: (newName: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [editing])
+
+  const commit = () => {
+    setEditing(false)
+    const trimmed = draft.trim()
+    if (trimmed.length > 0 && trimmed !== name) onRename(trimmed)
+  }
+
+  if (editing) {
+    return (
+      <figcaption className="px-2 py-1">
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              commit()
+            } else if (e.key === "Escape") {
+              e.preventDefault()
+              setEditing(false)
+              setDraft(name)
+            }
+          }}
+          maxLength={200}
+          aria-label="Board name"
+          className="w-full rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground outline-none"
+        />
+      </figcaption>
+    )
+  }
+
+  return (
+    <figcaption className="px-2 py-1.5 text-xs text-muted-foreground">
+      <button
+        type="button"
+        title="Rename"
+        aria-label={`Rename board ${name}`}
+        onClick={() => {
+          setDraft(name)
+          setEditing(true)
+        }}
+        className="flex w-full min-w-0 items-center gap-1 text-left"
+      >
+        {name ? (
+          <span className="truncate">{name}</span>
+        ) : (
+          <span className="italic text-muted-foreground/60">Add name…</span>
+        )}
+        <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+      </button>
+    </figcaption>
   )
 }

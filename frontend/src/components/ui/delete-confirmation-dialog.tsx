@@ -17,6 +17,12 @@ interface DeleteConfirmationDialogProps {
   readonly onConfirm: () => void
   readonly title?: string
   readonly description?: string
+  /** Extra classes for the dialog panel — pass STUDIO_CHILD_DIALOG_Z when the
+   *  dialog is opened from inside a full-screen studio modal, else it renders
+   *  behind it (stock z-50 vs the studio's z-[100]). */
+  readonly className?: string
+  /** Extra classes for the backdrop overlay (pair with `className`). */
+  readonly overlayClassName?: string
 }
 
 export function DeleteConfirmationDialog({
@@ -25,10 +31,12 @@ export function DeleteConfirmationDialog({
   onConfirm,
   title = "Delete this version?",
   description = "This action cannot be undone. The generated result will be permanently removed.",
+  className,
+  overlayClassName,
 }: DeleteConfirmationDialogProps) {
   return (
     <AlertDialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-      <AlertDialogContent>
+      <AlertDialogContent className={className} overlayClassName={overlayClassName}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
