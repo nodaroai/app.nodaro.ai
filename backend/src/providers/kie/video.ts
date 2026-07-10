@@ -69,6 +69,18 @@ const GROK_VIDEO_15_ASPECT_RATIOS = new Set<string>([
 ])
 
 /**
+ * Aspect ratios we forward to KIE for happyhorse-ref2v — same catalog-derived
+ * pattern as grok above. Ref2V is the only HappyHorse mode on the i2v path with
+ * a native aspect_ratio param (i2v proper infers AR from the input image, so it
+ * must NOT be sent one — the 1.1 schema rejects unknown params). Off-set values
+ * (stale "adaptive"/"Auto" from an SDK caller) are dropped so KIE falls back to
+ * its 16:9 default instead of 422ing.
+ */
+const HAPPYHORSE_REF2V_ASPECT_RATIOS = new Set<string>([
+  ...(getModel("happyhorse-ref2v")?.aspectRatios ?? []),
+])
+
+/**
  * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
  *
  * Delegates the three mutually-exclusive KIE input modes (first-frame /
@@ -716,6 +728,15 @@ export class KieVideoProvider
     // triggers an upstream 400/500 on multi-reference i2v (grok-i2v, happyhorse-ref2v).
     const i2vConstraints: ImageConstraints = { context: "Video generation", maxDimension: 2048 }
     if (provider === "wan-i2v") i2vConstraints.minDimension = 256
+    // HappyHorse 1.1 documented input floors — reject early with a clear message
+    // instead of an opaque KIE 422: i2v needs both dims ≥300px AND aspect within
+    // 1:2.5–2.5:1; ref2v needs the shortest side ≥400px.
+    if (provider === "happyhorse-i2v") {
+      i2vConstraints.minDimension = 300
+      i2vConstraints.minAspectRatio = 0.4
+      i2vConstraints.maxAspectRatio = 2.5
+    }
+    if (provider === "happyhorse-ref2v") i2vConstraints.minDimension = 400
     if (modelConfig.model.startsWith("hailuo/")) i2vConstraints.forceJpeg = true
     if (!usesRawImageUrls) {
       const [normImage, normEnd] = await Promise.all([
@@ -930,8 +951,10 @@ export class KieVideoProvider
       input.mode = options.grokMode
     }
 
-    // Seed for deterministic generation (Wan Turbo, Bytedance Lite/Pro)
-    if (options?.seed !== undefined && options.seed >= 0) {
+    // Seed for deterministic generation (Wan Turbo, Bytedance Lite/Pro).
+    // Skipped for models whose schema rejects unknown params (omitSeed) —
+    // e.g. HappyHorse 1.1 dropped seed with additionalProperties: false.
+    if (!modelConfig.omitSeed && options?.seed !== undefined && options.seed >= 0) {
       input.seed = options.seed
     }
 
@@ -958,6 +981,14 @@ export class KieVideoProvider
       if (ar && GROK_VIDEO_15_ASPECT_RATIOS.has(ar)) {
         input.aspect_ratio = ar
       }
+    }
+
+    // HappyHorse 1.1 Ref2V — forward aspect_ratio when it's in the model's
+    // catalog set (previously dropped silently and KIE always rendered 16:9).
+    // happyhorse-i2v deliberately gets nothing: its schema has no aspect_ratio
+    // (inferred from the input image) and rejects unknown params.
+    if (provider === "happyhorse-ref2v" && options?.aspectRatio && HAPPYHORSE_REF2V_ASPECT_RATIOS.has(options.aspectRatio)) {
+      input.aspect_ratio = options.aspectRatio
     }
 
     if (isSeedance2Provider(provider)) {

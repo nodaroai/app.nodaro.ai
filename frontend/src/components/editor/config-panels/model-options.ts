@@ -95,8 +95,8 @@ export const VIDEO_I2V_MODELS = [
   { value: "wan-i2v", label: "Wan 2.6", desc: "Wan I2V, 5-15s, resolution options" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast Wan, 5s clips" },
   { value: "wan-2.7-i2v",    label: "Wan 2.7",            desc: "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame" },
-  { value: "happyhorse-i2v",  label: "HappyHorse",        desc: "3–15s, 720p/1080p, image or text" },
-  { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
+  { value: "happyhorse-i2v",  label: "HappyHorse 1.1",        desc: "3–15s, 720p/1080p, image or text, per-second pricing" },
+  { value: "happyhorse-ref2v", label: "HappyHorse 1.1 Ref2V", desc: "1–9 reference images to video, 3–15s, per-second pricing" },
   // kling-3-omni pulled from the picker: it has a Replicate impl but no working
   // dispatch path (the i2v routing chain is KIE-only and there is no worker
   // short-circuit like LTX's), so every run failed at the router. Re-enable only
@@ -128,7 +128,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "wan", label: "Wan 2.6", desc: "High quality, 5-15s, 1080p" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
   { value: "wan-2.7-t2v", label: "Wan 2.7",    desc: "Wan 2.7 T2V, 2–15s, 720p/1080p" },
-  { value: "happyhorse",   label: "HappyHorse", desc: "3–15s, 720p/1080p" },
+  { value: "happyhorse",   label: "HappyHorse 1.1", desc: "3–15s, 720p/1080p, 9 aspect ratios, per-second pricing" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
@@ -508,7 +508,7 @@ export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
   "wan-2.7-i2v": 24, "wan-2.7-t2v": 24,
-  "happyhorse": 16, "happyhorse-i2v": 16, "happyhorse-ref2v": 19, "happyhorse-edit": 25,
+  "happyhorse": 29, "happyhorse-i2v": 29, "happyhorse-ref2v": 29, "happyhorse-edit": 35,
   "kling-3-omni": 32,
   "gemini-omni-video": 47,
 }
