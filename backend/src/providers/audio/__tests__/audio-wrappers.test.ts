@@ -30,9 +30,11 @@ const mocks = vi.hoisted(() => {
   const fsAccess = vi.fn()
   const fsUnlink = vi.fn()
   const speechToText = vi.fn()
+  const directStt = vi.fn()
   const fastWhisperToCaptions = vi.fn(() => [])
   const whisperToCaptions = vi.fn(() => [])
   return {
+    directStt,
     replicateRun, predictionsCreate, replicateWait, extractCost,
     youtubedl, uploadFileToR2, fsAccess, fsUnlink,
     speechToText, fastWhisperToCaptions, whisperToCaptions,
@@ -52,6 +54,11 @@ vi.mock("../../kie/audio.js", () => ({
   KieAudioProvider: class {
     speechToText = mocks.speechToText
   },
+}))
+
+// elevenlabs-stt now calls Scribe DIRECTLY (KIE's queue stalled — see direct-stt.ts).
+vi.mock("../../elevenlabs/direct-stt.js", () => ({
+  directSpeechToText: mocks.directStt,
 }))
 
 vi.mock("youtube-dl-exec", () => ({
@@ -576,59 +583,58 @@ describe("transcribe — provider: incredibly-fast-whisper", () => {
 })
 
 describe("transcribe — provider: elevenlabs-stt", () => {
-  it("delegates to KieAudioProvider.speechToText", async () => {
-    mocks.speechToText.mockResolvedValueOnce({
-      text: "kie says hello",
-      language: "en",
-      cost: 0.005,
-    })
+  it("calls Scribe DIRECTLY and never KIE (KIE's queue stalled on this model)", async () => {
+    mocks.directStt.mockResolvedValueOnce({ text: "scribe says hello", language: "en", words: [] })
 
     const result = await transcribe("https://audio.mp3", "elevenlabs-stt", "en", {
       diarize: true,
       tagAudioEvents: true,
     })
 
-    expect(result).toEqual({ text: "kie says hello", language: "en", cost: 0.005 })
-    expect(mocks.speechToText).toHaveBeenCalledWith("https://audio.mp3", {
+    // No metered provider cost on the direct path — the reserved tier commits.
+    expect(result).toEqual({ text: "scribe says hello", language: "en" })
+    expect(mocks.directStt).toHaveBeenCalledWith("https://audio.mp3", {
       languageCode: "en",
       diarize: true,
       tagAudioEvents: true,
     })
+    // The regression guard: the KIE path must be gone entirely.
+    expect(mocks.speechToText).not.toHaveBeenCalled()
   })
 
   it("passes languageCode=undefined when language is 'auto'", async () => {
-    mocks.speechToText.mockResolvedValueOnce({ text: "", language: "auto", cost: 0 })
+    mocks.directStt.mockResolvedValueOnce({ text: "", language: "auto", words: [] })
 
     await transcribe("u", "elevenlabs-stt", "auto")
 
-    expect(mocks.speechToText).toHaveBeenCalledWith(
+    expect(mocks.directStt).toHaveBeenCalledWith(
       "u",
       expect.objectContaining({ languageCode: undefined }),
     )
   })
 
   it("passes languageCode=undefined when language is missing", async () => {
-    mocks.speechToText.mockResolvedValueOnce({ text: "", language: "auto", cost: 0 })
+    mocks.directStt.mockResolvedValueOnce({ text: "", language: "auto", words: [] })
 
     await transcribe("u", "elevenlabs-stt")
 
-    expect(mocks.speechToText).toHaveBeenCalledWith(
+    expect(mocks.directStt).toHaveBeenCalledWith(
       "u",
       expect.objectContaining({ languageCode: undefined }),
     )
   })
 
   it("does not call replicate.predictions for elevenlabs-stt", async () => {
-    mocks.speechToText.mockResolvedValueOnce({ text: "x", language: "en", cost: 0 })
+    mocks.directStt.mockResolvedValueOnce({ text: "x", language: "en", words: [] })
 
     await transcribe("u", "elevenlabs-stt")
 
     expect(mocks.predictionsCreate).not.toHaveBeenCalled()
   })
 
-  it("maps KIE words to Caption-shaped words with speaker", async () => {
-    mocks.speechToText.mockResolvedValueOnce({
-      text: "hi there", language: "en", cost: 0.01,
+  it("maps diarized words to Caption-shaped words (ms) with speaker", async () => {
+    mocks.directStt.mockResolvedValueOnce({
+      text: "hi there", language: "en",
       words: [
         { text: "hi", start: 0.12, end: 0.5, speaker: "speaker_1" },
         { text: "there", start: 0.55, end: 0.9, speaker: "speaker_2" },
@@ -644,9 +650,7 @@ describe("transcribe — provider: elevenlabs-stt", () => {
   })
 
   it("omits words when the provider returns none", async () => {
-    mocks.speechToText.mockResolvedValueOnce({
-      text: "hi", language: "en", cost: 0.01, words: undefined,
-    })
+    mocks.directStt.mockResolvedValueOnce({ text: "hi", language: "en", words: [] })
 
     const result = await transcribe("https://r2.example/a.mp3", "elevenlabs-stt")
 

@@ -1,6 +1,6 @@
 import type { Caption } from "@remotion/captions"
 import { replicate, extractCost } from "../replicate/client.js"
-import { KieAudioProvider } from "../kie/audio.js"
+import { directSpeechToText } from "../elevenlabs/direct-stt.js"
 import { fastWhisperWordsToCaptions, whisperWordsToCaptions } from "./captions-mappers.js"
 
 function extractVersion(modelString: string): string {
@@ -68,13 +68,19 @@ export async function transcribe(
   console.log(`[transcribe] Audio URL: "${audioUrl}", Language: ${language ?? "auto"}`)
 
   if (resolvedProvider === "elevenlabs-stt") {
-    const kieAudio = new KieAudioProvider()
-    const result = await kieAudio.speechToText(audioUrl, {
+    // DIRECT Scribe — not KIE. KIE wraps this exact model behind a job queue that
+    // stalls ("[500] The upstream API service timed out") and has hung ~15 min on a
+    // stuck task; voice-changer-pro's diarizer already moved to direct Scribe after
+    // that incident (~1-2s on real clips) and this route now matches it, so speaker
+    // detection stops inheriting the flakiness.
+    const result = await directSpeechToText(audioUrl, {
       languageCode: language && language !== "auto" ? language : undefined,
       diarize: options?.diarize,
       tagAudioEvents: options?.tagAudioEvents,
     })
-    const words = result.words?.map((w) => ({
+    // Caption-shaped (ms), never raw seconds — `output_data.words` is a wire
+    // contract shared with the add-captions consumers.
+    const words = result.words.map((w) => ({
       text: w.text,
       startMs: Math.round(w.start * 1000),
       endMs: Math.round(w.end * 1000),
@@ -85,8 +91,11 @@ export async function transcribe(
     return {
       text: result.text,
       language: result.language,
-      cost: result.cost,
-      ...(words && words.length ? { words } : {}),
+      // No metered provider cost: the KIE figure was an average estimate of KIE's
+      // price, and we no longer pay KIE for this. Omitting it commits the RESERVED
+      // tier (user-facing credits unchanged), the same way the youtube-audio
+      // handler already commits without a metered cost.
+      ...(words.length ? { words } : {}),
     }
   }
 
