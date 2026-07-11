@@ -252,7 +252,7 @@ RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
 FROM node:22-slim AS runner
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg curl ca-certificates yt-dlp \
+    ffmpeg curl ca-certificates \
     aubio-tools \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
@@ -263,6 +263,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${ARCH}" -o /usr/bin/caddy \
     && chmod +x /usr/bin/caddy
+
+# yt-dlp — the OFFICIAL pinned static binary, NOT Debian's `yt-dlp` package.
+#
+# Two things were wrong before, and together they killed every social-video path
+# (download-video, youtube-audio, trim-audio on a social URL, the analysis worker):
+#
+#  1. `YOUTUBE_DL_SKIP_DOWNLOAD=1` (set in deps AND prod-deps) tells
+#     `youtube-dl-exec`'s postinstall NOT to fetch its binary — on purpose, since a
+#     system yt-dlp was apt-installed instead. But nothing pointed the code at the
+#     system one: it still spawned `node_modules/youtube-dl-exec/bin/yt-dlp`, which
+#     therefore never existed. Every call died with ENOENT.
+#  2. And the apt binary would not have saved us: Debian's `yt-dlp` is years out of
+#     date and YouTube rejects it. Falling back to it would have traded one failure
+#     for another.
+#
+# So: fetch the real thing, pin it, verify it runs at build time, and point
+# `YOUTUBE_DL_DIR` at it — the env var `youtube-dl-exec` reads — so every caller
+# (library-based and direct-spawn) resolves the SAME binary.
+ARG YT_DLP_VERSION=2026.07.04
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) asset=yt-dlp_linux ;; \
+      arm64) asset=yt-dlp_linux_aarch64 ;; \
+      *) echo "unsupported arch for yt-dlp: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/${asset}" \
+      -o /usr/local/bin/yt-dlp; \
+    chmod 0755 /usr/local/bin/yt-dlp; \
+    /usr/local/bin/yt-dlp --version
+ENV YOUTUBE_DL_DIR=/usr/local/bin
 
 # Create non-root user (node:22-slim already has uid 1000 node user, || true for safety)
 RUN groupadd --gid 1000 node || true \

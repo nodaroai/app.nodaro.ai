@@ -102,6 +102,11 @@ async function runDownloadWithProgress(
   } catch (err) {
     state.phase = "failed"
     state.error = err instanceof Error ? err.message : "Download failed"
+    // LOG IT. This ran in the background and only ever reported the failure to
+    // the SSE client, so a broken downloader looked like silence server-side —
+    // which is how a `spawn ... yt-dlp ENOENT` (the binary was missing from the
+    // image entirely) survived unnoticed across every social-video path.
+    console.error(`[download-video] ${downloadId} failed: ${state.error}`)
     cleanupFiles(baseName)
   }
 
