@@ -2286,6 +2286,19 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
     onUpdate({ orderedVoices: [...voices, { voiceId, voiceLabel, voiceType }] })
+  // Append a keep-slot — a null entry meaning "keep this speaker's original
+  // voice" (cloud-plugins orderedVoices keep-slot contract).
+  const addKeepSlot = () => onUpdate({ orderedVoices: [...voices, null] })
+  // Replace the entry at i with a whole new value (copy the array) — the
+  // position-preserving primitive both keep-slot conversions share.
+  const replaceAt = (i: number, value: VoiceChangerProData["orderedVoices"][number]) =>
+    onUpdate({ orderedVoices: voices.map((v, idx) => (idx === i ? value : v)) })
+  // Convert the voice at i to a keep-slot in place. Per-voice settings are
+  // intentionally discarded — a keep-slot has nothing to configure.
+  const keepAt = (i: number) => replaceAt(i, null)
+  // Fill the keep-slot at i with a picked voice, preserving its position.
+  const setVoiceAt = (i: number, voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
+    replaceAt(i, { voiceId, voiceLabel, voiceType })
   const removeVoice = (i: number) =>
     onUpdate({ orderedVoices: voices.filter((_, idx) => idx !== i) })
   const move = (i: number, delta: number) => {
@@ -2315,6 +2328,16 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           onSelect={(id, name, voiceType) => addVoice(id, name, voiceType ?? "premade")}
           showCustomVoices
         />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-1 h-7 w-full text-xs text-muted-foreground"
+          aria-label="Add keep-original slot"
+          onClick={addKeepSlot}
+        >
+          <Plus className="h-3 w-3 mr-1" /> Keep original — don&apos;t recast this speaker
+        </Button>
       </div>
       <div className="flex flex-col gap-1">
         {voices.map((v, i) => (
@@ -2325,7 +2348,31 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           <div key={v ? `${v.voiceId}-${i}` : `keep-${i}`} className="rounded border">
             <div className="flex items-center gap-2 px-2 py-1">
               <span className="text-xs text-muted-foreground w-16">Speaker {i + 1}</span>
-              <span className="text-sm flex-1 truncate">{v ? v.voiceLabel : "Keep original"}</span>
+              {v ? (
+                <span className="text-sm flex-1 truncate">{v.voiceLabel}</span>
+              ) : (
+                <div className="flex flex-1 items-center gap-2 min-w-0">
+                  <span className="text-sm text-muted-foreground truncate">Keep original</span>
+                  <VoiceBrowser
+                    value=""
+                    valueLabel="Choose voice…"
+                    compact
+                    showCustomVoices
+                    triggerAriaLabel={`Choose voice for speaker ${i + 1}`}
+                    onSelect={(id, name, voiceType) => setVoiceAt(i, id, name, voiceType ?? "premade")}
+                  />
+                </div>
+              )}
+              {v && (
+                <button
+                  aria-label={`Keep original for speaker ${i + 1}`}
+                  title="Keep this speaker's original voice (discards this voice pick)"
+                  onClick={() => keepAt(i)}
+                  className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
+                >
+                  Keep
+                </button>
+              )}
               <button aria-label="Move up" onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
               <button aria-label="Move down" onClick={() => move(i, 1)} className="text-xs px-1">↓</button>
               <button aria-label="Remove voice" onClick={() => removeVoice(i)} className="text-xs px-1">✕</button>

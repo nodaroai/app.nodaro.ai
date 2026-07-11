@@ -323,7 +323,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     type: "voice-changer-pro",
     label: "Voice Changer Pro",
     category: "ai-audio",
-    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk. Cloud edition only.",
+    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk; a null entry is a keep-slot (that speaker keeps their original voice). Cloud edition only.",
     outputType: "audio",
     creditCost: 4,
     capabilities: ["multi-speaker", "video-revoice", "dual-output-handles"],
@@ -332,7 +332,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioUrl", type: "audio-url" },
         { key: "videoUrl", type: "video-url" },
         // Each entry is a voiceId string OR a per-voice settings object
-        // { voiceId, stability?, similarityBoost?, style?, useSpeakerBoost?, volumeMode?, volume? }.
+        // { voiceId, stability?, similarityBoost?, style?, useSpeakerBoost?, volumeMode?, volume? }
+        // OR null — a keep-slot: that speaker keeps their original voice.
         { key: "orderedVoices", type: "voice[]", required: true },
         { key: "model", type: "select", options: [...VOICE_CHANGER_MODEL_IDS] },
         { key: "preserveBackground", type: "boolean" },

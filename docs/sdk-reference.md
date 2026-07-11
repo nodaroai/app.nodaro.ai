@@ -2354,7 +2354,7 @@ type VoiceChangerProVoice =
 recast(input: {
   audioUrl?: string
   videoUrl?: string
-  orderedVoices: Array<VoiceChangerProVoice>   // 1–8 entries
+  orderedVoices: Array<VoiceChangerProVoice | null>  // 1–8 entries; null = keep that speaker's original voice
   model?: string
   preserveBackground?: boolean             // default true
   separationQuality?: "fast" | "best"      // default "fast"
@@ -2380,6 +2380,11 @@ with per-voice ElevenLabs speech-to-speech settings (`stability`,
 `volumeMode` (`"match"` matches the original speaker, `"normalize"` applies
 loudnorm, `"manual"` uses `volume` as a percentage). A per-voice `seed`
 (integer 0–4294967295) makes that speaker's recast reproducible across runs.
+
+An entry may also be **`null`** — a keep-slot: that speaker keeps their original
+voice while later speakers are still recast. At least one entry must be non-null
+(all-null is rejected). Keep-slots don't cost credits — pricing counts recast
+speakers only.
 
 Pass **`audioUrl`** for audio → audio recast, or **`videoUrl`** to recast the
 audio track of a video clip (the server demuxes, recasts, and remuxes).
@@ -2408,6 +2413,12 @@ const { jobId } = await client.voices.recast({
   audioUrl: "https://cdn.example.com/dialogue.mp3",
   orderedVoices: ["Rachel", "Aria"],
   preserveBackground: true,
+})
+
+// Recast speakers 1 and 3, keep speaker 2's original voice (keep-slot)
+const { jobId: kept } = await client.voices.recast({
+  audioUrl: "https://cdn.example.com/panel.mp3",
+  orderedVoices: ["Rachel", null, "Aria"],
 })
 
 // Reproducible recast (per-voice seed) + a hall reverb on the voices

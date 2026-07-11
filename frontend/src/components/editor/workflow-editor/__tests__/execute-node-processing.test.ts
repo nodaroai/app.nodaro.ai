@@ -1443,6 +1443,18 @@ describe("voice-changer-pro", () => {
       undefined,
     )
   })
+
+  it("rejects when every slot is a keep-slot (all-null orderedVoices)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    const promise = executeNode(
+      makeNode("voice-changer-pro", { orderedVoices: [null, null] }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No recast voices")
+    expect(mockToastError).toHaveBeenCalled()
+    expect(mockVoiceChangerProApi).not.toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------

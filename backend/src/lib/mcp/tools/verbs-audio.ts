@@ -582,7 +582,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Detect each speaker in an audio or video clip and recast each one to " +
         "a different target voice (first-appearance order). Supply an ordered " +
         "list of voices — speaker 1 → voices[0], speaker 2 → voices[1], " +
-        "etc. Unmapped speakers keep their original voice.\n\n" +
+        "etc. Unmapped speakers keep their original voice, and a null entry " +
+        "is a keep-slot — that speaker keeps their original voice while later " +
+        "speakers are still recast (at least one entry must be non-null).\n\n" +
         "Each entry is EITHER a bare voice id OR an object with per-voice " +
         "speech-to-speech settings — { voiceId, stability, similarityBoost, " +
         "style, useSpeakerBoost, seed, volumeMode, volume }. volumeMode 'match' " +
@@ -632,15 +634,23 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                 volumeMode: z.enum(["match", "normalize", "manual"]).optional(),
                 volume: z.number().min(0).max(200).optional(),
               }),
+              // Keep-slot: null at position i keeps speaker i's original voice
+              // (cloud-plugins orderedVoices contract).
+              z.null(),
             ]),
           )
           .min(1)
           .max(8)
+          .refine((arr) => arr.some((v) => v !== null), {
+            message: "At least one ordered_voices entry must be a real voice (non-null).",
+          })
           .describe(
             "Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. " +
-              "Each entry is either a bare voice id (premade name or ElevenLabs UUID) or an object " +
+              "Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object " +
               "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
-              "with per-voice speech-to-speech settings. `seed` (0–4294967295) makes that speaker's recast reproducible.",
+              "with per-voice speech-to-speech settings, or null — a keep-slot that keeps that " +
+              "speaker's original voice while later speakers are still recast. At least one entry " +
+              "must be non-null. `seed` (0–4294967295) makes that speaker's recast reproducible.",
           ),
         voice_fx: z
           .object({
@@ -754,10 +764,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
       if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx
-      // ordered_voices entries can now be objects — surface the voice id in the
-      // widget prompt either way.
+      // ordered_voices entries can be objects or null keep-slots — surface the
+      // voice id (or "keep") in the widget prompt either way.
       const voiceLabels = args.ordered_voices
-        .map((v) => (typeof v === "string" ? v : v.voiceId))
+        .map((v) => (v === null ? "keep" : typeof v === "string" ? v : v.voiceId))
         .join(", ")
       return dispatchJob(fastify, session, {
         url: "/v1/voice-changer-pro",

@@ -2713,6 +2713,12 @@ export function executeNode(
       toast.error(`Node "${d.label}": add at least one voice`);
       return Promise.reject(new Error("No voices"));
     }
+    // All-null = every speaker keeps their original voice — nothing to recast.
+    // The route rejects this (≥1 non-null contract); fail fast client-side.
+    if (d.orderedVoices.every((v) => v === null)) {
+      toast.error(`Node "${d.label}": at least one speaker needs a new voice`);
+      return Promise.reject(new Error("No recast voices"));
+    }
     setUserPromptTemplate(undefined);
 
     // Switching modes (audio↔video) drops stale results of the other media type
