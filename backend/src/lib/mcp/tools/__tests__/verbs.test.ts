@@ -1040,6 +1040,37 @@ describe("voice_changer_pro verb", () => {
     // snake_case top-level voice_fx → camelCase voiceFx (mirrors separationQuality).
     expect(received.body?.voiceFx).toEqual({ preset: "hall", wetDryMix: 35 })
   })
+
+  // Keep-slots: a null entry means "keep this speaker's original voice"
+  // (cloud-plugins orderedVoices contract). The verb must accept nulls and
+  // forward them positionally — and must not crash building the widget
+  // prompt label (null has no .voiceId).
+  it("forwards null keep-slots positionally", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer-pro", { jobId: "j-vr4" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "voice_changer_pro", {
+      audio_url: "https://a/x.mp3",
+      ordered_voices: ["Rachel", null, { voiceId: "Aria", stability: 0.6 }],
+    })
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vr4")
+    expect(received.body?.orderedVoices).toEqual(["Rachel", null, { voiceId: "Aria", stability: 0.6 }])
+  })
+
+  it("rejects all-null ordered_voices at the schema layer", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer-pro", { jobId: "j-vr5" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    // Schema-level failures throw (MCP InvalidParams) before the handler runs —
+    // nothing may be dispatched to the route. (Or return isError=true if SDK version does.)
+    const result = await callTool(server, "voice_changer_pro", {
+      audio_url: "https://a/x.mp3",
+      ordered_voices: [null, null],
+    })
+    expect(result.isError).toBe(true)
+    expect(received.body).toBeUndefined()
+  })
 })
 
 describe("dubbing verb", () => {

@@ -4,9 +4,11 @@ import { VoiceChangerProConfig } from "../audio-configs"
 import type { VoiceChangerProData } from "@/types/nodes"
 
 // VoiceBrowser is exercised elsewhere; stub it to a button that adds a voice.
+// The compact variant (used inline on keep-slot rows) is labeled differently
+// so tests can target the top-level "add" browser vs a row's picker.
 vi.mock("../voice-browser", () => ({
-  VoiceBrowser: ({ onSelect }: { onSelect: (id: string, n: string, t: string) => void }) => (
-    <button onClick={() => onSelect("vX", "Voice X", "premade")}>add-voice</button>
+  VoiceBrowser: ({ onSelect, compact, triggerAriaLabel }: { onSelect: (id: string, n: string, t: string) => void; compact?: boolean; triggerAriaLabel?: string }) => (
+    <button aria-label={triggerAriaLabel} onClick={() => onSelect("vX", "Voice X", "premade")}>{compact ? "pick-voice" : "add-voice"}</button>
   ),
 }))
 
@@ -284,6 +286,58 @@ describe("VoiceChangerProConfig", () => {
         { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
       ],
     })
+  })
+
+  // ----- Keep-slot creation controls ---------------------------------------
+
+  it("appends a null keep-slot via the 'Keep original' add button", () => {
+    const onUpdate = vi.fn()
+    renderPanel({
+      orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade" }],
+    }, onUpdate)
+    fireEvent.click(screen.getByLabelText("Add keep-original slot"))
+    expect(onUpdate).toHaveBeenCalledWith({
+      orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade" }, null],
+    })
+  })
+
+  it("converts a voice row to a keep-slot in place (settings discarded)", () => {
+    const onUpdate = vi.fn()
+    renderPanel({
+      orderedVoices: [
+        { voiceId: "v1", voiceLabel: "One", voiceType: "premade", stability: 0.8 },
+        { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+      ],
+    }, onUpdate)
+    fireEvent.click(screen.getByLabelText("Keep original for speaker 1"))
+    expect(onUpdate).toHaveBeenCalledWith({
+      orderedVoices: [null, { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" }],
+    })
+  })
+
+  it("fills a keep-slot with a picked voice in place", () => {
+    const onUpdate = vi.fn()
+    renderPanel({
+      orderedVoices: [null, { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" }],
+    }, onUpdate)
+    // The keep row hosts its own compact VoiceBrowser with a per-row accessible
+    // name (mocked to forward triggerAriaLabel onto the button).
+    fireEvent.click(screen.getByLabelText("Choose voice for speaker 1"))
+    expect(onUpdate).toHaveBeenCalledWith({
+      orderedVoices: [
+        { voiceId: "vX", voiceLabel: "Voice X", voiceType: "premade" },
+        { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+      ],
+    })
+  })
+
+  it("shows the keep-convert button only on voice rows", () => {
+    renderPanel({
+      orderedVoices: [null, { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" }],
+    })
+    // One voice row → exactly one convert button (the keep row has none).
+    expect(screen.getAllByLabelText(/Keep original for speaker/)).toHaveLength(1)
+    expect(screen.getByLabelText("Keep original for speaker 2")).toBeInTheDocument()
   })
 
   it("defaults separation quality to 'fast' and updates on change", () => {

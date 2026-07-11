@@ -41,6 +41,9 @@ interface VoiceBrowserProps {
   readonly onSelect: (voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library", providerMeta?: VoiceProviderMeta) => void
   readonly compact?: boolean
   readonly showCustomVoices?: boolean  // default false — only TTS node sets this
+  /** Accessible name for the trigger button — set it when several browsers
+   *  render in a list (e.g. one per speaker row) so they stay distinguishable. */
+  readonly triggerAriaLabel?: string
 }
 
 // ── Stacking order for the Browse Voices dialog and its filter dropdowns ──
@@ -118,7 +121,7 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices }: VoiceBrowserProps) {
+export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices, triggerAriaLabel }: VoiceBrowserProps) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<TabId>(showCustomVoices ? "my-voices" : "premade")
 
@@ -286,6 +289,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
       <DialogTrigger asChild>
         <button
           type="button"
+          aria-label={triggerAriaLabel}
           className={`flex items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${compact ? "h-8 w-[140px] text-xs" : "h-9 w-full"}`}
         >
           <FitText text={displayLabel} />

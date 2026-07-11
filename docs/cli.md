@@ -192,6 +192,11 @@ nodaro objects recaption <id> [--json]
 # Voice — revoice an audio track or a talking video
 nodaro voice changer --voice <id> --audio <url>|--video <url> [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
 nodaro voice change ...                                  # alias of `voice changer`
+nodaro voice recast --audio <url>|--video <url> --voices <v1,v2,...>|--voices-json <json> [--model <id>] [--no-preserve-background] [--separation-quality fast|best] [--music-volume-mode match|normalize|manual] [--music-volume <0-200>] [--remove-background-noise] [--voice-fx <preset>] [--voice-fx-mix <0-100>] [--voice-fx-delay <20-2000>] [--voice-fx-decay <0-1>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # multi-speaker recast (Voice Changer Pro, Cloud only). --voices maps speakers in detection order;
+                                                         # the literal `keep` keeps that speaker's original voice (e.g. --voices Rachel,keep,Aria).
+                                                         # --voices-json takes the raw SDK array: voice ids, per-voice settings objects, or null keep-slots.
+nodaro voice pro ...                                     # alias of `voice recast`
 ```
 
 ## Param syntax
