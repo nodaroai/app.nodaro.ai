@@ -2,6 +2,7 @@ import { join } from "node:path"
 import youtubedl from "youtube-dl-exec"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
+import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
 
 function isSocialMediaUrl(url: string): boolean {
   return isAllowedSocialVideoUrl(url)
@@ -31,7 +32,11 @@ export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioRes
       try {
         await youtubedl(videoUrl, {
           output: videoPath,
-          format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+          // Shared with the download path — this function EXTRACTS AUDIO, so a
+          // selector that can land on a video-only format is fatal here. The old
+          // one could: its `best[ext=mp4]` fallback happily picked TikTok's
+          // h265 format, which claims `acodec=aac` and downloads without audio.
+          format: VIDEO_FORMAT_SELECTOR,
           mergeOutputFormat: "mp4",
           noPlaylist: true,
           noCheckCertificates: true,
