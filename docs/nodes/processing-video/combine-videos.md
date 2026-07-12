@@ -11,8 +11,10 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Transition | Select | fade | Transition type between clips |
-| Transition Duration | Number | 0.5 | Duration in seconds (0.1-2s), hidden for "cut" |
+| Transition Duration | Number | 0.5 | VIDEO transition length in seconds (0.1-2s), hidden for "cut" |
 | Audio Mode | Select | crossfade | How to handle audio during transitions |
+| Crossfade Duration | Number | 0.5 | AUDIO-only crossfade length (0-5s, shown when Audio = Crossfade). Never affects the video. Falls back to Transition Duration on older workflows. |
+| Crossfade Curve | Select | linear | Audio fade curve (shown when Audio = Crossfade) |
 | Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120) |
 | Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120) |
 | Clip Ordering | Drag list | — | Reorder connected video clips |
@@ -56,10 +58,12 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 - **crossfade** — Blend audio during transition (curve configurable, see below)
 - **remove** — Strip all audio from output
 
+**The audio crossfade never influences the video.** Its duration and curve shape only the soundtrack: at a cut the video stream is copied byte-for-byte (identical whether crossfade is on or off), and at blend transitions the video fade length is governed solely by Transition Duration.
+
 **How crossfade behaves per transition type:**
 
-- **Blend transitions (fade, dissolve, wipes, …):** the clips genuinely overlap for the transition duration, so the outgoing and incoming audio are cross-mixed — a true crossfade with no dip.
-- **Cut:** the video switches instantly and the clips never overlap, so there is no material to cross-mix. Instead, the outgoing clip's audio fades out into the cut and the incoming clip's fades in after it — a fade *through silence* centered on the cut. This is deliberate: overlapping the audio (a J-cut) would make every later clip's sound run ahead of its picture. Keep the crossfade duration short at cuts (**0.1–0.3s**) — enough to remove clicks and pops without an audible dip. Long durations (1s+) produce a clearly audible silence at each boundary.
+- **Cut (or any transition at duration 0):** the video switches instantly, and the soundtracks *overlap*: the incoming clip's audio starts `d` seconds early, cross-blending with the outgoing tail — the classic J-cut editors use. Tradeoff to know: after each boundary the remaining audio runs `d` ahead of its picture (imperceptible on ambient/music tracks at typical durations; for dialogue that must stay frame-locked, use **keep** or a short duration).
+- **Blend transitions (fade, dissolve, wipes, …):** every clip's audio stays anchored to its video start — no drift, regardless of the audio crossfade length. The fades cross-blend over the video overlap; an audio crossfade *longer* than the video fade simply extends the blend gently into both clips.
 
 **Audio normalization:** every clip is re-encoded to a common format before joining (24fps H.264, AAC 44.1kHz stereo), so clips from different providers — which often ship different sample rates — always splice cleanly. If some clips have audio and others are silent, the silent clips get a silent audio track injected so the combined track never drops out mid-video.
 
@@ -117,6 +121,6 @@ The Run button shows the live estimate.
 ## Tips
 
 - "Dip-to-black" works well between scenes with different settings or moods
-- Audio crossfade prevents jarring audio cuts during transitions — at cut transitions use a short duration (0.1–0.3s); the fade passes through silence at the cut point by design
+- Audio crossfade prevents jarring audio cuts during transitions — 0.5–1s blends ambient soundtracks smoothly across a hard cut without touching the picture
 - Connect a Merge Video & Audio node after combining to add a soundtrack
 - Per-clip frame trim is applied uniformly to every connected input — useful when all upstream clips have the same fixed-length tail dissolve

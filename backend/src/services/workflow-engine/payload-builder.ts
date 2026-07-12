@@ -4046,6 +4046,9 @@ export function buildPayload(
         // Worker reads audioCrossfadeCurve (resolveAudioCrossfadeCurve); dropping
         // it forced every workflow run back to the linear curve.
         audioCrossfadeCurve: data.audioCrossfadeCurve,
+        // Audio-only crossfade length; undefined → provider falls back to
+        // transitionDuration (pre-split workflows).
+        audioCrossfadeDuration: data.audioCrossfadeDuration as number | undefined,
         trimStartFrames: (data.trimStartFrames as number) ?? 0,
         trimEndFrames: (data.trimEndFrames as number) ?? 0,
         upstreamDurations,

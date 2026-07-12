@@ -12,10 +12,14 @@
  *     injected into the soundless clips so every join strategy sees
  *     uniform stream layouts — concat -c copy otherwise silently ends the
  *     audio track at the first soundless segment.
- *   - Audio handling per audioMode:
+ *   - Audio handling per audioMode (audioCrossfadeDuration is an
+ *     AUDIO-ONLY knob — it must never alter the video stream):
  *       "remove"    → -an
- *       "crossfade" → acrossfade chain; video-only directly when NO clip
- *                      has audio; video-only fallback kept as safety net
+ *       "crossfade" → hard-cut video (cut, or any transition at duration
+ *                      0): overlapping acrossfade rendered in an audio-only
+ *                      pass, muxed onto STREAM-COPIED video; xfade video:
+ *                      anchored afade+adelay+amix with an independent audio
+ *                      fade length; video-only when NO clip has audio
  *       "keep"      → adelay+amix anchored to each clip's video start;
  *                      video-only when NO clip has audio
  *   - Dip-to-color: interleave a solid color clip between each input
@@ -90,6 +94,7 @@ interface CombineCallOpts {
   transitionDuration?: number
   audioMode?: "keep" | "crossfade" | "remove"
   audioCrossfadeCurve?: string
+  audioCrossfadeDuration?: number
   trimStartFrames?: number
   trimEndFrames?: number
 }
@@ -101,6 +106,7 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     transitionDuration: over.transitionDuration ?? 1,
     audioMode: over.audioMode ?? "keep",
     audioCrossfadeCurve: over.audioCrossfadeCurve,
+    audioCrossfadeDuration: over.audioCrossfadeDuration,
     trimStartFrames: over.trimStartFrames ?? 0,
     trimEndFrames: over.trimEndFrames ?? 0,
   }
@@ -340,12 +346,14 @@ describe("combineVideos — cut transition", () => {
     expect(list).toContain("it'\\''s-work")
   })
 
-  it("cut + audioMode=crossfade: per-boundary afade out/in + aconcat — NO time-shifting acrossfade/apad", async () => {
-    // Regression 2026-06-11: acrossfade OVERLAPS clips in time, so against a
-    // hard-cut video every post-boundary segment's audio ran the full
-    // crossfade duration EARLY (sound led picture by 0.5s in clip 2), and
-    // apad hid the shortfall as end-silence. Hard cuts keep each clip's
-    // audio anchored to its video: fade-out tail / fade-in head + concat.
+  it("cut + audioMode=crossfade: overlapping acrossfade in an audio-only pass, muxed onto STREAM-COPIED video", async () => {
+    // Deliberate reversal of PR #3307 (2026-07-12, user decision): the
+    // overlapping blend is the point of "crossfade" — fading through
+    // silence at every cut sounded broken. The accepted tradeoff (audio
+    // leads video by d per boundary) is imperceptible on the ambient/music
+    // tracks AI clips carry. What #3307 rightly demanded — and this keeps —
+    // is that audio settings never alter the VIDEO stream: the video is
+    // stream-copied byte-identical to the plain-cut fast path.
     stubResolutionProbes(2)
     stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
@@ -358,26 +366,77 @@ describe("combineVideos — cut transition", () => {
       transitionDuration: 0.5,
     }))
 
-    const args = lastArgs()
-    const fc = args[args.indexOf("-filter_complex") + 1]
-    // Video: hard-cut concat filter, not xfade
-    expect(fc).toContain("[0:v][1:v]concat=n=2:v=1:a=0[vout]")
-    expect(fc).not.toContain("xfade=")
-    // Audio: timeline-preserving fades at the boundary, then sample concat
-    expect(fc).toContain("[0:a]afade=t=out:st=4.5:d=0.5:curve=tri[ac0]")
-    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri[ac1]")
-    expect(fc).toContain("[ac0][ac1]concat=n=2:v=0:a=1[aout]")
-    expect(fc).not.toContain("acrossfade")
-    expect(fc).not.toContain("apad")
-    const mapCalls = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-map") acc.push(args[i + 1])
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
+
+    // Pass 1: audio-only — overlapping acrossfade chain, padded back to the
+    // full video length, encoded at the pinned uniform params.
+    const audioArgs = ffargs(0)
+    const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]")
+    expect(fc).toContain("apad=whole_dur=10")
+    expect(fc).not.toContain("concat")
+    expect(fc).not.toContain("xfade")
+    expect(audioArgs[audioArgs.indexOf("-map") + 1]).toBe("[aoutp]")
+    expect(audioArgs[audioArgs.indexOf("-ar") + 1]).toBe("44100")
+    expect(audioArgs[audioArgs.length - 1]).toBe("/tmp/work/blended_audio.m4a")
+
+    // Pass 2: concat demuxer video (STREAM COPY — no re-encode) + blended track.
+    const muxArgs = lastArgs()
+    expect(muxArgs[muxArgs.indexOf("-f") + 1]).toBe("concat")
+    expect(muxArgs).toContain("/tmp/work/blended_audio.m4a")
+    expect(muxArgs[muxArgs.indexOf("-c") + 1]).toBe("copy")
+    expect(muxArgs).not.toContain("libx264")
+    expect(muxArgs).not.toContain("-filter_complex")
+    const mapCalls = muxArgs.reduce<string[]>((acc, a, i) => {
+      if (a === "-map") acc.push(muxArgs[i + 1])
       return acc
     }, [])
-    expect(mapCalls).toContain("[vout]")
-    expect(mapCalls).toContain("[aout]")
-    // Not stream-copy: re-encodes through filter graph
-    expect(args[args.indexOf("-c:v") + 1]).toBe("libx264")
-    expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
+    expect(mapCalls).toEqual(["0:v", "1:a"])
+  })
+
+  it("cut + crossfade: audioCrossfadeDuration overrides transitionDuration for the blend length", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0,
+      audioCrossfadeDuration: 1.5,
+    }))
+
+    const audioArgs = ffargs(0)
+    const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("acrossfade=d=1.5")
+  })
+
+  it("fade transition at duration 0 IS a hard cut: stream-copied video + overlapping audio blend", async () => {
+    // Regression (job bf65be3b): fade+0 used to build xfade/acrossfade with
+    // d=0, which errored into the video-only fallback — the output lost ALL
+    // audio. duration 0 must route through the hard-cut machinery.
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "fade",
+      audioMode: "crossfade",
+      transitionDuration: 0,
+      audioCrossfadeDuration: 1,
+    }))
+
+    const audioArgs = ffargs(0)
+    const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("acrossfade=d=1")
+    expect(fc).not.toContain("xfade")
+    const muxArgs = lastArgs()
+    expect(muxArgs[muxArgs.indexOf("-f") + 1]).toBe("concat")
+    expect(muxArgs).not.toContain("libx264")
   })
 
   it("cut + crossfade with transitionDuration 0 degenerates to the stream-copy fast path", async () => {
@@ -448,7 +507,7 @@ describe("combineVideos — cut transition", () => {
     expect(list).not.toContain("normalized_1.mp4")
   })
 
-  it("cut + crossfade with 3 clips: middle clip fades in AND out, all anchored", async () => {
+  it("cut + crossfade with 3 clips: chained acrossfade across every boundary", async () => {
     stubResolutionProbes(3)
     stubAudioStreamProbes(3, true)
     mocks.getVideoDuration
@@ -463,10 +522,11 @@ describe("combineVideos — cut transition", () => {
       transitionDuration: 0.5,
     }))
 
-    const args = lastArgs()
-    const fc = args[args.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri,afade=t=out:st=3.5:d=0.5:curve=tri[ac1]")
-    expect(fc).toContain("[ac0][ac1][ac2]concat=n=3:v=0:a=1[aout]")
+    const audioArgs = ffargs(0)
+    const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[a1]")
+    expect(fc).toContain("[a1][2:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]")
+    expect(fc).toContain("apad=whole_dur=14")
   })
 
   it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (safety net)", async () => {
@@ -686,7 +746,7 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     expect(fc).not.toContain("aevalsrc")
   })
 
-  it("audioMode=crossfade: chains acrossfade alongside xfade with default linear curve", async () => {
+  it("audioMode=crossfade: anchored afade+adelay+amix alongside xfade (default linear curve)", async () => {
     stubResolutionProbes(2)
     stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
@@ -699,15 +759,41 @@ describe("combineVideos — audioMode for xfade transitions", () => {
 
     const args = lastArgs()
     const fc = args[args.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("acrossfade=d=0.5")
-    expect(fc).toContain("c1=tri:c2=tri") // linear default
-    expect(fc).toContain("[aout]")
+    // Each clip's audio is ANCHORED at its video start (sync-safe no matter
+    // the audio fade length): clip 1's video starts at 5-0.5=4.5s.
+    expect(fc).toContain("[0:a]afade=t=out:st=4.5:d=0.5:curve=tri[xa0]")
+    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri,adelay=4500:all=1[xa1]")
+    expect(fc).toContain("[xa0][xa1]amix=inputs=2:normalize=0:duration=longest[aout]")
+    expect(fc).not.toContain("acrossfade")
     const mapCalls = args.reduce<string[]>((acc, a, i) => {
       if (a === "-map") acc.push(args[i + 1])
       return acc
     }, [])
     expect(mapCalls).toContain("[vout]")
     expect(mapCalls).toContain("[aout]")
+  })
+
+  it("audioMode=crossfade + xfade: audio fade length decouples from the video fade (video untouched)", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "fade",
+      audioMode: "crossfade",
+      transitionDuration: 0.5,
+      audioCrossfadeDuration: 2,
+    }))
+
+    const args = lastArgs()
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    // Video fade stays 0.5s — the audio knob must not touch it.
+    expect(fc).toContain("xfade=transition=fade:duration=0.5:offset=4.5")
+    // Audio fades run 2s, still anchored at the 4.5s video start.
+    expect(fc).toContain("[0:a]afade=t=out:st=3:d=2:curve=tri[xa0]")
+    expect(fc).toContain("[1:a]afade=t=in:st=0:d=2:curve=tri,adelay=4500:all=1[xa1]")
   })
 
   it("audioMode=crossfade: each curve id resolves to its acrossfade curve in the filter graph", async () => {
@@ -730,7 +816,7 @@ describe("combineVideos — audioMode for xfade transitions", () => {
       }))
 
       const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
-      expect(fc, `${id} → ${curve}`).toContain(`c1=${curve}:c2=${curve}`)
+      expect(fc, `${id} → ${curve}`).toContain(`curve=${curve}`)
     }
   })
 

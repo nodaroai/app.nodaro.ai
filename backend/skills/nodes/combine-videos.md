@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-05-20T13:15:49.575Z
-generated_from: 806ad950
+generated_at: 2026-07-12T12:52:01.538Z
+generated_from: 0627b7aed
 ---
 
 # Combine Videos
@@ -23,6 +23,7 @@ generated_from: 806ad950
 **Optional data fields:**
 - `currentJobProgress?: number`
 - `audioCrossfadeCurve?: string`
+- `audioCrossfadeDuration?: number`
 - `trimStartFrames?: number`
 - `trimEndFrames?: number`
 - `clipOrder?: string[]`
@@ -39,6 +40,7 @@ generated_from: 806ad950
   "transition": "cut",
   "transitionDuration": 0.5,
   "audioMode": "crossfade",
+  "audioCrossfadeDuration": 0.5,
   "fieldMappings": {}
 }
 ```
@@ -57,6 +59,7 @@ generated_from: 806ad950
 - `transition_duration`
 - `audio_mode`
 - `audio_crossfade_curve`
+- `audio_crossfade_duration`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
@@ -79,6 +82,7 @@ generated_from: 806ad950
     "transition": "cut",
     "transitionDuration": 0.5,
     "audioMode": "crossfade",
+    "audioCrossfadeDuration": 0.5,
     "fieldMappings": {}
   }
 }

@@ -754,10 +754,11 @@ export function runCombineVideos(
   trimEndFrames?: number,
   upstreamDurations?: ReadonlyArray<number | undefined>,
   audioCrossfadeCurve?: string,
+  audioCrossfadeDuration?: number,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames, upstreamDurations, audioCrossfadeCurve),
+    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames, upstreamDurations, audioCrossfadeCurve, audioCrossfadeDuration),
     "generatedVideoUrl",
     "Combine videos",
     ctx,
