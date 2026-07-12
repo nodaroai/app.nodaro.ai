@@ -8,6 +8,7 @@ import {
   hostnameMatchesAllowlist,
   isAllowedSocialVideoUrl,
 } from "../../lib/url-validator.js"
+import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the android
@@ -99,7 +100,7 @@ export function buildYtDlpVideoArgs(opts: {
 }): string[] {
   const args = [
     opts.url,
-    "--format", "mp4/best",
+    "--format", VIDEO_FORMAT_SELECTOR,
     "--output", deriveOutputTemplate(opts.outPath),
     "--no-playlist",
     "--no-check-certificates",
@@ -203,14 +204,33 @@ async function findDownloadedFile(outPath: string): Promise<string> {
   }
 }
 
-/** True iff the first video stream is h264 (ffprobe). Never rejects. */
-function isH264(filePath: string): Promise<boolean> {
+/**
+ * What ffprobe found in the downloaded file. `null` on either field means the
+ * probe itself failed, NOT that the stream is absent — callers must not treat
+ * "unknown" as "missing" (that would fire a bogus silent-video warning on every
+ * corrupt file).
+ */
+export interface ProbedStreams {
+  videoCodec: string | null
+  hasAudio: boolean | null
+}
+
+/**
+ * Probe the file's streams with ffprobe. Never rejects.
+ *
+ * This reports the AUDIO stream too, not just the video codec. It used to only
+ * answer "is this h264?", which meant a download that arrived with no audio
+ * track at all was indistinguishable from a healthy one — so a silent video was
+ * uploaded, marked "completed", and only blew up steps later inside ffmpeg. The
+ * download path is the last place that can still name that failure.
+ */
+export function probeStreams(filePath: string): Promise<ProbedStreams> {
   return new Promise((resolve) => {
+    const unknown: ProbedStreams = { videoCodec: null, hasAudio: null }
     const proc = spawn("ffprobe", [
       "-v", "error",
-      "-select_streams", "v:0",
-      "-show_entries", "stream=codec_name",
-      "-of", "csv=p=0",
+      "-show_entries", "stream=codec_type,codec_name",
+      "-of", "json",
       filePath,
     ], { stdio: ["ignore", "pipe", "pipe"] })
 
@@ -221,9 +241,24 @@ function isH264(filePath: string): Promise<boolean> {
     proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
     proc.on("close", (code) => {
       clearTimeout(watchdog)
-      resolve(code === 0 && stdout.trim() === "h264")
+      if (code !== 0) return resolve(unknown)
+      try {
+        // JSON, not CSV: ffprobe emits fields in its own fixed order, not the
+        // order `-show_entries` lists them, so positional parsing is a trap.
+        const { streams } = JSON.parse(stdout) as {
+          streams?: Array<{ codec_type?: string; codec_name?: string }>
+        }
+        if (!Array.isArray(streams)) return resolve(unknown)
+        const video = streams.find((s) => s.codec_type === "video")
+        resolve({
+          videoCodec: video?.codec_name ?? null,
+          hasAudio: streams.some((s) => s.codec_type === "audio"),
+        })
+      } catch {
+        resolve(unknown)
+      }
     })
-    proc.on("error", () => { clearTimeout(watchdog); resolve(false) })
+    proc.on("error", () => { clearTimeout(watchdog); resolve(unknown) })
   })
 }
 
@@ -315,9 +350,19 @@ export async function downloadYouTubeVideo(opts: {
   const stat = await fs.stat(actualPath)
   if (stat.size === 0) throw new Error("Downloaded video file is empty")
 
-  // Re-encode to h264/aac if needed for downstream compatibility.
-  const alreadyH264 = await isH264(actualPath)
-  if (!alreadyH264) {
+  const { videoCodec, hasAudio } = await probeStreams(actualPath)
+
+  // A silent video is not itself a download failure — fetching a clip with no
+  // soundtrack is legitimate — but every audio consumer downstream (transcribe,
+  // trim-audio, voice-changer) will then die with an error that names ffmpeg
+  // instead of the cause. Name it here, where the cause is still in view.
+  if (hasAudio === false) {
+    console.warn(`[download-video] ${url} produced a video with NO audio stream`)
+  }
+
+  // Re-encode to h264/aac if needed for downstream compatibility. A null codec
+  // means the probe failed — re-encode anyway; normalizing is the safe fallback.
+  if (videoCodec !== "h264") {
     onProcessingStart?.()
     const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
     await reencodeToH264(actualPath, tmpPath)
