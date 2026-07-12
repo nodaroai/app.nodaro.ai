@@ -28,24 +28,59 @@ import { probeFpsAndFrameCount } from "./smart-loop-cut.js"
  *  large enough that ranking is stable. */
 const COMPARE_WIDTH = 192
 
+/**
+ * Minimum PSNR (dB, at the downscaled compare size) for the best pair to
+ * count as a GENUINE match. Measured landscape on real AI clips: unrelated
+ * scenes ≈ 8–15dB, similar in-scene motion ≈ 18–25dB, a re-rendered
+ * continuation twin ≥ 27dB. Below this line the boundary reports
+ * `matched: false` and the caller keeps its fixed/default trims — cutting
+ * at a garbage "best" pair of two unrelated clips would move the cut to an
+ * arbitrary place.
+ */
+export const SMART_CUT_MIN_PSNR_DB = 24
+
 export interface SmartCutBoundary {
-  /** Frames to drop from the END of the previous clip. The matched frame
-   *  itself is KEPT as the clip's new last frame. */
+  /** Frames to drop from the END of the previous clip. Counts DROPPED
+   *  frames, not an index: 0 = drop nothing (the match IS the clip's last
+   *  frame, which is kept). The matched frame is always KEPT as the
+   *  previous clip's new last frame. */
   readonly trimEndFrames: number
-  /** Frames to drop from the START of the next clip. The matched
-   *  near-identical frame is dropped too (the previous clip already ends
-   *  on it), so this is matchIndex + 1. */
+  /** Frames to drop from the START of the next clip. Counts DROPPED
+   *  frames: the matched near-identical frame is dropped too (the previous
+   *  clip already ends on its twin), so this is matchIndex + 1 and is
+   *  always ≥ 1 when matched. */
   readonly trimStartFrames: number
-  /** PSNR (dB) of the chosen pair. >30 ≈ visually identical,
-   *  20–30 ≈ close, <20 ≈ no real overlap found (best effort). */
+  /** PSNR (dB) of the best pair found. >30 ≈ visually identical,
+   *  20–30 ≈ close, <20 ≈ unrelated frames. */
   readonly psnr: number
+  /** True when `psnr` clears SMART_CUT_MIN_PSNR_DB — apply the trims.
+   *  False = no genuine match in the windows; the trims here are
+   *  informational (where the best pair WAS) and the caller should use its
+   *  fixed/default trims instead. */
+  readonly matched: boolean
 }
 
 /**
  * Pure index math, split out for tests: map the best (prev, next) match to
- * per-clip trim counts. `bestPrevOffset` counts from the end of the search
- * window (0 = very last frame); `bestNextIndex` counts from the start of
- * the next clip (0 = very first frame).
+ * per-clip trim counts.
+ *
+ * Index conventions (the two sides COUNT FROM OPPOSITE ENDS — easy to
+ * confuse, so stated explicitly):
+ *   - `bestPrevOffset` counts BACKWARD from the previous clip's end:
+ *     0 = the very LAST frame of prev, 1 = second-to-last, …
+ *   - `bestNextIndex` counts FORWARD from the next clip's start:
+ *     0 = the very FIRST frame of next, 1 = second, …
+ *
+ * The returned values are DROP COUNTS, not indices:
+ *   - trimEndFrames = bestPrevOffset — drop everything AFTER the matched
+ *     frame on prev; the matched frame stays as prev's last frame.
+ *   - trimStartFrames = bestNextIndex + 1 — drop everything up to AND
+ *     INCLUDING the matched twin on next, so the shared moment plays
+ *     exactly once (as prev's final frame) and next resumes one motion
+ *     step later.
+ *
+ * Example: match = (0, 0) — prev's last frame ↔ next's first frame (the
+ * classic continuation case): prev is untouched, next drops 1 frame.
  */
 export function boundaryTrimsFromMatch(
   bestPrevOffset: number,
@@ -155,12 +190,14 @@ export async function findSmartCutBoundary(
     }
 
     const trims = boundaryTrimsFromMatch(bestPrevOffset, bestNextIndex)
+    const matched = bestPsnr >= SMART_CUT_MIN_PSNR_DB
     console.log(
       `[smartCut] Best pair: prev end-${bestPrevOffset} ↔ next +${bestNextIndex} ` +
-        `(PSNR ${bestPsnr === Infinity ? "inf" : bestPsnr.toFixed(2)}dB) → ` +
+        `(PSNR ${bestPsnr === Infinity ? "inf" : bestPsnr.toFixed(2)}dB, ` +
+        `${matched ? "MATCH" : `below ${SMART_CUT_MIN_PSNR_DB}dB — no match`}) → ` +
         `trimEnd=${trims.trimEndFrames}, trimStart=${trims.trimStartFrames}`,
     )
-    return { ...trims, psnr: bestPsnr }
+    return { ...trims, psnr: bestPsnr, matched }
   } finally {
     await cleanupWorkDir(workDir)
   }

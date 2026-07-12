@@ -162,7 +162,7 @@ beforeEach(() => {
     providerUsed: "kie",
     kieTaskId: "kie-task-9",
   })
-  mocks.mockCombineVideos.mockResolvedValue(STITCHED_PATH)
+  mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
 })
 
 // ---------------------------------------------------------------------------
@@ -212,7 +212,7 @@ describe("extend-video / seedance-2-extend", () => {
 
     vi.clearAllMocks()
     mocks.mockTextToVideo.mockResolvedValue({ url: EXTENSION_URL, cost: 0.1, displayCost: 0.12, providerUsed: "kie" })
-    mocks.mockCombineVideos.mockResolvedValue(STITCHED_PATH)
+    mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
     await handler()(makeJob({ duration: 1 }) as never, makeCtx() as never)
     expect(mocks.mockTextToVideo.mock.calls[0]![2]).toBe(4)
   })

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
   const mockUploadFileToR2 = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
 
   // FFmpeg operation functions
-  const mockCombineVideos = vi.fn().mockResolvedValue("/tmp/combine-work/output.mp4")
+  const mockCombineVideos = vi.fn().mockResolvedValue({ outputPath: "/tmp/combine-work/output.mp4" })
   const mockMergeVideoAudio = vi.fn().mockResolvedValue("/tmp/merge-work/output.mp4")
   const mockTrimAudio = vi.fn().mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
   const mockTrimVideo = vi.fn().mockResolvedValue({ videoPath: "/tmp/trim-work/output.mp4" })

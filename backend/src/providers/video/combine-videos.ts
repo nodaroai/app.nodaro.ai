@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames } from "./ffmpeg-utils.js"
 import { findSmartCutBoundary } from "./smart-cut.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
@@ -233,7 +233,31 @@ function buildAnchoredCrossfadeAudioFilter(
   return { filter: parts.join(";"), outputLabel: "[aout]" }
 }
 
-export async function combineVideos(options: CombineOptions): Promise<string> {
+export interface CombineVideosResult {
+  readonly outputPath: string
+  /** Per-boundary smart-cut decisions actually APPLIED (present only when
+   *  smart cut was enabled and there was at least one boundary). Boundary k
+   *  joins clip k and clip k+1 — each boundary is searched independently,
+   *  so every junction gets its own values. Surfaced into the job's
+   *  output_data so users can see exactly where each cut landed. */
+  readonly smartCuts?: ReadonlyArray<{
+    readonly boundary: number
+    /** Frames dropped from the END of clip k (the matched frame is kept). */
+    readonly prevClipEndTrimFrames: number
+    /** Frames dropped from the START of clip k+1 (its matched twin is
+     *  dropped too, so the shared moment plays exactly once). */
+    readonly nextClipStartTrimFrames: number
+    /** PSNR (dB) of the best pair found, rounded; 100 = pixel-identical.
+     *  null = the search errored. */
+    readonly psnrDb: number | null
+    /** True = a genuine match was found and the matcher's cut was applied.
+     *  False = no match above the threshold (or the search errored) — the
+     *  boundary used the fixed/default trims, whose values are reported. */
+    readonly matched: boolean
+  }>
+}
+
+export async function combineVideos(options: CombineOptions): Promise<CombineVideosResult> {
   const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames, smartCut } = options
   const workDir = await createWorkDir("combine")
 
@@ -275,20 +299,44 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     // frame indices line up with trimEdgeFrames' probe).
     const startTrims = normalizedPaths.map((_, i) => (i === 0 ? 0 : trimStartFrames))
     const endTrims = normalizedPaths.map((_, i) => (i === normalizedPaths.length - 1 ? 0 : trimEndFrames))
+    let smartCuts: Array<{ boundary: number; prevClipEndTrimFrames: number; nextClipStartTrimFrames: number; psnrDb: number | null; matched: boolean }> | undefined
     if (smartCut?.enabled && normalizedPaths.length >= 2) {
+      smartCuts = []
       for (let k = 0; k < normalizedPaths.length - 1; k++) {
         try {
           const cut = await findSmartCutBoundary(
             normalizedPaths[k], normalizedPaths[k + 1],
             smartCut.framesFromPrev, smartCut.framesFromNext,
           )
-          console.log(`[combineVideos] Smart cut boundary ${k}: end-trim ${cut.trimEndFrames}, start-trim ${cut.trimStartFrames} (PSNR ${cut.psnr === Infinity ? "inf" : cut.psnr.toFixed(2)}dB)`)
-          endTrims[k] = cut.trimEndFrames
-          startTrims[k + 1] = cut.trimStartFrames
+          if (cut.matched) {
+            // Genuine match — the matcher's cut replaces the fixed trims.
+            endTrims[k] = cut.trimEndFrames
+            startTrims[k + 1] = cut.trimStartFrames
+            console.log(`[combineVideos] Smart cut boundary ${k}: end-trim ${cut.trimEndFrames}, start-trim ${cut.trimStartFrames} (PSNR ${cut.psnr === Infinity ? "inf" : cut.psnr.toFixed(2)}dB)`)
+          } else {
+            // No pair cleared the threshold (clips likely don't continue
+            // each other) — keep the user's fixed/default trims for this
+            // boundary instead of cutting at an arbitrary "best" pair.
+            console.log(`[combineVideos] Smart cut boundary ${k}: best pair only ${cut.psnr.toFixed(2)}dB — no match, keeping fixed trims (${endTrims[k]}/${startTrims[k + 1]})`)
+          }
+          smartCuts.push({
+            boundary: k,
+            prevClipEndTrimFrames: endTrims[k]!,
+            nextClipStartTrimFrames: startTrims[k + 1]!,
+            psnrDb: Number.isFinite(cut.psnr) ? Math.round(cut.psnr * 100) / 100 : 100,
+            matched: cut.matched,
+          })
         } catch (err) {
           // Best-effort: a failed boundary search keeps that boundary's
           // fixed trims rather than failing the whole combine.
           console.log(`[combineVideos] Smart cut failed at boundary ${k}, keeping fixed trims: ${err instanceof Error ? err.message : String(err)}`)
+          smartCuts.push({
+            boundary: k,
+            prevClipEndTrimFrames: endTrims[k]!,
+            nextClipStartTrimFrames: startTrims[k + 1]!,
+            psnrDb: null,
+            matched: false,
+          })
         }
       }
     }
@@ -361,12 +409,17 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       await runFfmpeg(args)
 
       console.log(`[combineVideos] Output (cut): ${outputPath}`)
-      return outputPath
+      return { outputPath, smartCuts }
     }
 
+    // VIDEO STREAM durations (not container): concat boundaries, xfade
+    // offsets, adelay anchors and atempo ratios are all positions in the
+    // VIDEO timeline — the container duration overshoots by the audio
+    // overhang AI clips carry (~1-2 frames), shifting every downstream
+    // position late.
     const durations: number[] = []
     for (const clipPath of inputPaths) {
-      const dur = await getVideoDuration(clipPath)
+      const dur = await getVideoStreamDuration(clipPath)
       durations.push(dur)
     }
     console.log(`[combineVideos] Clip durations: ${durations.map((d) => d.toFixed(2)).join(", ")}`)
@@ -422,7 +475,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       }
 
       console.log(`[combineVideos] Output (cut+crossfade): ${outputPath}`)
-      return outputPath
+      return { outputPath, smartCuts }
     }
 
     const xfadeType = resolveXfadeName(transition)
@@ -553,7 +606,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     }
 
     console.log(`[combineVideos] Output: ${outputPath}`)
-    return outputPath
+    return { outputPath, smartCuts }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

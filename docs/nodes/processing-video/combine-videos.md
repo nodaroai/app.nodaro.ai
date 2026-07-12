@@ -18,8 +18,8 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Smart Cut | Toggle | off | PSNR-match boundary frames and cut at the closest pair (replaces the fixed trims) |
 | Smart Cut: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown when Smart Cut is on) |
 | Smart Cut: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
-| Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120, hidden when Smart Cut is on) |
-| Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120, hidden when Smart Cut is on) |
+| Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120). With Smart Cut on, used as the fallback for boundaries without a match |
+| Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120). With Smart Cut on, used as the fallback for boundaries without a match |
 | Clip Ordering | Drag list | — | Reorder connected video clips |
 
 ### Transition Options
@@ -72,7 +72,20 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 
 ### Smart Cut
 
-For continuation clips (each generated from the previous clip's last frame), the seam usually stutters because the models re-render a near-identical moment on both sides. **Smart Cut** finds it automatically: it searches the last *N* frames of each clip and the first *M* frames of the next (PSNR similarity), ends the first clip **on** the most similar frame and starts the next **right after** its match — the duplicated frame plays exactly once, so motion continues through the cut. It replaces the fixed Trim Start/End guesses; per-boundary results are logged with their PSNR (>30dB ≈ visually identical). If a boundary search fails, that boundary falls back to the fixed trims.
+For continuation clips (each generated from the previous clip's last frame), the seam usually stutters because the models re-render a near-identical moment on both sides. **Smart Cut** finds it automatically: it searches the last *N* frames of each clip and the first *M* frames of the next (PSNR similarity), ends the first clip **on** the most similar frame and starts the next **right after** its match — of the two near-identical twins, the *previous* clip's original frame is kept and the *next* clip's re-rendered copy is dropped, so the shared moment plays exactly once and motion continues through the cut.
+
+**Match threshold + fallback:** a pair only counts as a genuine match above **24dB** PSNR (measured: continuation twins ≥ ~28dB, unrelated clips ≤ ~15dB). Boundaries with a match use the matcher's cut; boundaries **without** one (clips that don't actually continue each other, or a failed search) fall back to the fixed **Trim Start/End** values — which stay visible below the Smart Cut controls as the per-boundary defaults.
+
+**Every junction is searched independently** — with 3 clips there are 2 boundaries, each with its own result. The applied values are reported in the job's `output_data.smartCuts`:
+
+```json
+"smartCuts": [
+  { "boundary": 0, "prevClipEndTrimFrames": 0, "nextClipStartTrimFrames": 1, "psnrDb": 30.19, "matched": true },
+  { "boundary": 1, "prevClipEndTrimFrames": 2, "nextClipStartTrimFrames": 1, "psnrDb": 11.7, "matched": false }
+]
+```
+
+`boundary` k is the join between clip k and clip k+1. The trim fields are the values actually **applied** (drop counts: `prevClipEndTrimFrames: 0` = the match was the previous clip's very last frame, kept; `nextClipStartTrimFrames: 1` = the next clip dropped just its duplicated first frame). `matched: false` means no pair cleared the threshold — the reported values are the fixed trims the boundary fell back to. `psnrDb`: >30 ≈ visually identical, 100 = pixel-identical, `null` = the search errored.
 
 ### Crossfade Curve (only when Audio = Crossfade)
 

@@ -165,12 +165,13 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         />
       </div>
 
-      {data.smartCutEnabled ? (
+      {data.smartCutEnabled && (
         <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
           <p className="text-[11px] text-muted-foreground">
             Finds the most similar pair of frames near each boundary (searching the
             windows below), ends the previous clip on it and starts the next right
-            after it — the duplicated frame plays once. Replaces the fixed trims.
+            after it — the duplicated frame plays once. Boundaries where no genuine
+            match is found fall back to the fixed trims below.
           </p>
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
@@ -207,43 +208,43 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
             />
           </div>
         </div>
-      ) : (
-        <>
-          <div>
-            <Label htmlFor="trim-end-frames">
-              Trim each clip end (frames, except last) — {data.trimEndFrames ?? 0}
-            </Label>
-            <Input
-              id="trim-end-frames"
-              type="number"
-              min={0}
-              max={120}
-              step={1}
-              value={data.trimEndFrames ?? 0}
-              onChange={(e) =>
-                onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
-              }
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="trim-start-frames">
-              Trim each clip start (frames, except first) — {data.trimStartFrames ?? 0}
-            </Label>
-            <Input
-              id="trim-start-frames"
-              type="number"
-              min={0}
-              max={120}
-              step={1}
-              value={data.trimStartFrames ?? 0}
-              onChange={(e) =>
-                onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
-              }
-            />
-          </div>
-        </>
       )}
+
+      <div>
+        <Label htmlFor="trim-end-frames">
+          Trim each clip end (frames, except last) — {data.trimEndFrames ?? 0}
+          {data.smartCutEnabled ? " (fallback when no match)" : ""}
+        </Label>
+        <Input
+          id="trim-end-frames"
+          type="number"
+          min={0}
+          max={120}
+          step={1}
+          value={data.trimEndFrames ?? 0}
+          onChange={(e) =>
+            onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+          }
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="trim-start-frames">
+          Trim each clip start (frames, except first) — {data.trimStartFrames ?? 0}
+          {data.smartCutEnabled ? " (fallback when no match)" : ""}
+        </Label>
+        <Input
+          id="trim-start-frames"
+          type="number"
+          min={0}
+          max={120}
+          step={1}
+          value={data.trimStartFrames ?? 0}
+          onChange={(e) =>
+            onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+          }
+        />
+      </div>
     </div>
   )
 }

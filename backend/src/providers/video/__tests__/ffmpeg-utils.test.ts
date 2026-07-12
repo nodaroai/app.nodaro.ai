@@ -120,6 +120,7 @@ import {
   runFfmpeg,
   runFfprobe,
   getVideoDuration,
+  getVideoStreamDuration,
   getVideoFps,
   probeVideoSource,
   probeVideoStream,
@@ -850,6 +851,50 @@ describe("trimEdgeFrames", () => {
 
     const args = execArgs(2)
     expect(args[args.indexOf("-ss") + 1]).toBe("1") // 30 frames / 30fps fallback = 1s
+  })
+
+  it("computes the end cut from the VIDEO STREAM duration, not the container (audio-overhang regression)", async () => {
+    // Real-world numbers from the reporting user's clip: 121 frames @ 24fps
+    // → video stream 5.041667s, but the container reports 5.088s because the
+    // audio track runs ~46ms longer. Cutting 2 frames from the CONTAINER
+    // duration (5.088 - 2/24 = 5.0047) lands past the last video frame
+    // (pts 5.000) and removes NOTHING. The stream duration must be used:
+    // 5.041667 - 2/24 = 4.958334 → exactly 2 frames dropped.
+    execFileOnce("24/1\n") // fps probe
+    execFileOnce("5.041667\n") // VIDEO STREAM duration probe
+    execFileOnce("") // ffmpeg trim
+
+    await trimEdgeFrames("/tmp/in.mp4", "/tmp/out.mp4", 0, 2)
+
+    // The duration probe must target the video stream, not the format.
+    const probeArgs = execArgs(1)
+    expect(probeArgs).toContain("-select_streams")
+    expect(probeArgs[probeArgs.indexOf("-select_streams") + 1]).toBe("v:0")
+    expect(probeArgs[probeArgs.indexOf("-show_entries") + 1]).toBe("stream=duration")
+
+    const args = execArgs(2)
+    expect(args[args.indexOf("-to") + 1]).toMatch(/^4\.9583/)
+  })
+})
+
+// ===========================================================================
+// 10b) getVideoStreamDuration
+// ===========================================================================
+
+describe("getVideoStreamDuration", () => {
+  it("returns the video stream duration when the stream reports one", async () => {
+    execFileOnce("5.041667\n")
+    const d = await getVideoStreamDuration("/tmp/in.mp4")
+    expect(d).toBeCloseTo(5.041667, 5)
+    expect(mocks.execFile).toHaveBeenCalledTimes(1)
+  })
+
+  it("falls back to the container/format duration when the stream has none", async () => {
+    execFileOnce("N/A\n") // some containers don't carry stream duration
+    execFileOnce("7.5\n") // format duration fallback
+    const d = await getVideoStreamDuration("/tmp/in.mp4")
+    expect(d).toBe(7.5)
+    expect(mocks.execFile).toHaveBeenCalledTimes(2)
   })
 })
 
