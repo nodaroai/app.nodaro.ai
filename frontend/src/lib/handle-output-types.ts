@@ -59,6 +59,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "generate-music": { audio: "audio" },
   "generate-script": { scenes: "video", images: "image", dialogue: "text", music: "audio", sfx: "audio", characters: "identity", locations: "identity" },
   "generate-video": { video: "video" },
+  "generate-video-pro": { video: "video" },
   // generative-pipeline is terminal (no output handle) — see its node-def test.
   "image-collage": { image: "image" },
   "image-critic": { approved: "approve", rejected: "negative" },

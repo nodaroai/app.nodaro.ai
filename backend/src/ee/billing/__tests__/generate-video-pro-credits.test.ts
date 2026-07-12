@@ -1,0 +1,228 @@
+/**
+ * generate-video-pro pricing helper — THE GOLDEN TABLE.
+ *
+ * `computeGenerateVideoProPricing` is the money-authoritative closed-form for
+ * the generate-video-pro node: it clamps (resolution, duration), runs the
+ * segment-split closed-form (module-local `computeSplit` twin — copied
+ * verbatim from the plan's Task 2 function body, since plugin code is not
+ * importable from ee/), and derives the BASE (0%-markup) reserve amount.
+ *
+ * - `mode: "single"` (requested duration <= 15s after clamping): behaves like
+ *   a normal single-segment t2v run — the credit identifier + BASE cost come
+ *   from the SAME path every other video node uses
+ *   (`buildVideoCreditModelIdentifier` + `getModelCreditBaseCost`, which is
+ *   DB-aware and falls back to STATIC_CREDIT_COSTS on a DB miss).
+ * - `mode: "multi"` (> 15s): the node stitches N segments together. There is
+ *   no per-duration DB row for a synthetic multi-segment run, so this path
+ *   reads STATIC_CREDIT_COSTS directly for all three quantities (feeBase,
+ *   noRefPerSec, refPerSec) rather than going through the DB-aware getter —
+ *   and hard-fails via PriceNotConfiguredError when a composite is missing
+ *   (never silently under-reserve).
+ *
+ * model_pricing DB lookups are mocked to MISS so getModelCreditBaseCost falls
+ * back to the real (un-mocked) STATIC_CREDIT_COSTS — mirrors
+ * seedance2-ref-video-billing.test.ts — so the asserted numbers below track
+ * the seeded reality in credits.ts, not a test double.
+ */
+
+import { describe, it, expect, beforeEach, vi } from "vitest"
+
+vi.mock("../../../lib/supabase.js", () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => Promise.resolve({ data: null, error: { code: "PGRST116" } }),
+        }),
+      }),
+    }),
+  },
+}))
+
+import { computeGenerateVideoProPricing } from "../generate-video-pro-credits.js"
+import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, invalidateModelPricingCache } from "../credits.js"
+
+beforeEach(() => {
+  invalidateModelPricingCache()
+})
+
+// Sanity: pin the seeded composites the golden table's hand-computed
+// comments below are derived from, so a future re-price of these rows fails
+// loudly here instead of silently invalidating the golden numbers.
+describe("golden-table composite sanity (seedance-2 family, credits.ts)", () => {
+  it("seedance-2 @ 720p 8s composites", () => {
+    expect(STATIC_CREDIT_COSTS["seedance-2:8s:720p"]).toBe(82)
+    expect(STATIC_CREDIT_COSTS["seedance-2:8s:720p-ref"]).toBe(50)
+  })
+  it("seedance-2 @ 4k 8s composites", () => {
+    expect(STATIC_CREDIT_COSTS["seedance-2:8s:4k"]).toBe(416)
+    expect(STATIC_CREDIT_COSTS["seedance-2:8s:4k-ref"]).toBe(256)
+  })
+  it("seedance-2-mini @ 720p 8s composites", () => {
+    expect(STATIC_CREDIT_COSTS["seedance-2-mini:8s:720p"]).toBe(41)
+    expect(STATIC_CREDIT_COSTS["seedance-2-mini:8s:720p-ref"]).toBe(25)
+  })
+  it("generate-video-pro fee row", () => {
+    expect(STATIC_CREDIT_COSTS["generate-video-pro"]).toBe(10)
+  })
+})
+
+describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unless noted)", () => {
+  it("D=8 -> mode single, creditIdentifier for 8s, reserveBase 82", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 8,
+    })
+    expect(result.mode).toBe("single")
+    expect(result.clampedDurationSec).toBe(8)
+    expect(result.segmentCount).toBe(1)
+    expect(result.totalRawSec).toBe(8)
+    expect(result.segmentDurations).toEqual([8])
+    expect(result.feeBase).toBe(0)
+    expect(result.creditIdentifier).toBe("seedance-2:8s:720p")
+    expect(result.reserveBase).toBe(82)
+  })
+
+  it("D=15 -> single, reserveBase 154", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 15,
+    })
+    expect(result.mode).toBe("single")
+    expect(result.clampedDurationSec).toBe(15)
+    expect(result.segmentCount).toBe(1)
+    expect(result.segmentDurations).toEqual([15])
+    expect(result.feeBase).toBe(0)
+    expect(result.creditIdentifier).toBe("seedance-2:15s:720p")
+    expect(result.reserveBase).toBe(154)
+  })
+
+  it("D=16 -> multi, n=2, s=17, durations [9,8], reserveBase 183", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 16,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.clampedDurationSec).toBe(16)
+    expect(result.segmentCount).toBe(2)
+    expect(result.totalRawSec).toBe(17)
+    expect(result.segmentDurations).toEqual([9, 8])
+    expect(result.creditIdentifier).toBeUndefined()
+    // feeBase(10) + ceil(noRefPerSec(10.25) × maxSeg(15)) + ceil(refPerSec(6.25) × ((n-1)×tailSec + (s-maxSeg)))
+    // = 10 + ceil(153.75) + ceil(6.25 × (1×1 + 2)) = 10 + 154 + ceil(18.75) = 10 + 154 + 19 = 183
+    expect(result.reserveBase).toBe(183)
+  })
+
+  it("D=43 -> multi, n=3, s=44, durations [15,15,14], reserveBase 358", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 43,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.clampedDurationSec).toBe(43)
+    expect(result.segmentCount).toBe(3)
+    expect(result.totalRawSec).toBe(44)
+    expect(result.segmentDurations).toEqual([15, 15, 14])
+    // 10 + ceil(10.25×15) + ceil(6.25×((3-1)×1+(44-15))) = 10 + 154 + ceil(6.25×31) = 10+154+194 = 358
+    expect(result.reserveBase).toBe(358)
+  })
+
+  it("D=60 -> multi, n=5, s=62, durations [14,12,12,12,12], reserveBase 483", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 60,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.clampedDurationSec).toBe(60)
+    expect(result.segmentCount).toBe(5)
+    expect(result.totalRawSec).toBe(62)
+    expect(result.segmentDurations).toEqual([14, 12, 12, 12, 12])
+    // 10 + ceil(10.25×15) + ceil(6.25×((5-1)×1+(62-15))) = 10 + 154 + ceil(6.25×51) = 10+154+319 = 483
+    expect(result.reserveBase).toBe(483)
+  })
+
+  it("D=120 -> multi, n=9, s=123, durations [15,15,15,13,13,13,13,13,13], reserveBase 889", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 120,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.clampedDurationSec).toBe(120)
+    expect(result.segmentCount).toBe(9)
+    expect(result.totalRawSec).toBe(123)
+    expect(result.segmentDurations).toEqual([15, 15, 15, 13, 13, 13, 13, 13, 13])
+    // 10 + ceil(10.25×15) + ceil(6.25×((9-1)×1+(123-15))) = 10 + 154 + ceil(6.25×116) = 10+154+725 = 889
+    expect(result.reserveBase).toBe(889)
+  })
+})
+
+describe("resolution clamp", () => {
+  it("seedance-2-mini @ 1080p (unsupported) snaps to mini's top tier (720p) rates, no throw", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2-mini",
+      resolution: "1080p",
+      durationSec: 60,
+    })
+    expect(result.mode).toBe("multi")
+    // Same split as the D=60 seedance-2 row (split math doesn't depend on provider/resolution).
+    expect(result.segmentCount).toBe(5)
+    expect(result.totalRawSec).toBe(62)
+    expect(result.segmentDurations).toEqual([14, 12, 12, 12, 12])
+    // Clamped to mini's top tier 720p: noRefPerSec = 41/8, refPerSec = 25/8 (NOT an unpriced 1080p lookup).
+    expect(result.noRefPerSec).toBeCloseTo(41 / 8)
+    expect(result.refPerSec).toBeCloseTo(25 / 8)
+    // 10 + ceil((41/8)×15) + ceil((25/8)×((5-1)×1+(62-15))) = 10 + ceil(76.875) + ceil(3.125×51)
+    // = 10 + 77 + ceil(159.375) = 10 + 77 + 160 = 247
+    expect(result.reserveBase).toBe(247)
+  })
+
+  it("seedance-2 @ 4k uses 4k rates", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "4k",
+      durationSec: 16,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.segmentCount).toBe(2)
+    expect(result.totalRawSec).toBe(17)
+    expect(result.noRefPerSec).toBeCloseTo(STATIC_CREDIT_COSTS["seedance-2:8s:4k"]! / 8)
+    expect(result.refPerSec).toBeCloseTo(STATIC_CREDIT_COSTS["seedance-2:8s:4k-ref"]! / 8)
+    // reserveBase = 10 + ceil((STATIC["seedance-2:8s:4k"]/8)×15) + ceil((STATIC["seedance-2:8s:4k-ref"]/8)×(1+2))
+    //             = 10 + ceil((416/8)×15) + ceil((256/8)×3)
+    //             = 10 + ceil(52×15) + ceil(32×3)
+    //             = 10 + 780 + 96
+    //             = 886
+    expect(result.reserveBase).toBe(886)
+  })
+})
+
+describe("cap clamp", () => {
+  it("durationSec 300 clamps to clampedDurationSec 120, n 9 (same split as D=120)", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 300,
+    })
+    expect(result.clampedDurationSec).toBe(120)
+    expect(result.segmentCount).toBe(9)
+    expect(result.mode).toBe("multi")
+  })
+})
+
+describe("missing composite", () => {
+  it("throws PriceNotConfiguredError for a provider with no seeded 8s composites", async () => {
+    await expect(
+      computeGenerateVideoProPricing({
+        provider: "totally-unseeded-provider-xyz",
+        resolution: "720p",
+        durationSec: 16,
+      }),
+    ).rejects.toThrow(PriceNotConfiguredError)
+  })
+})

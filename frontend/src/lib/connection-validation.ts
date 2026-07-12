@@ -1,5 +1,6 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
+import { isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
 import { isValidVideoRetakeConnection, type VideoRetakeHandleId } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection, ACCEPTS_VIDEO, ACCEPTS_AUDIO } from "./ffmpeg-handles"
@@ -310,6 +311,20 @@ export function isValidWorkflowConnection(
   if (targetType === "generate-video" && connection.targetHandle) {
     if (imageSourceType) {
       return isValidGenerateVideoConnection(
+        connection.targetHandle,
+        imageSourceType,
+        isVisualPickerType,
+      )
+    }
+  }
+
+  // Generate Video Pro — trimmed sibling of Generate Video (prompt/startFrame/
+  // imageReferences only). Uses imageSourceType (not raw typeOf) like
+  // generate-video above, since startFrame/imageReferences need the entity
+  // "image" source-handle remap that AUDIO_TEXT_VALIDATORS doesn't apply.
+  if (targetType === "generate-video-pro" && connection.targetHandle) {
+    if (imageSourceType) {
+      return isValidGenerateVideoProConnection(
         connection.targetHandle,
         imageSourceType,
         isVisualPickerType,

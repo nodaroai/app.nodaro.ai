@@ -45,6 +45,7 @@ const VIDEO_JOBS = new Set([
   "image-to-video",
   "text-to-video",
   "generate-video",
+  "generate-video-pro",
   "video-to-video",
   "lip-sync",
   "motion-transfer",

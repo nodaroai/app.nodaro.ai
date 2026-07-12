@@ -88,6 +88,7 @@ const NODE_TYPE_ICON_MAP: Readonly<Record<string, LucideIcon>> = {
   "image-critic": Eye,
   // Video
   "generate-video": Clapperboard,
+  "generate-video-pro": Clapperboard,
   "text-to-video": Clapperboard,
   "image-to-video": Clapperboard,
   "video-to-video": Film,

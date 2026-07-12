@@ -2665,6 +2665,35 @@ export async function generateVideo(
   })
 }
 
+// --- Generate Video Pro (Seedance-2-family multi-segment stitch) ---
+//
+// Trimmed sibling of generateVideo: startFrame(optional) + imageReferences +
+// prompt in, ONE video out (the backend splits/stitches internally when
+// duration exceeds a single segment's cap — see
+// backend/src/ee/billing/generate-video-pro-credits.ts). Body shape mirrors
+// payload-builder.ts's "generate-video-pro" DAG dispatch case exactly, so a
+// single-node Run produces the same request shape an orchestrated run does.
+
+export async function generateVideoPro(body: {
+  prompt: string
+  provider: string
+  duration: number
+  aspectRatio?: string
+  resolution: string
+  generateAudio?: boolean
+  startFrameUrl?: string
+  referenceImageUrls?: string[]
+  idempotencyKey?: string
+}): Promise<{ jobId: string }> {
+  const { idempotencyKey, ...rest } = body
+  return apiJson("/v1/generate-video-pro", {
+    body: rest,
+    workflowId: true,
+    idempotencyKey,
+    label: "Failed to start video generation",
+  })
+}
+
 export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string, userId?: string, options?: {
   duration?: string
   resolution?: string

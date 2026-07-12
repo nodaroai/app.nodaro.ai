@@ -949,6 +949,58 @@ async function computeSeedance2RefVideoCreditOverride(
     : baseCredits
 }
 
+/**
+ * Compute the CLAMPED-then-markup credit override for a generate-video-pro
+ * dispatch, or `undefined` when the payload isn't one (every other node
+ * type). Mirrors `computeSeedance2RefVideoCreditOverride` above — same
+ * reasoning: `generate-video-pro`'s flat modelIdentifier
+ * (STATIC_CREDIT_COSTS["generate-video-pro"] = 10, the multi-mode fee-base
+ * only) does NOT capture the real reservation, which depends on the
+ * requested duration's split/segment math (`computeGenerateVideoProPricing`
+ * in ee/billing/generate-video-pro-credits.ts). Reserving the flat fee-base
+ * would under-reserve every multi-segment run — see the payload-builder
+ * NOTE at case "generate-video-pro" for why that reservation logic does NOT
+ * live there.
+ *
+ * CLAMPS FIRST: the orchestrator DAG path never runs the (not-yet-built)
+ * single-node route's Zod clamp, so THIS is the clamp. `payload.duration` is
+ * rewritten to the pricing helper's `clampedDurationSec` and
+ * `payload.proPricing` is stamped with the full breakdown BEFORE this
+ * returns — both mutations land on the SAME object reference the caller
+ * already holds (`buildResult.payload`), so the enqueued worker payload
+ * (built from that reference after this call) never asks the private-plugin
+ * engine to generate more video than what was actually priced.
+ *
+ * The ee billing helper is loaded via DYNAMIC `import()` so this CORE engine
+ * file never statically depends on `ee/` for it — `tools/check-ee-imports.mjs`
+ * stays clean (same escape hatch `computeSeedance2RefVideoCreditOverride`
+ * uses). `pricing` stays `unknown` in the return type for the same reason:
+ * even a type-only static import of the ee module's interface would trip the
+ * textual import guard.
+ */
+export async function computeGenerateVideoProCreditOverride(
+  payload: Record<string, unknown>,
+): Promise<{ override: number; pricing: unknown } | undefined> {
+  if (payload?.jobName !== "generate-video-pro" && payload?.type !== "generate-video-pro") return undefined
+
+  const { computeGenerateVideoProPricing } = await import("../../ee/billing/generate-video-pro-credits.js")
+  const pricing = await computeGenerateVideoProPricing({
+    provider: String(payload.provider ?? "seedance-2"),
+    resolution: String(payload.resolution ?? "720p"),
+    durationSec: Number(payload.duration ?? 8),
+  })
+
+  // DAG clamp (spec §5/§6 — the route's Zod clamp never runs on this path).
+  payload.duration = pricing.clampedDurationSec
+  payload.proPricing = pricing
+
+  const { cost_markup_percent } = await getAppSettings()
+  const override = cost_markup_percent > 0
+    ? Math.ceil(pricing.reserveBase * (1 + cost_markup_percent / 100))
+    : pricing.reserveBase
+  return { override, pricing }
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -1074,13 +1126,27 @@ async function executeWorkerNode(
 
   if (hasCredits() && modelIdentifier !== "ffmpeg") {
     try {
+      // generate-video-pro reserves its own CLAMPED dynamic base
+      // (computeGenerateVideoProCreditOverride) — evaluated FIRST since it
+      // gates on the payload's own explicit generate-video-pro marker
+      // (jobName/type === "generate-video-pro"), a drift-resistant check.
+      //
       // Seedance 2 reference-video runs are billed unit×(input+output). The
       // seeded `-ref` composite (used as `modelIdentifier`) only encodes the
       // per-8s OUTPUT rate, so we ffprobe the connected reference videos and
       // reserve the FULL scaled BASE up front via an explicit creditOverride
-      // (commit_credits only refunds — never up-charges). Undefined for every
-      // other provider / no-ref run → unchanged DB-priced reservation.
-      const creditOverride = await computeSeedance2RefVideoCreditOverride(payload)
+      // (commit_credits only refunds — never up-charges) — evaluated SECOND,
+      // as a fallback: it gates on a heuristic (provider+referenceVideoUrls)
+      // rather than an explicit marker. Undefined for every other provider /
+      // no-ref run → unchanged DB-priced reservation.
+      //
+      // The two overrides are mutually exclusive by payload shape (never
+      // both apply to one dispatch), so a plain `??` combine is safe and
+      // short-circuits the second (unneeded) dynamic import + pricing call
+      // whenever the first already applies.
+      const creditOverride =
+        (await computeGenerateVideoProCreditOverride(payload))?.override ??
+        (await computeSeedance2RefVideoCreditOverride(payload))
 
       // Free-tier / blocked-models gate. reserveCredits does NOT check
       // blockedModels, so without this a free-tier workflow/app run could

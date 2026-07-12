@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, SEEDANCE_2_PROVIDERS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 
@@ -31,7 +31,18 @@ export interface NodeDescriptor {
   providers?: string[]
   /** Capabilities flags (e.g. "supports-reference-image", "supports-end-frame"). */
   capabilities?: string[]
+  /**
+   * Dynamic upper bound for a bounded numeric input, when the input isn't a
+   * fixed catalog list and the cap itself is runtime-configurable (env var).
+   * `inputSchema.fields` has no min/max shape, so nodes with this need surface
+   * it here instead. Currently only generate-video-pro's `duration` field
+   * (env `GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s).
+   */
+  maxDurationSec?: number
 }
+
+// Canonical provider list for generate-video-pro (derived from SEEDANCE_2_PROVIDERS)
+const GVP_PROVIDERS = [...SEEDANCE_2_PROVIDERS]
 
 /**
  * Hand-curated registry. Source of truth for `GET /v1/nodes`.
@@ -199,6 +210,40 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "duration", type: "number" },
       ],
     },
+  },
+  {
+    type: "generate-video-pro",
+    label: "Generate Video Pro",
+    category: "ai-video",
+    description:
+      "Long-form video generation — Seedance-2-family only (seedance-2 / seedance-2-fast / seedance-2-mini). Requests above a single segment's cap (15s) are auto-split into multiple segments and seamlessly stitched into one clip. Cloud edition only.",
+    outputType: "video",
+    // Multi-mode fee-base (STATIC_CREDIT_COSTS["generate-video-pro"] = 10), reserved
+    // on top of the per-second segment cost once the request splits into multiple
+    // segments (> 15s). Below that, the node prices identically to a normal
+    // single-shot t2v run on the same provider/resolution/duration. See
+    // ee/billing/generate-video-pro-credits.ts for the full closed-form.
+    creditCost: 10,
+    providers: GVP_PROVIDERS,
+    capabilities: ["long-form", "auto-segmentation", "seamless-stitch"],
+    inputSchema: {
+      fields: [
+        { key: "prompt", type: "text" },
+        { key: "provider", type: "select", options: GVP_PROVIDERS },
+        // 4..maxDurationSec below — inputSchema has no min/max shape, see maxDurationSec.
+        { key: "duration", type: "number" },
+        { key: "aspectRatio", type: "select" },
+        { key: "resolution", type: "select" },
+        { key: "generateAudio", type: "boolean" },
+      ],
+    },
+    // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at
+    // registry build the same way `computeGenerateVideoProPricing` reads it per-call;
+    // module-level is equivalent here since env vars don't change within a process
+    // lifetime. Mirrors GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK in
+    // frontend/src/components/editor/config-panels/video-configs.tsx (kept in sync by
+    // hand there since that module can't import this one — see its own comment).
+    maxDurationSec: Number(process.env.GENERATE_VIDEO_PRO_MAX_DURATION || 120),
   },
   {
     type: "video-sfx",

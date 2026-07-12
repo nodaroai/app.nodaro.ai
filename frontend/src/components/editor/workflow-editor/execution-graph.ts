@@ -337,6 +337,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // / DAG resume hydrates downstream nodes from a previously-executed
     // generate-video without re-running.
     type === "generate-video" ||
+    // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
+    // Writes the SAME generatedVideoUrl / per-result url fields as
+    // generate-video, so it hydrates from a previously-executed run the same way.
+    type === "generate-video-pro" ||
     type === "lip-sync" ||
     type === "speech-to-video" ||
     type === "ai-avatar" ||
@@ -900,6 +904,9 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   // execution-graph's VIDEO_SOURCE_TYPES so detectPreviewItemType /
   // collectMediaAssets treat its output as video.
   "generate-video",
+  // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
+  // Mirrors the "generate-video" entry above (same output field shape).
+  "generate-video-pro",
   "upload-video",
   "youtube-video",
   "combine-videos",

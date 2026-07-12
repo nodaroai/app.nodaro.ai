@@ -70,6 +70,7 @@ import {
   combineAudioApi,
   generateImage,
   createReferenceBoard,
+  generateVideoPro,
   getJobStatusLean,
   llmChatStream,
   setForcePrivate,
@@ -202,6 +203,7 @@ import type {
   ReduceNodeData,
   AiAvatarData,
   CinematicAvatarData,
+  GenerateVideoProNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -1851,6 +1853,54 @@ export function executeNode(
       },
     } as WorkflowNode;
     return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
+  }
+
+  // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
+  // Deliberately NOT re-typed through i2v/t2v like generate-video above: the
+  // pro node is a much smaller surface (startFrame optional + imageReferences
+  // + prompt in, ONE video out — the backend splits/stitches internally when
+  // duration exceeds a single segment). Dispatches straight to
+  // pollJobWithNodeUpdate, mirroring the reference-board case's minimal shape.
+  if (node.type === "generate-video-pro") {
+    const gvpData = node.data as GenerateVideoProNodeData;
+    const prompt = promptOf("generate-video-pro");
+    if (!prompt) {
+      toast.error(`Node "${gvpData.label}": no prompt found`);
+      return Promise.reject(new Error("No prompt"));
+    }
+
+    // startFrame is OPTIONAL (Seedance-2 is t2v-capable) — never hard-fail on
+    // a missing one. Resolution order mirrors image-to-video's own fallback
+    // chain: live-wired edge (via resolveNodeInputs) > library-picked node >
+    // generic imageUrl input (parity with the backend's payload-builder OR-chain).
+    let startFrameUrl: string | undefined = overrideMediaUrl ?? inputs.startFrameUrl;
+    if (!startFrameUrl && gvpData.selectedStartFrameNodeId) {
+      const startNode = nodes.find((n) => n.id === gvpData.selectedStartFrameNodeId);
+      if (startNode) startFrameUrl = extractNodeOutput(startNode);
+    }
+    if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
+
+    const referenceImageUrls = inputs.referenceImageUrls?.length ? inputs.referenceImageUrls : undefined;
+
+    setUserPromptTemplate(gvpData.prompt?.trim() || undefined);
+    return pollJobWithNodeUpdate(
+      node.id,
+      () =>
+        generateVideoPro({
+          prompt,
+          provider: gvpData.provider || "seedance-2",
+          duration: gvpData.duration,
+          aspectRatio: gvpData.aspectRatio ?? "adaptive",
+          resolution: gvpData.resolution ?? "720p",
+          generateAudio: gvpData.generateAudio,
+          startFrameUrl,
+          referenceImageUrls,
+          idempotencyKey,
+        }),
+      "generatedVideoUrl",
+      "Video generation",
+      ctx,
+    );
   }
 
   if (node.type === "image-to-video") {

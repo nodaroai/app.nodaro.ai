@@ -12,9 +12,15 @@ import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
 import { applyImageWatermark } from "../../utils/watermark.js"
-import { uploadBufferToR2, uploadFileToR2 } from "../storage.js"
+import { uploadBufferToR2, uploadFileToR2, uploadToR2 } from "../storage.js"
 import { runPostProcessing } from "../post-processing-error.js"
-import { markJobCompleted, setJobProgress, withProgressRamp, commitJobCredits } from "../../workers/shared.js"
+import {
+  markJobCompleted,
+  setJobProgress,
+  withProgressRamp,
+  commitJobCredits,
+  uploadVideoMaybeWatermark,
+} from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
@@ -24,26 +30,238 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../reques
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
-import type { PluginToolkit } from "./types.js"
+import { insertWithIdempotencyKey } from "../idempotent-insert.js"
+import { throwIfJobCancelled } from "../job-cancellation.js"
+import { hasCredits } from "../config.js"
+import { KieVideoProvider } from "../../providers/kie/video.js"
+import { pollKieTask, isUpstreamKieFailure } from "../../providers/kie/client.js"
+import { combineVideos as combineVideosCore } from "../../providers/video/combine-videos.js"
+import { extractTailToFile } from "../../providers/video/extract-tail.js"
+import { llmCompleteStructured } from "../llm-client.js"
+import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
+import { randomUUID } from "node:crypto"
+import { dirname, join } from "node:path"
+import { promises as fs } from "node:fs"
+import type { ZodType } from "zod"
+import type { PluginToolkit, PluginLlmRequest, PluginVideoGenOptions, PluginVideoGenResult } from "./types.js"
 
 /**
  * Assembles the real `PluginToolkit` dependency-injection surface handed to
  * every private plugin (`@nodaroai/cloud-plugins`, loaded by `load.ts`).
  *
- * Every member below is a direct reference (or, for `separateAudio`, a thin
- * one-line wrap) to this app's own CORE modules — no plugin ever imports an
- * app path directly; it only ever sees the shape declared in `./types.js`.
- * This file is itself core (`backend/src/lib/private-plugins/`) and must
- * never statically import from `ee/` (enforced by
- * `tools/check-ee-imports.mjs`) — `creditGuard`/`reserveCreditsForJob` come
- * from the core `middleware/credit-guard.ts` shim, which only reaches `ee/`
- * via a runtime-gated dynamic `import()`, not a static one.
+ * Every member below is a direct reference (or a thin wrap) to this app's own
+ * CORE modules — no plugin ever imports an app path directly; it only ever
+ * sees the shape declared in `./types.js`. This file is itself core
+ * (`backend/src/lib/private-plugins/`) and must never statically import from
+ * `ee/` (enforced by `tools/check-ee-imports.mjs`) — `creditGuard`/
+ * `reserveCreditsForJob` come from the core `middleware/credit-guard.ts`
+ * shim, which only reaches `ee/` via a runtime-gated dynamic `import()`, not
+ * a static one; `http.computeGenerateVideoProPricing` below does the same
+ * (mirrors `middleware/credit-guard.ts` and `load.ts`'s
+ * `applyStaticCreditCosts`/`applyPipelinePrompts`).
  *
- * See `.superpowers/sdd/task-9-report.md` for the full member -> source
- * traceability table (mirrors the Task 2 table in
- * `.superpowers/sdd/task-2-report.md` for the plugin repo's structural
- * `contract.ts` copy).
+ * See `.superpowers/sdd/task-9-report.md` for the Task 9 member -> source
+ * traceability table, and `.superpowers/sdd/task-8-report.md` for the Task 8
+ * additions (generate-video-pro: `providers.textToVideo`/`imageToVideo`/
+ * `getVideoTaskStatus`, `ffmpeg.combineVideos`/`extractTail`,
+ * `media.uploadVideoMaybeWatermark`, `storage.uploadVideoFromUrl`,
+ * `jobs.clearReconcileSentinel`/`throwIfJobCancelled`/`updateJobCheckpoint`/
+ * `readJobCheckpoint`, `http.insertJobWithIdempotencyKey`/
+ * `computeGenerateVideoProPricing`, and the whole `llm` group).
  */
+
+/**
+ * Adapts `PluginVideoGenOptions.onTaskCreated` (return type `void |
+ * Promise<void>`, per the contract) into `ReconcileOpts.onTaskCreated`
+ * (return type strictly `Promise<void>`, per `provider.interface.ts`) — the
+ * two aren't directly assignable, since a callback that might return plain
+ * `void` doesn't satisfy a slot the KIE client always awaits as a promise.
+ * Returns `undefined` (omitting `reconcileOpts` entirely) when there's no
+ * callback — never wires `makeOnTaskCreated` (spec §6: `provider_task_id` is
+ * never written by this path; only the plugin's own checkpoint is).
+ */
+function toReconcileOpts(options: PluginVideoGenOptions | undefined): ReconcileOpts | undefined {
+  const onTaskCreated = options?.onTaskCreated
+  if (!onTaskCreated) return undefined
+  return {
+    onTaskCreated: async (taskId: string) => {
+      await onTaskCreated(taskId)
+    },
+  }
+}
+
+/**
+ * Picks/renames `PluginVideoGenOptions`'s fields onto the real
+ * `ProviderOptions` shape `KieVideoProvider` expects. `aspectRatio` is only
+ * set when the caller passes one explicitly — `textToVideo` has its own
+ * positional `aspectRatio` param and never needs it here; `imageToVideo` has
+ * no positional slot and reads it exclusively via `options.aspectRatio` (the
+ * KIE i2v generic path otherwise infers aspect ratio from the input image).
+ */
+function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRatio?: string): ProviderOptions {
+  return {
+    resolution: options?.resolution,
+    generateAudio: options?.generateAudio,
+    referenceImageUrls: options?.referenceImageUrls,
+    referenceVideoUrls: options?.referenceVideoUrls,
+    ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+  }
+}
+
+/** `tk.providers.textToVideo` — wraps `KieVideoProvider#textToVideo` (`providers/kie/video.ts:1059`). */
+async function pluginTextToVideo(
+  prompt: string,
+  model: string,
+  durationSec: number,
+  aspectRatio: string,
+  options?: PluginVideoGenOptions,
+): Promise<PluginVideoGenResult> {
+  const result = await new KieVideoProvider().textToVideo(
+    prompt,
+    model,
+    durationSec,
+    aspectRatio,
+    toProviderOptions(options),
+    toReconcileOpts(options),
+  )
+  return { url: result.url, taskId: result.kieTaskId }
+}
+
+/** `tk.providers.imageToVideo` — wraps `KieVideoProvider#imageToVideo` (`providers/kie/video.ts`). */
+async function pluginImageToVideo(
+  imageUrl: string,
+  prompt: string,
+  model: string,
+  durationSec: number,
+  aspectRatio: string,
+  options?: PluginVideoGenOptions,
+): Promise<PluginVideoGenResult> {
+  const result = await new KieVideoProvider().imageToVideo(
+    imageUrl,
+    prompt,
+    model,
+    durationSec,
+    undefined, // no end frame — generate-video-pro segments never carry one
+    toProviderOptions(options, aspectRatio),
+    toReconcileOpts(options),
+  )
+  return { url: result.url, taskId: result.kieTaskId }
+}
+
+/**
+ * `tk.providers.getVideoTaskStatus` — wraps the single-shot KIE record-info
+ * poll the reconcile cron uses: `pollKieTask(taskId, 1)`
+ * (`providers/kie/client.ts`), the same call `lib/reconcile/kie.ts`'s
+ * `singlePoll` makes for `provider_kind: "kie-standard"` rows. A `KieError`
+ * with `isUpstreamFailure` set (`isUpstreamKieFailure`, same module) maps to
+ * `"failed"`; any other rejection (still generating, network blip, or the
+ * single-attempt timeout) maps to `"processing"`.
+ */
+async function getVideoTaskStatus(
+  taskId: string,
+): Promise<{ state: "processing" | "succeeded" | "failed"; videoUrl?: string }> {
+  try {
+    const { resultJson } = await pollKieTask(taskId, 1)
+    const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    return { state: "succeeded", videoUrl }
+  } catch (err) {
+    if (isUpstreamKieFailure(err)) return { state: "failed" }
+    return { state: "processing" }
+  }
+}
+
+/**
+ * `tk.ffmpeg.combineVideos` — wraps core `combineVideos`
+ * (`providers/video/combine-videos.ts:183`), which returns a LOCAL path
+ * inside its own temp dir, and adapts it to the contract's always-an-R2-URL
+ * member. Defaults mirror the route's Zod schema (`routes/combine-videos.ts`)
+ * for the fields the contract leaves optional. No `jobId` reaches this
+ * member (see the `types.ts` doc comment) — the upload key is minted here.
+ */
+async function combineVideosToUrl(options: {
+  videoUrls: string[]
+  transition: string
+  transitionDuration?: number
+  audioMode?: "keep" | "crossfade" | "remove"
+  audioCrossfadeCurve?: string
+  trimStartFrames?: number
+  trimEndFrames?: number
+}): Promise<string> {
+  const localPath = await combineVideosCore({
+    videoUrls: options.videoUrls,
+    transition: options.transition,
+    transitionDuration: options.transitionDuration ?? 0.5,
+    audioMode: options.audioMode ?? "crossfade",
+    audioCrossfadeCurve: options.audioCrossfadeCurve,
+    trimStartFrames: options.trimStartFrames ?? 0,
+    trimEndFrames: options.trimEndFrames ?? 0,
+  })
+  try {
+    return await uploadFileToR2(localPath, randomUUID(), "video")
+  } finally {
+    // combineVideos uses its own temp dir structure (not cleanupWorkDir-
+    // compatible) — mirrors workers/handlers/ffmpeg.ts's handleCombineVideos.
+    await fs.rm(dirname(localPath), { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/**
+ * `tk.ffmpeg.extractTail` — downloads `url` to a temp file, re-encodes its
+ * last `seconds` via `extractTailToFile` (`providers/video/extract-tail.ts`),
+ * and uploads the result to R2.
+ */
+async function extractTailToUrl(url: string, seconds: number, jobId: string): Promise<string> {
+  const workDir = await createWorkDir("extract-tail")
+  try {
+    const inputPath = join(workDir, "input.mp4")
+    await downloadFile(url, inputPath)
+    const tailPath = await extractTailToFile(inputPath, seconds)
+    return await uploadFileToR2(tailPath, jobId, "video")
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
+}
+
+/**
+ * `tk.jobs.updateJobCheckpoint` — read-merge-write on `jobs.output_data`.
+ * Shallow merge only: a patch key REPLACES the existing key wholesale (no
+ * deep merge), matching every other `output_data` writer in this codebase
+ * (e.g. `workers/shared.ts`'s `markJobCompleted`). The read step's error is
+ * checked BEFORE the merge — a silently-ignored transient read failure would
+ * otherwise treat existing output_data as `{}` and the write below would
+ * clobber it wholesale.
+ */
+async function updateJobCheckpoint(jobId: string, patch: Record<string, unknown>): Promise<void> {
+  const { data, error } = await supabase.from("jobs").select("output_data").eq("id", jobId).single()
+  if (error) {
+    throw new Error(`Failed to read checkpoint for job ${jobId}: ${error.message}`)
+  }
+  const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
+  await supabase
+    .from("jobs")
+    .update({ output_data: { ...existing, ...patch } })
+    .eq("id", jobId)
+}
+
+/** `tk.jobs.readJobCheckpoint` — read-only counterpart of `updateJobCheckpoint`. */
+async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown> | null> {
+  const { data } = await supabase.from("jobs").select("output_data").eq("id", jobId).single()
+  return (data?.output_data as Record<string, unknown> | null) ?? null
+}
+
+/**
+ * `tk.jobs.clearReconcileSentinel` — nulls the reconcile sentinel fields so
+ * the cron doesn't treat an in-flight pro-engine run as a stale pickup.
+ * Precedent: `workers/handlers/ffmpeg.ts:482-497` (add-captions→render
+ * handoff, same two-field update).
+ */
+async function clearReconcileSentinel(jobId: string): Promise<void> {
+  await supabase
+    .from("jobs")
+    .update({ provider_kind: null, provider_call_started_at: null })
+    .eq("id", jobId)
+}
+
 export function buildToolkit(): PluginToolkit {
   return {
     providers: {
@@ -55,6 +273,9 @@ export function buildToolkit(): PluginToolkit {
       // module-level state inside audio-separation.ts).
       separateAudio: (audioUrl, opts, reconcileOpts) =>
         new ReplicateAudioSeparationProvider().separateAudio(audioUrl, opts, reconcileOpts),
+      textToVideo: pluginTextToVideo,
+      imageToVideo: pluginImageToVideo,
+      getVideoTaskStatus,
     },
     ffmpeg: {
       runFfmpeg,
@@ -62,6 +283,8 @@ export function buildToolkit(): PluginToolkit {
       createWorkDir,
       cleanupWorkDir,
       downloadFile,
+      combineVideos: combineVideosToUrl,
+      extractTail: extractTailToUrl,
     },
     media: {
       extractAudio,
@@ -69,17 +292,24 @@ export function buildToolkit(): PluginToolkit {
       mergeVideoAudio,
       applyAudioFx,
       applyImageWatermark,
+      uploadVideoMaybeWatermark,
     },
     storage: {
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,
+      // Mirrors `uploadToR2` (`lib/storage.ts:126`) narrowed to video.
+      uploadVideoFromUrl: (url, jobId, trackUserId) => uploadToR2(url, jobId, "video", trackUserId),
     },
     jobs: {
       markJobCompleted,
       setJobProgress,
       withProgressRamp,
       commitJobCredits,
+      clearReconcileSentinel,
+      throwIfJobCancelled,
+      updateJobCheckpoint,
+      readJobCheckpoint,
     },
     http: {
       supabase,
@@ -94,6 +324,48 @@ export function buildToolkit(): PluginToolkit {
       buildJobInputData,
       formatZodError,
       safeFetch,
+      // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
+      // narrowed to the "jobs" table + the one column the contract needs.
+      insertJobWithIdempotencyKey: async (data, idempotencyKey) => {
+        const { row, created } = await insertWithIdempotencyKey<{ id: string }>("jobs", data, idempotencyKey)
+        return { id: row.id, created }
+      },
+      // Dynamic import keeps the core/ee boundary: this file (core) may not
+      // statically import `ee/` (tools/check-ee-imports.mjs). Gated on
+      // hasCredits() so the import is never even attempted outside Cloud —
+      // mirrors middleware/credit-guard.ts's creditGuard() shim and
+      // load.ts's applyStaticCreditCosts()/applyPipelinePrompts().
+      computeGenerateVideoProPricing: async (args) => {
+        if (!hasCredits()) {
+          throw new Error("computeGenerateVideoProPricing requires a Cloud-edition build")
+        }
+        const { computeGenerateVideoProPricing: computePricing } = await import(
+          "../../ee/billing/generate-video-pro-credits.js"
+        )
+        return computePricing(args)
+      },
+    },
+    llm: {
+      // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
+      // lib/llm-client.ts's LlmRequest and unwraps StructuredLlmOutput<T> to
+      // the contract's bare Promise<T>.
+      completeStructured: async <T>(
+        req: PluginLlmRequest,
+        schema: unknown,
+        opts?: { schemaName?: string; maxRetries?: number },
+      ): Promise<T> => {
+        const result = await llmCompleteStructured(
+          {
+            modelId: req.model,
+            system: req.system ?? "",
+            messages: [{ role: "user", content: req.prompt }],
+            maxTokens: req.maxTokens,
+          },
+          schema as ZodType<T>,
+          opts,
+        )
+        return result.output
+      },
     },
   }
 }

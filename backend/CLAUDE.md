@@ -559,8 +559,8 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 - Respects `maxExecutions` limit, skips if workflow already has pending/running execution
 
 ### Timeouts
-- Per-node: 30 minutes (`NODE_TIMEOUT_MS`)
-- Per-workflow: 60 minutes (`WORKFLOW_TIMEOUT_MS`)
+- Per-node: 90 minutes (`NODE_TIMEOUT_MS`)
+- Per-workflow: 120 minutes (`WORKFLOW_TIMEOUT_MS`)
 - Job polling interval: 3 seconds (`JOB_POLL_INTERVAL_MS`)
 
 ### Orchestrator Flow

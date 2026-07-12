@@ -400,6 +400,13 @@ const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputFi
     { dataField: "selectedEndFrameNodeId", inputField: "endFrameUrl" },
     { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
   ],
+  // Trimmed sibling of generate-video's fallback above — Generate Video Pro has
+  // no end frame / audio handles (see generate-video-pro-handles.ts), so only
+  // the start-frame dropdown fallback applies. Mirrors the frontend's own
+  // fallback in execute-node.ts (`gvpData.selectedStartFrameNodeId`).
+  "generate-video-pro": [
+    { dataField: "selectedStartFrameNodeId", inputField: "imageUrl", guard: (i) => !i.startFrameUrl && !i.imageUrl },
+  ],
   "lip-sync": [
     { dataField: "selectedImageNodeId", inputField: "imageUrl" },
     { dataField: "selectedVideoNodeId", inputField: "videoUrl" },

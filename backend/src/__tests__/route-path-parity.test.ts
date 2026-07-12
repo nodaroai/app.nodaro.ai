@@ -219,6 +219,15 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // POST /v1/voice-changer-pro (401/400, not 404); community/business get
   // 404 same as before (the route was already cloud-only pre-extraction).
   "/v1/voice-changer-pro",
+
+  // generate-video-pro's route is registered at runtime by the private
+  // @nodaroai/cloud-plugins package (v0.4.0, published 2026-07-12) via
+  // loadPrivatePlugins(app) on cloud builds — same architecture as
+  // voice-changer-pro. Not a static file under backend/src/routes/ or
+  // backend/src/ee/routes/ that this scanner walks. The node is
+  // CLOUD_ONLY-gated, so community builds never expose the frontend entry
+  // point; only cloud edition serves the route.
+  "/v1/generate-video-pro",
 ])
 
 // ---------------------------------------------------------------------------

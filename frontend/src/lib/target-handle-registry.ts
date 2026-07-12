@@ -1,6 +1,7 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
+import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
@@ -223,6 +224,15 @@ const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
   look: "Look",
 }
 
+/** Friendly labels for Generate Video Pro's three input handles — trimmed
+ *  subset of GENERATE_VIDEO_HANDLE_LABELS. No exported GENERATE_VIDEO_PRO_*_LABELS
+ *  map — kept local like its sibling above. */
+const GENERATE_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
+  prompt: "Prompt",
+  startFrame: "Start Frame",
+  imageReferences: "Image Refs",
+}
+
 /** Friendly labels for Video Retake's three input handles (video-retake-handles.ts
  *  exports only the IDs, no label map — mirror the node component's labels). */
 const VIDEO_RETAKE_HANDLE_LABELS: Record<string, string> = {
@@ -258,6 +268,15 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     label: GENERATE_VIDEO_HANDLE_LABELS[handleId] ?? handleId,
     accepts: (sourceType: string) =>
       isValidGenerateVideoConnection(handleId, sourceType, isVisualPickerType),
+  })),
+  // Generate Video Pro mirrors Generate Video, trimmed to its three input
+  // handles built from GENERATE_VIDEO_PRO_INPUT_HANDLES so the popover
+  // candidate set can't drift from the rendered handle set.
+  "generate-video-pro": GENERATE_VIDEO_PRO_INPUT_HANDLES.map((handleId) => ({
+    handleId,
+    label: GENERATE_VIDEO_PRO_HANDLE_LABELS[handleId] ?? handleId,
+    accepts: (sourceType: string) =>
+      isValidGenerateVideoProConnection(handleId, sourceType, isVisualPickerType),
   })),
   "camera-motion": [
     { handleId: "startState", label: "Start state", accepts: ACCEPTS_PARAMETER_PICKER },

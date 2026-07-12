@@ -15,6 +15,9 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   // for back-compat with un-migrated workflow JSON). Mirrors text-to-video so
   // fieldMappings/{} injection AND missing-ref detection work on the live node.
   "generate-video":      ["prompt", "negativePrompt"],
+  // Trimmed multi-segment stitch variant of generate-video — prompt only, no
+  // negativePrompt field on the node.
+  "generate-video-pro":  ["prompt"],
   "video-analysis":      ["analysisFocus", "youtubeUrl"],
   "video-to-video":      ["prompt"],
   "text-to-speech":      ["directText"],

@@ -131,6 +131,22 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
       }
     }
 
+    // generate-video-pro gets its OWN bucket (NOT lumped into the group
+    // above via inputData.provider, e.g. "seedance-2"): a multi-segment
+    // stitched run's wall-clock duration is categorically different from a
+    // single-shot generation on the same provider (N provider calls + ffmpeg
+    // stitching vs one), so sharing a model_identifier would poison the
+    // EMA-smoothed estimate for both. No provider guard — every dispatch is
+    // tracked regardless of which underlying provider it stitches.
+    case "generate-video-pro": {
+      return {
+        model_identifier: "generate-video-pro",
+        aspect_ratio: str(inputData.aspect_ratio),
+        quality: "",
+        duration_seconds: num(inputData.duration) || num(inputData.durationSeconds),
+      }
+    }
+
     // -----------------------------------------------------------------------
     // Text-to-speech / voice nodes
     // -----------------------------------------------------------------------
@@ -419,7 +435,7 @@ type StatRow = {
 export function getNodeCategory(model: string): string {
   // Video generation models
   if (
-    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video)/.test(model)
+    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video|generate-video-pro)/.test(model)
   ) {
     return "video"
   }

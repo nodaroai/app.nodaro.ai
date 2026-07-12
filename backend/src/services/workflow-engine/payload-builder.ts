@@ -3726,6 +3726,43 @@ export function buildPayload(
       })
     }
 
+    case "generate-video-pro": {
+      // Multi-segment Seedance-2-family stitch (private-plugin engine — see
+      // ee/billing/generate-video-pro-credits.ts). Deliberately THIN: no
+      // reservation logic here (see the voice-changer-pro NOTE above this
+      // case for why a flat model-identifier reservation would under-reserve
+      // a dynamically-priced node — the same class of gap, fixed here via
+      // node-executor's computeGenerateVideoProCreditOverride instead of left
+      // open). The node-input-resolver mapping for a dedicated image/video
+      // handle set lands in a later task; until then this reads the same
+      // generic resolvedInputs fields the unified generate-video case reads
+      // (resolvedInputs.startFrameUrl / .imageUrl / .referenceImageUrls),
+      // falling back to pre-seeded node data (single-node Run path), mirrored
+      // minimally rather than the full mention/frame-promotion machinery
+      // generate-video needs for its many providers.
+      //
+      // `type: "generate-video-pro"` is a deliberate marker stamped onto the
+      // PAYLOAD itself (not just the outer jobName/modelIdentifier returned
+      // alongside it) so node-executor's computeGenerateVideoProCreditOverride
+      // can recognize this dispatch from the payload object alone — the same
+      // object it also mutates in place (duration clamp + proPricing stamp)
+      // before the credit reservation call.
+      const gvpProvider = (data.provider as string | undefined) ?? "seedance-2"
+      return simpleResult("generate-video-pro", "generate-video-pro", {
+        jobId,
+        type: "generate-video-pro",
+        prompt: promptFor("generate-video-pro", true),
+        provider: gvpProvider,
+        duration: data.duration as number | undefined,
+        aspectRatio: (data.aspectRatio as string | undefined) ?? "adaptive",
+        resolution: (data.resolution as string | undefined) ?? "720p",
+        generateAudio: data.generateAudio as boolean | undefined,
+        startFrameUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || (data.startFrameUrl as string | undefined),
+        referenceImageUrls: resolvedInputs.referenceImageUrls || (data.referenceImageUrls as string[] | undefined),
+        usageLogId,
+      })
+    }
+
     case "dubbing":
       return simpleResult("dubbing", "elevenlabs-dubbing", {
         jobId,

@@ -357,8 +357,13 @@ export interface OrchestratorContext {
  *  even when reconcile later recovers the underlying job. */
 export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
-/** Max time for an entire workflow execution (ms) */
-export const WORKFLOW_TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
+/** Max time for an entire workflow execution (ms). Sized to cover a
+ *  generate-video-pro multi-segment stitch (each segment a full KIE
+ *  generation, up to NODE_TIMEOUT_MS=90min for the node itself) landing
+ *  inside a workflow alongside other nodes, with headroom beyond the
+ *  per-node ceiling — mirrors orchestrator-worker.ts's BullMQ `lockDuration`,
+ *  which MUST match this value (see the comment there). */
+export const WORKFLOW_TIMEOUT_MS = 120 * 60 * 1000 // 120 minutes
 
 /** Polling interval for checking job completion (ms) */
 export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds

@@ -24,6 +24,7 @@ import type {
   VideoToVideoData,
   TextToVideoData,
   GenerateVideoNodeData,
+  GenerateVideoProNodeData,
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
@@ -36,7 +37,7 @@ import type {
   SwitchXData,
   VideoAnalysisNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
@@ -3426,6 +3427,152 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 }
 
 export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
+
+/**
+ * Duration cap fallback (seconds) when no node-registry descriptor is
+ * available to read the real cap from. No frontend consumer of the
+ * `GET /v1/nodes` discovery endpoint exists yet — when one lands, replace
+ * this with the descriptor's cap. Mirrors the backend default
+ * (`GENERATE_VIDEO_PRO_MAX_DURATION` env var, `ee/billing/generate-video-pro-credits.ts`).
+ *
+ * Exported (not module-private) so every other GVP duration-slider consumer —
+ * the published-app field renderer (`presentation/config-field-renderer.tsx`)
+ * — imports the SAME constant instead of re-declaring the literal 120.
+ */
+export const GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK = 120
+
+/**
+ * Generate Video Pro — trimmed, Seedance-2-family-only config panel for the
+ * multi-segment stitch node (see GenerateVideoProNodeData). Deliberately a
+ * simplified subset of GenerateVideoConfig above: one prompt field (no
+ * negative), a 3-provider Select (no search), a continuous duration range
+ * (4s..cap, NOT the single-segment catalog list — durations above 15s span
+ * multiple stitched segments server-side), the shared AspectRatioSelector,
+ * a provider-aware resolution Select, and the audio toggle.
+ */
+function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const currentProvider = data.provider || "seedance-2"
+  const maxDuration = GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK
+  const duration = data.duration ?? 8
+
+  // Fail-safe (Provider Enum Sync step 12b / CLAUDE.md pitfall 5): mini/fast
+  // have no 1080p/4k — snap a stale resolution to the new provider's first
+  // valid option, mirroring GenerateVideoConfig's / ImageToVideoConfig's snap
+  // effect above (same VIDEO_RESOLUTION_OPTIONS source, so it can't drift).
+  useEffect(() => {
+    const opts = getVideoResolutionOptions(currentProvider)
+    if (opts && data.resolution && !opts.some((o) => o.value === data.resolution)) {
+      onUpdate({ resolution: opts[0]?.value })
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resolutionOptions = getVideoResolutionOptions(currentProvider)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={currentProvider}
+          onValueChange={(v) => onUpdate({ provider: v as GenerateVideoProNodeData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {GVP_PROVIDERS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <ModelDescriptionHint modelId={currentProvider} />
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="generate-video-pro" currentPrompt={data.prompt || ""} provider={currentProvider} duration={duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
+        <PromptEditor
+          rows={3}
+          value={data.prompt || ""}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder="Describe the video you want to generate..."
+          nodeRefs={nodeRefs}
+          refMap={refMap}
+          snippets={promptSnippets}
+        />
+        <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
+      </MappableField>
+
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={4}
+            max={maxDuration}
+            step={1}
+            value={duration}
+            onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) })}
+            className="flex-1 h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
+            aria-label="Duration (seconds)"
+          />
+          <Input
+            type="number"
+            min={4}
+            max={maxDuration}
+            value={duration}
+            onChange={(e) => {
+              if (e.target.value === "") return
+              const parsed = parseInt(e.target.value, 10)
+              if (Number.isNaN(parsed)) return
+              onUpdate({ duration: Math.min(maxDuration, Math.max(4, parsed)) })
+            }}
+            className="w-16 h-7 text-xs shrink-0"
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground px-1">
+          Above 15s the request is automatically split into multiple stitched Seedance 2 segments.
+        </p>
+      </MappableField>
+
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <AspectRatioSelector
+          options={getAspectRatiosForVideoModel("seedance-2")}
+          value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
+          onValueChange={(v) => onUpdate({ aspectRatio: v })}
+        />
+      </MappableField>
+
+      {resolutionOptions && resolutionOptions.length > 0 && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || resolutionOptions[0].value}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {resolutionOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-generateAudio"
+          checked={data.generateAudio ?? true}
+          onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-generateAudio" className="text-xs">Generate Audio (default on)</label>
+      </div>
+    </div>
+  )
+}
+
+export const GenerateVideoProConfig = memo(GenerateVideoProConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("video", "prompt")

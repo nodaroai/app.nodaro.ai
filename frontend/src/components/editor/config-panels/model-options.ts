@@ -1,4 +1,4 @@
-import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
+import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isSeedance2Provider, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES } from "@nodaro/prompts"
 import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
@@ -158,6 +158,14 @@ export const VIDEO_GEN_MODELS: readonly { value: VideoGenProvider; label: string
     }
     return out
   })()
+
+/** Generate Video Pro's provider set — the three Seedance-2-family variants
+ *  (the only providers that support the multi-segment stitch). Filtered from
+ *  VIDEO_GEN_MODELS by the SAME `isSeedance2Provider` predicate the shared
+ *  package + payload-builder use, so id/label/desc can never drift from the
+ *  canonical Seedance 2 list — no hand-written label strings. */
+export const GVP_PROVIDERS: readonly { value: VideoGenProvider; label: string; desc: string }[] =
+  VIDEO_GEN_MODELS.filter((m) => isSeedance2Provider(m.value))
 
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },

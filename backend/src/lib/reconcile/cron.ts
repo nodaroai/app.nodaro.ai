@@ -273,12 +273,21 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   }
 }
 
-/** Render jobs (the "video-render" BullMQ queue) and video-director orchestrator
- *  jobs (the "video-director" queue) both set status='processing' + started_at at
- *  pickup but NO provider_kind / provider_call_started_at — so they are invisible
- *  to the main scan (requires provider_call_started_at NOT NULL), to
- *  sweepNeverStartedJobs (status='pending'), and to the component sweep
- *  (provider='component').
+/** Render jobs (the "video-render" BullMQ queue) and video-director
+ *  orchestrator jobs (the "video-director" queue) set status='processing' +
+ *  started_at at pickup but NEVER set provider_kind / provider_call_started_at
+ *  — so they are invisible to the main scan (requires provider_call_started_at
+ *  NOT NULL), to sweepNeverStartedJobs (status='pending'), and to the
+ *  component sweep (provider='component'). generate-video-pro multi-segment
+ *  stitch jobs (the "generate-video-pro" jobName) reach that SAME invisibility
+ *  a different way: the video-worker's pickup path DOES set the standard
+ *  provider_kind="pre-task" + provider_call_started_at sentinel at pickup,
+ *  same as every other video-worker job — but the private-plugin handler's
+ *  FIRST action clears both back to null via `clearReconcileSentinel`
+ *  (`lib/private-plugins/toolkit.ts`). That clearing — not an absence of
+ *  initial instrumentation — is the invariant making these rows invisible to
+ *  the main scan for the rest of the run, and catchable only by this 90-min
+ *  sweep.
  *
  *  Render stalls: BullMQ's maxStalledCount OOM-kill scenario — handler catch never
  *  runs, row stays 'processing', reserved credits (render-video = 5cr) never refund.
@@ -288,11 +297,27 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
  *  the handler catch never runs, so the reserved "video-director" authoring credit
  *  is neither committed nor refunded without this sweep.
  *
+ *  generate-video-pro stalls: the pro engine checkpoints its own provider task id
+ *  internally instead of using the standard onTaskCreated → provider_call_started_at
+ *  path every other video node uses — jobs.provider_task_id is NEVER written for
+ *  this type (spec §6 linchpin, see backend/src/lib/private-plugins/types.ts). A
+ *  Railway deploy / OOM / SIGKILL mid-segment-stitch means the dynamically-clamped
+ *  credits reserved by computeGenerateVideoProCreditOverride are neither committed
+ *  nor refunded without this sweep.
+ *
  *  The threshold is well past the longest legitimate run (render ≈ 5 min, director
- *  chain ≈ 3 min) AND the orchestrator's 30-min node timeout, so a still-running job
- *  is never failed. Jobs are identified by input_data.type (set by buildJobInputData /
- *  the director route) since the jobs rows carry no job_type/provider for these queues. */
+ *  chain ≈ 3 min) AND the orchestrator's 90-min node timeout (NODE_TIMEOUT_MS —
+ *  generate-video-pro's multi-segment stitch is the long pole here), so a
+ *  still-running job is never failed. Jobs are identified by input_data.type (set
+ *  by buildJobInputData / the director route / node-executor's input_data
+ *  backfill) since the jobs rows carry no job_type/provider for these queues. */
 const RENDER_STALE_MS = 90 * 60 * 1000
+
+/** Job types swept by `sweepStuckOrchestratorJobs` — see the doc comment on
+ *  `RENDER_STALE_MS` above for why each one is invisible to the main scan.
+ *  Exported so tests can assert membership directly instead of re-deriving
+ *  it from a mocked query-builder chain. */
+export const STUCK_ORCHESTRATOR_JOB_TYPES = ["render-video", "video-director", "generate-video-pro"] as const
 
 async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
@@ -301,7 +326,7 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
     .select("id, provider_kind, reconcile_attempts")
     .eq("status", "processing")
     .is("provider_call_started_at", null)
-    .in("input_data->>type", ["render-video", "video-director"])
+    .in("input_data->>type", STUCK_ORCHESTRATOR_JOB_TYPES)
     .lt("started_at", cutoff)
     .limit(BATCH_LIMIT)
 

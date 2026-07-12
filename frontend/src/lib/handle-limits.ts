@@ -224,6 +224,27 @@ export function getHandleConnectionLimit(
     }
   }
 
+  // Generate Video Pro — Seedance-2-family only (all three providers share
+  // SEEDANCE_2_REF_LIMITS via VIDEO_REF_LIMITS_BY_PROVIDER, images: 9), so
+  // this reuses the same provider-limits source as generate-video above
+  // rather than a hand-picked literal — it stays correct if that shared cap
+  // is ever retuned. Only two of generate-video's handles exist here.
+  if (node.type === "generate-video-pro") {
+    const data = node.data as { provider?: string } | undefined
+    const provider = data?.provider ?? "seedance-2"
+    const providerLabel = getModel(provider)?.label ?? provider
+    switch (handleId) {
+      case "startFrame":
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "imageReferences": {
+        const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 9
+        return { limit: cap, providerLabel, isMultiProviderMin: false }
+      }
+      default:
+        return null
+    }
+  }
+
   // Video SFX — single video producer feeds the SFX generator. The prompt
   // and negative handles accept multiple producers (text/picker fragments
   // are concatenated upstream), so they are NOT capped here. MMAudio is the
