@@ -4049,6 +4049,9 @@ export function buildPayload(
         // Audio-only crossfade length; undefined → provider falls back to
         // transitionDuration (pre-split workflows).
         audioCrossfadeDuration: data.audioCrossfadeDuration as number | undefined,
+        smartCutEnabled: (data.smartCutEnabled as boolean) ?? false,
+        smartCutFramesPrev: data.smartCutFramesPrev as number | undefined,
+        smartCutFramesNext: data.smartCutFramesNext as number | undefined,
         trimStartFrames: (data.trimStartFrames as number) ?? 0,
         trimEndFrames: (data.trimEndFrames as number) ?? 0,
         upstreamDurations,

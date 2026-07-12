@@ -5371,6 +5371,9 @@ export function executeNode(
       upstreamDurations,
       combineData.audioCrossfadeCurve,
       combineData.audioCrossfadeDuration,
+      combineData.smartCutEnabled,
+      combineData.smartCutFramesPrev,
+      combineData.smartCutFramesNext,
     );
   }
 

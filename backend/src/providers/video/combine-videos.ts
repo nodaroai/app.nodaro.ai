@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames } from "./ffmpeg-utils.js"
+import { findSmartCutBoundary } from "./smart-cut.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
 interface CombineOptions {
@@ -23,6 +24,17 @@ interface CombineOptions {
   readonly audioCrossfadeDuration?: number
   readonly trimStartFrames: number
   readonly trimEndFrames: number
+  /** Smart cut: replace the fixed boundary trims with PSNR frame matching —
+   *  search the last `framesFromPrev` frames of each clip and the first
+   *  `framesFromNext` frames of the following one for the closest pair,
+   *  end the first clip ON the match and start the next right AFTER it
+   *  (the near-identical frame plays once). Built for continuation clips
+   *  (next generated from prev's last frame). */
+  readonly smartCut?: {
+    readonly enabled: boolean
+    readonly framesFromPrev: number
+    readonly framesFromNext: number
+  }
 }
 
 /**
@@ -129,39 +141,50 @@ function buildVideoFilter(
 }
 
 /**
- * Build chained acrossfade audio filter for N clips — a TRUE overlapping
- * blend: the incoming clip's audio starts `d` seconds before its video and
- * cross-mixes with the outgoing tail. Used for hard-cut joins, where it is
- * the only way to blend soundtracks (the clips share no overlap material).
+ * Audio blend for HARD-CUT joins: an L-cut with tail stretch. Every clip's
+ * audio starts exactly ON its video cut (adelay to the concat position — no
+ * lead, no accumulated drift, and the LAST clip ends exactly with the video,
+ * so there is never a silent/faded tail). The blend material comes from the
+ * OUTGOING side: each non-last clip's audio is stretched pitch-preserved
+ * (atempo, ratio dur/(dur+d) — a few percent) so its tail extends `d` past
+ * its cut and fades out over the incoming clip's fade-in. The slowed
+ * material is mostly audible inside the fade window, where it's masked.
  *
- * Known, accepted tradeoff (deliberate product decision 2026-07-12,
- * reversing PR #3307's fade-through-silence): after each boundary the
- * remaining clips' audio leads their video by `d` (accumulating per
- * boundary). For the ambient/music soundtracks AI clips carry this is
- * imperceptible at typical durations (≤1s) and sounds dramatically better
- * than fading through silence; content needing frame-accurate sync should
- * use audioMode "keep" or a short duration.
- *
- * `curve` is an `acrossfade=curve=...` name (e.g., "tri", "qsin"); we pass
- * it through `c1` + `c2` so both ends use the same shape.
+ * This replaced two rejected designs: fade-through-silence (PR #3307 —
+ * audible dropout at every boundary) and the overlapping acrossfade chain
+ * (audio led video and the LAST clip's sound ended (n-1)*d early, leaving
+ * end silence). Do not resurrect either.
  */
-function buildAudioFilter(
+function buildHardCutCrossfadeAudioFilter(
   durations: readonly number[],
-  transitionDuration: number,
+  fadeDuration: number,
   curve: string,
 ): { filter: string; outputLabel: string } {
+  const n = durations.length
   const parts: string[] = []
-
-  for (let i = 1; i < durations.length; i++) {
-    const inputA = i === 1 ? "[0:a]" : `[a${i - 1}]`
-    const inputB = `[${i}:a]`
-    const outputLabel = i === durations.length - 1 ? "[aout]" : `[a${i}]`
-
-    parts.push(
-      `${inputA}${inputB}acrossfade=d=${transitionDuration}:c1=${curve}:c2=${curve}${outputLabel}`
-    )
+  const labels: string[] = []
+  let videoStart = 0
+  for (let i = 0; i < n; i++) {
+    const chain: string[] = []
+    if (i < n - 1) {
+      const dur = durations[i]!
+      const ratio = dur / (dur + fadeDuration)
+      chain.push(`atempo=${ratio.toFixed(6)}`)
+      // Stretched length is dur + fadeDuration; fade out over the last
+      // fadeDuration — i.e. the part that lingers past this clip's cut.
+      chain.push(`afade=t=out:st=${dur}:d=${fadeDuration}:curve=${curve}`)
+    }
+    if (i > 0) {
+      chain.push(`afade=t=in:st=0:d=${fadeDuration}:curve=${curve}`)
+    }
+    const ms = Math.max(0, Math.round(videoStart * 1000))
+    if (ms > 0) chain.push(`adelay=${ms}:all=1`)
+    const label = `[ca${i}]`
+    parts.push(`[${i}:a]${chain.length > 0 ? chain.join(",") : "anull"}${label}`)
+    labels.push(label)
+    videoStart += durations[i]!
   }
-
+  parts.push(`${labels.join("")}amix=inputs=${n}:normalize=0:duration=longest[aout]`)
   return { filter: parts.join(";"), outputLabel: "[aout]" }
 }
 
@@ -211,7 +234,7 @@ function buildAnchoredCrossfadeAudioFilter(
 }
 
 export async function combineVideos(options: CombineOptions): Promise<string> {
-  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames } = options
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames, smartCut } = options
   const workDir = await createWorkDir("combine")
 
   // Audio crossfade length is its own knob; older workflows stored it in
@@ -236,22 +259,46 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     const target = await pickTargetResolution(rawPaths)
     console.log(`[combineVideos] Normalizing ${rawPaths.length} clips to ${target.width}x${target.height}`)
 
-    const inputPaths: string[] = []
+    const normalizedPaths: string[] = []
     for (let i = 0; i < rawPaths.length; i++) {
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
       await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height)
-      // Frame trim is meant to clean transition artifacts at clip BOUNDARIES.
-      // The first clip's start and the last clip's end are not boundaries —
-      // they're the final video's opening/closing frames the user chose to
-      // keep. Suppress trim on those outer edges.
-      const isFirst = i === 0
-      const isLast = i === rawPaths.length - 1
-      const effStart = isFirst ? 0 : trimStartFrames
-      const effEnd = isLast ? 0 : trimEndFrames
+      normalizedPaths.push(normalizedPath)
+    }
+
+    // Per-clip trim plan. Frame trim is meant to clean transition artifacts
+    // at clip BOUNDARIES — the first clip's start and the last clip's end
+    // are not boundaries (they're the final video's opening/closing frames
+    // the user chose to keep), so outer edges always stay 0. Fixed trims
+    // fill the inner edges; smart cut REPLACES them per boundary with PSNR
+    // frame matching on the normalized clips (uniform resolution + fps, so
+    // frame indices line up with trimEdgeFrames' probe).
+    const startTrims = normalizedPaths.map((_, i) => (i === 0 ? 0 : trimStartFrames))
+    const endTrims = normalizedPaths.map((_, i) => (i === normalizedPaths.length - 1 ? 0 : trimEndFrames))
+    if (smartCut?.enabled && normalizedPaths.length >= 2) {
+      for (let k = 0; k < normalizedPaths.length - 1; k++) {
+        try {
+          const cut = await findSmartCutBoundary(
+            normalizedPaths[k], normalizedPaths[k + 1],
+            smartCut.framesFromPrev, smartCut.framesFromNext,
+          )
+          console.log(`[combineVideos] Smart cut boundary ${k}: end-trim ${cut.trimEndFrames}, start-trim ${cut.trimStartFrames} (PSNR ${cut.psnr === Infinity ? "inf" : cut.psnr.toFixed(2)}dB)`)
+          endTrims[k] = cut.trimEndFrames
+          startTrims[k + 1] = cut.trimStartFrames
+        } catch (err) {
+          // Best-effort: a failed boundary search keeps that boundary's
+          // fixed trims rather than failing the whole combine.
+          console.log(`[combineVideos] Smart cut failed at boundary ${k}, keeping fixed trims: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    }
+
+    const inputPaths: string[] = []
+    for (let i = 0; i < normalizedPaths.length; i++) {
       const trimmedPath = await trimEdgeFrames(
-        normalizedPath, join(workDir, `trimmed_${i}.mp4`), effStart, effEnd,
+        normalizedPaths[i], join(workDir, `trimmed_${i}.mp4`), startTrims[i], endTrims[i],
       )
-      if (trimmedPath === normalizedPath && (effStart > 0 || effEnd > 0)) {
+      if (trimmedPath === normalizedPaths[i] && (startTrims[i] > 0 || endTrims[i] > 0)) {
         console.log(`[combineVideos] Trim would exceed clip ${i} duration, skipping`)
       }
       inputPaths.push(trimmedPath)
@@ -338,24 +385,24 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     // Hard-cut video + audio crossfade: the video is stream-copied VERBATIM
     // (byte-identical to the fast path — audio settings must never alter the
     // video stream), and the audio is blended in its own pass with the
-    // overlapping acrossfade chain, padded back to the video's full length.
-    // Two passes: (1) decode all clips, acrossfade audio only; (2) concat
-    // demuxer for the video + mux the blended track, everything -c copy.
+    // anchored L-cut graph (see buildHardCutCrossfadeAudioFilter — every
+    // clip's audio starts on its cut; outgoing tails stretch over the next
+    // clip's fade-in; the last clip ends exactly with the video). Two
+    // passes: (1) decode all clips, blend audio only; (2) concat demuxer
+    // for the video + mux the blended track, everything -c copy.
     if (hardCutVideo) {
       const listPath = join(workDir, "filelist.txt")
       const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
       await fs.writeFile(listPath, listContent)
 
       try {
-        const videoTotal = durations.reduce((sum, d) => sum + d, 0)
-        const audioFilter = buildAudioFilter(durations, safeAudioCrossfade, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
-        const paddedFilter = `${audioFilter.filter};${audioFilter.outputLabel}apad=whole_dur=${videoTotal}[aoutp]`
+        const audioFilter = buildHardCutCrossfadeAudioFilter(durations, safeAudioCrossfade, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
         const audioPath = join(workDir, "blended_audio.m4a")
         await runFfmpeg([
           "-y",
           ...inputs,
-          "-filter_complex", paddedFilter,
-          "-map", "[aoutp]",
+          "-filter_complex", audioFilter.filter,
+          "-map", audioFilter.outputLabel,
           "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
           audioPath,
         ])

@@ -16,10 +16,13 @@
  *     AUDIO-ONLY knob — it must never alter the video stream):
  *       "remove"    → -an
  *       "crossfade" → hard-cut video (cut, or any transition at duration
- *                      0): overlapping acrossfade rendered in an audio-only
- *                      pass, muxed onto STREAM-COPIED video; xfade video:
- *                      anchored afade+adelay+amix with an independent audio
- *                      fade length; video-only when NO clip has audio
+ *                      0): anchored L-cut blend (outgoing tails atempo-
+ *                      stretched over the incoming fade-in; LAST clip
+ *                      anchored so its sound ends WITH the video) rendered
+ *                      in an audio-only pass, muxed onto STREAM-COPIED
+ *                      video; xfade video: anchored afade+adelay+amix with
+ *                      an independent audio fade length; video-only when
+ *                      NO clip has audio
  *       "keep"      → adelay+amix anchored to each clip's video start;
  *                      video-only when NO clip has audio
  *   - Dip-to-color: interleave a solid color clip between each input
@@ -72,6 +75,13 @@ vi.mock("node:fs", () => ({
   promises: { writeFile: mocks.fsWriteFile },
 }))
 
+const smartCutMocks = vi.hoisted(() => ({
+  findSmartCutBoundary: vi.fn(),
+}))
+vi.mock("../smart-cut.js", () => ({
+  findSmartCutBoundary: smartCutMocks.findSmartCutBoundary,
+}))
+
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", NODE_ENV: "test" },
   hasCredits: () => true, isCloud: () => true, isCommunity: () => false,
@@ -95,6 +105,7 @@ interface CombineCallOpts {
   audioMode?: "keep" | "crossfade" | "remove"
   audioCrossfadeCurve?: string
   audioCrossfadeDuration?: number
+  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
   trimStartFrames?: number
   trimEndFrames?: number
 }
@@ -107,6 +118,7 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     audioMode: over.audioMode ?? "keep",
     audioCrossfadeCurve: over.audioCrossfadeCurve,
     audioCrossfadeDuration: over.audioCrossfadeDuration,
+    smartCut: over.smartCut,
     trimStartFrames: over.trimStartFrames ?? 0,
     trimEndFrames: over.trimEndFrames ?? 0,
   }
@@ -157,6 +169,8 @@ beforeEach(() => {
   mocks.normalizeVideoForCombine.mockImplementation(async (_in: string, out: string) => out)
   mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
   mocks.fsWriteFile.mockResolvedValue(undefined)
+  smartCutMocks.findSmartCutBoundary.mockReset()
+  smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30 })
 })
 
 // ===========================================================================
@@ -303,6 +317,86 @@ describe("combineVideos — frame trim (delegates to trimEdgeFrames)", () => {
 })
 
 // ===========================================================================
+// 2b) Smart cut — PSNR boundary matching replaces the fixed boundary trims
+// ===========================================================================
+
+describe("combineVideos — smart cut", () => {
+  it("overrides the fixed boundary trims with the matcher's result (outer edges stay 0)", async () => {
+    stubResolutionProbes(2)
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 3, trimStartFrames: 5, psnr: 34.2 })
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      trimStartFrames: 1,
+      trimEndFrames: 2,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+    }))
+
+    expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledWith(
+      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8,
+    )
+    // Fixed trims (1/2) are ignored — the boundary comes from the matcher.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 3,
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 5, 0,
+    )
+  })
+
+  it("3 clips: the middle clip combines boundary-0 start trim with boundary-1 end trim", async () => {
+    stubResolutionProbes(3)
+    smartCutMocks.findSmartCutBoundary
+      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31 })
+      .mockResolvedValueOnce({ trimEndFrames: 6, trimStartFrames: 1, psnr: 29 })
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut",
+      smartCut: { enabled: true, framesFromPrev: 12, framesFromNext: 10 },
+    }))
+
+    expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledTimes(2)
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2,
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 4, 6,
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      3, "/tmp/work/normalized_2.mp4", "/tmp/work/trimmed_2.mp4", 1, 0,
+    )
+  })
+
+  it("a failed boundary search keeps that boundary's fixed trims (best effort)", async () => {
+    stubResolutionProbes(2)
+    smartCutMocks.findSmartCutBoundary.mockRejectedValueOnce(new Error("probe failed"))
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      trimStartFrames: 1,
+      trimEndFrames: 2,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+    }))
+
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2,
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 1, 0,
+    )
+  })
+
+  it("disabled (default): the matcher never runs", async () => {
+    stubResolutionProbes(2)
+    await combineVideos(defaultOptions({ videoUrls: ["a.mp4", "b.mp4"], transition: "cut" }))
+    expect(smartCutMocks.findSmartCutBoundary).not.toHaveBeenCalled()
+  })
+})
+
+// ===========================================================================
 // 3) Cut transition
 // ===========================================================================
 
@@ -346,13 +440,15 @@ describe("combineVideos — cut transition", () => {
     expect(list).toContain("it'\\''s-work")
   })
 
-  it("cut + audioMode=crossfade: overlapping acrossfade in an audio-only pass, muxed onto STREAM-COPIED video", async () => {
-    // Deliberate reversal of PR #3307 (2026-07-12, user decision): the
-    // overlapping blend is the point of "crossfade" — fading through
-    // silence at every cut sounded broken. The accepted tradeoff (audio
-    // leads video by d per boundary) is imperceptible on the ambient/music
-    // tracks AI clips carry. What #3307 rightly demanded — and this keeps —
-    // is that audio settings never alter the VIDEO stream: the video is
+  it("cut + audioMode=crossfade: anchored L-cut blend in an audio-only pass, muxed onto STREAM-COPIED video", async () => {
+    // Design history (do not regress): #3307's fade-through-silence sounded
+    // like a dropout at every boundary; the overlapping acrossfade chain
+    // that replaced it made audio lead video AND ended the last clip's
+    // sound (n-1)*d early (silence at the very end — user bug report).
+    // The L-cut graph fixes all of it: every clip's audio starts ON its
+    // video cut, outgoing tails are atempo-stretched to linger d past the
+    // cut under the incoming fade-in, and the LAST clip is untouched and
+    // anchored — it ends exactly with the video. The video itself is
     // stream-copied byte-identical to the plain-cut fast path.
     stubResolutionProbes(2)
     stubAudioStreamProbes(2, true)
@@ -368,15 +464,19 @@ describe("combineVideos — cut transition", () => {
 
     expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
 
-    // Pass 1: audio-only — overlapping acrossfade chain, padded back to the
-    // full video length, encoded at the pinned uniform params.
+    // Pass 1: audio-only anchored L-cut graph at the pinned uniform params.
     const audioArgs = ffargs(0)
     const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]")
-    expect(fc).toContain("apad=whole_dur=10")
-    expect(fc).not.toContain("concat")
-    expect(fc).not.toContain("xfade")
-    expect(audioArgs[audioArgs.indexOf("-map") + 1]).toBe("[aoutp]")
+    // Outgoing clip: stretched 5s→5.5s (ratio 0.909091), fades out over the
+    // 0.5s that lingers past its cut. No delay (starts at 0).
+    expect(fc).toContain("[0:a]atempo=0.909091,afade=t=out:st=5:d=0.5:curve=tri[ca0]")
+    // Incoming/last clip: anchored at its video cut (5s), fades in, is NOT
+    // stretched and has NO fade-out — it ends exactly with the video.
+    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri,adelay=5000:all=1[ca1]")
+    expect(fc).toContain("[ca0][ca1]amix=inputs=2:normalize=0:duration=longest[aout]")
+    expect(fc).not.toContain("acrossfade")
+    expect(fc).not.toContain("apad")
+    expect(audioArgs[audioArgs.indexOf("-map") + 1]).toBe("[aout]")
     expect(audioArgs[audioArgs.indexOf("-ar") + 1]).toBe("44100")
     expect(audioArgs[audioArgs.length - 1]).toBe("/tmp/work/blended_audio.m4a")
 
@@ -410,7 +510,10 @@ describe("combineVideos — cut transition", () => {
 
     const audioArgs = ffargs(0)
     const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("acrossfade=d=1.5")
+    // 5s clip stretched to 6.5s (ratio 0.769231); fades run 1.5s.
+    expect(fc).toContain("atempo=0.769231")
+    expect(fc).toContain("afade=t=out:st=5:d=1.5")
+    expect(fc).toContain("afade=t=in:st=0:d=1.5")
   })
 
   it("fade transition at duration 0 IS a hard cut: stream-copied video + overlapping audio blend", async () => {
@@ -432,7 +535,7 @@ describe("combineVideos — cut transition", () => {
 
     const audioArgs = ffargs(0)
     const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("acrossfade=d=1")
+    expect(fc).toContain("afade=t=out:st=5:d=1")
     expect(fc).not.toContain("xfade")
     const muxArgs = lastArgs()
     expect(muxArgs[muxArgs.indexOf("-f") + 1]).toBe("concat")
@@ -507,7 +610,7 @@ describe("combineVideos — cut transition", () => {
     expect(list).not.toContain("normalized_1.mp4")
   })
 
-  it("cut + crossfade with 3 clips: chained acrossfade across every boundary", async () => {
+  it("cut + crossfade with 3 clips: middle clip stretches, fades both ways, and is anchored; last clip only fades in", async () => {
     stubResolutionProbes(3)
     stubAudioStreamProbes(3, true)
     mocks.getVideoDuration
@@ -524,9 +627,12 @@ describe("combineVideos — cut transition", () => {
 
     const audioArgs = ffargs(0)
     const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[a1]")
-    expect(fc).toContain("[a1][2:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]")
-    expect(fc).toContain("apad=whole_dur=14")
+    // Middle clip (4s → 4.5s, ratio 0.888889): anchored at 5s, both fades.
+    expect(fc).toContain("[1:a]atempo=0.888889,afade=t=out:st=4:d=0.5:curve=tri,afade=t=in:st=0:d=0.5:curve=tri,adelay=5000:all=1[ca1]")
+    // Last clip: anchored at 9s (5+4), fade-in only, no stretch, no fade-out.
+    expect(fc).toContain("[2:a]afade=t=in:st=0:d=0.5:curve=tri,adelay=9000:all=1[ca2]")
+    expect(fc).toContain("[ca0][ca1][ca2]amix=inputs=3:normalize=0:duration=longest[aout]")
+    expect(fc).not.toContain("acrossfade")
   })
 
   it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (safety net)", async () => {

@@ -2836,6 +2836,10 @@ export async function combineVideos(
   /** Audio-only crossfade length (seconds); never affects the video stream.
    *  Omitted -> backend follows transitionDuration (pre-split workflows). */
   audioCrossfadeDuration?: number,
+  /** Smart cut: PSNR boundary matching; replaces fixed trims when enabled. */
+  smartCutEnabled?: boolean,
+  smartCutFramesPrev?: number,
+  smartCutFramesNext?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
@@ -2845,6 +2849,11 @@ export async function combineVideos(
   if (trimEndFrames && trimEndFrames > 0) body.trimEndFrames = trimEndFrames
   if (audioCrossfadeCurve) body.audioCrossfadeCurve = audioCrossfadeCurve
   if (typeof audioCrossfadeDuration === "number") body.audioCrossfadeDuration = audioCrossfadeDuration
+  if (smartCutEnabled) {
+    body.smartCutEnabled = true
+    if (typeof smartCutFramesPrev === "number") body.smartCutFramesPrev = smartCutFramesPrev
+    if (typeof smartCutFramesNext === "number") body.smartCutFramesNext = smartCutFramesNext
+  }
   if (
     upstreamDurations &&
     upstreamDurations.length === videoUrls.length &&

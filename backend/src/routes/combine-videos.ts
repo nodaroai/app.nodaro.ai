@@ -28,6 +28,12 @@ const combineVideosBody = z.object({
   /** Audio-only crossfade length (seconds) — never affects the video stream.
    *  Omitted → falls back to transitionDuration (pre-split workflows). */
   audioCrossfadeDuration: z.number().min(0).max(5).optional(),
+  /** Smart cut: PSNR-match the last N frames of each clip against the first
+   *  M frames of the next and cut at the closest pair (replaces the fixed
+   *  boundary trims). */
+  smartCutEnabled: z.boolean().optional().default(false),
+  smartCutFramesPrev: z.number().int().min(1).max(24).optional().default(8),
+  smartCutFramesNext: z.number().int().min(1).max(24).optional().default(8),
   trimStartFrames: z.number().int().min(0).max(120).optional().default(0),
   trimEndFrames: z.number().int().min(0).max(120).optional().default(0),
   userId: z.string().uuid().optional(),
@@ -64,7 +70,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -107,6 +113,9 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       audioMode,
       audioCrossfadeCurve,
       audioCrossfadeDuration,
+      smartCutEnabled,
+      smartCutFramesPrev,
+      smartCutFramesNext,
       trimStartFrames,
       trimEndFrames,
       usageLogId,

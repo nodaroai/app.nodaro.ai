@@ -15,8 +15,11 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Audio Mode | Select | crossfade | How to handle audio during transitions |
 | Crossfade Duration | Number | 0.5 | AUDIO-only crossfade length (0-5s, shown when Audio = Crossfade). Never affects the video. Falls back to Transition Duration on older workflows. |
 | Crossfade Curve | Select | linear | Audio fade curve (shown when Audio = Crossfade) |
-| Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120) |
-| Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120) |
+| Smart Cut | Toggle | off | PSNR-match boundary frames and cut at the closest pair (replaces the fixed trims) |
+| Smart Cut: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown when Smart Cut is on) |
+| Smart Cut: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
+| Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120, hidden when Smart Cut is on) |
+| Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120, hidden when Smart Cut is on) |
 | Clip Ordering | Drag list | — | Reorder connected video clips |
 
 ### Transition Options
@@ -62,10 +65,14 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 
 **How crossfade behaves per transition type:**
 
-- **Cut (or any transition at duration 0):** the video switches instantly, and the soundtracks *overlap*: the incoming clip's audio starts `d` seconds early, cross-blending with the outgoing tail — the classic J-cut editors use. Tradeoff to know: after each boundary the remaining audio runs `d` ahead of its picture (imperceptible on ambient/music tracks at typical durations; for dialogue that must stay frame-locked, use **keep** or a short duration).
-- **Blend transitions (fade, dissolve, wipes, …):** every clip's audio stays anchored to its video start — no drift, regardless of the audio crossfade length. The fades cross-blend over the video overlap; an audio crossfade *longer* than the video fade simply extends the blend gently into both clips.
+- **Cut (or any transition at duration 0):** the video switches instantly, and the audio does an **L-cut**: each incoming clip's sound starts exactly ON its cut (in sync, fading in), while the outgoing clip's sound lingers `d` seconds past the cut and fades out over it — a true blend with no dropout. The lingering tail comes from stretching the outgoing audio a few percent (pitch-preserved), which is masked under the fade. The **last clip is untouched**: its sound runs to the very end of the video, no fade-out.
+- **Blend transitions (fade, dissolve, wipes, …):** every clip's audio stays anchored to its video start — no drift, regardless of the audio crossfade length. The fades cross-blend over the video overlap; an audio crossfade *longer* than the video fade simply extends the blend gently into both clips. The last clip's audio is never faded out.
 
 **Audio normalization:** every clip is re-encoded to a common format before joining (24fps H.264, AAC 44.1kHz stereo), so clips from different providers — which often ship different sample rates — always splice cleanly. If some clips have audio and others are silent, the silent clips get a silent audio track injected so the combined track never drops out mid-video.
+
+### Smart Cut
+
+For continuation clips (each generated from the previous clip's last frame), the seam usually stutters because the models re-render a near-identical moment on both sides. **Smart Cut** finds it automatically: it searches the last *N* frames of each clip and the first *M* frames of the next (PSNR similarity), ends the first clip **on** the most similar frame and starts the next **right after** its match — the duplicated frame plays exactly once, so motion continues through the cut. It replaces the fixed Trim Start/End guesses; per-boundary results are logged with their PSNR (>30dB ≈ visually identical). If a boundary search fails, that boundary falls back to the fixed trims.
 
 ### Crossfade Curve (only when Audio = Crossfade)
 

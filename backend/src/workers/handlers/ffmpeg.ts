@@ -44,7 +44,7 @@ import { isKineticCaptionStyle } from "@nodaro/shared"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
-  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames } = job.data as {
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
     /** Validated upstream against `COMBINE_TRANSITION_IDS` at the route's
@@ -56,12 +56,22 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
     /** Audio-only crossfade length; undefined → provider falls back to
      *  transitionDuration (pre-split workflows). */
     audioCrossfadeDuration?: number
+    smartCutEnabled?: boolean
+    smartCutFramesPrev?: number
+    smartCutFramesNext?: number
     trimStartFrames?: number
     trimEndFrames?: number
   }
   console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, curve=${audioCrossfadeCurve ?? "linear"}, audioXfade=${audioCrossfadeDuration ?? "(=transition)"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
-  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
+  const outputPath = await combineVideos({
+    videoUrls, transition, transitionDuration,
+    audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, audioCrossfadeDuration,
+    trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0,
+    smartCut: smartCutEnabled
+      ? { enabled: true, framesFromPrev: smartCutFramesPrev ?? 8, framesFromNext: smartCutFramesNext ?? 8 }
+      : undefined,
+  })
   await setJobProgress(job, ctx.jobId, 80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
