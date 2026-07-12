@@ -18,8 +18,8 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Smart Cut | Toggle | off | PSNR-match boundary frames and cut at the closest pair (replaces the fixed trims) |
 | Smart Cut: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown when Smart Cut is on) |
 | Smart Cut: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
-| Trim Start Frames | Number | 0 | Frames trimmed from the start of EACH clip (0-120). With Smart Cut on, used as the fallback for boundaries without a match |
-| Trim End Frames | Number | 0 | Frames trimmed from the end of EACH clip (0-120). With Smart Cut on, used as the fallback for boundaries without a match |
+| Trim Start Frames | Number | 1 | Frames trimmed from the start of EACH clip except the first (0-120). Default 1 drops the duplicated boundary frame AI continuation clips carry. With Smart Cut on, used as the fallback for boundaries without a match |
+| Trim End Frames | Number | 2 | Frames trimmed from the end of EACH clip except the last (0-120). Default 2 drops boundary generation artifacts. With Smart Cut on, used as the fallback for boundaries without a match |
 | Clip Ordering | Drag list | — | Reorder connected video clips |
 
 ### Transition Options
@@ -80,12 +80,12 @@ For continuation clips (each generated from the previous clip's last frame), the
 
 ```json
 "smartCuts": [
-  { "boundary": 0, "prevClipEndTrimFrames": 0, "nextClipStartTrimFrames": 1, "psnrDb": 30.19, "matched": true },
-  { "boundary": 1, "prevClipEndTrimFrames": 2, "nextClipStartTrimFrames": 1, "psnrDb": 11.7, "matched": false }
+  { "boundary": 0, "prevClipEndTrimFrames": 0, "nextClipStartTrimFrames": 1, "psnrDb": 30.19, "matched": true, "searchedPrevFrames": 8, "searchedNextFrames": 8 },
+  { "boundary": 1, "prevClipEndTrimFrames": 2, "nextClipStartTrimFrames": 1, "psnrDb": 11.7, "matched": false, "searchedPrevFrames": 8, "searchedNextFrames": 8 }
 ]
 ```
 
-`boundary` k is the join between clip k and clip k+1. The trim fields are the values actually **applied** (drop counts: `prevClipEndTrimFrames: 0` = the match was the previous clip's very last frame, kept; `nextClipStartTrimFrames: 1` = the next clip dropped just its duplicated first frame). `matched: false` means no pair cleared the threshold — the reported values are the fixed trims the boundary fell back to. `psnrDb`: >30 ≈ visually identical, 100 = pixel-identical, `null` = the search errored.
+`boundary` k is the join between clip k and clip k+1. Every pair in the `searchedPrevFrames` × `searchedNextFrames` grid is compared (the requested windows, clamped to short clips). The trim fields are the values actually **applied** (drop counts: `prevClipEndTrimFrames: 0` = the match was the previous clip's very last frame, kept; `nextClipStartTrimFrames: 1` = the next clip dropped just its duplicated first frame). `matched: false` means no pair cleared the threshold — the reported values are the fixed trims the boundary fell back to. `psnrDb`: >30 ≈ visually identical, 100 = pixel-identical, `null` = the search errored.
 
 ### Crossfade Curve (only when Audio = Crossfade)
 

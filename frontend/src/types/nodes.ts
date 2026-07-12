@@ -6627,7 +6627,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 2,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeDuration: 0.5, fieldMappings: {} },
+    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeDuration: 0.5, trimEndFrames: 2, trimStartFrames: 1, smartCutFramesPrev: 8, smartCutFramesNext: 8, fieldMappings: {} },
   },
   {
     type: "image-collage",

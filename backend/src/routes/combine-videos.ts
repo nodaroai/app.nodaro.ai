@@ -34,8 +34,13 @@ const combineVideosBody = z.object({
   smartCutEnabled: z.boolean().optional().default(false),
   smartCutFramesPrev: z.number().int().min(1).max(24).optional().default(8),
   smartCutFramesNext: z.number().int().min(1).max(24).optional().default(8),
-  trimStartFrames: z.number().int().min(0).max(120).optional().default(0),
-  trimEndFrames: z.number().int().min(0).max(120).optional().default(0),
+  /** Defaults 1 start / 2 end — the user-validated recipe for AI
+   *  continuation clips: the NEXT clip re-renders the boundary moment as
+   *  its first frame (drop 1), and the previous clip's last couple of
+   *  frames often carry generation artifacts (drop 2). These are also the
+   *  smart-cut FALLBACK values for boundaries without a genuine match. */
+  trimStartFrames: z.number().int().min(0).max(120).optional().default(1),
+  trimEndFrames: z.number().int().min(0).max(120).optional().default(2),
   userId: z.string().uuid().optional(),
   /** Optional upstream durations, one per videoUrls entry (same order).
    *  When length doesn't match videoUrls, ignored (backend falls back to 8s

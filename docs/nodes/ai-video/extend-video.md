@@ -43,7 +43,7 @@ LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_
 
 ### How Seedance 2 Extend works
 
-Seedance 2 generates the continuation natively (it watches the source clip and produces only what happens next, soundtrack included), then the platform trim-stitches source + extension into one seamless clip: the source's last 4 frames and the extension's first 3 frames (the duplicated boundary) are dropped, joined with a hard cut and short timeline-anchored audio crossfades. The output is the full source plus the extension, about 7 frames shorter than their sum. The extension automatically matches the source's aspect ratio.
+Seedance 2 generates the continuation natively (it watches the source clip and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio.
 
 ### Seedance 2 Extend credits
 
