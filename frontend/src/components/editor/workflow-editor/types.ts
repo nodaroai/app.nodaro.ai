@@ -187,8 +187,11 @@ function gvpPerSecRate(provider: string, resolution: string, ref: boolean): numb
   return composite / 8
 }
 
-/** Display-only credit estimate for a generate-video-pro node's popup/badge. */
-function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData): number {
+/** Display-only credit estimate for a generate-video-pro node's popup/badge.
+ *  Exported so the node's Run strip shows the SAME closed-form number the
+ *  popup does (single-segment composite for ≤15s, fee + per-second segment
+ *  math beyond) instead of a fixed single-segment approximation. */
+export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData): number {
   const provider = data.provider || "seedance-2"
   const resolution = data.resolution || "720p"
   const duration = data.duration ?? 8
