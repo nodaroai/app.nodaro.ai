@@ -18,6 +18,7 @@ import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoProConnection } from "@/lib/generate-video-pro-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { estimateGenerateVideoProCredits } from "@/components/editor/workflow-editor/types"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoProNodeData, GeneratedResult } from "@/types/nodes"
 
@@ -62,13 +63,16 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
     setVideoError(false)
   }, [activeUrl])
 
-  // Coarse popup-time credit ESTIMATE only — matches the `text-to-video`,
-  // no-video-ref call shape `computeGenerateVideoProPricing`'s single-segment
-  // path uses server-side (ee/billing/generate-video-pro-credits.ts). Seedance
-  // 2 pricing has exactly one seeded duration tier (8s), so any `duration`
-  // value collapses to the same composite — the badge is deliberately an
-  // approximation; the real (possibly multi-segment) charge is always
-  // computed server-side at run time.
+  // Run-strip credit estimate via the SAME closed-form the popup badge and
+  // the backend reservation use (fee + first segment at the no-ref rate +
+  // remaining seconds and tail overlaps at the ref rate for multi-segment
+  // runs; the plain single-segment composite below 15s). The useModelCredits
+  // calls both SUBSCRIBE this component to the live prices and WARM the
+  // shared react-query cache estimateGenerateVideoProCredits reads — their
+  // return values are intentionally unused. Previously the strip showed the
+  // single-segment 8s composite regardless of duration, so a 60s run
+  // displayed ~1/6th of the real reservation (user bug report).
+  const resolution = nodeData.resolution || "720p"
   const creditIdentifier = buildVideoCreditModelIdentifier(
     provider,
     nodeData.duration,
@@ -78,7 +82,11 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.resolution,
     false,
   )
-  const credits = useModelCredits(creditIdentifier, 82)
+  useModelCredits(creditIdentifier, 82)
+  useModelCredits(`${provider}:8s:${resolution}`, 82)
+  useModelCredits(`${provider}:8s:${resolution}-ref`, 50)
+  useModelCredits("generate-video-pro", 10)
+  const credits = estimateGenerateVideoProCredits(nodeData)
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video-element sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
