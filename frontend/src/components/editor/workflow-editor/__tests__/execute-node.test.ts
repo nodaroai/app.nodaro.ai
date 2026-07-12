@@ -2292,6 +2292,7 @@ describe("combine-videos", () => {
       undefined,
       expect.any(Array),
       undefined, // audioCrossfadeCurve — unset on this node
+      undefined, // audioCrossfadeDuration — unset → backend follows transitionDuration
     )
   })
 })

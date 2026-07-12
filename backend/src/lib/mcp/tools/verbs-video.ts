@@ -701,6 +701,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(AUDIO_CROSSFADE_CURVE_IDS as unknown as [string, ...string[]])
           .optional()
           .describe("Curve shape for audio crossfade (only consulted when audio_mode='crossfade')"),
+        audio_crossfade_duration: z
+          .number()
+          .min(0)
+          .max(5)
+          .optional()
+          .describe(
+            "Audio-only crossfade length in seconds — blends the soundtracks without altering the video stream (at cuts the video is stream-copied untouched). Omitted: follows transition_duration.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -755,6 +763,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         transitionDuration: args.transition_duration,
         audioMode: args.audio_mode,
         audioCrossfadeCurve: args.audio_crossfade_curve,
+        audioCrossfadeDuration: args.audio_crossfade_duration,
         mcp_client: session.clientName,
         userId: session.userId,
       }

@@ -43,10 +43,21 @@ describe("ytMetadataProbe", () => {
 describe("buildYtDlpVideoArgs", () => {
   it("carries spoof + mp4 merge + max-filesize", () => {
     const args = buildYtDlpVideoArgs({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4", maxFilesizeBytes: 512 * 1024 * 1024 })
-    expect(args).toContain("--extractor-args")
-    expect(args.join(" ")).toContain("youtube:player_client=android")
+    expect(args.join(" ")).toContain("referer:youtube.com")
     expect(args.join(" ")).toContain("--max-filesize 512M")
     expect(args.join(" ")).toContain("--merge-output-format mp4")
+  })
+
+  /**
+   * The regression this pins: `youtube:player_client=android` capped EVERY
+   * YouTube download at 360p — the android client does not expose the
+   * higher-resolution DASH streams, so the format selector had nothing better to
+   * pick. It was mis-diagnosed as a YouTube-side SABR limit; it was this arg.
+   * yt-dlp's own default client chain returns 1080p from the same binary.
+   */
+  it("pins no player_client — the android pin capped YouTube at 360p", () => {
+    const args = buildYtDlpVideoArgs({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4" })
+    expect(args.join(" ")).not.toContain("player_client")
   })
 
   /**

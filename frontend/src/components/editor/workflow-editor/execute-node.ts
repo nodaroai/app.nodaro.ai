@@ -5370,6 +5370,7 @@ export function executeNode(
       combineData.trimEndFrames,
       upstreamDurations,
       combineData.audioCrossfadeCurve,
+      combineData.audioCrossfadeDuration,
     );
   }
 

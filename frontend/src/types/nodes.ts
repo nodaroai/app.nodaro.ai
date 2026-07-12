@@ -2983,6 +2983,11 @@ export type CombineVideosData = {
   /** Any id from `AUDIO_CROSSFADE_CURVES` (`@nodaro/shared`). Only consulted
    *  when audioMode==="crossfade". Optional — backend defaults to "linear". */
   audioCrossfadeCurve?: string
+  /** Audio-only crossfade length in seconds — never affects the video
+   *  stream (video is stream-copied at cuts; xfade length stays
+   *  transitionDuration). Optional — backend falls back to
+   *  transitionDuration for pre-split workflows. */
+  audioCrossfadeDuration?: number
   trimStartFrames?: number
   trimEndFrames?: number
   clipOrder?: string[]
@@ -6615,7 +6620,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 2,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", fieldMappings: {} },
+    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeDuration: 0.5, fieldMappings: {} },
   },
   {
     type: "image-collage",

@@ -25,6 +25,9 @@ const combineVideosBody = z.object({
     .enum(AUDIO_CROSSFADE_CURVE_TUPLE)
     .optional()
     .default(DEFAULT_AUDIO_CROSSFADE_CURVE_ID),
+  /** Audio-only crossfade length (seconds) — never affects the video stream.
+   *  Omitted → falls back to transitionDuration (pre-split workflows). */
+  audioCrossfadeDuration: z.number().min(0).max(5).optional(),
   trimStartFrames: z.number().int().min(0).max(120).optional().default(0),
   trimEndFrames: z.number().int().min(0).max(120).optional().default(0),
   userId: z.string().uuid().optional(),
@@ -61,7 +64,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, trimStartFrames, trimEndFrames } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -103,6 +106,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       transitionDuration,
       audioMode,
       audioCrossfadeCurve,
+      audioCrossfadeDuration,
       trimStartFrames,
       trimEndFrames,
       usageLogId,

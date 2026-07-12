@@ -75,10 +75,10 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         />
       </div>
 
-      {(data.transition !== "cut" || (data.audioMode ?? "crossfade") === "crossfade") && (
+      {data.transition !== "cut" && (
         <div>
           <Label htmlFor="transition-duration">
-            {data.transition !== "cut" ? "Duration" : "Crossfade duration"} — {data.transitionDuration ?? 0.5}s
+            Transition duration — {data.transitionDuration ?? 0.5}s
           </Label>
           <Input
             id="transition-duration"
@@ -108,25 +108,44 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           </SelectContent>
         </Select>
         {(data.audioMode ?? "crossfade") === "crossfade" && (
-          <div className="flex flex-col gap-1 pl-3 border-l-2 border-muted-foreground/20">
-            <Label htmlFor="audio-crossfade-curve" className="text-[11px] text-muted-foreground">
-              Crossfade curve
-            </Label>
-            <Select
-              value={data.audioCrossfadeCurve ?? DEFAULT_AUDIO_CROSSFADE_CURVE_ID}
-              onValueChange={(v) => onUpdate({ audioCrossfadeCurve: v })}
-            >
-              <SelectTrigger id="audio-crossfade-curve" aria-label="Crossfade curve" className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AUDIO_CROSSFADE_CURVES.map((c) => (
-                  <SelectItem key={c.id} value={c.id} title={c.description}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="audio-crossfade-duration" className="text-[11px] text-muted-foreground">
+                Crossfade duration — {data.audioCrossfadeDuration ?? data.transitionDuration ?? 0.5}s (audio only)
+              </Label>
+              <Input
+                id="audio-crossfade-duration"
+                type="number"
+                min={0}
+                max={5}
+                step={0.1}
+                className="h-8 text-xs"
+                value={data.audioCrossfadeDuration ?? data.transitionDuration ?? 0.5}
+                onChange={(e) =>
+                  onUpdate({ audioCrossfadeDuration: e.target.value === "" ? undefined : parseFloat(e.target.value) })
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="audio-crossfade-curve" className="text-[11px] text-muted-foreground">
+                Crossfade curve
+              </Label>
+              <Select
+                value={data.audioCrossfadeCurve ?? DEFAULT_AUDIO_CROSSFADE_CURVE_ID}
+                onValueChange={(v) => onUpdate({ audioCrossfadeCurve: v })}
+              >
+                <SelectTrigger id="audio-crossfade-curve" aria-label="Crossfade curve" className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUDIO_CROSSFADE_CURVES.map((c) => (
+                    <SelectItem key={c.id} value={c.id} title={c.description}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         )}
       </div>
