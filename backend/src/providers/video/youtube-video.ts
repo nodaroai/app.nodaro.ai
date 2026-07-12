@@ -11,8 +11,8 @@ import {
 import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
 
 /**
- * Shared yt-dlp video provider — the single source of the android
- * player_client + UA spoof for the VIDEO download path.
+ * Shared yt-dlp video provider — the single source of the referer/UA spoof for
+ * the VIDEO download path.
  *
  * Extracted from `routes/download-video.ts` so the download-video route AND
  * the video-analysis worker call ONE spoofed/allowlisted implementation. Two
@@ -66,12 +66,21 @@ export function resolveYtDlpBin(env: NodeJS.ProcessEnv = process.env): string {
 const YT_DLP_BIN = resolveYtDlpBin()
 
 /**
- * android player_client + referer/UA spoof — the ONLY copy for the video
- * path. Shared verbatim between the download and metadata-probe calls so a
- * change to the spoof identity can't drift between the two.
+ * referer/UA spoof — the ONLY copy for the video path. Shared verbatim between
+ * the download and metadata-probe calls so the spoof identity can't drift.
+ *
+ * NO `player_client` pin. There used to be one (`youtube:player_client=android`),
+ * and it was silently capping every YouTube download at **360p**: the android
+ * client simply does not expose the higher-resolution DASH streams, so the
+ * format selector had nothing better to choose. Removing the pin lets yt-dlp use
+ * its own default client chain — which the maintainers keep current against
+ * whatever YouTube is doing this month — and the same binary then returns 1080p.
+ *
+ * This was mis-diagnosed once as a YouTube-side SABR/PO-token limit. It was not;
+ * it was this argument. If YouTube quality regresses again, suspect a pin here
+ * before believing the platform is throttling us.
  */
 const YT_SPOOF_ARGS = [
-  "--extractor-args", "youtube:player_client=android",
   "--add-header", "referer:youtube.com",
   "--add-header", "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 ] as const
@@ -295,8 +304,8 @@ function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
  * Download a social video (YouTube/TikTok/Instagram/X/Facebook) to `outPath`
  * as an h264/aac mp4. Validates the host against the BROAD social allowlist
  * BEFORE spawning (SSRF gate — the worker calls this directly), applies the
- * android player_client + UA spoof, optionally caps size, then re-encodes to
- * h264 when the download isn't already h264. Throws on any failure.
+ * referer/UA spoof, optionally caps size, then re-encodes to h264 when the
+ * download isn't already h264. Throws on any failure.
  *
  * Progress reporting (both optional, used by the SSE download-video route):
  *   - `onProgress(pct)` — download percent (0–100) as yt-dlp reports it.
