@@ -276,7 +276,7 @@ export async function smartLoopCut(
   }
 }
 
-async function probeFpsAndFrameCount(
+export async function probeFpsAndFrameCount(
   filePath: string,
 ): Promise<{ fps: number; frameCount: number }> {
   // Use -count_frames + nb_read_frames (decodes the stream; accurate)

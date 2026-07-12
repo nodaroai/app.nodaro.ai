@@ -709,6 +709,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Audio-only crossfade length in seconds — blends the soundtracks without altering the video stream (at cuts the video is stream-copied untouched). Omitted: follows transition_duration.",
           ),
+        smart_cut: z
+          .boolean()
+          .optional()
+          .describe(
+            "PSNR-match the last frames of each clip against the first frames of the next and cut at the closest pair — seamless for continuation clips (next generated from prev's last frame). Replaces the fixed trim_* frame counts.",
+          ),
+        smart_cut_frames_prev: z.number().int().min(1).max(24).optional()
+          .describe("Smart-cut search window at each clip's END (frames, default 8)"),
+        smart_cut_frames_next: z.number().int().min(1).max(24).optional()
+          .describe("Smart-cut search window at each clip's START (frames, default 8)"),
       },
               outputSchema: {
           jobId: z.string(),
@@ -764,6 +774,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         audioMode: args.audio_mode,
         audioCrossfadeCurve: args.audio_crossfade_curve,
         audioCrossfadeDuration: args.audio_crossfade_duration,
+        smartCutEnabled: args.smart_cut,
+        smartCutFramesPrev: args.smart_cut_frames_prev,
+        smartCutFramesNext: args.smart_cut_frames_next,
         mcp_client: session.clientName,
         userId: session.userId,
       }

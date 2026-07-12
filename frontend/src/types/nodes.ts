@@ -2988,6 +2988,13 @@ export type CombineVideosData = {
    *  transitionDuration). Optional — backend falls back to
    *  transitionDuration for pre-split workflows. */
   audioCrossfadeDuration?: number
+  /** Smart cut: PSNR-match the last `smartCutFramesPrev` frames of each clip
+   *  against the first `smartCutFramesNext` of the next and cut at the
+   *  closest pair (drops the duplicated frame). Replaces the fixed trims
+   *  when enabled. */
+  smartCutEnabled?: boolean
+  smartCutFramesPrev?: number
+  smartCutFramesNext?: number
   trimStartFrames?: number
   trimEndFrames?: number
   clipOrder?: string[]

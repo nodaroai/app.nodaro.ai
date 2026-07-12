@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-07-12T12:52:01.538Z
-generated_from: 0627b7aed
+generated_at: 2026-07-12T15:46:23.055Z
+generated_from: 46865c972
 ---
 
 # Combine Videos
@@ -24,6 +24,9 @@ generated_from: 0627b7aed
 - `currentJobProgress?: number`
 - `audioCrossfadeCurve?: string`
 - `audioCrossfadeDuration?: number`
+- `smartCutEnabled?: boolean`
+- `smartCutFramesPrev?: number`
+- `smartCutFramesNext?: number`
 - `trimStartFrames?: number`
 - `trimEndFrames?: number`
 - `clipOrder?: string[]`
@@ -60,6 +63,9 @@ generated_from: 0627b7aed
 - `audio_mode`
 - `audio_crossfade_curve`
 - `audio_crossfade_duration`
+- `smart_cut`
+- `smart_cut_frames_prev`
+- `smart_cut_frames_next`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

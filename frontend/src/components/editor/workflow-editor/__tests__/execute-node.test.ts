@@ -2293,6 +2293,9 @@ describe("combine-videos", () => {
       expect.any(Array),
       undefined, // audioCrossfadeCurve — unset on this node
       undefined, // audioCrossfadeDuration — unset → backend follows transitionDuration
+      undefined, // smartCutEnabled — off by default
+      undefined, // smartCutFramesPrev
+      undefined, // smartCutFramesNext
     )
   })
 })
