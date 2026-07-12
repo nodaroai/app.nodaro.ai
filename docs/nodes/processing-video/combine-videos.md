@@ -56,6 +56,13 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 - **crossfade** — Blend audio during transition (curve configurable, see below)
 - **remove** — Strip all audio from output
 
+**How crossfade behaves per transition type:**
+
+- **Blend transitions (fade, dissolve, wipes, …):** the clips genuinely overlap for the transition duration, so the outgoing and incoming audio are cross-mixed — a true crossfade with no dip.
+- **Cut:** the video switches instantly and the clips never overlap, so there is no material to cross-mix. Instead, the outgoing clip's audio fades out into the cut and the incoming clip's fades in after it — a fade *through silence* centered on the cut. This is deliberate: overlapping the audio (a J-cut) would make every later clip's sound run ahead of its picture. Keep the crossfade duration short at cuts (**0.1–0.3s**) — enough to remove clicks and pops without an audible dip. Long durations (1s+) produce a clearly audible silence at each boundary.
+
+**Audio normalization:** every clip is re-encoded to a common format before joining (24fps H.264, AAC 44.1kHz stereo), so clips from different providers — which often ship different sample rates — always splice cleanly. If some clips have audio and others are silent, the silent clips get a silent audio track injected so the combined track never drops out mid-video.
+
 ### Crossfade Curve (only when Audio = Crossfade)
 
 | Curve | FFmpeg `acrossfade=curve=` | When to use |
@@ -110,6 +117,6 @@ The Run button shows the live estimate.
 ## Tips
 
 - "Dip-to-black" works well between scenes with different settings or moods
-- Audio crossfade prevents jarring audio cuts during transitions
+- Audio crossfade prevents jarring audio cuts during transitions — at cut transitions use a short duration (0.1–0.3s); the fade passes through silence at the cut point by design
 - Connect a Merge Video & Audio node after combining to add a soundtrack
 - Per-clip frame trim is applied uniformly to every connected input — useful when all upstream clips have the same fixed-length tail dissolve

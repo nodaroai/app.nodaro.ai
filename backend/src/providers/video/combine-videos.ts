@@ -222,12 +222,50 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
 
     const outputPath = join(workDir, "output.mp4")
 
+    // Probe audio presence once for the whole set (skipped for "remove" —
+    // audio is dropped anyway). Drives the mixed-set silent-track injection
+    // below and the audio-graph decisions in every branch.
+    const audioFlags = audioMode === "remove"
+      ? inputPaths.map(() => false)
+      : await Promise.all(inputPaths.map((p) => hasAudioStream(p)))
+    const anyAudio = audioFlags.some(Boolean)
+
+    // A mixed set (some clips with audio, some without) breaks EVERY join
+    // strategy: the concat demuxer's stream copy silently ends the audio
+    // track at the first soundless segment (the rest of the video goes
+    // mute), and the crossfade/keep filter graphs error on the missing
+    // [i:a] pad, dropping audio wholesale via their fallbacks. Give
+    // soundless clips a silent AAC track (44.1kHz stereo — the exact params
+    // normalizeVideoForCombine pins) so every clip presents an identical
+    // stream layout. Video is stream-copied, so this is a cheap remux;
+    // -shortest bounds the infinite anullsrc to the clip's length.
+    if (anyAudio) {
+      for (let i = 0; i < inputPaths.length; i++) {
+        if (audioFlags[i]) continue
+        const silencedPath = join(workDir, `silenced_${i}.mp4`)
+        console.log(`[combineVideos] Clip ${i} has no audio, adding silent track`)
+        await runFfmpeg([
+          "-y", "-i", inputPaths[i],
+          "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+          "-map", "0:v", "-map", "1:a",
+          "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+          "-shortest",
+          silencedPath,
+        ])
+        inputPaths[i] = silencedPath
+        audioFlags[i] = true
+      }
+    }
+
     // Concat-demuxer fast path: stream-copy, no filter graph. Used for cut
     // transitions where audio doesn't need filtering — including
     // cut+crossfade with a zero transition duration, where zero-length
     // fades degenerate to a plain cut (previously acrossfade d=0 errored
-    // and only the catch-fallback saved the output).
-    if (transition === "cut" && (audioMode !== "crossfade" || transitionDuration <= 0)) {
+    // and only the catch-fallback saved the output), and cut+crossfade over
+    // clips with no audio at all (nothing to fade). Safe to stream-copy
+    // because normalize pinned identical codec params on every clip and the
+    // injection above made stream layouts uniform.
+    if (transition === "cut" && (audioMode !== "crossfade" || transitionDuration <= 0 || !anyAudio)) {
       const listPath = join(workDir, "filelist.txt")
       const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
       await fs.writeFile(listPath, listContent)
@@ -317,24 +355,10 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
         outputPath,
       ])
     } else if (audioMode === "crossfade") {
-      const audioFilter = buildAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
-      const fullFilter = `${videoFilter.filter};${audioFilter.filter}`
-
-      try {
-        await runFfmpeg([
-          "-y",
-          ...inputs,
-          "-filter_complex", fullFilter,
-          "-map", videoFilter.outputLabel,
-          "-map", audioFilter.outputLabel,
-          "-c:v", "libx264",
-          "-preset", "fast",
-          "-c:a", "aac",
-          outputPath,
-        ])
-      } catch {
-        // Fallback: some clips may not have audio streams
-        console.log("[combineVideos] Audio crossfade failed, falling back to video-only")
+      if (!anyAudio) {
+        // No clip has audio — nothing to crossfade. Emit video-only directly
+        // instead of letting the audio graph fail into the same fallback.
+        console.log("[combineVideos] No audio streams, emitting video-only")
         await runFfmpeg([
           "-y",
           ...inputs,
@@ -345,6 +369,38 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
           "-an",
           outputPath,
         ])
+      } else {
+        const audioFilter = buildAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
+        const fullFilter = `${videoFilter.filter};${audioFilter.filter}`
+
+        try {
+          await runFfmpeg([
+            "-y",
+            ...inputs,
+            "-filter_complex", fullFilter,
+            "-map", videoFilter.outputLabel,
+            "-map", audioFilter.outputLabel,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-c:a", "aac",
+            outputPath,
+          ])
+        } catch {
+          // Safety net — the silent-track injection above should have made
+          // the audio graph valid, but a probe miss on an exotic container
+          // still lands here rather than failing the job.
+          console.log("[combineVideos] Audio crossfade failed, falling back to video-only")
+          await runFfmpeg([
+            "-y",
+            ...inputs,
+            "-filter_complex", videoFilter.filter,
+            "-map", videoFilter.outputLabel,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-an",
+            outputPath,
+          ])
+        }
       }
     } else {
       // audioMode === "keep": the video xfade chain COMPRESSES the timeline
@@ -352,9 +408,10 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       // (N-1)*D seconds late relative to its video. Anchor each clip's audio
       // at its video start instead: adelay to the xfade offset, then amix —
       // the D-second overlap regions mix the outgoing tail with the incoming
-      // head. Clips without audio are simply omitted (silence adds nothing);
-      // if NO clip has audio, emit video-only.
-      const audioFlags = await Promise.all(inputPaths.map((p) => hasAudioStream(p)))
+      // head. Clips without audio are simply omitted (silence adds nothing —
+      // after the mixed-set injection above this only happens when NO clip
+      // has audio, in which case we emit video-only). Flags come from the
+      // up-front probe.
       const starts: number[] = []
       let acc = 0
       for (let i = 0; i < durations.length; i++) {

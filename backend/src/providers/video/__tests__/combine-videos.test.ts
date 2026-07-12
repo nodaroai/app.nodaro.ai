@@ -7,12 +7,17 @@
  *   - Cut transition (concat demuxer with stream-copy)
  *   - xfade transition family (fade/dissolve/dip-to-black/dip-to-white)
  *     with chained xfade filter graph
+ *   - Up-front audio probe of every clip (skipped for "remove"): a MIXED
+ *     set (some clips with audio, some without) gets silent AAC tracks
+ *     injected into the soundless clips so every join strategy sees
+ *     uniform stream layouts — concat -c copy otherwise silently ends the
+ *     audio track at the first soundless segment.
  *   - Audio handling per audioMode:
  *       "remove"    → -an
- *       "crossfade" → acrossfade chain + video-only fallback when any
- *                      clip lacks audio
- *       "keep"      → concat audio with silent placeholders for clips
- *                      without an audio stream
+ *       "crossfade" → acrossfade chain; video-only directly when NO clip
+ *                      has audio; video-only fallback kept as safety net
+ *       "keep"      → adelay+amix anchored to each clip's video start;
+ *                      video-only when NO clip has audio
  *   - Dip-to-color: interleave a solid color clip between each input
  *   - Per-clip frame trim with "would exceed clip length" skip
  *   - safeDuration = min(transitionDuration, minDur * 0.9) clamp
@@ -136,7 +141,12 @@ beforeEach(() => {
   mocks.cleanupWorkDir.mockResolvedValue(undefined)
   mocks.downloadFile.mockResolvedValue(undefined)
   mocks.runFfmpeg.mockResolvedValue("")
+  // mockReset (not just clear) drains mockResolvedValueOnce queues left by
+  // tests whose flow didn't consume every stub — audio-mode gating is
+  // probe-driven, so a leaked stub would silently flip a branch.
+  mocks.runFfprobe.mockReset()
   mocks.runFfprobe.mockResolvedValue("")
+  mocks.getVideoDuration.mockReset()
   mocks.getVideoDuration.mockResolvedValue(5)
   mocks.normalizeVideoForCombine.mockImplementation(async (_in: string, out: string) => out)
   mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
@@ -337,6 +347,7 @@ describe("combineVideos — cut transition", () => {
     // apad hid the shortfall as end-silence. Hard cuts keep each clip's
     // audio anchored to its video: fade-out tail / fade-in head + concat.
     stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -371,8 +382,10 @@ describe("combineVideos — cut transition", () => {
 
   it("cut + crossfade with transitionDuration 0 degenerates to the stream-copy fast path", async () => {
     // d=0 fades are a plain cut; previously acrossfade d=0 errored and only
-    // the catch-fallback produced output (job b17b3b86).
+    // the catch-fallback produced output (job b17b3b86). Audio present on
+    // both clips so the fast path is chosen by d=0 alone.
     stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
     await combineVideos(defaultOptions({
       transition: "cut",
       audioMode: "crossfade",
@@ -385,8 +398,59 @@ describe("combineVideos — cut transition", () => {
     expect(args).not.toContain("-filter_complex")
   })
 
+  it("cut + crossfade when NO clip has audio: stream-copy fast path, no filter attempt", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, false)
+
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0.5,
+    }))
+
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(1)
+    const args = lastArgs()
+    expect(args[args.indexOf("-f") + 1]).toBe("concat")
+    expect(args).not.toContain("-filter_complex")
+  })
+
+  it("cut + keep with a MIXED set: injects a silent track so concat -c copy can't drop audio mid-video", async () => {
+    // Empirically proven corruption: concat demuxer stream-copy with one
+    // soundless segment ends the output's audio track at that boundary —
+    // the rest of the video plays MUTE (no error). The soundless clip must
+    // get a silent AAC track before the filelist is written.
+    mocks.runFfprobe.mockReset()
+    mocks.runFfprobe.mockImplementation(async (probeArgs: unknown) => {
+      const args = probeArgs as string[]
+      const path = args[args.length - 1]
+      if (path.endsWith("normalized_0.mp4")) return "audio\n"
+      if (path.endsWith("normalized_1.mp4")) return ""
+      return "1280x720" // resolution probes
+    })
+
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "keep",
+    }))
+
+    // First ffmpeg call = the injection remux for clip 1.
+    const injectArgs = ffargs(0)
+    expect(injectArgs.join(" ")).toContain("anullsrc=channel_layout=stereo:sample_rate=44100")
+    expect(injectArgs).toContain("-shortest")
+    expect(injectArgs[injectArgs.indexOf("-c:v") + 1]).toBe("copy")
+    expect(injectArgs[injectArgs.indexOf("-i") + 1]).toBe("/tmp/work/normalized_1.mp4")
+    expect(injectArgs[injectArgs.length - 1]).toBe("/tmp/work/silenced_1.mp4")
+
+    // Filelist references the silenced file, not the audio-less original.
+    const list = mocks.fsWriteFile.mock.calls[0][1] as string
+    expect(list).toContain("file '/tmp/work/normalized_0.mp4'")
+    expect(list).toContain("file '/tmp/work/silenced_1.mp4'")
+    expect(list).not.toContain("normalized_1.mp4")
+  })
+
   it("cut + crossfade with 3 clips: middle clip fades in AND out, all anchored", async () => {
     stubResolutionProbes(3)
+    stubAudioStreamProbes(3, true)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(4)
@@ -405,14 +469,15 @@ describe("combineVideos — cut transition", () => {
     expect(fc).toContain("[ac0][ac1][ac2]concat=n=3:v=0:a=1[aout]")
   })
 
-  it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (e.g. clip without audio)", async () => {
+  it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (safety net)", async () => {
     stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
     // First ffmpeg call (the filter-graph attempt) rejects; fallback succeeds.
     mocks.runFfmpeg
-      .mockRejectedValueOnce(new Error("acrossfade failed: no audio in clip 1"))
+      .mockRejectedValueOnce(new Error("acrossfade failed: probe missed"))
       .mockResolvedValueOnce("")
 
     await combineVideos(defaultOptions({
@@ -622,6 +687,8 @@ describe("combineVideos — audioMode for xfade transitions", () => {
   })
 
   it("audioMode=crossfade: chains acrossfade alongside xfade with default linear curve", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -654,6 +721,8 @@ describe("combineVideos — audioMode for xfade transitions", () => {
 
     for (const [id, curve] of samples) {
       mocks.runFfmpeg.mockClear()
+      stubResolutionProbes(2)
+      stubAudioStreamProbes(2, true)
       mocks.getVideoDuration.mockResolvedValueOnce(5).mockResolvedValueOnce(5)
 
       await combineVideos(defaultOptions({
@@ -665,19 +734,13 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     }
   })
 
-  it("audioMode=crossfade: falls back to video-only when ffmpeg fails (no audio in some clips)", async () => {
+  it("audioMode=crossfade: falls back to video-only when ffmpeg fails (probe missed a bad stream)", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
-    // First merge call rejects; fallback succeeds.
-    mocks.runFfmpeg
-      .mockResolvedValueOnce("") // (no normalize/trim ffmpeg in this flow since trimStart=0)
-      .mockRejectedValueOnce(new Error("audio crossfade failed"))
-      .mockResolvedValueOnce("")
-
-    // Wait — the flow has zero pre-merge ffmpeg calls when trimStart=0.
-    // Let me reset the mock to fail on first attempt.
-    mocks.runFfmpeg.mockReset()
+    // First merge call (the crossfade attempt) rejects; fallback succeeds.
     mocks.runFfmpeg
       .mockRejectedValueOnce(new Error("audio crossfade failed"))
       .mockResolvedValueOnce("")
@@ -689,6 +752,25 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
     const fallbackArgs = mocks.runFfmpeg.mock.calls[1][0] as string[]
     expect(fallbackArgs).toContain("-an")
+  })
+
+  it("audioMode=crossfade: when NO clip has audio, emits video-only in ONE pass (no doomed attempt)", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, false)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "fade", audioMode: "crossfade",
+    }))
+
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(1)
+    const args = lastArgs()
+    expect(args).toContain("-an")
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("xfade=")
+    expect(fc).not.toContain("acrossfade")
   })
 
   it("audioMode=keep: delays each clip's audio to its xfaded video start and mixes (no late concat)", async () => {
@@ -716,7 +798,7 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     expect(fc).not.toContain("acrossfade")
   })
 
-  it("audioMode=keep: clips without audio are omitted from the mix (silence adds nothing)", async () => {
+  it("audioMode=keep: a soundless clip in a mixed set gets a silent track injected, then joins the mix", async () => {
     mocks.runFfprobe.mockReset()
     mocks.getVideoDuration.mockReset()
 
@@ -734,13 +816,23 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     })
 
     await combineVideos(defaultOptions({
-      transition: "fade", audioMode: "keep",
+      transition: "fade", audioMode: "keep", transitionDuration: 1,
     }))
 
-    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+    // Injection remux ran for clip 1 before the merge.
+    const injectArgs = ffargs(0)
+    expect(injectArgs.join(" ")).toContain("anullsrc")
+    expect(injectArgs[injectArgs.length - 1]).toBe("/tmp/work/silenced_1.mp4")
+
+    // Merge inputs reference the silenced file; BOTH clips are in the mix,
+    // anchored to their video starts (5s clip, 1s overlap → 4000ms delay).
+    const args = lastArgs()
+    expect(args).toContain("/tmp/work/silenced_1.mp4")
+    const fc = args[args.indexOf("-filter_complex") + 1]
     expect(fc).not.toContain("aevalsrc")
     expect(fc).toContain("[0:a]anull[ka0]")
-    expect(fc).toContain("amix=inputs=1:normalize=0:duration=longest[aout]")
+    expect(fc).toContain("[1:a]adelay=4000:all=1[ka1]")
+    expect(fc).toContain("amix=inputs=2:normalize=0:duration=longest[aout]")
   })
 
   it("audioMode=keep: when NO clip has audio (probe rejections), emits video-only with -an", async () => {

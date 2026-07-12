@@ -518,10 +518,17 @@ export async function stripAudio(inputPath: string, outputPath: string): Promise
 
 /**
  * Re-encode a clip to a uniform format for combining: fps=24, h264/yuv420p,
- * AAC audio, and — crucially — scaled and letterboxed to exactly
- * `targetWidth`×`targetHeight`. xfade/acrossfade and the concat filter all
- * require every input to share the same resolution, so a single odd-sized
- * clip would otherwise abort the whole combine.
+ * AAC audio at 44.1kHz stereo, and — crucially — scaled and letterboxed to
+ * exactly `targetWidth`×`targetHeight`. xfade/acrossfade and the concat
+ * filter all require every input to share the same resolution, so a single
+ * odd-sized clip would otherwise abort the whole combine.
+ *
+ * The `-ar`/`-ac` pin matters as much as the resolution: providers emit
+ * clips at 32/44.1/48kHz, and the combine cut path splices normalized clips
+ * with `-f concat -c copy`, which stamps the whole output track with the
+ * FIRST clip's decoder config. A later clip at another rate then plays at
+ * the wrong speed/pitch and desyncs from its video (job 3dca9c76). Same
+ * pin as runBlockFit's block encode in assemble-narrated-video.ts.
  */
 export async function normalizeVideoForCombine(
   inputPath: string,
@@ -536,7 +543,7 @@ export async function normalizeVideoForCombine(
     "-y", "-i", inputPath,
     "-vf", `fps=24,scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23",
-    "-c:a", "aac", "-b:a", "128k",
+    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
     "-movflags", "+faststart",
     outputPath,
   ])

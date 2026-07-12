@@ -899,6 +899,22 @@ describe("normalizeVideoForCombine", () => {
     expect(args).toContain("aac")
   })
 
+  it("pins audio to 44.1kHz stereo so -c copy concat never splices mismatched rates", async () => {
+    // Regression (job 3dca9c76): two clips normalized here kept their source
+    // sample rates (32kHz vs 44.1kHz). The cut fast path's concat demuxer
+    // stream-copy then spliced both into one AAC track declared at the first
+    // clip's rate — the second clip's audio played ~27% slow and pitch-shifted,
+    // and the audio track ran 4s past the video. Every clip must leave
+    // normalize with identical audio params (mirrors runBlockFit's pin).
+    execFileOnce("")
+
+    await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1280, 720)
+
+    const args = execArgs()
+    expect(args[args.indexOf("-ar") + 1]).toBe("44100")
+    expect(args[args.indexOf("-ac") + 1]).toBe("2")
+  })
+
   it("rounds odd target dimensions down to even", async () => {
     execFileOnce("")
 
