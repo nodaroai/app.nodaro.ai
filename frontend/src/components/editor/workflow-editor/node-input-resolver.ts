@@ -753,6 +753,8 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
   // entries so llm-chat reference routing treats its output as video.
   "generate-video",
+  // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
+  "generate-video-pro",
   "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",

@@ -141,6 +141,7 @@ import { Switch } from "@/components/ui/switch";
 import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
 import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
 import { hasCredits } from "@/lib/edition";
+import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -715,6 +716,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "AI",
     group: "Video",
     keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"],
+  },
+  {
+    type: "generate-video-pro",
+    label: "Generate Video Pro",
+    icon: <Clapperboard className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["long-form", "long video", "multi-segment", "stitch", "extended duration", "seedance", "pro"],
   },
   {
     type: "video-to-video",
@@ -1430,12 +1439,9 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
-/** Node types that must only appear in Cloud edition (hasCredits()). */
-const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-changer-pro"]);
-
 /**
  * Returns `NODE_OPTIONS` filtered for the current edition.
- * Cloud-only nodes are excluded when `hasCredits()` is false.
+ * Cloud-only nodes (`CLOUD_ONLY_NODE_TYPES`) are excluded when `hasCredits()` is false.
  * Use this instead of `NODE_OPTIONS` whenever building a user-visible list.
  */
 export function getNodeOptions(): ReadonlyArray<NodeOption> {

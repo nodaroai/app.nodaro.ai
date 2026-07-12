@@ -3,12 +3,19 @@ import {
   IMAGE_GEN_MODELS,
   VIDEO_T2V_MODELS,
   VIDEO_GEN_MODELS,
+  GVP_PROVIDERS,
   IMAGE_STYLE_PRESETS,
   getAspectRatiosForModel,
+  getAspectRatiosForVideoModel,
+  getVideoResolutionOptions,
   IMAGE_QUALITY_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
   VIDEO_RATIOS,
 } from "@/components/editor/config-panels/model-options"
+// Single source of truth for the duration-slider cap — defined once in the
+// config panel (frontend/src/components/editor/config-panels/video-configs.tsx)
+// and imported here so the two never drift.
+import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "@/components/editor/config-panels/video-configs"
 import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
 import {
@@ -483,6 +490,97 @@ function renderGenerateVideo(
   }
 }
 
+/**
+ * Generate Video Pro — Seedance-2-family multi-segment stitch node (Task 13).
+ * Trimmed sibling of renderGenerateVideo above: adds prompt/duration/resolution
+ * cases (the trimmed config panel exposes fewer, simpler levers than the full
+ * generate-video node) and drops "motion" (no motion-amount field on this
+ * node). Provider set is GVP_PROVIDERS (the 3 Seedance-2-family ids only —
+ * never the full VIDEO_GEN_MODELS superset). Aspect ratio + resolution read
+ * the node's OWN current provider so options can never silently drift from
+ * what the model actually supports (no hardcoded static superset lists).
+ */
+function renderGenerateVideoPro(
+  props: ConfigFieldRendererProps,
+): React.ReactNode | null {
+  const { field, value, nodeData, onChange, allowedValues, readOnly, customLabel } = props
+  const provider = String(nodeData.provider ?? "seedance-2")
+
+  switch (field) {
+    case "prompt":
+      return (
+        <TextareaField
+          label={customLabel ?? "Prompt"}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+        />
+      )
+    case "provider":
+      return (
+        <OptionSelect
+          label={customLabel ?? "Model"}
+          options={GVP_PROVIDERS}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          showDesc
+        />
+      )
+    case "duration":
+      return (
+        <SliderField
+          label={customLabel ?? "Duration (seconds)"}
+          value={value}
+          onChange={onChange}
+          min={4}
+          max={GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK}
+          step={1}
+          readOnly={readOnly}
+        />
+      )
+    case "aspectRatio":
+      return (
+        <AspectRatioField
+          label={customLabel ?? "Aspect Ratio"}
+          options={getAspectRatiosForVideoModel(provider)}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          autoReset
+        />
+      )
+    case "resolution": {
+      const resOpts = getVideoResolutionOptions(provider)
+      if (!resOpts) return null
+      return (
+        <OptionSelect
+          label={customLabel ?? "Resolution"}
+          options={resOpts}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          autoReset
+        />
+      )
+    }
+    case "generateAudio":
+      return (
+        <ToggleField
+          label={customLabel ?? "Generate Audio"}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+        />
+      )
+    default:
+      return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fallback: delegate to generic FieldInputCard using the shared exposable-field
 // resolver (static NODE_DEFINITIONS fields + dynamic lottie slot fields)
@@ -522,6 +620,7 @@ const NODE_RENDERERS: Record<
   "generate-image": renderGenerateImage,
   "text-to-video": renderTextToVideo,
   "generate-video": renderGenerateVideo,
+  "generate-video-pro": renderGenerateVideoPro,
 }
 
 export function ConfigFieldRenderer(

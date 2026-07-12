@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-07-03T10:24:31.058Z
-generated_from: 25df56f4a
+generated_at: 2026-07-12T06:23:10.800Z
+generated_from: 61416e7f
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -115,6 +115,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `generate-music` — Generate Music
 - `generate-script` — Generate Script
 - `generate-video` — Generate Video
+- `generate-video-pro` — Generate Video Pro
 - `generative-pipeline` — Story → Video
 - `group` — Group
 - `held-prop` — Held Prop

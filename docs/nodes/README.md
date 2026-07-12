@@ -194,6 +194,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Generate Video](./ai-video/generate-video.md) | Unified video producer — text-only, image-to-video, first+last frame, reference mode, or video-edit (V2V) driven by which inputs are wired (`VIDEO_GEN_PROVIDERS` catalog); providers include VEO 3.x, Gemini Omni, Kling, Seedance 2, LTX 2.3, and more | Animate images, generate from text, run reference-driven multimodal mode (Seedance 2, VEO 3.x), or edit existing video (Gemini Omni) — one node, all modes |
+| [Generate Video Pro](./ai-video/generate-video-pro.md) | Long-form video — auto-splits requests beyond a single segment's 15s limit into multiple Seedance 2 segments and stitches them into one clip (Cloud edition only) | One continuous clip longer than 15 seconds |
 | [Image to Video](./ai-video/image-to-video.md) (legacy) | Redirects to Generate Video; legacy `image-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Text to Video](./ai-video/text-to-video.md) (legacy) | Redirects to Generate Video; legacy `text-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |

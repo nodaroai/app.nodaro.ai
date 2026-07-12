@@ -1,7 +1,11 @@
-import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
+import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+// getCachedCredits reads the live React-Query model-cost cache (an `ee/`
+// concern — credits are enterprise-only). Allowlisted in
+// tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
+import { getCachedCredits } from "@/ee/hooks/use-model-credits"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -128,6 +132,90 @@ const MOTION_CREDIT_COSTS: Record<string, number> = {
   "motion-transfer:1080p:30s": 85,
 }
 
+// ---------------------------------------------------------------------------
+// generate-video-pro — DISPLAY-ONLY credit estimate.
+//
+// UI-side twin of the money-authoritative closed-form in
+// `backend/src/ee/billing/generate-video-pro-credits.ts`
+// (`computeGenerateVideoProPricing`). `gvpSplit` transcribes the SAME
+// segment-split algorithm as that file's module-local `computeSplit` (itself
+// a verbatim copy of the plan's Task 2 `computeSplit`) — keep all three in
+// sync if the split algorithm ever changes. This function is NEVER
+// authoritative for billing; only the backend helper is.
+// ---------------------------------------------------------------------------
+
+const GVP_SPLIT = { minSeg: 4, maxSeg: 15, lossSec: 0.3, capSec: 120 } as const
+
+interface GvpSplitResult {
+  mode: "single" | "multi"
+  clampedD: number
+  n: number
+  s: number
+  durations: number[]
+}
+
+function gvpSplit(requestedSec: number): GvpSplitResult {
+  const d = Math.min(Math.max(Math.round(requestedSec), GVP_SPLIT.minSeg), GVP_SPLIT.capSec)
+  if (d <= GVP_SPLIT.maxSeg) return { mode: "single", clampedD: d, n: 1, s: d, durations: [d] }
+  let n = 2
+  while (n * GVP_SPLIT.maxSeg < d + GVP_SPLIT.lossSec * (n - 1)) n++
+  const s = Math.ceil(d + GVP_SPLIT.lossSec * (n - 1))
+  const base = Math.floor(s / n)
+  const durations = new Array<number>(n).fill(base)
+  durations[0] += s - base * n
+  for (let i = 0; i < n - 1; i++) {
+    if (durations[i] > GVP_SPLIT.maxSeg) {
+      durations[i + 1] += durations[i] - GVP_SPLIT.maxSeg
+      durations[i] = GVP_SPLIT.maxSeg
+    }
+  }
+  return { mode: "multi", clampedD: d, n, s, durations }
+}
+
+/** Static fallbacks — the seeded seedance-2 @ 720p 8s composites (STATIC_CREDIT_COSTS
+ *  in backend/src/ee/billing/credits.ts), used only while the live cache is cold. */
+const GVP_NOREF_FALLBACK = 82
+const GVP_REF_FALLBACK = 50
+const GVP_FEE_FALLBACK = 10
+
+/** Per-second BASE rate for a (provider, resolution, ref) combination, read from the
+ *  live cached composite when available (mirrors the backend's perSecRate identifier
+ *  scheme exactly: `${provider}:8s:${resolution}[-ref]`), else a static fallback. */
+function gvpPerSecRate(provider: string, resolution: string, ref: boolean): number {
+  const identifier = `${provider}:8s:${resolution}${ref ? "-ref" : ""}`
+  const composite = getCachedCredits(identifier) ?? (ref ? GVP_REF_FALLBACK : GVP_NOREF_FALLBACK)
+  return composite / 8
+}
+
+/** Display-only credit estimate for a generate-video-pro node's popup/badge. */
+function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData): number {
+  const provider = data.provider || "seedance-2"
+  const resolution = data.resolution || "720p"
+  const duration = data.duration ?? 8
+  const split = gvpSplit(duration)
+
+  if (split.mode === "single") {
+    // Single-segment run behaves like a normal t2v run — same identifier the
+    // backend's single-mode path uses, so the cached composite (when warm)
+    // tracks the real reservation exactly for the common ≤15s case.
+    const identifier = buildVideoCreditModelIdentifier(
+      provider, split.clampedD, false, "text-to-video", undefined, resolution, false,
+    )
+    const cached = getCachedCredits(identifier)
+    if (cached !== undefined) return cached
+    return Math.ceil(gvpPerSecRate(provider, resolution, false) * split.clampedD)
+  }
+
+  const fee = getCachedCredits("generate-video-pro") ?? GVP_FEE_FALLBACK
+  const noRefPerSec = gvpPerSecRate(provider, resolution, false)
+  const refPerSec = gvpPerSecRate(provider, resolution, true)
+  return (
+    fee +
+    Math.ceil(noRefPerSec * GVP_SPLIT.maxSeg) +
+    Math.ceil(refPerSec * ((split.n - 1) + (split.s - GVP_SPLIT.maxSeg)))
+  )
+}
+
 /**
  * Estimate credit cost for a single node, reading node data for variable-cost nodes.
  */
@@ -136,6 +224,9 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
   // Component nodes: use the published estimatedCredits stored on the node data
   if (nodeType === "component" && node.data) {
     return (node.data.estimatedCredits as number) ?? 0
+  }
+  if (nodeType === "generate-video-pro" && node.data) {
+    return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData)
   }
   if (nodeType === "motion-transfer" && node.data) {
     const provider = (node.data.provider as string) ?? "kling"
@@ -189,6 +280,8 @@ export const EXECUTABLE_TYPES = new Set([
   // (Task 5.1) so the backend's NODE_REGISTRY × EXECUTABLE_TYPES parity check
   // (node-registry-sync.test.ts) stays green.
   "generate-video",
+  // Seedance-2-family multi-segment stitch variant of generate-video (Task 13).
+  "generate-video-pro",
   "text-to-speech",
   "generate-music",
   "text-to-audio",

@@ -5,6 +5,7 @@ import { IMAGE_PRODUCER_HANDLE_LABELS } from "../image-producer-handles"
 import { AUDIO_TEXT_HANDLE_LABELS } from "../audio-text-handles"
 import { IDENTITY_HANDLE_LABELS } from "../identity-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES } from "../generate-video-handles"
+import { GENERATE_VIDEO_PRO_INPUT_HANDLES } from "../generate-video-pro-handles"
 import { GENERATE_IMAGE_INPUT_HANDLES } from "../generate-image-handles"
 import { VIDEO_RETAKE_HANDLE_IDS } from "../video-retake-handles"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
@@ -38,6 +39,7 @@ const AUTHORITATIVE = new Map<string, readonly string[]>([
   ...labelEntries(AUDIO_TEXT_HANDLE_LABELS),
   ...labelEntries(IDENTITY_HANDLE_LABELS),
   ["generate-video", [...GENERATE_VIDEO_INPUT_HANDLES]],
+  ["generate-video-pro", [...GENERATE_VIDEO_PRO_INPUT_HANDLES]],
   ["generate-image", [...GENERATE_IMAGE_INPUT_HANDLES]],
   ["video-retake", [...VIDEO_RETAKE_HANDLE_IDS]],
   ["video-sfx", ["prompt", "negative", "video"]],
@@ -97,6 +99,9 @@ const TARGET_HANDLE_AUTHORITATIVE = new Map<string, readonly string[]>([
   ["voice-changer-pro", ["audio", "video"]],
   ["describe-to-picker", ["image"]],
 ])
+
+// Note: generate-video-pro is already included via AUTHORITATIVE spread,
+// so no separate entry needed here
 
 describe("TARGET_HANDLE_ACCEPTS registers a superset of every node's rendered input handles", () => {
   it.each([...TARGET_HANDLE_AUTHORITATIVE.entries()])(

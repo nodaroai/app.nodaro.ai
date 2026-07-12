@@ -958,6 +958,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "location": 2,
   "voice-changer": 4,
   "voice-changer-pro": 4,
+  "generate-video-pro": 10,       // multi-segment stitch fee-base (flat, on top of per-second segment cost — see ee/billing/generate-video-pro-credits.ts)
   "dubbing": 8,
   "voice-remix": 4,
   "voice-design": 5,

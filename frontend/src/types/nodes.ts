@@ -4,7 +4,7 @@ import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFA
 import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
-import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
+import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -1807,6 +1807,39 @@ export type GenerateVideoNodeData =
      *  Replaces the legacy `connectedRefImageOrder` field (migrated on load). */
     referenceImageOrder?: readonly string[]
   }
+
+/**
+ * Generate Video Pro node data — Seedance-2-family-only multi-segment stitch
+ * variant of Generate Video. Above a single segment's 15s cap, the backend
+ * splits the requested duration into multiple KIE Seedance-2 clips and
+ * stitches them into one output (see
+ * `backend/src/ee/billing/generate-video-pro-credits.ts` for the pricing
+ * closed-form and `payload-builder.ts`'s `"generate-video-pro"` case for the
+ * dispatch shape). Trimmed handle set vs. GenerateVideoNodeData — no end
+ * frame / video refs / audio refs / negative prompt / pickers cluster (see
+ * `generate-video-pro-handles.ts`).
+ */
+export interface GenerateVideoProNodeData {
+  [key: string]: unknown
+  label: string
+  provider: "seedance-2" | "seedance-2-fast" | "seedance-2-mini"
+  prompt?: string
+  /** Total seconds, 4..cap (cap comes from the node-registry descriptor). */
+  duration: number
+  aspectRatio?: string
+  resolution?: string
+  generateAudio?: boolean
+  selectedStartFrameNodeId?: string | null
+  referenceImageOrder?: string[]
+  fieldMappings?: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
 
 /** Video SFX (Foley/Ambient) — Replicate mmaudio.
  *
@@ -4909,6 +4942,7 @@ export type SceneNodeData =
   | VideoRetakeData
   | TextToVideoData
   | GenerateVideoNodeData
+  | GenerateVideoProNodeData
   | VideoSfxNodeData
   | TextToSpeechData
   | QACheckData
@@ -5087,6 +5121,7 @@ export type SceneNodeType =
   | "video-retake"
   | "text-to-video"
   | "generate-video"
+  | "generate-video-pro"
   | "video-sfx"
   | "text-to-speech"
   | "qa-check"
@@ -5952,6 +5987,58 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "wan-turbo", label: "Wan Turbo" },
         ],
       },
+    ],
+  },
+  {
+    // Multi-segment Seedance-2-family stitch (see GenerateVideoProNodeData).
+    // creditCost is a coarse popup-time display fallback only, matching the
+    // single-segment default (provider seedance-2, 8s, 720p — model-catalog
+    // identifier "seedance-2:8s:720p"); real cost is dynamic (segment count ×
+    // per-second rate + fee-base — see ee/billing/generate-video-pro-credits.ts).
+    type: "generate-video-pro",
+    label: "Generate Video Pro",
+    category: "ai",
+    creditCost: 82,
+    inputs: ["prompt", "startFrame", "imageReferences"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Generate Video Pro",
+      provider: "seedance-2",
+      prompt: "",
+      duration: 8,
+      resolution: "720p",
+      generateAudio: true,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as GenerateVideoProNodeData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: GVP_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+      },
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      {
+        // max mirrors GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK in
+        // config-panels/video-configs.tsx. Can't import that constant here —
+        // video-configs.tsx is a React component tree and this is a plain
+        // data/types module (importing it would drag the whole config-panel
+        // UI layer into every consumer of NODE_DEFINITIONS). Keep the two
+        // numbers in sync by hand; the presentation-layer renderer
+        // (presentation/config-field-renderer.tsx) imports the real constant.
+        key: "duration", label: "Duration (seconds)", type: "slider" as const, min: 4, max: 120, step: 1,
+      },
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
+        options: getAspectRatiosForVideoModel("seedance-2"),
+      },
+      {
+        key: "resolution", label: "Resolution", type: "select" as const,
+        options: getVideoResolutionOptions("seedance-2") ?? [],
+      },
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
     ],
   },
   {

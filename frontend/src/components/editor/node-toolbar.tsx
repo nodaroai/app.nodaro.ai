@@ -14,6 +14,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import { hasCredits } from "@/lib/edition"
+import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { clusterByGroup } from "@/lib/cluster-by-group"
 import { categoryRank } from "@/lib/node-category-order"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
@@ -120,6 +121,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "describe-to-picker", label: "Describe to Picker", icon: <ScanFace className="h-4 w-4" />, category: "AI", group: "Image" },
   // AI — Video
   { type: "generate-video", label: "Generate Video", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"] },
+  { type: "generate-video-pro", label: "Generate Video Pro", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["long-form", "long video", "multi-segment", "stitch", "extended duration", "seedance", "pro"] },
   { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "switchx", label: "Relight & Switch", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["relight", "relighting", "relit", "lighting", "switch", "swap background", "replace background", "change background", "scene swap", "restyle", "recolor", "composite", "compositing", "green screen", "chroma key", "rotoscope", "matte", "alpha", "color match", "harmonize", "vfx", "video to video", "beeble"] },
   { type: "generative-pipeline", label: "Story → Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"] },
@@ -235,11 +237,11 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
 ]
 
-/** Node types that must only appear in Cloud edition (hasCredits()). */
-const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-changer-pro"])
-
-/** Returns NODE_OPTIONS filtered for the current edition. */
-function getNodeOptions(): ReadonlyArray<NodeOption> {
+/** Returns NODE_OPTIONS filtered for the current edition. Cloud-only nodes
+ *  (`CLOUD_ONLY_NODE_TYPES`) are excluded when `hasCredits()` is false.
+ *  Exported so gating tests can exercise this list directly (mirrors
+ *  add-node-popup.tsx's exported `getNodeOptions`). */
+export function getNodeOptions(): ReadonlyArray<NodeOption> {
   return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits())
 }
 

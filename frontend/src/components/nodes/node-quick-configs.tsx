@@ -32,6 +32,7 @@ import {
   getAspectRatiosForModel,
   IMAGE_RESOLUTION_OPTIONS,
   VIDEO_GEN_MODELS,
+  GVP_PROVIDERS,
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
@@ -396,6 +397,28 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
         { value: "3", label: "× 3" },
         { value: "4", label: "× 4" },
       ],
+    },
+  ],
+  // ── Generate Video Pro (model · resolution — provider-aware; the config
+  // panel owns prompt/duration/aspect) ──
+  "generate-video-pro": [
+    {
+      field: "provider",
+      ariaLabel: "Model",
+      icon: Sparkles,
+      options: toOptions(GVP_PROVIDERS),
+    },
+    {
+      field: "resolution",
+      ariaLabel: "Resolution",
+      icon: Maximize2,
+      // Provider-aware: seedance-2 exposes 480p/720p/1080p/4k, fast/mini stop
+      // at 720p. Same VIDEO_RESOLUTION_OPTIONS source the config panel's
+      // fail-safe useEffect reads, so the two can't drift.
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2"
+        return VIDEO_RESOLUTION_OPTIONS[provider] ?? []
+      },
     },
   ],
   // ── Image Collage (layout · aspect · resolution) ──

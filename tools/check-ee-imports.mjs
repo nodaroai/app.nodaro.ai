@@ -121,6 +121,10 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/kling3-director-modal.tsx",
   "frontend/src/components/editor/scene-config.tsx",
   "frontend/src/components/editor/workflow-editor/run-handlers.ts",
+  // estimateNodeCredits' generate-video-pro branch reads getCachedCredits for
+  // the live provider/resolution composite rates (display-only estimate,
+  // static 82/50 fallback) — same coupling as run-handlers.ts above.
+  "frontend/src/components/editor/workflow-editor/types.ts",
   "frontend/src/components/editor/workflow-editor/workflow-editor-main.tsx",
   "frontend/src/components/layout/app-sidebar.tsx",
   "frontend/src/components/nodes/ai-avatar-node.tsx",
@@ -152,6 +156,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/generate-music-node.tsx",
   "frontend/src/components/nodes/generate-script-node.tsx",
   "frontend/src/components/nodes/generate-video-node.tsx",
+  "frontend/src/components/nodes/generate-video-pro-node.tsx",
   "frontend/src/components/nodes/image-collage-node.tsx",
   "frontend/src/components/nodes/image-critic-node.tsx",
   "frontend/src/components/nodes/image-to-image-node.tsx",

@@ -841,6 +841,12 @@ const VIDEO_RESULT_TYPES = new Set([
   // recognise the type so "Run from here" / DAG resume hydrates downstream nodes
   // from a previously-executed generate-video without re-running.
   "generate-video",
+  // Generate Video Pro — multi-segment Seedance-2-family stitch (private-plugin
+  // engine, see ee/billing/generate-video-pro-credits.ts). Writes the same
+  // generatedVideoUrl / per-result `url` fields as every other video producer, so
+  // "Run from here" / DAG resume can hydrate a downstream consumer from a
+  // previously-executed generate-video-pro without re-running it.
+  "generate-video-pro",
   "lip-sync",
   "speech-to-video",
   "motion-transfer",

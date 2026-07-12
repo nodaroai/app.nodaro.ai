@@ -104,6 +104,7 @@ import {
   VideoRetakeConfig,
   TextToVideoConfig,
   GenerateVideoConfig,
+  GenerateVideoProConfig,
   VideoSfxConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -218,7 +219,7 @@ import {
 import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "generate-video-pro", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "voice-changer-pro", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -287,6 +288,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "switchx": "Relight & Switch",
   "text-to-video": "Text to Video",
   "generate-video": "Generate Video",
+  "generate-video-pro": "Generate Video Pro",
   "text-to-speech": "Text to Speech",
   "qa-check": "QA Check",
   "image-critic": "Image Critic",
@@ -562,6 +564,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         )}
       </>
     )
+    case "generate-video-pro": return <GenerateVideoProConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-speech": return <TextToSpeechConfig {...configProps} nodeId={selectedNodeId} />
     case "qa-check": return <QACheckConfig {...configProps} />
     case "image-critic": return <ImageCriticConfig {...configProps} nodeId={selectedNodeId} />

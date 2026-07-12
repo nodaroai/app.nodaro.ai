@@ -30,6 +30,11 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // through to the imageUrl/videoUrl/audioUrl/text default and downstream consumers
   // could silently misroute the output.
   "generate-video",
+  // Generate Video Pro — Seedance-2-family multi-segment stitch variant of
+  // generate-video (same "emits videoUrl" contract; a trimmed provider +
+  // handle set). Must mirror generate-video here or its output can't connect
+  // downstream (the recurring "cannot connect the outputs" bug class).
+  "generate-video-pro",
   "upload-video",
   "youtube-video",
   "combine-videos",

@@ -57,10 +57,19 @@ import type { AudioFxPreset, SurroundDirection } from "@nodaro/shared"
  * this app's loader/worker passes a REAL bullmq `Job` across the plugin
  * boundary, which satisfies this interface structurally (it has both
  * members, plus many more the plugin doesn't need).
+ *
+ * Additive: `attemptsMade`/`opts.attempts` (also real BullMQ `Job` members)
+ * are exposed so a handler can compute final-attempt status itself, mirroring
+ * the inputs to `isFinalJobAttempt` (`workers/shared.ts:51-53`) — needed by
+ * generate-video-pro's partial-commit-on-exhaustion path.
  */
 export interface PluginJob {
   readonly data: unknown
   updateProgress(progress: number): Promise<void>
+  /** BullMQ `Job#attemptsMade` — how many attempts have already run. */
+  readonly attemptsMade: number
+  /** BullMQ `Job#opts`, narrowed to the one field `isFinalJobAttempt` reads. */
+  readonly opts: { attempts?: number }
 }
 
 /**
@@ -103,6 +112,29 @@ export interface PluginAudioSeparationResult {
   cost: number | null
 }
 
+/**
+ * Mirrors the options object `textToVideo`/`imageToVideo` accept
+ * (`providers/kie/video.ts`), narrowed to the fields generate-video-pro uses.
+ */
+export interface PluginVideoGenOptions {
+  resolution?: string
+  generateAudio?: boolean
+  referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  /** Invoked with the provider task id as soon as it exists. The pro engine
+   * checkpoints it; jobs.provider_task_id is NEVER written (spec §6 linchpin). */
+  onTaskCreated?: (taskId: string) => void | Promise<void>
+}
+
+/**
+ * Mirrors the resolved-generation shape `textToVideo`/`imageToVideo` return
+ * (`providers/kie/video.ts`).
+ */
+export interface PluginVideoGenResult {
+  url: string
+  taskId?: string
+}
+
 export interface PluginProvidersToolkit {
   /** Mirrors `directVoiceChanger` (`providers/elevenlabs/voice-changer.ts`). */
   directVoiceChanger(
@@ -121,6 +153,37 @@ export interface PluginProvidersToolkit {
     opts: { mode: "vocal_instrumental" | "stems"; quality: "auto" | "fast" | "best" },
     reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
   ): Promise<PluginAudioSeparationResult>
+  /** Mirrors `textToVideo` (`providers/kie/video.ts`). */
+  textToVideo(
+    prompt: string,
+    model: string,
+    durationSec: number,
+    aspectRatio: string,
+    options?: PluginVideoGenOptions,
+  ): Promise<PluginVideoGenResult>
+  /** Mirrors `imageToVideo` (`providers/kie/video.ts`). */
+  imageToVideo(
+    imageUrl: string,
+    prompt: string,
+    model: string,
+    durationSec: number,
+    aspectRatio: string,
+    options?: PluginVideoGenOptions,
+  ): Promise<PluginVideoGenResult>
+  /**
+   * Mirrors the single-shot KIE record-info query the reconcile system polls
+   * — `pollKieTask` (`providers/kie/client.ts`) called with `maxAttempts=1`,
+   * the same call `lib/reconcile/kie.ts`'s `singlePoll` makes for
+   * `provider_kind: "kie-standard"` rows — exposed as a plain function so the
+   * pro engine can reconcile an in-flight checkpointed segment task on
+   * resume. A `KieError` with `isUpstreamFailure` set (`isUpstreamKieFailure`,
+   * same module) maps to `"failed"`; any other rejection (still generating,
+   * network blip, single-attempt timeout) maps to `"processing"`.
+   */
+  getVideoTaskStatus(taskId: string): Promise<{
+    state: "processing" | "succeeded" | "failed"
+    videoUrl?: string
+  }>
 }
 
 // ============================================================================
@@ -136,6 +199,33 @@ export interface PluginFfmpegToolkit {
   createWorkDir(prefix: string): Promise<string>
   cleanupWorkDir(workDir: string): Promise<void>
   downloadFile(url: string, dest: string): Promise<void>
+  /**
+   * Mirrors `combineVideos` (`providers/video/combine-videos.ts:183`),
+   * adapted to always resolve an R2 URL — the toolkit implementation uploads
+   * when the core function instead returns a local path (see
+   * `workers/handlers/ffmpeg.ts`'s `handleCombineVideos` for the same
+   * combine-then-upload-then-cleanup shape). Note there is no `jobId`
+   * parameter here (unlike `extractTail` below) — the toolkit implementation
+   * mints its own upload key.
+   */
+  combineVideos(options: {
+    videoUrls: string[]
+    transition: string
+    transitionDuration?: number
+    audioMode?: "keep" | "crossfade" | "remove"
+    audioCrossfadeCurve?: string
+    trimStartFrames?: number
+    trimEndFrames?: number
+  }): Promise<string>
+  /**
+   * New core helper added alongside this contract member
+   * (`providers/video/extract-tail.ts`'s `extractTailToFile`) — re-encodes
+   * (never stream-copies, since a stream-copy trim snaps to the nearest
+   * keyframe and can emit an undecodable tail — same rationale as
+   * `trimLastFrames`, `providers/video/ffmpeg-utils.ts:404-431`) and uploads
+   * the result to R2.
+   */
+  extractTail(url: string, seconds: number, jobId: string): Promise<string>
 }
 
 // ============================================================================
@@ -196,6 +286,18 @@ export interface PluginMediaToolkit {
   applyAudioFx(opts: PluginAudioFxOptions): Promise<{ outputPath: string }>
   /** Mirrors `applyImageWatermark` (`utils/watermark.ts`). */
   applyImageWatermark(buffer: Buffer): Promise<Buffer>
+  /**
+   * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts:513-541`) — also
+   * transcodes to browser-safe when `watermark` is false. Used for the final
+   * stitched output only (per-segment uploads go through
+   * `storage.uploadVideoFromUrl`).
+   */
+  uploadVideoMaybeWatermark(
+    url: string,
+    jobId: string,
+    userId: string | undefined,
+    watermark: boolean,
+  ): Promise<string>
 }
 
 // ============================================================================
@@ -223,6 +325,12 @@ export interface PluginStorageToolkit {
   ): Promise<string>
   /** Mirrors `runPostProcessing` (`lib/post-processing-error.ts`). */
   runPostProcessing<T>(fn: () => Promise<T>): Promise<T>
+  /**
+   * Mirrors `uploadToR2` (`lib/storage.ts:126`), narrowed to video content —
+   * downloads `url` and uploads to R2 without transcoding. Used for
+   * per-segment persistence in generate-video-pro.
+   */
+  uploadVideoFromUrl(url: string, jobId: string, trackUserId?: string): Promise<string>
 }
 
 // ============================================================================
@@ -256,6 +364,32 @@ export interface PluginJobsToolkit {
     extraNonProviderCredits?: number,
     metered?: boolean,
   ): Promise<void>
+  /**
+   * Nulls `provider_kind` + `provider_call_started_at` on the job row so the
+   * reconcile sweep doesn't treat an in-flight handler as a stale pickup
+   * (precedent: the add-captions→render handoff,
+   * `workers/handlers/ffmpeg.ts:482-497`). Must be called first on every
+   * handler entry, including re-picks.
+   */
+  clearReconcileSentinel(jobId: string): Promise<void>
+  /**
+   * Mirrors `throwIfJobCancelled` (`lib/job-cancellation.ts`) — an ambient
+   * check against the current job's cancellation flag, internally throttled
+   * to once per 4s.
+   */
+  throwIfJobCancelled(): Promise<void>
+  /**
+   * Shallow-merges `patch` into the job row's `output_data` (read-merge-
+   * write) — used for per-segment checkpointing. See `toolkit.ts`'s
+   * `updateJobCheckpoint` implementation. See `readJobCheckpoint` below for
+   * the read side.
+   */
+  updateJobCheckpoint(jobId: string, patch: Record<string, unknown>): Promise<void>
+  /**
+   * Reads and returns the job row's parsed `output_data` (or null). See
+   * `toolkit.ts`'s `readJobCheckpoint` implementation.
+   */
+  readJobCheckpoint(jobId: string): Promise<Record<string, unknown> | null>
 }
 
 // ============================================================================
@@ -322,6 +456,26 @@ export interface PluginFetchResponse {
   arrayBuffer(): Promise<ArrayBuffer>
 }
 
+/**
+ * Mirrors the return shape of `computeGenerateVideoProPricing`
+ * (`ee/billing/generate-video-pro-credits.ts`) — the pro split/pricing
+ * formula's single source of truth, shared by the route's credit-guard
+ * `computeCredits` and the node-executor override path.
+ */
+export interface GenerateVideoProPricing {
+  mode: "single" | "multi"
+  clampedDurationSec: number
+  segmentCount: number
+  totalRawSec: number
+  segmentDurations: number[]
+  feeBase: number // 0 when mode === "single"
+  noRefPerSec: number
+  refPerSec: number
+  tailSec: number
+  reserveBase: number // pre-markup
+  creditIdentifier?: string // single mode: the plain composite identifier
+}
+
 export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
@@ -362,6 +516,46 @@ export interface PluginHttpToolkit {
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
   safeFetch(url: string): Promise<PluginFetchResponse>
+  /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`). */
+  insertJobWithIdempotencyKey(
+    data: Record<string, unknown> & { user_id: string },
+    idempotencyKey: string | null | undefined,
+  ): Promise<{ id: string; created: boolean }>
+  /**
+   * Mirrors `computeGenerateVideoProPricing`
+   * (`ee/billing/generate-video-pro-credits.ts`) — see `GenerateVideoProPricing`.
+   * Core may not statically import `ee/`; the toolkit implementation reaches
+   * it via a runtime-gated dynamic `import()` (mirrors
+   * `middleware/credit-guard.ts`'s shim pattern and `load.ts`'s
+   * `applyStaticCreditCosts`/`applyPipelinePrompts`).
+   */
+  computeGenerateVideoProPricing(args: {
+    provider: string
+    resolution: string
+    durationSec: number
+  }): Promise<GenerateVideoProPricing>
+}
+
+// ============================================================================
+// tk.llm — backend/src/lib/llm-client.ts
+// ============================================================================
+
+/** Narrow mirror of `lib/llm-client.ts` llmCompleteStructured, shaped to the
+ * pro planner's single call site (minimal structural interface rule). */
+export interface PluginLlmRequest {
+  model: string
+  system?: string
+  prompt: string
+  maxTokens?: number
+}
+
+export interface PluginLlmToolkit {
+  /** Mirrors `llmCompleteStructured` (`lib/llm-client.ts:133`). */
+  completeStructured<T>(
+    req: PluginLlmRequest,
+    schema: unknown, // ZodType<T> — kept opaque to avoid pinning zod's type identity across repos
+    opts?: { schemaName?: string; maxRetries?: number },
+  ): Promise<T>
 }
 
 // ============================================================================
@@ -375,6 +569,7 @@ export interface PluginToolkit {
   storage: PluginStorageToolkit
   jobs: PluginJobsToolkit
   http: PluginHttpToolkit
+  llm: PluginLlmToolkit
 }
 
 // ============================================================================
