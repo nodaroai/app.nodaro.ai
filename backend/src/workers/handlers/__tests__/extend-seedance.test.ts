@@ -9,8 +9,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockTextToVideo = vi.fn()
+  const mockImageToVideo = vi.fn()
   const mockCombineVideos = vi.fn()
   const mockProbeVideoSource = vi.fn()
+  const mockExtractTailToFile = vi.fn().mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
+  const mockExtractFrame = vi.fn().mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.jpg" })
+  const mockUploadFileToR2 = vi.fn()
 
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -27,8 +31,12 @@ const mocks = vi.hoisted(() => {
 
   return {
     mockTextToVideo,
+    mockImageToVideo,
     mockCombineVideos,
     mockProbeVideoSource,
+    mockExtractTailToFile,
+    mockExtractFrame,
+    mockUploadFileToR2,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
@@ -48,10 +56,19 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/storage.js", () => ({
   uploadToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4"),
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/buf.mp4"),
+  uploadFileToR2: mocks.mockUploadFileToR2,
+}))
+
+vi.mock("@/providers/video/extract-tail.js", () => ({
+  extractTailToFile: mocks.mockExtractTailToFile,
+}))
+
+vi.mock("@/providers/video/extract-frame.js", () => ({
+  extractFrame: mocks.mockExtractFrame,
 }))
 
 vi.mock("@/providers/index.js", () => ({
-  imageToVideo: vi.fn(),
+  imageToVideo: mocks.mockImageToVideo,
   textToVideo: mocks.mockTextToVideo,
   videoToVideo: vi.fn(),
   lipSync: vi.fn(),
@@ -124,6 +141,8 @@ import { videoAIHandlers } from "../video-ai.js"
 const SOURCE_URL = "https://cdn.example.com/source.mp4"
 const EXTENSION_URL = "https://kie.example.com/extension.mp4"
 const STITCHED_PATH = "/tmp/combine-abc/output.mp4"
+const TAIL_URL = "https://r2.example.com/videos/tail-uuid.mp4"
+const LAST_FRAME_URL = "https://r2.example.com/images/frame-uuid.png"
 
 function makeJob(data: Record<string, unknown> = {}) {
   return {
@@ -155,13 +174,17 @@ const handler = () => videoAIHandlers["extend-video"]!
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 4.0 })
-  mocks.mockTextToVideo.mockResolvedValue({
+  mocks.mockImageToVideo.mockResolvedValue({
     url: EXTENSION_URL,
     cost: 0.2,
     displayCost: 0.25,
     providerUsed: "kie",
     kieTaskId: "kie-task-9",
   })
+  mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
+  mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.jpg" })
+  // First upload = the tail video, second = the last-frame image.
+  mocks.mockUploadFileToR2.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
   mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
 })
 
@@ -170,24 +193,32 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("extend-video / seedance-2-extend", () => {
-  it("generates via the EXACT bare temporal template on the seedance-2 ref-video transport", async () => {
+  it("generates via i2v: last-frame anchor + 1s tail reference + the EXACT extend template", async () => {
     await handler()(makeJob({ duration: 6, resolution: "480p", generateAudio: false }) as never, makeCtx() as never)
 
-    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
-    const [prompt, provider, duration, aspectRatio, opts, reconcileOpts] = mocks.mockTextToVideo.mock.calls[0]!
-    // Spike phrasing matrix: the bare template is the ONLY form proven on
-    // both tiers (36.7–38.1dB handoff); "reference"-keyword phrasings and
-    // meta-instructions re-stage the scene. Pin the string verbatim.
-    expect(prompt).toBe("Generate the content after Video 1: the ball keeps rolling until it hits a cup")
+    // Prep: tail extracted from the downloaded source at the spike-validated
+    // 1s, then uploaded; the frame-exact extractor reads the tail's R2 copy
+    // (its last frame IS the source's last frame).
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 1)
+    expect(mocks.mockExtractFrame).toHaveBeenCalledWith({ videoUrl: TAIL_URL, mode: "last" })
+
+    expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockTextToVideo).not.toHaveBeenCalled()
+    const [imageUrl, provider, prompt, duration, endFrameUrl, opts, reconcileOpts] = mocks.mockImageToVideo.mock.calls[0]!
+    // Spike-validated (2026-07-12): the extension must be anchored on the
+    // source's last frame and reference ONLY the last second.
+    expect(imageUrl).toBe(LAST_FRAME_URL)
     expect(provider).toBe("seedance-2")
+    expect(prompt).toBe("extend @video_1 as follows:\nthe ball keeps rolling until it hits a cup")
     expect(duration).toBe(6)
-    // Native token (live-verified to adopt the ref video's ratio) — no
-    // ffprobe round-trip; see source-matched-aspect.test.ts for fallbacks.
-    expect(aspectRatio).toBe("adaptive")
+    expect(endFrameUrl).toBeUndefined()
     expect(opts).toMatchObject({
-      referenceVideoUrls: [SOURCE_URL],
+      referenceVideoUrls: [TAIL_URL],
       resolution: "480p",
       generateAudio: false,
+      // Native token (live-verified to adopt the ref video's ratio) — no
+      // ffprobe round-trip; see source-matched-aspect.test.ts for fallbacks.
+      aspectRatio: "adaptive",
     })
     // NO onTaskCreated by design: persisting the KIE task would let the
     // reconcile cron finalize this job with the UNSTITCHED extension clip.
@@ -196,25 +227,28 @@ describe("extend-video / seedance-2-extend", () => {
 
   it("trims user prompt whitespace inside the template", async () => {
     await handler()(makeJob({ prompt: "  she opens the door  " }) as never, makeCtx() as never)
-    expect(mocks.mockTextToVideo.mock.calls[0]![0]).toBe("Generate the content after Video 1: she opens the door")
+    expect(mocks.mockImageToVideo.mock.calls[0]![2]).toBe("extend @video_1 as follows:\nshe opens the door")
   })
 
   it("defaults duration to the 8s pricing tier, 720p, audio on", async () => {
     await handler()(makeJob() as never, makeCtx() as never)
-    const [, , duration, , opts] = mocks.mockTextToVideo.mock.calls[0]!
+    const [, , , duration, , opts] = mocks.mockImageToVideo.mock.calls[0]!
     expect(duration).toBe(8)
     expect(opts).toMatchObject({ resolution: "720p", generateAudio: true })
   })
 
   it("snaps out-of-range durations into seedance's native 4–15s window", async () => {
     await handler()(makeJob({ duration: 20 }) as never, makeCtx() as never)
-    expect(mocks.mockTextToVideo.mock.calls[0]![2]).toBe(15)
+    expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(15)
 
     vi.clearAllMocks()
-    mocks.mockTextToVideo.mockResolvedValue({ url: EXTENSION_URL, cost: 0.1, displayCost: 0.12, providerUsed: "kie" })
+    mocks.mockImageToVideo.mockResolvedValue({ url: EXTENSION_URL, cost: 0.1, displayCost: 0.12, providerUsed: "kie" })
+    mocks.mockUploadFileToR2.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
+    mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.jpg" })
+    mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
     mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
     await handler()(makeJob({ duration: 1 }) as never, makeCtx() as never)
-    expect(mocks.mockTextToVideo.mock.calls[0]![2]).toBe(4)
+    expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(4)
   })
 
   it("never probes the source — seedance's native adaptive needs no round-trip", async () => {
@@ -230,10 +264,13 @@ describe("extend-video / seedance-2-extend", () => {
       transitionDuration: 0.15,
       audioMode: "crossfade",
       audioCrossfadeCurve: "equal-power",
-      // combineVideos trims only at clip BOUNDARIES: trimEndFrames hits the
-      // source's tail, trimStartFrames the extension's head — the recipe.
+      // Fixed recipe trims stay as the smart-cut FALLBACK: trimEndFrames
+      // hits the source's tail, trimStartFrames the extension's head.
       trimStartFrames: 3,
       trimEndFrames: 4,
+      // The extension is generated FROM the source's tail — the exact
+      // continuation case smart cut solves. PSNR-match the boundary.
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
     })
   })
 

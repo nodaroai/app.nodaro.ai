@@ -254,6 +254,11 @@ export interface CombineVideosResult {
      *  False = no match above the threshold (or the search errored) — the
      *  boundary used the fixed/default trims, whose values are reported. */
     readonly matched: boolean
+    /** Window sizes actually searched (requested, clamped to clip length);
+     *  every pair in the searchedPrev × searchedNext grid was compared.
+     *  null when the search errored before extraction. */
+    readonly searchedPrevFrames: number | null
+    readonly searchedNextFrames: number | null
   }>
 }
 
@@ -299,7 +304,7 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     // frame indices line up with trimEdgeFrames' probe).
     const startTrims = normalizedPaths.map((_, i) => (i === 0 ? 0 : trimStartFrames))
     const endTrims = normalizedPaths.map((_, i) => (i === normalizedPaths.length - 1 ? 0 : trimEndFrames))
-    let smartCuts: Array<{ boundary: number; prevClipEndTrimFrames: number; nextClipStartTrimFrames: number; psnrDb: number | null; matched: boolean }> | undefined
+    let smartCuts: Array<{ boundary: number; prevClipEndTrimFrames: number; nextClipStartTrimFrames: number; psnrDb: number | null; matched: boolean; searchedPrevFrames: number | null; searchedNextFrames: number | null }> | undefined
     if (smartCut?.enabled && normalizedPaths.length >= 2) {
       smartCuts = []
       for (let k = 0; k < normalizedPaths.length - 1; k++) {
@@ -325,6 +330,8 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
             nextClipStartTrimFrames: startTrims[k + 1]!,
             psnrDb: Number.isFinite(cut.psnr) ? Math.round(cut.psnr * 100) / 100 : 100,
             matched: cut.matched,
+            searchedPrevFrames: cut.searchedPrevFrames,
+            searchedNextFrames: cut.searchedNextFrames,
           })
         } catch (err) {
           // Best-effort: a failed boundary search keeps that boundary's
@@ -336,6 +343,8 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
             nextClipStartTrimFrames: startTrims[k + 1]!,
             psnrDb: null,
             matched: false,
+            searchedPrevFrames: null,
+            searchedNextFrames: null,
           })
         }
       }

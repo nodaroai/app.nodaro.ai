@@ -30,6 +30,8 @@ import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
+import { extractTailToFile } from "../../providers/video/extract-tail.js"
+import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
 import {
   cleanupWorkDir,
@@ -40,7 +42,8 @@ import {
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
-import { uploadBufferToR2 } from "../../lib/storage.js"
+import { uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
+import { randomUUID } from "node:crypto"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
@@ -1044,13 +1047,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     return
   }
 
-  // ─── Seedance 2 trim-stitch extend ─────────────────────────────────────
+  // ─── Seedance 2 smart-stitch extend ────────────────────────────────────
   // Extends ANY video by URL: generate the continuation through the
-  // seedance-2 reference-video transport with the bare temporal template,
-  // then trim-stitch source+extension into one seamless clip. The template
-  // phrasing and trim counts are load-bearing — spike-validated ("reference"
-  // keywords / meta-instructions re-stage the scene; dropping 4 source-tail
-  // + 3 extension-head frames removes the duplicated boundary).
+  // seedance-2 i2v transport — the source's LAST FRAME as the first-frame
+  // anchor + its LAST SECOND as the @video_1 reference, with the
+  // spike-validated "extend @video_1 as follows:" template — then
+  // smart-stitch source+extension into one seamless clip (PSNR boundary
+  // matching; the fixed trim counts are the no-match fallback).
   if (provider === "seedance-2-extend") {
     const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
       jobId: string
@@ -1073,10 +1076,37 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // native token would ffprobe + snap to the closest catalog ratio.
     const aspectRatio = await resolveSourceMatchedAspect("seedance-2", sourceUrl)
 
-    const kiePrompt = `Generate the content after Video 1: ${String(userPrompt ?? "").trim()}`
-
     await setJobProgress(job, ctx.jobId, 5)
-    const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 75 })
+
+    // Spike-validated generation inputs (2026-07-12): the @video_1 reference
+    // is the source's LAST SECOND only — a short tail keeps the model
+    // continuing the boundary motion instead of re-staging the whole clip —
+    // and the source's LAST FRAME anchors the extension as its first frame
+    // (i2v transport), so the continuation starts pixel-adjacent to the
+    // boundary and the smart-stitch reliably finds+drops the duplicate.
+    const prepDir = await createWorkDir("extend-prep")
+    let tailUrl: string
+    let lastFrameUrl: string
+    try {
+      const srcLocal = join(prepDir, "source.mp4")
+      await downloadFile(sourceUrl, srcLocal)
+      const tailPath = await extractTailToFile(srcLocal, SEEDANCE_2_EXTEND_STITCH.referenceTailSeconds)
+      // randomUUID keys: these are throwaway generation inputs — the job's
+      // own R2 keys stay reserved for the stitched deliverable.
+      tailUrl = await uploadFileToR2(tailPath, randomUUID(), "video", ctx.jobUserId)
+      // Last frame of the tail IS the source's last frame; the tail is
+      // already on R2, so the frame-exact extractor can read it directly.
+      const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
+      lastFrameUrl = await uploadFileToR2(frame.imagePath, randomUUID(), "image", ctx.jobUserId)
+      await cleanupWorkDir(dirname(frame.imagePath))
+    } finally {
+      await cleanupWorkDir(prepDir)
+    }
+    await setJobProgress(job, ctx.jobId, 10)
+
+    const kiePrompt = `extend @video_1 as follows:\n${String(userPrompt ?? "").trim()}`
+
+    const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
     let gen
     try {
       // NO onTaskCreated on purpose: the KIE task's result is the raw
@@ -1084,21 +1114,26 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // reconcile cron finalize this extend-video job with the unstitched
       // extension (silent wrong output). If the worker dies mid-wait,
       // BullMQ's stalled-job recovery re-runs the whole handler instead.
-      gen = await textToVideo(kiePrompt, "seedance-2", extSeconds, aspectRatio, {
+      gen = await imageToVideo(lastFrameUrl, "seedance-2", kiePrompt, extSeconds, undefined, {
         resolution: resolution ?? "720p",
         generateAudio: generateAudio ?? true,
-        referenceVideoUrls: [sourceUrl],
+        referenceVideoUrls: [tailUrl],
+        aspectRatio,
       })
     } finally {
       seedanceRamp.stop()
     }
 
-    // Trim-stitch (SEEDANCE_2_EXTEND_STITCH): combineVideos trims only at
-    // clip BOUNDARIES, so trimEndFrames hits the source's tail and
-    // trimStartFrames the extension's head; hard cut + timeline-anchored
-    // audio fades keep A/V sample-locked. A stitch failure fails the job
-    // (full refund) — never deliver the bare extension as the result.
-    const { outputPath: stitchedPath } = await combineVideos({
+    // Smart-stitch: the extension was generated FROM the source's tail, so
+    // this is exactly the continuation case the smart cut solves — PSNR-
+    // match the source's last frames against the extension's first frames
+    // and cut at the closest pair (duplicate plays once, motion continues).
+    // The fixed SEEDANCE_2_EXTEND_STITCH trims remain the FALLBACK for
+    // boundaries where no genuine match is found (or the search fails).
+    // Hard cut + anchored audio blend keeps A/V sample-locked. A stitch
+    // failure fails the job (full refund) — never deliver the bare
+    // extension as the result.
+    const { outputPath: stitchedPath, smartCuts: stitchCuts } = await combineVideos({
       videoUrls: [sourceUrl, gen.url],
       transition: "cut",
       transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
@@ -1106,6 +1141,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       audioCrossfadeCurve: "equal-power",
       trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
       trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
     })
     await setJobProgress(job, ctx.jobId, 85)
 
@@ -1129,6 +1165,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         thumbnailUrl: stitchedThumbUrl,
         // Raw (unstitched) extension clip — provenance/debug only.
         rawExtensionUrl: gen.url,
+        // Where the stitch actually cut (smart-cut decision + PSNR).
+        ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
       },
     })
     if (seedanceOk) {

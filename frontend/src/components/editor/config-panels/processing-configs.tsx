@@ -212,7 +212,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
 
       <div>
         <Label htmlFor="trim-end-frames">
-          Trim each clip end (frames, except last) — {data.trimEndFrames ?? 0}
+          Trim each clip end (frames, except last) — {data.trimEndFrames ?? 2}
           {data.smartCutEnabled ? " (fallback when no match)" : ""}
         </Label>
         <Input
@@ -221,7 +221,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           min={0}
           max={120}
           step={1}
-          value={data.trimEndFrames ?? 0}
+          value={data.trimEndFrames ?? 2}
           onChange={(e) =>
             onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
           }
@@ -230,7 +230,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
 
       <div>
         <Label htmlFor="trim-start-frames">
-          Trim each clip start (frames, except first) — {data.trimStartFrames ?? 0}
+          Trim each clip start (frames, except first) — {data.trimStartFrames ?? 1}
           {data.smartCutEnabled ? " (fallback when no match)" : ""}
         </Label>
         <Input
@@ -239,7 +239,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           min={0}
           max={120}
           step={1}
-          value={data.trimStartFrames ?? 0}
+          value={data.trimStartFrames ?? 1}
           onChange={(e) =>
             onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
           }

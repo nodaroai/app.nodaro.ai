@@ -4052,8 +4052,10 @@ export function buildPayload(
         smartCutEnabled: (data.smartCutEnabled as boolean) ?? false,
         smartCutFramesPrev: data.smartCutFramesPrev as number | undefined,
         smartCutFramesNext: data.smartCutFramesNext as number | undefined,
-        trimStartFrames: (data.trimStartFrames as number) ?? 0,
-        trimEndFrames: (data.trimEndFrames as number) ?? 0,
+        // Unset trims default to start 1 / end 2 (the user-validated
+        // continuation recipe) — same defaults as the route's Zod.
+        trimStartFrames: (data.trimStartFrames as number) ?? 1,
+        trimEndFrames: (data.trimEndFrames as number) ?? 2,
         upstreamDurations,
         usageLogId,
       })

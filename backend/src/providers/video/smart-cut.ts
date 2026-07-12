@@ -58,6 +58,11 @@ export interface SmartCutBoundary {
    *  informational (where the best pair WAS) and the caller should use its
    *  fixed/default trims instead. */
   readonly matched: boolean
+  /** Window sizes actually searched (requested values clamped to the
+   *  clips' frame counts). Every pair in searchedPrevFrames ×
+   *  searchedNextFrames is compared. */
+  readonly searchedPrevFrames: number
+  readonly searchedNextFrames: number
 }
 
 /**
@@ -197,7 +202,7 @@ export async function findSmartCutBoundary(
         `${matched ? "MATCH" : `below ${SMART_CUT_MIN_PSNR_DB}dB — no match`}) → ` +
         `trimEnd=${trims.trimEndFrames}, trimStart=${trims.trimStartFrames}`,
     )
-    return { ...trims, psnr: bestPsnr, matched }
+    return { ...trims, psnr: bestPsnr, matched, searchedPrevFrames: windowPrev, searchedNextFrames: windowNext }
   } finally {
     await cleanupWorkDir(workDir)
   }

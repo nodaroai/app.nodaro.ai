@@ -173,7 +173,7 @@ beforeEach(() => {
   mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
   mocks.fsWriteFile.mockResolvedValue(undefined)
   smartCutMocks.findSmartCutBoundary.mockReset()
-  smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30, matched: true })
+  smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
 })
 
 // ===========================================================================
@@ -326,7 +326,7 @@ describe("combineVideos — frame trim (delegates to trimEdgeFrames)", () => {
 describe("combineVideos — smart cut", () => {
   it("overrides the fixed boundary trims with the matcher's result (outer edges stay 0)", async () => {
     stubResolutionProbes(2)
-    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 3, trimStartFrames: 5, psnr: 34.2, matched: true })
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 3, trimStartFrames: 5, psnr: 34.2, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
@@ -351,8 +351,8 @@ describe("combineVideos — smart cut", () => {
   it("3 clips: the middle clip combines boundary-0 start trim with boundary-1 end trim", async () => {
     stubResolutionProbes(3)
     smartCutMocks.findSmartCutBoundary
-      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31, matched: true })
-      .mockResolvedValueOnce({ trimEndFrames: 6, trimStartFrames: 1, psnr: 29, matched: true })
+      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31, matched: true, searchedPrevFrames: 12, searchedNextFrames: 10 })
+      .mockResolvedValueOnce({ trimEndFrames: 6, trimStartFrames: 1, psnr: 29, matched: true, searchedPrevFrames: 12, searchedNextFrames: 10 })
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
@@ -375,7 +375,7 @@ describe("combineVideos — smart cut", () => {
   it("below-threshold best pair (matched:false): the boundary keeps the FIXED trims and reports them", async () => {
     stubResolutionProbes(2)
     smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({
-      trimEndFrames: 5, trimStartFrames: 7, psnr: 12.3, matched: false,
+      trimEndFrames: 5, trimStartFrames: 7, psnr: 12.3, matched: false, searchedPrevFrames: 8, searchedNextFrames: 8,
     })
 
     const out = await combineVideos(defaultOptions({
@@ -395,7 +395,7 @@ describe("combineVideos — smart cut", () => {
       2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 1, 0,
     )
     expect(out.smartCuts).toEqual([
-      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: 12.3, matched: false },
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: 12.3, matched: false, searchedPrevFrames: 8, searchedNextFrames: 8 },
     ])
   })
 
@@ -428,8 +428,8 @@ describe("combineVideos — smart cut", () => {
   it("reports every boundary's applied cut in the result (per-junction values)", async () => {
     stubResolutionProbes(3)
     smartCutMocks.findSmartCutBoundary
-      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31.456, matched: true })
-      .mockResolvedValueOnce({ trimEndFrames: 0, trimStartFrames: 1, psnr: Infinity, matched: true })
+      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31.456, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
+      .mockResolvedValueOnce({ trimEndFrames: 0, trimStartFrames: 1, psnr: Infinity, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
 
     const out = await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
@@ -438,9 +438,9 @@ describe("combineVideos — smart cut", () => {
     }))
 
     expect(out.smartCuts).toEqual([
-      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 4, psnrDb: 31.46, matched: true },
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 4, psnrDb: 31.46, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 },
       // Infinity (pixel-identical) is JSON-unsafe — reported as 100.
-      { boundary: 1, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 1, psnrDb: 100, matched: true },
+      { boundary: 1, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 1, psnrDb: 100, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 },
     ])
   })
 
@@ -457,7 +457,7 @@ describe("combineVideos — smart cut", () => {
     }))
 
     expect(out.smartCuts).toEqual([
-      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: null, matched: false },
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null },
     ])
   })
 })

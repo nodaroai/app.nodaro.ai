@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-07-12T15:46:23.055Z
-generated_from: 46865c972
+generated_at: 2026-07-12T19:11:12.232Z
+generated_from: a9716a88e
 ---
 
 # Combine Videos
@@ -44,6 +44,10 @@ generated_from: 46865c972
   "transitionDuration": 0.5,
   "audioMode": "crossfade",
   "audioCrossfadeDuration": 0.5,
+  "trimEndFrames": 2,
+  "trimStartFrames": 1,
+  "smartCutFramesPrev": 8,
+  "smartCutFramesNext": 8,
   "fieldMappings": {}
 }
 ```
@@ -89,6 +93,10 @@ generated_from: 46865c972
     "transitionDuration": 0.5,
     "audioMode": "crossfade",
     "audioCrossfadeDuration": 0.5,
+    "trimEndFrames": 2,
+    "trimStartFrames": 1,
+    "smartCutFramesPrev": 8,
+    "smartCutFramesNext": 8,
     "fieldMappings": {}
   }
 }

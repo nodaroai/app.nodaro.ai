@@ -1139,12 +1139,18 @@ export const SEEDANCE_2_REF_LIMITS = {
  * boundary clicks without shifting sync (combineVideos cut+crossfade path).
  */
 export const SEEDANCE_2_EXTEND_STITCH = {
-  /** Frames dropped from the END of the source clip. */
+  /** Frames dropped from the END of the source clip (smart-cut FALLBACK —
+   *  used only when the PSNR boundary matcher finds no genuine match). */
   trimTailFrames: 4,
-  /** Frames dropped from the START of the generated extension. */
+  /** Frames dropped from the START of the generated extension (smart-cut
+   *  fallback, see above). */
   trimHeadFrames: 3,
   /** Boundary audio fade length (seconds), timeline-preserving. */
   audioFadeSec: 0.15,
+  /** Seconds of the source's TAIL passed as the @video_1 reference —
+   *  spike-validated: a short tail keeps the model focused on continuing
+   *  the boundary motion instead of re-staging the whole clip. */
+  referenceTailSeconds: 1,
 } as const
 
 /**
