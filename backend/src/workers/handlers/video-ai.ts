@@ -1098,7 +1098,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // trimStartFrames the extension's head; hard cut + timeline-anchored
     // audio fades keep A/V sample-locked. A stitch failure fails the job
     // (full refund) — never deliver the bare extension as the result.
-    const stitchedPath = await combineVideos({
+    const { outputPath: stitchedPath } = await combineVideos({
       videoUrls: [sourceUrl, gen.url],
       transition: "cut",
       transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,

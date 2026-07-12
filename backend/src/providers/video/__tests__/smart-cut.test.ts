@@ -41,7 +41,7 @@ vi.mock("sharp", () => ({
   })),
 }))
 
-import { findSmartCutBoundary, boundaryTrimsFromMatch } from "../smart-cut.js"
+import { findSmartCutBoundary, boundaryTrimsFromMatch, SMART_CUT_MIN_PSNR_DB } from "../smart-cut.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -91,6 +91,40 @@ describe("findSmartCutBoundary", () => {
     expect(cut.trimEndFrames).toBe(1)
     expect(cut.trimStartFrames).toBe(2)
     expect(cut.psnr).toBe(Infinity)
+    expect(cut.matched).toBe(true)
+  })
+
+  it("maps a match DEEP in both windows: prev file order is oldest→newest, offset counts from the END", async () => {
+    // The two sides count from opposite ends — the exact confusion this
+    // test pins down. Window 4/4: prev files prev_0001..0004 where 0004 is
+    // the clip's very LAST frame. Making prev_0001 (the OLDEST in the
+    // window = offset 3 from the end) match next_0003 (index 2 from the
+    // start) must yield trimEnd=3 (drop the 3 frames after the match) and
+    // trimStart=3 (drop frames 0,1 and the matched twin at index 2).
+    stubProbes(120, 120)
+    paintFrames(4, 4, 1, 3)
+
+    const cut = await findSmartCutBoundary("/prev.mp4", "/next.mp4", 4, 4)
+
+    expect(cut.trimEndFrames).toBe(3)
+    expect(cut.trimStartFrames).toBe(3)
+    expect(cut.matched).toBe(true)
+  })
+
+  it("no pair clears the threshold → matched:false, best-effort info still reported", async () => {
+    stubProbes(120, 120)
+    // All fills distinct → every pair differs by large per-byte deltas →
+    // best PSNR ≈ 9dB, far below the threshold.
+    for (let i = 1; i <= 4; i++) mocks.pixelFillByPath.set(`/tmp/sc/prev_${String(i).padStart(4, "0")}.png`, 10 + i)
+    for (let j = 1; j <= 4; j++) mocks.pixelFillByPath.set(`/tmp/sc/next_${String(j).padStart(4, "0")}.png`, 200 + j)
+
+    const cut = await findSmartCutBoundary("/prev.mp4", "/next.mp4", 4, 4)
+
+    expect(cut.matched).toBe(false)
+    expect(cut.psnr).toBeLessThan(SMART_CUT_MIN_PSNR_DB)
+    // Info fields still describe the best pair found.
+    expect(cut.trimEndFrames).toBeGreaterThanOrEqual(0)
+    expect(cut.trimStartFrames).toBeGreaterThanOrEqual(1)
   })
 
   it("extracts the tail window of prev and the head window of next (downscaled)", async () => {

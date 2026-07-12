@@ -64,7 +64,7 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
   }
   console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, curve=${audioCrossfadeCurve ?? "linear"}, audioXfade=${audioCrossfadeDuration ?? "(=transition)"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
-  const outputPath = await combineVideos({
+  const { outputPath, smartCuts } = await combineVideos({
     videoUrls, transition, transitionDuration,
     audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, audioCrossfadeDuration,
     trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0,
@@ -85,7 +85,9 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    // smartCuts: per-boundary cut decisions (frames trimmed on each side of
+    // every junction + match PSNR) so users can see where each cut landed.
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(smartCuts ? { smartCuts } : {}) },
   })
   if (!ok) return
 

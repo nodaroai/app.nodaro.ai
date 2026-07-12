@@ -65,6 +65,9 @@ vi.mock("../ffmpeg-utils.js", () => ({
   runFfmpeg: mocks.runFfmpeg,
   runFfprobe: mocks.runFfprobe,
   getVideoDuration: mocks.getVideoDuration,
+  // combine-videos probes VIDEO STREAM durations (audio-overhang-free);
+  // tests drive both through the same mock.
+  getVideoStreamDuration: mocks.getVideoDuration,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
   normalizeVideoForCombine: mocks.normalizeVideoForCombine,
@@ -170,7 +173,7 @@ beforeEach(() => {
   mocks.trimEdgeFrames.mockImplementation(async (input: string) => input)
   mocks.fsWriteFile.mockResolvedValue(undefined)
   smartCutMocks.findSmartCutBoundary.mockReset()
-  smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30 })
+  smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30, matched: true })
 })
 
 // ===========================================================================
@@ -323,7 +326,7 @@ describe("combineVideos — frame trim (delegates to trimEdgeFrames)", () => {
 describe("combineVideos — smart cut", () => {
   it("overrides the fixed boundary trims with the matcher's result (outer edges stay 0)", async () => {
     stubResolutionProbes(2)
-    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 3, trimStartFrames: 5, psnr: 34.2 })
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 3, trimStartFrames: 5, psnr: 34.2, matched: true })
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
@@ -348,8 +351,8 @@ describe("combineVideos — smart cut", () => {
   it("3 clips: the middle clip combines boundary-0 start trim with boundary-1 end trim", async () => {
     stubResolutionProbes(3)
     smartCutMocks.findSmartCutBoundary
-      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31 })
-      .mockResolvedValueOnce({ trimEndFrames: 6, trimStartFrames: 1, psnr: 29 })
+      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31, matched: true })
+      .mockResolvedValueOnce({ trimEndFrames: 6, trimStartFrames: 1, psnr: 29, matched: true })
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
@@ -367,6 +370,33 @@ describe("combineVideos — smart cut", () => {
     expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
       3, "/tmp/work/normalized_2.mp4", "/tmp/work/trimmed_2.mp4", 1, 0,
     )
+  })
+
+  it("below-threshold best pair (matched:false): the boundary keeps the FIXED trims and reports them", async () => {
+    stubResolutionProbes(2)
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({
+      trimEndFrames: 5, trimStartFrames: 7, psnr: 12.3, matched: false,
+    })
+
+    const out = await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      trimStartFrames: 1,
+      trimEndFrames: 2,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+    }))
+
+    // The matcher's below-threshold values are NOT applied — the user's
+    // fixed trims are.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2,
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 1, 0,
+    )
+    expect(out.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: 12.3, matched: false },
+    ])
   })
 
   it("a failed boundary search keeps that boundary's fixed trims (best effort)", async () => {
@@ -393,6 +423,42 @@ describe("combineVideos — smart cut", () => {
     stubResolutionProbes(2)
     await combineVideos(defaultOptions({ videoUrls: ["a.mp4", "b.mp4"], transition: "cut" }))
     expect(smartCutMocks.findSmartCutBoundary).not.toHaveBeenCalled()
+  })
+
+  it("reports every boundary's applied cut in the result (per-junction values)", async () => {
+    stubResolutionProbes(3)
+    smartCutMocks.findSmartCutBoundary
+      .mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31.456, matched: true })
+      .mockResolvedValueOnce({ trimEndFrames: 0, trimStartFrames: 1, psnr: Infinity, matched: true })
+
+    const out = await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut",
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+    }))
+
+    expect(out.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 4, psnrDb: 31.46, matched: true },
+      // Infinity (pixel-identical) is JSON-unsafe — reported as 100.
+      { boundary: 1, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 1, psnrDb: 100, matched: true },
+    ])
+  })
+
+  it("a failed boundary is reported with the fixed trims it fell back to and psnrDb null", async () => {
+    stubResolutionProbes(2)
+    smartCutMocks.findSmartCutBoundary.mockRejectedValueOnce(new Error("probe failed"))
+
+    const out = await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      trimStartFrames: 1,
+      trimEndFrames: 2,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+    }))
+
+    expect(out.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: null, matched: false },
+    ])
   })
 })
 
@@ -492,6 +558,28 @@ describe("combineVideos — cut transition", () => {
       return acc
     }, [])
     expect(mapCalls).toEqual(["0:v", "1:a"])
+  })
+
+  it("cut + crossfade with a very short clip: fade clamps to 90% of the shortest clip, keeping atempo above its 0.5 floor", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0,
+      audioCrossfadeDuration: 5, // way beyond the 1s clip — must clamp to 0.9
+    }))
+
+    const audioArgs = ffargs(0)
+    const fc = audioArgs[audioArgs.indexOf("-filter_complex") + 1]
+    // ratio = 1 / (1 + 0.9) = 0.526316 — above atempo's 0.5 minimum by
+    // construction (clamp ≤ 0.9·minDur ⇒ ratio ≥ 1/1.9).
+    expect(fc).toContain("atempo=0.526316")
+    expect(fc).toContain("afade=t=out:st=1:d=0.9")
   })
 
   it("cut + crossfade: audioCrossfadeDuration overrides transitionDuration for the blend length", async () => {
@@ -1061,7 +1149,8 @@ describe("combineVideos — audioMode for xfade transitions", () => {
 describe("combineVideos — return + cleanup", () => {
   it("returns the workDir/output.mp4 path on success", async () => {
     const out = await combineVideos(defaultOptions({ transition: "cut" }))
-    expect(out).toBe("/tmp/work/output.mp4")
+    expect(out.outputPath).toBe("/tmp/work/output.mp4")
+    expect(out.smartCuts).toBeUndefined()
   })
 
   it("cleans up workDir on terminal ffmpeg failure", async () => {

@@ -187,7 +187,7 @@ async function combineVideosToUrl(options: {
   trimStartFrames?: number
   trimEndFrames?: number
 }): Promise<string> {
-  const localPath = await combineVideosCore({
+  const { outputPath: localPath } = await combineVideosCore({
     videoUrls: options.videoUrls,
     transition: options.transition,
     transitionDuration: options.transitionDuration ?? 0.5,

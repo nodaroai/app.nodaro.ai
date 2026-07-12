@@ -191,6 +191,31 @@ export async function getVideoDuration(filePath: string): Promise<number> {
 }
 
 /**
+ * Duration of the VIDEO STREAM (seconds) — NOT the container. AI-generated
+ * clips routinely carry an audio track 40-90ms longer than the video, so the
+ * container/format duration (getVideoDuration) overshoots the last video
+ * frame. Anything computing FRAME positions (frame trims, concat boundaries,
+ * xfade offsets) must use this instead: cutting at `formatDuration - N/fps`
+ * lands past the video's end and silently under-trims by the overhang
+ * (~1-2 frames). Falls back to the format duration when the stream doesn't
+ * report one (rare containers).
+ */
+export async function getVideoStreamDuration(filePath: string): Promise<number> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=duration",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  const duration = parseFloat(output.trim())
+  if (Number.isNaN(duration) || duration <= 0) {
+    return getVideoDuration(filePath)
+  }
+  return duration
+}
+
+/**
  * SSRF guard for probeVideoSource when handed a remote URL. ffprobe performs
  * its OWN DNS resolution + network I/O, so it bypasses safeFetch — a
  * user-supplied URL that resolves to an internal IP would let ffprobe connect
@@ -458,7 +483,11 @@ export async function trimEdgeFrames(
   if (trimStartFrames <= 0 && trimEndFrames <= 0) return inputPath
 
   const fps = await getVideoFps(inputPath)
-  const duration = await getVideoDuration(inputPath)
+  // VIDEO STREAM duration, not container: the container includes the audio
+  // overhang AI clips ship (~1-2 frames' worth), so an end cut computed from
+  // it lands past the last video frame and silently trims fewer frames than
+  // requested (regression caught by smart cut, which needs exact indices).
+  const duration = await getVideoStreamDuration(inputPath)
   const startSec = trimStartFrames / fps
   const endSec = trimEndFrames / fps
 
@@ -466,6 +495,8 @@ export async function trimEdgeFrames(
 
   const args = ["-y", "-i", inputPath]
   if (trimStartFrames > 0) args.push("-ss", String(startSec))
+  // Also bounds the AUDIO to the video's cut point, killing the overhang on
+  // trimmed clips — concat boundaries then match the video exactly.
   if (trimEndFrames > 0) args.push("-to", String(duration - endSec))
   args.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac", outputPath)
 
