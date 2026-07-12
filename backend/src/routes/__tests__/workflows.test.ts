@@ -99,6 +99,8 @@ const CAMEL_FULL = {
   edges: [{ source: "n1", target: "n2" }],
   settings: { autoSave: true },
   parentWorkflowId: null,
+  // Which client app created this workflow; null = native (app.nodaro.ai itself).
+  appSlug: null,
 }
 
 let app: FastifyInstance

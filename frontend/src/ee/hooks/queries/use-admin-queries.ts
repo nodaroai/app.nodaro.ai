@@ -976,3 +976,64 @@ export function useResetNodeDefaultMutation() {
     },
   })
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Client apps (admin) — the registry of apps built on the Nodaro SDK.
+//
+// `workflowsListed` drives THE visibility rule for the user's workflow list:
+// a workflow shows iff it is native (app_slug IS NULL) or its app is listed.
+// Studio is listed (its workflows are first-class); voice-changer-pro is not
+// (its rows are private per-conversion storage). Unregistered apps stay hidden —
+// the rule fails closed.
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface AdminClientApp {
+  readonly slug: string
+  readonly name: string
+  readonly workflowsListed: boolean
+  /** null when the count query failed — render "--", not a misleading 0. */
+  readonly workflowCount: number | null
+  readonly createdAt: string
+}
+
+export function useAdminClientApps() {
+  return useQuery({
+    queryKey: queryKeys.admin.clientApps(),
+    queryFn: async (): Promise<AdminClientApp[]> => {
+      const res = await fetch("/v1/admin/client-apps", {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch client apps")
+      const json = await res.json()
+      return (json.data ?? []) as AdminClientApp[]
+    },
+    enabled: hasAdmin(),
+    staleTime: 60_000,
+  })
+}
+
+export function useToggleClientAppMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ slug, workflowsListed }: { slug: string; workflowsListed: boolean }) => {
+      const res = await fetch(`/v1/admin/client-apps/${slug}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...await getAuthHeaders(),
+        },
+        body: JSON.stringify({ workflowsListed }),
+      })
+      if (!res.ok) throw new Error("Failed to update client app")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.clientApps() })
+      // The core registry query is cached with staleTime: Infinity — this toggle
+      // is the only thing that moves it, so it must be evicted here or the
+      // workflow list keeps filtering on the old listed set for the session.
+      qc.invalidateQueries({ queryKey: queryKeys.clientApps.all })
+      qc.invalidateQueries({ queryKey: queryKeys.workflows.all })
+    },
+  })
+}

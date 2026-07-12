@@ -27,6 +27,7 @@ import {
   Sliders,
   FolderTree,
   Puzzle,
+  Blocks,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -52,6 +53,7 @@ const ADMIN_NAV = [
   { href: "/admin/node-defaults", label: "Node Defaults", icon: Sliders },
   { href: "/admin/llm-models", label: "LLM Models", icon: BrainCircuit },
   { href: "/admin/miniapps", label: "MiniApps", icon: AppWindow },
+  { href: "/admin/client-apps", label: "Client Apps", icon: Blocks },
   { href: "/admin/reports", label: "Reports", icon: Flag },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },

@@ -80,8 +80,20 @@ const createWorkflowBody = z.object({
 
 // Project-less create. `projectId` is optional; when omitted the server
 // resolves the caller's default project (lazy-creating one if needed).
+/**
+ * Studio's slug in `client_apps`. The only slug the platform names directly
+ * (it has a dedicated dashboard tab + the legacy `?studio=true` param); every
+ * other client app is handled generically through the registry.
+ */
+const STUDIO_APP_SLUG = "studio"
+
 const createWorkflowFlatBody = createWorkflowBody.extend({
   projectId: z.string().uuid().optional(),
+  // Which client app is creating this workflow (SDK callers: 'studio',
+  // 'voice-changer-pro', …). Omitted = native, created in app.nodaro.ai itself.
+  // Validated against the client_apps registry below — an unknown slug is a 400,
+  // never a silently-unclassified row.
+  appSlug: z.string().min(1).max(64).optional(),
 })
 
 const updateWorkflowBody = z.object({
@@ -147,7 +159,10 @@ const listWorkflowsQuery = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
-  // Filter to Studio-origin workflows only (settings.studio is set).
+  // Scope the list to one client app's workflows (workflows.app_slug).
+  app: z.string().min(1).max(64).optional(),
+  // Legacy alias for `?app=studio`, kept so existing callers (the dashboard's
+  // "Studio Workflows" tab) keep working. Resolved into `app` below.
   studio: z
     .string()
     .optional()
@@ -174,7 +189,7 @@ const WORKFLOW_META_COLS =
   "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, created_at, updated_at"
 
 const WORKFLOW_FULL_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, parent_workflow_id, created_at, updated_at"
+  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, parent_workflow_id, app_slug, created_at, updated_at"
 
 function toWorkflowMeta(row: Record<string, unknown>) {
   return {
@@ -200,6 +215,9 @@ function toWorkflowFull(row: Record<string, unknown>) {
     edges: row.edges,
     settings: row.settings,
     parentWorkflowId: row.parent_workflow_id ?? null,
+    // Client app that created this workflow; null = native. Lets an SDK caller
+    // read back the classification it asked for.
+    appSlug: row.app_slug ?? null,
   }
 }
 
@@ -221,6 +239,25 @@ function validationError(reply: FastifyReply, message: string) {
 
 function notFound(reply: FastifyReply, message: string) {
   return reply.status(404).send({ error: { code: "not_found", message } })
+}
+
+/**
+ * Verify an `appSlug` exists in the `client_apps` registry.
+ *
+ * Unknown slugs are rejected at write time (400) rather than stored: a row whose
+ * app is unregistered would be invisible everywhere (the workflow-list rule
+ * fails closed on unknown slugs), so silently accepting one would hand the
+ * caller a workflow they can never see. Better to tell them immediately. The DB
+ * has the same FK constraint; this turns its 500 into an actionable 400.
+ */
+async function clientAppExists(slug: string): Promise<{ ok: boolean; error?: unknown }> {
+  const { data, error } = await supabase
+    .from("client_apps")
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle()
+  if (error) return { ok: false, error }
+  return { ok: data !== null }
 }
 
 /**
@@ -343,6 +380,17 @@ export async function workflowRoutes(app: FastifyInstance) {
   // List ALL workflows owned by the caller, across every project. Used by
   // the SDK / CLI / MCP for a flat view; the frontend's "My Workflows" tab
   // hits Supabase directly for one fewer hop.
+  //
+  // `?app=<slug>` scopes the list to one client app's workflows (`?studio=true`
+  // is a legacy alias for `?app=studio`).
+  //
+  // DO NOT CHANGE THE DEFAULT. With no `app` param this returns EVERYTHING the
+  // caller owns, native and client-app rows alike. voice-changer-pro lists its
+  // own conversions through exactly this call with no param — making the default
+  // "native only" (to mirror the dashboard's visibility rule) would blank vcp's
+  // conversion list in production the moment it deployed. That flip is Phase 2
+  // and is gated on an SDK release that sends `?app=voice-changer-pro`. Until
+  // every deployed client passes its slug, the default stays permissive.
   app.get("/v1/workflows", async (req, reply) => {
     const userId = authorize(req, reply, "workflows:read")
     if (!userId) return
@@ -351,10 +399,14 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!query) return
     const limit = query.limit ?? (query.viewAll ? 500 : 100)
 
+    // `?studio=true` is the legacy spelling of `?app=studio`; an explicit `?app=`
+    // wins if both are somehow sent.
+    const appSlug = query.app ?? (query.studio ? STUDIO_APP_SLUG : undefined)
+
     // Admin "All users" view — mirrors GET /v1/projects?viewAll=true. Returns
-    // every user's top-level workflows (optionally Studio-origin only) with
-    // owner emails. Powers the dashboard "Studio Workflows" tab when an admin
-    // flips the "All users" switch.
+    // every user's top-level workflows (optionally scoped to one client app)
+    // with owner emails. Powers the dashboard "Studio Workflows" tab when an
+    // admin flips the "All users" switch.
     if (query.viewAll) {
       const isAdmin = await checkIsAdmin(userId)
       if (!isAdmin) {
@@ -370,8 +422,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         .is("parent_workflow_id", null)
         .order("updated_at", { ascending: false })
         .limit(limit)
-      if (query.studio) {
-        allQuery = allQuery.not("settings->studio", "is", null)
+      if (appSlug) {
+        allQuery = allQuery.eq("app_slug", appSlug)
       }
       const { data, error } = await allQuery
       if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
@@ -405,8 +457,8 @@ export async function workflowRoutes(app: FastifyInstance) {
       .is("parent_workflow_id", null)
       .order("updated_at", { ascending: false })
       .limit(limit)
-    if (query.studio) {
-      listQuery = listQuery.not("settings->studio", "is", null)
+    if (appSlug) {
+      listQuery = listQuery.eq("app_slug", appSlug)
     }
     const { data, error } = await listQuery
 
@@ -425,6 +477,19 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!body) return
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
+
+    // Classify the row's origin. An unregistered slug is rejected here rather
+    // than persisted — see clientAppExists.
+    if (body.appSlug) {
+      const app = await clientAppExists(body.appSlug)
+      if (app.error) return sendInternalError(reply, req, app.error, "Failed to create workflow")
+      if (!app.ok) {
+        return validationError(
+          reply,
+          `Unknown appSlug '${body.appSlug}'. Register the app in client_apps first.`,
+        )
+      }
+    }
 
     if (body.nodes && body.edges) {
       body.edges = migrateGenerateImageHandles(
@@ -464,6 +529,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
+        // NULL = native (created in app.nodaro.ai itself).
+        app_slug: body.appSlug ?? null,
       })
       .select(WORKFLOW_FULL_COLS)
       .single()
@@ -518,6 +585,12 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const full = toWorkflowFull(data)
     const settings = full.settings as { studio?: { shared?: unknown } } | null | undefined
+    // NOTE: this is NOT the origin signal that `workflows.app_slug` replaced.
+    // `settings.studio.shared` is a PER-ROW opt-in the owner sets to publish one
+    // workflow by link — a fact neither `app_slug` (per-row origin) nor
+    // `client_apps.workflows_listed` (per-app) can express. Do not "finish the
+    // migration" by deleting this check: without it every workflow in the
+    // database becomes readable by id, with no auth.
     if (settings?.studio?.shared !== true) {
       // Not shared → indistinguishable from not-found (don't leak existence).
       return notFound(reply, "Workflow not found")

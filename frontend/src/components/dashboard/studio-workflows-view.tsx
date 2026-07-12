@@ -16,7 +16,7 @@ interface StudioWorkflowsViewProps {
 
 /**
  * "Studio Workflows" dashboard tab — workflows that originated in
- * studio.nodaro.ai (settings.studio set). Visible to everyone: each user sees
+ * studio.nodaro.ai (app_slug = 'studio'). Visible to everyone: each user sees
  * their own; admins can flip the "All users" switch to see everyone's (with the
  * owner email shown). Cards open the in-app editor (read-only for Studio
  * projects, as elsewhere).
