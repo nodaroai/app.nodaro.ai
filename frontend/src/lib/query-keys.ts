@@ -133,6 +133,13 @@ export const queryKeys = {
     listStudioAll: () => ["workflows", "list", "studio", "all"] as const,
   },
 
+  // Client-app registry (which SDK apps exist, whose workflows are user-facing).
+  // Tiny + near-immutable — cached hard; see use-client-apps-queries.ts.
+  clientApps: {
+    all: ["client-apps"] as const,
+    list: () => ["client-apps", "list"] as const,
+  },
+
   // Search
   search: {
     all: ["search"] as const,
@@ -241,6 +248,7 @@ export const queryKeys = {
         params.cursor ?? "",
       ] as const,
     nodeDefaults: () => ["admin", "node-defaults"] as const,
+    clientApps: () => ["admin", "client-apps"] as const,
   },
 
   nodeDefaults: {

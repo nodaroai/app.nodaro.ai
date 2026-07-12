@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { STUDIO_APP_SLUG } from "./use-client-apps-queries"
 
 export interface MyWorkflow {
   readonly id: string
@@ -58,8 +59,21 @@ const WORKFLOW_COLS =
  * Flat, owner-scoped list of every workflow the caller owns, joined with
  * minimal project info (name + isDefault) for badge rendering. Powers the
  * "My Workflows" dashboard tab. Excludes sub-workflows (parent_workflow_id
- * IS NOT NULL) so the list shows top-level flows only, and Studio-origin
- * workflows (settings.studio set) which live in the "Studio Workflows" tab.
+ * IS NOT NULL) so the list shows top-level flows only.
+ *
+ * VISIBILITY: NATIVE ONLY — `app_slug IS NULL`. This is deliberate, not an
+ * oversight: every client app that is registered with `workflows_listed = true`
+ * (studio today) already gets its own dedicated dashboard tab — see
+ * `useMyStudioWorkflows` below. If this query also admitted listed apps
+ * (`app_slug IS NULL OR app is listed`), studio's workflows would render here
+ * AND in "Studio Workflows" — the exact double-listing bug this filter fixes.
+ *
+ * `client_apps.workflows_listed` is real and still load-bearing (it gates the
+ * admin screen, and in Phase 2 will gate `GET /v1/workflows`'s default set) —
+ * it is simply a different question from "does My Workflows show it", so this
+ * query never reads the registry at all. DO NOT "simplify" this back into an
+ * OR-with-listed-apps filter (e.g. reintroducing `workflowVisibilityFilter` /
+ * `fetchListedAppSlugs` here) — that reintroduces the duplicate-tab bug.
  *
  * Tries the full select (with `projects.is_default`) first. Pre-migration
  * environments fail at the PostgREST level with "column does not exist";
@@ -83,9 +97,7 @@ export function useMyWorkflows() {
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
-          // Studio-origin workflows (settings.studio set) live in the dedicated
-          // "Studio Workflows" tab, not here.
-          .is("settings->studio", null)
+          .is("app_slug", null)
           .order("updated_at", { ascending: false })
           .limit(200)
 
@@ -106,9 +118,10 @@ export function useMyWorkflows() {
 }
 
 /**
- * Owner-scoped list of the caller's Studio-origin workflows (settings.studio
- * set). Powers the default view of the "Studio Workflows" dashboard tab — same
- * shape and project join as useMyWorkflows, with the studio filter inverted.
+ * Owner-scoped list of the caller's Studio-origin workflows — the rows whose
+ * `app_slug` is 'studio'. Powers the default view of the "Studio Workflows"
+ * dashboard tab: same shape and project join as useMyWorkflows, but scoped by
+ * `app_slug` equality to one app instead of `app_slug IS NULL`.
  */
 export function useMyStudioWorkflows() {
   return useQuery({
@@ -127,7 +140,7 @@ export function useMyStudioWorkflows() {
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
-          .not("settings->studio", "is", null)
+          .eq("app_slug", STUDIO_APP_SLUG)
           .order("updated_at", { ascending: false })
           .limit(200)
 

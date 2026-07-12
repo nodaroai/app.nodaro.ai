@@ -272,6 +272,27 @@ export type Database = {
           },
         ]
       }
+      client_apps: {
+        Row: {
+          created_at: string
+          name: string
+          slug: string
+          workflows_listed: boolean
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          slug: string
+          workflows_listed?: boolean
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          slug?: string
+          workflows_listed?: boolean
+        }
+        Relationships: []
+      }
       credit_purchases: {
         Row: {
           amount_usd: number
@@ -1331,6 +1352,7 @@ export type Database = {
       }
       workflows: {
         Row: {
+          app_slug: string | null
           created_at: string
           description: string | null
           edges: Json
@@ -1348,6 +1370,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          app_slug?: string | null
           created_at?: string
           description?: string | null
           edges?: Json
@@ -1365,6 +1388,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          app_slug?: string | null
           created_at?: string
           description?: string | null
           edges?: Json
@@ -1382,6 +1406,13 @@ export type Database = {
           version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "workflows_app_slug_fkey"
+            columns: ["app_slug"]
+            isOneToOne: false
+            referencedRelation: "client_apps"
+            referencedColumns: ["slug"]
+          },
           {
             foreignKeyName: "workflows_folder_id_fkey"
             columns: ["folder_id"]
