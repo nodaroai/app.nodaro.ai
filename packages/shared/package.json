@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/shared",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Shared types, model catalog, wire contracts, and structural vocabularies for the Nodaro platform and SDK.",
   "type": "module",
   "license": "Apache-2.0",
