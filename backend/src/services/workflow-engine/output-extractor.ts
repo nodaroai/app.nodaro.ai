@@ -847,6 +847,12 @@ const VIDEO_RESULT_TYPES = new Set([
   // "Run from here" / DAG resume can hydrate a downstream consumer from a
   // previously-executed generate-video-pro without re-running it.
   "generate-video-pro",
+  // Edit Video Pro — replace-span Seedance-2 bridge (private-plugin engine,
+  // see ee/billing/edit-video-pro-credits.ts). Writes the same
+  // generatedVideoUrl / per-result `url` fields as every other video
+  // producer, so "Run from here" / DAG resume can hydrate a downstream
+  // consumer from a previously-executed edit-video-pro without re-running it.
+  "edit-video-pro",
   "lip-sync",
   "speech-to-video",
   "motion-transfer",

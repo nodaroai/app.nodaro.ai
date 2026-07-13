@@ -31,6 +31,8 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
   // Unlike generate-video's entry above (a known-stale "in" — the node
   // actually renders "prompt"), this uses the real rendered handle id.
   "generate-video-pro": [{ handle: "prompt", field: "prompt" }],
+  // Span-replace sibling of generate-video-pro — same real rendered handle id.
+  "edit-video-pro": [{ handle: "prompt", field: "prompt" }],
   "text-to-speech": [{ handle: "in", field: "directText" }],
   "text-to-audio": [{ handle: "in", field: "prompt" }],
   "generate-music": [{ handle: "in", field: "prompt" }],

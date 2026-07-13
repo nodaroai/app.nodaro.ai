@@ -57,6 +57,8 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "generate-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
   // Trimmed multi-segment stitch sibling of generate-video — no negativePrompt field.
   "generate-video-pro": { prompt: "prompt", media: "video", inline: true },
+  // Span-replace sibling of generate-video-pro — no negativePrompt field.
+  "edit-video-pro": { prompt: "prompt", media: "video", inline: true },
   "text-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
   "image-to-video": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Motion prompt", media: "video", inline: true },
   "video-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },

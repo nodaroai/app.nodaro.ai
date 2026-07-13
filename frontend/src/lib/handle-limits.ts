@@ -245,6 +245,36 @@ export function getHandleConnectionLimit(
     }
   }
 
+  // Edit Video Pro — Seedance-2-family only, same provider set as its gvp
+  // sibling (GVP_PROVIDERS = VIDEO_GEN_MODELS filtered by isSeedance2Provider,
+  // shared verbatim between both config panels). `video` accepts exactly one
+  // source clip, like video-retake: Seedance-2 replaces a time-window in a
+  // single source video (see edit-video-pro-handles.ts). `imageReferences` is
+  // capped the same way as generate-video-pro's case above —
+  // VIDEO_REF_LIMITS_BY_PROVIDER rather than a hand-picked literal, so it
+  // stays correct if that shared cap is ever retuned. No pool-consumption
+  // subtraction here: unlike legacy generate-video's Seedance-2 mode, this
+  // node's `video` and `imageReferences` route to SEPARATE payload fields
+  // (`videoUrl` / `referenceImageUrls` — see payload-builder.ts's
+  // "edit-video-pro" case and input-resolver.ts's SELECTED_NODE_FALLBACKS
+  // comment), so there is no shared reference_image_urls pool to subtract
+  // from — mirrors generate-video-pro, which has the same separation.
+  if (node.type === "edit-video-pro") {
+    switch (handleId) {
+      case "video":
+        return { limit: 1, providerLabel: "Edit Video", isMultiProviderMin: false }
+      case "imageReferences": {
+        const data = node.data as { provider?: string } | undefined
+        const provider = data?.provider ?? "seedance-2"
+        const providerLabel = getModel(provider)?.label ?? provider
+        const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 9
+        return { limit: cap, providerLabel, isMultiProviderMin: false }
+      }
+      default:
+        return null
+    }
+  }
+
   // Video SFX — single video producer feeds the SFX generator. The prompt
   // and negative handles accept multiple producers (text/picker fragments
   // are concatenated upstream), so they are NOT capped here. MMAudio is the

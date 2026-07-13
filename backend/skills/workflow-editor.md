@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-07-12T06:23:10.800Z
-generated_from: 61416e7f
+generated_at: 2026-07-12T19:47:44.882Z
+generated_from: 60b869779
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -96,6 +96,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `describe-to-picker` — Describe to Picker
 - `dubbing` — Dubbing
 - `duration` — Duration
+- `edit-video-pro` — Edit Video Pro
 - `era` — Era / Period
 - `exposure-settings` — Exposure Settings
 - `extend-video` — Extend Video

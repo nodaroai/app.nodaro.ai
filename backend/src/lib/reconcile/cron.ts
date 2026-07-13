@@ -305,6 +305,15 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
  *  credits reserved by computeGenerateVideoProCreditOverride are neither committed
  *  nor refunded without this sweep.
  *
+ *  edit-video-pro stalls: same private-plugin engine family as generate-video-pro
+ *  (same `clearReconcileSentinel` toolkit call at pickup, see
+ *  backend/src/lib/private-plugins/toolkit.ts), so it reaches the same
+ *  invisibility the same way — clearing provider_kind/provider_call_started_at
+ *  right after the standard video-worker pickup instrumentation sets them. A
+ *  crash mid-reference-bridge-stitch means the probe-at-reserve credits from
+ *  computeEditVideoProCreditOverride are neither committed nor refunded without
+ *  this sweep.
+ *
  *  The threshold is well past the longest legitimate run (render ≈ 5 min, director
  *  chain ≈ 3 min) AND the orchestrator's 90-min node timeout (NODE_TIMEOUT_MS —
  *  generate-video-pro's multi-segment stitch is the long pole here), so a
@@ -317,7 +326,7 @@ const RENDER_STALE_MS = 90 * 60 * 1000
  *  `RENDER_STALE_MS` above for why each one is invisible to the main scan.
  *  Exported so tests can assert membership directly instead of re-deriving
  *  it from a mocked query-builder chain. */
-export const STUCK_ORCHESTRATOR_JOB_TYPES = ["render-video", "video-director", "generate-video-pro"] as const
+export const STUCK_ORCHESTRATOR_JOB_TYPES = ["render-video", "video-director", "generate-video-pro", "edit-video-pro"] as const
 
 async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()

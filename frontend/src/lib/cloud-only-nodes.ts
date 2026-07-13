@@ -10,4 +10,5 @@
 export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "voice-changer-pro",
   "generate-video-pro",
+  "edit-video-pro",
 ])

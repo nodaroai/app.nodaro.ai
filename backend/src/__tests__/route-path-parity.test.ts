@@ -228,6 +228,13 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // CLOUD_ONLY-gated, so community builds never expose the frontend entry
   // point; only cloud edition serves the route.
   "/v1/generate-video-pro",
+
+  // edit-video-pro's route is registered at runtime by the private
+  // @nodaroai/cloud-plugins package — same architecture as generate-video-pro
+  // above. Not a static file under backend/src/routes/ or backend/src/ee/routes/
+  // that this scanner walks. The node is CLOUD_ONLY-gated, so community builds
+  // never expose the frontend entry point; only cloud edition serves the route.
+  "/v1/edit-video-pro",
 ])
 
 // ---------------------------------------------------------------------------

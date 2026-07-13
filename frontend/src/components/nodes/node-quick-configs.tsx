@@ -421,6 +421,16 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       },
     },
   ],
+  // ── Edit Video Pro (model only — no resolution lever, both are
+  // source-derived by design; the config panel owns prompt/span/audio) ──
+  "edit-video-pro": [
+    {
+      field: "provider",
+      ariaLabel: "Model",
+      icon: Sparkles,
+      options: toOptions(GVP_PROVIDERS),
+    },
+  ],
   // ── Image Collage (layout · aspect · resolution) ──
   // No provider/model — a local FFmpeg composite. Aspect values are single-sourced
   // from COMPOSITION_RATIOS (the same list the config panel renders) so the strip

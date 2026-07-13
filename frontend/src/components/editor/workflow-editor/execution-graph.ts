@@ -341,6 +341,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // Writes the SAME generatedVideoUrl / per-result url fields as
     // generate-video, so it hydrates from a previously-executed run the same way.
     type === "generate-video-pro" ||
+    // Edit Video Pro — span-replace sibling of generate-video-pro (Task 14).
+    // Same output field shape.
+    type === "edit-video-pro" ||
     type === "lip-sync" ||
     type === "speech-to-video" ||
     type === "ai-avatar" ||
@@ -907,6 +910,8 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
   // Mirrors the "generate-video" entry above (same output field shape).
   "generate-video-pro",
+  // Edit Video Pro — span-replace sibling of generate-video-pro (Task 14).
+  "edit-video-pro",
   "upload-video",
   "youtube-video",
   "combine-videos",

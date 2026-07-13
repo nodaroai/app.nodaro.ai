@@ -755,6 +755,8 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "generate-video",
   // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
   "generate-video-pro",
+  // Edit Video Pro — Seedance-2-family span-replace sibling of generate-video-pro.
+  "edit-video-pro",
   "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",

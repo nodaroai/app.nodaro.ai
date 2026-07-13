@@ -35,6 +35,11 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // handle set). Must mirror generate-video here or its output can't connect
   // downstream (the recurring "cannot connect the outputs" bug class).
   "generate-video-pro",
+  // Edit Video Pro — Seedance-2-family span-replace sibling of generate-
+  // video-pro (same "emits videoUrl" contract; source video + prompt in,
+  // ONE video out). Must mirror generate-video-pro here or its output can't
+  // connect downstream (the recurring "cannot connect the outputs" bug class).
+  "edit-video-pro",
   "upload-video",
   "youtube-video",
   "combine-videos",

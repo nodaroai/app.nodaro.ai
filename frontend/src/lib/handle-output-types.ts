@@ -46,6 +46,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "describe-to-picker": { "picker-json": "pickerJson" },
   "dubbing": { audio: "audio" },
   "edit-image": { image: "image" },
+  "edit-video-pro": { video: "video" },
   "extend-video": { video: "video" },
   "extract-audio": { audio: "audio" },
   "extract-frame": { image: "image" },

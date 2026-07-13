@@ -1001,6 +1001,79 @@ export async function computeGenerateVideoProCreditOverride(
   return { override, pricing }
 }
 
+/**
+ * Compute the PROBE-AT-RESERVE credit override for an edit-video-pro
+ * dispatch, or `undefined` when the payload isn't one / isn't a "replace"
+ * (edit-mode reserves nothing in v1 — "mode: edit" is reserved for a future
+ * version, see `EditVideoProPricing`'s doc comment). Sibling of
+ * `computeGenerateVideoProCreditOverride` above, but with a materially
+ * different money model: generate-video-pro trusts the client's requested
+ * duration, while edit-video-pro PROBES the source video server-side
+ * (`computeEditVideoProPricing` in ee/billing/edit-video-pro-credits.ts,
+ * itself built on the `seedance2RefVideoBaseCreditsFromUrls` "never
+ * under-reserve" precedent) so the resolution tier, the tail edge, and both
+ * MIN_REF floors are knowable on a successful probe — reserve == commit
+ * exactly in that case; a failed probe worst-cases (top catalog tier, both
+ * edges assumed present) so it can only ever OVER-reserve.
+ *
+ * CLAMPS FIRST, same as gvp: the orchestrator DAG path never runs the
+ * (not-yet-built) single-node route's Zod span refine, so THIS is the clamp.
+ * `payload.spanStart`/`payload.spanEnd` are rewritten to the pricing helper's
+ * `spanStartSec`/`spanEndSec` and `payload.proPricing` is stamped with the
+ * full breakdown BEFORE this returns — both mutations land on the SAME
+ * object reference the caller already holds (`buildResult.payload`), so the
+ * enqueued worker payload (built from that reference after this call) never
+ * asks the private-plugin engine to replace more of the source than what was
+ * actually priced.
+ *
+ * `spanExceedsSource` (the requested span reaches past the probed source's
+ * actual length) THROWS before any reservation math runs at all — unlike a
+ * plain clamp, asking the engine to replace footage that doesn't exist is a
+ * user input error, not a money-rounding detail, so the whole dispatch fails
+ * fast with a descriptive message instead of silently reserving for (and
+ * later replacing) less video than requested.
+ *
+ * The probe's ONLY input is `payload.videoUrl` (the payload's own resolved
+ * video source) — a client-supplied `sourceDurationSec` display hint (the
+ * source `<video>` element's `loadedmetadata` duration, cached on node data
+ * for the span slider's UI range) is NEVER read here. Trusting a client
+ * duration hint for money would let a stale/spoofed value under-reserve.
+ *
+ * Same dynamic-`import()` / `pricing: unknown` escape hatch as gvp — see its
+ * doc comment above for why (`tools/check-ee-imports.mjs` boundary).
+ */
+export async function computeEditVideoProCreditOverride(
+  payload: Record<string, unknown>,
+): Promise<{ override: number; pricing: unknown } | undefined> {
+  if (payload?.jobName !== "edit-video-pro" && payload?.type !== "edit-video-pro") return undefined
+  if (((payload.mode as string | undefined) ?? "replace") !== "replace") return undefined
+
+  const { computeEditVideoProPricing } = await import("../../ee/billing/edit-video-pro-credits.js")
+  const spanStart = Number(payload.spanStart ?? 0)
+  const pricing = await computeEditVideoProPricing({
+    provider: String(payload.provider ?? "seedance-2"),
+    sourceUrl: typeof payload.videoUrl === "string" ? payload.videoUrl : undefined,
+    spanStart,
+    spanEnd: Number(payload.spanEnd ?? spanStart + 8),
+  })
+  if (pricing.spanExceedsSource) {
+    throw new Error(
+      `edit-video-pro: the span end (${payload.spanEnd}s) is beyond the end of the source video (${pricing.probe?.durationSec.toFixed(1)}s)`,
+    )
+  }
+  // DAG clamp (the route's Zod refines never run on this path): stamp the
+  // PRICED span back so the engine never replaces more than what was reserved.
+  payload.spanStart = pricing.spanStartSec
+  payload.spanEnd = pricing.spanEndSec
+  payload.proPricing = pricing
+
+  const { cost_markup_percent } = await getAppSettings()
+  const override = cost_markup_percent > 0
+    ? Math.ceil(pricing.reserveBase * (1 + cost_markup_percent / 100))
+    : pricing.reserveBase
+  return { override, pricing }
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -1131,21 +1204,30 @@ async function executeWorkerNode(
       // gates on the payload's own explicit generate-video-pro marker
       // (jobName/type === "generate-video-pro"), a drift-resistant check.
       //
+      // edit-video-pro reserves its own PROBE-AT-RESERVE dynamic base
+      // (computeEditVideoProCreditOverride) — evaluated SECOND, on the same
+      // drift-resistant explicit-marker basis (jobName/type ===
+      // "edit-video-pro"), plus a mode gate (only "replace" reserves; a
+      // future "edit" mode reserves nothing here). Can THROW (span beyond
+      // the probed source) — that throw propagates out of this whole `try`,
+      // same as any other pre-reservation validation failure below.
+      //
       // Seedance 2 reference-video runs are billed unit×(input+output). The
       // seeded `-ref` composite (used as `modelIdentifier`) only encodes the
       // per-8s OUTPUT rate, so we ffprobe the connected reference videos and
       // reserve the FULL scaled BASE up front via an explicit creditOverride
-      // (commit_credits only refunds — never up-charges) — evaluated SECOND,
+      // (commit_credits only refunds — never up-charges) — evaluated LAST,
       // as a fallback: it gates on a heuristic (provider+referenceVideoUrls)
       // rather than an explicit marker. Undefined for every other provider /
       // no-ref run → unchanged DB-priced reservation.
       //
-      // The two overrides are mutually exclusive by payload shape (never
-      // both apply to one dispatch), so a plain `??` combine is safe and
-      // short-circuits the second (unneeded) dynamic import + pricing call
-      // whenever the first already applies.
+      // The three overrides are mutually exclusive by payload shape (never
+      // more than one applies to a single dispatch), so a plain `??` combine
+      // is safe and short-circuits any later (unneeded) dynamic import +
+      // pricing call once an earlier one already applies.
       const creditOverride =
         (await computeGenerateVideoProCreditOverride(payload))?.override ??
+        (await computeEditVideoProCreditOverride(payload))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload))
 
       // Free-tier / blocked-models gate. reserveCredits does NOT check

@@ -2694,6 +2694,31 @@ export async function generateVideoPro(body: {
   })
 }
 
+// --- Edit Video Pro (Seedance-2-family span replace) ---
+//
+// Sibling of runVideoRetake: `videoUrl` (the source clip) + spanStart/spanEnd
+// (the window to replace) + prompt in, ONE video out. `mode` is hardcoded to
+// "replace" — EditVideoProNodeData reserves "edit" for v2 and never renders
+// it in the v1 UI (see types/nodes.ts). Body shape mirrors payload-builder.ts's
+// "edit-video-pro" DAG dispatch case, so a single-node Run produces the same
+// request shape an orchestrated run does.
+
+export async function runEditVideoPro(params: {
+  videoUrl: string
+  spanStart: number
+  spanEnd: number
+  prompt: string
+  provider?: string
+  generateAudio?: boolean
+  referenceImageUrls?: string[]
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/edit-video-pro", {
+    body: { mode: "replace", ...params },
+    workflowId: true,
+    label: "Failed to start video edit",
+  })
+}
+
 export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string, userId?: string, options?: {
   duration?: string
   resolution?: string

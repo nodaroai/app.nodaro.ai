@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData } from "@/types/nodes";
+import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier } from "@nodaro/shared"
@@ -219,6 +219,38 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
   )
 }
 
+// ---------------------------------------------------------------------------
+// edit-video-pro — DISPLAY-ONLY credit estimate. Span-replace sibling of
+// generate-video-pro above: reuses the SAME gvpSplit/gvpPerSecRate helpers
+// (single source of truth for the split algorithm + per-second rate lookup).
+// UI-side twin of `computeEditVideoProPricing` in
+// `backend/src/ee/billing/edit-video-pro-credits.ts` — keep both in sync if
+// the reserve formula ever changes. NEVER authoritative for billing.
+// ---------------------------------------------------------------------------
+
+/** Static fallback for the edit-video-pro flat fee (STATIC_CREDIT_COSTS in
+ *  backend/src/ee/billing/credits.ts), used only while the live cache is cold. */
+const EVP_FEE_FALLBACK = 10
+
+/** Display-only estimate for an edit-video-pro node. The client can't know
+ *  the source's resolution tier (server probes at reserve) — display at 720p. */
+function estimateEditVideoProCredits(data: EditVideoProNodeData): number {
+  const provider = data.provider || "seedance-2"
+  const spanStart = Math.max(0, data.spanStart ?? 0)
+  const spanEnd = data.spanEnd ?? spanStart + 8
+  const span = Math.min(Math.max(spanEnd - spanStart, 4), 120)
+  const D = data.sourceDurationSec
+  const headExists = spanStart > 0
+  const tailExists = D === undefined ? true : D - spanEnd > 0.05
+  const loss = 0.3 * ((headExists ? 1 : 0) + (tailExists ? 1 : 0))
+  const split = gvpSplit(span + loss)
+  const refOut = spanStart >= 1 ? 1 : 0
+  const refIn = D === undefined ? 1 : (tailExists && D - spanEnd >= 1 ? 1 : 0)
+  const fee = getCachedCredits("edit-video-pro") ?? EVP_FEE_FALLBACK
+  const refPerSec = gvpPerSecRate(provider, "720p", true)
+  return fee + Math.ceil(refPerSec * (split.s + refOut + (split.n - 1) + refIn))
+}
+
 /**
  * Estimate credit cost for a single node, reading node data for variable-cost nodes.
  */
@@ -230,6 +262,9 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
   }
   if (nodeType === "generate-video-pro" && node.data) {
     return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData)
+  }
+  if (nodeType === "edit-video-pro" && node.data) {
+    return estimateEditVideoProCredits(node.data as EditVideoProNodeData)
   }
   if (nodeType === "motion-transfer" && node.data) {
     const provider = (node.data.provider as string) ?? "kling"
@@ -285,6 +320,9 @@ export const EXECUTABLE_TYPES = new Set([
   "generate-video",
   // Seedance-2-family multi-segment stitch variant of generate-video (Task 13).
   "generate-video-pro",
+  // Span-replace sibling of generate-video-pro (Task 14) — Seedance-2-family
+  // reference-bridge edit of an existing video's [spanStart, spanEnd) window.
+  "edit-video-pro",
   "text-to-speech",
   "generate-music",
   "text-to-audio",

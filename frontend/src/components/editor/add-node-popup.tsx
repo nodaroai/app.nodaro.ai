@@ -726,6 +726,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["long-form", "long video", "multi-segment", "stitch", "extended duration", "seedance", "pro"],
   },
   {
+    type: "edit-video-pro",
+    label: "Edit Video Pro",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["retake", "replace span", "edit clip", "seedance", "pro", "reshoot"],
+  },
+  {
     type: "video-to-video",
     label: "Video to Video",
     icon: <Film className="h-4 w-4" />,

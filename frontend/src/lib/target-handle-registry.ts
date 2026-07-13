@@ -2,6 +2,7 @@ import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
+import { EDIT_VIDEO_PRO_INPUT_HANDLES, isValidEditVideoProConnection } from "./edit-video-pro-handles"
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
@@ -233,6 +234,16 @@ const GENERATE_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
   imageReferences: "Image Refs",
 }
 
+/** Friendly labels for Edit Video Pro's three input handles — sibling of
+ *  GENERATE_VIDEO_PRO_HANDLE_LABELS with `video` swapped in for startFrame
+ *  (the required source clip to edit, not an optional reference frame). No
+ *  exported EDIT_VIDEO_PRO_*_LABELS map — kept local like its sibling. */
+const EDIT_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
+  video: "Video",
+  prompt: "Prompt",
+  imageReferences: "Image Refs",
+}
+
 /** Friendly labels for Video Retake's three input handles (video-retake-handles.ts
  *  exports only the IDs, no label map — mirror the node component's labels). */
 const VIDEO_RETAKE_HANDLE_LABELS: Record<string, string> = {
@@ -277,6 +288,16 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     label: GENERATE_VIDEO_PRO_HANDLE_LABELS[handleId] ?? handleId,
     accepts: (sourceType: string) =>
       isValidGenerateVideoProConnection(handleId, sourceType, isVisualPickerType),
+  })),
+  // Edit Video Pro mirrors Generate Video Pro, with `video` swapped in for
+  // startFrame (the required source clip to edit) — built from
+  // EDIT_VIDEO_PRO_INPUT_HANDLES so the popover candidate set can't drift
+  // from the rendered handle set.
+  "edit-video-pro": EDIT_VIDEO_PRO_INPUT_HANDLES.map((handleId) => ({
+    handleId,
+    label: EDIT_VIDEO_PRO_HANDLE_LABELS[handleId] ?? handleId,
+    accepts: (sourceType: string) =>
+      isValidEditVideoProConnection(handleId, sourceType, isVisualPickerType),
   })),
   "camera-motion": [
     { handleId: "startState", label: "Start state", accepts: ACCEPTS_PARAMETER_PICKER },

@@ -35,6 +35,12 @@ interface CombineOptions {
     readonly framesFromPrev: number
     readonly framesFromNext: number
   }
+  /** Pin the normalization canvas (both together) instead of the majority-
+   *  resolution pick — edit-video-pro pins the SOURCE dims so a long bridge
+   *  can never flip the majority vote and letterbox the kept footage.
+   *  normalizeVideoForCombine handles even-rounding. */
+  readonly targetWidth?: number
+  readonly targetHeight?: number
 }
 
 /**
@@ -285,7 +291,9 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
       rawPaths.push(rawPath)
     }
 
-    const target = await pickTargetResolution(rawPaths)
+    const target = options.targetWidth && options.targetHeight
+      ? { width: options.targetWidth, height: options.targetHeight }
+      : await pickTargetResolution(rawPaths)
     console.log(`[combineVideos] Normalizing ${rawPaths.length} clips to ${target.width}x${target.height}`)
 
     const normalizedPaths: string[] = []

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
@@ -160,6 +161,55 @@ function SliderField({
           className={cn("flex-1", readOnly && "opacity-70 cursor-default")}
         />
       </div>
+    </GlassCard>
+  )
+}
+
+/** Plain numeric input (as opposed to SliderField's range control) — used for
+ *  fields with no natural fixed upper bound (e.g. edit-video-pro's span
+ *  endpoints, which can legitimately exceed 120s for a long source video).
+ *  Optional `helpText` renders a small muted caveat below the input. */
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  step,
+  readOnly,
+  helpText,
+}: {
+  label: string
+  value: unknown
+  onChange: (v: unknown) => void
+  min?: number
+  step?: number
+  readOnly?: boolean
+  helpText?: string
+}) {
+  const numValue = Number(value ?? min ?? 0)
+
+  return (
+    <GlassCard>
+      <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
+      <Input
+        type="number"
+        min={min}
+        step={step ?? 0.1}
+        value={numValue}
+        onChange={(e) => {
+          if (e.target.value === "") return
+          const parsed = parseFloat(e.target.value)
+          if (Number.isNaN(parsed)) return
+          onChange(min !== undefined ? Math.max(min, parsed) : parsed)
+        }}
+        disabled={readOnly}
+        className={cn(readOnly && "opacity-70 cursor-default")}
+      />
+      {helpText && (
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+          {helpText}
+        </p>
+      )}
     </GlassCard>
   )
 }
@@ -581,6 +631,88 @@ function renderGenerateVideoPro(
   }
 }
 
+/** Surfaced on both span fields (spanStart/spanEnd) so the caveat is visible
+ *  regardless of which one an app curator chose to expose as a card — the two
+ *  numeric fields render as independent cards in the app runner, so there's
+ *  no single "group footer" slot to hang a one-time note on. */
+const EDIT_VIDEO_PRO_SPAN_HELP_TEXT =
+  "Span must fall within your video's length; an out-of-range span fails after reserving and auto-refunds."
+
+/**
+ * Edit Video Pro — span-replace sibling of Generate Video Pro (Task 14).
+ * Mirrors renderGenerateVideoPro's structure: prompt + provider (same
+ * GVP_PROVIDERS — the 3 Seedance-2-family ids) + generateAudio. Unlike gvp,
+ * NO aspectRatio/resolution cases — both are source-derived by design (see
+ * EditVideoProNodeData). Adds the two span fields (spanStart/spanEnd) as
+ * plain numeric inputs (NumberField, not SliderField — no natural fixed
+ * upper bound, mirrors the editor panel's own un-capped span inputs in
+ * video-configs.tsx) plus the reserve/refund caveat help text.
+ */
+function renderEditVideoPro(
+  props: ConfigFieldRendererProps,
+): React.ReactNode | null {
+  const { field, value, onChange, readOnly, customLabel, allowedValues } = props
+
+  switch (field) {
+    case "prompt":
+      return (
+        <TextareaField
+          label={customLabel ?? "Prompt"}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+        />
+      )
+    case "provider":
+      return (
+        <OptionSelect
+          label={customLabel ?? "Model"}
+          options={GVP_PROVIDERS}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          showDesc
+        />
+      )
+    case "spanStart":
+      return (
+        <NumberField
+          label={customLabel ?? "Span Start (seconds)"}
+          value={value}
+          onChange={onChange}
+          min={0}
+          step={0.1}
+          readOnly={readOnly}
+          helpText={EDIT_VIDEO_PRO_SPAN_HELP_TEXT}
+        />
+      )
+    case "spanEnd":
+      return (
+        <NumberField
+          label={customLabel ?? "Span End (seconds)"}
+          value={value}
+          onChange={onChange}
+          min={0}
+          step={0.1}
+          readOnly={readOnly}
+          helpText={EDIT_VIDEO_PRO_SPAN_HELP_TEXT}
+        />
+      )
+    case "generateAudio":
+      return (
+        <ToggleField
+          label={customLabel ?? "Generate Audio"}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+        />
+      )
+    default:
+      return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fallback: delegate to generic FieldInputCard using the shared exposable-field
 // resolver (static NODE_DEFINITIONS fields + dynamic lottie slot fields)
@@ -621,6 +753,7 @@ const NODE_RENDERERS: Record<
   "text-to-video": renderTextToVideo,
   "generate-video": renderGenerateVideo,
   "generate-video-pro": renderGenerateVideoPro,
+  "edit-video-pro": renderEditVideoPro,
 }
 
 export function ConfigFieldRenderer(
