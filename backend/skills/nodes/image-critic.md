@@ -1,7 +1,7 @@
 ---
 node_type: image-critic
-generated_at: 2026-05-21T12:08:16.232Z
-generated_from: 34a5d237
+generated_at: 2026-07-13T16:11:49.518Z
+generated_from: 9af14ef89
 ---
 
 # Image Critic
@@ -22,6 +22,7 @@ generated_from: 34a5d237
 **Optional data fields:**
 - `prompt?: string`
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `currentJobId?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

@@ -474,11 +474,30 @@ describe("generate-script handler", () => {
     const job = makeJob("generate-script", { prompt: "a story about adventure" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined)
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("forwards reasoningEffort as the trailing arg to generateScript", async () => {
+    const job = makeJob("generate-script", {
+      prompt: "a story about adventure",
+      llmModel: "claude-opus-4.7",
+      reasoningEffort: "max",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith(
+      "a story about adventure",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "claude-opus-4.7",
+      "max",
+    )
   })
 })
 

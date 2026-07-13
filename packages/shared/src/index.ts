@@ -252,16 +252,20 @@ export {
   VIDEO_ANALYSIS_LLM_MODELS,
   LLM_FEATURE_DEFAULTS,
   LLM_MODALITY_CAPS,
+  LLM_REASONING_EFFORTS,
+  EFFORT_TIER_BUMP,
   getLlmModel,
   getLlmTier,
   getLlmModalityCaps,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
+  effectiveReasoningEffort,
   type LlmTier,
   type LlmFeature,
   type KieApiFormat,
   type LlmModelDef,
+  type LlmReasoningEffort,
 } from "./llm-models.js"
 
 export {

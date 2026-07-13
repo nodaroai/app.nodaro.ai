@@ -578,29 +578,71 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 
 ## Unified LLM Client (`lib/llm-client.ts`)
 
-Unified interface for all LLM calls across 7 models and 3 tiers:
+Unified interface for all LLM calls across 13 models and 3 tiers:
 
 ### Model Registry (`packages/shared/src/llm-models.ts`)
-| Tier | Models | API Format |
-|------|--------|------------|
-| Economy | `gemini-3-flash`, `claude-haiku-4.5` | chat-completions, messages |
-| Standard | `claude-sonnet-4.6`, `gpt-5.2` | messages, chat-completions |
-| Premium | `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4` | chat-completions, messages, responses |
+
+| Model | Tier | API Format | Notes |
+|-------|------|------------|-------|
+| `gemini-3-flash` | Economy | chat-completions | |
+| `claude-haiku-4.5` | Economy | messages | |
+| `gpt-5.6-luna` | Economy | responses | reasoning efforts; `supportsTemperature: false` |
+| `claude-sonnet-4.6` | Standard | messages | reasoning efforts (low/medium/high/max) |
+| `gpt-5.2` | Standard | chat-completions | |
+| `gpt-5.6-terra` | Standard | responses | reasoning efforts; `supportsTemperature: false` |
+| `claude-sonnet-5` | Standard | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
+| `gemini-3.1-pro` | Premium | chat-completions | |
+| `claude-opus-4.7` | Premium | messages | reasoning efforts (low–max); `supportsTemperature: false`; `preferKie` |
+| `gpt-5.4` | Premium | responses | reasoning efforts (low/medium/high only) |
+| `gpt-5.5` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
+| `gpt-5.6-sol` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
+| `claude-opus-4.8` | Premium | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
+
+`grok-4.5` is intentionally NOT in the registry — live verification against KIE (2026-07-13)
+returned 422 on every slug/endpoint permutation tried; grok chat isn't live on KIE yet.
+Fast-follow (new registry entry + rate row + docs) once it activates — don't hand-add a
+placeholder.
 
 ### API Formats
-- **chat-completions** — Gemini, GPT-5.2 (`POST /api/v1/chat/completions`)
-- **messages** — Claude models (`POST /claude/v1/messages` with `X-Api-Key` + `anthropic-version`)
-- **responses** — GPT-5.4 (`POST /api/v1/responses` with `input` array + `developer` role)
+- **chat-completions** — `gemini-3-flash`, `gemini-3.1-pro`, `gpt-5.2` — `POST {KIE_API_BASE}/{model.kieSlugOrModel}/v1/chat/completions` (the model's own KIE slug prefixes the path — there's no single shared chat-completions URL)
+- **messages** — every Claude model (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.7`, `claude-sonnet-5`, `claude-opus-4.8`) — `POST {KIE_API_BASE}/claude/v1/messages` with `X-Api-Key` + `anthropic-version`. KIE defaults `stream: true` for Claude — non-streaming calls must explicitly send `stream: false`.
+- **responses** — `gpt-5.4`, `gpt-5.5`, and the GPT-5.6 family (`gpt-5.6-luna`/`gpt-5.6-terra`/`gpt-5.6-sol`) — `POST {KIE_API_BASE}/codex/v1/responses` with an `input` array + `developer` role.
 
 ### Functions
-- `llmComplete(params)` — sync completion, returns `{ text, usage }`
-- `llmStream(params)` — SSE streaming with `onToken` callback
-- Both try KIE first, fallback to direct Anthropic SDK if `directFallbackModel` is set
+- `llmComplete(params)` — sync completion, returns `{ text, usage, model, providerCost }`
+- `llmStream(params, onToken, signal?)` — SSE streaming with an `onToken` callback
+- `llmCompleteStructured(params, zodSchema, opts?)` — schema-constrained completion: parses + Zod-validates, retries (feeding the bad output + error back as a correction turn) up to `opts.maxRetries` (default 2) before throwing; accumulates usage/cost across every attempt, not just the winning one
+- All three try KIE first, falling back to the direct Anthropic SDK when `directFallbackModel` is set — see **KIE-first routing** below for exactly when the fallback is preferred vs. mandatory
+
+### `reasoningEffort` — param + per-format wire mapping
+`LlmRequest.reasoningEffort` is clamped via `effectiveReasoningEffort(modelId, requested)` (`packages/shared/src/llm-models.ts`) to the highest level the model actually declares that is ≤ the request; unsupported / undefined / a model with no `reasoningEfforts` entry → `undefined` (nothing sent, vendor default applies). `deriveParams()` in `llm-client.ts` computes this once per call and maps it per format:
+- **messages** (Claude, KIE and direct-Anthropic alike): `thinking: { type: "adaptive" }, output_config: { effort: eff }`
+- **chat-completions** (Gemini / GPT-5.2 — none declare `reasoningEfforts` today, so this is currently always a no-op): `reasoning_effort: eff`
+- **responses** (GPT-5.4 / 5.5 / 5.6 family): `reasoning: { effort: eff }`
+
+`deriveParams()` also raises the output-token cap to `Math.max(model.maxOutputTokens, 32768)` at `xhigh`/`max` when the caller didn't pass an explicit `maxTokens`, so extended thinking can't truncate the answer.
+
+### Billing: 3-arg `buildLlmCreditIdentifier` + the xhigh/max tier-bump
+`buildLlmCreditIdentifier(feature, modelId?, reasoningEffort?)` is the SINGLE function the `creditGuard` preHandler (via `resolveLlmCreditId`, which reads `llmModel`/`reasoningEffort` off the raw body before Zod strips them), the credit reservation (`reserveCreditsForJob`'s model identifier, built the same way post-Zod), and the frontend credit badges (`useModelCredits(buildLlmCreditIdentifier(...))` in every LLM `*-node.tsx`) all call directly with the route's real `llmModel`/`reasoningEffort` — guard, reservation, and node badges use the same 3-arg identifier everywhere, so those three stay in lockstep by construction. The workflow **pre-run estimator** (`CreditsService.estimateWorkflowCredits` → `getNodeModelIdentifier`) is a separate call path that only special-cases `llm-chat` for model/effort tiering; every other LLM node type (`after-effects`, `motion-graphics`, `lottie-overlay`, `3d-title`, `video-composer`, `generate-script`, `image-to-text`, `image-critic`, `qa-check`, `describe-to-picker`) estimates at the base feature price (`STATIC_CREDIT_COSTS[node.type]`), regardless of the selected model or reasoning effort — a pre-existing estimator limitation; actual billing (guard + reservation) is unaffected.
+
+The 3rd argument is clamped via `effectiveReasoningEffort` BEFORE the bump check runs, so requesting `xhigh` on a model whose ceiling is `high` (e.g. `gpt-5.4`) clamps to `high` first and does **not** bump. After clamping, `xhigh`/`max` bump the identifier's tier one step (economy→standard, standard→premium; premium is unchanged); every other level — including `high`, the Claude-family server default — leaves the tier alone. Omitting the 3rd argument entirely is 100% back-compat with the pre-effort 2-arg behavior.
+
+### KIE-first routing (`preferKie`) + direct-Anthropic fallback
+`claude-sonnet-5`, `claude-opus-4.7`, and `claude-opus-4.8` set `preferKie: true` (the preferred routing for these models) — `llmComplete`/`llmStream` route them through KIE's `messages` proxy first and fall back to the direct Anthropic SDK only on a KIE failure (or when `KIE_API_KEY` isn't configured). Claude models WITHOUT `preferKie` (`claude-haiku-4.5`, `claude-sonnet-4.6`) go direct-Anthropic whenever `directFallbackModel` + `ANTHROPIC_API_KEY` are available — KIE is never tried for them at all. Two verification flags at the top of `llm-client.ts` (dated 2026-07-13) gate the `preferKie` preference at a finer grain than the model flag alone:
+- **`KIE_CLAUDE_TOOLS_VERIFIED = true`** — forced tool_choice passthrough is verified, so structured NON-STREAM calls (`jsonSchema` set, `structuredOutputMode: "anthropic-tool"`) carry the forced `tools`/`tool_choice` payload onto the KIE `messages` body and parse the returned `tool_use` block; these stay on the `preferKie` path.
+- **Structured STREAMS always go direct**, unconditionally — a streamed forced-tool response isn't parsed on the KIE path, so `llmStream` treats any `jsonSchema !== undefined` on an `anthropic-tool` model as `mustDirect` regardless of the verified flag.
+- **`KIE_CLAUDE_EFFORT_VERIFIED = false`** — KIE's Claude proxy is NOT verified to forward `thinking`/`output_config` end-to-end, so it's not trusted yet: any call with a resolved (post-clamp) `reasoningEffort` on a `preferKie` model is forced direct, in both `llmComplete` and `llmStream`. Flip this to `true` only after confirming KIE's proxy actually forwards `thinking`/`output_config` end-to-end — it gates real spend, not just a code path.
+
+### `supportsTemperature: false` — registry-derived strip
+Models with `supportsTemperature: false` (`claude-opus-4.7`, `gpt-5.5`, the GPT-5.6 family, `claude-sonnet-5`, `claude-opus-4.8`) have `temperature` stripped from every wire body in `deriveParams()` — never sent, regardless of what the caller passed. The same registry flag also derives `ee/pipelines/llms/call-llm.ts`'s `TEMPERATURE_UNSUPPORTED_MODELS` set (`LLM_MODELS.filter(m => m.supportsTemperature === false).flatMap(m => [m.kieSlugOrModel, ...(m.directFallbackModel ? [m.directFallbackModel] : [])])` — covers both the KIE slug and the direct-Anthropic model id). The film-studio pipeline's LLM wrapper is a SEPARATE call path from `llm-client.ts` and used to hand-list this set; it's now single-sourced from the registry so a new reasoning model can't ship covered on one call path but forgotten on the other.
+
+### KIE `credits_consumed` — actual-cost capture + drift warning
+KIE's non-stream response bodies carry `credits_consumed` (KIE credits; 1 credit = $0.005) — the REAL provider charge for that call. `extractActualUsd()` reads it (when present, positive, finite) and `buildResponse()` prefers it over the per-token rate-table estimate (`calculateLlmCost`, `pricing/llm-cost.ts`) as the returned `providerCost`; the table estimate is still computed alongside it (when usage is available) purely so the two can be compared. A >25% divergence between the two logs `console.warn("[llm-cost-drift] model=... estimated=$... actual=$...")` — an ops signal that KIE repriced the model and the rate table needs a manual update. **Non-stream only** — KIE's SSE stream responses don't reliably carry `credits_consumed`, so `parseSseStream()` always falls back to the table estimate.
 
 ### LLM Features & Credit Routing
-- `LlmFeature` type covers 13 features: ai-writer, llm-chat, prompt-helper, scene-graph-ai, after-effects, motion-graphics, lottie-overlay, 3d-title, image-to-text, qa-check, generate-script, translate, image-critic
-- `buildLlmCreditIdentifier(feature, model)` → economy: `"feature:economy"`, standard: `"feature"`, premium: `"feature:premium"`
-- `resolveLlmCreditId(feature, body)` — reads `llmModel` from raw request body before Zod strips it (for `creditGuard` preHandler)
+- `LlmFeature` type covers 15 features: ai-writer, llm-chat, prompt-helper, scene-graph-ai, after-effects, motion-graphics, motion-graphics-lottie, lottie-overlay, 3d-title, image-to-text, describe-to-picker, qa-check, generate-script, translate, image-critic
+- `buildLlmCreditIdentifier(feature, model?, reasoningEffort?)` → economy: `"feature:economy"`, standard: `"feature"`, premium: `"feature:premium"` (see the tier-bump rule above)
+- `resolveLlmCreditId(feature, body)` — reads `llmModel` + `reasoningEffort` from the raw request body before Zod strips it (for `creditGuard` preHandler)
 
 ---
 

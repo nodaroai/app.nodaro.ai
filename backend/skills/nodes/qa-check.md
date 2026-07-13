@@ -1,7 +1,7 @@
 ---
 node_type: qa-check
-generated_at: 2026-05-18T13:23:37.369Z
-generated_from: cb1e786d
+generated_at: 2026-07-13T16:15:37.802Z
+generated_from: 9af14ef89
 ---
 
 # QA Check
@@ -12,6 +12,23 @@ generated_from: cb1e786d
 **Credit cost:** 1
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `approved`, `rejected`
+
+**Required data fields:**
+- `label: string`
+- `provider: QaCheckProvider`
+- `checkType: "content" | "quality" | "consistency" | "safety"`
+- `threshold: number`
+- `fieldMappings: FieldMappings`
+
+**Optional data fields:**
+- `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
+- `currentJobId?: string`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `score?: number`
+- `approved?: boolean`
+- `reason?: string`
 
 **Default data:**
 ```json

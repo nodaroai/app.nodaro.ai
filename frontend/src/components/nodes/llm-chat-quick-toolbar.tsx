@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
-import { Sparkles, LayoutTemplate, Repeat2, Settings2 } from "lucide-react"
+import { Sparkles, LayoutTemplate, Repeat2, Settings2, Gauge } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -18,14 +18,40 @@ import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared"
 import { GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
+import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import type { LLMChatData } from "@/types/nodes"
+
+const AUTO_EFFORT = "__auto__"
 
 const TIER_LABELS: Record<string, string> = {
   economy: "Economy",
   standard: "Standard",
   premium: "Premium",
+}
+
+/**
+ * Pure patch-builder behind the Model select's `onValueChange`. Exported so
+ * this can be unit-tested directly — driving the real Radix Select through
+ * jsdom isn't practical in this suite (no PointerEvent/hasPointerCapture
+ * polyfill), matching the precedent in `node-quick-configs.test.tsx`.
+ *
+ * Clears a stale `reasoningEffort` in the SAME patch when the newly-selected
+ * model doesn't declare that level (mirrors ReasoningEffortSelect's
+ * clear-on-model-switch `useEffect` in the config panel — this toolbar
+ * renders its own Select rather than that shared component, so it doesn't
+ * get that effect for free and must self-clear here instead). One atomic
+ * `updateNodeData` call either way.
+ */
+export function buildModelChangePatch(data: LLMChatData, nextModelId: string): Partial<LLMChatData> {
+  const nextLevels = getLlmModel(nextModelId)?.reasoningEfforts ?? []
+  const currentEffort = data.reasoningEffort
+  return {
+    llmModel: nextModelId,
+    ...(currentEffort && !nextLevels.includes(currentEffort) ? { reasoningEffort: undefined } : {}),
+  }
 }
 
 interface LlmChatQuickToolbarProps {
@@ -104,6 +130,13 @@ export function LlmChatQuickToolbar({
   const modelEntry = useMemo(() => LLM_MODELS.find((m) => m.id === currentModel), [currentModel])
   const modelLabel = modelEntry?.displayName ?? currentModel
 
+  // Reasoning effort — only rendered when the current model declares levels.
+  // Options/labels are single-sourced from EFFORT_LABELS (shared with
+  // ReasoningEffortSelect, the config-panel counterpart) so wording can't drift.
+  const effortLevels = modelEntry?.reasoningEfforts ?? []
+  const effortValue = data.reasoningEffort ?? AUTO_EFFORT
+  const effortLabel = data.reasoningEffort ? EFFORT_LABELS[data.reasoningEffort] : "Auto"
+
   const currentTemplateId = data.templateId ?? "custom"
   // Memoized to match the `modelEntry` precedent above — this toolbar is mounted
   // (and re-rendered) for every llm-chat node on the canvas, not only the hovered one.
@@ -116,7 +149,9 @@ export function LlmChatQuickToolbar({
   // expandItemsWithRepeat; we narrow the toolbar to a sensible range).
   const repeatCount = Math.min(Math.max(1, (data.repeatCount as number | undefined) ?? 1), 4)
 
-  const handleModelChange = (value: string) => updateNodeData(nodeId, { llmModel: value })
+  const handleModelChange = (value: string) => updateNodeData(nodeId, buildModelChangePatch(data, value))
+  const handleEffortChange = (value: string) =>
+    updateNodeData(nodeId, { reasoningEffort: value === AUTO_EFFORT ? undefined : (value as LlmReasoningEffort) })
   const handleTemplateChange = (value: string) => updateNodeData(nodeId, { templateId: value })
   const handleRepeatChange = (value: string) => {
     const n = parseInt(value, 10)
@@ -146,6 +181,17 @@ export function LlmChatQuickToolbar({
         <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS[m.tier]} description={m.desc} className="text-xs">
           {m.displayName}
         </SelectItemWithMeta>
+      ))}
+    </SelectContent>
+  )
+
+  const effortItems = (
+    <SelectContent className="node-menu-surface">
+      <SelectItem value={AUTO_EFFORT} className="text-xs">Auto (model default)</SelectItem>
+      {effortLevels.map((level) => (
+        <SelectItem key={level} value={level} className="text-xs">
+          {EFFORT_LABELS[level]}
+        </SelectItem>
       ))}
     </SelectContent>
   )
@@ -211,6 +257,16 @@ export function LlmChatQuickToolbar({
                 {modelItems}
               </Select>
             </ToolbarSetting>
+            {effortLevels.length > 0 && (
+              <ToolbarSetting label="Effort" icon={<Gauge className="w-3 h-3" />}>
+                <Select disabled={isRunning} value={effortValue} onValueChange={handleEffortChange} onOpenChange={handleOpenChange}>
+                  <SelectTrigger className={ghostPopoverTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  {effortItems}
+                </Select>
+              </ToolbarSetting>
+            )}
             <ToolbarSetting label="Preset" icon={<LayoutTemplate className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
@@ -246,6 +302,17 @@ export function LlmChatQuickToolbar({
         </SelectTrigger>
         {modelItems}
       </Select>
+
+      {/* Reasoning effort — only for models that declare levels */}
+      {effortLevels.length > 0 && (
+        <Select disabled={isRunning} value={effortValue} onValueChange={handleEffortChange} onOpenChange={handleOpenChange}>
+          <SelectTrigger className={`${ghostTriggerClass} max-w-[130px]`} title="Reasoning effort">
+            <Gauge className="opacity-70" />
+            <SelectValue>{effortLabel}</SelectValue>
+          </SelectTrigger>
+          {effortItems}
+        </Select>
+      )}
 
       {/* Preset */}
       <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>

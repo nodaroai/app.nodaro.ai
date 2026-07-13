@@ -1,7 +1,7 @@
 ---
 node_type: 3d-title
-generated_at: 2026-05-18T13:23:37.604Z
-generated_from: cb1e786d
+generated_at: 2026-07-13T16:15:38.149Z
+generated_from: 9af14ef89
 ---
 
 # 3D Title
@@ -12,6 +12,23 @@ generated_from: cb1e786d
 **Credit cost:** 3
 **Inputs (target handles):** `background`
 **Outputs (source handles):** `composition`
+
+**Required data fields:**
+- `label: string`
+- `titlePrompt: string`
+- `aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"`
+- `backgroundColor: string`
+- `fps: number`
+- `durationSeconds: number`
+
+**Optional data fields:**
+- `titlePlan?: Record<string, unknown>`
+- `backgroundMediaUrl?: string`
+- `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `currentJobProgress?: number`
+- `errorMessage?: string`
 
 **Default data:**
 ```json

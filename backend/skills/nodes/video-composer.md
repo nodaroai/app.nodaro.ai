@@ -1,7 +1,7 @@
 ---
 node_type: video-composer
-generated_at: 2026-05-18T13:23:37.587Z
-generated_from: cb1e786d
+generated_at: 2026-07-13T16:11:49.840Z
+generated_from: 9af14ef89
 ---
 
 # Compose Video
@@ -26,6 +26,7 @@ generated_from: cb1e786d
 - `sceneGraph?: Record<string, unknown>`
 - `assetOrder?: string[]`
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

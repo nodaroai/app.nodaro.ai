@@ -8,7 +8,7 @@ import { SCENE_GRAPH_SYSTEM_PROMPT } from "../prompts/scene-graph-system.js"
 import { validateSceneGraph } from "../lib/scene-graph-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -31,6 +31,7 @@ const generateBody = z.object({
   durationSeconds: z.number().min(1).max(300).default(30),
   userId: z.string().uuid(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 export async function sceneGraphAIRoutes(app: FastifyInstance) {
@@ -87,7 +88,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       }
 
       // Reserve credits
-      const modelIdentifier = buildLlmCreditIdentifier("scene-graph-ai", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("scene-graph-ai", llmModel, parsed.data.reasoningEffort)
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -123,6 +124,7 @@ Composition style: ${prompt}`
           messages: [{ role: "user", content: userMessage }],
           maxTokens: 4096,
           temperature: 0.3,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         const rawText = response.text

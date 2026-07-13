@@ -37,7 +37,8 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
+import { LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, getLlmModel } from "@nodaro/shared"
+import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
 /**
@@ -176,6 +177,29 @@ const llmModelControl: QuickConfigControl = {
   ariaLabel: "Model",
   icon: Sparkles,
   options: LLM_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
+}
+
+/** Effort dropdown for reasoning-capable models (writes `data.reasoningEffort`).
+ *  Provider-aware: options are derived from the CURRENTLY selected `llmModel`'s
+ *  `reasoningEfforts` levels — empty on non-reasoning models, so
+ *  {@link QuickConfigSelect} self-hides the control. Its generic fail-safe
+ *  `useEffect` (same mechanism every provider-aware control here relies on)
+ *  snaps or clears a stale stored effort whenever the model switch changes
+ *  this list — no bespoke onChange wiring needed. */
+const reasoningEffortControl: QuickConfigControl = {
+  field: "reasoningEffort",
+  ariaLabel: "Effort",
+  icon: Gauge,
+  sentinelUndefined: "auto",
+  options: (data) => {
+    const model = getLlmModel(typeof data.llmModel === "string" ? data.llmModel : "")
+    const levels = model?.reasoningEfforts ?? []
+    if (levels.length === 0) return []
+    return [
+      { value: "auto", label: "Auto" },
+      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] })),
+    ]
+  },
 }
 
 /** Vision LLM model dropdown (writes `data.llmModel`). The describe-to-picker
@@ -540,14 +564,17 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "suno-replace-section": [sunoModelControl],
   "suno-style-boost": [sunoModelControl],
   // ── LLM-backed (llmModel) ──
-  "generate-script": [llmModelControl],
-  "qa-check": [llmModelControl],
-  "image-to-text": [llmModelControl],
-  "describe-to-picker": [visionModelControl],
-  "image-critic": [llmModelControl],
+  "generate-script": [llmModelControl, reasoningEffortControl],
+  "qa-check": [llmModelControl, reasoningEffortControl],
+  "image-to-text": [llmModelControl, reasoningEffortControl],
+  "describe-to-picker": [visionModelControl, reasoningEffortControl],
+  "image-critic": [llmModelControl, reasoningEffortControl],
+  // forced-alignment is a fixed ElevenLabs feature (static "elevenlabs-forced-
+  // alignment" credit id in forced-alignment-node.tsx) — ForcedAlignmentData
+  // has no llmModel/reasoningEffort field, so no effort control here.
   "forced-alignment": [llmModelControl],
-  "motion-graphics": [llmModelControl],
-  "3d-title": [llmModelControl],
+  "motion-graphics": [llmModelControl, reasoningEffortControl],
+  "3d-title": [llmModelControl, reasoningEffortControl],
   // ── Audio / voice (inline-mirrored lists) ──
   "transcribe": [sttProviderControl],
   "audio-isolation": [sttProviderControl],

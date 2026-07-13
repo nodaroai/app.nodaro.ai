@@ -616,6 +616,7 @@ export function buildSyncHttpBody(
         userInput: resolvedInputs.prompt || data.userInput || data.prompt,
         userId: ctx.userId,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 4096,
       })
@@ -637,6 +638,7 @@ export function buildSyncHttpBody(
         referenceVideoUrls: resolvedInputs.referenceVideoUrls,
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 2048,
         userId: ctx.userId,
@@ -672,6 +674,7 @@ export function buildSyncHttpBody(
         aspectRatio: data.aspectRatio,
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
     }
@@ -686,6 +689,7 @@ export function buildSyncHttpBody(
         height: data.height,
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
 
@@ -710,6 +714,7 @@ export function buildSyncHttpBody(
         height: data.height,
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
     }
@@ -725,6 +730,7 @@ export function buildSyncHttpBody(
         durationSeconds: data.durationSeconds,
         backgroundColor: data.backgroundColor,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
 
@@ -738,6 +744,7 @@ export function buildSyncHttpBody(
         durationSeconds: data.durationSeconds,
         backgroundColor: data.backgroundColor,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
 
@@ -747,6 +754,7 @@ export function buildSyncHttpBody(
         customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
 
@@ -756,6 +764,7 @@ export function buildSyncHttpBody(
         targetPickers: downstreamPickerTypes,
         instructions: data.instructions,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       }
 
@@ -772,6 +781,7 @@ export function buildSyncHttpBody(
         provider: data.provider || "claude",
         threshold: data.threshold ?? 0.7,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         userId: ctx.userId,
       })
 
@@ -783,6 +793,7 @@ export function buildSyncHttpBody(
         mode: data.mode,
         threshold: data.threshold,
         llmModel: data.llmModel,
+        reasoningEffort: data.reasoningEffort,
         workflowId: ctx.workflowId,
         userId: ctx.userId,
       })

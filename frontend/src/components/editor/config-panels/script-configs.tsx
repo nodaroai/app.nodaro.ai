@@ -36,6 +36,7 @@ import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pickerTypeLabel, ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels"
 import { LlmModelSelect } from "./llm-model-select"
+import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -85,6 +86,12 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         feature="generate-script"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature="generate-script"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
       <MappableField field="sceneCount" label="Number of Scenes" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
@@ -265,6 +272,12 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
       />
+      <ReasoningEffortSelect
+        feature="qa-check"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
+      />
       <div>
         <Label>Check Type</Label>
         <Select
@@ -393,6 +406,12 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
       />
+      <ReasoningEffortSelect
+        feature="image-critic"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
+      />
     </div>
   )
 }
@@ -435,6 +454,12 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
         feature="image-to-text"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature="image-to-text"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
 
       <div>
@@ -545,6 +570,12 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
         filter={(m) => m.vendor === "anthropic"}
+      />
+      <ReasoningEffortSelect
+        feature="describe-to-picker"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
       <div>
         <Label>Extra guidance (optional)</Label>

@@ -83,7 +83,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToTextData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const credits = useModelCredits(buildLlmCreditIdentifier("image-to-text", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-to-text"]), 1)
+  const credits = useModelCredits(buildLlmCreditIdentifier("image-to-text", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-to-text"], nodeData.reasoningEffort), 1)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0

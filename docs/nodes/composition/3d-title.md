@@ -2,7 +2,9 @@
 > AI-generated animated 3D text scenes with camera, lighting, and particle effects.
 
 ## Overview
-The 3D Title node uses Claude Sonnet to generate a plan for animated 3D text scenes. The plan includes camera movements, lighting setups, and optional particle effects. Rendering uses `@remotion/three` with Three.js and `@react-three/drei` for high-quality 3D text animation. Maximum duration is 60 seconds.
+The 3D Title node uses Claude Sonnet (configurable via the model selector — any of the shared LLM registry's models) to generate a plan for animated 3D text scenes. The plan includes camera movements, lighting setups, and optional particle effects. Rendering uses `@remotion/three` with Three.js and `@react-three/drei` for high-quality 3D text animation. Maximum duration is 60 seconds.
+
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up, same rule as every other LLM-backed node — see the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
 ## Configuration
 

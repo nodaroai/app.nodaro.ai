@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-05-24T21:24:59.458Z
-generated_from: bda59987
+generated_at: 2026-07-13T16:15:38.348Z
+generated_from: 9af14ef89
 ---
 
 # LLM Chat
@@ -12,6 +12,32 @@ generated_from: bda59987
 **Credit cost:** 3
 **Inputs (target handles):** `prompt`, `references`, `system-prompt`
 **Outputs (source handles):** `text`, `items`
+
+**Required data fields:**
+- `label: string`
+- `systemPrompt: string`
+- `userInput: string`
+- `temperature: number`
+- `maxTokens: number`
+- `fieldMappings: FieldMappings`
+
+**Optional data fields:**
+- `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
+- `repeatCount?: number`
+- `templateId?: string`
+- `generatedItems?: string[]`
+- `createdNodeIds?: string[]`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedText?: string`
+- `generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string; model?: string; templateId?: string }>`
+- `activeResultIndex?: number`
+- `lastSystemPrompt?: string`
+- `lastUserPrompt?: string`
+- `referenceImageUrls?: readonly string[]`
+- `referenceVideoUrls?: readonly string[]`
+- `referenceAudioUrls?: readonly string[]`
 
 **Default data:**
 ```json

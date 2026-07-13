@@ -27,7 +27,7 @@ const ACCEPTS_PROMPT = (t: string) => isValidGenerateScriptConnection("prompt", 
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
-  const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel || LLM_FEATURE_DEFAULTS["generate-script"]), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel || LLM_FEATURE_DEFAULTS["generate-script"], nodeData.reasoningEffort), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)

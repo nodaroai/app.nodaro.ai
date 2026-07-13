@@ -1,7 +1,7 @@
 ---
 node_type: after-effects
-generated_at: 2026-05-18T13:23:37.594Z
-generated_from: cb1e786d
+generated_at: 2026-07-13T16:11:49.848Z
+generated_from: 9af14ef89
 ---
 
 # After Effects
@@ -25,6 +25,7 @@ generated_from: cb1e786d
 - `width?: number`
 - `height?: number`
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

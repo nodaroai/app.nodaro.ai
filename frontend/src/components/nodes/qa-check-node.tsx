@@ -17,7 +17,7 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
-  const credits = useModelCredits(buildLlmCreditIdentifier("qa-check", nodeData.llmModel || LLM_FEATURE_DEFAULTS["qa-check"]), 1)
+  const credits = useModelCredits(buildLlmCreditIdentifier("qa-check", nodeData.llmModel || LLM_FEATURE_DEFAULTS["qa-check"], nodeData.reasoningEffort), 1)
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>

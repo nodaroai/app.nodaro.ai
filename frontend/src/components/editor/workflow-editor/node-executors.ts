@@ -491,12 +491,13 @@ export function runScriptGeneration(
   targetDuration?: number,
   provider?: string,
   llmModel?: string,
+  reasoningEffort?: string,
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
   return new Promise<string>((resolve, reject) => {
-    generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, userId: ctx.userId })
+    generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, userId: ctx.userId })
       .then(({ jobId }) => {
         if (ctx.signal?.aborted) {
           // Run discarded/aborted while the create-job request was in flight.
@@ -628,6 +629,7 @@ export function runLottiePlanGeneration(
     durationSeconds: number;
     backgroundColor?: string;
     llmModel?: string;
+    reasoningEffort?: string;
     previousSids?: string[];
   },
   ctx: ExecutionContext,

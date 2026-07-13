@@ -38,6 +38,7 @@ import type {
   RenderVideoData,
 } from "@/types/nodes"
 import { LlmModelSelect } from "./llm-model-select"
+import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import { motionGraphicsFeature } from "@nodaro/shared"
@@ -62,6 +63,12 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
         feature="scene-graph-ai"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature="scene-graph-ai"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
 
       <MappableField field="compositionPrompt" label="Composition Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -110,6 +117,12 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
         feature="after-effects"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature="after-effects"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
 
       <MappableField field="effectPrompt" label="Effect Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -194,6 +207,12 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
       />
+      <ReasoningEffortSelect
+        feature="lottie-overlay"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
+      />
 
       <MappableField field="overlayPrompt" label="Overlay Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -277,6 +296,12 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
         feature="3d-title"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature="3d-title"
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
 
       <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
@@ -416,6 +441,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
         feature={motionGraphicsFeature(data.engine)}
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+      />
+      <ReasoningEffortSelect
+        feature={motionGraphicsFeature(data.engine)}
+        modelId={data.llmModel}
+        value={data.reasoningEffort}
+        onChange={(v) => onUpdate({ reasoningEffort: v })}
       />
 
       <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={

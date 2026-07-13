@@ -13,7 +13,7 @@ import type { ThreeDTitleData } from "@/types/nodes"
 
 function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ThreeDTitleData
-  const credits = useModelCredits(buildLlmCreditIdentifier("3d-title", nodeData.llmModel || LLM_FEATURE_DEFAULTS["3d-title"]), 15)
+  const credits = useModelCredits(buildLlmCreditIdentifier("3d-title", nodeData.llmModel || LLM_FEATURE_DEFAULTS["3d-title"], nodeData.reasoningEffort), 15)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

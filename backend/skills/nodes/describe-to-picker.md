@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-06-14T23:30:29.182Z
-generated_from: 90fa6b6ee
+generated_at: 2026-07-13T16:11:49.654Z
+generated_from: 9af14ef89
 ---
 
 # Describe to Picker
@@ -18,6 +18,7 @@ generated_from: 90fa6b6ee
 
 **Optional data fields:**
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `instructions?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`

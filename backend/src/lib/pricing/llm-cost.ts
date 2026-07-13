@@ -40,8 +40,18 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "claude-sonnet-4.6": { inputPricePerM: 3.00,  outputPricePerM: 15.00 },
   "gpt-5.2":           { inputPricePerM: 2.50,  outputPricePerM: 10.00 },
   "gemini-3.1-pro":    { inputPricePerM: 0.50,  outputPricePerM: 3.50 },
-  "claude-opus-4.7":   { inputPricePerM: 5.00,  outputPricePerM: 25.00 },
-  "gpt-5.4":           { inputPricePerM: 10.00, outputPricePerM: 40.00 },
+  // KIE-routed models below are pinned to KIE's published list prices
+  // (kie.ai/claude-opus-4-7, kie.ai/gpt-5-4, kie.ai/gpt-5-5, kie.ai/gpt-5-6,
+  // kie.ai/claude-sonnet-5, kie.ai/claude-opus-4-8).
+  "claude-opus-4.7":   { inputPricePerM: 1.425, outputPricePerM: 7.15 },
+  "gpt-5.4":           { inputPricePerM: 0.70,  outputPricePerM: 5.60 },
+  "gpt-5.5":           { inputPricePerM: 1.40,  outputPricePerM: 8.40 },
+  "gpt-5.6-luna":      { inputPricePerM: 0.28,  outputPricePerM: 1.68 },
+  "gpt-5.6-terra":     { inputPricePerM: 0.70,  outputPricePerM: 4.20 },
+  "gpt-5.6-sol":       { inputPricePerM: 1.40,  outputPricePerM: 8.40 },
+  // grok-4.5 deferred — add its rate row when the model lands in the registry.
+  "claude-sonnet-5":   { inputPricePerM: 0.85,  outputPricePerM: 4.275 },
+  "claude-opus-4.8":   { inputPricePerM: 2.00,  outputPricePerM: 10.00 },
 }
 
 /** Calculate provider cost in USD from token usage and model pricing. */

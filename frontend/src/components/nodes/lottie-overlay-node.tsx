@@ -14,7 +14,7 @@ import type { LottieOverlayData } from "@/types/nodes"
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LottieOverlayData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("lottie-overlay", nodeData.llmModel || LLM_FEATURE_DEFAULTS["lottie-overlay"]), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("lottie-overlay", nodeData.llmModel || LLM_FEATURE_DEFAULTS["lottie-overlay"], nodeData.reasoningEffort), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

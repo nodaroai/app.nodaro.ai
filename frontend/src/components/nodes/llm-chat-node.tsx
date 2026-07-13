@@ -115,7 +115,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   }, [Boolean(activeText), outputView])
   const capOutput = shouldCapOutput(contentHeight, isResized)
 
-  const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"]), 3)
+  const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"], nodeData.reasoningEffort), 3)
   const template = getGenerateTextTemplate(nodeData.templateId ?? "")
 
   // Per-result model + template — what actually produced the active result

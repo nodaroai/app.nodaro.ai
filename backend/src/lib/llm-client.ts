@@ -9,8 +9,8 @@
 
 import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
-import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort } from "@nodaro/shared"
+import type { LlmModelDef, LlmFeature, LlmReasoningEffort } from "@nodaro/shared"
 import { calculateLlmCost } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
@@ -19,6 +19,11 @@ import { extractJsonFromAIResponse } from "./json-utils.js"
 import { restrictObjectSchemas } from "./json-schema-strict.js"
 
 const LLM_TIMEOUT_MS = 120_000
+
+// KIE Claude-proxy passthrough facts. When false, the affected request class
+// routes direct-Anthropic instead of through KIE.
+const KIE_CLAUDE_EFFORT_VERIFIED = false // thinking/output_config passthrough NOT verified — effort-carrying calls route direct
+const KIE_CLAUDE_TOOLS_VERIFIED = true   // forced tool_choice passthrough verified 2026-07-13
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -42,6 +47,12 @@ export interface LlmRequest {
   messages: LlmMessage[]
   maxTokens?: number
   temperature?: number
+  /**
+   * Requested reasoning effort. Clamped to the model's declared levels
+   * (`effectiveReasoningEffort`); undefined / unsupported → nothing is sent
+   * and the vendor default applies.
+   */
+  reasoningEffort?: LlmReasoningEffort
   /** Feature name — used only for default model resolution */
   feature?: string
   /**
@@ -75,12 +86,22 @@ export interface LlmResponse {
 export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
 
-  // Claude models: use direct Anthropic SDK (more reliable than KIE proxy)
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-    return callAnthropicDirect(model, req)
+    const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
+    const mustDirect =
+      (req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool" && !KIE_CLAUDE_TOOLS_VERIFIED) ||
+      (eff !== undefined && !KIE_CLAUDE_EFFORT_VERIFIED)
+    if (!model.preferKie || mustDirect || !config.KIE_API_KEY) {
+      return callAnthropicDirect(model, req)
+    }
+    try {
+      return await callKie(model, req)
+    } catch {
+      // KIE proxy failure — the direct SDK is the reliability backstop.
+      return callAnthropicDirect(model, req)
+    }
   }
 
-  // Other models: use KIE.ai
   if (config.KIE_API_KEY) {
     return callKie(model, req)
   }
@@ -95,12 +116,27 @@ export async function llmStream(
 ): Promise<LlmResponse> {
   const model = resolveModel(req)
 
-  // Claude models: use direct Anthropic SDK (more reliable than KIE proxy)
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-    return streamAnthropicDirect(model, req, onToken, signal)
+    const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
+    // streamed forced-tool output is not parsed on the KIE path — always take the direct SDK for structured streams
+    const mustDirect =
+      (req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool") ||
+      (eff !== undefined && !KIE_CLAUDE_EFFORT_VERIFIED)
+    if (!model.preferKie || mustDirect || !config.KIE_API_KEY) {
+      return streamAnthropicDirect(model, req, onToken, signal)
+    }
+    // Fall back only if KIE fails BEFORE any token reached the caller — after
+    // that the stream is tainted and the error must surface.
+    let emitted = false
+    const wrapped = (chunk: string) => { emitted = true; onToken(chunk) }
+    try {
+      return await streamKie(model, req, wrapped, signal)
+    } catch (err) {
+      if (emitted) throw err
+      return streamAnthropicDirect(model, req, onToken, signal)
+    }
   }
 
-  // Other models: use KIE.ai
   if (config.KIE_API_KEY) {
     return streamKie(model, req, onToken, signal)
   }
@@ -219,6 +255,23 @@ function effectiveTimeout(req: LlmRequest): number {
   return req.timeoutMs ?? LLM_TIMEOUT_MS
 }
 
+/** Per-request derived params: clamped effort, temperature (stripped for
+ *  models that reject it), and the output-token cap (raised to 32768 at
+ *  xhigh/max so thinking doesn't truncate the answer). */
+function deriveParams(model: LlmModelDef, req: LlmRequest): {
+  eff: LlmReasoningEffort | undefined
+  temperature: number | undefined
+  maxTokens: number
+} {
+  const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
+  const temperature = model.supportsTemperature === false ? undefined : req.temperature
+  let maxTokens = req.maxTokens ?? model.maxOutputTokens
+  if (req.maxTokens === undefined && (eff === "xhigh" || eff === "max")) {
+    maxTokens = Math.max(model.maxOutputTokens, 32768)
+  }
+  return { eff, temperature, maxTokens }
+}
+
 // ---------------------------------------------------------------------------
 // Shared message builders
 // ---------------------------------------------------------------------------
@@ -277,10 +330,24 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
     return { role: m.role, content: blocks }
   })
 
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
   return {
     model: model.kieSlugOrModel,
-    max_tokens: req.maxTokens ?? model.maxOutputTokens,
-    temperature: req.temperature,
+    max_tokens: maxTokens,
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(eff !== undefined ? { thinking: { type: "adaptive" }, output_config: { effort: eff } } : {}),
+    // Forced-tool structured output — mirrors callAnthropicDirect's pattern.
+    // KIE_CLAUDE_TOOLS_VERIFIED gates routing (see llmComplete/llmStream); once
+    // a structured call reaches here, the schema must actually be carried on
+    // the wire or KIE has no way to know to emit a tool_use block.
+    ...(req.jsonSchema && model.structuredOutputMode === "anthropic-tool" ? {
+      tools: [{
+        name: req.jsonSchema.name,
+        description: "Emit the structured result.",
+        input_schema: req.jsonSchema.schema,
+      }],
+      tool_choice: { type: "tool", name: req.jsonSchema.name },
+    } : {}),
     system: req.system,
     messages,
   }
@@ -354,13 +421,53 @@ function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, 
   }
 }
 
-/** Build LlmResponse with computed provider cost from token usage. */
-function buildResponse(model: LlmModelDef, text: string, usage?: { inputTokens: number; outputTokens: number }): LlmResponse {
+/**
+ * KIE's non-stream responses carry `credits_consumed` (KIE credits; 1 credit
+ * = $0.005) — the ACTUAL provider charge for that call, which can drift from
+ * our per-token rate table as KIE repriced models. Returns undefined when the
+ * field is absent/non-positive/non-numeric so callers fall back to the table
+ * estimate. KIE's SSE stream responses don't reliably carry this field, so
+ * streaming call sites never pass data through this helper (table estimate
+ * only — see {@link parseSseStream}).
+ */
+const KIE_CREDIT_USD = 0.005
+
+function extractActualUsd(data: unknown): number | undefined {
+  const kieCredits = (data as { credits_consumed?: unknown }).credits_consumed
+  return typeof kieCredits === "number" && Number.isFinite(kieCredits) && kieCredits > 0
+    ? kieCredits * KIE_CREDIT_USD
+    : undefined
+}
+
+/**
+ * Build LlmResponse with computed provider cost from token usage. When
+ * `actualUsd` is supplied (real KIE `credits_consumed` billing — see
+ * {@link extractActualUsd}), it wins over the per-token table estimate; the
+ * table estimate is still computed (when usage is available) so it can be
+ * compared against the actual for drift detection. A >25% divergence between
+ * the two logs an ops signal — KIE's real price moved and the rate table in
+ * `pricing/llm-cost.ts` needs a manual reprice.
+ */
+function buildResponse(
+  model: LlmModelDef,
+  text: string,
+  usage?: { inputTokens: number; outputTokens: number },
+  actualUsd?: number,
+): LlmResponse {
+  const tableEstimate = usage ? calculateLlmCost(model, usage) : undefined
+  if (actualUsd !== undefined && tableEstimate !== undefined && tableEstimate > 0) {
+    const drift = Math.abs(actualUsd - tableEstimate) / tableEstimate
+    if (drift > 0.25) {
+      console.warn(
+        `[llm-cost-drift] model=${model.id} estimated=$${tableEstimate.toFixed(6)} actual=$${actualUsd.toFixed(6)}`,
+      )
+    }
+  }
   return {
     text,
     usage,
     model: model.id,
-    providerCost: usage ? calculateLlmCost(model, usage) : undefined,
+    providerCost: actualUsd ?? tableEstimate,
   }
 }
 
@@ -419,11 +526,13 @@ async function streamKie(
 
 async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
-    max_tokens: req.maxTokens ?? model.maxOutputTokens,
-    temperature: req.temperature,
+    max_tokens: maxTokens,
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(eff !== undefined ? { reasoning_effort: eff } : {}),
   }
   const responseFormat = kieResponseFormat(model, req)
   if (responseFormat) body.response_format = responseFormat
@@ -446,18 +555,25 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   const text = (choices?.[0]?.message as Record<string, unknown>)?.content as string ?? ""
   const usage = data.usage as Record<string, number> | undefined
 
-  return buildResponse(model, text, usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined)
+  return buildResponse(
+    model,
+    text,
+    usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined,
+    extractActualUsd(data),
+  )
 }
 
 async function streamKieChatCompletions(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
-    max_tokens: req.maxTokens ?? model.maxOutputTokens,
-    temperature: req.temperature,
+    max_tokens: maxTokens,
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(eff !== undefined ? { reasoning_effort: eff } : {}),
     stream: true,
   }
   const responseFormat = kieResponseFormat(model, req)
@@ -500,11 +616,22 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   const data = await response.json() as Record<string, unknown>
   assertKieEnvelope(data, model.id, "messages")
   const content = data.content as Array<Record<string, unknown>> | undefined
-  const textBlock = content?.find((b) => b.type === "text")
-  const text = (textBlock?.text as string) ?? ""
+  // A forced-tool structured call (see buildMessagesBody) returns its result in
+  // a tool_use block, not text — prefer it so schema-carrying calls aren't
+  // silently parsed as empty text. Plain-text calls are unaffected (no tool_use
+  // block present, falls through to the text block exactly as before).
+  const toolUseBlock = content?.find((b) => b.type === "tool_use")
+  const text = toolUseBlock
+    ? JSON.stringify((toolUseBlock as { input?: unknown }).input ?? {})
+    : ((content?.find((b) => b.type === "text")?.text as string) ?? "")
   const usage = data.usage as Record<string, number> | undefined
 
-  return buildResponse(model, text, usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined)
+  return buildResponse(
+    model,
+    text,
+    usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
+    extractActualUsd(data),
+  )
 }
 
 async function streamKieMessages(
@@ -533,12 +660,14 @@ async function streamKieMessages(
 async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/codex/v1/responses`
   // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     input: buildResponsesInput(req),
     stream: false,
+    ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }
-  if (req.maxTokens) body.max_output_tokens = req.maxTokens
+  if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
 
   const response = await fetch(url, {
     method: "POST",
@@ -561,7 +690,12 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   const text = (textBlock?.text as string) ?? ""
   const usage = data.usage as Record<string, number> | undefined
 
-  return buildResponse(model, text, usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined)
+  return buildResponse(
+    model,
+    text,
+    usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
+    extractActualUsd(data),
+  )
 }
 
 async function streamKieResponses(
@@ -569,12 +703,14 @@ async function streamKieResponses(
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/codex/v1/responses`
   // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     input: buildResponsesInput(req),
     stream: true,
+    ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }
-  if (req.maxTokens) body.max_output_tokens = req.maxTokens
+  if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
 
   const response = await fetch(url, {
     method: "POST",
@@ -597,6 +733,7 @@ async function streamKieResponses(
 
 async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const anthropic = getAnthropicClient()
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
 
   // Forced single-tool structured output: guaranteed schema-shaped JSON. We
   // return the tool input serialized as `text` so the rest of the pipeline
@@ -607,7 +744,7 @@ async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise
     const response = await anthropic.messages.create(
       {
         model: model.directFallbackModel!,
-        max_tokens: req.maxTokens ?? model.maxOutputTokens,
+        max_tokens: maxTokens,
         system: req.system,
         messages: buildAnthropicMessages(req),
         tools: [{
@@ -616,7 +753,8 @@ async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise
           input_schema: req.jsonSchema.schema as Anthropic.Messages.Tool.InputSchema,
         }],
         tool_choice: { type: "tool", name: toolName },
-      },
+        ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
+      } as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming,
       { timeout: effectiveTimeout(req) },
     )
     const toolUse = response.content.find(
@@ -629,11 +767,12 @@ async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise
   const response = await anthropic.messages.create(
     {
       model: model.directFallbackModel!,
-      max_tokens: req.maxTokens ?? model.maxOutputTokens,
-      temperature: req.temperature,
+      max_tokens: maxTokens,
+      ...(temperature !== undefined ? { temperature } : {}),
       system: req.system,
       messages: buildAnthropicMessages(req),
-    },
+      ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
+    } as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming,
     { timeout: effectiveTimeout(req) },
   )
 
@@ -646,14 +785,16 @@ async function streamAnthropicDirect(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const anthropic = getAnthropicClient()
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
   const stream = anthropic.messages.stream(
     {
       model: model.directFallbackModel!,
-      max_tokens: req.maxTokens ?? model.maxOutputTokens,
-      temperature: req.temperature,
+      max_tokens: maxTokens,
+      ...(temperature !== undefined ? { temperature } : {}),
       system: req.system,
       messages: buildAnthropicMessages(req),
-    },
+      ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
+    } as unknown as Anthropic.Messages.MessageCreateParamsStreaming,
     { timeout: effectiveTimeout(req) },
   )
 

@@ -350,3 +350,44 @@ describe("suno-generate quick configs", () => {
     expect(NODE_QUICK_CONFIGS["suno-cover"].map((c) => c.field)).toEqual(["model"])
   })
 })
+
+// ===========================================================================
+// LLM-backed quick configs — reasoningEffortControl registration + options
+// ===========================================================================
+describe("LLM-backed quick configs — reasoningEffortControl", () => {
+  it("generate-script/qa-check/image-to-text/image-critic/motion-graphics/3d-title register [llmModel, reasoningEffort]", () => {
+    for (const type of ["generate-script", "qa-check", "image-to-text", "image-critic", "motion-graphics", "3d-title"]) {
+      expect(NODE_QUICK_CONFIGS[type].map((c) => c.field), type).toEqual(["llmModel", "reasoningEffort"])
+    }
+  })
+
+  it("describe-to-picker registers [llmModel, reasoningEffort] via the vision-model control", () => {
+    expect(NODE_QUICK_CONFIGS["describe-to-picker"].map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
+  })
+
+  it("forced-alignment keeps just the model control (ForcedAlignmentData has no reasoningEffort field)", () => {
+    expect(NODE_QUICK_CONFIGS["forced-alignment"].map((c) => c.field)).toEqual(["llmModel"])
+  })
+
+  it("returns [] for a model with no declared reasoning levels (control self-hides)", () => {
+    const effortControl = NODE_QUICK_CONFIGS["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.2" }) : effortControl.options
+    expect(opts).toEqual([])
+  })
+
+  it("returns [] when no llmModel is set on the node yet", () => {
+    const effortControl = NODE_QUICK_CONFIGS["qa-check"].find((c) => c.field === "reasoningEffort")!
+    const opts = typeof effortControl.options === "function" ? effortControl.options({}) : effortControl.options
+    expect(opts).toEqual([])
+  })
+
+  it("returns Auto + the model's declared reasoning levels with friendly labels", () => {
+    const effortControl = NODE_QUICK_CONFIGS["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.6-terra" }) : effortControl.options
+    expect(opts.map((o) => o.value)).toEqual(["auto", "none", "low", "medium", "high", "xhigh", "max"])
+    // Auto is the sentinel (unset ⇒ vendor default); levels use the shared friendly labels
+    expect(effortControl.sentinelUndefined).toBe("auto")
+    expect(opts[0]).toEqual({ value: "auto", label: "Auto" })
+    expect(opts.find((o) => o.value === "max")?.label).toBe("Max (may bill one tier up)")
+  })
+})

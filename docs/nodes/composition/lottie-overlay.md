@@ -2,7 +2,9 @@
 > AI-placed timed Lottie animations overlaid on video.
 
 ## Overview
-The Lottie Overlay node uses Claude Sonnet to interpret a prompt and select, position, and time Lottie animations from a built-in library. The AI determines which animations to use, where to place them on screen, and when they should appear and disappear. The result is rendered using `@remotion/lottie` with `delayRender`/`continueRender` for each overlay.
+The Lottie Overlay node uses Claude Sonnet (configurable via the model selector — any of the shared LLM registry's models) to interpret a prompt and select, position, and time Lottie animations from a built-in library. The AI determines which animations to use, where to place them on screen, and when they should appear and disappear. The result is rendered using `@remotion/lottie` with `delayRender`/`continueRender` for each overlay.
+
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up, same rule as every other LLM-backed node — see the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
 The built-in animations are self-hosted on the Nodaro CDN (`https://cdn.nodaro.ai/lottie-catalog/<name>.json`) — there is no third-party dependency. Plans authored before the catalog moved to self-hosting (which referenced the old third-party URLs) heal automatically at render time, so saved workflows keep working without any edit.
 

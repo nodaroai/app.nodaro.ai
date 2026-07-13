@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/accordion"
 import type { LLMChatData } from "@/types/nodes"
 import { LlmModelSelect } from "./llm-model-select"
+import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -166,6 +167,10 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       ...(isDefaultOrEmpty && tpl.defaultInput ? { userInput: tpl.defaultInput } : {}),
       ...(tpl.defaultMaxTokens ? { maxTokens: tpl.defaultMaxTokens } : {}),
       ...(tpl.llmModel ? { llmModel: tpl.llmModel } : {}),
+      // Applying a template RESETS effort (unconditional — a template without a
+      // saved effort clears it to Auto, so an expensive tier never silently
+      // carries across template swaps); Save/Update capture it conditionally.
+      reasoningEffort: tpl.reasoningEffort,
     })
   }
 
@@ -196,6 +201,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         systemPrompt: data.systemPrompt,
         ...(data.maxTokens ? { defaultMaxTokens: data.maxTokens } : {}),
         ...(data.llmModel ? { llmModel: data.llmModel } : {}),
+        ...(data.reasoningEffort ? { reasoningEffort: data.reasoningEffort } : {}),
       },
     ])
   }
@@ -212,6 +218,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
               systemPrompt: data.systemPrompt,
               ...(data.maxTokens ? { defaultMaxTokens: data.maxTokens } : {}),
               ...(data.llmModel ? { llmModel: data.llmModel } : {}),
+              ...(data.reasoningEffort ? { reasoningEffort: data.reasoningEffort } : {}),
             }
           : t,
       ),
@@ -336,6 +343,12 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           feature="llm-chat"
           value={data.llmModel}
           onChange={(v) => onUpdate({ llmModel: v })}
+        />
+        <ReasoningEffortSelect
+          feature="llm-chat"
+          modelId={data.llmModel}
+          value={data.reasoningEffort}
+          onChange={(v) => onUpdate({ reasoningEffort: v })}
         />
       </div>
 

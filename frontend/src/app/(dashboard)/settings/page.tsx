@@ -25,6 +25,7 @@ import {
 import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation } from "@/hooks/queries/use-user-settings-queries"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { LlmModelSelect } from "@/components/editor/config-panels/llm-model-select"
+import { ReasoningEffortSelect } from "@/components/editor/config-panels/reasoning-effort-select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -730,6 +731,12 @@ function TextTemplateCard({
               onChange={(modelId) => onChange(template.id, { llmModel: modelId })}
             />
           </div>
+          <ReasoningEffortSelect
+            feature="llm-chat"
+            modelId={template.llmModel}
+            value={template.reasoningEffort}
+            onChange={(v) => onChange(template.id, { reasoningEffort: v })}
+          />
         </div>
       ) : (
         <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap text-muted-foreground line-clamp-3">

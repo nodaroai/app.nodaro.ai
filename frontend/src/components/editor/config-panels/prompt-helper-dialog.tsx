@@ -25,8 +25,10 @@ import {
 import { wizardAnalyze, wizardGenerate } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared"
 import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro/prompts"
 import { LlmModelSelect } from "./llm-model-select"
+import { ReasoningEffortSelect } from "./reasoning-effort-select"
 
 interface PromptHelperDialogProps {
   readonly open: boolean
@@ -146,6 +148,9 @@ export function PromptHelperDialog({
   const [llmModel, setLlmModel] = useState<string | undefined>(() => {
     return localStorage.getItem("prompt-wizard-model") || "gemini-3.1-pro"
   })
+  const [reasoningEffort, setReasoningEffort] = useState<LlmReasoningEffort | undefined>(() => {
+    return (localStorage.getItem("prompt-wizard-reasoning-effort") as LlmReasoningEffort | null) || undefined
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -198,6 +203,15 @@ export function PromptHelperDialog({
     localStorage.setItem("prompt-wizard-model", modelId)
   }
 
+  function handleReasoningEffortChange(value: LlmReasoningEffort | undefined) {
+    setReasoningEffort(value)
+    if (value) {
+      localStorage.setItem("prompt-wizard-reasoning-effort", value)
+    } else {
+      localStorage.removeItem("prompt-wizard-reasoning-effort")
+    }
+  }
+
   function handlePreferenceChange(value: string) {
     setUserPreference(value)
     if (value) {
@@ -208,7 +222,7 @@ export function PromptHelperDialog({
   }
 
   const effectiveModel = llmModel || LLM_FEATURE_DEFAULTS["prompt-helper"]
-  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", effectiveModel), 1)
+  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", effectiveModel, reasoningEffort), 1)
 
   // -- Phase 1: Analyze --
   async function handleAnalyze() {
@@ -223,6 +237,7 @@ export function PromptHelperDialog({
         aspectRatio,
         duration,
         llmModel,
+        reasoningEffort,
         nodeContext,
         userPreference: userPreference || undefined,
       })
@@ -280,6 +295,7 @@ export function PromptHelperDialog({
         aspectRatio,
         duration,
         llmModel,
+        reasoningEffort,
         selections: selectionList,
         originalPrompt: roughIdea || undefined,
         nodeContext,
@@ -514,6 +530,12 @@ export function PromptHelperDialog({
               </div>
 
               <LlmModelSelect feature="prompt-helper" value={llmModel} onChange={handleModelChange} />
+              <ReasoningEffortSelect
+                feature="prompt-helper"
+                modelId={llmModel}
+                value={reasoningEffort}
+                onChange={handleReasoningEffortChange}
+              />
             </>
           )}
 

@@ -28,27 +28,39 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | Instructions (System Prompt) | `string` | `""` | Optional system instructions that guide the model's behavior and output format. Labeled **Instructions (System Prompt)** in the config panel and **Instructions** on the node handle |
 | User Input | `string` | `""` | The main prompt. Can include references to upstream nodes via field mappings |
 | Model | `string` | `gemini-3-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
-| Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative) |
+| Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 family, Claude Sonnet 5, and Claude Opus 4.8) |
 | Max Tokens | `number` | `2048` | Maximum output length in tokens |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
+| Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
 
 ### Model selector
 
-The model is chosen from the shared LLM model selector and determines the credit cost by tier:
+The model is chosen from the shared LLM model selector and determines the credit cost by tier. All 13 models accept an image reference; only the **Gemini** models additionally accept video and audio references.
 
-| Tier | Models | Multimodal |
-|------|--------|------------|
-| Economy | Gemini Flash, Claude Haiku | Gemini Flash: image + video + audio. Haiku: image only |
-| Standard | Claude Sonnet, GPT-5.2 | image only |
-| Premium | Gemini Pro, Claude Opus, GPT-5.4 | Gemini Pro: image + video + audio. Opus / GPT-5.4: image only |
+| Model | Tier | Multimodal (references) |
+|-------|------|--------------------------|
+| Gemini 3 Flash | Economy | image + video + audio |
+| Claude Haiku 4.5 | Economy | image only |
+| GPT-5.6 Luna | Economy | image only |
+| Claude Sonnet 4.6 | Standard | image only |
+| GPT-5.2 | Standard | image only |
+| GPT-5.6 Terra | Standard | image only |
+| Claude Sonnet 5 | Standard | image only |
+| Gemini 3.1 Pro | Premium | image + video + audio |
+| Claude Opus 4.7 | Premium | image only |
+| GPT-5.4 | Premium | image only |
+| GPT-5.5 | Premium | image only |
+| GPT-5.6 Sol | Premium | image only |
+| Claude Opus 4.8 | Premium | image only |
 
-The default model is Gemini Flash (economy tier). All models accept an image reference; only the **Gemini** models accept video and audio references.
+The default model is Gemini 3 Flash (economy tier). 9 of the 13 models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever) — see [Reasoning effort](#reasoning-effort).
 
 ## Canvas controls
 
 Hovering the node on the canvas reveals a quick toolbar beneath it, mirroring the Generate Image node:
 
 - **AI Model** — pick the LLM (same options as the config panel's model selector).
+- **Effort** — reasoning effort for models that support it; hidden when the selected model has no reasoning levels. See [Reasoning effort](#reasoning-effort).
 - **Preset** — choose a built-in preset or one of your saved presets.
 - **# of runs** — generate 1–4 results per click; the Run button's credit cost updates to reflect the multiplier.
 - **Run** — execute the node.
@@ -119,6 +131,19 @@ Cost depends on the selected model's tier.
 | Premium | Claude Opus, GPT-5.4, Gemini Pro | **3** |
 
 The credit identifier is `llm-chat` (standard), `llm-chat:economy`, or `llm-chat:premium`, built from the selected model at request time. These match the runtime `STATIC_CREDIT_COSTS` values (`llm-chat` = 2, `llm-chat:economy` = 1, `llm-chat:premium` = 3).
+
+## Reasoning effort
+
+Reasoning-capable models expose an **Effort** selector (Auto/low/…/max — the levels vary
+per model). **Auto** applies the vendor default. `xhigh` and `max` bill **one tier up**:
+economy models bill the standard price, standard models bill the premium price, premium
+models are unchanged.
+
+Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
+- GPT-5.6 Luna at `max` → 2 credits (economy billed as standard)
+- GPT-5.6 Terra at `xhigh` → 3 credits (standard billed as premium)
+- GPT-5.6 Sol at `max` → 3 credits (premium, unchanged)
+- Claude Sonnet 5 at `high` → 2 credits (high never changes the price)
 
 ## Best Practices
 

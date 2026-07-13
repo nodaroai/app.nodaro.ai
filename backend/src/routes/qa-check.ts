@@ -5,7 +5,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -20,6 +20,7 @@ const qaCheckBody = z.object({
   provider: z.enum(["claude", "gpt"]).default("claude"),
   threshold: z.number().min(0).max(1).default(0.7),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -66,7 +67,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["qa-check"]
-      const modelIdentifier = buildLlmCreditIdentifier("qa-check", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("qa-check", llmModel, parsed.data.reasoningEffort)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -107,6 +108,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
           system: systemPrompt,
           messages: [{ role: "user", content: `Evaluate the following content:\n\n${content}` }],
           maxTokens: 1024,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         const rawText = response.text
