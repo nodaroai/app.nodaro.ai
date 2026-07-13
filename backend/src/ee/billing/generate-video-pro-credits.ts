@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { MODEL_CATALOG, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 
 /**
@@ -62,8 +62,11 @@ function computeSplit(requestedSec: number, capSec: number): SplitResult {
   return { mode: "multi" as const, clampedD: d, n, s, durations }
 }
 
-/** Fixed per-join tail overlap (seconds) the reserve formula charges at the video-ref rate for every join after the first segment. */
-const TAIL_SEC = 1
+/** Fixed per-join tail overlap (seconds) the reserve formula charges at the
+ *  video-ref rate for every join after the first segment. Single-sourced
+ *  from the shared continuation-ref length (KIE r2v floor 1.8s) so the
+ *  billed overlap always matches what the engine actually cuts. */
+const TAIL_SEC = SEEDANCE_2_CONTINUATION_REF_SEC
 
 /**
  * Clamp a requested resolution to the provider's catalog resolutions (single

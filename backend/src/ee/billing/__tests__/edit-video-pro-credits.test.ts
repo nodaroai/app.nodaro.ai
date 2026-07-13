@@ -70,7 +70,7 @@ describe("golden-table composite sanity (seedance-2 ref family + edit-video-pro 
 // ---------------------------------------------------------------------------
 
 describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge unless noted)", () => {
-  it("mid-video span 10 (A=2,B=12,D=20) -> reserveBase 92, reserveResolution 720p", async () => {
+  it("mid-video span 10 (A=2,B=12,D=20) -> reserveBase 104, reserveResolution 720p", async () => {
     probeMock.mockResolvedValue(probe720(20))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -88,15 +88,15 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     // computeSplit(10+0.6=10.6, 120) -> round to 11, single segment
     expect(result.segmentCount).toBe(1)
     expect(result.totalRawSec).toBe(11)
-    // refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=1 (tail>=MIN_REF) = 2
-    expect(result.refsSecReserve).toBe(2)
+    // (refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=1 (tail>=MIN_REF)) × MIN_REF(2) = 4
+    expect(result.refsSecReserve).toBe(4)
     expect(result.reserveResolution).toBe("720p")
-    // feeBase(10) + ceil(6.25 × (11 + 2)) = 10 + ceil(81.25) = 10 + 82 = 92
-    expect(result.reserveBase).toBe(92)
+    // feeBase(10) + ceil(6.25 × (11 + 4)) = 10 + ceil(93.75) = 10 + 94 = 104
+    expect(result.reserveBase).toBe(104)
     expect(result.spanExceedsSource).toBe(false)
   })
 
-  it("A=0 span 10 (A=0,B=10,D=20) -> reserveBase 79", async () => {
+  it("A=0 span 10 (A=0,B=10,D=20) -> reserveBase 85", async () => {
     probeMock.mockResolvedValue(probe720(20))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -109,14 +109,14 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     expect(result.outerSeamLossReserve).toBe(0.3)
     expect(result.segmentCount).toBe(1)
     expect(result.totalRawSec).toBe(10)
-    // refOut=0 (A<MIN_REF) + (n-1)=0 + refIn=1 = 1
-    expect(result.refsSecReserve).toBe(1)
+    // (refOut=0 (A<MIN_REF) + (n-1)=0 + refIn=1) × MIN_REF(2) = 2
+    expect(result.refsSecReserve).toBe(2)
     expect(result.reserveResolution).toBe("720p")
-    // 10 + ceil(6.25 × (10 + 1)) = 10 + ceil(68.75) = 10 + 69 = 79
-    expect(result.reserveBase).toBe(79)
+    // 10 + ceil(6.25 × (10 + 2)) = 10 + 75 = 85
+    expect(result.reserveBase).toBe(85)
   })
 
-  it("B==D (A=10,B=20,D=20) -> reserveBase 79 (probe makes the tail edge knowable)", async () => {
+  it("B==D (A=10,B=20,D=20) -> reserveBase 85 (probe makes the tail edge knowable)", async () => {
     probeMock.mockResolvedValue(probe720(20))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -129,14 +129,14 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     expect(result.outerSeamLossReserve).toBe(0.3)
     expect(result.segmentCount).toBe(1)
     expect(result.totalRawSec).toBe(10)
-    // refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=0 (no tail) = 1 -- SAME total as the A=0 row
-    // above (which had refOut=0+refIn=1) despite a different reason, landing on the same 79.
-    expect(result.refsSecReserve).toBe(1)
-    expect(result.reserveBase).toBe(79)
+    // (refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=0 (no tail)) × MIN_REF(2) = 2 -- SAME total
+    // as the A=0 row above (which had refOut=0+refIn=1), landing on the same 85.
+    expect(result.refsSecReserve).toBe(2)
+    expect(result.reserveBase).toBe(85)
     expect(result.spanExceedsSource).toBe(false)
   })
 
-  it("A=0.5 (A=0.5,B=10.5,D=20) -> reserveBase 85 (refOut floors to 0 below MIN_REF)", async () => {
+  it("A=0.5 (A=0.5,B=10.5,D=20) -> reserveBase 92 (refOut floors to 0 below MIN_REF)", async () => {
     probeMock.mockResolvedValue(probe720(20))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -149,13 +149,13 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     expect(result.outerSeamLossReserve).toBe(0.6)
     expect(result.segmentCount).toBe(1)
     expect(result.totalRawSec).toBe(11)
-    // refOut=0 (0.5 < MIN_REF=1, the "floor") + (n-1)=0 + refIn=1 = 1
-    expect(result.refsSecReserve).toBe(1)
-    // 10 + ceil(6.25 × (11 + 1)) = 10 + ceil(75) = 10 + 75 = 85
-    expect(result.reserveBase).toBe(85)
+    // (refOut=0 (0.5 < MIN_REF=2, the "floor") + (n-1)=0 + refIn=1) × MIN_REF(2) = 2
+    expect(result.refsSecReserve).toBe(2)
+    // 10 + ceil(6.25 × (11 + 2)) = 10 + ceil(81.25) = 10 + 82 = 92
+    expect(result.reserveBase).toBe(92)
   })
 
-  it("span 20 mid (A=10,B=30,D=40) -> reserveBase 167", async () => {
+  it("span 20 mid (A=10,B=30,D=40) -> reserveBase 185", async () => {
     probeMock.mockResolvedValue(probe720(40))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -169,13 +169,13 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     expect(result.segmentCount).toBe(2)
     expect(result.totalRawSec).toBe(22)
     expect(result.segmentDurations).toEqual([11, 11])
-    // refOut=1 + (n-1)=1 + refIn=1 = 3
-    expect(result.refsSecReserve).toBe(3)
-    // 10 + ceil(6.25 × (22 + 3)) = 10 + ceil(156.25) = 10 + 157 = 167
-    expect(result.reserveBase).toBe(167)
+    // (refOut=1 + (n-1)=1 + refIn=1) × MIN_REF(2) = 6
+    expect(result.refsSecReserve).toBe(6)
+    // 10 + ceil(6.25 × (22 + 6)) = 10 + 175 = 185
+    expect(result.reserveBase).toBe(185)
   })
 
-  it("span 4, mid-video (A=8,B=12,D=20) -> reserveBase 54", async () => {
+  it("span 4, mid-video (A=8,B=12,D=20) -> reserveBase 67", async () => {
     probeMock.mockResolvedValue(probe720(20))
     const result = await computeEditVideoProPricing({
       provider: "seedance-2",
@@ -188,10 +188,10 @@ describe("computeEditVideoProPricing — golden table (seedance-2, 720p bridge u
     // computeSplit(4.6, 120) -> round to 5, single segment
     expect(result.segmentCount).toBe(1)
     expect(result.totalRawSec).toBe(5)
-    // refOut=1 + (n-1)=0 + refIn=1 = 2
-    expect(result.refsSecReserve).toBe(2)
-    // 10 + ceil(6.25 × (5 + 2)) = 10 + ceil(43.75) = 10 + 44 = 54
-    expect(result.reserveBase).toBe(54)
+    // (refOut=1 + (n-1)=0 + refIn=1) × MIN_REF(2) = 4
+    expect(result.refsSecReserve).toBe(4)
+    // 10 + ceil(6.25 × (5 + 4)) = 10 + ceil(56.25) = 10 + 57 = 67
+    expect(result.reserveBase).toBe(67)
   })
 })
 
@@ -238,14 +238,14 @@ describe("probe failure / missing sourceUrl -> worst-case fallback (over-reserve
     expect(result.clampedSpanSec).toBe(10)
     expect(result.outerSeamLossReserve).toBe(0.6)
     expect(result.totalRawSec).toBe(11)
-    // refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=1 (assumed, probe is null) = 2
-    expect(result.refsSecReserve).toBe(2)
+    // (refOut=1 (A>=MIN_REF) + (n-1)=0 + refIn=1 (assumed, probe is null)) × MIN_REF(2) = 4
+    expect(result.refsSecReserve).toBe(4)
     // TOP tier of MODEL_CATALOG["seedance-2"].resolutions by pixel height.
     const topTier = SEEDANCE_2_RESOLUTIONS[SEEDANCE_2_RESOLUTIONS.length - 1]
     expect(topTier).toBe("4k")
     expect(result.reserveResolution).toBe("4k")
-    // feeBase(10) + ceil(rate_4k(32) × (S'=11 + refsSecReserve=2)) = 10 + ceil(32×13) = 10 + 416 = 426
-    expect(result.reserveBase).toBe(426)
+    // feeBase(10) + ceil(rate_4k(32) × (S'=11 + refsSecReserve=4)) = 10 + ceil(32×15) = 10 + 480 = 490
+    expect(result.reserveBase).toBe(490)
     expect(result.spanExceedsSource).toBe(false) // unknowable without a probe -- never flagged
   })
 
@@ -258,7 +258,7 @@ describe("probe failure / missing sourceUrl -> worst-case fallback (over-reserve
     expect(probeMock).not.toHaveBeenCalled()
     expect(result.probe).toBeNull()
     expect(result.reserveResolution).toBe("4k")
-    expect(result.reserveBase).toBe(426)
+    expect(result.reserveBase).toBe(490)
     expect(result.spanExceedsSource).toBe(false)
   })
 })
@@ -282,7 +282,7 @@ describe("source-duration clamp (spanEnd vs probed duration)", () => {
     expect(result.spanExceedsSource).toBe(true)
     expect(result.spanEndSec).toBe(20) // clamped to the probed duration
     expect(result.clampedSpanSec).toBe(18)
-    expect(result.reserveBase).toBe(142)
+    expect(result.reserveBase).toBe(154)
   })
 
   it("spanEnd within tolerance of D (A=2,B=19.98,D=20) -> tail treated absent, no flag", async () => {
@@ -298,7 +298,7 @@ describe("source-duration clamp (spanEnd vs probed duration)", () => {
     // tail treated absent (D-B=0.02 <= tolerance) -> only the head edge counts
     // toward outerSeamLossReserve (0.3*(1+0)=0.3, not 0.6).
     expect(result.outerSeamLossReserve).toBe(0.3)
-    expect(result.reserveBase).toBe(142) // same split/refs as the row above -- rounds identically
+    expect(result.reserveBase).toBe(154) // same split/refs as the row above -- rounds identically
   })
 })
 

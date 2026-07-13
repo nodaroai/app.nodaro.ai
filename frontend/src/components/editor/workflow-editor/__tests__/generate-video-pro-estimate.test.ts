@@ -48,20 +48,20 @@ describe("estimateNodeCredits — generate-video-pro", () => {
     })
   })
 
-  it("D=16 -> multi, n=2, s=17, 183", () => {
-    expect(estimateNodeCredits(gvpNode(16))).toBe(183)
+  it("D=16 -> multi, n=2, s=17, 189", () => {
+    expect(estimateNodeCredits(gvpNode(16))).toBe(189)
   })
 
-  it("D=60 -> multi, n=5, s=62, 483", () => {
-    expect(estimateNodeCredits(gvpNode(60))).toBe(483)
+  it("D=60 -> multi, n=5, s=62, 508", () => {
+    expect(estimateNodeCredits(gvpNode(60))).toBe(508)
   })
 
   it("D=8 -> single, cached composite for the snapped tier (mock 82 -> 82)", () => {
     expect(estimateNodeCredits(gvpNode(8))).toBe(82)
   })
 
-  it("D=300 clamps to 120 -> multi, n=9, s=123, 889 (same as D=120)", () => {
-    expect(estimateNodeCredits(gvpNode(300))).toBe(889)
+  it("D=300 clamps to 120 -> multi, n=9, s=123, 939 (same as D=120)", () => {
+    expect(estimateNodeCredits(gvpNode(300))).toBe(939)
   })
 
   it("uncached: single mode falls back to a per-second approximation, never throws", () => {
@@ -70,8 +70,8 @@ describe("estimateNodeCredits — generate-video-pro", () => {
     expect(estimateNodeCredits(gvpNode(8))).toBeGreaterThan(0)
   })
 
-  it("uncached: multi mode falls back to the static 82/50 rates, still 183 for D=16", () => {
+  it("uncached: multi mode falls back to the static 82/50 rates, still 189 for D=16", () => {
     vi.mocked(getCachedCredits).mockReturnValue(undefined)
-    expect(estimateNodeCredits(gvpNode(16))).toBe(183)
+    expect(estimateNodeCredits(gvpNode(16))).toBe(189)
   })
 })

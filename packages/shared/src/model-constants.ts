@@ -1140,6 +1140,29 @@ export const SEEDANCE_2_REF_LIMITS = {
 } as const
 
 /**
+ * KIE r2v REFERENCE-VIDEO MINIMUM (seconds) for the Seedance 2.0 family — the
+ * provider hard-rejects shorter reference clips with a 400 BEFORE generation:
+ * "the parameter video duration (seconds) specified in the request must be
+ * greater than or equal to 1.8 for model dreamina-seedance-2-0-fast in r2v"
+ * (2026-07-13, job dbf95612 — every 1.0s continuation tail failed
+ * deterministically). Mirror of the reference-AUDIO maximum below.
+ */
+export const SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC = 1.8
+
+/**
+ * The continuation-reference length (seconds) every Seedance-2 chaining
+ * feature actually cuts — extend-node tails, generate-video-pro segment
+ * tails, edit-video-pro refOut/refIn brackets — AND the length the gvp/evp
+ * credit formulas bill per continuation join. Clears the provider floor
+ * above with margin while staying short enough to keep the model focused on
+ * continuing the boundary motion instead of re-staging the whole clip.
+ * Guarded ≥ floor by model-constants tests; the private-plugin twin
+ * (nodaro-cloud-plugins chain.ts TAIL_SEC / bridge-math.ts MIN_REF) is
+ * guarded by that repo's r2v-ref-floor.test.ts — keep the two in sync.
+ */
+export const SEEDANCE_2_CONTINUATION_REF_SEC = 2
+
+/**
  * Trim-stitch parameters for the seedance-2-extend provider (spike-validated
  * 2026-06-11):
  * the model's extension output wobbles for its first ~3 frames and the source
@@ -1157,10 +1180,11 @@ export const SEEDANCE_2_EXTEND_STITCH = {
   trimHeadFrames: 3,
   /** Boundary audio fade length (seconds), timeline-preserving. */
   audioFadeSec: 0.15,
-  /** Seconds of the source's TAIL passed as the @video_1 reference —
-   *  spike-validated: a short tail keeps the model focused on continuing
-   *  the boundary motion instead of re-staging the whole clip. */
-  referenceTailSeconds: 1,
+  /** Seconds of the source's TAIL passed as the @video_1 reference — short
+   *  keeps the model focused on continuing the boundary motion; the value is
+   *  floored by SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC (the original spike's 1s
+   *  tail is now provider-rejected). */
+  referenceTailSeconds: SEEDANCE_2_CONTINUATION_REF_SEC,
 } as const
 
 /**

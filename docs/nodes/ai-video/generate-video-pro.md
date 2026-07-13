@@ -65,7 +65,7 @@ Billed via the same per-second Seedance 2 composite identifiers Generate Video u
 ### Multi-segment (> 15s)
 
 ```
-reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 1 + (S − 15)))
+reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 2 + (S − 15)))
 ```
 
 - **10** — flat fee covering the segmentation/stitch overhead, charged once per run regardless of segment count.
@@ -73,7 +73,7 @@ reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 1
 - **15** — the per-segment maximum. The first segment is always reserved at the full 15s cap, even when its actual length ends up shorter (see the worked example below).
 - **N** — the number of segments the request splits into.
 - **S** — the combined length (seconds) of all segments, which runs slightly longer than the requested duration to cover the per-join overlap needed for a seamless stitch.
-- **`(N − 1) × 1`** — one second of overlap per join, billed at the reference rate (each joining segment continues from the previous one's final frames).
+- **`(N − 1) × 2`** — two seconds of overlap per join, billed at the reference rate (each joining segment continues from the previous one's final 2-second tail — the minimum reference length the Seedance 2 family accepts).
 
 #### Worked examples (720p, `seedance-2`)
 
@@ -81,12 +81,12 @@ reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 1
 |---:|---|---:|---:|---:|
 | 8s | single | 1 | 8s | 82 |
 | 15s | single | 1 | 15s | 154 |
-| 16s | multi | 2 | 17s | 183 |
-| 43s | multi | 3 | 44s | 358 |
-| 60s | multi | 5 | 62s | 483 |
-| 120s | multi | 9 | 123s | 889 |
+| 16s | multi | 2 | 17s | 189 |
+| 43s | multi | 3 | 44s | 371 |
+| 60s | multi | 5 | 62s | 508 |
+| 120s | multi | 9 | 123s | 939 |
 
-**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: `10 + ceil(10.25 × 15) + ceil(6.25 × (4 × 1 + 47)) = 10 + 154 + 319 = 483` credits. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): `10 + ceil(10.25 × 14) + ceil(6.25 × (4 × 1 + 48)) = 10 + 144 + 325 = 479` credits — **4 credits refunded**. Credits are only ever refunded at commit, never charged above the reservation.
+**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: `10 + ceil(10.25 × 15) + ceil(6.25 × (4 × 2 + 47)) = 10 + 154 + 344 = 508` credits. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): `10 + ceil(10.25 × 14) + ceil(6.25 × (4 × 2 + 48)) = 10 + 144 + 350 = 504` credits — **4 credits refunded**. Credits are only ever refunded at commit, never charged above the reservation.
 
 ### Partial delivery
 

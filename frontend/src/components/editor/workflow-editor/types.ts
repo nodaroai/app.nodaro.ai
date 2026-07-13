@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -215,7 +215,7 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
   return (
     fee +
     Math.ceil(noRefPerSec * GVP_SPLIT.maxSeg) +
-    Math.ceil(refPerSec * ((split.n - 1) + (split.s - GVP_SPLIT.maxSeg)))
+    Math.ceil(refPerSec * ((split.n - 1) * SEEDANCE_2_CONTINUATION_REF_SEC + (split.s - GVP_SPLIT.maxSeg)))
   )
 }
 
@@ -244,11 +244,11 @@ function estimateEditVideoProCredits(data: EditVideoProNodeData): number {
   const tailExists = D === undefined ? true : D - spanEnd > 0.05
   const loss = 0.3 * ((headExists ? 1 : 0) + (tailExists ? 1 : 0))
   const split = gvpSplit(span + loss)
-  const refOut = spanStart >= 1 ? 1 : 0
-  const refIn = D === undefined ? 1 : (tailExists && D - spanEnd >= 1 ? 1 : 0)
+  const refOut = spanStart >= SEEDANCE_2_CONTINUATION_REF_SEC ? 1 : 0
+  const refIn = D === undefined ? 1 : (tailExists && D - spanEnd >= SEEDANCE_2_CONTINUATION_REF_SEC ? 1 : 0)
   const fee = getCachedCredits("edit-video-pro") ?? EVP_FEE_FALLBACK
   const refPerSec = gvpPerSecRate(provider, "720p", true)
-  return fee + Math.ceil(refPerSec * (split.s + refOut + (split.n - 1) + refIn))
+  return fee + Math.ceil(refPerSec * (split.s + (refOut + (split.n - 1) + refIn) * SEEDANCE_2_CONTINUATION_REF_SEC))
 }
 
 /**

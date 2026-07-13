@@ -99,7 +99,7 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.reserveBase).toBe(154)
   })
 
-  it("D=16 -> multi, n=2, s=17, durations [9,8], reserveBase 183", async () => {
+  it("D=16 -> multi, n=2, s=17, durations [9,8], reserveBase 189", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",
       resolution: "720p",
@@ -111,12 +111,12 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.totalRawSec).toBe(17)
     expect(result.segmentDurations).toEqual([9, 8])
     expect(result.creditIdentifier).toBeUndefined()
-    // feeBase(10) + ceil(noRefPerSec(10.25) × maxSeg(15)) + ceil(refPerSec(6.25) × ((n-1)×tailSec + (s-maxSeg)))
-    // = 10 + ceil(153.75) + ceil(6.25 × (1×1 + 2)) = 10 + 154 + ceil(18.75) = 10 + 154 + 19 = 183
-    expect(result.reserveBase).toBe(183)
+    // feeBase(10) + ceil(noRefPerSec(10.25) × maxSeg(15)) + ceil(refPerSec(6.25) × ((n-1)×tailSec(2) + (s-maxSeg)))
+    // = 10 + ceil(153.75) + ceil(6.25 × (1×2 + 2)) = 10 + 154 + ceil(25) = 10 + 154 + 25 = 189
+    expect(result.reserveBase).toBe(189)
   })
 
-  it("D=43 -> multi, n=3, s=44, durations [15,15,14], reserveBase 358", async () => {
+  it("D=43 -> multi, n=3, s=44, durations [15,15,14], reserveBase 371", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",
       resolution: "720p",
@@ -127,11 +127,11 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.segmentCount).toBe(3)
     expect(result.totalRawSec).toBe(44)
     expect(result.segmentDurations).toEqual([15, 15, 14])
-    // 10 + ceil(10.25×15) + ceil(6.25×((3-1)×1+(44-15))) = 10 + 154 + ceil(6.25×31) = 10+154+194 = 358
-    expect(result.reserveBase).toBe(358)
+    // 10 + ceil(10.25×15) + ceil(6.25×((3-1)×2+(44-15))) = 10 + 154 + ceil(6.25×33) = 10+154+207 = 371
+    expect(result.reserveBase).toBe(371)
   })
 
-  it("D=60 -> multi, n=5, s=62, durations [14,12,12,12,12], reserveBase 483", async () => {
+  it("D=60 -> multi, n=5, s=62, durations [14,12,12,12,12], reserveBase 508", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",
       resolution: "720p",
@@ -142,11 +142,11 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.segmentCount).toBe(5)
     expect(result.totalRawSec).toBe(62)
     expect(result.segmentDurations).toEqual([14, 12, 12, 12, 12])
-    // 10 + ceil(10.25×15) + ceil(6.25×((5-1)×1+(62-15))) = 10 + 154 + ceil(6.25×51) = 10+154+319 = 483
-    expect(result.reserveBase).toBe(483)
+    // 10 + ceil(10.25×15) + ceil(6.25×((5-1)×2+(62-15))) = 10 + 154 + ceil(6.25×55) = 10+154+344 = 508
+    expect(result.reserveBase).toBe(508)
   })
 
-  it("D=120 -> multi, n=9, s=123, durations [15,15,15,13,13,13,13,13,13], reserveBase 889", async () => {
+  it("D=120 -> multi, n=9, s=123, durations [15,15,15,13,13,13,13,13,13], reserveBase 939", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",
       resolution: "720p",
@@ -157,8 +157,8 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.segmentCount).toBe(9)
     expect(result.totalRawSec).toBe(123)
     expect(result.segmentDurations).toEqual([15, 15, 15, 13, 13, 13, 13, 13, 13])
-    // 10 + ceil(10.25×15) + ceil(6.25×((9-1)×1+(123-15))) = 10 + 154 + ceil(6.25×116) = 10+154+725 = 889
-    expect(result.reserveBase).toBe(889)
+    // 10 + ceil(10.25×15) + ceil(6.25×((9-1)×2+(123-15))) = 10 + 154 + ceil(6.25×124) = 10+154+775 = 939
+    expect(result.reserveBase).toBe(939)
   })
 })
 
@@ -177,9 +177,9 @@ describe("resolution clamp", () => {
     // Clamped to mini's top tier 720p: noRefPerSec = 41/8, refPerSec = 25/8 (NOT an unpriced 1080p lookup).
     expect(result.noRefPerSec).toBeCloseTo(41 / 8)
     expect(result.refPerSec).toBeCloseTo(25 / 8)
-    // 10 + ceil((41/8)×15) + ceil((25/8)×((5-1)×1+(62-15))) = 10 + ceil(76.875) + ceil(3.125×51)
-    // = 10 + 77 + ceil(159.375) = 10 + 77 + 160 = 247
-    expect(result.reserveBase).toBe(247)
+    // 10 + ceil((41/8)×15) + ceil((25/8)×((5-1)×2+(62-15))) = 10 + ceil(76.875) + ceil(3.125×55)
+    // = 10 + 77 + ceil(171.875) = 10 + 77 + 172 = 259
+    expect(result.reserveBase).toBe(259)
   })
 
   it("seedance-2 @ 4k uses 4k rates", async () => {
@@ -193,12 +193,12 @@ describe("resolution clamp", () => {
     expect(result.totalRawSec).toBe(17)
     expect(result.noRefPerSec).toBeCloseTo(STATIC_CREDIT_COSTS["seedance-2:8s:4k"]! / 8)
     expect(result.refPerSec).toBeCloseTo(STATIC_CREDIT_COSTS["seedance-2:8s:4k-ref"]! / 8)
-    // reserveBase = 10 + ceil((STATIC["seedance-2:8s:4k"]/8)×15) + ceil((STATIC["seedance-2:8s:4k-ref"]/8)×(1+2))
-    //             = 10 + ceil((416/8)×15) + ceil((256/8)×3)
-    //             = 10 + ceil(52×15) + ceil(32×3)
-    //             = 10 + 780 + 96
-    //             = 886
-    expect(result.reserveBase).toBe(886)
+    // reserveBase = 10 + ceil((STATIC["seedance-2:8s:4k"]/8)×15) + ceil((STATIC["seedance-2:8s:4k-ref"]/8)×(2+2))
+    //             = 10 + ceil((416/8)×15) + ceil((256/8)×4)
+    //             = 10 + ceil(52×15) + ceil(32×4)
+    //             = 10 + 780 + 128
+    //             = 918
+    expect(result.reserveBase).toBe(918)
   })
 })
 
