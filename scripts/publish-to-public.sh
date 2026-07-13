@@ -14,7 +14,7 @@ FLOOR="15fc0318f6e853b989409e0382909c76187d17a4"   # clean-generation genesis
 # author-identity gate (the pre-gate stray-identity commits of 2026-07-08..10 are
 # sunk — already in history/public). Every commit created AFTER this floor must
 # carry an allowlisted author+committer email or the publish aborts.
-IDENTITY_FLOOR="9a0e501ec9ec5ac06fcdf40314789852f7bd8565"
+IDENTITY_FLOOR="c859397a4dfe24df3e5098c9853639a2b34bda2e"
 AUTHOR_ALLOWLIST=".github/mirror-author-allowlist.txt"
 PUBLIC_REMOTE="${PUBLIC_REMOTE:-git@github.com:nodaroai/app.nodaro.ai.git}"
 
