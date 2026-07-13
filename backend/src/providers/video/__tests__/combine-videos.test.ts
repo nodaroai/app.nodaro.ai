@@ -111,6 +111,8 @@ interface CombineCallOpts {
   smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
   trimStartFrames?: number
   trimEndFrames?: number
+  targetWidth?: number
+  targetHeight?: number
 }
 
 function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVideos>[0] {
@@ -124,6 +126,8 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     smartCut: over.smartCut,
     trimStartFrames: over.trimStartFrames ?? 0,
     trimEndFrames: over.trimEndFrames ?? 0,
+    targetWidth: over.targetWidth,
+    targetHeight: over.targetHeight,
   }
 }
 
@@ -219,6 +223,62 @@ describe("combineVideos — pre-processing", () => {
     mocks.downloadFile.mockRejectedValueOnce(new Error("404"))
     await expect(combineVideos(defaultOptions())).rejects.toThrow()
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/work")
+  })
+})
+
+// ===========================================================================
+// 1b) Target resolution pin (targetWidth/targetHeight) — edit-video-pro pins
+//     the SOURCE dims so a long bridge clip can never flip the majority vote
+//     and letterbox the kept footage. Both must be set together to take
+//     effect; when either is absent, the existing majority-pick behavior
+//     (pickTargetResolution) is unchanged.
+// ===========================================================================
+
+describe("combineVideos — target resolution pin (targetWidth/targetHeight)", () => {
+  it("targetWidth/targetHeight pin the normalization canvas (pickTargetResolution NOT consulted)", async () => {
+    // transition="cut" + audioMode="remove" is the leanest hard-cut path:
+    // no hasAudioStream probing, no duration probing. The ONLY thing that
+    // would call runFfprobe on this path is pickTargetResolution's per-clip
+    // resolution probe — so a pinned target should leave runFfprobe untouched.
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      audioMode: "remove",
+      targetWidth: 640,
+      targetHeight: 480,
+    }))
+
+    expect(mocks.runFfprobe).not.toHaveBeenCalled()
+
+    expect(mocks.normalizeVideoForCombine).toHaveBeenCalledTimes(2)
+    for (const call of mocks.normalizeVideoForCombine.mock.calls) {
+      expect(call[2]).toBe(640) // targetWidth
+      expect(call[3]).toBe(480) // targetHeight
+    }
+  })
+
+  it("default behavior unchanged when target params absent (majority pick still runs)", async () => {
+    // 2 clips at 1280x720, one odd 864x496 → target is still the majority
+    // pick via pickTargetResolution, exactly as before this option existed.
+    mocks.runFfprobe.mockImplementation(async (probeArgs: unknown) => {
+      const args = probeArgs as string[]
+      const path = args[args.length - 1]
+      return path.endsWith("input_1.mp4") ? "864x496" : "1280x720"
+    })
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut",
+      audioMode: "remove",
+    }))
+
+    // Absent targetWidth/targetHeight, the resolution probe IS consulted.
+    expect(mocks.runFfprobe).toHaveBeenCalled()
+    expect(mocks.normalizeVideoForCombine).toHaveBeenCalledTimes(3)
+    for (const call of mocks.normalizeVideoForCombine.mock.calls) {
+      expect(call[2]).toBe(1280) // targetWidth (majority)
+      expect(call[3]).toBe(720) // targetHeight (majority)
+    }
   })
 })
 

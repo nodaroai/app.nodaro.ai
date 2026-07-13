@@ -147,6 +147,23 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
       }
     }
 
+    // edit-video-pro gets its OWN bucket too, for the same reason as
+    // generate-video-pro above: a replace-span reference-bridge run's
+    // wall-clock duration (probe + N reference segments + stitch) is
+    // categorically different from a single-shot generation, and it has no
+    // `duration` field at all — its length signal is the (post-clamp)
+    // spanEnd - spanStart window, not a client-declared duration.
+    case "edit-video-pro": {
+      const spanStart = num(inputData.spanStart)
+      const spanEnd = num(inputData.spanEnd)
+      return {
+        model_identifier: "edit-video-pro",
+        aspect_ratio: str(inputData.aspect_ratio),
+        quality: "",
+        duration_seconds: spanEnd > spanStart ? spanEnd - spanStart : 0,
+      }
+    }
+
     // -----------------------------------------------------------------------
     // Text-to-speech / voice nodes
     // -----------------------------------------------------------------------
@@ -435,7 +452,7 @@ type StatRow = {
 export function getNodeCategory(model: string): string {
   // Video generation models
   if (
-    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video|generate-video-pro)/.test(model)
+    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video|generate-video-pro|edit-video-pro)/.test(model)
   ) {
     return "video"
   }

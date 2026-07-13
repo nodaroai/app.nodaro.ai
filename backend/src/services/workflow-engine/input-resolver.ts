@@ -407,6 +407,14 @@ const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputFi
   "generate-video-pro": [
     { dataField: "selectedStartFrameNodeId", inputField: "imageUrl", guard: (i) => !i.startFrameUrl && !i.imageUrl },
   ],
+  // edit-video-pro deliberately has NO entry here (unlike its gvp sibling
+  // above): it has no legacy dropdown-selected fields at all — `video` is a
+  // required wired handle only. Its three payload inputs route entirely
+  // through generic (non-node-type-gated) mechanisms already: `videoUrl` via
+  // the default branch of routeVideoOutput, `prompt` via TEXT_SOURCE_NODE_TYPES
+  // (edge.targetHandle === "prompt", handled above the edge loop), and
+  // `referenceImageUrls` via REFERENCE_HANDLE_MAP's "imageReferences" key
+  // (keyed by targetHandle, not targetType). Nothing to add here.
   "lip-sync": [
     { dataField: "selectedImageNodeId", inputField: "imageUrl" },
     { dataField: "selectedVideoNodeId", inputField: "videoUrl" },

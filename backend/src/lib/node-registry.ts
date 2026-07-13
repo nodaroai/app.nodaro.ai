@@ -36,9 +36,18 @@ export interface NodeDescriptor {
    * fixed catalog list and the cap itself is runtime-configurable (env var).
    * `inputSchema.fields` has no min/max shape, so nodes with this need surface
    * it here instead. Currently only generate-video-pro's `duration` field
-   * (env `GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s).
+   * (env `GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s). See also
+   * `spanMinSec`/`maxSpanSec` below (edit-video-pro's analogous span bounds).
    */
   maxDurationSec?: number
+  /** Fixed minimum span length in seconds for edit-video-pro's spanStart/
+   *  spanEnd replace window (Seedance-2's minimum segment length — not
+   *  env-configurable, unlike maxSpanSec below). */
+  spanMinSec?: number
+  /** Dynamic upper bound for edit-video-pro's span window (env
+   *  `EDIT_VIDEO_PRO_MAX_SPAN`, default 120s) — same rationale as
+   *  maxDurationSec above, mirrored for the span-replace node. */
+  maxSpanSec?: number
 }
 
 // Canonical provider list for generate-video-pro (derived from SEEDANCE_2_PROVIDERS)
@@ -244,6 +253,35 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     // frontend/src/components/editor/config-panels/video-configs.tsx (kept in sync by
     // hand there since that module can't import this one — see its own comment).
     maxDurationSec: Number(process.env.GENERATE_VIDEO_PRO_MAX_DURATION || 120),
+  },
+  {
+    type: "edit-video-pro",
+    label: "Edit Video Pro",
+    category: "ai-video",
+    description:
+      "Replace a span of an existing video with newly generated content — Seedance-2-family reference bridge, seamlessly stitched back into the source. Cloud edition only.",
+    outputType: "video",
+    // Flat fee-base (STATIC_CREDIT_COSTS["edit-video-pro"] = 10), reserved on
+    // top of the per-second reference-bridge segment cost. Unlike
+    // generate-video-pro, the reserve PROBES the source video server-side —
+    // see ee/billing/edit-video-pro-credits.ts for the full closed-form.
+    creditCost: 10,
+    providers: GVP_PROVIDERS,
+    capabilities: ["span-replace", "reference-bridge", "seamless-stitch"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "spanStart", type: "number" },
+        { key: "spanEnd", type: "number" },
+        { key: "prompt", type: "text" },
+        { key: "generateAudio", type: "boolean" },
+      ],
+    },
+    // Fixed floor — Seedance-2's minimum segment length (see SPLIT.minSeg in
+    // ee/billing/edit-video-pro-credits.ts). Env-configurable ceiling, same
+    // pattern as generate-video-pro's maxDurationSec above.
+    spanMinSec: 4,
+    maxSpanSec: Number(process.env.EDIT_VIDEO_PRO_MAX_SPAN || 120),
   },
   {
     type: "video-sfx",

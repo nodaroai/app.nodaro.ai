@@ -1,6 +1,7 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
 import { isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
+import { isValidEditVideoProConnection } from "./edit-video-pro-handles"
 import { isValidVideoRetakeConnection, type VideoRetakeHandleId } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection, ACCEPTS_VIDEO, ACCEPTS_AUDIO } from "./ffmpeg-handles"
@@ -325,6 +326,22 @@ export function isValidWorkflowConnection(
   if (targetType === "generate-video-pro" && connection.targetHandle) {
     if (imageSourceType) {
       return isValidGenerateVideoProConnection(
+        connection.targetHandle,
+        imageSourceType,
+        isVisualPickerType,
+      )
+    }
+  }
+
+  // Edit Video Pro — span-replace sibling of Generate Video Pro. Uses
+  // imageSourceType for the same reason as generate-video-pro above (its
+  // imageReferences handle needs the entity "image" source-handle remap);
+  // the `video` handle also routes through it harmlessly — the remap only
+  // ever substitutes entity types to "upload-image", never a video producer,
+  // so VIDEO_PRODUCER_TYPES membership is unaffected either way.
+  if (targetType === "edit-video-pro" && connection.targetHandle) {
+    if (imageSourceType) {
+      return isValidEditVideoProConnection(
         connection.targetHandle,
         imageSourceType,
         isVisualPickerType,

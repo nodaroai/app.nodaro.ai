@@ -216,6 +216,11 @@ export interface PluginFfmpegToolkit {
     audioCrossfadeCurve?: string
     trimStartFrames?: number
     trimEndFrames?: number
+    /** Pin the normalization canvas (both together) instead of the majority-
+     *  resolution pick — edit-video-pro pins the SOURCE dims so a long bridge
+     *  can never flip the majority vote and letterbox the kept footage. */
+    targetWidth?: number
+    targetHeight?: number
   }): Promise<string>
   /**
    * New core helper added alongside this contract member
@@ -226,6 +231,25 @@ export interface PluginFfmpegToolkit {
    * the result to R2.
    */
   extractTail(url: string, seconds: number, jobId: string): Promise<string>
+  /**
+   * Re-encoding cut of `[startSec, endSec)` (endSec undefined = to EOF) —
+   * wraps core `trimVideo` (`providers/video/trim-video.ts`, input-seek +
+   * libx264) and uploads the cut to R2, returning the URL. `opts.crf`
+   * overrides the default 23 (edit-video-pro cuts kept footage at 18).
+   */
+  trimVideo(
+    url: string,
+    startSec: number,
+    endSec: number | undefined,
+    jobId: string,
+    opts?: { crf?: number },
+  ): Promise<string>
+  /**
+   * Mirrors `probeVideoSource` (`providers/video/ffmpeg-utils.ts`) — remote-
+   * capable ffprobe (SSRF-asserted, protocol-whitelisted), field rename only
+   * (`durationSeconds` → `durationSec`).
+   */
+  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }>
 }
 
 // ============================================================================
@@ -476,6 +500,35 @@ export interface GenerateVideoProPricing {
   creditIdentifier?: string // single mode: the plain composite identifier
 }
 
+/**
+ * Mirrors the return shape of `computeEditVideoProPricing`
+ * (`ee/billing/edit-video-pro-credits.ts`) — the edit-video-pro reserve
+ * formula's single source of truth (route computeCredits + DAG override +
+ * the engine's commit math all derive from it). Reserve probes the source
+ * server-side (spec rev4); `probe` is null when the probe failed and the
+ * reserve worst-cased (top tier + tail/refIn assumed).
+ */
+export interface EditVideoProPricing {
+  mode: "replace"
+  spanStartSec: number
+  spanEndSec: number // possibly clamped: ≤ spanStart+maxSpan, and ≤ probed D
+  clampedSpanSec: number
+  maxSpanSec: number
+  segmentCount: number
+  segmentDurations: number[]
+  totalRawSec: number // S′ at reserve
+  refsSecReserve: number
+  outerSeamLossReserve: number
+  feeBase: number
+  refPerSecByResolution: Record<string, number>
+  reserveResolution: string
+  reserveBase: number // pre-markup
+  probe: { width: number; height: number; durationSec: number } | null
+  /** Probe succeeded AND requested spanEnd > D + tolerance. Money was clamped
+   *  to D; callers REJECT before reserving (route 400 / DAG throw). */
+  spanExceedsSource: boolean
+}
+
 export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
@@ -534,6 +587,18 @@ export interface PluginHttpToolkit {
     resolution: string
     durationSec: number
   }): Promise<GenerateVideoProPricing>
+  /**
+   * Mirrors `computeEditVideoProPricing` (`ee/billing/edit-video-pro-credits.ts`)
+   * — same runtime-gated dynamic `import()` shim as
+   * `computeGenerateVideoProPricing` above. `sourceUrl` optional: absent or
+   * unreachable degrades to the worst-case reserve instead of throwing.
+   */
+  computeEditVideoProPricing(args: {
+    provider: string
+    sourceUrl?: string
+    spanStart: number
+    spanEnd: number
+  }): Promise<EditVideoProPricing>
 }
 
 // ============================================================================

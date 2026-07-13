@@ -71,6 +71,7 @@ import {
   generateImage,
   createReferenceBoard,
   generateVideoPro,
+  runEditVideoPro,
   getJobStatusLean,
   llmChatStream,
   setForcePrivate,
@@ -204,6 +205,7 @@ import type {
   AiAvatarData,
   CinematicAvatarData,
   GenerateVideoProNodeData,
+  EditVideoProNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -1899,6 +1901,52 @@ export function executeNode(
         }),
       "generatedVideoUrl",
       "Video generation",
+      ctx,
+    );
+  }
+
+  // Edit Video Pro — Seedance-2-family span-replace sibling of generate-video-pro.
+  // Requires a source video (the "video" handle → inputs.videoUrl via the
+  // generic resolver default — edit-video-pro isn't in MULTI_VIDEO_INPUT_TYPES
+  // or any other special-cased consumer branch in node-input-resolver.ts, so a
+  // connected video producer lands in inputs.videoUrl like extend-video /
+  // video-retake). Dispatches straight to pollJobWithNodeUpdate, mirroring
+  // generate-video-pro's minimal shape — no cinematography-hint / identity-lock
+  // collection (trimmed handle set: no pickers cluster, per EditVideoProNodeData).
+  if (node.type === "edit-video-pro") {
+    const evpData = node.data as EditVideoProNodeData;
+    const videoUrl = inputs.videoUrl as string | undefined;
+    if (!videoUrl) {
+      toast.error(`Node "${evpData.label}": Connect a video to edit`);
+      return Promise.reject(new Error("edit-video-pro requires a video input"));
+    }
+
+    // appendWired mirrors the backend orchestrator's promptFor("edit-video-pro", true)
+    // (payload-builder.ts) so a single-node Run produces the same prompt a DAG
+    // run would.
+    const prompt = promptOf("edit-video-pro", true);
+    if (!prompt) {
+      toast.error(`Node "${evpData.label}": no prompt found`);
+      return Promise.reject(new Error("No prompt"));
+    }
+
+    const referenceImageUrls = inputs.referenceImageUrls?.length ? inputs.referenceImageUrls : undefined;
+
+    setUserPromptTemplate(evpData.prompt?.trim() || undefined);
+    return pollJobWithNodeUpdate(
+      node.id,
+      () =>
+        runEditVideoPro({
+          videoUrl,
+          spanStart: evpData.spanStart,
+          spanEnd: evpData.spanEnd,
+          prompt,
+          provider: evpData.provider || "seedance-2",
+          generateAudio: evpData.generateAudio,
+          referenceImageUrls,
+        }),
+      "generatedVideoUrl",
+      "Edit Video",
       ctx,
     );
   }

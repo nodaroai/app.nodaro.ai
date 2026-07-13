@@ -21,6 +21,9 @@ interface TrimVideoOptions {
    *  startTime/endTime). Worker probes duration. */
   readonly keepFirstSeconds?: number
   readonly keepLastSeconds?: number
+  /** libx264 CRF for the re-encode (default 23). edit-video-pro cuts kept
+   *  footage at 18 to minimize generation loss before the splice re-encode. */
+  readonly crf?: number
 }
 
 export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath: string }> {
@@ -28,6 +31,7 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
     videoUrl, outputSilentVideo = false,
     trimStartFrames, trimEndFrames,
     trimStartSeconds, trimEndSeconds, keepFirstSeconds, keepLastSeconds,
+    crf,
   } = options
   let { startTime, endTime } = options
   const workDir = await createWorkDir("trim-video")
@@ -83,7 +87,7 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
     if (endTime !== undefined) {
       args.push("-t", String(endTime - startTime))
     }
-    args.push("-c:v", "libx264", "-preset", "fast", "-crf", "23")
+    args.push("-c:v", "libx264", "-preset", "fast", "-crf", String(crf ?? 23))
     if (outputSilentVideo) {
       args.push("-an")
     } else {

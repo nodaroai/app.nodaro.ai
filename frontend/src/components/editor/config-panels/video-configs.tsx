@@ -25,6 +25,7 @@ import type {
   TextToVideoData,
   GenerateVideoNodeData,
   GenerateVideoProNodeData,
+  EditVideoProNodeData,
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
@@ -80,6 +81,7 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SpanRangeSlider } from "./span-range-slider"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 
@@ -3573,6 +3575,134 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
 }
 
 export const GenerateVideoProConfig = memo(GenerateVideoProConfigImpl)
+
+/**
+ * Span-length cap fallback (seconds) when no node-registry descriptor is
+ * available to read the real cap from. Mirrors the backend default
+ * (`EDIT_VIDEO_PRO_MAX_SPAN` env var, `ee/billing/edit-video-pro-credits.ts`)
+ * — same pattern as GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK above. This is
+ * the SPAN LENGTH cap (spanEnd - spanStart), not an absolute bound on
+ * spanEnd's value, so it is surfaced as validation-hint text only — never a
+ * hard HTML `max` on the spanEnd field (spanStart can itself be large for a
+ * long source video, which would make a flat max on spanEnd's absolute value
+ * incorrectly reject valid spans).
+ */
+export const EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK = 120
+
+/**
+ * Edit Video Pro — span-replace sibling of Generate Video Pro (see
+ * EditVideoProNodeData). Deliberately has NO resolution/aspect controls —
+ * both are source-derived by design (the replaced span inherits the source
+ * clip's own dimensions). Provider select (3 Seedance-2 SKUs), one prompt
+ * field (no negative), the SpanRangeSlider synced with two numeric From/To
+ * fields (the slider itself only renders once sourceDurationSec has been
+ * probed — see edit-video-pro-node.tsx's onLoadedMetadata stamping), and the
+ * audio toggle.
+ */
+function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<EditVideoProNodeData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const currentProvider = data.provider || "seedance-2"
+  const spanStart = Math.max(0, data.spanStart ?? 0)
+  const spanEnd = data.spanEnd ?? spanStart + 8
+  const sourceDuration = data.sourceDurationSec
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={currentProvider}
+          onValueChange={(v) => onUpdate({ provider: v as EditVideoProNodeData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {GVP_PROVIDERS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <ModelDescriptionHint modelId={currentProvider} />
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="edit-video-pro" currentPrompt={data.prompt || ""} provider={currentProvider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
+        <PromptEditor
+          rows={3}
+          value={data.prompt || ""}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder="Describe what should replace the selected span..."
+          nodeRefs={nodeRefs}
+          refMap={refMap}
+          snippets={promptSnippets}
+        />
+        <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
+      </MappableField>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Replace Span</Label>
+        {sourceDuration === undefined ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Connect a video and open its preview to enable the slider
+          </p>
+        ) : (
+          <SpanRangeSlider
+            videoDuration={sourceDuration}
+            spanStart={spanStart}
+            spanEnd={spanEnd}
+            onChange={({ spanStart: s, spanEnd: e }) => onUpdate({ spanStart: s, spanEnd: e })}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <MappableField field="spanStart" label="From (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              type="number"
+              step={0.1}
+              min={0}
+              value={spanStart}
+              onChange={(e) => {
+                if (e.target.value === "") return
+                const parsed = parseFloat(e.target.value)
+                if (Number.isNaN(parsed)) return
+                onUpdate({ spanStart: Math.max(0, parsed) })
+              }}
+            />
+          </MappableField>
+          <MappableField field="spanEnd" label="To (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              type="number"
+              step={0.1}
+              min={0}
+              value={spanEnd}
+              onChange={(e) => {
+                if (e.target.value === "") return
+                const parsed = parseFloat(e.target.value)
+                if (Number.isNaN(parsed)) return
+                onUpdate({ spanEnd: Math.max(0, parsed) })
+              }}
+            />
+          </MappableField>
+        </div>
+        <p className="text-[10px] text-muted-foreground px-1">
+          Replace span must be at least 4 seconds. Spans longer than ~15s are automatically split into multiple stitched Seedance 2 segments. Maximum span: {EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK}s.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="evp-generateAudio"
+          checked={data.generateAudio ?? true}
+          onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="evp-generateAudio" className="text-xs">Generate Audio (default on)</label>
+      </div>
+    </div>
+  )
+}
+
+export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("video", "prompt")

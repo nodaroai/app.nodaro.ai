@@ -6,6 +6,7 @@ import { AUDIO_TEXT_HANDLE_LABELS } from "../audio-text-handles"
 import { IDENTITY_HANDLE_LABELS } from "../identity-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES } from "../generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES } from "../generate-video-pro-handles"
+import { EDIT_VIDEO_PRO_INPUT_HANDLES } from "../edit-video-pro-handles"
 import { GENERATE_IMAGE_INPUT_HANDLES } from "../generate-image-handles"
 import { VIDEO_RETAKE_HANDLE_IDS } from "../video-retake-handles"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
@@ -40,6 +41,7 @@ const AUTHORITATIVE = new Map<string, readonly string[]>([
   ...labelEntries(IDENTITY_HANDLE_LABELS),
   ["generate-video", [...GENERATE_VIDEO_INPUT_HANDLES]],
   ["generate-video-pro", [...GENERATE_VIDEO_PRO_INPUT_HANDLES]],
+  ["edit-video-pro", [...EDIT_VIDEO_PRO_INPUT_HANDLES]],
   ["generate-image", [...GENERATE_IMAGE_INPUT_HANDLES]],
   ["video-retake", [...VIDEO_RETAKE_HANDLE_IDS]],
   ["video-sfx", ["prompt", "negative", "video"]],

@@ -67,6 +67,7 @@ import { VideoToVideoNode } from "./video-to-video-node";
 import { SwitchXNode } from "./switchx-node";
 import { GenerateVideoNode } from "./generate-video-node";
 import { GenerateVideoProNode } from "./generate-video-pro-node";
+import { EditVideoProNode } from "./edit-video-pro-node";
 import { VideoRetakeNode } from "./video-retake-node";
 import { VideoSfxNode } from "./video-sfx-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
@@ -254,6 +255,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-video": GenerateVideoNode,
   "generate-video": GenerateVideoNode,
   "generate-video-pro": GenerateVideoProNode,
+  "edit-video-pro": EditVideoProNode,
   "video-retake": VideoRetakeNode,
   "video-sfx": VideoSfxNode,
   "text-to-speech": TextToSpeechNode,

@@ -122,6 +122,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // AI — Video
   { type: "generate-video", label: "Generate Video", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"] },
   { type: "generate-video-pro", label: "Generate Video Pro", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["long-form", "long video", "multi-segment", "stitch", "extended duration", "seedance", "pro"] },
+  { type: "edit-video-pro", label: "Edit Video Pro", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["retake", "replace span", "edit clip", "seedance", "pro", "reshoot"] },
   { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "switchx", label: "Relight & Switch", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["relight", "relighting", "relit", "lighting", "switch", "swap background", "replace background", "change background", "scene swap", "restyle", "recolor", "composite", "compositing", "green screen", "chroma key", "rotoscope", "matte", "alpha", "color match", "harmonize", "vfx", "video to video", "beeble"] },
   { type: "generative-pipeline", label: "Story → Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"] },

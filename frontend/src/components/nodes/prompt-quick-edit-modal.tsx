@@ -89,6 +89,9 @@ const NODE_TYPE_ICON_MAP: Readonly<Record<string, LucideIcon>> = {
   // Video
   "generate-video": Clapperboard,
   "generate-video-pro": Clapperboard,
+  // Span-replace edit of an existing clip — same semantic as video-retake
+  // (Scissors), not a from-scratch generation (Clapperboard).
+  "edit-video-pro": Scissors,
   "text-to-video": Clapperboard,
   "image-to-video": Clapperboard,
   "video-to-video": Film,

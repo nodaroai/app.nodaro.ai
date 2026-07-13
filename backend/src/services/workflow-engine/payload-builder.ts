@@ -3763,6 +3763,28 @@ export function buildPayload(
       })
     }
 
+    case "edit-video-pro": {
+      // Replace-span Seedance-2 bridge (private-plugin engine — see
+      // ee/billing/edit-video-pro-credits.ts). Deliberately THIN: no
+      // reservation logic here (same reasoning as generate-video-pro above);
+      // node-executor's computeEditVideoProCreditOverride probes + clamps +
+      // stamps proPricing on this same payload object before reserving.
+      // `type: "edit-video-pro"` is the payload marker that override gates on.
+      return simpleResult("edit-video-pro", "edit-video-pro", {
+        jobId,
+        type: "edit-video-pro",
+        mode: (data.mode as string | undefined) ?? "replace",
+        videoUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+        spanStart: data.spanStart as number | undefined,
+        spanEnd: data.spanEnd as number | undefined,
+        prompt: promptFor("edit-video-pro", true),
+        provider: (data.provider as string | undefined) ?? "seedance-2",
+        generateAudio: data.generateAudio as boolean | undefined,
+        referenceImageUrls: resolvedInputs.referenceImageUrls || (data.referenceImageUrls as string[] | undefined),
+        usageLogId,
+      })
+    }
+
     case "dubbing":
       return simpleResult("dubbing", "elevenlabs-dubbing", {
         jobId,

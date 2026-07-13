@@ -7,7 +7,9 @@ import {
   createWorkDir,
   cleanupWorkDir,
   downloadFile,
+  probeVideoSource,
 } from "../../providers/video/ffmpeg-utils.js"
+import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
@@ -186,6 +188,8 @@ async function combineVideosToUrl(options: {
   audioCrossfadeCurve?: string
   trimStartFrames?: number
   trimEndFrames?: number
+  targetWidth?: number
+  targetHeight?: number
 }): Promise<string> {
   const { outputPath: localPath } = await combineVideosCore({
     videoUrls: options.videoUrls,
@@ -195,6 +199,8 @@ async function combineVideosToUrl(options: {
     audioCrossfadeCurve: options.audioCrossfadeCurve,
     trimStartFrames: options.trimStartFrames ?? 0,
     trimEndFrames: options.trimEndFrames ?? 0,
+    targetWidth: options.targetWidth,
+    targetHeight: options.targetHeight,
   })
   try {
     return await uploadFileToR2(localPath, randomUUID(), "video")
@@ -220,6 +226,38 @@ async function extractTailToUrl(url: string, seconds: number, jobId: string): Pr
   } finally {
     await cleanupWorkDir(workDir)
   }
+}
+
+/**
+ * `tk.ffmpeg.trimVideo` — re-encoding cut of [startSec, endSec) via core
+ * `trimVideo` (`providers/video/trim-video.ts`), uploaded to R2. `opts.crf`
+ * threads to the new TrimVideoOptions.crf (default 23; edit-video-pro cuts
+ * at 18). Cleanup mirrors combineVideosToUrl (core leaves its work dir).
+ */
+async function trimVideoToUrl(
+  url: string,
+  startSec: number,
+  endSec: number | undefined,
+  jobId: string,
+  opts?: { crf?: number },
+): Promise<string> {
+  const { videoPath } = await trimVideoCore({
+    videoUrl: url,
+    startTime: startSec,
+    ...(endSec !== undefined ? { endTime: endSec } : {}),
+    ...(opts?.crf !== undefined ? { crf: opts.crf } : {}),
+  })
+  try {
+    return await uploadFileToR2(videoPath, jobId, "video")
+  } finally {
+    await fs.rm(dirname(videoPath), { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only. */
+async function probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }> {
+  const { width, height, durationSeconds } = await probeVideoSource(url)
+  return { width, height, durationSec: durationSeconds }
 }
 
 /**
@@ -285,6 +323,8 @@ export function buildToolkit(): PluginToolkit {
       downloadFile,
       combineVideos: combineVideosToUrl,
       extractTail: extractTailToUrl,
+      trimVideo: trimVideoToUrl,
+      probeVideoMeta,
     },
     media: {
       extractAudio,
@@ -341,6 +381,15 @@ export function buildToolkit(): PluginToolkit {
         }
         const { computeGenerateVideoProPricing: computePricing } = await import(
           "../../ee/billing/generate-video-pro-credits.js"
+        )
+        return computePricing(args)
+      },
+      computeEditVideoProPricing: async (args) => {
+        if (!hasCredits()) {
+          throw new Error("computeEditVideoProPricing requires a Cloud-edition build")
+        }
+        const { computeEditVideoProPricing: computePricing } = await import(
+          "../../ee/billing/edit-video-pro-credits.js"
         )
         return computePricing(args)
       },

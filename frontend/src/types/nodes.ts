@@ -1841,6 +1841,42 @@ export interface GenerateVideoProNodeData {
   currentJobProgress?: number
 }
 
+/**
+ * Edit Video Pro node data — Seedance-2-family span-replace sibling of
+ * Generate Video Pro. Given a source video, replaces the [spanStart, spanEnd)
+ * window with freshly generated content per `prompt` (the backend splits/
+ * stitches internally when the span exceeds a single segment's cap — see
+ * `backend/src/ee/billing/edit-video-pro-credits.ts` for the pricing
+ * closed-form and `payload-builder.ts`'s `"edit-video-pro"` case for the
+ * dispatch shape). Unlike GenerateVideoProNodeData there is NO resolution /
+ * aspectRatio field — both are source-derived by design. Trimmed handle set:
+ * `video` (the required source to edit) replaces the optional startFrame (see
+ * `edit-video-pro-handles.ts`).
+ */
+export interface EditVideoProNodeData {
+  [key: string]: unknown
+  label: string
+  provider: string // seedance-2 | seedance-2-fast | seedance-2-mini
+  /** "edit" is reserved for v2 — never rendered in the v1 UI. */
+  mode: "replace"
+  prompt: string
+  spanStart: number
+  spanEnd: number
+  generateAudio: boolean
+  /** Display cache from the source <video>'s loadedmetadata — UI slider max +
+   *  estimate hint ONLY; the server probes for money (never trust this). */
+  sourceDurationSec?: number
+  referenceImageUrls?: string[]
+  fieldMappings?: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 /** Video SFX (Foley/Ambient) — Replicate mmaudio.
  *
  *  Generates synchronized SFX / foley / ambient audio for an input video clip
@@ -4955,6 +4991,7 @@ export type SceneNodeData =
   | TextToVideoData
   | GenerateVideoNodeData
   | GenerateVideoProNodeData
+  | EditVideoProNodeData
   | VideoSfxNodeData
   | TextToSpeechData
   | QACheckData
@@ -5134,6 +5171,7 @@ export type SceneNodeType =
   | "text-to-video"
   | "generate-video"
   | "generate-video-pro"
+  | "edit-video-pro"
   | "video-sfx"
   | "text-to-speech"
   | "qa-check"
@@ -6049,6 +6087,48 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       {
         key: "resolution", label: "Resolution", type: "select" as const,
         options: getVideoResolutionOptions("seedance-2") ?? [],
+      },
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
+    ],
+  },
+  {
+    // Span-replace sibling of Generate Video Pro (see EditVideoProNodeData).
+    // creditCost is a coarse popup-time display fallback only, matching the
+    // documented default (provider seedance-2, spanStart 0, spanEnd 8 —
+    // i.e. an 8s single-segment replace at 720p with a probed tail ref);
+    // real cost is dynamic (probe-at-reserve — see
+    // ee/billing/edit-video-pro-credits.ts).
+    type: "edit-video-pro",
+    label: "Edit Video Pro",
+    category: "ai",
+    creditCost: 67,
+    inputs: ["video", "prompt", "imageReferences"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Edit Video Pro",
+      provider: "seedance-2",
+      mode: "replace",
+      prompt: "",
+      spanStart: 0,
+      spanEnd: 8,
+      generateAudio: true,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as EditVideoProNodeData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: GVP_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+      },
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      {
+        key: "spanStart", label: "Span Start (seconds)", type: "slider" as const, min: 0, max: 120, step: 1,
+      },
+      {
+        key: "spanEnd", label: "Span End (seconds)", type: "slider" as const, min: 4, max: 120, step: 1,
       },
       { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
     ],
