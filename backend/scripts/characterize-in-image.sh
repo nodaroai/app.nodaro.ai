@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the ffmpeg output-characterization suite inside the PRODUCTION runtime
-# environment: node:22-slim (Debian bookworm) + the exact apt-pinned ffmpeg
-# from the Dockerfile, on linux/amd64 (production's architecture).
+# environment: node:22-slim (Debian bookworm) + the exact sha256-pinned static
+# ffmpeg tarball from the Dockerfile ARGs, on linux/amd64 (production's arch).
 #
 # WHY THIS EXISTS: your local ffmpeg is not production's ffmpeg. Homebrew
 # ships 8.x, Debian bookworm ships 5.1.x, and their rendered output DIFFERS
@@ -32,23 +32,19 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Single source of truth for the pin is the Dockerfile. Two supported shapes,
-# newest first: a static-tarball pin (URL + SHA256 ARGs — the container here
-# is linux/amd64, so the AMD64 pair applies), else the legacy apt version pin.
-# `|| true` keeps set -e from killing the script at an empty grep, so the
-# friendly guard below gets to explain the problem.
+# Single source of truth for the pin is the Dockerfile's static-tarball ARGs
+# (the container here is linux/amd64, so the AMD64 pair applies). Missing
+# ARGs are a hard error — installing anything else would bless/verify goldens
+# against a binary production doesn't run. `|| true` keeps set -e from killing
+# the script at an empty grep, so the guard below gets to explain the problem.
 FFMPEG_TARBALL_URL="$(grep -oE '^ARG FFMPEG_TARBALL_URL_AMD64=.*' "$REPO_ROOT/Dockerfile" | head -1 | cut -d= -f2- || true)"
 FFMPEG_TARBALL_SHA256="$(grep -oE '^ARG FFMPEG_TARBALL_SHA256_AMD64=.*' "$REPO_ROOT/Dockerfile" | head -1 | cut -d= -f2- || true)"
-FFMPEG_PIN="$(grep -oE 'FFMPEG_VERSION=[^ ]+' "$REPO_ROOT/Dockerfile" | head -1 | cut -d= -f2 || true)"
-if [ -n "$FFMPEG_TARBALL_URL" ] && [ -n "$FFMPEG_TARBALL_SHA256" ]; then
-  echo "[characterize-in-image] mode=$MODE ffmpeg=static tarball (from Dockerfile ARGs)"
-  echo "[characterize-in-image]   $FFMPEG_TARBALL_URL"
-elif [ -n "$FFMPEG_PIN" ]; then
-  echo "[characterize-in-image] mode=$MODE ffmpeg=$FFMPEG_PIN (apt pin from Dockerfile)"
-else
-  echo "could not read an ffmpeg pin (FFMPEG_TARBALL_URL_AMD64/SHA256 or FFMPEG_VERSION) from $REPO_ROOT/Dockerfile" >&2
+if [ -z "$FFMPEG_TARBALL_URL" ] || [ -z "$FFMPEG_TARBALL_SHA256" ]; then
+  echo "could not parse FFMPEG_TARBALL_URL_AMD64/FFMPEG_TARBALL_SHA256_AMD64 from $REPO_ROOT/Dockerfile" >&2
   exit 1
 fi
+echo "[characterize-in-image] mode=$MODE ffmpeg=static tarball (from Dockerfile ARGs)"
+echo "[characterize-in-image]   $FFMPEG_TARBALL_URL"
 
 GOLDEN_DIR="$REPO_ROOT/backend/src/providers/video/__characterization__/golden"
 mkdir -p "$GOLDEN_DIR"
@@ -65,18 +61,13 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 echo "[container] installing pinned ffmpeg + fonts (matches Dockerfile runner stage)..."
 apt-get update -qq >/dev/null
-if [ -n "${FFMPEG_TARBALL_URL}" ]; then
-  apt-get install -y -qq --no-install-recommends rsync curl ca-certificates xz-utils \
-    fontconfig fonts-dejavu-core fonts-liberation >/dev/null
-  curl -fsSL "${FFMPEG_TARBALL_URL}" -o /tmp/ffmpeg.tar.xz
-  echo "${FFMPEG_TARBALL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - >/dev/null
-  mkdir -p /tmp/ffmpeg-dist
-  tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
-  install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
-else
-  apt-get install -y -qq --no-install-recommends rsync "ffmpeg=${FFMPEG_PIN}" \
-    fontconfig fonts-dejavu-core fonts-liberation >/dev/null
-fi
+apt-get install -y -qq --no-install-recommends rsync curl ca-certificates xz-utils \
+  fontconfig fonts-dejavu-core fonts-liberation >/dev/null
+curl -fsSL "${FFMPEG_TARBALL_URL}" -o /tmp/ffmpeg.tar.xz
+echo "${FFMPEG_TARBALL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - >/dev/null
+mkdir -p /tmp/ffmpeg-dist
+tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
+install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
 ffmpeg -version | head -1
 
 echo "[container] syncing repo (node_modules/dist excluded)..."
