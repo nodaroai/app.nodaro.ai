@@ -66,9 +66,11 @@ jobs:
         run: npm ci
 
       - name: Build workspace packages the CLI imports
-        run: |
-          npm -w @nodaro/shared run build
-          npm -w @nodaro/sdk run build
+        # build:packages is the single source of truth for the workspace build
+        # order (shared → prompts → sdk). A hand-rolled subset here broke the
+        # 1.3.0 binaries: the SDK grew an @nodaro/prompts type import and its
+        # dts build failed because prompts was never built.
+        run: npm run build:packages
 
       - name: Compile binary
         env:

@@ -77,9 +77,8 @@ jobs:
           if [ -n "$OPEN" ]; then
             gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "mirror-to-public failed again: $RUN_URL"
           else
+            BODY=$(printf 'The nightly gated mirror failed: %s\n\nUntil this is green, nothing reaches the public repo (and npm publishes stay stuck behind it). Check the run log for the gate that tripped (identity / leaks / secrets / ancestry). Close this issue when a run succeeds.' "$RUN_URL")
             gh issue create --repo "$GITHUB_REPOSITORY" --label mirror-failure \
               --title "mirror-to-public is failing — public mirror is falling behind" \
-              --body "The nightly gated mirror failed: $RUN_URL
-
-Until this is green, nothing reaches the public repo (and npm publishes stay stuck behind it). Check the run log for the gate that tripped (identity / leaks / secrets / ancestry). Close this issue when a run succeeds."
+              --body "$BODY"
           fi

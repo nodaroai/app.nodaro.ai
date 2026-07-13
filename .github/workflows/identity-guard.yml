@@ -20,6 +20,19 @@ on:
     branches: [dev, main]
 permissions: { contents: read }
 jobs:
+  # Guard-for-the-guards: a workflow file with a YAML/actions error silently
+  # loses ALL its triggers (schedule included) — exactly how the mirror
+  # alerting step's mis-indented heredoc killed mirror-to-public.yml's nightly
+  # run on 2026-07-13. actionlint fails the PR instead.
+  lint-workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
   check-identities:
     runs-on: ubuntu-latest
     steps:
@@ -36,12 +49,12 @@ jobs:
           # has a "before" that may no longer exist in the clone. Either way,
           # fall back to scanning just the tip commit.
           if [ -z "${BASE_SHA:-}" ] || ! echo "$BASE_SHA" | grep -qv '^0*$' || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
-            RANGE="$HEAD_SHA -1"
+            LOG_ARGS=("$HEAD_SHA" -1)
           else
-            RANGE="$BASE_SHA..$HEAD_SHA"
+            LOG_ARGS=("$BASE_SHA..$HEAD_SHA")
           fi
-          echo "scanning: $RANGE"
-          BAD=$(git log --format='%h %ae%n%h %ce' $RANGE | sort -u | awk -v listfile="$ALLOWLIST" '
+          echo "scanning: ${LOG_ARGS[*]}"
+          BAD=$(git log --format='%h %ae%n%h %ce' "${LOG_ARGS[@]}" | sort -u | awk -v listfile="$ALLOWLIST" '
             BEGIN { while ((getline line < listfile) > 0) { sub(/#.*/, "", line); gsub(/^[ \t]+|[ \t]+$/, "", line); if (line != "") allowed[line] = 1 } }
             { if (!($2 in allowed)) print }
           ')
