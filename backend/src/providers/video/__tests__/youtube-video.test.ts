@@ -17,6 +17,7 @@ import {
   YtUrlNotAllowedError,
   type YtClientRung,
 } from "../youtube-video.js"
+import { VIDEO_FORMAT_SELECTOR } from "../video-format.js"
 
 /** Minimal stand-in for a spawned child: emits stdout/stderr, then closes. */
 function fakeProc(opts: { stdout?: string; stderr?: string; code?: number; error?: Error }) {
@@ -89,6 +90,51 @@ describe("buildYtDlpVideoArgs", () => {
       expect(branch).toContain("+ba")
     }
     expect(branches.at(-1)).toBe("b")
+  })
+})
+
+/**
+ * Section downloads: `--download-sections "*start-end"` with a ±3s pad —
+ * yt-dlp cuts at keyframes, so the fetched range is imprecise; the pad
+ * guarantees the requested range survives, and the CLIENT does the frame-exact
+ * trim on the small file afterwards.
+ */
+describe("buildYtDlpVideoArgs — section downloads", () => {
+  const base = { url: "https://youtu.be/x", outPath: "/tmp/x.mp4" }
+
+  it("adds --download-sections with the ±3s padded range", () => {
+    const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 10, endSec: 20 } })
+    const i = args.indexOf("--download-sections")
+    expect(i).toBeGreaterThan(-1)
+    expect(args[i + 1]).toBe("*7-23")
+  })
+
+  it("clamps the padded start at 0 — never a negative range start", () => {
+    const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 2, endSec: 5 } })
+    expect(args[args.indexOf("--download-sections") + 1]).toBe("*0-8")
+  })
+
+  it("never adds --force-keyframes-at-cuts — that re-encodes server-side", () => {
+    const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 10, endSec: 20 } })
+    expect(args).not.toContain("--force-keyframes-at-cuts")
+  })
+
+  it("without a section, args are byte-identical to the pre-section behavior", () => {
+    const args = buildYtDlpVideoArgs(base)
+    expect(args).toEqual([
+      "https://youtu.be/x",
+      "--format", VIDEO_FORMAT_SELECTOR,
+      "--output", "/tmp/x.%(ext)s",
+      "--no-playlist",
+      "--no-check-certificates",
+      "--merge-output-format", "mp4",
+      "--write-thumbnail",
+      "--convert-thumbnails", "jpg",
+      "--add-header", "referer:youtube.com",
+      "--add-header", "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "--newline",
+      "--progress-template", "download:%(progress._percent_str)s",
+    ])
   })
 })
 
@@ -278,6 +324,27 @@ describe("downloadYouTubeVideo — client ladder wiring", () => {
     await expect(
       downloadYouTubeVideo({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4" }),
     ).rejects.toThrow("ERROR: unable to download video data: HTTP Error 403")
+  })
+
+  it("every ladder rung inherits the section args — they live in the BASE args", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: web down", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: tv down", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: android down", code: 1 }) as never)
+
+    await expect(
+      downloadYouTubeVideo({
+        url: "https://www.youtube.com/watch?v=x",
+        outPath: "/tmp/x.mp4",
+        section: { startSec: 10, endSec: 20 },
+      }),
+    ).rejects.toThrow("android down")
+
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(3)
+    for (const call of [0, 1, 2]) {
+      const args = argsOfCall(call)
+      expect(args[args.indexOf("--download-sections") + 1]).toBe("*7-23")
+    }
   })
 
   it("spawns yt-dlp exactly once for a non-YouTube host, with no client pin", async () => {

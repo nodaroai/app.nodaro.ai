@@ -4,7 +4,8 @@ import { randomUUID } from "crypto"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { supabase } from "../lib/supabase.js"
-import { uploadBufferToR2 } from "../lib/storage.js"
+import { uploadBufferToR2, deleteFromR2, r2KeyFromOurUrl } from "../lib/storage.js"
+import { updateStorageUsage } from "../utils/file-validation.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import {
   downloadFile,
@@ -58,7 +59,118 @@ const MediaProcessSchema = z.object({
     })
     .optional(),
   format: z.enum(["mp4", "webm", "mp3", "wav", "m4a", "aac"]).optional(),
+  // "The cut replaces the original": after processing succeeds and the output
+  // is uploaded, best-effort delete the SOURCE object from R2 (only when it is
+  // our bucket AND the requester provably owns it via an assets row).
+  deleteSource: z.boolean().optional().default(false),
 })
+
+/**
+ * Best-effort source cleanup for `deleteSource: true` — the caller has declared
+ * "the processed output replaces the original". Runs only AFTER the new output
+ * is fully uploaded and the response payload is built, and NEVER throws: a
+ * delete problem must not fail a request whose real work already succeeded.
+ *
+ * Mirrors the platform's canonical asset delete, DELETE /v1/library/:id
+ * ?permanent=true (routes/library.ts):
+ *   1. Bucket gate — only objects in OUR R2 bucket (`r2KeyFromOurUrl`); foreign
+ *      URLs are silently skipped.
+ *   2. Ownership gate — the requesting user must positively own the object via
+ *      an `assets` row (user_id + r2_key). /v1/upload, this route's own outputs
+ *      and /v1/library/save-generated all create such rows. No row, or someone
+ *      else's row → skip with a warn.
+ *   3. Referrer safety — the R2 object is removed only when NO other assets row
+ *      and NO job output references it (content-addressed safety: R2 objects
+ *      are unrecoverable, see library.ts). Lookup errors fail safe toward
+ *      keeping data.
+ *   4. The user's asset row is deleted and their tracked storage decremented by
+ *      the row's size_bytes — the same way the quota was charged at upload.
+ *      (Like library.ts, no thumbnail-object chase: the existing delete path
+ *      removes only the primary object + row.)
+ *
+ * Exported for testability.
+ */
+export async function deleteSourceAfterProcess(sourceUrl: string, userId: string): Promise<void> {
+  try {
+    const sourceKey = r2KeyFromOurUrl(sourceUrl)
+    if (!sourceKey) return // foreign URL — not our bucket, nothing to delete
+
+    const { data: owned, error: ownedError } = await supabase
+      .from("assets")
+      .select("id, user_id, r2_key, size_bytes")
+      .eq("r2_key", sourceKey)
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle()
+
+    if (ownedError || !owned) {
+      console.warn(
+        `[media-process] deleteSource skipped for ${sourceKey}: ` +
+          (ownedError
+            ? `ownership lookup failed (${ownedError.message})`
+            : "no asset record establishes the requester's ownership"),
+      )
+      return
+    }
+
+    // Content-addressed safety (same checks as library.ts): another assets row
+    // (e.g. saved from the gallery by another user) or one of the user's job
+    // outputs may point at the SAME object — deleting it would permanently
+    // break them. Any lookup error counts as "a referrer may exist".
+    const { count: otherAssetRefs, error: assetRefError } = await supabase
+      .from("assets")
+      .select("id", { count: "exact", head: true })
+      .eq("r2_key", sourceKey)
+      .neq("id", owned.id)
+    const assetRefsExist = !!assetRefError || (!!otherAssetRefs && otherAssetRefs > 0)
+
+    let jobRefsExist = false
+    if (!assetRefsExist) {
+      // One .eq() per output_data key — never a hand-built .or() string; the
+      // URL's reserved chars corrupt an unquoted PostgREST filter (library.ts).
+      for (const key of ["imageUrl", "videoUrl", "audioUrl"] as const) {
+        const { count, error } = await supabase
+          .from("jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq(`output_data->>${key}`, sourceUrl)
+        if (error || (count ?? 0) > 0) {
+          jobRefsExist = true
+          break
+        }
+      }
+    }
+
+    if (!assetRefsExist && !jobRefsExist) {
+      try {
+        await deleteFromR2(sourceKey)
+      } catch (err) {
+        // Object survives; continue to the record cleanup like library.ts does.
+        console.warn(`[media-process] deleteSource R2 delete failed for ${sourceKey} (continuing):`, err)
+      }
+    } else {
+      console.warn(
+        `[media-process] deleteSource kept R2 object ${sourceKey}: other asset/job referrers exist`,
+      )
+    }
+
+    const { error: rowError } = await supabase.from("assets").delete().eq("id", owned.id).eq("user_id", userId)
+    if (rowError) {
+      // Row survives → its quota charge must survive with it; skip the decrement.
+      console.warn(`[media-process] deleteSource failed to delete asset row ${owned.id}: ${rowError.message}`)
+      return
+    }
+
+    const sizeBytes = owned.size_bytes ?? 0
+    if (sizeBytes > 0) {
+      await updateStorageUsage(userId, -sizeBytes).catch((err) => {
+        console.warn("[media-process] deleteSource storage decrement failed:", err)
+      })
+    }
+  } catch (err) {
+    console.warn("[media-process] deleteSource failed (response unaffected):", err)
+  }
+}
 
 export async function mediaProcessRoutes(app: FastifyInstance) {
   app.post("/v1/media/process", async (req, reply) => {
@@ -79,7 +191,7 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
       })
     }
 
-    const { sourceUrl, type, crop, trim, format } = parsed.data
+    const { sourceUrl, type, crop, trim, format, deleteSource } = parsed.data
 
     const inputExt = safeMediaExt(sourceUrl, type === "video" ? "mp4" : "mp3")
     const outputExt = format ?? inputExt
@@ -187,7 +299,7 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
 
       if (asset) assetId = asset.id
 
-      return {
+      const responsePayload = {
         data: {
           url: publicUrl,
           thumbnailUrl,
@@ -197,6 +309,15 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
           mimeType,
         },
       }
+
+      // Best-effort housekeeping, strictly AFTER the new output is uploaded and
+      // the response payload is built. The helper never throws, so a delete
+      // problem can never turn a successful process into a failed request.
+      if (deleteSource) {
+        await deleteSourceAfterProcess(sourceUrl, userId)
+      }
+
+      return responsePayload
     } finally {
       await cleanupWorkDir(workDir)
     }
