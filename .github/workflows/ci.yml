@@ -493,28 +493,17 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Install the production-pinned ffmpeg + fonts (from the Dockerfile ARGs)
+      - name: Install the production-pinned ffmpeg + fonts (via tools/install-pinned-ffmpeg.sh)
         run: |
           # Same binary as production, one source of truth: the Dockerfile's
-          # static-tarball pin (URL + SHA256 ARGs, per arch — this job is amd64).
-          # Missing ARGs are a hard error: installing anything else would
+          # static-tarball pin, parsed and installed by the SAME script the
+          # Dockerfile and characterize-in-image.sh use. The script hard-errors
+          # if the pin can't be resolved — installing anything else would
           # bless/verify goldens against the wrong binary.
-          FFMPEG_TARBALL_URL=$(grep -oE '^ARG FFMPEG_TARBALL_URL_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
-          FFMPEG_TARBALL_SHA256=$(grep -oE '^ARG FFMPEG_TARBALL_SHA256_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
-          if [ -z "$FFMPEG_TARBALL_URL" ] || [ -z "$FFMPEG_TARBALL_SHA256" ]; then
-            echo "::error::could not parse FFMPEG_TARBALL_URL_AMD64/FFMPEG_TARBALL_SHA256_AMD64 from the Dockerfile — the characterize job must install exactly the production ffmpeg"
-            exit 1
-          fi
-          echo "pinned ffmpeg tarball: $FFMPEG_TARBALL_URL"
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends \
             curl ca-certificates xz-utils fontconfig fonts-dejavu-core fonts-liberation
-          curl -fsSL "$FFMPEG_TARBALL_URL" -o /tmp/ffmpeg.tar.xz
-          echo "$FFMPEG_TARBALL_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -
-          mkdir -p /tmp/ffmpeg-dist
-          tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
-          install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
-          ffmpeg -version | head -1
+          bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
       - name: Pin npm version
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install dependencies

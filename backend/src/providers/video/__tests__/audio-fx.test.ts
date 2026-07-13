@@ -258,7 +258,10 @@ describe("buildAudioFxArgs — afir gain compensation (version-robust wet leg)",
  * Only runFfmpeg is faked — work dirs and file I/O are real.
  */
 const ffmpegFake = vi.hoisted(() => ({
-  // Each call shifts the next behavior; the last entry repeats.
+  // Plain FIFO: each probe run consumes exactly one behavior, and running
+  // out THROWS — so a change in how many probes the code performs (e.g. a
+  // retry-policy change) surfaces as "no behavior configured" instead of
+  // being silently absorbed by a repeating last entry.
   behaviors: [] as Array<"flat2" | "l1norm" | "nonflat" | "silent" | "fail">,
 }))
 
@@ -268,9 +271,7 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
   return {
     ...actual,
     runFfmpeg: async (args: readonly string[]): Promise<string> => {
-      const behavior = ffmpegFake.behaviors.length > 1
-        ? ffmpegFake.behaviors.shift()!
-        : ffmpegFake.behaviors[0]
+      const behavior = ffmpegFake.behaviors.shift()
       if (!behavior) throw new Error("ffmpegFake: no behavior configured")
       if (behavior === "fail") throw new Error("ffmpeg failed: fake transient error")
 
@@ -359,7 +360,7 @@ describe("afirEffectiveGain — probe failure semantics (throw, retry, never mem
   })
 
   it("memoizes by IR CONTENT, not preset name alone — a different IR under the same name re-probes", async () => {
-    ffmpegFake.behaviors = ["flat2", "l1norm", "l1norm"]
+    ffmpegFake.behaviors = ["flat2", "l1norm"]
     const irB = ir()
     irB[0] = 0.9 // different content → different fingerprint
     await expect(afirEffectiveGain("t-fingerprint", ir())).resolves.toBeCloseTo(2, 5)

@@ -121,6 +121,14 @@ function clampNum(v: number | undefined, lo: number, hi: number, fallback: numbe
  * requires (golden values against unseeded noise flake ±1 dB forever; see
  * `__characterization__/`). This seeded noise source is the single deliberate
  * divergence from the verbatim browser port documented on `buildReverbIr`.
+ *
+ * TWIN WARNING: packages/shared/src/selector.ts carries its own private
+ * mulberry32 (cosmetically different — `| 0` seed masking — but the same
+ * sequence). The two are deliberately INDEPENDENT and both frozen: THIS copy
+ * seeds every reverb IR the committed characterization goldens are pinned
+ * to, so any change to its sequence silently invalidates the goldens and
+ * shifts every rendered reverb waveform. Do NOT "deduplicate" into a shared
+ * export or "sync" one copy to match the other.
  */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
@@ -467,11 +475,24 @@ function floatsToF32le(samples: Float32Array): Buffer {
  * end (IR + probe + graph), which is the only way to catch a regression in
  * the one number that matters.
  */
+/** IR + serialized bytes per preset. buildReverbIr is seeded-deterministic,
+ *  so this trades ~5 MB per worker (all nine presets resident, worst case)
+ *  for skipping three full passes over up to 144k floats plus a 576 KB
+ *  serialize on EVERY reverb job. The per-job disk write remains — each
+ *  job's ffmpeg reads the IR from its own work dir. The cached Float32Array
+ *  is shared: callers treat it as immutable. */
+const reverbIrByPreset = new Map<string, { ir: Float32Array; bytes: Buffer }>()
+
 export async function writeReverbIr(preset: string, irPath: string): Promise<Float32Array> {
   const r = REVERB[preset] ?? REVERB.room
-  const ir = buildReverbIr(r.dur)
-  await fs.writeFile(irPath, floatsToF32le(ir))
-  return ir
+  let entry = reverbIrByPreset.get(preset)
+  if (!entry) {
+    const ir = buildReverbIr(r.dur)
+    entry = { ir, bytes: floatsToF32le(ir) }
+    reverbIrByPreset.set(preset, entry)
+  }
+  await fs.writeFile(irPath, entry.bytes)
+  return entry.ir
 }
 
 export interface AudioFxPaths {

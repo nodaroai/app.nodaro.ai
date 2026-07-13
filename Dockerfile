@@ -267,12 +267,15 @@ FROM node:22-slim AS runner
 # (backend/scripts/characterize-in-image.sh bless), review the per-metric
 # `npm run characterize:report` diff, update DEFAULT_GOLDEN_FILE
 # (backend/src/providers/video/__characterization__/golden.ts), and ship it
-# all in ONE PR. The characterize CI job installs the same tarball (parsed
-# from these ARGs) — a mismatch fails the suite's version guard loudly.
+# all in ONE PR. The characterize CI job and characterize-in-image.sh install
+# the same tarball via the SAME script (tools/install-pinned-ffmpeg.sh, which
+# also owns the ARG parsing) — a procedure change lands everywhere at once,
+# and a pin mismatch fails the suite's version guard loudly.
 ARG FFMPEG_TARBALL_URL_AMD64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-12-13-16/ffmpeg-n8.1.2-22-g94138f6973-linux64-gpl-8.1.tar.xz
 ARG FFMPEG_TARBALL_SHA256_AMD64=516b60bad3df2dedea23594c60e7afaecf3e6a440ca9091ef95ee1f62deba71e
 ARG FFMPEG_TARBALL_URL_ARM64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-12-13-16/ffmpeg-n8.1.2-22-g94138f6973-linuxarm64-gpl-8.1.tar.xz
 ARG FFMPEG_TARBALL_SHA256_ARM64=0a34477fb47a9c108b869fccc9919e00d0c7ebf886e8d45301c74d2d46640d64
+COPY tools/install-pinned-ffmpeg.sh /tmp/install-pinned-ffmpeg.sh
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates xz-utils \
     aubio-tools \
@@ -286,13 +289,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          arm64) FFMPEG_TARBALL_URL="${FFMPEG_TARBALL_URL_ARM64}"; FFMPEG_TARBALL_SHA256="${FFMPEG_TARBALL_SHA256_ARM64}" ;; \
          *) echo "unsupported arch for ffmpeg: $(dpkg --print-architecture)" >&2; exit 1 ;; \
        esac \
-    && curl -fsSL "${FFMPEG_TARBALL_URL}" -o /tmp/ffmpeg.tar.xz \
-    && echo "${FFMPEG_TARBALL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - \
-    && mkdir -p /tmp/ffmpeg-dist \
-    && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1 \
-    && install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/ \
-    && rm -rf /tmp/ffmpeg-dist /tmp/ffmpeg.tar.xz \
-    && ffmpeg -version | head -1 \
+    && bash /tmp/install-pinned-ffmpeg.sh --url "${FFMPEG_TARBALL_URL}" --sha256 "${FFMPEG_TARBALL_SHA256}" \
+    && rm -f /tmp/install-pinned-ffmpeg.sh \
     && rm -rf /var/lib/apt/lists/* \
     && ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${ARCH}" -o /usr/bin/caddy \
