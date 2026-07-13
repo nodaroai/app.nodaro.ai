@@ -26,7 +26,12 @@
     "backfill-template-previews": "tsx src/scripts/backfill-template-previews.ts",
     "gen:skills": "tsx scripts/gen-skills.ts",
     "gen:vd-fallback": "tsx scripts/gen-video-director-fallback.ts",
-    "gen:skills:check": "tsx scripts/gen-skills.ts --check"
+    "gen:skills:check": "tsx scripts/gen-skills.ts --check",
+    "precharacterize:check": "npm -w @nodaro/shared run build",
+    "characterize:check": "vitest run --config vitest.characterize.config.ts",
+    "precharacterize:bless": "npm -w @nodaro/shared run build",
+    "characterize:bless": "CHARACTERIZE_MODE=bless vitest run --config vitest.characterize.config.ts",
+    "characterize:report": "tsx src/providers/video/__characterization__/report.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",

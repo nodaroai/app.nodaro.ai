@@ -670,6 +670,16 @@ All three tiers are VEO 3.1 per [docs.kie.ai/veo3-api/generate-veo-3-video](http
 
 ---
 
+## ffmpeg: pinned version + output characterization (CRITICAL)
+
+Rendered audio/video output is **ffmpeg-version-dependent** (`afir`'s intrinsic gain is ×2 on 5.1 vs ×1 on 8 — a silent 6 dB change; the voice-changer reverb incident). Three interlocking guards, all load-bearing:
+
+1. **The Dockerfile pins ffmpeg** (`ARG FFMPEG_VERSION`, runner stage). NEVER "fix" a `version not found` build failure by unpinning — that failure is the design (Debian keeps only the current package version; a security update forces a deliberate bump). Bumping the pin = a real ffmpeg upgrade: re-bless the characterization goldens inside the new image, review the `characterize:report` diff, update `DEFAULT_GOLDEN_FILE` (in `__characterization__/golden.ts`), and ship it all in ONE PR.
+2. **The characterization suite** (`backend/src/providers/video/__characterization__/`) renders lavfi fixtures through every ffmpeg-backed operation via its REAL production function (a partial mock of ONLY `downloadFile` resolves fixture URLs locally — never weaken `safe-fetch` for tests) and asserts DECODED-output metrics against `golden/ffmpeg-*.json`. It is **opt-in by design**: `.char.ts` suffix + `vitest.characterize.config.ts`, invoked only by `npm run characterize:{check,bless,report}` — NEVER add it to the default `npm test` glob (bare runners/laptops have the wrong ffmpeg; the suite's version guard rejects mismatched binaries with instructions). Bless/check locally via `backend/scripts/characterize-in-image.sh` (node:22-slim + apt-pinned ffmpeg on linux/amd64); CI runs the `FFmpeg Output Characterization` job the same way. If you change rendered output deliberately, re-bless inside the image and justify every moved metric in the PR.
+3. **The reverb IR noise is seeded** (`mulberry32(IR_NOISE_SEED)` in `audio-fx.ts::buildReverbIr`) so renders are bit-reproducible. Do not "fix" it back to `Math.random()` (flaky goldens) and do not touch the seed (invalidates goldens). The browser preview stays random by design — it is the approved reference implementation.
+
+Boot logs answer "which ffmpeg?": `logFfmpegVersion()` prints one line at server + worker startup.
+
 ## App Run Archive (soft-delete) — migrated from root CLAUDE.md
 
 `app_runs.deleted_at` makes `DELETE /v1/app/:slug/runs/:runId` a soft-delete. The run is hidden from the default list and recoverable from `/archived-runs` in the UI. API / SDK (`client.apps.deleteRun()`) / MCP (`delete_app_run` tool) all soft-delete by design — they cannot destroy data.

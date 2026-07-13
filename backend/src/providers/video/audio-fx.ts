@@ -111,9 +111,38 @@ function clampNum(v: number | undefined, lo: number, hi: number, fallback: numbe
 }
 
 /**
+ * Deterministic PRNG (mulberry32) for the IR's noise source. The browser
+ * draws a fresh `Math.random()` realization on every page load and users
+ * approved that sound — WHICH realization plays is perceptually irrelevant
+ * for a diffuse reverb, and the normalisation below makes the level exactly
+ * realization-independent (the RMS divides straight out). Fixing the server
+ * on ONE realization therefore changes nothing audible, but it makes every
+ * render bit-reproducible — which the ffmpeg output-characterization harness
+ * requires (golden values against unseeded noise flake ±1 dB forever; see
+ * `__characterization__/`). This seeded noise source is the single deliberate
+ * divergence from the verbatim browser port documented on `buildReverbIr`.
+ */
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Arbitrary and FIXED FOREVER — changing it changes every reverb render's
+ *  exact waveform (not its sound) and invalidates the blessed goldens. */
+const IR_NOISE_SEED = 0x52564231
+
+/**
  * The reverb's impulse response: a decaying pink-noise burst, `durSec` long, MONO.
  *
- * A VERBATIM PORT of `impulseResponse()` in `vcp.nodaro.ai/src/lib/audio-graph.ts`.
+ * A VERBATIM PORT of `impulseResponse()` in `vcp.nodaro.ai/src/lib/audio-graph.ts`
+ * — except the noise source, which is SEEDED here (see `mulberry32` above; the
+ * browser stays on `Math.random()` by design, it is the approved reference).
  * The browser's reverb is the one the user auditions and approved; this file's job
  * is to reproduce it, not to improve on it. Keep the two in lockstep.
  *
@@ -147,11 +176,12 @@ export function buildReverbIr(durSec: number, sampleRate: number = IR_SAMPLE_RAT
   // Paul Kellet's economy pink-noise filter — three one-pole sections over white
   // noise. The spectral tilt is what gives the tail its body; white noise alone
   // reads as a thin hiss.
+  const random = mulberry32(IR_NOISE_SEED)
   let b0 = 0
   let b1 = 0
   let b2 = 0
   for (let i = 0; i < length; i++) {
-    const white = Math.random() * 2 - 1
+    const white = random() * 2 - 1
     b0 = 0.99765 * b0 + white * 0.099046
     b1 = 0.963 * b1 + white * 0.2965164
     b2 = 0.57 * b2 + white * 1.0526913
