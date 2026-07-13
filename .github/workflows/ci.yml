@@ -463,3 +463,66 @@ jobs:
           echo "Add one with:  npx changeset        (pick bump level + write a note)"
           echo "Or, if this change needs no release:  npx changeset --empty"
           exit 1
+
+  # ffmpeg OUTPUT characterization — renders synthetic lavfi fixtures through
+  # every ffmpeg-backed operation (backend/src/providers/video) and compares
+  # measured properties of the DECODED output against committed golden values
+  # (backend/src/providers/video/__characterization__/golden/). This is the
+  # net the arg-string tests cannot be: a 6 dB rendered-output change (the
+  # afir ×2→×1 incident) is invisible to them and CI stayed green through it.
+  #
+  # It runs inside node:22-slim with the SAME apt-pinned ffmpeg as the
+  # production image (Dockerfile ARG FFMPEG_VERSION, parsed below so the pin
+  # has one source of truth) — NEVER on the bare runner, whose preinstalled
+  # ffmpeg is a different version and would bless/verify the wrong numbers.
+  # When Debian's archive supersedes the pinned version this job fails at apt
+  # install — the same loud, deliberate failure mode as the production docker
+  # build. Bump the pin, re-bless the golden inside the new image
+  # (backend/scripts/characterize-in-image.sh bless), review the report diff,
+  # and ship all of it in one PR.
+  characterize:
+    name: FFmpeg Output Characterization
+    runs-on: ubuntu-latest
+    container: node:22-slim
+    env:
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+      # node:22-slim has no python; youtube-dl-exec's preinstall probes for it
+      # (bare-runner jobs never see this — GitHub runners ship python).
+      YOUTUBE_DL_SKIP_PYTHON_CHECK: 1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Install the production-pinned ffmpeg + fonts (from the Dockerfile ARGs)
+        run: |
+          # Same binary as production, one source of truth: the Dockerfile pin.
+          # Static-tarball pin (URL+SHA256, per arch — this job is amd64)
+          # preferred; legacy apt version pin as fallback.
+          FFMPEG_TARBALL_URL=$(grep -oE '^ARG FFMPEG_TARBALL_URL_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
+          FFMPEG_TARBALL_SHA256=$(grep -oE '^ARG FFMPEG_TARBALL_SHA256_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
+          apt-get update -qq
+          if [ -n "$FFMPEG_TARBALL_URL" ]; then
+            echo "pinned ffmpeg tarball: $FFMPEG_TARBALL_URL"
+            apt-get install -y -qq --no-install-recommends \
+              curl ca-certificates xz-utils fontconfig fonts-dejavu-core fonts-liberation
+            curl -fsSL "$FFMPEG_TARBALL_URL" -o /tmp/ffmpeg.tar.xz
+            echo "$FFMPEG_TARBALL_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -
+            mkdir -p /tmp/ffmpeg-dist
+            tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
+            install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
+          else
+            FFMPEG_PIN=$(grep -oE 'FFMPEG_VERSION=[^ ]+' Dockerfile | head -1 | cut -d= -f2)
+            echo "pinned ffmpeg (apt): $FFMPEG_PIN"
+            apt-get install -y -qq --no-install-recommends \
+              "ffmpeg=$FFMPEG_PIN" fontconfig fonts-dejavu-core fonts-liberation
+          fi
+          ffmpeg -version | head -1
+      - name: Pin npm version
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install dependencies
+        run: npm ci
+      - name: Build workspace packages
+        run: npm run build:packages
+      - name: Characterization check (decoded-output goldens)
+        working-directory: backend
+        run: npm run characterize:check

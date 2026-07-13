@@ -111,9 +111,38 @@ function clampNum(v: number | undefined, lo: number, hi: number, fallback: numbe
 }
 
 /**
+ * Deterministic PRNG (mulberry32) for the IR's noise source. The browser
+ * draws a fresh `Math.random()` realization on every page load and users
+ * approved that sound — WHICH realization plays is perceptually irrelevant
+ * for a diffuse reverb, and the normalisation below makes the level exactly
+ * realization-independent (the RMS divides straight out). Fixing the server
+ * on ONE realization therefore changes nothing audible, but it makes every
+ * render bit-reproducible — which the ffmpeg output-characterization harness
+ * requires (golden values against unseeded noise flake ±1 dB forever; see
+ * `__characterization__/`). This seeded noise source is the single deliberate
+ * divergence from the verbatim browser port documented on `buildReverbIr`.
+ */
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Arbitrary and FIXED FOREVER — changing it changes every reverb render's
+ *  exact waveform (not its sound) and invalidates the blessed goldens. */
+const IR_NOISE_SEED = 0x52564231
+
+/**
  * The reverb's impulse response: a decaying pink-noise burst, `durSec` long, MONO.
  *
- * A VERBATIM PORT of `impulseResponse()` in `vcp.nodaro.ai/src/lib/audio-graph.ts`.
+ * A VERBATIM PORT of `impulseResponse()` in `vcp.nodaro.ai/src/lib/audio-graph.ts`
+ * — except the noise source, which is SEEDED here (see `mulberry32` above; the
+ * browser stays on `Math.random()` by design, it is the approved reference).
  * The browser's reverb is the one the user auditions and approved; this file's job
  * is to reproduce it, not to improve on it. Keep the two in lockstep.
  *
@@ -147,11 +176,12 @@ export function buildReverbIr(durSec: number, sampleRate: number = IR_SAMPLE_RAT
   // Paul Kellet's economy pink-noise filter — three one-pole sections over white
   // noise. The spectral tilt is what gives the tail its body; white noise alone
   // reads as a thin hiss.
+  const random = mulberry32(IR_NOISE_SEED)
   let b0 = 0
   let b1 = 0
   let b2 = 0
   for (let i = 0; i < length; i++) {
-    const white = Math.random() * 2 - 1
+    const white = random() * 2 - 1
     b0 = 0.99765 * b0 + white * 0.099046
     b1 = 0.963 * b1 + white * 0.2965164
     b2 = 0.57 * b2 + white * 1.0526913
@@ -195,45 +225,64 @@ function convolverNormalizationScale(ir: Float32Array, sampleRate: number): numb
 }
 
 /**
- * `afir` applies an intrinsic output gain on top of the convolution, and IT IS
- * VERSION-DEPENDENT: ×2 (+6.02 dB) on the ffmpeg 5.1.9 that ships in the
- * production image (Debian bookworm, see the Dockerfile), ×1 on ffmpeg 8. It is
- * NOT hardcoded here on purpose — the day the base image bumps, a hardcoded ÷2
- * would silently make every reverb 6 dB hot, which is the exact bug this module
- * was written to fix.
+ * `afir` applies gain ON TOP of the convolution, and BOTH the amount and the
+ * MECHANISM are version-dependent:
  *
- * So we MEASURE it, once per process: convolve an impulse with a Dirac IR (a 1
- * followed by zeros), whose convolution is by definition the identity, and read
- * the output's peak. Whatever that peak is, it is the gain, and we divide the IR
- * by it.
+ *  - ffmpeg 5.1 (what production ran before the ffmpeg-8 pin): a flat ×2
+ *    (+6.02 dB), independent of the IR.
+ *  - ffmpeg 8: a new `irnorm` option EXISTS and DEFAULTS TO 1, which divides
+ *    the IR by its ℓ1 norm (Σ|coefficients|) INDEPENDENTLY of `gtype` — so
+ *    `gtype=none` no longer means "no gain". For our Web-Audio-normalized
+ *    reverb IRs that is a −20…−37 dB wet leg (measured; the attenuation
+ *    matched 20·log10(ℓ1) to four decimals on every preset — i.e. the paid
+ *    reverb effect silently all but disappears). Passing `irnorm=-1` would
+ *    disable it there, but the option is a HARD ERROR on 5.1 — a
+ *    version-conditional argument trap (see the buildAudioFxArgs notes).
  *
- * The IR is padded to `AFIR_PROBE_IR_SAMPLES` rather than being a single sample:
- * on ffmpeg 5.1.9 an IR shorter than 8 taps hits a degenerate path in `afir` and
- * comes back at 1/8192 (−78 dB) instead of ×2. Probing with a 1-sample IR would
- * therefore "measure" 0.000122 and we would MULTIPLY the IR by 8192. The padding
- * keeps the probe in the same regime as a real IR (the shortest is `outdoor`, 7200
- * taps), which is the only regime whose answer we actually want.
+ * The original defense here — convolve a Dirac IR once and divide the real IR
+ * by the measured peak — was structurally blind to ffmpeg 8's behavior twice
+ * over: a Dirac's ℓ1 norm is 1 (the probe swears ×1 while real IRs get
+ * crushed), and norm-based gain is SCALE-INVARIANT (rescaling the IR rescales
+ * its norm, so IR pre-division cancels nothing).
+ *
+ * So we measure the EFFECTIVE gain for THE ACTUAL IR, per preset, at runtime:
+ * convolve a unit impulse with the very IR we are about to use and read
+ * peak(output)/peak(IR). A unit-impulse convolution reproduces the IR, so any
+ * flat per-IR scalar policy — ×2, ℓ1 normalization, whatever a future ffmpeg
+ * invents — is captured exactly. The compensation is then applied to the WET
+ * LEG'S volume in the filter graph (NOT to the IR — see above): a scalar
+ * after a convolution is the same signal (both are LTI), and it cancels the
+ * measured gain regardless of its mechanism.
+ *
+ * Memoised per preset per process (the IR generator is seeded, so a preset's
+ * IR — and therefore its measured gain — is identical for the process's
+ * lifetime).
  */
-const AFIR_PROBE_IR_SAMPLES = 8192
-const AFIR_PROBE_IMPULSE_SAMPLES = 32768
-/** A measured gain outside this band is not a gain, it's a broken probe (e.g. the
- *  degenerate short-IR path above, or a silent output). Fall back rather than
+const AFIR_PROBE_TAIL_SAMPLES = 4800
+/** A measured gain outside this band is not a gain, it's a broken probe (a
+ *  silent output, a truncated render). The band is wide on purpose: ×2 flat
+ *  (ffmpeg 5.1) at the top, and 1/ℓ1 of the longest Web-Audio-normalized IR
+ *  (church, 3 s → ≈1/75) with margin at the bottom. Fall back rather than
  *  wreck the mix. */
-const AFIR_GAIN_MIN = 0.25
+const AFIR_GAIN_MIN = 1 / 512
 const AFIR_GAIN_MAX = 8
 
-let afirGainPromise: Promise<number> | null = null
+const afirGainByPreset = new Map<string, Promise<number>>()
 
-/** Memoised per process — one probe per worker, not one per job. */
-function afirIntrinsicGain(): Promise<number> {
-  afirGainPromise ??= resolveAfirIntrinsicGain()
-  return afirGainPromise
+/** Memoised per (preset, process) — one probe per preset per worker. */
+function afirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
+  let pending = afirGainByPreset.get(preset)
+  if (!pending) {
+    pending = resolveAfirEffectiveGain(preset, ir)
+    afirGainByPreset.set(preset, pending)
+  }
+  return pending
 }
 
-async function resolveAfirIntrinsicGain(): Promise<number> {
+async function resolveAfirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
   try {
-    const gain = await probeAfirIntrinsicGain()
-    console.log(`[audio-fx] afir intrinsic gain measured: ×${gain.toFixed(4)}`)
+    const gain = await probeAfirEffectiveGain(ir)
+    console.log(`[audio-fx] afir effective gain for "${preset}": ×${gain.toFixed(6)}`)
     return gain
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -242,22 +291,26 @@ async function resolveAfirIntrinsicGain(): Promise<number> {
     // level. Silently guessing is how the 22 dB-hot export shipped in the first
     // place.
     console.warn(
-      `[audio-fx] afir gain probe FAILED (${msg}) — falling back to ×${fallback} ` +
-      `inferred from the ffmpeg version. Reverb level may be off if this is wrong.`,
+      `[audio-fx] afir gain probe FAILED for "${preset}" (${msg}) — falling back to ` +
+      `×${fallback} inferred from the ffmpeg version. Reverb level may be off if this is wrong.`,
     )
     return fallback
   }
 }
 
-async function probeAfirIntrinsicGain(): Promise<number> {
+async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
   const workDir = await createWorkDir("afir-probe")
   try {
     const impulsePath = join(workDir, "impulse.f32")
-    const irPath = join(workDir, "dirac.f32")
+    const irPath = join(workDir, "ir.f32")
     const outPath = join(workDir, "out.f32")
 
-    await fs.writeFile(impulsePath, floatsToF32le(unitImpulse(AFIR_PROBE_IMPULSE_SAMPLES)))
-    await fs.writeFile(irPath, floatsToF32le(unitImpulse(AFIR_PROBE_IR_SAMPLES)))
+    // The impulse must be at least as long as the IR: afir's output length
+    // follows the INPUT, and a unit-impulse convolution reproduces the IR —
+    // truncate it and the peak may fall outside the rendered window.
+    const impulse = unitImpulse(ir.length + AFIR_PROBE_TAIL_SAMPLES)
+    await fs.writeFile(impulsePath, floatsToF32le(impulse))
+    await fs.writeFile(irPath, floatsToF32le(ir))
 
     await runFfmpeg([
       "-y",
@@ -269,20 +322,29 @@ async function probeAfirIntrinsicGain(): Promise<number> {
     ])
 
     const raw = await fs.readFile(outPath)
-    let peak = 0
+    let peakOut = 0
     for (let i = 0; i + 4 <= raw.length; i += 4) {
-      peak = Math.max(peak, Math.abs(raw.readFloatLE(i)))
+      peakOut = Math.max(peakOut, Math.abs(raw.readFloatLE(i)))
     }
-    if (!Number.isFinite(peak) || peak < AFIR_GAIN_MIN || peak > AFIR_GAIN_MAX) {
-      throw new Error(`implausible peak ${peak} (expected ~1 or ~2)`)
+    let peakIr = 0
+    for (let i = 0; i < ir.length; i++) peakIr = Math.max(peakIr, Math.abs(ir[i]))
+    if (peakIr <= 0) throw new Error("IR is silent")
+
+    const gain = peakOut / peakIr
+    if (!Number.isFinite(gain) || gain < AFIR_GAIN_MIN || gain > AFIR_GAIN_MAX) {
+      throw new Error(`implausible gain ${gain} (expected within [${AFIR_GAIN_MIN}, ${AFIR_GAIN_MAX}])`)
     }
-    return peak
+    return gain
   } finally {
     await cleanupWorkDir(workDir)
   }
 }
 
-/** Last resort when the probe can't run: ffmpeg < 6 doubles, ffmpeg >= 6 doesn't. */
+/** Last resort when the probe can't run: ffmpeg < 6 doubles. ≥6 is reported as
+ *  ×1 — under ffmpeg 8's default ℓ1 normalization the truthful value would be
+ *  IR-dependent and this fallback CANNOT know which normalization the binary
+ *  applies, so ×1 (an over-quiet reverb there) is the least-bad guess. The
+ *  probe failing at all is the anomaly to fix. */
 async function afirGainFromVersion(): Promise<number> {
   try {
     const out = await runFfmpeg(["-hide_banner", "-version"])
@@ -291,9 +353,9 @@ async function afirGainFromVersion(): Promise<number> {
   } catch {
     /* fall through */
   }
-  // Assume the production image (5.1.9). Guessing ×1 there would ship a +6 dB
-  // reverb; guessing ×2 on a newer ffmpeg ships a −6 dB one. Too quiet beats too
-  // loud — the loud one is the bug users complained about.
+  // Assume the old production image (5.1.9). Guessing ×1 there would ship a
+  // +6 dB reverb; guessing ×2 on a newer ffmpeg ships a −6 dB one. Too quiet
+  // beats too loud — the loud one is the bug users complained about.
   return 2
 }
 
@@ -311,24 +373,24 @@ function floatsToF32le(samples: Float32Array): Buffer {
 }
 
 /**
- * Synthesise the preset's IR, normalise it as the browser does, cancel `afir`'s
- * intrinsic gain, and write it where ffmpeg can read it as a raw f32le input.
+ * Synthesise the preset's IR, normalise it as the browser does, and write it
+ * where ffmpeg can read it as a raw f32le input. Returns the IR so the caller
+ * can measure `afir`'s effective gain against THESE exact samples.
  *
- * Everything that sets the reverb's LEVEL happens here, in Node, where it is
- * testable — `afir` is left with nothing to do but convolve.
+ * Note the IR is written UNCOMPENSATED: afir's version-dependent gain is
+ * norm-based on ffmpeg 8, and norm-based gain is scale-invariant — dividing
+ * the IR cancels nothing there. The cancellation lives in the wet leg's
+ * `volume` node instead (see buildAudioFxArgs / afirEffectiveGain).
  *
- * Exported so the level can be verified against the real ffmpeg binary end to end
- * (IR + probe + graph), which is the only way to catch a regression in the one
- * number that matters.
+ * Exported so the level can be verified against the real ffmpeg binary end to
+ * end (IR + probe + graph), which is the only way to catch a regression in
+ * the one number that matters.
  */
-export async function writeReverbIr(preset: string, irPath: string): Promise<void> {
+export async function writeReverbIr(preset: string, irPath: string): Promise<Float32Array> {
   const r = REVERB[preset] ?? REVERB.room
   const ir = buildReverbIr(r.dur)
-
-  const afirGain = await afirIntrinsicGain()
-  for (let i = 0; i < ir.length; i++) ir[i] /= afirGain
-
   await fs.writeFile(irPath, floatsToF32le(ir))
+  return ir
 }
 
 export interface AudioFxPaths {
@@ -374,8 +436,12 @@ export interface AudioFxPaths {
  * level stays put wherever the Amount slider goes — the browser does the same. The
  * trailing `alimiter` is a clip guard for the file being written; it is transparent
  * below 0.95.
+ *
+ * `afirGain` is the measured effective gain afir applies to THIS preset's IR
+ * on THIS binary (see afirEffectiveGain) — the wet volume divides it back
+ * out. It defaults to 1 so the pure arg-shape is testable without a probe.
  */
-export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths): string[] {
+export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths, afirGain = 1): string[] {
   const p = opts.preset
 
   if (AUDIO_FX_REVERB_PRESETS.has(p)) {
@@ -383,8 +449,14 @@ export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths): str
     if (!paths.irPath) {
       throw new Error(`buildAudioFxArgs: reverb preset "${p}" requires an irPath`)
     }
+    if (!(afirGain > 0) || !Number.isFinite(afirGain)) {
+      throw new Error(`buildAudioFxArgs: implausible afirGain ${afirGain}`)
+    }
     const mixPct = clampNum(opts.mix, 0, 100, r.mix)
-    const wetGain = (mixPct / 100).toFixed(3)
+    // Wet leg: user mix × the reciprocal of afir's measured gain. On ffmpeg 8
+    // the reciprocal is large (ℓ1 normalization crushes the IR by 20–37 dB),
+    // so 6 decimals keep the small mix×(1/gain) products exact enough.
+    const wetGain = ((mixPct / 100) / afirGain).toFixed(6)
     const dryGain = ((100 - mixPct) / 100).toFixed(3)
 
     // afir's own dry/wet gains do NOT pass the dry input through (`dry=1:wet=0`
@@ -452,12 +524,14 @@ export async function applyAudioFx(opts: AudioFxOptions): Promise<{ outputPath: 
     await downloadFile(opts.audioUrl, inputPath)
 
     let irPath: string | undefined
+    let afirGain = 1
     if (AUDIO_FX_REVERB_PRESETS.has(opts.preset)) {
       irPath = join(workDir, "reverb-ir.f32")
-      await writeReverbIr(opts.preset, irPath)
+      const ir = await writeReverbIr(opts.preset, irPath)
+      afirGain = await afirEffectiveGain(opts.preset, ir)
     }
 
-    await runFfmpeg(buildAudioFxArgs(opts, { inputPath, outputPath, irPath }))
+    await runFfmpeg(buildAudioFxArgs(opts, { inputPath, outputPath, irPath }, afirGain))
 
     console.log(`[applyAudioFx] Output: ${outputPath}`)
     return { outputPath }

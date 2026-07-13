@@ -5,5 +5,12 @@
     "noEmit": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/__tests__/**"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/__tests__/**",
+    "src/**/*.char.ts",
+    "src/**/__characterization__/**"
+  ]
 }

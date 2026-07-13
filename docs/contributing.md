@@ -205,6 +205,37 @@ CI runs `tsc --noEmit`, `vitest`, and a small linting pass. Local
 flakiness is rare; if a test fails locally but passes in CI (or
 vice versa), open an issue with reproduction steps.
 
+### ffmpeg output characterization (opt-in suite)
+
+Ordinary unit tests assert the **argument strings** passed to ffmpeg;
+they cannot see a change in what ffmpeg actually renders (filter
+behavior differs between ffmpeg versions — that is why the Dockerfile
+pins the exact ffmpeg package). The characterization suite in
+`backend/src/providers/video/__characterization__/` closes that gap:
+it renders synthetic fixtures through every ffmpeg-backed operation
+and compares measured properties of the **decoded output** (energy,
+band spectrum, decay envelope, duration, per-frame luma) against
+committed golden values.
+
+It is deliberately **excluded from `npm test`** — its numbers are only
+valid against the exact pinned production ffmpeg, not whatever binary
+your laptop or a bare CI runner happens to have. Run it inside the
+production image environment instead:
+
+```bash
+backend/scripts/characterize-in-image.sh check   # compare against golden
+backend/scripts/characterize-in-image.sh bless   # rewrite golden (deliberate!)
+cd backend && npm run characterize:report -- --against ffmpeg-X.json
+```
+
+If you touch anything under `backend/src/providers/video/`, run the
+`check` before opening the PR (CI runs it too, inside a container with
+the pinned ffmpeg). If your change is *supposed* to alter rendered
+output, re-bless inside the image and commit the golden diff with an
+explanation of every metric that moved. Never edit golden values by
+hand, and never bless against an unpinned/local ffmpeg — the suite's
+version guard will reject it.
+
 ## 6. Adding a new node
 
 Adding a new node type touches a *lot* of files — backend route,

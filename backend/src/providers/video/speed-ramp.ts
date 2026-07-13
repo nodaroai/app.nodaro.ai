@@ -164,7 +164,16 @@ export async function speedRamp(options: SpeedRampOptions): Promise<string> {
     const videoFilters: string[] = []
     if (usingRamps) {
       const ptsExpr = buildRampSetptsExpression(ramps!)
-      videoFilters.push(`setpts=${ptsExpr}`)
+      // The piecewise expression contains commas (`if(lt(T,0.5),…)`), and
+      // ffmpeg's FILTERGRAPH parser splits on unescaped commas before the
+      // filter ever sees its argument — unquoted, every ramp render died with
+      // `No such filter: '1)'` on every ffmpeg version (found by the output-
+      // characterization harness; the arg-string tests couldn't see it).
+      // Single quotes are filtergraph-level quoting, not shell quoting: they
+      // reach ffmpeg verbatim via execFile and make the argument atomic —
+      // exactly the `setpts='(...)/TB'` form buildRampSetptsExpression's doc
+      // prescribes. The expression itself never contains a single quote.
+      videoFilters.push(`setpts='${ptsExpr}'`)
     } else {
       videoFilters.push(`setpts=PTS/${clampedSpeed}`)
     }

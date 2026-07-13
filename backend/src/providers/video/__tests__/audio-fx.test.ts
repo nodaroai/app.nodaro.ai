@@ -209,3 +209,37 @@ describe("buildAudioFxArgs — non-reverb presets are plain -af chains", () => {
     expect(chain({ audioUrl: "x", preset: "custom" })).toBe("anull")
   })
 })
+
+describe("buildAudioFxArgs — afir gain compensation (version-robust wet leg)", () => {
+  const fcFor = (afirGain?: number): string => {
+    const args = buildAudioFxArgs(
+      { audioUrl: "x", preset: "room", mix: 50 },
+      { inputPath: "/w/in.mp3", outputPath: "/w/out.mp3", irPath: "/w/reverb-ir.f32" },
+      afirGain,
+    )
+    return args[args.indexOf("-filter_complex") + 1]
+  }
+
+  it("divides ONLY the wet leg by the measured gain (dry untouched — complementary crossfade preserved)", () => {
+    // ffmpeg 5.1 regime: flat ×2 → wet halves, dry stays.
+    const fc = fcFor(2)
+    expect(fc).toContain("volume=0.250000") // wet: 0.5 / 2
+    expect(fc).toContain("volume=0.500")    // dry: unchanged
+  })
+
+  it("compensation is in the graph, NOT the IR — norm-based gain is scale-invariant, IR division cancels nothing", () => {
+    // ffmpeg 8 regime: irnorm=1 crushes a Web-Audio IR by ℓ1 (measured 1/10.3
+    // for room) → wet multiplies back up; must render with full precision.
+    const fc = fcFor(1 / 10.3)
+    expect(fc).toContain("volume=5.150000")
+  })
+
+  it("defaults to ×1 so pure arg-shape tests need no probe", () => {
+    expect(fcFor(undefined)).toContain("volume=0.500000")
+  })
+
+  it("rejects an implausible gain rather than rendering a broken mix", () => {
+    expect(() => fcFor(0)).toThrow(/implausible afirGain/)
+    expect(() => fcFor(Number.NaN)).toThrow(/implausible afirGain/)
+  })
+})
