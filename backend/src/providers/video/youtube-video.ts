@@ -102,15 +102,28 @@ function deriveOutputTemplate(outPath: string): string {
   return outPath.replace(/\.[^./\\]+$/, "") + ".%(ext)s"
 }
 
+/** Seconds of slack added on each side of a requested section (see below). */
+export const SECTION_PAD_SEC = 3
+
 /**
  * yt-dlp video download args. Exported for testability. Adds
  * `--max-filesize <N>M` only when `maxFilesizeBytes` is provided (the
  * video-analysis path caps download size; the download-video route does not).
+ *
+ * `section` (optional) adds `--download-sections "*start-end"` with a
+ * ±SECTION_PAD_SEC pad on both sides: `--download-sections` cuts at KEYFRAMES,
+ * so the fetched range is imprecise — the client performs the frame-exact trim
+ * afterwards on the (small) result, and the pad guarantees the requested range
+ * survives the keyframe rounding. Clamped at 0 on the left; overshooting the
+ * video's end is fine (yt-dlp clamps). Deliberately NO
+ * `--force-keyframes-at-cuts`: that re-encodes server-side, and precision is
+ * the client's second-stage cut, not ours.
  */
 export function buildYtDlpVideoArgs(opts: {
   url: string
   outPath: string
   maxFilesizeBytes?: number
+  section?: { startSec: number; endSec: number }
 }): string[] {
   const args = [
     opts.url,
@@ -128,6 +141,13 @@ export function buildYtDlpVideoArgs(opts: {
   if (opts.maxFilesizeBytes && opts.maxFilesizeBytes > 0) {
     const mb = Math.round(opts.maxFilesizeBytes / (1024 * 1024))
     args.push("--max-filesize", `${mb}M`)
+  }
+  if (opts.section) {
+    const start = Math.max(0, opts.section.startSec - SECTION_PAD_SEC)
+    const end = opts.section.endSec + SECTION_PAD_SEC
+    // These live in the BASE args, so every client-ladder rung (web/tv/android)
+    // inherits the section — a rung retry must never fall back to a full fetch.
+    args.push("--download-sections", `*${start}-${end}`)
   }
   return args
 }
@@ -437,15 +457,20 @@ function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void):
  *   - `onProgress(pct)` — download percent (0–100) as yt-dlp reports it.
  *   - `onProcessingStart()` — fired once, right before the h264 re-encode
  *     begins, so callers can surface a distinct "processing" phase.
+ *
+ * `section` (optional) fetches only that time range (± the keyframe pad) via
+ * `--download-sections` — see buildYtDlpVideoArgs. yt-dlp's progress output is
+ * jumpy for section downloads; callers should expect non-monotonic percents.
  */
 export async function downloadYouTubeVideo(opts: {
   url: string
   outPath: string
   maxFilesizeBytes?: number
+  section?: { startSec: number; endSec: number }
   onProgress?: (pct: number) => void
   onProcessingStart?: () => void
 }): Promise<void> {
-  const { url, outPath, maxFilesizeBytes, onProgress, onProcessingStart } = opts
+  const { url, outPath, maxFilesizeBytes, section, onProgress, onProcessingStart } = opts
 
   // SSRF gate — same broad allowlist the download-video route accepted before
   // extraction, so TikTok/Instagram/X/Facebook support is preserved.
@@ -453,7 +478,7 @@ export async function downloadYouTubeVideo(opts: {
     throw new YtUrlNotAllowedError(`host not allowed: ${url}`)
   }
 
-  const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes })
+  const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, section })
 
   // YouTube 429s the default (web) client on the watch page from datacenter IPs,
   // so retry web → tv → android (the android rung never hits the watch page).

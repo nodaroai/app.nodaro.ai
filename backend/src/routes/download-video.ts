@@ -6,17 +6,43 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { recordDownloadedVideoAsset } from "../lib/asset-records.js"
 import { downloadYouTubeVideo } from "../providers/video/youtube-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 
-const downloadVideoBody = z.object({
-  url: safeUrlSchema.refine(
-    (url) => isAllowedSocialVideoUrl(url),
-    { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
-  ),
-})
+const downloadVideoBody = z
+  .object({
+    url: safeUrlSchema.refine(
+      (url) => isAllowedSocialVideoUrl(url),
+      { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
+    ),
+    // Optional section fetch: both-or-neither, 0 <= start < end (seconds).
+    // The provider pads the range ±3s before handing it to yt-dlp, because
+    // --download-sections cuts at keyframes; the client does the exact trim.
+    sectionStartSec: z.number().min(0, "sectionStartSec must be >= 0").optional(),
+    sectionEndSec: z.number().min(0, "sectionEndSec must be >= 0").optional(),
+  })
+  .superRefine((body, ctx) => {
+    const hasStart = body.sectionStartSec !== undefined
+    const hasEnd = body.sectionEndSec !== undefined
+    if (hasStart !== hasEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "sectionStartSec and sectionEndSec must be provided together",
+        path: [hasStart ? "sectionEndSec" : "sectionStartSec"],
+      })
+      return
+    }
+    if (hasStart && hasEnd && body.sectionStartSec! >= body.sectionEndSec!) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "sectionStartSec must be less than sectionEndSec",
+        path: ["sectionStartSec"],
+      })
+    }
+  })
 
 interface ActiveDownload {
   percent: number
@@ -65,6 +91,8 @@ async function runDownloadWithProgress(
   outputId: string,
   baseName: string,
   outPath: string,
+  userId: string,
+  section?: { startSec: number; endSec: number },
 ): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
@@ -72,10 +100,12 @@ async function runDownloadWithProgress(
   try {
     // Provider owns yt-dlp spawn + spoof + h264 normalize; we keep the SSE
     // progress map, fed by its callbacks. onProgress reports download percent;
-    // onProcessingStart fires once when the h264 re-encode begins.
+    // onProcessingStart fires once when the h264 re-encode begins. For section
+    // downloads yt-dlp's percents are jumpy — accepted, the map just relays them.
     await downloadYouTubeVideo({
       url,
       outPath,
+      section,
       onProgress: (pct) => {
         if (state.phase === "downloading") {
           state.percent = Math.min(Math.round(pct), 99)
@@ -90,10 +120,41 @@ async function runDownloadWithProgress(
     state.phase = "uploading"
     state.percent = 95
 
-    const videoR2Url = await uploadFileWithKeyToR2(outPath, `videos/yt-${outputId}.mp4`, "video/mp4")
+    const videoR2Key = `videos/yt-${outputId}.mp4`
+    // Size taken BEFORE the upload path unlinks the file — it becomes the
+    // assets row's size_bytes, which is exactly what the delete paths
+    // (library.ts, media-process deleteSource) decrement by later.
+    const videoSizeBytes = (await fs.stat(outPath)).size
+    const videoR2Url = await uploadFileWithKeyToR2(outPath, videoR2Key, "video/mp4")
     await fs.unlink(outPath).catch(() => {})
 
     const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
+
+    // Ownership row + increment-only storage accounting — the same assets shape
+    // /v1/upload and /v1/media/process insert. Without this row the downloaded
+    // object is unowned and untracked: the ownership-gated deleteSource on
+    // /v1/media/process could never clean it up, and its bytes never counted
+    // toward the user's storage. Primary video object only — no thumbnail row
+    // and no thumbnail byte tracking, matching the platform's delete paths
+    // (which remove/decrement only the primary object + row).
+    //
+    // DELIBERATELY no reserve_storage_if_within_limit here: social imports have
+    // never been quota-ENFORCED, and silently making them fail over-quota would
+    // be an unauthorized product change. Increment-only accounting for now;
+    // enforcement is an explicit future decision.
+    //
+    // Bookkeeping is best-effort: a failure must never fail a download whose
+    // video already uploaded — the user keeps their video; it is merely unowned
+    // (deleteSource will skip it), same as every pre-existing download.
+    await recordDownloadedVideoAsset({
+      userId,
+      outputId,
+      sizeBytes: videoSizeBytes,
+      r2Key: videoR2Key,
+      r2Url: videoR2Url,
+      thumbnailUrl,
+      sourceUrl: url,
+    })
 
     state.phase = "completed"
     state.percent = 100
@@ -130,17 +191,25 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { url } = parsed.data
+    const userId = req.userId
+    const { url, sectionStartSec, sectionEndSec } = parsed.data
     const downloadId = randomUUID()
     const outputId = randomUUID()
     const baseName = `yt-video-${outputId}`
     const outPath = join(tmpdir(), `${baseName}.mp4`)
 
+    // Zod guarantees both-or-neither; collapse the pair into one value here so
+    // everything downstream deals with a single optional section object.
+    const section =
+      sectionStartSec !== undefined && sectionEndSec !== undefined
+        ? { startSec: sectionStartSec, endSec: sectionEndSec }
+        : undefined
+
     const state: ActiveDownload = { percent: 0, phase: "downloading" }
     activeDownloads.set(downloadId, state)
 
     // Start download in background
-    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath)
+    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath, userId, section)
 
     return { downloadId }
   })
