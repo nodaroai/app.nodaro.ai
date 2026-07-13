@@ -11,11 +11,15 @@ import {
   buildYtDlpVideoArgs,
   resolveYtDlpBin,
   probeStreams,
+  downloadYouTubeVideo,
+  youtubeClientLadder,
+  runThroughClientLadder,
   YtUrlNotAllowedError,
+  type YtClientRung,
 } from "../youtube-video.js"
 
-/** Minimal stand-in for a spawned ffprobe: emits stdout, then closes. */
-function fakeProc(opts: { stdout?: string; code?: number; error?: Error }) {
+/** Minimal stand-in for a spawned child: emits stdout/stderr, then closes. */
+function fakeProc(opts: { stdout?: string; stderr?: string; code?: number; error?: Error }) {
   const proc = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
@@ -28,6 +32,7 @@ function fakeProc(opts: { stdout?: string; code?: number; error?: Error }) {
   queueMicrotask(() => {
     if (opts.error) return proc.emit("error", opts.error)
     if (opts.stdout) proc.stdout.emit("data", Buffer.from(opts.stdout))
+    if (opts.stderr) proc.stderr.emit("data", Buffer.from(opts.stderr))
     proc.emit("close", opts.code ?? 0)
   })
   return proc
@@ -160,5 +165,127 @@ describe("resolveYtDlpBin", () => {
     // so the OS resolves it, instead of spawning a guaranteed-missing path.
     const resolved = resolveYtDlpBin({} as NodeJS.ProcessEnv)
     expect(resolved === "yt-dlp" || resolved.endsWith("/bin/yt-dlp")).toBe(true)
+  })
+})
+
+/**
+ * The regression these pin: PR #77 dropped the android client pin (it capped
+ * downloads at 360p), leaving every YouTube fetch on the default (web) client.
+ * YouTube's watch page then 429s the web client from Railway's datacenter IP,
+ * taking video imports 100% down ("Couldn't fetch this video"). The ladder
+ * retries web → tv → android — best quality first, guaranteed-working android
+ * last — for YouTube only; every other host keeps its single attempt.
+ */
+describe("youtubeClientLadder", () => {
+  it("YouTube URLs get the web → tv → android ladder, in order", () => {
+    const rungs = youtubeClientLadder("https://www.youtube.com/watch?v=x")
+    expect(rungs.map((r) => r.label)).toEqual(["default", "tv", "android"])
+    // Rung 1 is the pin-free base args — no extractor-args, so best quality.
+    expect(rungs[0].extractorArgs).toEqual([])
+    expect(rungs[1].extractorArgs).toEqual(["--extractor-args", "youtube:player_client=tv"])
+    expect(rungs[2].extractorArgs).toEqual(["--extractor-args", "youtube:player_client=android"])
+  })
+
+  it("treats youtu.be and music.youtube.com as YouTube (3 rungs)", () => {
+    expect(youtubeClientLadder("https://youtu.be/x")).toHaveLength(3)
+    expect(youtubeClientLadder("https://music.youtube.com/watch?v=x")).toHaveLength(3)
+  })
+
+  it("non-YouTube hosts get exactly one default-client attempt", () => {
+    for (const url of [
+      "https://www.tiktok.com/@a/video/1",
+      "https://www.instagram.com/reel/x",
+      "https://x.com/a/status/1",
+      "https://www.facebook.com/watch?v=1",
+    ]) {
+      const rungs = youtubeClientLadder(url)
+      expect(rungs).toHaveLength(1)
+      expect(rungs[0]).toEqual({ label: "default", extractorArgs: [] })
+    }
+  })
+})
+
+describe("runThroughClientLadder", () => {
+  it("stops at the first success — a rung-1 win runs the attempt exactly once", async () => {
+    const attempt = vi.fn().mockResolvedValue("ok")
+    await expect(runThroughClientLadder("https://youtu.be/x", attempt)).resolves.toBe("ok")
+    expect(attempt).toHaveBeenCalledTimes(1)
+    expect(attempt.mock.calls[0][0].label).toBe("default")
+  })
+
+  it("a first-attempt failure advances to rung 2 with the tv extractor-args", async () => {
+    const attempt = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP Error 429: Too Many Requests"))
+      .mockResolvedValueOnce("ok")
+    await expect(runThroughClientLadder("https://youtu.be/x", attempt)).resolves.toBe("ok")
+    expect(attempt).toHaveBeenCalledTimes(2)
+    expect(attempt.mock.calls[1][0].label).toBe("tv")
+    expect(attempt.mock.calls[1][0].extractorArgs).toContain("youtube:player_client=tv")
+  })
+
+  it("when every rung fails, the LAST rung's error is what propagates", async () => {
+    const attempt = vi.fn((rung: YtClientRung) => Promise.reject(new Error(`rung ${rung.label} failed`)))
+    await expect(runThroughClientLadder("https://youtu.be/x", attempt)).rejects.toThrow("rung android failed")
+    expect(attempt).toHaveBeenCalledTimes(3)
+  })
+
+  it("non-YouTube hosts try once and propagate that single error unchanged", async () => {
+    const attempt = vi.fn().mockRejectedValue(new Error("tiktok boom"))
+    await expect(runThroughClientLadder("https://tiktok.com/x", attempt)).rejects.toThrow("tiktok boom")
+    expect(attempt).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * End-to-end wiring of the ladder into the real yt-dlp spawn (spawn is mocked).
+ * These exercise the all-rungs-fail path, which rejects inside the ladder before
+ * any ffprobe/fs work — so the mocked spawn calls ARE the ladder attempts.
+ */
+describe("downloadYouTubeVideo — client ladder wiring", () => {
+  beforeEach(() => vi.mocked(spawn).mockReset())
+
+  const argsOfCall = (call: number) => vi.mocked(spawn).mock.calls[call][1] as string[]
+
+  it("retries web → tv → android, appending each rung's extractor-args to the spawn", async () => {
+    // mockImplementationOnce (not mockReturnValueOnce): each fakeProc — and its
+    // queued close emit — must be created lazily WHEN that rung spawns, so its
+    // listeners are attached before the microtask fires. Building all three
+    // eagerly would fire rungs 2/3's close before their listeners existed.
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: web\nERROR: HTTP Error 429: Too Many Requests", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: tv\nERROR: tv rung failed", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: android\nERROR: android rung final line", code: 1 }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.youtube.com/watch?v=x", outPath: "/tmp/x.mp4" }),
+    ).rejects.toThrow("android rung final line")
+
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(3)
+    // Rung 1 (web) carries no client pin; rungs 2/3 add tv then android.
+    expect(argsOfCall(0).join(" ")).not.toContain("player_client")
+    expect(argsOfCall(1)).toContain("youtube:player_client=tv")
+    expect(argsOfCall(2)).toContain("youtube:player_client=android")
+  })
+
+  it("propagates the stderr LAST line of the final failed rung (SSE + mapYtdlpError contract)", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: first rung line", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: second rung line", code: 1 }) as never)
+      .mockImplementationOnce(
+        () => fakeProc({ stderr: "WARNING: noise\nERROR: unable to download video data: HTTP Error 403", code: 1 }) as never,
+      )
+    await expect(
+      downloadYouTubeVideo({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4" }),
+    ).rejects.toThrow("ERROR: unable to download video data: HTTP Error 403")
+  })
+
+  it("spawns yt-dlp exactly once for a non-YouTube host, with no client pin", async () => {
+    vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ stderr: "ERROR: tiktok boom", code: 1 }) as never)
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.tiktok.com/@a/video/1", outPath: "/tmp/x.mp4" }),
+    ).rejects.toThrow("tiktok boom")
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(1)
+    expect(argsOfCall(0).join(" ")).not.toContain("player_client")
   })
 })

@@ -69,15 +69,20 @@ const YT_DLP_BIN = resolveYtDlpBin()
  * referer/UA spoof — the ONLY copy for the video path. Shared verbatim between
  * the download and metadata-probe calls so the spoof identity can't drift.
  *
- * NO `player_client` pin. There used to be one (`youtube:player_client=android`),
- * and it was silently capping every YouTube download at **360p**: the android
- * client simply does not expose the higher-resolution DASH streams, so the
- * format selector had nothing better to choose. Removing the pin lets yt-dlp use
- * its own default client chain — which the maintainers keep current against
- * whatever YouTube is doing this month — and the same binary then returns 1080p.
+ * NO `player_client` pin lives in these base args, on purpose. A hard
+ * `youtube:player_client=android` pin here once capped every YouTube download at
+ * **360p** — the android client does not expose the higher-resolution DASH
+ * streams, so the format selector had nothing better to pick. The base args stay
+ * pin-free so attempt 1 uses yt-dlp's default (web) client and returns 1080p
+ * when YouTube lets it through.
  *
- * This was mis-diagnosed once as a YouTube-side SABR/PO-token limit. It was not;
- * it was this argument. If YouTube quality regresses again, suspect a pin here
+ * The android client is NOT gone, though — it is the LAST rung of the client
+ * ladder (see `youtubeClientLadder`). YouTube's watch page 429s the web client
+ * from datacenter IPs (Railway), so the download and probe retry web → tv →
+ * android; the android rung never touches the watch page and always succeeds
+ * (worst case: the pre-ladder 360p behaviour — i.e. a working download). Pins
+ * therefore belong ONLY in the fallback rungs, never in these base args. If
+ * YouTube quality regresses to 360p, suspect a pin leaking into the base args
  * before believing the platform is throttling us.
  */
 const YT_SPOOF_ARGS = [
@@ -125,6 +130,82 @@ export function buildYtDlpVideoArgs(opts: {
     args.push("--max-filesize", `${mb}M`)
   }
   return args
+}
+
+/** One rung of the yt-dlp client ladder: a label for telemetry plus the extra
+ *  `--extractor-args` to append to the base args (empty for the default client). */
+export interface YtClientRung {
+  label: string
+  extractorArgs: string[]
+}
+
+/**
+ * The ordered yt-dlp client rungs to try for `url`. Exported for testability.
+ *
+ * YouTube's watch page returns HTTP 429 to yt-dlp's default (web) client from
+ * datacenter IPs (Railway) — intermittent from residential IPs, effectively 100%
+ * from production — so a single web attempt is what took video imports down
+ * ("Couldn't fetch this video"). The ladder retries with progressively more
+ * watch-page-avoidant clients:
+ *   1. `default` — the pin-free base args (web client → best quality, 1080p60
+ *      avc1 when YouTube lets it through).
+ *   2. `tv`      — the TV client.
+ *   3. `android` — never fetches the watch page; has succeeded on the audio
+ *      paths for months. Worst case equals the pre-#77 behaviour: works, 360p.
+ *
+ * This ladder is YouTube-ONLY. TikTok/Instagram/X/Facebook are unaffected by the
+ * watch-page 429 and get exactly ONE default-client attempt — byte-for-byte the
+ * pre-ladder args, so their behaviour is unchanged.
+ */
+export function youtubeClientLadder(url: string): YtClientRung[] {
+  // YOUTUBE_HOSTS covers youtube.com / youtu.be and, via exact-suffix match, the
+  // subdomains (www., m., music.youtube.com). Everything else → single attempt.
+  if (!isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS)) {
+    return [{ label: "default", extractorArgs: [] }]
+  }
+  return [
+    { label: "default", extractorArgs: [] },
+    { label: "tv", extractorArgs: ["--extractor-args", "youtube:player_client=tv"] },
+    { label: "android", extractorArgs: ["--extractor-args", "youtube:player_client=android"] },
+  ]
+}
+
+/**
+ * Run `attempt` through the client ladder for `url`. Exported for testability.
+ *
+ * Calls `attempt(rung)` for each rung in order and returns the first success. On
+ * a rung failure it logs the blocked client and advances to the next rung; the
+ * LAST rung's rejection propagates UNCHANGED — so when every rung fails, the
+ * error the caller sees (and the download-video route surfaces over SSE via
+ * `err.message`, and VCP's `mapYtdlpError` classifies) is exactly the last
+ * rung's error, stderr-last-line message intact.
+ *
+ * The per-rung "succeeded"/"failed" lines are the production telemetry for how
+ * often YouTube blocks the web client — grep `[download-video] youtube client`.
+ * Only YouTube runs a real (>1 rung) ladder, so only YouTube emits these lines.
+ */
+export async function runThroughClientLadder<T>(
+  url: string,
+  attempt: (rung: YtClientRung) => Promise<T>,
+): Promise<T> {
+  const rungs = youtubeClientLadder(url)
+  for (let i = 0; i < rungs.length; i++) {
+    const rung = rungs[i]
+    try {
+      const result = await attempt(rung)
+      if (rungs.length > 1) {
+        console.log(`[download-video] youtube client "${rung.label}" succeeded`)
+      }
+      return result
+    } catch (err) {
+      if (i === rungs.length - 1) throw err
+      const firstLine = (err instanceof Error ? err.message : String(err)).split("\n")[0]
+      console.log(`[download-video] youtube client "${rung.label}" failed (${firstLine}), trying next`)
+    }
+  }
+  // Unreachable: youtubeClientLadder always returns ≥1 rung, and the final rung
+  // either returns or throws above. Present only to satisfy the type checker.
+  throw new Error("youtube client ladder exhausted with no attempt")
 }
 
 /**
@@ -177,9 +258,15 @@ export async function ytMetadataProbe(
   if (!hostnameMatchesAllowlist(host, YOUTUBE_HOSTS)) {
     throw new YtUrlNotAllowedError(`host not allowed: ${host}`)
   }
-  const raw = await runYtDlp(
-    ["--dump-json", "--skip-download", "--no-playlist", ...YT_SPOOF_ARGS, url],
-    { timeoutMs: 15_000 },
+  // Same watch-page 429 exposure as the download, so run the probe through the
+  // client ladder too (it's YouTube-only, so all three rungs apply). Metadata
+  // (duration/title/isLive) is client-independent, so the android fallback is
+  // fully sufficient — this only needs the fetch to succeed, not best quality.
+  const raw = await runThroughClientLadder(url, (rung) =>
+    runYtDlp(
+      ["--dump-json", "--skip-download", "--no-playlist", ...YT_SPOOF_ARGS, ...rung.extractorArgs, url],
+      { timeoutMs: 15_000 },
+    ),
   )
   const meta = JSON.parse(raw) as { duration?: number | null; title?: string | null; is_live?: boolean }
   return {
@@ -301,6 +388,45 @@ function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
 }
 
 /**
+ * One yt-dlp download attempt: spawn, parse `download:NN%` progress lines to
+ * `onProgress`, capture stderr, resolve on exit 0, reject otherwise.
+ *
+ * The error shape here is load-bearing and MUST NOT drift: on non-zero exit it
+ * rejects with an Error whose message is the LAST non-empty stderr line — the
+ * download-video route reports that string over SSE (`state.error = err.message`)
+ * and VCP's `mapYtdlpError` classifies it. This is the exact spawn/parse/error
+ * logic that used to live inline in `downloadYouTubeVideo`; it was extracted only
+ * so the client ladder can call it once per rung.
+ */
+function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
+    let stderrBuf = ""
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      const lines = chunk.toString().split("\n")
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        // Progress lines look like "download: 45.2%" or "download:  45.2%"
+        const match = trimmed.match(/^download:\s*([\d.]+)%/)
+        if (match) {
+          const pct = parseFloat(match[1])
+          if (!Number.isNaN(pct)) onProgress?.(pct)
+        }
+      }
+    })
+
+    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
+    proc.on("error", (err) => reject(err))
+    proc.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(stderrBuf.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
+    })
+  })
+}
+
+/**
  * Download a social video (YouTube/TikTok/Instagram/X/Facebook) to `outPath`
  * as an h264/aac mp4. Validates the host against the BROAD social allowlist
  * BEFORE spawning (SSRF gate — the worker calls this directly), applies the
@@ -329,31 +455,13 @@ export async function downloadYouTubeVideo(opts: {
 
   const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes })
 
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
-    let stderrBuf = ""
-
-    proc.stdout.on("data", (chunk: Buffer) => {
-      const lines = chunk.toString().split("\n")
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        // Progress lines look like "download: 45.2%" or "download:  45.2%"
-        const match = trimmed.match(/^download:\s*([\d.]+)%/)
-        if (match) {
-          const pct = parseFloat(match[1])
-          if (!Number.isNaN(pct)) onProgress?.(pct)
-        }
-      }
-    })
-
-    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
-    proc.on("error", (err) => reject(err))
-    proc.on("close", (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(stderrBuf.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
-    })
-  })
+  // YouTube 429s the default (web) client on the watch page from datacenter IPs,
+  // so retry web → tv → android (the android rung never hits the watch page).
+  // Non-YouTube hosts get a single unchanged attempt. The last rung's error
+  // propagates verbatim — the route's SSE and VCP's mapYtdlpError depend on it.
+  await runThroughClientLadder(url, (rung) =>
+    spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
+  )
 
   const actualPath = await findDownloadedFile(outPath)
   const stat = await fs.stat(actualPath)
