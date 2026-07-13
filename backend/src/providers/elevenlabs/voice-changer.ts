@@ -1,5 +1,6 @@
 import { DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
+import { resolveDirectVoiceId } from "./direct-tts.js"
 
 export interface VoiceChangerOptions {
   modelId?: string
@@ -22,6 +23,14 @@ export async function directVoiceChanger(
   options?: VoiceChangerOptions,
 ): Promise<Buffer> {
   const headers = getElevenLabsHeaders()
+
+  // Same name→UUID resolution the direct-TTS path applies: the codebase (and
+  // the public docs/CLI) pass premade voice NAMES ("Rachel", "Aria") around,
+  // but /v1/speech-to-speech/{voice_id} 404s on anything that isn't a UUID.
+  // Resolving here — the single choke point — covers every caller: the
+  // voice-changer worker (audio + video modes), video-ai, and the plugin
+  // toolkit's Voice Changer Pro recasts. UUIDs pass through unchanged.
+  const targetVoiceId = resolveDirectVoiceId(voiceId)
 
   const formData = new FormData()
   const blob = new Blob([audioBuffer as BlobPart], { type: "audio/mpeg" })
@@ -58,7 +67,7 @@ export async function directVoiceChanger(
     formData.append("voice_settings", JSON.stringify(voiceSettings))
   }
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/speech-to-speech/${voiceId}`, {
+  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/speech-to-speech/${targetVoiceId}`, {
     method: "POST",
     headers: {
       ...headers,

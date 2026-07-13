@@ -898,6 +898,23 @@ describe("buildPayload", () => {
       expect(result.payload.orderedVoices).toEqual([null, "v2"])
     })
 
+    // The orchestrator path has no route in front of it (dispatches straight
+    // to the worker), so buildPayload itself must enforce the ≥1-non-null
+    // contract instead of shipping a recast-nothing job mid-execution.
+    it("voice-changer-pro rejects an all-keep (all-null) orderedVoices pre-flight", () => {
+      const n = node("n1", "voice-changer-pro", {
+        orderedVoices: [null, null],
+      })
+      expect(() => buildPayload(n, jobId, { audioUrl: "a.mp3" }))
+        .toThrow(/at least one speaker needs a new voice/)
+    })
+
+    it("voice-changer-pro rejects an empty orderedVoices pre-flight", () => {
+      const n = node("n1", "voice-changer-pro", { orderedVoices: [] })
+      expect(() => buildPayload(n, jobId, { audioUrl: "a.mp3" }))
+        .toThrow(/add at least one voice/)
+    })
+
     it("dubbing", () => {
       const n = node("n1", "dubbing", { targetLanguage: "es" })
       const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })
