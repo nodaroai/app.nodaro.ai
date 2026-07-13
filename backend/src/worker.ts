@@ -1,4 +1,5 @@
 import { createVideoWorker } from "./workers/video-worker.js"
+import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -11,6 +12,9 @@ process.on("uncaughtException", (err) => {
 const worker = createVideoWorker()
 
 console.log("Worker started, waiting for jobs...")
+// One line, on boot: which ffmpeg is this worker rendering with? Output is
+// version-dependent (see the Dockerfile FFMPEG_VERSION pin).
+logFfmpegVersion("worker")
 
 // Railway's SIGTERM grace window before SIGKILL is ~30s. We drain for at
 // most 25s so logs flush and we exit cleanly before the kill lands. Jobs

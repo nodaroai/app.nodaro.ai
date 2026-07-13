@@ -14,6 +14,7 @@ import {
 } from "./ee/pipelines/reconcile-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
+import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
 
@@ -36,6 +37,11 @@ async function main() {
   }
 
   await app.listen({ port: config.PORT, host: config.HOST })
+
+  // One line, on boot: which ffmpeg does this process render with? Output is
+  // version-dependent (see the Dockerfile FFMPEG_VERSION pin), and "which
+  // ffmpeg?" is the first question when production output changes.
+  logFfmpegVersion("server")
 
   // Start billing cleanup cron jobs (cloud edition only)
   if (hasCredits()) {
