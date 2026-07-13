@@ -3714,6 +3714,19 @@ export function buildPayload(
       // .voiceId off it.
       const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string } | null>
       const orderedVoices = rawVoices.map((v) => (v === null ? null : v.voiceId))
+      // Fail fast BEFORE a job row is created and credits are reserved — same
+      // ≥1-non-null contract the route enforces with a 400 and the editor's
+      // executeNode enforces with a toast. This path dispatches straight to
+      // the worker (no route), so without this guard an all-keep node ships a
+      // recast-nothing job to the pipeline mid-execution.
+      if (orderedVoices.length === 0) {
+        throw new Error("Voice Changer Pro: add at least one voice.")
+      }
+      if (orderedVoices.every((v) => v === null)) {
+        throw new Error(
+          "Voice Changer Pro: at least one speaker needs a new voice — every entry is a keep-original slot.",
+        )
+      }
       return simpleResult("voice-changer-pro", "voice-changer-pro", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,

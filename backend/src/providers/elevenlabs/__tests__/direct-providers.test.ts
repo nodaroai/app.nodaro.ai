@@ -181,6 +181,17 @@ describe("voice-changer — directVoiceChanger", () => {
     expect((init as { method: string }).method).toBe("POST")
   })
 
+  // The CLI help, SDK docs, and MCP tool all advertise premade voice NAMES
+  // ("Rachel", "Aria"), but the STS endpoint 404s on anything that isn't a
+  // UUID (prod job e0757d4a: voice_not_found for literal "Aria"). The same
+  // name→UUID resolution the direct-TTS path applies must fire here — this
+  // choke point also covers Voice Changer Pro via the plugin toolkit.
+  it("resolves premade voice names to their ElevenLabs UUIDs in the URL", async () => {
+    await directVoiceChanger(Buffer.from("input"), "Aria")
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${ELEVENLABS_BASE_URL}/v1/speech-to-speech/9BWtsMINqrJLrRacOk9x`)
+  })
+
   it("includes auth + Accept: audio/mpeg headers", async () => {
     await directVoiceChanger(Buffer.from("input"), "voice-id-1")
     const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string> }

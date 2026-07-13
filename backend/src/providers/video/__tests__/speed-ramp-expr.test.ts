@@ -74,7 +74,10 @@ describe("buildRampSetptsExpression", () => {
   it("builds a single-segment expression", () => {
     const expr = buildRampSetptsExpression([{ start: 0, end: 5, speed: 0.5 }])
     // Expression ends with /TB and contains a piecewise if() guarding the segment end.
-    expect(expr).toMatch(/\/TB$/)
+    // The builder returns the filtergraph-safe QUOTED atom — commas inside
+    // must never be splittable by the graph parser.
+    expect(expr).toMatch(/^'/)
+    expect(expr).toMatch(/\/TB'$/)
     expect(expr).toMatch(/lt\(T,5\)/)
     // Inside-segment branch should reference the segment speed.
     expect(expr).toMatch(/0\+\(T-0\)\/0\.5/)
@@ -91,7 +94,10 @@ describe("buildRampSetptsExpression", () => {
       { start: 3, end: 5, speed: 1 },
     ]
     const expr = buildRampSetptsExpression(ramps)
-    expect(expr).toMatch(/\/TB$/)
+    // The builder returns the filtergraph-safe QUOTED atom — commas inside
+    // must never be splittable by the graph parser.
+    expect(expr).toMatch(/^'/)
+    expect(expr).toMatch(/\/TB'$/)
     // All three segment boundaries should appear.
     expect(expr).toMatch(/lt\(T,1\)/)
     expect(expr).toMatch(/lt\(T,3\)/)

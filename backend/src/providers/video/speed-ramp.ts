@@ -73,7 +73,12 @@ export function buildAtempoChain(speed: number): string[] {
  * falls inside segment k. Boundaries cum[k] accumulate `(end - start) / speed`
  * over earlier segments plus the passthrough gaps between them.
  *
- * Returned string is suitable for FFmpeg `setpts='(...)/TB'`.
+ * Returns the FILTERGRAPH-SAFE atom: `'(...)/TB'`, single-quoted by this
+ * builder because the piecewise expression contains commas and ffmpeg's
+ * filtergraph parser splits on unescaped commas BEFORE the filter parses its
+ * argument. An unquoted return once shipped with every ramp render dead
+ * ("No such filter: '1)'"); baking the quotes in here means no caller can
+ * reintroduce that by writing the natural `setpts=${expr}`.
  */
 export function buildRampSetptsExpression(ramps: ReadonlyArray<SpeedRampSegment>): string {
   if (ramps.length === 0) {
@@ -124,7 +129,7 @@ export function buildRampSetptsExpression(ramps: ReadonlyArray<SpeedRampSegment>
       expr = `if(lt(T,${r.end}),${branchInSegment},${expr})`
     }
   }
-  return `(${expr})/TB`
+  return `'(${expr})/TB'`
 }
 
 /**
@@ -163,17 +168,11 @@ export async function speedRamp(options: SpeedRampOptions): Promise<string> {
     // ---- Build the video filter chain ----
     const videoFilters: string[] = []
     if (usingRamps) {
+      // buildRampSetptsExpression returns the filtergraph-safe QUOTED atom
+      // (its commas would otherwise split the graph — see its doc), so it
+      // drops in directly.
       const ptsExpr = buildRampSetptsExpression(ramps!)
-      // The piecewise expression contains commas (`if(lt(T,0.5),…)`), and
-      // ffmpeg's FILTERGRAPH parser splits on unescaped commas before the
-      // filter ever sees its argument — unquoted, every ramp render died with
-      // `No such filter: '1)'` on every ffmpeg version (found by the output-
-      // characterization harness; the arg-string tests couldn't see it).
-      // Single quotes are filtergraph-level quoting, not shell quoting: they
-      // reach ffmpeg verbatim via execFile and make the argument atomic —
-      // exactly the `setpts='(...)/TB'` form buildRampSetptsExpression's doc
-      // prescribes. The expression itself never contains a single quote.
-      videoFilters.push(`setpts='${ptsExpr}'`)
+      videoFilters.push(`setpts=${ptsExpr}`)
     } else {
       videoFilters.push(`setpts=PTS/${clampedSpeed}`)
     }

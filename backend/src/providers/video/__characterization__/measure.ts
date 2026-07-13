@@ -233,7 +233,15 @@ interface VideoStreamInfo {
   readonly pixFmt: string
 }
 
-async function probeVideoStream(path: string): Promise<VideoStreamInfo> {
+/**
+ * Raw geometry probe. Named to NOT shadow ffmpeg-utils' exported
+ * `probeVideoStream` (different shape: {codec,pixFmt}) — auto-importing that
+ * here would silently NaN every frame measurement. The fallback-laden helpers
+ * there (getVideoFps → 30 on failure, getVideoDuration) are deliberately not
+ * reused either: this harness must MEASURE drift, and a fallback would mask
+ * exactly the change it exists to catch.
+ */
+async function probeVideoGeometry(path: string): Promise<VideoStreamInfo> {
   const out = await runFfprobe([
     "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=width,height,r_frame_rate,pix_fmt",
@@ -256,7 +264,7 @@ async function probeVideoStream(path: string): Promise<VideoStreamInfo> {
 /** Decode the video stream to gray rawvideo and measure mean luma per frame,
  *  plus the audio stream (if any) through measureAudio. */
 export async function measureVideo(path: string): Promise<VideoMetrics> {
-  const info = await probeVideoStream(path)
+  const info = await probeVideoGeometry(path)
   const workDir = await createWorkDir("characterize-measure")
   try {
     const rawPath = join(workDir, "video.gray")
@@ -298,7 +306,7 @@ export async function measureVideo(path: string): Promise<VideoMetrics> {
 
 /** Decode a still image to gray and measure dimensions + mean luma. */
 export async function measureImage(path: string): Promise<ImageMetrics> {
-  const info = await probeVideoStream(path)
+  const info = await probeVideoGeometry(path)
   const workDir = await createWorkDir("characterize-measure")
   try {
     const rawPath = join(workDir, "image.gray")

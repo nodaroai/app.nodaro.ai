@@ -121,6 +121,14 @@ function clampNum(v: number | undefined, lo: number, hi: number, fallback: numbe
  * requires (golden values against unseeded noise flake ±1 dB forever; see
  * `__characterization__/`). This seeded noise source is the single deliberate
  * divergence from the verbatim browser port documented on `buildReverbIr`.
+ *
+ * TWIN WARNING: packages/shared/src/selector.ts carries its own private
+ * mulberry32 (cosmetically different — `| 0` seed masking — but the same
+ * sequence). The two are deliberately INDEPENDENT and both frozen: THIS copy
+ * seeds every reverb IR the committed characterization goldens are pinned
+ * to, so any change to its sequence silently invalidates the goldens and
+ * shifts every rendered reverb waveform. Do NOT "deduplicate" into a shared
+ * export or "sync" one copy to match the other.
  */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
@@ -269,6 +277,14 @@ function convolverNormalizationScale(ir: Float32Array, sampleRate: number): numb
  * the credits and the error names this probe — instead of silently rendering
  * garbage. One in-place retry absorbs transient spawn/disk blips first.
  */
+/** Minimum probe headroom beyond the IR. The probe window must absorb afir's
+ *  algorithmic latency (measured 1–3 samples on 5.1 and 8, but partition
+ *  sizes — and therefore worst-case latency — grow with IR length), or the
+ *  cropped tail skews the energy ratio and falsely trips the flatness check.
+ *  The window therefore SCALES with the IR (see probeAfirEffectiveGain) —
+ *  this floor alone must not be trusted for long IRs; it was sized for
+ *  today's ≤3 s presets while AFIR_GAIN_MIN deliberately leaves room for
+ *  minutes-long ones. */
 const AFIR_PROBE_TAIL_SAMPLES = 4800
 /** A measured gain outside this band is not a gain, it's a broken probe (a
  *  silent output, a truncated render). The band is wide on purpose: ×2 flat
@@ -289,23 +305,52 @@ const AFIR_FLATNESS_TOLERANCE_DB = 0.5
 
 const afirGainByPreset = new Map<string, Promise<number>>()
 
+/** FNV-1a over the IR's raw float bits — one cheap pass. The memo key carries
+ *  this so a caller reusing a preset NAME with different IR content (the
+ *  export invites forensics/tooling callers) measures its own gain instead of
+ *  silently inheriting the first IR's. Production is unaffected: the seeded
+ *  generator makes each preset's IR — and so its fingerprint — constant. */
+function irFingerprint(ir: Float32Array): string {
+  const bits = new Uint32Array(ir.buffer, ir.byteOffset, ir.length)
+  let hash = 0x811c9dc5
+  for (let i = 0; i < bits.length; i++) {
+    hash ^= bits[i]
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `${ir.length}:${(hash >>> 0).toString(16)}`
+}
+
 /**
- * Memoised per (preset, process) — one probe per preset per worker; failures
- * are evicted so the next job retries instead of inheriting a poisoned entry.
- * Exported for the unit tests that pin exactly these semantics.
+ * Memoised per (preset, IR content, process) — one probe per preset per
+ * worker; failures are evicted so the next job retries instead of inheriting
+ * a poisoned entry. Exported for the unit tests that pin exactly these
+ * semantics.
  */
 export function afirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
-  let pending = afirGainByPreset.get(preset)
+  const memoKey = `${preset}#${irFingerprint(ir)}`
+  let pending = afirGainByPreset.get(memoKey)
   if (!pending) {
     pending = resolveAfirEffectiveGain(preset, ir)
-    afirGainByPreset.set(preset, pending)
-    pending.catch(() => afirGainByPreset.delete(preset))
+    afirGainByPreset.set(memoKey, pending)
+    pending.catch(() => afirGainByPreset.delete(memoKey))
   }
   return pending
 }
 
+/**
+ * A probe failure WE diagnosed from the measurement itself (silent IR,
+ * implausible gain, non-flat gain). For a given (binary, IR) these reproduce
+ * bit-for-bit, so an in-place retry is a wasted spawn and "retry the job" is
+ * misleading advice — the fix is code, not persistence. Spawn/IO failures
+ * (anything runFfmpeg or the filesystem throws) stay retryable: those are the
+ * transient blips the retry exists to absorb. The queue's own bounded retries
+ * remain on top of both classes as the net for freak cases (e.g. a partial
+ * output file that read as an implausible gain).
+ */
+class DeterministicProbeError extends Error {}
+
 async function resolveAfirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
-  let firstFailure: string | undefined
+  const failures: string[] = []
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const gain = await probeAfirEffectiveGain(ir)
@@ -313,14 +358,24 @@ async function resolveAfirEffectiveGain(preset: string, ir: Float32Array): Promi
       return gain
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      firstFailure ??= msg
       console.warn(`[audio-fx] afir gain probe attempt ${attempt + 1} failed for "${preset}": ${msg}`)
+      if (err instanceof DeterministicProbeError) {
+        // No guessing, no pointless retry: see the FAILURE POLICY above. This
+        // rejection fails the job (worker refunds credits) and the memo entry
+        // self-evicts.
+        throw new Error(
+          `afir gain probe failed for reverb preset "${preset}": ${msg} — this result is ` +
+          `deterministic for this ffmpeg binary and IR, so retrying will not change it; ` +
+          `the reverb graph needs a code fix for this ffmpeg`,
+        )
+      }
+      failures.push(msg)
     }
   }
-  // No guessing: see the FAILURE POLICY above. This rejection fails the job
-  // (worker refunds credits) and the memo entry self-evicts for a fresh retry.
+  // Transient class, both attempts failed. Surface every attempt's message —
+  // the later one is usually the more representative of a persisting cause.
   throw new Error(
-    `afir gain probe failed for reverb preset "${preset}" (${firstFailure}) — ` +
+    `afir gain probe failed for reverb preset "${preset}" (${failures.join("; then ")}) — ` +
     `refusing to render the reverb at a guessed level; retry the job`,
   )
 }
@@ -334,8 +389,12 @@ async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
 
     // The impulse must be at least as long as the IR: afir's output length
     // follows the INPUT, and a unit-impulse convolution reproduces the IR —
-    // truncate it and the peak may fall outside the rendered window.
-    const impulse = unitImpulse(ir.length + AFIR_PROBE_TAIL_SAMPLES)
+    // truncate it and the peak may fall outside the rendered window. The
+    // tail headroom scales with the IR (an eighth, floored at 0.1 s) so
+    // partition latency on a future long preset can't crop the response and
+    // masquerade as a flatness violation.
+    const tailSamples = Math.max(AFIR_PROBE_TAIL_SAMPLES, Math.ceil(ir.length / 8))
+    const impulse = unitImpulse(ir.length + tailSamples)
     await fs.writeFile(impulsePath, floatsToF32le(impulse))
     await fs.writeFile(irPath, floatsToF32le(ir))
 
@@ -362,11 +421,13 @@ async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
       peakIr = Math.max(peakIr, Math.abs(ir[i]))
       sumSqIr += ir[i] * ir[i]
     }
-    if (peakIr <= 0 || sumSqIr <= 0) throw new Error("IR is silent")
+    if (peakIr <= 0 || sumSqIr <= 0) throw new DeterministicProbeError("IR is silent")
 
     const gain = peakOut / peakIr
     if (!Number.isFinite(gain) || gain < AFIR_GAIN_MIN || gain > AFIR_GAIN_MAX) {
-      throw new Error(`implausible gain ${gain} (expected within [${AFIR_GAIN_MIN}, ${AFIR_GAIN_MAX}])`)
+      throw new DeterministicProbeError(
+        `implausible gain ${gain} (expected within [${AFIR_GAIN_MIN}, ${AFIR_GAIN_MAX}])`,
+      )
     }
 
     // Flatness invariant: a flat scalar g scales the peak by g and the energy
@@ -375,10 +436,10 @@ async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
     const energyGain = Math.sqrt(sumSqOut / sumSqIr)
     const flatnessDriftDb = Math.abs(20 * Math.log10(gain / energyGain))
     if (!Number.isFinite(flatnessDriftDb) || flatnessDriftDb > AFIR_FLATNESS_TOLERANCE_DB) {
-      throw new Error(
+      throw new DeterministicProbeError(
         `afir gain is not a flat scalar (peak ratio ×${gain.toFixed(6)} vs energy ratio ` +
         `×${energyGain.toFixed(6)}, ${flatnessDriftDb.toFixed(2)} dB apart) — the wet-leg ` +
-        `scalar compensation cannot cancel non-flat processing; the graph needs rework for this ffmpeg`,
+        `scalar compensation cannot cancel non-flat processing`,
       )
     }
     return gain
@@ -414,11 +475,24 @@ function floatsToF32le(samples: Float32Array): Buffer {
  * end (IR + probe + graph), which is the only way to catch a regression in
  * the one number that matters.
  */
+/** IR + serialized bytes per preset. buildReverbIr is seeded-deterministic,
+ *  so this trades ~5 MB per worker (all nine presets resident, worst case)
+ *  for skipping three full passes over up to 144k floats plus a 576 KB
+ *  serialize on EVERY reverb job. The per-job disk write remains — each
+ *  job's ffmpeg reads the IR from its own work dir. The cached Float32Array
+ *  is shared: callers treat it as immutable. */
+const reverbIrByPreset = new Map<string, { ir: Float32Array; bytes: Buffer }>()
+
 export async function writeReverbIr(preset: string, irPath: string): Promise<Float32Array> {
   const r = REVERB[preset] ?? REVERB.room
-  const ir = buildReverbIr(r.dur)
-  await fs.writeFile(irPath, floatsToF32le(ir))
-  return ir
+  let entry = reverbIrByPreset.get(preset)
+  if (!entry) {
+    const ir = buildReverbIr(r.dur)
+    entry = { ir, bytes: floatsToF32le(ir) }
+    reverbIrByPreset.set(preset, entry)
+  }
+  await fs.writeFile(irPath, entry.bytes)
+  return entry.ir
 }
 
 export interface AudioFxPaths {

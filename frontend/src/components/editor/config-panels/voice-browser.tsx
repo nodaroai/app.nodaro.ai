@@ -20,7 +20,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { FitText } from "@/components/ui/fit-text"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
-import { useVoiceLibrary } from "@/hooks/use-voices"
+import { useVoiceLibraryInfinite } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
@@ -134,7 +134,6 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   const [librarySearch, setLibrarySearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [libraryGender, setLibraryGender] = useState<GenderFilter>("All")
-  const [libraryPage, setLibraryPage] = useState(0)
   const [libraryCategory, setLibraryCategory] = useState<string | undefined>(undefined)
   const [libraryFeatured, setLibraryFeatured] = useState(false)
   const [librarySort, setLibrarySort] = useState("trending")
@@ -161,7 +160,6 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     setLibraryLanguage("All")
     setLibraryUseCase("All")
     setLibraryDescriptive("All")
-    setLibraryPage(0)
   }, [])
 
   // -- Audio --
@@ -190,7 +188,6 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(librarySearch)
-      setLibraryPage(0)
     }, 400)
     return () => clearTimeout(timer)
   }, [librarySearch])
@@ -199,7 +196,13 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   const { data: allPremade = [] } = useVoices()
 
   const libraryGenderParam = libraryGender === "All" ? undefined : libraryGender.toLowerCase()
-  const { data: libraryData, isFetching: libraryLoading } = useVoiceLibrary(
+  const {
+    data: libraryData,
+    isFetching: libraryLoading,
+    isFetchingNextPage: libraryFetchingMore,
+    fetchNextPage: fetchMoreLibrary,
+    hasNextPage: libraryHasMore,
+  } = useVoiceLibraryInfinite(
     {
       search: debouncedSearch || undefined,
       gender: libraryGenderParam,
@@ -211,10 +214,18 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
       language: libraryLanguage !== "All" ? libraryLanguage : undefined,
       use_cases: libraryUseCase !== "All" ? libraryUseCase : undefined,
       descriptives: libraryDescriptive !== "All" ? libraryDescriptive : undefined,
-      page: libraryPage,
-      page_size: 30,
     },
     tab === "library",
+  )
+
+  // Flatten every loaded infinite-query page into one flat list. The sentinel at
+  // the bottom of the list fetches the next page as it scrolls into view, so the
+  // window grows without a "Load more" button. Filtering happens server-side over
+  // the FULL library (a filter change starts a fresh query at page 0), so the
+  // loaded window is always a prefix of the correctly-filtered result set.
+  const libraryVoices = useMemo(
+    () => libraryData?.pages.flatMap((p) => p.voices) ?? [],
+    [libraryData],
   )
 
   // Premade filtering (client-side)
@@ -420,7 +431,6 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                         setLibraryCategory(isActive ? undefined : cat.key)
                         if (!isActive) setLibraryFeatured(false)
                       }
-                      setLibraryPage(0)
                     }}
                     className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${isActive ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
@@ -431,7 +441,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               <span className="mx-1 h-4 w-px bg-border" />
               <button
                 type="button"
-                onClick={() => { setLibraryHighQuality(!libraryHighQuality); setLibraryPage(0) }}
+                onClick={() => { setLibraryHighQuality(!libraryHighQuality) }}
                 className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
               >
                 <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
@@ -448,14 +458,14 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   <button
                     key={g}
                     type="button"
-                    onClick={() => { setLibraryGender(g); setLibraryPage(0) }}
+                    onClick={() => { setLibraryGender(g) }}
                     className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
                     {g}
                   </button>
                 ))}
               </div>
-              <Select value={librarySort} onValueChange={(v) => { setLibrarySort(v); setLibraryPage(0) }}>
+              <Select value={librarySort} onValueChange={(v) => { setLibrarySort(v) }}>
                 <SelectTrigger className="h-7 w-[120px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -494,7 +504,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
             {showAdvancedFilters && (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-2">
-                  <Select value={libraryAccent} onValueChange={(v) => { setLibraryAccent(v); setLibraryPage(0) }}>
+                  <Select value={libraryAccent} onValueChange={(v) => { setLibraryAccent(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Accent" />
                     </SelectTrigger>
@@ -505,7 +515,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={libraryAge} onValueChange={(v) => { setLibraryAge(v); setLibraryPage(0) }}>
+                  <Select value={libraryAge} onValueChange={(v) => { setLibraryAge(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Age" />
                     </SelectTrigger>
@@ -516,7 +526,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={libraryLanguage} onValueChange={(v) => { setLibraryLanguage(v); setLibraryPage(0) }}>
+                  <Select value={libraryLanguage} onValueChange={(v) => { setLibraryLanguage(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Language" />
                     </SelectTrigger>
@@ -529,7 +539,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   </Select>
                 </div>
                 <div className="flex gap-2">
-                  <Select value={libraryUseCase} onValueChange={(v) => { setLibraryUseCase(v); setLibraryPage(0) }}>
+                  <Select value={libraryUseCase} onValueChange={(v) => { setLibraryUseCase(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Use case" />
                     </SelectTrigger>
@@ -540,7 +550,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={libraryDescriptive} onValueChange={(v) => { setLibraryDescriptive(v); setLibraryPage(0) }}>
+                  <Select value={libraryDescriptive} onValueChange={(v) => { setLibraryDescriptive(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Tone" />
                     </SelectTrigger>
@@ -555,49 +565,38 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               </div>
             )}
 
-            {/* Results */}
-            {libraryLoading && (!libraryData || libraryData.voices.length === 0) ? (
+            {/* Results — infinite scroll: the first page is the initial window,
+                the sentinel inside VoiceList fetches each next page on scroll. */}
+            {libraryLoading && libraryVoices.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
+            ) : libraryVoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No voices found — try adjusting your filters
+              </p>
             ) : (
-              <>
-                <VoiceList
-                  voices={(libraryData?.voices ?? []).map((v) => ({
-                    id: v.voice_id,
-                    name: v.name,
-                    preview_url: v.preview_url,
-                    gender: v.gender,
-                    accent: v.accent,
-                    description: v.description || v.use_case,
-                    category: v.category,
-                    recommendedProvider: v.recommendedProvider,
-                    verifiedProviders: v.verifiedProviders,
-                  }))}
-                  selectedValue={value}
-                  playingId={playingId}
-                  onPlay={handlePlay}
-                  onSelect={(v) => handleSelect(v.id, v.name, "library", { recommendedProvider: v.recommendedProvider, verifiedProviders: v.verifiedProviders })}
-                  showCategory
-                />
-                {libraryData?.hasMore && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={libraryLoading}
-                    onClick={() => setLibraryPage((p) => p + 1)}
-                  >
-                    {libraryLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                    Load more
-                  </Button>
-                )}
-                {!libraryLoading && libraryData?.voices.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No voices found — try adjusting your filters
-                  </p>
-                )}
-              </>
+              <VoiceList
+                voices={libraryVoices.map((v) => ({
+                  id: v.voice_id,
+                  name: v.name,
+                  preview_url: v.preview_url,
+                  gender: v.gender,
+                  accent: v.accent,
+                  description: v.description || v.use_case,
+                  category: v.category,
+                  recommendedProvider: v.recommendedProvider,
+                  verifiedProviders: v.verifiedProviders,
+                }))}
+                selectedValue={value}
+                playingId={playingId}
+                onPlay={handlePlay}
+                onSelect={(v) => handleSelect(v.id, v.name, "library", { recommendedProvider: v.recommendedProvider, verifiedProviders: v.verifiedProviders })}
+                showCategory
+                onEndReached={fetchMoreLibrary}
+                hasMore={libraryHasMore}
+                loadingMore={libraryFetchingMore}
+              />
             )}
           </>
         )}
@@ -958,6 +957,9 @@ function VoiceList({
   onPlay,
   onSelect,
   showCategory,
+  onEndReached,
+  hasMore,
+  loadingMore,
 }: {
   readonly voices: VoiceListItem[]
   readonly selectedValue: string
@@ -965,13 +967,43 @@ function VoiceList({
   readonly onPlay: (previewUrl: string, id: string) => void
   readonly onSelect: (voice: VoiceListItem) => void
   readonly showCategory?: boolean
+  /** Infinite scroll: called when the sentinel scrolls into the list's viewport.
+   *  Omit for a fully client-side list (e.g. the premade tab) — no sentinel renders. */
+  readonly onEndReached?: () => void
+  /** Whether a next page exists — the sentinel only observes while true. */
+  readonly hasMore?: boolean
+  /** Whether a next page is currently loading — pauses the sentinel + shows a spinner. */
+  readonly loadingMore?: boolean
 }) {
+  // Infinite-scroll sentinel, observed against the list's OWN scroll container
+  // (root = scrollRef) so it fires on intra-list scroll — the list is clipped to
+  // max-h-[50vh] inside the dialog, so a viewport-rooted observer would never see
+  // it. Mirrors the use-lazy-mount IntersectionObserver idiom: rootMargin
+  // prefetch, disconnect on cleanup, and a graceful no-op when IntersectionObserver
+  // is unavailable (e.g. jsdom). Re-runs on voices.length so the observer re-binds
+  // the sentinel each time a page appends.
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!onEndReached || !hasMore || loadingMore) return
+    const sentinel = sentinelRef.current
+    if (!sentinel || typeof IntersectionObserver === "undefined") return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onEndReached()
+      },
+      { root: scrollRef.current, rootMargin: "200px" },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [onEndReached, hasMore, loadingMore, voices.length])
+
   if (voices.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">No voices match your filters</p>
   }
 
   return (
-    <div className="flex-1 overflow-y-auto min-h-0 max-h-[50vh] -mx-1 px-1">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 max-h-[50vh] -mx-1 px-1">
       <div className="flex flex-col gap-1">
         {voices.map((voice) => {
           const isSelected = voice.id === selectedValue || voice.name === selectedValue
@@ -1042,6 +1074,11 @@ function VoiceList({
           )
         })}
       </div>
+      {onEndReached && hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-3" aria-hidden>
+          {loadingMore && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        </div>
+      )}
     </div>
   )
 }

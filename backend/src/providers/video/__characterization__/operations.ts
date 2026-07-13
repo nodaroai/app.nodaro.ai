@@ -132,6 +132,22 @@ const tier1: CharacterizedOperation[] = [
     },
   },
   {
+    // Echo convolved against a unit impulse IS the echo chain's impulse
+    // response — tap times land as envelope spikes, so a delay/decay
+    // semantic change in `aecho` is directly visible.
+    name: "audio-fx-echo-impulse",
+    tier: 1,
+    run: async (f) => {
+      const { outputPath } = await applyAudioFx({
+        audioUrl: fixtureUrl(f.impulseWav),
+        preset: "echo",
+        delayMs: 400,
+        decay: 0.6,
+      })
+      return single(outputPath, "audio")
+    },
+  },
+  {
     name: "mix-audio-average",
     tier: 1,
     run: async (f) => {
@@ -150,6 +166,20 @@ const tier1: CharacterizedOperation[] = [
         audioUrls: [fixtureUrl(f.toneWav), fixtureUrl(f.noiseWav)],
         trackVolumes: [100, 50],
         sumTracks: true,
+      })
+      return single(outputPath, "audio")
+    },
+  },
+  {
+    // Mixed sample rates + channel counts (44.1 kHz stereo vs 48 kHz mono)
+    // force libavfilter's AUTO-INSERTED resample/format conversion inside
+    // amix — the `aresample` suspect class from the upgrade plan, exercised
+    // exactly the way production mixes arbitrary user audio.
+    name: "mix-audio-resample-downmix",
+    tier: 1,
+    run: async (f) => {
+      const outputPath = await mixAudio({
+        audioUrls: [fixtureUrl(f.toneStereo44kWav), fixtureUrl(f.toneWav)],
       })
       return single(outputPath, "audio")
     },

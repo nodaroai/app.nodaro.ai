@@ -44,6 +44,12 @@ It pairs naturally with **Text to Speech → Audio FX (Room) → Merge Video & A
 
 Flat **2 credits** per run (FFmpeg processing, no provider markup).
 
+Reverb presets calibrate their level against the rendering engine at run
+time. If that calibration cannot complete safely, the run **fails and the
+credits are refunded** — the node never renders a reverb at a guessed level.
+A transient failure succeeds on retry; if the same run keeps failing with a
+calibration error, report it rather than retrying further.
+
 ## Best Practices
 
 - For dialogue indoors, **Room** with mix ~25–35 is usually enough — too much reverb muddies speech.

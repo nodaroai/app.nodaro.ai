@@ -706,7 +706,16 @@ export function applyRangeIndices(
   return result
 }
 
-/** mulberry32 PRNG — deterministic given a seed (any 32-bit signed integer). */
+/** mulberry32 PRNG — deterministic given a seed (any 32-bit signed integer).
+ *
+ * TWIN WARNING: backend/src/providers/video/audio-fx.ts carries its own
+ * private mulberry32 (cosmetically different — `>>> 0` seed masking — but the
+ * same sequence). The two are deliberately INDEPENDENT and both frozen: the
+ * audio-fx copy seeds every reverb impulse response that the committed
+ * characterization goldens (and every customer's rendered reverb waveform)
+ * are pinned to. Do NOT "deduplicate" them into one shared export or "sync"
+ * one to match the other — a change to either sequence is a silent behavior
+ * change in its domain. */
 function mulberry32(seed: number): () => number {
   let a = seed | 0
   return () => {

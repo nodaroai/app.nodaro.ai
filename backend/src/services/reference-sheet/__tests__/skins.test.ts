@@ -47,5 +47,8 @@ describe("skins", () => {
       nonBgPixels(await composeSheet(base("studio"))),
     ])
     expect(bp).toBeGreaterThan(flat * 3)
-  })
+    // Two real sheet composites take ~2 s idle and up to ~5 s on a loaded
+    // machine — the default 5 s cap made this the suite's only flake (three
+    // load-induced timeouts observed in one day, each passing in isolation).
+  }, 15_000)
 })

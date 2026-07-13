@@ -379,6 +379,13 @@ a provider whose env var is unset. Add `KIE_API_KEY` /
 `REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` /
 `FAL_KEY` per your needs and restart.
 
+**Running on arm64?** The image ships a distinct arm64 build of the same
+pinned ffmpeg source. Rendered-output parity between the amd64 and arm64
+builds is verified against the same characterization baseline (54/54
+operations within tolerance as of the current pin); re-verify after any
+ffmpeg pin bump with
+`CHARACTERIZE_ARCH=arm64 backend/scripts/characterize-in-image.sh check`.
+
 **Docker build fails downloading or checksum-verifying the ffmpeg
 tarball.** ffmpeg is deliberately pinned in the Dockerfile to an exact
 static build (`ARG FFMPEG_TARBALL_URL_*` + `ARG FFMPEG_TARBALL_SHA256_*`,
