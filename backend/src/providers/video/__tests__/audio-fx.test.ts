@@ -344,8 +344,26 @@ describe("afirEffectiveGain — probe failure semantics (throw, retry, never mem
     await expect(afirEffectiveGain("t-nonflat", ir())).rejects.toThrow(/not a flat scalar/)
   })
 
-  it("rejects a silent probe output as a broken probe, not a gain", async () => {
+  it("a deterministic diagnosis skips the in-place retry and says so — no 'retry the job' advice", async () => {
+    // If the (wasteful, misleading) retry happened, the second behavior would
+    // resolve ×2 and this would NOT reject.
+    ffmpegFake.behaviors = ["nonflat", "flat2"]
+    await expect(afirEffectiveGain("t-det-noretry", ir())).rejects.toThrow(
+      /deterministic for this ffmpeg binary and IR/,
+    )
+  })
+
+  it("rejects a silent probe output as deterministic, not transient", async () => {
     ffmpegFake.behaviors = ["silent"]
-    await expect(afirEffectiveGain("t-silent", ir())).rejects.toThrow(/refusing to render/)
+    await expect(afirEffectiveGain("t-silent", ir())).rejects.toThrow(/deterministic/)
+  })
+
+  it("memoizes by IR CONTENT, not preset name alone — a different IR under the same name re-probes", async () => {
+    ffmpegFake.behaviors = ["flat2", "l1norm", "l1norm"]
+    const irB = ir()
+    irB[0] = 0.9 // different content → different fingerprint
+    await expect(afirEffectiveGain("t-fingerprint", ir())).resolves.toBeCloseTo(2, 5)
+    const gainB = await afirEffectiveGain("t-fingerprint", irB)
+    expect(gainB).toBeLessThan(1) // fresh probe (l1norm), NOT the cached ×2
   })
 })
