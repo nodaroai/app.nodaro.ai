@@ -251,28 +251,47 @@ RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
 # Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.
 FROM node:22-slim AS runner
 
-# ffmpeg is PINNED. Rendered audio/video output is ffmpeg-version-dependent
-# (e.g. afir's intrinsic output gain is ×2 on 5.1 and ×1 on 8 — a silent 6 dB
-# difference in customer-billed output), so an unpinned `apt-get install
-# ffmpeg` would let a base-image rebuild silently change what every render
-# sounds/looks like with zero code change and zero review.
+# ffmpeg is PINNED — to an exact static build, by URL + SHA256, per arch.
+# Rendered audio/video output is ffmpeg-version-dependent: the 5.1→8 upgrade
+# alone changed afir's gain MECHANISM (ffmpeg 8's new `irnorm` option defaults
+# to ℓ1-normalizing the IR — it would have silently crushed every reverb's wet
+# leg by 20–37 dB had the characterization harness + the runtime wet-leg
+# compensation in backend/src/providers/video/audio-fx.ts not caught it). An
+# unpinned install would let a base-image rebuild change what every customer
+# render sounds/looks like with zero code change and zero review.
 #
-# ACCEPTED FAILURE MODE (this is a feature): Debian's archive keeps only the
-# current version of a package, so when a security update supersedes this
-# one, the build FAILS LOUDLY with "version ... not found". That is the
-# point — a loud build failure forcing a deliberate, reviewed bump instead
-# of a silent DSP change. Do NOT "fix" that failure by unpinning: bump the
-# pin AND re-bless the output-characterization goldens
-# (backend `npm run characterize:check`) in the same PR.
-ARG FFMPEG_VERSION=7:5.1.9-0+deb12u1
+# These are BtbN/FFmpeg-Builds release assets from a DATED tag — immutable and
+# checksum-verified, so the build is deterministic forever (unlike an apt pin,
+# which Debian's archive eventually drops). Bumping them is a deliberate
+# ffmpeg upgrade: re-bless the characterization goldens inside the new image
+# (backend/scripts/characterize-in-image.sh bless), review the per-metric
+# `npm run characterize:report` diff, update DEFAULT_GOLDEN_FILE
+# (backend/src/providers/video/__characterization__/golden.ts), and ship it
+# all in ONE PR. The characterize CI job installs the same tarball (parsed
+# from these ARGs) — a mismatch fails the suite's version guard loudly.
+ARG FFMPEG_TARBALL_URL_AMD64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-12-13-16/ffmpeg-n8.1.2-22-g94138f6973-linux64-gpl-8.1.tar.xz
+ARG FFMPEG_TARBALL_SHA256_AMD64=516b60bad3df2dedea23594c60e7afaecf3e6a440ca9091ef95ee1f62deba71e
+ARG FFMPEG_TARBALL_URL_ARM64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-12-13-16/ffmpeg-n8.1.2-22-g94138f6973-linuxarm64-gpl-8.1.tar.xz
+ARG FFMPEG_TARBALL_SHA256_ARM64=0a34477fb47a9c108b869fccc9919e00d0c7ebf886e8d45301c74d2d46640d64
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg=${FFMPEG_VERSION} curl ca-certificates \
+    curl ca-certificates xz-utils \
     aubio-tools \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     libatspi2.0-0 \
     fonts-dejavu-core fonts-liberation fontconfig \
+    && case "$(dpkg --print-architecture)" in \
+         amd64) FFMPEG_TARBALL_URL="${FFMPEG_TARBALL_URL_AMD64}"; FFMPEG_TARBALL_SHA256="${FFMPEG_TARBALL_SHA256_AMD64}" ;; \
+         arm64) FFMPEG_TARBALL_URL="${FFMPEG_TARBALL_URL_ARM64}"; FFMPEG_TARBALL_SHA256="${FFMPEG_TARBALL_SHA256_ARM64}" ;; \
+         *) echo "unsupported arch for ffmpeg: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "${FFMPEG_TARBALL_URL}" -o /tmp/ffmpeg.tar.xz \
+    && echo "${FFMPEG_TARBALL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - \
+    && mkdir -p /tmp/ffmpeg-dist \
+    && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1 \
+    && install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/ \
+    && rm -rf /tmp/ffmpeg-dist /tmp/ffmpeg.tar.xz \
     && ffmpeg -version | head -1 \
     && rm -rf /var/lib/apt/lists/* \
     && ARCH=$(dpkg --print-architecture) \

@@ -29,9 +29,11 @@ export interface GoldenFile {
 export const GOLDEN_DIR = join(dirname(fileURLToPath(import.meta.url)), "golden")
 
 /** The committed reference golden. UPDATE THIS (and re-bless) in the same PR
- *  that bumps the Dockerfile's FFMPEG_VERSION pin — the version guard in
- *  characterize.char.ts fails the suite until the two agree. */
-export const DEFAULT_GOLDEN_FILE = "ffmpeg-5.1.9.json"
+ *  that bumps the Dockerfile's ffmpeg pin — the version guard in
+ *  characterize.char.ts fails the suite until the two agree.
+ *  (ffmpeg-5.1.9.json is kept in golden/ as the pre-upgrade reference the
+ *  8.x classification was reviewed against.) */
+export const DEFAULT_GOLDEN_FILE = "ffmpeg-n8.1.2.json"
 
 /** "5.1.9-0+deb12u1" → "ffmpeg-5.1.9.json" (bare upstream version; the Debian
  *  revision lives inside the file). */

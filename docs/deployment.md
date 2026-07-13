@@ -379,17 +379,18 @@ a provider whose env var is unset. Add `KIE_API_KEY` /
 `REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` /
 `FAL_KEY` per your needs and restart.
 
-**Docker build fails with `Version '7:5.1.9-0+deb12u1' for 'ffmpeg' was
-not found`.** ffmpeg is deliberately version-pinned in the Dockerfile
-(`ARG FFMPEG_VERSION`): rendered audio/video output differs between
-ffmpeg versions (filter gain/behavior changes), so an unpinned install
-would let a base-image rebuild silently change what renders sound and
-look like. Debian's archive only keeps the current package version, so
-when a security update supersedes the pinned one the build fails loudly
-instead of silently changing output. Fix: look up the current version
-(`docker run --rm node:22-slim bash -c "apt-get update -qq && apt-cache
-policy ffmpeg"`), bump `FFMPEG_VERSION`, and treat it as a real ffmpeg
-upgrade — verify rendered output afterwards rather than assuming parity.
+**Docker build fails downloading or checksum-verifying the ffmpeg
+tarball.** ffmpeg is deliberately pinned in the Dockerfile to an exact
+static build (`ARG FFMPEG_TARBALL_URL_*` + `ARG FFMPEG_TARBALL_SHA256_*`,
+per architecture): rendered audio/video output differs between ffmpeg
+versions (filter gain/behavior changes — the 5.1→8 jump alone changed a
+convolution filter's gain semantics), so an unpinned install would let a
+rebuild silently change what renders sound and look like. A download
+failure or checksum mismatch fails the build loudly instead of silently
+changing output. Fix: pick a newer dated release from
+<https://github.com/BtbN/FFmpeg-Builds/releases>, update BOTH the URL and
+SHA256 for BOTH architectures, and treat it as a real ffmpeg upgrade —
+verify rendered output afterwards rather than assuming parity.
 
 **Film Director pipelines (Cloud) stall at "running" and never
 resume.** A pipeline's orchestration job can be lost — a re-drive that
