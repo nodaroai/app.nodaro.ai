@@ -471,13 +471,13 @@ jobs:
   # net the arg-string tests cannot be: a 6 dB rendered-output change (the
   # afir ×2→×1 incident) is invisible to them and CI stayed green through it.
   #
-  # It runs inside node:22-slim with the SAME apt-pinned ffmpeg as the
-  # production image (Dockerfile ARG FFMPEG_VERSION, parsed below so the pin
-  # has one source of truth) — NEVER on the bare runner, whose preinstalled
-  # ffmpeg is a different version and would bless/verify the wrong numbers.
-  # When Debian's archive supersedes the pinned version this job fails at apt
-  # install — the same loud, deliberate failure mode as the production docker
-  # build. Bump the pin, re-bless the golden inside the new image
+  # It runs inside node:22-slim with the SAME sha256-pinned static ffmpeg
+  # tarball as the production image (Dockerfile ARG FFMPEG_TARBALL_URL_AMD64 /
+  # _SHA256_AMD64, parsed below so the pin has one source of truth) — NEVER on
+  # the bare runner, whose preinstalled ffmpeg is a different version and
+  # would bless/verify the wrong numbers. A download or checksum failure fails
+  # this job loudly — the same deliberate failure mode as the production
+  # docker build. Bump the pins, re-bless the golden inside the new image
   # (backend/scripts/characterize-in-image.sh bless), review the report diff,
   # and ship all of it in one PR.
   characterize:
@@ -495,27 +495,25 @@ jobs:
           persist-credentials: false
       - name: Install the production-pinned ffmpeg + fonts (from the Dockerfile ARGs)
         run: |
-          # Same binary as production, one source of truth: the Dockerfile pin.
-          # Static-tarball pin (URL+SHA256, per arch — this job is amd64)
-          # preferred; legacy apt version pin as fallback.
+          # Same binary as production, one source of truth: the Dockerfile's
+          # static-tarball pin (URL + SHA256 ARGs, per arch — this job is amd64).
+          # Missing ARGs are a hard error: installing anything else would
+          # bless/verify goldens against the wrong binary.
           FFMPEG_TARBALL_URL=$(grep -oE '^ARG FFMPEG_TARBALL_URL_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
           FFMPEG_TARBALL_SHA256=$(grep -oE '^ARG FFMPEG_TARBALL_SHA256_AMD64=.*' Dockerfile | head -1 | cut -d= -f2- || true)
-          apt-get update -qq
-          if [ -n "$FFMPEG_TARBALL_URL" ]; then
-            echo "pinned ffmpeg tarball: $FFMPEG_TARBALL_URL"
-            apt-get install -y -qq --no-install-recommends \
-              curl ca-certificates xz-utils fontconfig fonts-dejavu-core fonts-liberation
-            curl -fsSL "$FFMPEG_TARBALL_URL" -o /tmp/ffmpeg.tar.xz
-            echo "$FFMPEG_TARBALL_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -
-            mkdir -p /tmp/ffmpeg-dist
-            tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
-            install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
-          else
-            FFMPEG_PIN=$(grep -oE 'FFMPEG_VERSION=[^ ]+' Dockerfile | head -1 | cut -d= -f2)
-            echo "pinned ffmpeg (apt): $FFMPEG_PIN"
-            apt-get install -y -qq --no-install-recommends \
-              "ffmpeg=$FFMPEG_PIN" fontconfig fonts-dejavu-core fonts-liberation
+          if [ -z "$FFMPEG_TARBALL_URL" ] || [ -z "$FFMPEG_TARBALL_SHA256" ]; then
+            echo "::error::could not parse FFMPEG_TARBALL_URL_AMD64/FFMPEG_TARBALL_SHA256_AMD64 from the Dockerfile — the characterize job must install exactly the production ffmpeg"
+            exit 1
           fi
+          echo "pinned ffmpeg tarball: $FFMPEG_TARBALL_URL"
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            curl ca-certificates xz-utils fontconfig fonts-dejavu-core fonts-liberation
+          curl -fsSL "$FFMPEG_TARBALL_URL" -o /tmp/ffmpeg.tar.xz
+          echo "$FFMPEG_TARBALL_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/ffmpeg-dist
+          tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-dist --strip-components=1
+          install -m 0755 /tmp/ffmpeg-dist/bin/ffmpeg /tmp/ffmpeg-dist/bin/ffprobe /usr/local/bin/
           ffmpeg -version | head -1
       - name: Pin npm version
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate

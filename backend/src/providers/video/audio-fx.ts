@@ -256,46 +256,73 @@ function convolverNormalizationScale(ir: Float32Array, sampleRate: number): numb
  *
  * Memoised per preset per process (the IR generator is seeded, so a preset's
  * IR — and therefore its measured gain — is identical for the process's
- * lifetime).
+ * lifetime). ONLY SUCCESSES are memoised: a failed probe rejects the job and
+ * is retried fresh on the next one — caching a failure would poison every
+ * later job of that preset for the worker's lifetime over one transient
+ * hiccup.
+ *
+ * FAILURE POLICY — throw, never guess. There is no fallback value that is
+ * safe on every binary: a flat guess is what shipped the 22 dB-hot reverb on
+ * 5.1, and under ffmpeg 8's per-IR ℓ1 normalization ANY flat guess renders
+ * the wet leg 20–37 dB off (near-silence billed to a customer). A failed
+ * probe therefore fails the job loudly — the worker's failure path refunds
+ * the credits and the error names this probe — instead of silently rendering
+ * garbage. One in-place retry absorbs transient spawn/disk blips first.
  */
 const AFIR_PROBE_TAIL_SAMPLES = 4800
 /** A measured gain outside this band is not a gain, it's a broken probe (a
  *  silent output, a truncated render). The band is wide on purpose: ×2 flat
- *  (ffmpeg 5.1) at the top, and 1/ℓ1 of the longest Web-Audio-normalized IR
- *  (church, 3 s → ≈1/75) with margin at the bottom. Fall back rather than
- *  wreck the mix. */
-const AFIR_GAIN_MIN = 1 / 512
+ *  (ffmpeg 5.1) at the top, and at the bottom enough headroom below the
+ *  longest current IR's ℓ1 gain (church, 3 s → ≈1/75) that a much longer
+ *  future preset (≈2 minutes of IR before 1/4096 trips) still measures
+ *  rather than funneling into a spurious failure. */
+const AFIR_GAIN_MIN = 1 / 4096
 const AFIR_GAIN_MAX = 8
+/** The wet-leg compensation model assumes afir's gain is a FLAT scalar. The
+ *  probe verifies that assumption instead of trusting one number: for a flat
+ *  gain, peak ratio and energy ratio agree exactly (measured: to 4 decimals
+ *  on every preset × both binaries); disagreement beyond this many dB means
+ *  some future ffmpeg applies non-flat processing (spectral shaping, a
+ *  peak-shifting latency) that a scalar CANNOT cancel — fail rather than
+ *  miscompensate and let a re-bless enshrine the wrong output. */
+const AFIR_FLATNESS_TOLERANCE_DB = 0.5
 
 const afirGainByPreset = new Map<string, Promise<number>>()
 
-/** Memoised per (preset, process) — one probe per preset per worker. */
-function afirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
+/**
+ * Memoised per (preset, process) — one probe per preset per worker; failures
+ * are evicted so the next job retries instead of inheriting a poisoned entry.
+ * Exported for the unit tests that pin exactly these semantics.
+ */
+export function afirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
   let pending = afirGainByPreset.get(preset)
   if (!pending) {
     pending = resolveAfirEffectiveGain(preset, ir)
     afirGainByPreset.set(preset, pending)
+    pending.catch(() => afirGainByPreset.delete(preset))
   }
   return pending
 }
 
 async function resolveAfirEffectiveGain(preset: string, ir: Float32Array): Promise<number> {
-  try {
-    const gain = await probeAfirEffectiveGain(ir)
-    console.log(`[audio-fx] afir effective gain for "${preset}": ×${gain.toFixed(6)}`)
-    return gain
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    const fallback = await afirGainFromVersion()
-    // Loud on purpose: we are now GUESSING at the thing that sets the reverb's
-    // level. Silently guessing is how the 22 dB-hot export shipped in the first
-    // place.
-    console.warn(
-      `[audio-fx] afir gain probe FAILED for "${preset}" (${msg}) — falling back to ` +
-      `×${fallback} inferred from the ffmpeg version. Reverb level may be off if this is wrong.`,
-    )
-    return fallback
+  let firstFailure: string | undefined
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const gain = await probeAfirEffectiveGain(ir)
+      console.log(`[audio-fx] afir effective gain for "${preset}": ×${gain.toFixed(6)}`)
+      return gain
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      firstFailure ??= msg
+      console.warn(`[audio-fx] afir gain probe attempt ${attempt + 1} failed for "${preset}": ${msg}`)
+    }
   }
+  // No guessing: see the FAILURE POLICY above. This rejection fails the job
+  // (worker refunds credits) and the memo entry self-evicts for a fresh retry.
+  throw new Error(
+    `afir gain probe failed for reverb preset "${preset}" (${firstFailure}) — ` +
+    `refusing to render the reverb at a guessed level; retry the job`,
+  )
 }
 
 async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
@@ -323,40 +350,41 @@ async function probeAfirEffectiveGain(ir: Float32Array): Promise<number> {
 
     const raw = await fs.readFile(outPath)
     let peakOut = 0
+    let sumSqOut = 0
     for (let i = 0; i + 4 <= raw.length; i += 4) {
-      peakOut = Math.max(peakOut, Math.abs(raw.readFloatLE(i)))
+      const v = raw.readFloatLE(i)
+      peakOut = Math.max(peakOut, Math.abs(v))
+      sumSqOut += v * v
     }
     let peakIr = 0
-    for (let i = 0; i < ir.length; i++) peakIr = Math.max(peakIr, Math.abs(ir[i]))
-    if (peakIr <= 0) throw new Error("IR is silent")
+    let sumSqIr = 0
+    for (let i = 0; i < ir.length; i++) {
+      peakIr = Math.max(peakIr, Math.abs(ir[i]))
+      sumSqIr += ir[i] * ir[i]
+    }
+    if (peakIr <= 0 || sumSqIr <= 0) throw new Error("IR is silent")
 
     const gain = peakOut / peakIr
     if (!Number.isFinite(gain) || gain < AFIR_GAIN_MIN || gain > AFIR_GAIN_MAX) {
       throw new Error(`implausible gain ${gain} (expected within [${AFIR_GAIN_MIN}, ${AFIR_GAIN_MAX}])`)
     }
+
+    // Flatness invariant: a flat scalar g scales the peak by g and the energy
+    // by g², so the two independent gain estimates must agree. Divergence
+    // means the compensation MODEL is broken, not just the number — fail.
+    const energyGain = Math.sqrt(sumSqOut / sumSqIr)
+    const flatnessDriftDb = Math.abs(20 * Math.log10(gain / energyGain))
+    if (!Number.isFinite(flatnessDriftDb) || flatnessDriftDb > AFIR_FLATNESS_TOLERANCE_DB) {
+      throw new Error(
+        `afir gain is not a flat scalar (peak ratio ×${gain.toFixed(6)} vs energy ratio ` +
+        `×${energyGain.toFixed(6)}, ${flatnessDriftDb.toFixed(2)} dB apart) — the wet-leg ` +
+        `scalar compensation cannot cancel non-flat processing; the graph needs rework for this ffmpeg`,
+      )
+    }
     return gain
   } finally {
     await cleanupWorkDir(workDir)
   }
-}
-
-/** Last resort when the probe can't run: ffmpeg < 6 doubles. ≥6 is reported as
- *  ×1 — under ffmpeg 8's default ℓ1 normalization the truthful value would be
- *  IR-dependent and this fallback CANNOT know which normalization the binary
- *  applies, so ×1 (an over-quiet reverb there) is the least-bad guess. The
- *  probe failing at all is the anomaly to fix. */
-async function afirGainFromVersion(): Promise<number> {
-  try {
-    const out = await runFfmpeg(["-hide_banner", "-version"])
-    const major = Number(/ffmpeg version n?(\d+)\./.exec(out)?.[1])
-    if (Number.isFinite(major)) return major < 6 ? 2 : 1
-  } catch {
-    /* fall through */
-  }
-  // Assume the old production image (5.1.9). Guessing ×1 there would ship a
-  // +6 dB reverb; guessing ×2 on a newer ffmpeg ships a −6 dB one. Too quiet
-  // beats too loud — the loud one is the bug users complained about.
-  return 2
 }
 
 function unitImpulse(length: number): Float32Array {
@@ -415,15 +443,21 @@ export interface AudioFxPaths {
  *    `afir=gtype=gn` and land the wet leg roughly ON TOP of the dry (+6 dB for
  *    `room`, measured) — ~22 dB hotter than the preview the user approved. The
  *    voice drowned in a dark wash. See `convolverNormalizationScale`.
- *  - `afir` also applies a version-dependent intrinsic gain (×2 on the production
- *    ffmpeg 5.1.9). See `afirIntrinsicGain`.
+ *  - `afir` ALSO applies its own gain on top of the convolution, and both the
+ *    amount and the mechanism are version-dependent (flat ×2 on 5.1; per-IR ℓ1
+ *    normalization via `irnorm`'s default on ffmpeg 8). See `afirEffectiveGain`.
  *  - `irnorm` is NOT an option on ffmpeg 5.1 (`gtype` runs -1..2 and that is all).
  *    Passing it does not degrade — it ERRORS OUT, and every reverb job dies with
- *    it. Do not reach for it.
+ *    it. Do not reach for it; the measured `afirGain` compensation below handles
+ *    every version without version-conditional args.
  *
- * So: `gtype=none`. The IR arrives already carrying the browser's normalisation and
- * already divided by `afir`'s intrinsic gain, and `afir` is left to do nothing but
- * the convolution.
+ * So: `gtype=none`. The IR arrives carrying the browser's normalisation and is
+ * otherwise UNCOMPENSATED — deliberately. afir's gain on ffmpeg 8 is norm-based
+ * and therefore SCALE-INVARIANT: dividing the IR by any measured factor changes
+ * its norm by the same factor and cancels nothing. The cancellation must sit
+ * OUTSIDE the convolution, which is why it lives in the wet leg's `volume`
+ * node via the `afirGain` parameter (a scalar after a convolution is the same
+ * signal — LTI — wherever it is applied).
  *
  * The band shape goes DOWNSTREAM of `afir`, not into the IR — the browser applies
  * it as BiquadFilterNodes after the convolver, and convolution and filtering are

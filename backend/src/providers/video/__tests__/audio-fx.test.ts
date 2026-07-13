@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest"
-import { buildAudioFxArgs, buildReverbIr, IR_SAMPLE_RATE, type AudioFxPaths } from "../audio-fx.js"
+import { describe, it, expect, vi } from "vitest"
+import {
+  afirEffectiveGain,
+  buildAudioFxArgs,
+  buildReverbIr,
+  IR_SAMPLE_RATE,
+  type AudioFxPaths,
+} from "../audio-fx.js"
 
 const PATHS: AudioFxPaths = {
   inputPath: "/w/in.mp3",
@@ -241,5 +247,105 @@ describe("buildAudioFxArgs — afir gain compensation (version-robust wet leg)",
   it("rejects an implausible gain rather than rendering a broken mix", () => {
     expect(() => fcFor(0)).toThrow(/implausible afirGain/)
     expect(() => fcFor(Number.NaN)).toThrow(/implausible afirGain/)
+  })
+})
+
+/**
+ * The probe's FAILURE SEMANTICS are load-bearing (a wrong guess ships a
+ * near-silent or 6 dB-hot reverb billed to a customer), so they are pinned
+ * here with a fake runFfmpeg: throw instead of guessing, retry once, never
+ * memoize a failure, and reject non-flat gain that a scalar cannot cancel.
+ * Only runFfmpeg is faked — work dirs and file I/O are real.
+ */
+const ffmpegFake = vi.hoisted(() => ({
+  // Each call shifts the next behavior; the last entry repeats.
+  behaviors: [] as Array<"flat2" | "l1norm" | "nonflat" | "silent" | "fail">,
+}))
+
+vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../ffmpeg-utils.js")>()
+  const { promises: fsp } = await import("node:fs")
+  return {
+    ...actual,
+    runFfmpeg: async (args: readonly string[]): Promise<string> => {
+      const behavior = ffmpegFake.behaviors.length > 1
+        ? ffmpegFake.behaviors.shift()!
+        : ffmpegFake.behaviors[0]
+      if (!behavior) throw new Error("ffmpegFake: no behavior configured")
+      if (behavior === "fail") throw new Error("ffmpeg failed: fake transient error")
+
+      const inputIdxs = args.flatMap((a, i) => (a === "-i" ? [i + 1] : []))
+      const irPath = args[inputIdxs[1]]
+      const outPath = args[args.length - 1]
+      const raw = await fsp.readFile(irPath)
+      const out = Buffer.alloc(raw.length)
+      const count = Math.floor(raw.length / 4)
+      let l1 = 0
+      for (let i = 0; i < count; i++) l1 += Math.abs(raw.readFloatLE(i * 4))
+      for (let i = 0; i < count; i++) {
+        const v = raw.readFloatLE(i * 4)
+        const scaled =
+          behavior === "flat2" ? v * 2
+          : behavior === "l1norm" ? v / l1
+          : behavior === "silent" ? 0
+          : i < count / 2 ? v : v * 4 // nonflat: second half boosted
+        out.writeFloatLE(scaled, i * 4)
+      }
+      await fsp.writeFile(outPath, out)
+      return ""
+    },
+  }
+})
+
+describe("afirEffectiveGain — probe failure semantics (throw, retry, never memoize failures)", () => {
+  const ir = (): Float32Array => {
+    const data = new Float32Array(64)
+    for (let i = 0; i < data.length; i++) data[i] = (i % 2 ? -1 : 1) / (i + 1)
+    return data
+  }
+
+  it("measures a flat gain via peak ratio (×2, the ffmpeg 5.1 regime)", async () => {
+    ffmpegFake.behaviors = ["flat2"]
+    await expect(afirEffectiveGain("t-flat", ir())).resolves.toBeCloseTo(2, 5)
+  })
+
+  it("measures a tiny flat ℓ1-normalization gain (the ffmpeg 8 regime) instead of rejecting it", async () => {
+    ffmpegFake.behaviors = ["l1norm"]
+    const gain = await afirEffectiveGain("t-l1", ir())
+    expect(gain).toBeGreaterThan(0)
+    expect(gain).toBeLessThan(1)
+  })
+
+  it("retries once: a single transient failure still resolves", async () => {
+    ffmpegFake.behaviors = ["fail", "flat2"]
+    await expect(afirEffectiveGain("t-retry", ir())).resolves.toBeCloseTo(2, 5)
+  })
+
+  it("throws after both attempts fail — no version-guessed fallback gain", async () => {
+    ffmpegFake.behaviors = ["fail", "fail", "fail"]
+    await expect(afirEffectiveGain("t-throw", ir())).rejects.toThrow(/refusing to render the reverb at a guessed level/)
+  })
+
+  it("does NOT memoize a failure — the next job re-probes and succeeds", async () => {
+    ffmpegFake.behaviors = ["fail", "fail", "flat2"]
+    await expect(afirEffectiveGain("t-evict", ir())).rejects.toThrow()
+    await expect(afirEffectiveGain("t-evict", ir())).resolves.toBeCloseTo(2, 5)
+  })
+
+  it("memoizes success — one probe per preset per process", async () => {
+    ffmpegFake.behaviors = ["flat2", "fail", "fail", "fail"]
+    await expect(afirEffectiveGain("t-memo", ir())).resolves.toBeCloseTo(2, 5)
+    // Would fail if re-probed: the remaining behaviors all throw.
+    await expect(afirEffectiveGain("t-memo", ir())).resolves.toBeCloseTo(2, 5)
+  })
+
+  it("rejects a NON-FLAT gain the scalar compensation model cannot cancel", async () => {
+    ffmpegFake.behaviors = ["nonflat"]
+    await expect(afirEffectiveGain("t-nonflat", ir())).rejects.toThrow(/not a flat scalar/)
+  })
+
+  it("rejects a silent probe output as a broken probe, not a gain", async () => {
+    ffmpegFake.behaviors = ["silent"]
+    await expect(afirEffectiveGain("t-silent", ir())).rejects.toThrow(/refusing to render/)
   })
 })
