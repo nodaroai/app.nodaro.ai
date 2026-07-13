@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { LLM_REASONING_EFFORTS } from "@nodaro/shared"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
@@ -86,6 +87,7 @@ const updateSettingsBody = z.object({
     defaultInput: z.string().max(10000).optional(),
     defaultMaxTokens: z.number().int().min(1).max(16384).optional(),
     llmModel: z.string().optional(),
+    reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
     fansOut: z.boolean().optional(),
     requiresImageRef: z.boolean().optional(),
   })).max(100).optional(),

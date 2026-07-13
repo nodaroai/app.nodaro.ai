@@ -119,12 +119,34 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
 }
 
 /**
+ * Explicit overrides for node types whose real `*Data` interface name
+ * diverges from the kebab-case → PascalCase heuristic below — acronyms
+ * (LLM, QA) stay upper-case and "3d" is spelled out ("ThreeD") in the actual
+ * declarations, instead of the heuristic's literal "Llm"/"Qa"/"3d". A miss
+ * here fails SILENTLY (parseDataInterface just returns undefined and the
+ * node's skill doc renders with no field list at all — Type/Category/
+ * Inputs/Outputs/Default-data only, no "Required/Optional data fields"
+ * section), so a new node type with an acronym in its name needs an entry
+ * here or its data-shape block will quietly go missing. Verify with:
+ * `grep "^export type.*Data" frontend/src/types/nodes.ts` against the
+ * heuristic's guess.
+ */
+const INTERFACE_NAME_OVERRIDES: Record<string, string> = {
+  "llm-chat": "LLMChatData",
+  "3d-title": "ThreeDTitleData",
+  "qa-check": "QACheckData",
+}
+
+/**
  * Heuristic mapper from kebab-case node type to PascalCase *Data interface
- * name. text-prompt → TextPromptData, image-to-video → ImageToVideoData,
- * 3d-title → 3dTitleData. parseDataInterface returns undefined when no
- * matching interface/type alias exists; render-skill.ts handles that gracefully.
+ * name. text-prompt → TextPromptData, image-to-video → ImageToVideoData.
+ * Checks {@link INTERFACE_NAME_OVERRIDES} first for known heuristic misses.
+ * parseDataInterface returns undefined when no matching interface/type alias
+ * exists; render-skill.ts handles that gracefully (see the override doc
+ * comment for what "gracefully" actually looks like).
  */
 function nodeTypeToInterfaceName(type: string, suffix = "Data"): string {
+  if (suffix === "Data" && INTERFACE_NAME_OVERRIDES[type]) return INTERFACE_NAME_OVERRIDES[type]
   const pascal = type
     .split("-")
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))

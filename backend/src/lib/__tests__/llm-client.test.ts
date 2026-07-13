@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import type { LlmContentBlock } from "../llm-client.js"
+import { calculateLlmCost } from "../pricing/llm-cost.js"
 
 vi.mock("../config.js", () => ({
   config: { KIE_API_KEY: "test-kie-key", ANTHROPIC_API_KEY: undefined, NODE_ENV: "test" },
@@ -247,5 +248,125 @@ describe("KIE error envelope handling (regression: empty output for Gemini/GPT)"
     )
     expect(tokens.join("")).toBe("hello")
     expect(res.text).toBe("hello")
+  })
+})
+
+describe("reasoningEffort wire mapping + temperature strip", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  beforeEach(() => { fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock) })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it("responses format: sends reasoning.effort, never temperature (gpt-5.6-sol)", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }], usage: { input_tokens: 1, output_tokens: 1 } }))
+    await llmComplete({ modelId: "gpt-5.6-sol", system: "s", messages: [{ role: "user", content: "hi" }], temperature: 0.7, reasoningEffort: "max" })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.reasoning).toEqual({ effort: "max" })
+    expect(body.temperature).toBeUndefined()
+    expect(body.max_output_tokens).toBe(32768) // headroom at max effort with no explicit maxTokens
+  })
+
+  it("chat-completions format: sends reasoning_effort only when the model declares levels", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }))
+    await llmComplete({ modelId: "gemini-3-flash", system: "", messages: [{ role: "user", content: "hi" }], reasoningEffort: "high" })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.reasoning_effort).toBeUndefined() // gemini has no levels → clamp yields undefined
+  })
+
+  it("messages format (KIE Claude): adaptive thinking + output_config.effort, temperature stripped", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "ok" }], usage: { input_tokens: 1, output_tokens: 1 } }))
+    await llmComplete({ modelId: "claude-sonnet-5", system: "s", messages: [{ role: "user", content: "hi" }], temperature: 0.7, reasoningEffort: "high" })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.thinking).toEqual({ type: "adaptive" })
+    expect(body.output_config).toEqual({ effort: "high" })
+    expect(body.temperature).toBeUndefined()
+    expect(body.max_tokens).toBe(16384) // high does NOT trigger headroom
+  })
+
+  it("messages format without effort: no thinking/output_config, temperature still stripped for sonnet-5", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "ok" }], usage: { input_tokens: 1, output_tokens: 1 } }))
+    await llmComplete({ modelId: "claude-sonnet-5", system: "s", messages: [{ role: "user", content: "hi" }], temperature: 0.7 })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.thinking).toBeUndefined()
+    expect(body.output_config).toBeUndefined()
+    expect(body.temperature).toBeUndefined()
+  })
+
+  it("temperature still sent for models that accept it (gemini-3-flash)", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }))
+    await llmComplete({ modelId: "gemini-3-flash", system: "", messages: [{ role: "user", content: "hi" }], temperature: 0.5 })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.temperature).toBe(0.5)
+  })
+})
+
+describe("actual-cost capture from KIE credits_consumed", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  beforeEach(() => { fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock) })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it("chat-completions: credits_consumed wins over the table estimate", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        choices: [{ message: { role: "assistant", content: "ok" } }],
+        usage: { prompt_tokens: 1000, completion_tokens: 500 },
+        credits_consumed: 2,
+      }),
+    )
+    const res = await llmComplete({
+      modelId: "gemini-3-flash",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    })
+    // 2 KIE credits * $0.005/credit = $0.01 — NOT the table estimate
+    // ((1000 * 0.15 + 500 * 0.90) / 1e6 = 0.0006).
+    expect(res.providerCost).toBeCloseTo(0.01, 10)
+  })
+
+  it("messages: no credits_consumed field falls back to the table estimate", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        content: [{ type: "text", text: "ok" }],
+        usage: { input_tokens: 1000, output_tokens: 500 },
+      }),
+    )
+    const res = await llmComplete({
+      modelId: "claude-opus-4.7",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    })
+    expect(res.providerCost).toBeCloseTo(
+      calculateLlmCost("claude-opus-4.7", { inputTokens: 1000, outputTokens: 500 }),
+      10,
+    )
+  })
+
+  it("responses: emits [llm-cost-drift] warning when actual diverges >25% from the table estimate", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }],
+        usage: { input_tokens: 1000, output_tokens: 500 },
+        credits_consumed: 1,
+      }),
+    )
+    const res = await llmComplete({
+      modelId: "gpt-5.4",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    })
+    // table estimate = (1000 * 0.70 + 500 * 5.60) / 1e6 = 0.0035
+    // actual = 1 credit * $0.005 = 0.005 → drift = |0.005-0.0035|/0.0035 ≈ 0.4286 (> 0.25)
+    expect(res.providerCost).toBeCloseTo(0.005, 10)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0][0]).toContain("[llm-cost-drift]")
+    warnSpy.mockRestore()
   })
 })

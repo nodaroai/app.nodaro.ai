@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -30,6 +30,7 @@ const describeToPickerBody = z
     instructions: z.string().max(2000).optional(),
     userId: z.string().uuid().optional(),
     llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+    reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
   })
   .refine((b) => (b.targetPickers?.length ?? 0) > 0 || !!b.targetPicker, {
     message: "targetPickers (or legacy targetPicker) is required",
@@ -143,7 +144,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       if (!model || !STRUCTURED_VISION_MODEL_IDS.has(model.id)) {
         return reply.status(400).send({ error: { code: "validation_error", message: "describe-to-picker requires a vision-capable model with structured output (Anthropic or Gemini)" } })
       }
-      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId)
+      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, parsed.data.reasoningEffort)
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -177,6 +178,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
             modelId: model.id,
             system: buildSystemPrompt(legend, instructions),
             messages: [{ role: "user", content }],
+            reasoningEffort: parsed.data.reasoningEffort,
           },
           schema,
           { schemaName: toolName },

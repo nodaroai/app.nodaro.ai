@@ -19,6 +19,7 @@ interface WizardOpts extends GlobalOpts {
   aspectRatio?: string
   duration?: number
   llmModel?: string
+  reasoningEffort?: string
 }
 
 /** The provider/style/aspect/duration/model fields every action passes through. */
@@ -29,6 +30,7 @@ function commonWizardFields(opts: WizardOpts) {
     aspectRatio: opts.aspectRatio,
     duration: opts.duration,
     llmModel: opts.llmModel,
+    reasoningEffort: opts.reasoningEffort,
   }
 }
 
@@ -47,6 +49,7 @@ export function promptCommand(): Command {
     .option("--aspect-ratio <ratio>")
     .option("--duration <seconds>", "clip duration in seconds", (v) => parseInt(v, 10))
     .option("--llm-model <id>")
+    .option("--reasoning-effort <level>", "reasoning effort: none|low|medium|high|xhigh|max (model-dependent)")
     .option("--profile <name>")
     .action(async (opts: WizardOpts) => {
       try {
@@ -111,6 +114,7 @@ export function promptCommand(): Command {
     .option("--aspect-ratio <ratio>")
     .option("--duration <seconds>", "clip duration in seconds", (v) => parseInt(v, 10))
     .option("--llm-model <id>")
+    .option("--reasoning-effort <level>", "reasoning effort: none|low|medium|high|xhigh|max (model-dependent)")
     .option("--profile <name>")
     .option("--json")
     .action(async (opts: WizardOpts) => {
@@ -150,6 +154,7 @@ export function promptCommand(): Command {
     .option("--aspect-ratio <ratio>")
     .option("--duration <seconds>", "clip duration in seconds", (v) => parseInt(v, 10))
     .option("--llm-model <id>")
+    .option("--reasoning-effort <level>", "reasoning effort: none|low|medium|high|xhigh|max (model-dependent)")
     .option("--profile <name>")
     .option("--json")
     .action(async (opts: WizardOpts & { selection?: string[]; originalPrompt?: string }) => {
@@ -183,6 +188,7 @@ export function promptCommand(): Command {
     .option("--aspect-ratio <ratio>")
     .option("--duration <seconds>", "clip duration in seconds", (v) => parseInt(v, 10))
     .option("--llm-model <id>")
+    .option("--reasoning-effort <level>", "reasoning effort: none|low|medium|high|xhigh|max (model-dependent)")
     .option("--profile <name>")
     .option("--json")
     .action(async (opts: WizardOpts) => {

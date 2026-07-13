@@ -908,6 +908,7 @@ export function executeNode(
       scriptData.targetLength || undefined,
       scriptData.provider || undefined,
       scriptData.llmModel || undefined,
+      scriptData.reasoningEffort || undefined,
     );
   }
 
@@ -3987,6 +3988,7 @@ export function executeNode(
       inputs.prompt || itData.customPrompt || undefined,
       ctx.userId,
       itData.llmModel,
+      itData.reasoningEffort,
     )
       .then((result) => {
         const existingResults =
@@ -4037,7 +4039,7 @@ export function executeNode(
     const dpData = node.data as DescribeToPickerData;
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
-    return describeToPickerApi(imageUrl, targetPickers, ctx.userId, dpData.llmModel, dpData.instructions)
+    return describeToPickerApi(imageUrl, targetPickers, ctx.userId, dpData.llmModel, dpData.instructions, dpData.reasoningEffort)
       .then((result) => {
         updateNodeData(node.id, {
           executionStatus: "completed",
@@ -4139,6 +4141,7 @@ export function executeNode(
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,
+      reasoningEffort: chatData.reasoningEffort,
       // Stop button → aborts this stream mid-flight (cancels the SSE fetch).
       signal: ctx.signal,
       onToken: (token) => {
@@ -6149,6 +6152,7 @@ export function executeNode(
       durationSeconds: d.durationSeconds,
       userId: ctx.userId,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -6202,6 +6206,7 @@ export function executeNode(
       durationSeconds: d.durationSeconds,
       userId: ctx.userId,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -6276,6 +6281,7 @@ export function executeNode(
       lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
       userId: ctx.userId,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -6338,6 +6344,7 @@ export function executeNode(
       backgroundMediaUrl,
       userId: ctx.userId,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -6378,6 +6385,7 @@ export function executeNode(
         durationSeconds: d.durationSeconds,
         backgroundColor: d.backgroundColor,
         llmModel: d.llmModel,
+        reasoningEffort: d.reasoningEffort,
         previousSids,
       }, ctx);
     }
@@ -6397,6 +6405,7 @@ export function executeNode(
       backgroundColor: d.backgroundColor,
       userId: ctx.userId!,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -7448,6 +7457,7 @@ export function executeNode(
       provider: d.provider || "claude",
       threshold: d.threshold ?? 0.7,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     }).then(
       (result) => {
         updateNodeData(node.id, {
@@ -7497,6 +7507,7 @@ export function executeNode(
       mode: d.mode,
       threshold: d.threshold ?? 0.7,
       llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
     }).then(
       async (result) => {
         // Dedup short-circuit: credit-guard may return { jobId, deduped: true } within 10s.

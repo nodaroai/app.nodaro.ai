@@ -14,7 +14,7 @@ import type { AfterEffectsData } from "@/types/nodes"
 function AfterEffectsNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as AfterEffectsData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("after-effects", nodeData.llmModel || LLM_FEATURE_DEFAULTS["after-effects"]), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("after-effects", nodeData.llmModel || LLM_FEATURE_DEFAULTS["after-effects"], nodeData.reasoningEffort), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

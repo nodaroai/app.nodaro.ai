@@ -14,7 +14,7 @@ import type { VideoComposerData } from "@/types/nodes"
 function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoComposerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel || LLM_FEATURE_DEFAULTS["scene-graph-ai"]), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel || LLM_FEATURE_DEFAULTS["scene-graph-ai"], nodeData.reasoningEffort), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

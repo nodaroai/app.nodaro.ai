@@ -141,6 +141,45 @@ const imageGenNodes = nodes.filter(n => n.category === "ai-image")
 
 This is exposed via `client.workflows.run` if the param is supported — check the SDK source. Otherwise fall back to direct `client.request("POST", "/v1/workflows/" + id + "/run?wait=true&timeout=120", ...)` — the underlying client exposes a generic `request` method.
 
+## Reasoning effort (LLM-backed nodes)
+
+LLM-backed feature routes accept an optional `reasoningEffort` field in the
+request body — `"none" | "low" | "medium" | "high" | "xhigh" | "max"`,
+model-dependent (see the model table in the
+[model selector](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-text/llm-chat.md#model-selector)
+section of the Generate Text node docs). Omit it for the vendor default
+("Auto"). `xhigh` and `max` bill one tier up (economy → standard, standard →
+premium); see the
+[Reasoning effort](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-text/llm-chat.md#reasoning-effort)
+section for the exact rule. Workflow/canvas LLM nodes carry the same field on
+their node `data`, and `client.promptHelper.*` accepts it directly in its
+request body.
+
+`client.nodes.run(type, params)` POSTs `params` straight to `POST /v1/<type>`
+— that matches the registered route only for `generate-script`,
+`image-critic`, `qa-check`, and `describe-to-picker`. Other LLM-backed node
+types register at a nested path instead (`llm-chat` → `/v1/llm-chat/generate`,
+`after-effects` → `/v1/after-effects/generate`, `motion-graphics` →
+`/v1/motion-graphics/generate`, `lottie-overlay` →
+`/v1/lottie-overlay/generate`, `3d-title` → `/v1/3d-title/generate`,
+`image-to-text` → `/v1/image-to-text/describe`, `video-composer` →
+`/v1/scene-graph/generate`) — use `client.request("POST", "<path>", { body })`
+for those, or `client.promptHelper.*`, which always posts to
+`/v1/prompt-helper/wizard` regardless of node type.
+
+```typescript
+// Bare-path node type — client.nodes.run() posts directly to /v1/generate-script.
+await client.nodes.run("generate-script", {
+  prompt: "Draft a 3-scene product launch script for a smart water bottle.",
+  llmModel: "claude-sonnet-5",
+  reasoningEffort: "high",
+})
+```
+
+The CLI exposes the same lever as `--reasoning-effort <level>` on
+`nodaro prompt wizard/analyze/generate/enhance`, and as `--param
+reasoningEffort=<level>` on `nodaro nodes run <type>`.
+
 ## When NOT to use the SDK
 
 - **SSE / streaming endpoints** (e.g. the Generate Text node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK doesn't yet expose SSE. Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.

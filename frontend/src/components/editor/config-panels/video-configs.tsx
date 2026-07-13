@@ -4473,6 +4473,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
           </SelectContent>
         </Select>
       </div>
+      {/* reasoning-effort selector deliberately absent: video-analysis models expose no effort levels (v1) */}
 
       {/* YouTube URL (alternative to a wired video source) */}
       <div className="flex flex-col gap-1.5">

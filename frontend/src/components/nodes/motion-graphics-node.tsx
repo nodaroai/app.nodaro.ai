@@ -14,7 +14,7 @@ import type { MotionGraphicsData } from "@/types/nodes"
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionGraphicsData
   const mgFeature = motionGraphicsFeature(nodeData.engine)
-  const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature]), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature], nodeData.reasoningEffort), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

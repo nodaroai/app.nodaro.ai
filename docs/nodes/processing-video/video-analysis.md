@@ -47,6 +47,11 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 | Analysis Model (`llmModel`) | Select | `gemini-3-flash` | `gemini-3-flash` (fast, default) or `gemini-3.1-pro` (higher fidelity, costs more — see [Credit Cost](#credit-cost)) |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
+**Only Gemini models are offered here.** The model list is capability-derived, not
+hand-picked — Video Analysis requires native video *and* audio ingestion, which today
+only `gemini-3-flash` / `gemini-3.1-pro` provide. The GPT-5.6/Claude 5-era chat models
+are text+image only and are not offered here.
+
 **Analysis Focus steers attention, never format.** It biases what the model
 attends to; it does **not** change the output JSON shape, the ≤8s scene
 segmentation, or the field set. Leave it empty for a general-purpose breakdown.

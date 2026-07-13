@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
-import { LLM_MODEL_IDS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, parseFailure } from "./_verb-helpers.js"
@@ -59,6 +59,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
         llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+        reasoning_effort: z.enum(LLM_REASONING_EFFORTS).optional().describe("Reasoning effort (model-dependent; xhigh/max bill one tier up)."),
       },
       annotations,
     },
@@ -73,6 +74,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: args.aspectRatio,
         duration: args.duration,
         llmModel: args.llmModel,
+        reasoningEffort: args.reasoning_effort,
       }),
   )
 
@@ -94,6 +96,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
         llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+        reasoning_effort: z.enum(LLM_REASONING_EFFORTS).optional().describe("Reasoning effort (model-dependent; xhigh/max bill one tier up)."),
       },
       annotations,
     },
@@ -109,6 +112,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: args.aspectRatio,
         duration: args.duration,
         llmModel: args.llmModel,
+        reasoningEffort: args.reasoning_effort,
       }),
   )
 
@@ -126,6 +130,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
         llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+        reasoning_effort: z.enum(LLM_REASONING_EFFORTS).optional().describe("Reasoning effort (model-dependent; xhigh/max bill one tier up)."),
       },
       annotations,
     },
@@ -140,6 +145,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         aspectRatio: args.aspectRatio,
         duration: args.duration,
         llmModel: args.llmModel,
+        reasoningEffort: args.reasoning_effort,
       }),
   )
 }

@@ -1088,6 +1088,7 @@ describe("image-to-text", () => {
       makeNode("image-to-text", {
         detailLevel: "detailed",
         customPrompt: "Describe this image",
+        reasoningEffort: "high",
       }),
       makeCtx(),
     )
@@ -1098,6 +1099,7 @@ describe("image-to-text", () => {
       "Describe this image",
       "u1",
       undefined,
+      "high",
     )
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",

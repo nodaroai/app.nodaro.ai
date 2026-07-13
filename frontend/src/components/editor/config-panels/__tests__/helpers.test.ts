@@ -225,6 +225,16 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(node)).toBe("llm-chat")
   })
 
+  it("bumps the displayed tier for xhigh/max effort (matches guard + reservation)", () => {
+    const node = makeNode({ type: "llm-chat", data: { label: "Generate Text", llmModel: "gpt-5.6-terra", reasoningEffort: "max" } as any })
+    expect(getModelIdentifier(node)).toBe("llm-chat:premium")
+  })
+
+  it("bumps the lottie-engine motion-graphics identifier on max effort", () => {
+    const node = makeNode({ type: "motion-graphics", data: { label: "MG", engine: "lottie", llmModel: "gpt-5.6-terra", reasoningEffort: "max" } as any })
+    expect(getModelIdentifier(node)).toBe("motion-graphics-lottie:premium")
+  })
+
   it("returns provider from node data when available", () => {
     const node = makeNode({ type: "generate-image", data: { label: "Img", provider: "flux" } as any })
     expect(getModelIdentifier(node)).toBe("flux")

@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { LLM_MODELS } from "@nodaro/shared"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
 import { getPipelineSignal } from "../pipeline-context.js"
 import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
@@ -8,14 +9,17 @@ import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
 /**
- * Models that reject the `temperature` parameter with a 400. Add new reasoning
- * models here as they ship. Anthropic's extended-thinking models (Opus 4.7+)
- * don't accept temperature; their output diversity is controlled by the
- * thinking budget, not by sampling temperature.
+ * Models that reject the `temperature` parameter with a 400 — derived from the
+ * shared registry (`supportsTemperature: false`) so new reasoning models are
+ * covered by their registry entry instead of a hand-list here. Covers both the
+ * KIE slug and the direct-Anthropic model id.
  */
-const TEMPERATURE_UNSUPPORTED_MODELS = new Set<string>([
-  "claude-opus-4-7",
-])
+const TEMPERATURE_UNSUPPORTED_MODELS = new Set<string>(
+  LLM_MODELS.filter((m) => m.supportsTemperature === false).flatMap((m) => [
+    m.kieSlugOrModel,
+    ...(m.directFallbackModel ? [m.directFallbackModel] : []),
+  ]),
+)
 
 // Accept any Zod schema whose PARSED OUTPUT is T. The schema's INPUT type may
 // diverge from T (e.g. ZodDefault makes input optional but output required),

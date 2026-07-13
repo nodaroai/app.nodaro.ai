@@ -1,7 +1,7 @@
 ---
 node_type: generate-script
-generated_at: 2026-06-16T08:22:28.131Z
-generated_from: 877dfa01a
+generated_at: 2026-07-13T16:11:49.376Z
+generated_from: 9af14ef89
 ---
 
 # Generate Script
@@ -26,6 +26,7 @@ generated_from: 877dfa01a
 
 **Optional data fields:**
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

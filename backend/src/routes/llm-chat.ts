@@ -7,7 +7,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -25,6 +25,7 @@ const llmChatBody = z.object({
   maxTokens: z.number().min(1).max(16384).default(2048),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 function buildUserContent(
@@ -104,7 +105,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }
-      const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort)
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -139,6 +140,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
           maxTokens,
           temperature,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         const generatedText = response.text
@@ -224,7 +226,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }
-      const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort)
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -272,6 +274,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
             messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
             maxTokens,
             temperature,
+            reasoningEffort: parsed.data.reasoningEffort,
           },
           (delta) => {
             if (sse.isClosed) return

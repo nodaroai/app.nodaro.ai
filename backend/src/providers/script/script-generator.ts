@@ -1,5 +1,6 @@
 import { llmComplete } from "../../lib/llm-client.js"
 import { getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared"
 
 export interface ScriptSceneCharacter {
   readonly name: string
@@ -135,6 +136,7 @@ export async function generateScript(
   targetDuration?: number,
   provider?: ScriptProvider,
   llmModel?: string,
+  reasoningEffort?: string,
 ): Promise<GeneratedScript> {
   // Resolve model: prefer explicit llmModel, then map legacy provider, then feature default
   let resolvedModelId = llmModel
@@ -162,6 +164,7 @@ export async function generateScript(
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt }],
     maxTokens: Math.min(modelMaxTokens, 16384),
+    reasoningEffort: reasoningEffort as LlmReasoningEffort | undefined,
   })
 
   const raw = response.text

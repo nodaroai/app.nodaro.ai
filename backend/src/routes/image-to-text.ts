@@ -5,7 +5,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -24,6 +24,7 @@ const imageToTextBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -68,7 +69,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["image-to-text"]
-      const modelIdentifier = buildLlmCreditIdentifier("image-to-text", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("image-to-text", llmModel, parsed.data.reasoningEffort)
       const mcpClient = extractMcpClient(req.body)
 
       // Create a job record for audit trail
@@ -139,6 +140,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
             ],
           }],
           maxTokens: 1024,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         const generatedText = response.text

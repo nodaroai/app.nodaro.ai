@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -1388,6 +1388,7 @@ export type GenerateScriptData = {
   provider: ScriptProvider
   model: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   sceneCount: number
   styleGuide: string
   structure: "freeform" | "8-step" | "custom"
@@ -2358,6 +2359,7 @@ export type QACheckData = {
   checkType: "content" | "quality" | "consistency" | "safety"
   threshold: number
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fieldMappings: FieldMappings
   currentJobId?: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2374,6 +2376,7 @@ export type ImageCriticData = {
   threshold: number
   prompt?: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fieldMappings: FieldMappings
   // runtime
   currentJobId?: string
@@ -2978,6 +2981,7 @@ export type ImageToTextData = {
   detailLevel: "brief" | "detailed" | "structured"
   customPrompt: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
@@ -2992,6 +2996,7 @@ export type DescribeToPickerData = {
   label: string
   /** Anthropic vision model id; default claude-sonnet-4.6. */
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   /** Optional extra guidance appended to the analyzer system prompt. */
   instructions?: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3400,6 +3405,7 @@ export type VideoComposerData = {
   backgroundColor: string
   assetOrder?: string[]
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
@@ -3415,6 +3421,7 @@ export type AfterEffectsData = {
   width?: number
   height?: number
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3432,6 +3439,7 @@ export type LottieOverlayData = {
   height?: number
   lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3448,6 +3456,7 @@ export type ThreeDTitleData = {
   backgroundColor: string
   backgroundMediaUrl?: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3465,6 +3474,7 @@ export type MotionGraphicsData = {
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   backgroundColor: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -4260,6 +4270,7 @@ export type LLMChatData = {
   systemPrompt: string
   userInput: string
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   temperature: number
   maxTokens: number
   /** How many generations to produce per Run click. `llm-chat` is in
@@ -4322,6 +4333,7 @@ export type VideoAnalysisNodeData = {
   probedYoutube?: { url: string; durationSec: number }
   // Analysis config
   llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
   analysisFocus?: string
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"

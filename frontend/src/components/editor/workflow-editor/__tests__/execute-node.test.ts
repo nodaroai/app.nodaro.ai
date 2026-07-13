@@ -475,10 +475,11 @@ describe("generate-script", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
     )
   })
 
-  it("passes sceneCount, tone, targetLength, provider from data", async () => {
+  it("passes sceneCount, tone, targetLength, provider, llmModel, reasoningEffort from data", async () => {
     mockResolveNodeInputs.mockReturnValue({ prompt: "p" })
     mockRunScriptGeneration.mockResolvedValue(undefined)
     await executeNode(
@@ -487,6 +488,8 @@ describe("generate-script", () => {
         tone: "dramatic",
         targetLength: "short",
         provider: "claude",
+        llmModel: "claude-sonnet-4.6",
+        reasoningEffort: "medium",
       }),
       makeCtx(),
     )
@@ -498,7 +501,8 @@ describe("generate-script", () => {
       "dramatic",
       "short",
       "claude",
-      undefined,
+      "claude-sonnet-4.6",
+      "medium",
     )
   })
 })

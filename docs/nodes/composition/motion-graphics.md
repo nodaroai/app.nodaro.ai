@@ -2,7 +2,9 @@
 > AI-generated 2D motion graphics including lower thirds, title cards, kinetic typography, and animated shapes.
 
 ## Overview
-The Motion Graphics node uses an LLM to generate a plan for 2D motion graphics compositions. It supports lower thirds, title cards, kinetic typography, animated shapes, and SVG path animations. A live preview is available in the config panel. Maximum duration is 60 seconds.
+The Motion Graphics node uses an LLM (configurable via the model selector — any of the shared LLM registry's models, Claude Sonnet by default) to generate a plan for 2D motion graphics compositions. It supports lower thirds, title cards, kinetic typography, animated shapes, and SVG path animations. A live preview is available in the config panel. Maximum duration is 60 seconds.
+
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up — see [Pricing](#pricing) below and the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
 The node ships with two **engines** (see below). The default **Lottie** engine has the LLM author a complete Lottie animation with named editable slots. The **Classic** engine produces a compact elements DSL rendered with pure Remotion primitives and a built-in `FONT_MAP`.
 
@@ -69,6 +71,8 @@ Credits follow the standard LLM pricing tiers, evaluated at each engine's typica
 The tier is determined by the selected LLM model (Economy / Standard / Premium).
 
 **Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **5 credits** for Lottie versus **2 credits** for Classic — both derived from the same formula, evaluated at each engine's typical output size.
+
+**Reasoning effort and tier.** Selecting `xhigh` or `max` effort on a reasoning-capable model bills **one tier up** (economy → standard, standard → premium; premium is unchanged) — the same rule the Generate Text node documents in full at [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort). `Auto` and every other level apply the vendor default and never change the tier shown above.
 
 ## Configuration
 

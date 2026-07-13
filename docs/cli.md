@@ -135,10 +135,11 @@ nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
 #   --category filters a single-dim picker; --field picks one dimension of a multi-dim picker (person/styling/framing)
 
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
-nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>]   # interactive Q&A; node picker if --node-type omitted
-nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # return guided questions
-nodaro prompt generate --node-type <type> --selection category=value [--selection ...] [--original-prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # build a prompt from selections
-nodaro prompt enhance --node-type <type> --prompt "…" [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # one-shot rewrite, no questions
+nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>]   # interactive Q&A; node picker if --node-type omitted
+nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # return guided questions
+nodaro prompt generate --node-type <type> --selection category=value [--selection ...] [--original-prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # build a prompt from selections
+nodaro prompt enhance --node-type <type> --prompt "…" [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # one-shot rewrite, no questions
+#   --reasoning-effort <level>: none|low|medium|high|xhigh|max (model-dependent; unsupported/omitted -> vendor default). xhigh/max bill one tier up.
 
 # Executions
 nodaro executions get <id> [--watch] [--json]

@@ -1,3 +1,5 @@
+import type { LlmReasoningEffort } from "@nodaro/shared"
+
 export interface GenerateTextTemplate {
   readonly id: string
   readonly label: string
@@ -7,6 +9,7 @@ export interface GenerateTextTemplate {
   readonly placeholderInput?: string
   readonly defaultMaxTokens?: number
   readonly llmModel?: string
+  readonly reasoningEffort?: LlmReasoningEffort
   readonly fansOut?: boolean
   readonly requiresImageRef?: boolean
 }

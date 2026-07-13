@@ -114,7 +114,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const credits = useModelCredits(
-    buildLlmCreditIdentifier("image-critic", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-critic"]),
+    buildLlmCreditIdentifier("image-critic", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-critic"], nodeData.reasoningEffort),
     1,
   )
   const [modalOpen, setModalOpen] = useState(false)

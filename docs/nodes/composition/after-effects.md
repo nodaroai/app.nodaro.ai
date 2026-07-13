@@ -2,7 +2,9 @@
 > AI-generated post-processing effects applied to video using Claude Sonnet.
 
 ## Overview
-The After Effects node uses Claude Sonnet to interpret a natural language prompt and generate a structured effect plan. The plan specifies post-processing effects such as color grading, vignette, film grain, noise, letterboxing, animated blur, trail, and motion blur. A live preview is available in the config panel before rendering.
+The After Effects node uses Claude Sonnet (configurable via the model selector — any of the shared LLM registry's models) to interpret a natural language prompt and generate a structured effect plan. The plan specifies post-processing effects such as color grading, vignette, film grain, noise, letterboxing, animated blur, trail, and motion blur. A live preview is available in the config panel before rendering.
+
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up, same rule as every other LLM-backed node — see the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
 ## Configuration
 

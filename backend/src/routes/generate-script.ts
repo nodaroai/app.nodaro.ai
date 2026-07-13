@@ -6,7 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
+import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -19,6 +19,7 @@ const generateScriptBody = z.object({
   provider: z.enum(SCRIPT_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 export async function generateScriptRoutes(app: FastifyInstance) {
@@ -30,7 +31,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, sceneCount, tone, targetDuration, provider, llmModel } = parsed.data
+    const { prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -39,7 +40,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = buildLlmCreditIdentifier("generate-script", llmModel)
+    const modelIdentifier = buildLlmCreditIdentifier("generate-script", llmModel, reasoningEffort)
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await supabase
@@ -73,6 +74,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       targetDuration,
       provider,
       llmModel,
+      reasoningEffort,
       usageLogId,
     })
 

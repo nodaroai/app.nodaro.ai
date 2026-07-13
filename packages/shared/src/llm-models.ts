@@ -16,6 +16,12 @@
 export type LlmTier = "economy" | "standard" | "premium"
 export type KieApiFormat = "chat-completions" | "messages" | "responses"
 
+export const LLM_REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const
+export type LlmReasoningEffort = (typeof LLM_REASONING_EFFORTS)[number]
+/** Levels that bill one tier up. `high` is the Claude-family server default — it never bumps. */
+export const EFFORT_TIER_BUMP: ReadonlySet<LlmReasoningEffort> = new Set(["xhigh", "max"])
+const EFFORT_RANK: Record<LlmReasoningEffort, number> = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 }
+
 export interface LlmModelDef {
   id: string
   displayName: string
@@ -41,6 +47,12 @@ export interface LlmModelDef {
   structuredOutputMode?: "anthropic-tool" | "kie-response-format"
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
+  /** Effort levels this model accepts (ascending). Absent/empty = no effort lever, picker hidden. */
+  reasoningEfforts?: readonly LlmReasoningEffort[]
+  /** false = model rejects `temperature` (Claude 5-era, GPT-5.6). Absent = accepts. */
+  supportsTemperature?: false
+  /** Claude-only: KIE is the preferred routing, direct Anthropic the fallback. */
+  preferKie?: true
 }
 
 export const LLM_MODELS: readonly LlmModelDef[] = [
@@ -81,6 +93,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-4-6",
+    reasoningEfforts: ["low", "medium", "high", "max"],
   },
   {
     id: "gpt-5.2",
@@ -117,6 +130,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-7",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    preferKie: true,
   },
   {
     id: "gpt-5.4",
@@ -128,6 +144,92 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "openai",
     supportsImages: true,
     maxOutputTokens: 16384,
+    reasoningEfforts: ["low", "medium", "high"],
+  },
+  {
+    id: "gpt-5.5",
+    displayName: "GPT-5.5",
+    desc: "Previous flagship GPT, deep reasoning",
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-5-5",
+    vendor: "openai",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+  },
+  {
+    id: "gpt-5.6-luna",
+    displayName: "GPT-5.6 Luna",
+    desc: "Fastest GPT-5.6, high-volume workloads",
+    tier: "economy",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-5-6-luna",
+    vendor: "openai",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+  },
+  {
+    id: "gpt-5.6-terra",
+    displayName: "GPT-5.6 Terra",
+    desc: "Balanced GPT-5.6 for production work",
+    tier: "standard",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-5-6-terra",
+    vendor: "openai",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+  },
+  {
+    id: "gpt-5.6-sol",
+    displayName: "GPT-5.6 Sol",
+    desc: "Flagship GPT-5.6, deepest reasoning",
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-5-6-sol",
+    vendor: "openai",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+  },
+  // grok-4.5 deferred — KIE chat endpoint not yet live (2026-07-13); add entry + rate row + docs when it activates.
+  {
+    id: "claude-sonnet-5",
+    displayName: "Claude Sonnet 5",
+    desc: "Near-Opus quality at Sonnet cost",
+    tier: "standard",
+    kieFormat: "messages",
+    kieSlugOrModel: "claude-sonnet-5",
+    vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    directFallbackModel: "claude-sonnet-5",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    preferKie: true,
+  },
+  {
+    id: "claude-opus-4.8",
+    displayName: "Claude Opus 4.8",
+    desc: "Most capable Claude, long-horizon work",
+    tier: "premium",
+    kieFormat: "messages",
+    kieSlugOrModel: "claude-opus-4-8",
+    vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    directFallbackModel: "claude-opus-4-8",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    preferKie: true,
   },
 ] as const
 
@@ -201,6 +303,12 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "claude-opus-4.7":   { image: true,  video: false, audio: false },
   "gpt-5.2":           { image: true,  video: false, audio: false },
   "gpt-5.4":           { image: true,  video: false, audio: false },
+  "gpt-5.5":           { image: true,  video: false, audio: false },
+  "gpt-5.6-luna":      { image: true,  video: false, audio: false },
+  "gpt-5.6-terra":     { image: true,  video: false, audio: false },
+  "gpt-5.6-sol":       { image: true,  video: false, audio: false },
+  "claude-sonnet-5":   { image: true,  video: false, audio: false },
+  "claude-opus-4.8":   { image: true,  video: false, audio: false },
 }
 
 /** Capability lookup with safe default — unknown models get image-only. */
@@ -217,26 +325,51 @@ export function getLlmTier(id: string): LlmTier {
   return getLlmModel(id)?.tier ?? "standard"
 }
 
+/** Highest level the model supports that is ≤ the requested level; undefined = treat as Auto. */
+export function effectiveReasoningEffort(
+  modelId: string | undefined,
+  requested?: string,
+): LlmReasoningEffort | undefined {
+  if (!requested || !(requested in EFFORT_RANK)) return undefined
+  const levels = getLlmModel(modelId ?? "")?.reasoningEfforts
+  if (!levels || levels.length === 0) return undefined
+  const req = requested as LlmReasoningEffort
+  let best: LlmReasoningEffort | undefined
+  for (const l of levels) {
+    if (EFFORT_RANK[l] <= EFFORT_RANK[req] && (best === undefined || EFFORT_RANK[l] > EFFORT_RANK[best])) best = l
+  }
+  return best
+}
+
 /**
  * Build a composite credit identifier for an LLM feature.
  * - economy tier → "ai-writer:economy"
  * - standard tier → "ai-writer" (no suffix — backward compatible)
  * - premium tier → "ai-writer:premium"
+ * A reasoning effort of "xhigh" or "max" (after clamping to what the model
+ * actually supports) bills one tier up (economy→standard, standard→premium;
+ * premium stays premium). `high` is the Claude-family server default and
+ * never bumps.
  */
-export function buildLlmCreditIdentifier(feature: string, modelId?: string): string {
+export function buildLlmCreditIdentifier(feature: string, modelId?: string, reasoningEffort?: string): string {
   if (!modelId) return feature
-  const tier = getLlmTier(modelId)
+  let tier = getLlmTier(modelId)
+  const eff = effectiveReasoningEffort(modelId, reasoningEffort)
+  if (eff !== undefined && EFFORT_TIER_BUMP.has(eff)) {
+    if (tier === "economy") tier = "standard"
+    else if (tier === "standard") tier = "premium"
+  }
   if (tier === "standard") return feature
   return `${feature}:${tier}`
 }
 
 /**
- * Resolve llmModel from raw body for creditGuard preHandler (before Zod parsing).
- * Returns the credit identifier for the given feature + optional model.
+ * Resolve llmModel (+ reasoningEffort) from raw body for creditGuard preHandler
+ * (before Zod parsing). Returns the credit identifier for the given feature.
  */
 export function resolveLlmCreditId(feature: string, body: unknown): string {
-  const llmModel = (body as Record<string, unknown>)?.llmModel as string | undefined
-  return buildLlmCreditIdentifier(feature, llmModel)
+  const b = body as Record<string, unknown> | undefined
+  return buildLlmCreditIdentifier(feature, b?.llmModel as string | undefined, b?.reasoningEffort as string | undefined)
 }
 
 /** Models capable of video-analysis: capability-derived, never hand-listed (route-enum-sync convention). */

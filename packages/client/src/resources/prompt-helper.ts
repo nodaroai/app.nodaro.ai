@@ -11,6 +11,8 @@ interface CommonInput {
   aspectRatio?: string
   duration?: number
   llmModel?: string
+  /** Reasoning effort level (model-dependent). */
+  reasoningEffort?: string
   nodeContext?: WizardNodeContext
   userPreference?: string
   /** Associates this call with a workflow execution. Read server-side before Zod. */

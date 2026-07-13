@@ -4712,12 +4712,15 @@ export function buildPayload(
     case "generate-script": {
       // Credit ID is tier-based when an LLM model is selected (e.g.
       // `generate-script:economy`). Must also forward `llmModel` so the worker
-      // routes to the user's chosen model instead of the default.
+      // routes to the user's chosen model instead of the default. Reasoning
+      // effort further bumps the tier on clamped xhigh/max (same as the
+      // single-node route) and rides along in the payload for the worker.
       const scriptLlmModel = data.llmModel as string | undefined
+      const scriptEffort = data.reasoningEffort as string | undefined
       return {
         jobName: "generate-script",
         queueName: "video-generation",
-        modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel),
+        modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel, scriptEffort),
         payload: {
           jobId,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
@@ -4726,6 +4729,7 @@ export function buildPayload(
           targetDuration: data.targetDuration ?? data.targetLength,
           provider: data.provider,
           llmModel: scriptLlmModel,
+          reasoningEffort: scriptEffort,
           usageLogId,
         },
       }
@@ -4738,13 +4742,14 @@ export function buildPayload(
         throw new Error("motion-graphics (elements engine) executes via sync HTTP, not the worker queue")
       }
       const mgLlmModel = data.llmModel as string | undefined
+      const mgEffort = data.reasoningEffort as string | undefined
       const fps = (data.fps as number) ?? 30
       const aspectRatio = (data.aspectRatio as string) ?? "16:9"
       const dims = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? { width: 1920, height: 1080 }
       return {
         jobName: "motion-graphics-lottie",
         queueName: "video-generation",
-        modelIdentifier: buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel),
+        modelIdentifier: buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel, mgEffort),
         payload: {
           jobId,
           prompt: resolvedInputs.prompt || resolveRefs(data.motionPrompt as string | undefined, refMap),
@@ -4754,6 +4759,7 @@ export function buildPayload(
           durationInFrames: Math.round(((data.durationSeconds as number) ?? 5) * fps),
           backgroundColor: (data.backgroundColor as string) ?? "#00000000",
           llmModel: mgLlmModel,
+          reasoningEffort: mgEffort,
           usageLogId,
         },
       }

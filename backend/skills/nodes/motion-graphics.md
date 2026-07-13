@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-06-11T10:53:13.652Z
-generated_from: 3f316820
+generated_at: 2026-07-13T16:11:49.873Z
+generated_from: 9af14ef89
 ---
 
 # Motion Graphics
@@ -26,6 +26,7 @@ generated_from: 3f316820
 - `engine?: "elements" | "lottie"`
 - `lottieUrl?: string`
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

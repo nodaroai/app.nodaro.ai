@@ -925,6 +925,34 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
+  // estimateWorkflowCredits — llm-chat reasoning-effort tier bump
+  // (getNodeModelIdentifier must forward data.reasoningEffort into
+  // buildLlmCreditIdentifier's 3rd arg — otherwise the pre-run estimate
+  // understates a clamped xhigh/max reservation vs. what creditGuard/
+  // resolveLlmCreditId actually reserves at runtime.)
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("estimateWorkflowCredits — llm-chat reasoning-effort tier bump", () => {
+    it("resolves llm-chat gpt-5.6-terra at the standard price with no reasoning effort", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "llm-chat", data: { llmModel: "gpt-5.6-terra" } },
+      ])).toBe(2)
+    })
+
+    it("does not bump the tier for high effort (Claude-family server default, never bumps)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "llm-chat", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "high" } },
+      ])).toBe(2)
+    })
+
+    it("bumps llm-chat gpt-5.6-terra to the premium price at max reasoning effort (estimator/billing parity)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "llm-chat", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "max" } },
+      ])).toBe(3)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
   // STATIC_CREDIT_COSTS — Seedance 2 1080p coverage (no DB dependency)
   // ════════════════════════════════════════════════════════════════════════
   // `estimateWorkflowCredits` doesn't thread `resolution`/`hasVideoRef`

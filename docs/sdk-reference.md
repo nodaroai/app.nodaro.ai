@@ -688,6 +688,47 @@ if ("jobId" in result) {
 > [Assemble Narrated Video node docs](nodes/processing-video/assemble-narrated-video.md)
 > for the fit policy and credit formula (`3 + ceil(blocks / 6)`).
 >
+> **Reasoning effort.** LLM-backed feature routes accept an optional
+> `reasoningEffort` field in the request body: `"none" | "low" | "medium" |
+> "high" | "xhigh" | "max"`, model-dependent (see the model table in the
+> [Generate Text node docs](nodes/ai-text/llm-chat.md#model-selector)). Omit
+> it — or pick a level the model doesn't support — for the vendor default
+> ("Auto"). `xhigh` and `max` bill **one tier up** (economy → standard,
+> standard → premium); see
+> [Reasoning effort](nodes/ai-text/llm-chat.md#reasoning-effort) for the
+> exact rule and worked examples. Workflow/canvas LLM nodes carry the same
+> field on their node `data` (`reasoningEffort?: LlmReasoningEffort`), and
+> `client.promptHelper.*` accepts it directly in its request body.
+>
+> `client.nodes.run(type, params)` POSTs `params` straight to `POST
+> /v1/<type>` — that matches the registered route only for `generate-script`,
+> `image-critic`, `qa-check`, and `describe-to-picker`. Other LLM-backed node
+> types register at a nested path instead: `llm-chat` →
+> `/v1/llm-chat/generate`, `after-effects` → `/v1/after-effects/generate`,
+> `motion-graphics` → `/v1/motion-graphics/generate`, `lottie-overlay` →
+> `/v1/lottie-overlay/generate`, `3d-title` → `/v1/3d-title/generate`,
+> `image-to-text` → `/v1/image-to-text/describe`, `video-composer` →
+> `/v1/scene-graph/generate`. For those, call `client.request("POST",
+> "<path>", { body: params })` directly, or use `client.promptHelper.*`
+> (always `/v1/prompt-helper/wizard`, regardless of node type).
+>
+> ```ts
+> // Bare-path node type — client.nodes.run() posts directly to /v1/generate-script.
+> await client.nodes.run("generate-script", {
+>   prompt: "A 3-scene product launch script for a smart water bottle.",
+>   llmModel: "gpt-5.6-sol",
+>   reasoningEffort: "high",
+> })
+>
+> // client.promptHelper.* takes the same field and works for any node type —
+> // it always posts to /v1/prompt-helper/wizard.
+> await client.promptHelper.enhance({
+>   nodeType: "generate-image",
+>   prompt: "a snow leopard in the mountains",
+>   reasoningEffort: "high",
+> })
+> ```
+
 > Every other node type keeps the generic `Record<string, unknown>` body —
 > `generate-image`, `generate-video`, and `assemble-narrated-video` are
 > currently the only three with dedicated typed params.
@@ -1942,6 +1983,14 @@ AI prompt assistance for generation nodes. All three methods delegate to
 `POST /v1/prompt-helper/wizard` (see
 [API Integration §12](./api-integration.md#12-prompt-wizard)) and reserve
 credits per call.
+
+All three inputs also accept optional `llmModel` and `reasoningEffort` fields
+(the latter is model-dependent — unsupported or omitted levels fall back to
+the vendor default). Both are forwarded to the underlying LLM call and affect
+credit cost the same way as every other LLM-backed node — see
+[Reasoning effort](nodes/ai-text/llm-chat.md#reasoning-effort). The CLI
+exposes the same lever as `--llm-model <id>` / `--reasoning-effort <level>`
+on `nodaro prompt wizard/analyze/generate/enhance`.
 
 #### `analyze(input)`
 

@@ -3,11 +3,13 @@ import {
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
   STRUCTURED_VISION_MODELS,
+  LLM_REASONING_EFFORTS,
   getLlmModel,
   getLlmTier,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
+  effectiveReasoningEffort,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 
@@ -21,8 +23,8 @@ import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 // LLM_MODELS data integrity
 // ---------------------------------------------------------------------------
 describe("LLM_MODELS data integrity", () => {
-  it("should have exactly 7 models", () => {
-    expect(LLM_MODELS).toHaveLength(7)
+  it("should have exactly 13 models", () => {
+    expect(LLM_MODELS).toHaveLength(13)
   })
 
   it("each model has all required fields", () => {
@@ -57,14 +59,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 2 economy, 2 standard, 3 premium models", () => {
+  it("has 3 economy, 4 standard, 6 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(2)
-    expect(tierCounts.standard).toBe(2)
-    expect(tierCounts.premium).toBe(3)
+    expect(tierCounts.economy).toBe(3)
+    expect(tierCounts.standard).toBe(4)
+    expect(tierCounts.premium).toBe(6)
   })
 
   it("all three kieFormats are represented", () => {
@@ -111,6 +113,12 @@ describe("LLM_MODEL_IDS", () => {
       "gemini-3.1-pro",
       "claude-opus-4.7",
       "gpt-5.4",
+      "gpt-5.5",
+      "gpt-5.6-luna",
+      "gpt-5.6-terra",
+      "gpt-5.6-sol",
+      "claude-sonnet-5",
+      "claude-opus-4.8",
     ]
     expect(LLM_MODEL_IDS).toEqual(expected)
   })
@@ -420,6 +428,8 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "claude-sonnet-4.6",
         "gemini-3-flash",
         "gemini-3.1-pro",
+        "claude-sonnet-5",
+        "claude-opus-4.8",
       ].sort(),
     )
   })
@@ -441,5 +451,80 @@ describe("STRUCTURED_VISION_MODELS", () => {
       expect(m.supportsImages).toBe(true)
       expect(m.structuredOutputMode).toBeDefined()
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Reasoning effort registry (GPT-5.6 / Claude Sonnet 5 / Claude Opus 4.8)
+// grok-4.5 is DEFERRED — its chat endpoint is not live on the provider yet
+// (2026-07-13); its tests are intentionally omitted here.
+// ---------------------------------------------------------------------------
+describe("reasoning effort registry", () => {
+  it("every reasoningEfforts list is a subset of the superset, in ascending order", () => {
+    const rank = Object.fromEntries(LLM_REASONING_EFFORTS.map((e, i) => [e, i]))
+    for (const m of LLM_MODELS) {
+      for (const e of m.reasoningEfforts ?? []) expect(LLM_REASONING_EFFORTS).toContain(e)
+      const ranks = (m.reasoningEfforts ?? []).map((e) => rank[e])
+      expect([...ranks].sort((a, b) => a - b)).toEqual(ranks)
+    }
+  })
+  it("new models exist with expected tiers", () => {
+    expect(getLlmTier("gpt-5.6-luna")).toBe("economy")
+    expect(getLlmTier("gpt-5.6-terra")).toBe("standard")
+    expect(getLlmTier("gpt-5.6-sol")).toBe("premium")
+    expect(getLlmTier("claude-sonnet-5")).toBe("standard")
+    expect(getLlmTier("claude-opus-4.8")).toBe("premium")
+    expect(getLlmTier("gpt-5.5")).toBe("premium")
+  })
+})
+
+describe("effectiveReasoningEffort", () => {
+  it("passes through a supported level", () => {
+    expect(effectiveReasoningEffort("claude-sonnet-5", "max")).toBe("max")
+  })
+  it("clamps down to the highest supported level ≤ requested", () => {
+    expect(effectiveReasoningEffort("gpt-5.4", "xhigh")).toBe("high")
+  })
+  it("returns undefined when the model has no levels", () => {
+    expect(effectiveReasoningEffort("gemini-3-flash", "high")).toBeUndefined()
+  })
+  it("returns undefined for none on Claude (below its lowest level)", () => {
+    expect(effectiveReasoningEffort("claude-sonnet-5", "none")).toBeUndefined()
+  })
+  it("returns undefined for undefined/garbage input", () => {
+    expect(effectiveReasoningEffort("claude-sonnet-5", undefined)).toBeUndefined()
+    expect(effectiveReasoningEffort("claude-sonnet-5", "turbo")).toBeUndefined()
+  })
+})
+
+describe("buildLlmCreditIdentifier effort bump (xhigh/max only)", () => {
+  it("economy + max → standard (bare feature)", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-luna", "max")).toBe("llm-chat")
+  })
+  it("standard + xhigh → premium", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-terra", "xhigh")).toBe("llm-chat:premium")
+  })
+  it("premium + max stays premium", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-sol", "max")).toBe("llm-chat:premium")
+  })
+  it("high never bumps", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5", "high")).toBe("llm-chat")
+  })
+  it("clamp on a partial-list standard model never bumps (sonnet-4.6 @ xhigh → high)", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-4.6", "xhigh")).toBe("llm-chat")
+  })
+  it("bump uses the CLAMPED effort (xhigh on a low/medium/high model clamps to high → no bump)", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.4", "xhigh")).toBe("llm-chat:premium")
+    // gpt-5.4 is premium anyway; the real clamp case:
+    expect(buildLlmCreditIdentifier("llm-chat", "gemini-3-flash", "max")).toBe("llm-chat:economy")
+  })
+  it("back-compat: no effort arg → identical to today for every model", () => {
+    for (const m of LLM_MODELS) {
+      const before = m.tier === "standard" ? "x" : `x:${m.tier}`
+      expect(buildLlmCreditIdentifier("x", m.id)).toBe(before)
+    }
+  })
+  it("resolveLlmCreditId reads reasoningEffort from the raw body", () => {
+    expect(resolveLlmCreditId("llm-chat", { llmModel: "gpt-5.6-terra", reasoningEffort: "max" })).toBe("llm-chat:premium")
   })
 })

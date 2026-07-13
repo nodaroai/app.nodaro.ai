@@ -282,13 +282,13 @@ export function getModelIdentifier(node: WorkflowNode): string {
   // motion-graphics: feature is engine-dependent (design §8 — every credit-id site branches on engine)
   if (node.type === "motion-graphics") {
     const feature = motionGraphicsFeature(data.engine as string | undefined)
-    return buildLlmCreditIdentifier(feature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[feature])
+    return buildLlmCreditIdentifier(feature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[feature], data.reasoningEffort as string | undefined)
   }
 
   // LLM-powered nodes: use composite credit identifier based on selected model tier
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {
-    return buildLlmCreditIdentifier(llmFeature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[llmFeature])
+    return buildLlmCreditIdentifier(llmFeature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[llmFeature], data.reasoningEffort as string | undefined)
   }
 
   const nodeType = node.type ?? "unknown"

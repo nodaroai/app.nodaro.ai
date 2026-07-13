@@ -1,7 +1,7 @@
 ---
 node_type: image-to-text
-generated_at: 2026-06-16T08:22:28.397Z
-generated_from: 877dfa01a
+generated_at: 2026-07-13T16:11:49.648Z
+generated_from: 9af14ef89
 ---
 
 # Describe Image
@@ -21,6 +21,7 @@ generated_from: 877dfa01a
 
 **Optional data fields:**
 - `llmModel?: string`
+- `reasoningEffort?: LlmReasoningEffort`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

@@ -2,7 +2,9 @@
 > AI-powered scene-graph video composition from natural language prompts.
 
 ## Overview
-The Video Composer node uses Claude Sonnet to transform a text prompt into a structured scene-graph plan. It analyzes connected upstream assets (images, videos, audio) and arranges them into a multi-track timeline composition. The resulting plan is then rendered into a final video via the Render Video node.
+The Video Composer node uses Claude Sonnet (configurable via the model selector — any of the shared LLM registry's models) to transform a text prompt into a structured scene-graph plan. It analyzes connected upstream assets (images, videos, audio) and arranges them into a multi-track timeline composition. The resulting plan is then rendered into a final video via the Render Video node.
+
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up, same rule as every other LLM-backed node — see the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
 ## Configuration
 

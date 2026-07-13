@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -21,6 +21,7 @@ const aiWriterBody = z.object({
   maxTokens: z.number().min(1).max(16384).default(4096),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
 })
 
 export async function aiWriterRoutes(app: FastifyInstance) {
@@ -66,7 +67,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["ai-writer"]
-      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel, parsed.data.reasoningEffort)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -108,6 +109,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           messages: [{ role: "user", content: userInput }],
           maxTokens,
           temperature,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         const generatedText = response.text
@@ -194,7 +196,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["ai-writer"]
-      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel, parsed.data.reasoningEffort)
 
       // Create job record
       const { data: job, error: jobError } = await supabase
@@ -251,6 +253,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
             messages: [{ role: "user", content: userInput }],
             maxTokens,
             temperature,
+            reasoningEffort: parsed.data.reasoningEffort,
           },
           (delta) => {
             if (sse.isClosed) return

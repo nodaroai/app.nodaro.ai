@@ -14,6 +14,7 @@
  */
 
 import { LLM_FEATURE_DEFAULTS, applySlots } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared"
 import { llmComplete } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"
@@ -39,6 +40,7 @@ interface MotionGraphicsLottiePayload {
   durationInFrames: number
   backgroundColor: string
   llmModel?: string
+  reasoningEffort?: string
   /** Regeneration hint (Phase 2) — accepted from day 1. */
   previousSids?: string[]
   usageLogId?: string
@@ -59,7 +61,7 @@ function buildUserMessage(p: {
 }
 
 const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphicsLottie(job, ctx) {
-  const { prompt, fps, width, height, durationInFrames, backgroundColor, llmModel, previousSids } =
+  const { prompt, fps, width, height, durationInFrames, backgroundColor, llmModel, reasoningEffort, previousSids } =
     job.data as MotionGraphicsLottiePayload
   const modelId = llmModel ?? LLM_FEATURE_DEFAULTS["motion-graphics-lottie"]
   console.log(`[worker] motion-graphics-lottie ${ctx.jobId} (model: ${modelId})`)
@@ -78,6 +80,7 @@ const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphic
       maxTokens: LOTTIE_MAX_TOKENS,
       temperature: 0.3,
       timeoutMs: LOTTIE_LLM_TIMEOUT_MS,
+      reasoningEffort: reasoningEffort as LlmReasoningEffort | undefined,
     })
     totalProviderCost += response.providerCost ?? 0
     lastUsage = response.usage

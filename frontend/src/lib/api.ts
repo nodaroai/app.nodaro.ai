@@ -2838,6 +2838,7 @@ export async function generateScriptApi(params: {
   targetDuration?: number
   provider?: string
   llmModel?: string
+  reasoningEffort?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   return apiJson("/v1/generate-script", {
@@ -4076,12 +4077,14 @@ export async function imageToTextApi(
   customPrompt?: string,
   userId?: string,
   llmModel?: string,
+  reasoningEffort?: string,
 ): Promise<{ jobId: string; generatedText: string }> {
   const body: Record<string, unknown> = { imageUrl }
   if (detailLevel) body.detailLevel = detailLevel
   if (customPrompt) body.customPrompt = customPrompt
   if (userId) body.userId = userId
   if (llmModel) body.llmModel = llmModel
+  if (reasoningEffort) body.reasoningEffort = reasoningEffort
   return apiJson("/v1/image-to-text/describe", {
     body,
     workflowId: true,
@@ -4095,11 +4098,13 @@ export async function describeToPickerApi(
   userId?: string,
   llmModel?: string,
   instructions?: string,
+  reasoningEffort?: string,
 ): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/prompts").PickerGaps }> {
   const body: Record<string, unknown> = { imageUrl, targetPickers }
   if (userId) body.userId = userId
   if (llmModel) body.llmModel = llmModel
   if (instructions) body.instructions = instructions
+  if (reasoningEffort) body.reasoningEffort = reasoningEffort
   return apiJson("/v1/describe-to-picker", {
     body,
     workflowId: true,
@@ -4722,6 +4727,7 @@ export async function generateSceneGraph(params: {
   durationSeconds: number
   userId: string
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{ jobId: string; sceneGraph: Record<string, unknown> }> {
   return apiJson("/v1/scene-graph/generate", {
     body: params,
@@ -4741,6 +4747,7 @@ export async function generateAfterEffects(params: {
   durationSeconds: number
   userId: string
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{ jobId: string; effectPlan: Record<string, unknown> }> {
   return apiJson("/v1/after-effects/generate", {
     body: params,
@@ -4773,6 +4780,7 @@ export async function generateLottieOverlay(params: {
   lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
   userId: string
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{ jobId: string; overlayPlan: Record<string, unknown> }> {
   return apiJson("/v1/lottie-overlay/generate", {
     body: params,
@@ -4794,6 +4802,7 @@ export async function generate3DTitle(params: {
   backgroundMediaUrl?: string
   userId: string
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{ jobId: string; titlePlan: Record<string, unknown> }> {
   return apiJson("/v1/3d-title/generate", {
     body: params,
@@ -4814,6 +4823,7 @@ export async function generateMotionGraphics(params: {
   backgroundColor?: string
   userId: string
   llmModel?: string
+  reasoningEffort?: string
   engine?: "elements" | "lottie"
   previousSids?: string[]
 }): Promise<{
@@ -4839,6 +4849,7 @@ export async function wizardAnalyze(params: {
   aspectRatio?: string
   duration?: number
   llmModel?: string
+  reasoningEffort?: string
   nodeContext?: {
     connectedInputTypes?: string[]
     referenceImageCount?: number
@@ -4871,6 +4882,7 @@ export async function wizardGenerate(params: {
   aspectRatio?: string
   duration?: number
   llmModel?: string
+  reasoningEffort?: string
   selections: Array<{ category: string; value: string; isCustom: boolean }>
   originalPrompt?: string
   nodeContext?: {
@@ -4955,6 +4967,7 @@ export async function generateAIWriterStream(params: {
   maxTokens: number
   userId: string
   llmModel?: string
+  reasoningEffort?: string
   onToken: (token: string) => void
   signal?: AbortSignal
 }): Promise<{ jobId: string; generatedText: string }> {
@@ -4972,6 +4985,7 @@ export async function llmChatStream(params: {
   maxTokens: number
   userId: string
   llmModel?: string
+  reasoningEffort?: string
   onToken: (token: string) => void
   signal?: AbortSignal
 }): Promise<{ jobId: string; generatedText: string }> {
@@ -6853,6 +6867,7 @@ export function qaCheckApi(params: {
   provider?: "claude" | "gpt"
   threshold?: number
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
   return apiRequest("/v1/qa-check", "QA check failed", {
     method: "POST",
@@ -6867,6 +6882,7 @@ export function imageCriticApi(params: {
   mode: ImageCriticMode
   threshold?: number
   llmModel?: string
+  reasoningEffort?: string
 }): Promise<{
   jobId: string
   score: number

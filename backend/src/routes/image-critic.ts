@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { IMAGE_CRITIC_MODES, ImageCriticResultSchema, LLM_MODEL_IDS, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveLlmCreditId, type ImageCriticMode, type ImageCriticResult } from "@nodaro/shared"
+import { IMAGE_CRITIC_MODES, ImageCriticResultSchema, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveLlmCreditId, type ImageCriticMode, type ImageCriticResult } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
@@ -23,6 +23,7 @@ const imageCriticBody = z.object({
   mode: z.enum(IMAGE_CRITIC_MODES),
   threshold: z.number().min(0).max(1).default(0.7),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -130,7 +131,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["image-critic"]
-      const modelIdentifier = buildLlmCreditIdentifier("image-critic", llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("image-critic", llmModel, parsed.data.reasoningEffort)
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -192,6 +193,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
           system,
           messages: [{ role: "user", content }],
           maxTokens: 1024,
+          reasoningEffort: parsed.data.reasoningEffort,
         })
 
         let parsedResult: ImageCriticResult

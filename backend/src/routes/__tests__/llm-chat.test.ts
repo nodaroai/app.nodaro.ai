@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import Fastify from "fastify"
 import { llmChatRoutes } from "../llm-chat.js"
 import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
+import { llmComplete } from "../../lib/llm-client.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
-  reserveCreditsForJob: async () => ({ usageLogId: "ul-1" }),
+  reserveCreditsForJob: vi.fn(async () => ({ usageLogId: "ul-1" })),
 }))
 
 vi.mock("../../lib/supabase.js", () => ({
@@ -119,6 +121,53 @@ describe("POST /v1/llm-chat/generate — capability filter", () => {
       },
     })
     expect(res.statusCode).toBe(200)
+  })
+
+  it("accepts reasoningEffort and forwards it to llmComplete", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: {
+        systemPrompt: "",
+        userInput: "describe",
+        referenceImageUrls: ["https://x/y.png"],
+        llmModel: "claude-sonnet-4.6",
+        reasoningEffort: "max",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const forwarded = vi.mocked(llmComplete).mock.calls[0][0]
+    expect(forwarded.reasoningEffort).toBe("max")
+  })
+
+  it("reserves credits at the tier-bumped identifier when reasoningEffort clamps to max (guard/reserve parity)", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: {
+        systemPrompt: "",
+        userInput: "describe",
+        referenceImageUrls: ["https://x/y.png"],
+        llmModel: "gpt-5.6-terra",
+        reasoningEffort: "max",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+
+    // gpt-5.6-terra is a "standard" tier model whose reasoningEfforts list
+    // includes "max" — buildLlmCreditIdentifier bumps standard -> premium.
+    // The reservation call must receive the SAME bumped identifier the
+    // creditGuard preHandler gate-checked against, or the gate and the
+    // reservation disagree and the job is under-billed.
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "job-1",
+      "llm-chat:premium",
+    )
   })
 
   it("calls markProviderCallStart with anthropic-sync on success (reconcile parity)", async () => {
