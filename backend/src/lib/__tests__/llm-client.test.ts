@@ -285,6 +285,22 @@ describe("reasoningEffort wire mapping + temperature strip", () => {
     expect(body.max_tokens).toBe(16384) // high does NOT trigger headroom
   })
 
+  it("messages format: floors an explicit small maxTokens at max effort (legacy 2048 node data must not truncate)", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "ok" }], usage: { input_tokens: 1, output_tokens: 1 } }))
+    await llmComplete({ modelId: "claude-sonnet-5", system: "s", messages: [{ role: "user", content: "hi" }], maxTokens: 2048, reasoningEffort: "max" })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.max_tokens).toBe(32768)
+  })
+
+  it("messages format: an explicit maxTokens is respected at high effort (floor is xhigh/max only)", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "ok" }], usage: { input_tokens: 1, output_tokens: 1 } }))
+    await llmComplete({ modelId: "claude-sonnet-5", system: "s", messages: [{ role: "user", content: "hi" }], maxTokens: 2048, reasoningEffort: "high" })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.max_tokens).toBe(2048)
+  })
+
   it("messages format without effort: no thinking/output_config, temperature still stripped for sonnet-5", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "ok" }], usage: { input_tokens: 1, output_tokens: 1 } }))

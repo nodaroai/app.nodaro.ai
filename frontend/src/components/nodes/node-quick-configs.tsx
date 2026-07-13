@@ -571,8 +571,9 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "image-critic": [llmModelControl, reasoningEffortControl],
   // forced-alignment is a fixed ElevenLabs feature (static "elevenlabs-forced-
   // alignment" credit id in forced-alignment-node.tsx) — ForcedAlignmentData
-  // has no llmModel/reasoningEffort field, so no effort control here.
-  "forced-alignment": [llmModelControl],
+  // forced-alignment is deliberately ABSENT: it's a fixed-price ElevenLabs
+  // feature — ForcedAlignmentData has no llmModel/reasoningEffort field, and a
+  // model dropdown here wrote a field the node never reads.
   "motion-graphics": [llmModelControl, reasoningEffortControl],
   "3d-title": [llmModelControl, reasoningEffortControl],
   // ── Audio / voice (inline-mirrored lists) ──

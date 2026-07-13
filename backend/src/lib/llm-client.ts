@@ -266,8 +266,14 @@ function deriveParams(model: LlmModelDef, req: LlmRequest): {
   const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
   const temperature = model.supportsTemperature === false ? undefined : req.temperature
   let maxTokens = req.maxTokens ?? model.maxOutputTokens
-  if (req.maxTokens === undefined && (eff === "xhigh" || eff === "max")) {
-    maxTokens = Math.max(model.maxOutputTokens, 32768)
+  if (eff === "xhigh" || eff === "max") {
+    // Reasoning tokens share the output budget on these models. Floor the cap
+    // even when the caller sent an explicit maxTokens — node data persists the
+    // old 2048 default, and a tier-bumped call must never truncate its answer
+    // because thinking consumed a small legacy cap. The cap is a ceiling, not
+    // spend: billing is flat per call, so raising it costs nothing unless the
+    // model actually generates that much.
+    maxTokens = Math.max(maxTokens, 32768)
   }
   return { eff, temperature, maxTokens }
 }

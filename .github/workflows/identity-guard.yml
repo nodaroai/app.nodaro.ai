@@ -1,0 +1,56 @@
+# Fails any PR or push that introduces a commit whose author/committer email
+# is not on .github/mirror-author-allowlist.txt (public noreply/bot identities).
+#
+# This is the PR-TIME half of the identity wall. The mirror gate
+# (scripts/publish-to-public.sh, "author-identity gate") remains the
+# publish-time backstop, but it only fires nightly — the 2026-07-09/10
+# incident showed a private-email commit can land, get grandfathered or
+# manually pushed, and sit in public history before anyone looks. Catching it
+# on the PR, minutes after creation, makes the fix a trivial amend instead of
+# a 110-commit history rewrite (2026-07-13).
+#
+# Note: GitHub's own "Block command line pushes that expose my email" account
+# setting is the other structural layer — it stops the push at the source.
+# This guard covers identities that setting can't (other collaborators, bots,
+# server-side merge commits made while an account's primary email is exposed).
+name: identity-guard
+on:
+  pull_request: {}
+  push:
+    branches: [dev, main]
+permissions: { contents: read }
+jobs:
+  check-identities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: scan commit identities against the allowlist
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after }}
+        run: |
+          set -euo pipefail
+          ALLOWLIST=".github/mirror-author-allowlist.txt"
+          # Push of a brand-new branch has an all-zeros "before"; a force-push
+          # has a "before" that may no longer exist in the clone. Either way,
+          # fall back to scanning just the tip commit.
+          if [ -z "${BASE_SHA:-}" ] || ! echo "$BASE_SHA" | grep -qv '^0*$' || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            RANGE="$HEAD_SHA -1"
+          else
+            RANGE="$BASE_SHA..$HEAD_SHA"
+          fi
+          echo "scanning: $RANGE"
+          BAD=$(git log --format='%h %ae%n%h %ce' $RANGE | sort -u | awk -v listfile="$ALLOWLIST" '
+            BEGIN { while ((getline line < listfile) > 0) { sub(/#.*/, "", line); gsub(/^[ \t]+|[ \t]+$/, "", line); if (line != "") allowed[line] = 1 } }
+            { if (!($2 in allowed)) print }
+          ')
+          if [ -n "$BAD" ]; then
+            echo "ABORT: commit(s) carry a non-allowlisted author/committer email:"
+            echo "$BAD"
+            echo "Private emails must never enter history. Fix: git commit --amend --reset-author"
+            echo "(after confirming git config user.email is the GitHub noreply address),"
+            echo "or add a legitimate new public identity to $ALLOWLIST via PR."
+            exit 1
+          fi
+          echo "OK: all commit identities allowlisted."

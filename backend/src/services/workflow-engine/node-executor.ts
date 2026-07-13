@@ -640,7 +640,7 @@ export function buildSyncHttpBody(
         llmModel: data.llmModel,
         reasoningEffort: data.reasoningEffort,
         temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 2048,
+        maxTokens: data.maxTokens ?? 8192,
         userId: ctx.userId,
       })
     }

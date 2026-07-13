@@ -22,7 +22,7 @@ const llmChatBody = z.object({
   referenceVideoUrls: z.array(z.string().url()).max(3).optional(),
   referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().min(1).max(16384).default(2048),
+  maxTokens: z.number().min(1).max(16384).default(8192),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),

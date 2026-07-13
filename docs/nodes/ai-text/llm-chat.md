@@ -29,7 +29,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | User Input | `string` | `""` | The main prompt. Can include references to upstream nodes via field mappings |
 | Model | `string` | `gemini-3-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
 | Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 family, Claude Sonnet 5, and Claude Opus 4.8) |
-| Max Tokens | `number` | `2048` | Maximum output length in tokens |
+| Max Tokens | `number` | `8192` | Maximum output length in tokens. At `xhigh`/`max` effort the effective cap is floored to 32768 so reasoning tokens can't truncate the answer |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
 
@@ -150,7 +150,7 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
 - Use the Instructions (System Prompt) to define output format, tone, and constraints — good instructions dramatically improve consistency.
 - Reference upstream nodes in the User Input via field mappings for dynamic, context-aware prompts.
 - Keep Temperature at 0.7 for a balance of creativity and coherence. Lower it for factual or structured output; raise it for brainstorming.
-- For long-form content, raise Max Tokens. The default (2048) handles most cases but may truncate very long outputs.
+- For long-form content, raise Max Tokens. The default (8192) handles most cases but may truncate very long outputs. At `xhigh`/`max` effort the cap is automatically floored to 32768.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (3 cr) for complex reasoning.
 - To process a video or audio reference, select a Gemini model.

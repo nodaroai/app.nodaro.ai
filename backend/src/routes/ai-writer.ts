@@ -18,7 +18,7 @@ const aiWriterBody = z.object({
   userInput: z.string().min(1).max(10000),
   userPrompt: z.string().max(8000).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().min(1).max(16384).default(4096),
+  maxTokens: z.number().min(1).max(16384).default(8192),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
