@@ -10,7 +10,9 @@ on:
   schedule:
     - cron: '23 3 * * *'   # nightly ~03:23 UTC (off the hour to dodge scheduler load; configurable)
   workflow_dispatch: {}     # manual "publish now" override
-permissions: { contents: read }
+# issues: write powers the failure-alert step (auto-issue) — the Jul 11-13
+# outage went unnoticed for 3 days because the nightly run failed silently.
+permissions: { contents: read, issues: write }
 concurrency:
   group: mirror-to-public
   cancel-in-progress: false
@@ -60,3 +62,24 @@ jobs:
           fi
           bash scripts/publish-to-public.sh main
           bash scripts/publish-to-public.sh dev
+      # The Jul 11-13 outage: three consecutive nightly failures, zero alerts,
+      # while blocked commits were hand-pushed around the gate. One open issue
+      # per outage (deduped by label), a comment per subsequent failure.
+      - name: alert on failure (auto-issue)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create mirror-failure --repo "$GITHUB_REPOSITORY" --color B60205 --description "mirror-to-public run failed" --force 2>/dev/null || true
+          OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label mirror-failure --state open --json number --jq '.[0].number // empty')
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "mirror-to-public failed again: $RUN_URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label mirror-failure \
+              --title "mirror-to-public is failing — public mirror is falling behind" \
+              --body "The nightly gated mirror failed: $RUN_URL
+
+Until this is green, nothing reaches the public repo (and npm publishes stay stuck behind it). Check the run log for the gate that tripped (identity / leaks / secrets / ancestry). Close this issue when a run succeeds."
+          fi
