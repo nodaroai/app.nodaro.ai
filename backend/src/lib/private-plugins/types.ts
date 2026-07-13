@@ -367,8 +367,15 @@ export interface PluginStorageToolkit {
 // ============================================================================
 
 export interface PluginJobsToolkit {
-  /** Mirrors `markJobCompleted` (`workers/shared.ts`). */
-  markJobCompleted(jobId: string, fields: Record<string, unknown>): Promise<boolean>
+  /** `output` is the job's OUTPUT PAYLOAD (`{ videoUrl, pro: checkpoint }`),
+   *  NOT jobs-table columns — the toolkit read-merges it into `output_data`
+   *  and completes via the core CAS (`workers/shared.ts` `markJobCompleted`).
+   *  NEVER register the core column-level function here raw: PostgREST
+   *  rejects payload keys as unknown columns ("Could not find the 'pro'
+   *  column"), completion silently no-ops, and finished jobs rot in
+   *  status=processing (jobs 1e209599, dbf95612). Returns false only for the
+   *  cancelled/already-terminal CAS miss; transient read failures throw. */
+  markJobCompleted(jobId: string, output: Record<string, unknown>): Promise<boolean>
   /** Mirrors `setJobProgress` (`workers/shared.ts`). */
   setJobProgress(job: PluginJob, jobId: string, progress: number): Promise<void>
   /** Mirrors `withProgressRamp` (`workers/shared.ts`). */

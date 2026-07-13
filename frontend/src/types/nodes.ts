@@ -5883,6 +5883,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "qwen", label: "Qwen" },
           { value: "seedream", label: "Seedream" },
           { value: "seedream-5-lite", label: "Seedream 5 Lite" },
+          { value: "seedream-5-pro", label: "Seedream 5 Pro" },
           { value: "z-image", label: "Z-Image" },
           { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
           { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },

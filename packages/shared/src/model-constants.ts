@@ -48,7 +48,8 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "qwen-edit": 2000,           // docs.kie.ai/market/qwen/image-edit
   // verified == 5000 default (no entry needed): imagen4(-fast/-ultra), nano-banana,
   //   nano-banana-edit, flux, flux-flex, gpt-image-2, ideogram-v3/-edit/-remix,
-  //   z-image, grok, qwen-i2i.
+  //   z-image, grok, qwen-i2i, seedream-5-pro, seedream-5-pro-i2i
+  //   (docs.kie.ai/market/seedream/5-pro-text-to-image + 5-pro-image-to-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -340,6 +341,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "qwen",
   "seedream",
   "seedream-5-lite",
+  "seedream-5-pro",
   "flux",
   "flux-flex",
   // Image editing / image-to-image (reference = source image)
@@ -357,6 +359,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "qwen-edit",
   "seedream-edit",
   "seedream-5-lite-i2i",
+  "seedream-5-pro-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -386,6 +389,7 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "qwen": "qwen-i2i",
   "seedream": "seedream-edit",
   "seedream-5-lite": "seedream-5-lite-i2i",
+  "seedream-5-pro": "seedream-5-pro-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
 }
@@ -414,6 +418,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "flux-pro-i2i": 4,
   "seedream-edit": 16,
   "seedream-5-lite-i2i": 16,
+  "seedream-5-pro-i2i": 16,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -484,6 +489,8 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "seedream-edit": "quality",
   "seedream-5-lite": "quality",
   "seedream-5-lite-i2i": "quality",
+  "seedream-5-pro": "quality",
+  "seedream-5-pro-i2i": "quality",
   "topaz-image-upscale": "resolution",
   "ideogram-edit": "rendering-speed",
   "ideogram-remix": "rendering-speed",
@@ -495,7 +502,7 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
 
 
 // Models where quality=high triggers composite credit identifier
-export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-edit", "seedream-5-lite", "seedream-5-lite-i2i"])
+export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-edit", "seedream-5-lite", "seedream-5-lite-i2i", "seedream-5-pro", "seedream-5-pro-i2i"])
 
 // Models where resolution=2K triggers composite credit identifier
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
@@ -532,6 +539,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "qwen",
   "seedream",
   "seedream-5-lite",
+  "seedream-5-pro",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -561,6 +569,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "qwen-edit",
   "seedream-edit",
   "seedream-5-lite-i2i",
+  "seedream-5-pro-i2i",
   "flux-kontext",
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
@@ -1007,6 +1016,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "gpt-image-2": "prompt",
   "seedream": "prompt",
   "seedream-5-lite": "prompt",
+  "seedream-5-pro": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",
@@ -1130,6 +1140,29 @@ export const SEEDANCE_2_REF_LIMITS = {
 } as const
 
 /**
+ * KIE r2v REFERENCE-VIDEO MINIMUM (seconds) for the Seedance 2.0 family — the
+ * provider hard-rejects shorter reference clips with a 400 BEFORE generation:
+ * "the parameter video duration (seconds) specified in the request must be
+ * greater than or equal to 1.8 for model dreamina-seedance-2-0-fast in r2v"
+ * (2026-07-13, job dbf95612 — every 1.0s continuation tail failed
+ * deterministically). Mirror of the reference-AUDIO maximum below.
+ */
+export const SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC = 1.8
+
+/**
+ * The continuation-reference length (seconds) every Seedance-2 chaining
+ * feature actually cuts — extend-node tails, generate-video-pro segment
+ * tails, edit-video-pro refOut/refIn brackets — AND the length the gvp/evp
+ * credit formulas bill per continuation join. Clears the provider floor
+ * above with margin while staying short enough to keep the model focused on
+ * continuing the boundary motion instead of re-staging the whole clip.
+ * Guarded ≥ floor by model-constants tests; the private-plugin twin
+ * (nodaro-cloud-plugins chain.ts TAIL_SEC / bridge-math.ts MIN_REF) is
+ * guarded by that repo's r2v-ref-floor.test.ts — keep the two in sync.
+ */
+export const SEEDANCE_2_CONTINUATION_REF_SEC = 2
+
+/**
  * Trim-stitch parameters for the seedance-2-extend provider (spike-validated
  * 2026-06-11):
  * the model's extension output wobbles for its first ~3 frames and the source
@@ -1147,10 +1180,11 @@ export const SEEDANCE_2_EXTEND_STITCH = {
   trimHeadFrames: 3,
   /** Boundary audio fade length (seconds), timeline-preserving. */
   audioFadeSec: 0.15,
-  /** Seconds of the source's TAIL passed as the @video_1 reference —
-   *  spike-validated: a short tail keeps the model focused on continuing
-   *  the boundary motion instead of re-staging the whole clip. */
-  referenceTailSeconds: 1,
+  /** Seconds of the source's TAIL passed as the @video_1 reference — short
+   *  keeps the model focused on continuing the boundary motion; the value is
+   *  floored by SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC (the original spike's 1s
+   *  tail is now provider-rejected). */
+  referenceTailSeconds: SEEDANCE_2_CONTINUATION_REF_SEC,
 } as const
 
 /**

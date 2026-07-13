@@ -174,6 +174,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "seedream-edit":       { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
   "seedream-5-lite":     { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
   "seedream-5-lite-i2i": { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  "seedream-5-pro":      { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  "seedream-5-pro-i2i":  { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
   // Video gen — resolution-style (720p/1080p)
   "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

@@ -1,4 +1,4 @@
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 
@@ -49,7 +49,10 @@ function computeSplit(requestedSec: number, capSec: number): SplitResult {
   return { mode: "multi" as const, clampedD: d, n, s, durations }
 }
 
-const MIN_REF = 1
+// Continuation-reference length (KIE r2v floor is 1.8s — see the shared
+// constant's doc). Both the ref-eligibility threshold AND the per-ref /
+// per-join seconds the reserve bills.
+const MIN_REF = SEEDANCE_2_CONTINUATION_REF_SEC
 const OUTER_SEAM_LOSS_PER_EDGE = 0.3
 const SPAN_TOLERANCE_SEC = 0.05
 const TIER_HEIGHT: Record<string, number> = { "480p": 480, "720p": 720, "1080p": 1080, "4k": 2160 }
@@ -123,7 +126,7 @@ export async function computeEditVideoProPricing(args: {
   const split = computeSplit(clampedSpanSec + outerSeamLossReserve, maxSpanSec)
   const refOut = spanStartSec >= MIN_REF ? 1 : 0
   const refIn = probe ? (tailExists && probe.durationSec - spanEndSec >= MIN_REF ? 1 : 0) : 1
-  const refsSecReserve = refOut + (split.n - 1) + refIn
+  const refsSecReserve = (refOut + (split.n - 1) + refIn) * MIN_REF
   const reserveResolution = probe
     ? deriveBridgeResolution(provider, probe.width, probe.height)
     : tiers[tiers.length - 1] // probe failed → TOP tier (over-reserve only)

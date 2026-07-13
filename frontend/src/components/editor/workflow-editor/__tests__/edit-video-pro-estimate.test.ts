@@ -51,33 +51,33 @@ describe("estimateNodeCredits — edit-video-pro", () => {
     vi.mocked(getCachedCredits).mockReturnValue(undefined)
   })
 
-  it("mid-video span 10, D known (20) -> 92", () => {
+  it("mid-video span 10, D known (20) -> 104", () => {
     expect(
       estimateNodeCredits(evpNode({ spanStart: 2, spanEnd: 12, sourceDurationSec: 20 })),
-    ).toBe(92)
+    ).toBe(104)
   })
 
-  it("A=0 span 10, D 20 -> 79", () => {
+  it("A=0 span 10, D 20 -> 85", () => {
     expect(
       estimateNodeCredits(evpNode({ spanStart: 0, spanEnd: 10, sourceDurationSec: 20 })),
-    ).toBe(79)
+    ).toBe(85)
   })
 
-  it("D unknown -> worst-cases tail+refIn (spanStart 2, spanEnd 12 -> 92)", () => {
+  it("D unknown -> worst-cases tail+refIn (spanStart 2, spanEnd 12 -> 104)", () => {
     expect(
       estimateNodeCredits(evpNode({ spanStart: 2, spanEnd: 12, sourceDurationSec: undefined })),
-    ).toBe(92)
+    ).toBe(104)
   })
 
-  it("B==D -> 79", () => {
+  it("B==D -> 85", () => {
     expect(
       estimateNodeCredits(evpNode({ spanStart: 10, spanEnd: 20, sourceDurationSec: 20 })),
-    ).toBe(79)
+    ).toBe(85)
   })
 
-  it("span 20 mid -> 167", () => {
+  it("span 20 mid -> 185", () => {
     expect(
       estimateNodeCredits(evpNode({ spanStart: 5, spanEnd: 25, sourceDurationSec: 40 })),
-    ).toBe(167)
+    ).toBe(185)
   })
 })

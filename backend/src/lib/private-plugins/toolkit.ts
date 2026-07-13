@@ -290,6 +290,32 @@ async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown>
 }
 
 /**
+ * `tk.jobs.markJobCompleted` — plugins pass the job's OUTPUT PAYLOAD
+ * (`{ videoUrl, pro: checkpoint }`), NOT jobs-table columns. This wrapper
+ * read-merges the payload into `output_data` (same shallow-merge semantics
+ * and read-error handling as `updateJobCheckpoint` above) and completes
+ * through the core CAS (`workers/shared.ts` `markJobCompleted`, which spreads
+ * its `fields` as UPDATE COLUMNS). Registering the core function here RAW was
+ * the bug that left every gvp/evp completion unrecorded: PostgREST rejected
+ * the payload keys as unknown columns ("Could not find the 'pro' column of
+ * 'jobs' in the schema cache"), the resulting `false` read as
+ * cancelled-mid-flight, and a fully-generated job rotted in
+ * status=processing until the reconcile sweep failed+refunded it
+ * (jobs 1e209599, dbf95612 — the latter with a finished stitch in hand).
+ * A transient read failure THROWS (retryable via the handler's stitch-retry /
+ * next BullMQ attempt) rather than returning false — false means "skip the
+ * credit commit", which is wrong for a delivered output.
+ */
+async function pluginMarkJobCompleted(jobId: string, output: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await supabase.from("jobs").select("output_data").eq("id", jobId).single()
+  if (error) {
+    throw new Error(`Failed to read output_data for job ${jobId}: ${error.message}`)
+  }
+  const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
+  return markJobCompleted(jobId, { output_data: { ...existing, ...output } })
+}
+
+/**
  * `tk.jobs.clearReconcileSentinel` — nulls the reconcile sentinel fields so
  * the cron doesn't treat an in-flight pro-engine run as a stale pickup.
  * Precedent: `workers/handlers/ffmpeg.ts:482-497` (add-captions→render
@@ -344,7 +370,7 @@ export function buildToolkit(): PluginToolkit {
       uploadVideoFromUrl: (url, jobId, trackUserId) => uploadToR2(url, jobId, "video", trackUserId),
     },
     jobs: {
-      markJobCompleted,
+      markJobCompleted: pluginMarkJobCompleted,
       setJobProgress,
       withProgressRamp,
       commitJobCredits,

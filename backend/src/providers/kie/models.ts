@@ -312,6 +312,25 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_urls",  // Array of URLs (like seedream-edit)
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
+  // Seedream 5 Pro (flagship Bytedance model). Quality basic = 1K, high = 2K
+  // (list price doubles at high — 14 KIE credits — handled via composite
+  // identifier "seedream-5-pro:high"). I2I adds 0.5 KIE credits per input
+  // image (absorbed in the flat tier price, same as the rest of the family).
+  // See: docs.kie.ai/market/seedream/5-pro-text-to-image.md
+  "seedream-5-pro": {
+    model: "seedream/5-pro-text-to-image",
+    credits: 7,
+    cost: 0.035,
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+  "seedream-5-pro-i2i": {
+    model: "seedream/5-pro-image-to-image",
+    credits: 7,
+    cost: 0.035,
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array of URLs (like seedream-edit)
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
 
   // Flux-2 Flex text-to-image (we already have Flex I2I but were missing T2I)
   // See: docs.kie.ai/market/flux2/flex-text-to-image.md

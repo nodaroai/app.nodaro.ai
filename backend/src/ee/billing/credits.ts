@@ -206,6 +206,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedream:high": 4,            // estimated (4K)
   "seedream-5-lite": 2,
   "seedream-5-lite:high": 5,     // estimated (4K)
+  "seedream-5-pro": 3,           // (basic / 1K default)
+  "seedream-5-pro:high": 6,      // high / 2K
   "flux-flex": 4,                // (1K default)
   "flux-flex:2K": 6,
   "z-image": 1,
@@ -278,6 +280,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedream-edit:high": 4,       // estimated (4K)
   "seedream-5-lite-i2i": 2,
   "seedream-5-lite-i2i:high": 5, // estimated (4K)
+  "seedream-5-pro-i2i": 3,       // (basic / 1K default)
+  "seedream-5-pro-i2i:high": 6,  // high / 2K
   // ── Video Generation (I2V / T2V) ──
   "minimax": 15,                 // (6s, 1080p)
   "veo3": 63,                    // (VEO 3.1 Quality)

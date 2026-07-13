@@ -193,20 +193,21 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("extend-video / seedance-2-extend", () => {
-  it("generates via i2v: last-frame anchor + 1s tail reference + the EXACT extend template", async () => {
+  it("generates via i2v: last-frame anchor + 2s tail reference + the EXACT extend template", async () => {
     await handler()(makeJob({ duration: 6, resolution: "480p", generateAudio: false }) as never, makeCtx() as never)
 
-    // Prep: tail extracted from the downloaded source at the spike-validated
-    // 1s, then uploaded; the frame-exact extractor reads the tail's R2 copy
-    // (its last frame IS the source's last frame).
-    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 1)
+    // Prep: tail extracted from the downloaded source at the shared
+    // continuation-ref length (2s — KIE rejects r2v reference videos under
+    // 1.8s), then uploaded; the frame-exact extractor reads the tail's R2
+    // copy (its last frame IS the source's last frame).
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 2)
     expect(mocks.mockExtractFrame).toHaveBeenCalledWith({ videoUrl: TAIL_URL, mode: "last" })
 
     expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
     expect(mocks.mockTextToVideo).not.toHaveBeenCalled()
     const [imageUrl, provider, prompt, duration, endFrameUrl, opts, reconcileOpts] = mocks.mockImageToVideo.mock.calls[0]!
     // Spike-validated (2026-07-12): the extension must be anchored on the
-    // source's last frame and reference ONLY the last second.
+    // source's last frame and reference ONLY the last moments (2s tail).
     expect(imageUrl).toBe(LAST_FRAME_URL)
     expect(provider).toBe("seedance-2")
     expect(prompt).toBe("extend @video_1 as follows:\nthe ball keeps rolling until it hits a cup")
@@ -242,6 +243,7 @@ describe("extend-video / seedance-2-extend", () => {
     expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(15)
 
     vi.clearAllMocks()
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 4.0 })
     mocks.mockImageToVideo.mockResolvedValue({ url: EXTENSION_URL, cost: 0.1, displayCost: 0.12, providerUsed: "kie" })
     mocks.mockUploadFileToR2.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
     mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.jpg" })
@@ -251,9 +253,20 @@ describe("extend-video / seedance-2-extend", () => {
     expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(4)
   })
 
-  it("never probes the source — seedance's native adaptive needs no round-trip", async () => {
+  it("probes ONLY the local download (short-source guard) — never the remote URL; aspect stays native 'adaptive' with no remote round-trip", async () => {
     await handler()(makeJob() as never, makeCtx() as never)
-    expect(mocks.mockProbeVideoSource).not.toHaveBeenCalled()
+    expect(mocks.mockProbeVideoSource).toHaveBeenCalledTimes(1)
+    expect(mocks.mockProbeVideoSource).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4")
+    expect(mocks.mockProbeVideoSource).not.toHaveBeenCalledWith(SOURCE_URL)
+  })
+
+  it("source shorter than the 1.8s r2v floor → friendly error BEFORE any tail extract or provider call", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 1.2 })
+    await expect(
+      handler()(makeJob() as never, makeCtx() as never),
+    ).rejects.toThrow(/too short to extend.*1\.8s.*got 1\.20s/)
+    expect(mocks.mockExtractTailToFile).not.toHaveBeenCalled()
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
   })
 
   it("trim-stitches with the spike-validated recipe (cut, −4 tail / −3 head, 0.15s anchored fades)", async () => {

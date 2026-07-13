@@ -5,13 +5,13 @@
 
 ## Overview
 
-Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 20 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is Nano Banana.
+Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 21 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is Nano Banana.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana` | AI model to use for transformation (20 options) |
+| Provider | select | `nano-banana` | AI model to use for transformation (21 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
@@ -19,7 +19,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
 | Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image) |
 | Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K |
-| Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high) |
+| Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
 | Mask | image/canvas | -- | Inpainting mask (ideogram-edit only). Painted via a mask editor modal. |
@@ -51,6 +51,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | qwen-edit | Qwen Edit | Targeted image editing | Targeted edits |
 | seedream-edit | Seedream Edit | Photorealistic image editing | Quality options (basic/high) |
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
+| seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **3 credits** at basic (1K) / **6 credits** at high (2K). | Quality options (basic/high) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 3 credits |

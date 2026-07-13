@@ -26,7 +26,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -47,6 +47,7 @@ import { randomUUID } from "node:crypto"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
+import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 
@@ -1079,17 +1080,26 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     await setJobProgress(job, ctx.jobId, 5)
 
     // Spike-validated generation inputs (2026-07-12): the @video_1 reference
-    // is the source's LAST SECOND only — a short tail keeps the model
-    // continuing the boundary motion instead of re-staging the whole clip —
-    // and the source's LAST FRAME anchors the extension as its first frame
-    // (i2v transport), so the continuation starts pixel-adjacent to the
-    // boundary and the smart-stitch reliably finds+drops the duplicate.
+    // is the source's last moments only (SEEDANCE_2_CONTINUATION_REF_SEC — a
+    // short tail keeps the model continuing the boundary motion instead of
+    // re-staging the whole clip, floored by KIE's r2v ≥1.8s reference-video
+    // minimum) — and the source's LAST FRAME anchors the extension as its
+    // first frame (i2v transport), so the continuation starts pixel-adjacent
+    // to the boundary and the smart-stitch reliably finds+drops the duplicate.
     const prepDir = await createWorkDir("extend-prep")
     let tailUrl: string
     let lastFrameUrl: string
     try {
       const srcLocal = join(prepDir, "source.mp4")
       await downloadFile(sourceUrl, srcLocal)
+      // A source shorter than the provider floor yields a tail KIE will
+      // 400-reject after ~90s of queueing — fail fast with a clear message.
+      const srcProbe = await probeVideoSource(srcLocal)
+      if (srcProbe.durationSeconds < SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC) {
+        throw new Error(
+          `Source video is too short to extend: Seedance 2 needs at least ${SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC}s of footage to continue from (got ${srcProbe.durationSeconds.toFixed(2)}s).`,
+        )
+      }
       const tailPath = await extractTailToFile(srcLocal, SEEDANCE_2_EXTEND_STITCH.referenceTailSeconds)
       // randomUUID keys: these are throwaway generation inputs — the job's
       // own R2 keys stay reserved for the stitched deliverable.

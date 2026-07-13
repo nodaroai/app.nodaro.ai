@@ -26,7 +26,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | best for typography / logos / text-heavy | Nano Banana Pro, GPT Image 2 | Nano Banana Pro for diagrams / complex text; GPT Image 2 for logos and short copy. |
 | cheapest realistic image | Z-Image, Qwen, Imagen 4 Fast | Z-Image is the cheapest at 1 credit. Qwen / Imagen4 Fast for slightly higher quality. |
 | highest fidelity image | Nano Banana Pro, Imagen 4 Ultra, Flux 2 Flex | Pick by family preference; all three are premium tiers. |
-| image edit / restyle | Flux Kontext Pro, Ideogram Remix, Seedream 5 Lite (I2I) | Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Lite for instruction-based edits. |
+| image edit / restyle | Flux Kontext Pro, Ideogram Remix, Seedream 5 Pro (I2I) | Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Pro for instruction-based edits (5 Lite is the budget option). |
 | highest-resolution image (4K / 8K) | Topaz Image Upscale, Nano Banana Pro, GPT Image 2 | Generate at native then Topaz upscale for 8K. |
 | background removal / cutout | Recraft Remove BG | 1 credit, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
@@ -72,6 +72,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Grok Upscale | xAI | Standard | 3 | upscale | Upscale a previously-generated Grok image. Requires the prior task id. |
 | Imagen 4 Ultra | Google | Standard | 3 | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
 | Kontext Multi (Open) | Black Forest Labs | Standard | 3 | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images, no safety filter. |
+| Seedream 5 Pro | Bytedance | Standard | 3 | t2i | Flagship Seedream 5 Pro — strongest instruction following and visual reasoning. Basic = 1K, high = 2K. |
+| Seedream 5 Pro (I2I) | Bytedance | Standard | 3 | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
 | Topaz Image Upscale | Topaz | Standard | 3 | upscale | High-quality image upscale up to 8K. Best for production-ready output. |
 | Wan 2.7 Pro | Alibaba | Standard | 3 | t2i | Wan 2.7 Pro text-to-image — higher quality, 1K/2K/4K, no image input. |
 | Flux 2 Flex | Black Forest Labs | Standard | 4 | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |

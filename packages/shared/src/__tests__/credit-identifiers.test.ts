@@ -17,6 +17,8 @@ describe("buildCreditModelIdentifier", () => {
       "seedream-edit",
       "seedream-5-lite",
       "seedream-5-lite-i2i",
+      "seedream-5-pro",
+      "seedream-5-pro-i2i",
     ]
 
     it.each(highQualityProviders)(
