@@ -190,6 +190,7 @@ async function combineVideosToUrl(options: {
   trimEndFrames?: number
   targetWidth?: number
   targetHeight?: number
+  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
 }): Promise<string> {
   const { outputPath: localPath } = await combineVideosCore({
     videoUrls: options.videoUrls,
@@ -201,6 +202,7 @@ async function combineVideosToUrl(options: {
     trimEndFrames: options.trimEndFrames ?? 0,
     targetWidth: options.targetWidth,
     targetHeight: options.targetHeight,
+    smartCut: options.smartCut,
   })
   try {
     return await uploadFileToR2(localPath, randomUUID(), "video")

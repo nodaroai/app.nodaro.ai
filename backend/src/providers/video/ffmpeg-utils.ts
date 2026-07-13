@@ -123,6 +123,24 @@ export async function runFfmpegCapture(
   }
 }
 
+/**
+ * Log the installed ffmpeg version — one line, called once per process at
+ * boot (API server + video worker). Rendered output is ffmpeg-version-
+ * dependent (see the FFMPEG_VERSION pin in the Dockerfile), so when
+ * production output changes, the logs must be able to answer "which
+ * ffmpeg?". Non-fatal: a missing binary logs a loud error line here and
+ * fails the first render anyway — boot must not die over logging.
+ */
+export function logFfmpegVersion(tag: string): void {
+  execFile("ffmpeg", ["-version"], { timeout: 10_000 }, (error, stdout) => {
+    if (error) {
+      console.error(`[${tag}] ffmpeg -version failed (is ffmpeg installed?): ${error.message}`)
+    } else {
+      console.log(`[${tag}] ${stdout.split("\n", 1)[0]}`)
+    }
+  })
+}
+
 export function runFfprobe(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and

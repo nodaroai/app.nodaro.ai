@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js"
+import { videoQueue } from "../queue.js"
 import {
   STALE_THRESHOLD_MS,
   MIN_STALE_THRESHOLD_MS,
@@ -319,7 +320,12 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
  *  generate-video-pro's multi-segment stitch is the long pole here), so a
  *  still-running job is never failed. Jobs are identified by input_data.type (set
  *  by buildJobInputData / the director route / node-executor's input_data
- *  backfill) since the jobs rows carry no job_type/provider for these queues. */
+ *  backfill) since the jobs rows carry no job_type/provider for these queues.
+ *
+ *  For the CHECKPOINT_RESUMABLE_JOB_TYPES subset (gvp/evp), the sweep first
+ *  tries `tryResumeCheckpointedPluginJob` — requeue-for-resume once, and skip
+ *  entirely while a live BullMQ entry for the row exists — before falling
+ *  back to fail+refund. See that function's doc comment. */
 const RENDER_STALE_MS = 90 * 60 * 1000
 
 /** Job types swept by `sweepStuckOrchestratorJobs` — see the doc comment on
@@ -328,11 +334,113 @@ const RENDER_STALE_MS = 90 * 60 * 1000
  *  it from a mocked query-builder chain. */
 export const STUCK_ORCHESTRATOR_JOB_TYPES = ["render-video", "video-director", "generate-video-pro", "edit-video-pro"] as const
 
+/** The subset of STUCK_ORCHESTRATOR_JOB_TYPES that checkpoints its progress
+ *  (`output_data.pro`, written by the private-plugin engines on every state
+ *  change) and whose handler RESUMES from that checkpoint on re-entry —
+ *  completed segments are skipped, an in-flight provider task is re-polled,
+ *  and only the remainder (often just the final stitch) runs. For these,
+ *  failing the row is a LAST resort: job 1e209599 died to a deploy-storm
+ *  worker restart with all four segments generated and only the stitch
+ *  outstanding, and the sweep failed+refunded it — every segment's provider
+ *  cost wasted, user told to re-run. Exported for the same test-directness
+ *  reason as the list above. */
+export const CHECKPOINT_RESUMABLE_JOB_TYPES: ReadonlySet<string> =
+  new Set(["generate-video-pro", "edit-video-pro"])
+
+/** One resume per job: the sweep requeues only while reconcile_attempts is 0,
+ *  so a job that stalls AGAIN after its resume is swept (failed + refunded)
+ *  at the next encounter instead of looping forever. */
+const MAX_RESUME_ATTEMPTS = 1
+
+interface StuckOrchestratorRow {
+  id: string
+  provider_kind: string | null
+  reconcile_attempts: number | null
+  user_id: string | null
+  usage_log_id: string | null
+  input_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | null
+}
+
+/**
+ * Resume-instead-of-fail for checkpointed private-plugin jobs.
+ *
+ * Returns:
+ *  - "live"     — a BullMQ entry for this row still exists (queued or active):
+ *                 the run is slow, not dead (a long multi-segment run can
+ *                 legitimately outlive RENDER_STALE_MS). Requeuing would
+ *                 double-process the checkpoint (two writers, two provider
+ *                 tasks per segment), and sweeping would fail a live job —
+ *                 leave it alone entirely.
+ *  - "requeued" — the row had a checkpoint and a resume attempt left; a fresh
+ *                 BullMQ job was enqueued. The handler re-enters, skips the
+ *                 checkpoint's completed segments, and finishes the run.
+ *  - "sweep"    — not resumable (wrong type, no checkpoint yet, resume
+ *                 already spent, or the CAS lost): caller falls through to
+ *                 the fail+refund sweep exactly as before.
+ *
+ * The BullMQ payload is reconstructed from the row: `input_data` carries the
+ * route's full Zod-parsed body (buildJobInputData), the money-authoritative
+ * pricing rides in the checkpoint (`output_data.pro.pricing` — the same
+ * object the route embedded into the original payload at reservation time),
+ * and usage_log_id is a dedicated column. Extra input_data keys (`type`,
+ * `userPrompt`) are inert — the plugin handlers read named fields only. No
+ * custom BullMQ jobId on the add (per tryRemoveFromQueue's doc, a reused id
+ * would dedupe against the removeOnComplete window); the reconcile_attempts
+ * CAS below is what makes concurrent cron ticks single-shot.
+ */
+async function tryResumeCheckpointedPluginJob(
+  row: StuckOrchestratorRow, jobType: string,
+): Promise<"live" | "requeued" | "sweep"> {
+  if (!CHECKPOINT_RESUMABLE_JOB_TYPES.has(jobType)) return "sweep"
+
+  // Same states tryRemoveFromQueue scans (queue.ts), plus "active".
+  try {
+    const live = await videoQueue.getJobs(["active", "prioritized", "waiting", "delayed"], 0, 500)
+    if (live.some(j => (j?.data as { jobId?: string } | undefined)?.jobId === row.id)) return "live"
+  } catch {
+    // Redis hiccup — fall through to the resume attempt: the CAS still bounds
+    // it to one requeue total, and a rare double-entry converges through the
+    // checkpoint (segments persist idempotently by index).
+  }
+
+  const attempts = row.reconcile_attempts ?? 0
+  if (attempts >= MAX_RESUME_ATTEMPTS) return "sweep"
+  const checkpoint = (row.output_data as { pro?: { pricing?: unknown } } | null)?.pro
+  if (!checkpoint || typeof checkpoint !== "object" || !checkpoint.pricing) return "sweep"
+
+  // CAS on reconcile_attempts: exactly one tick wins the requeue. started_at
+  // refreshes so queue-wait before pickup doesn't eat into the next
+  // RENDER_STALE_MS window (the worker refreshes it again at pickup).
+  const { data: updated, error } = await supabase
+    .from("jobs")
+    .update({
+      reconcile_attempts: attempts + 1,
+      reconcile_last_error: "requeued_for_resume",
+      started_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+    .eq("status", "processing")
+    .eq("reconcile_attempts", attempts)
+    .select("id")
+  if (error || !updated || updated.length === 0) return "sweep"
+
+  await videoQueue.add(jobType, {
+    jobId: row.id,
+    userId: row.user_id ?? undefined,
+    ...(row.input_data ?? {}),
+    proPricing: checkpoint.pricing,
+    usageLogId: row.usage_log_id ?? undefined,
+  })
+  console.log(`[reconcile/cron] requeued checkpointed ${jobType} job ${row.id} for resume`)
+  return "requeued"
+}
+
 async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, provider_kind, reconcile_attempts")
+    .select("id, provider_kind, reconcile_attempts, user_id, usage_log_id, input_data, output_data")
     .eq("status", "processing")
     .is("provider_call_started_at", null)
     .in("input_data->>type", STUCK_ORCHESTRATOR_JOB_TYPES)
@@ -345,13 +453,23 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
     return
   }
 
-  for (const row of data ?? []) {
+  for (const row of (data ?? []) as unknown as StuckOrchestratorRow[]) {
     result.scanned++
     try {
+      const jobType = String((row.input_data as { type?: unknown } | null)?.type ?? "")
+      const resume = await tryResumeCheckpointedPluginJob(row, jobType)
+      if (resume === "requeued") {
+        result.recovered++
+        continue
+      }
+      if (resume === "live") {
+        result.notStale++
+        continue
+      }
       await sweepStaleSyncJob({
-        id: row.id as string,
-        provider_kind: (row.provider_kind as string | null) ?? null,
-        reconcile_attempts: (row.reconcile_attempts as number | null) ?? 0,
+        id: row.id,
+        provider_kind: row.provider_kind ?? null,
+        reconcile_attempts: row.reconcile_attempts ?? 0,
       })
       result.swept++
     } catch (err) {

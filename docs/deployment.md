@@ -379,6 +379,18 @@ a provider whose env var is unset. Add `KIE_API_KEY` /
 `REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` /
 `FAL_KEY` per your needs and restart.
 
+**Docker build fails with `Version '7:5.1.9-0+deb12u1' for 'ffmpeg' was
+not found`.** ffmpeg is deliberately version-pinned in the Dockerfile
+(`ARG FFMPEG_VERSION`): rendered audio/video output differs between
+ffmpeg versions (filter gain/behavior changes), so an unpinned install
+would let a base-image rebuild silently change what renders sound and
+look like. Debian's archive only keeps the current package version, so
+when a security update supersedes the pinned one the build fails loudly
+instead of silently changing output. Fix: look up the current version
+(`docker run --rm node:22-slim bash -c "apt-get update -qq && apt-cache
+policy ffmpeg"`), bump `FFMPEG_VERSION`, and treat it as a real ffmpeg
+upgrade — verify rendered output afterwards rather than assuming parity.
+
 **Film Director pipelines (Cloud) stall at "running" and never
 resume.** A pipeline's orchestration job can be lost — a re-drive that
 arrives while the previous drive is still active is deduped away by

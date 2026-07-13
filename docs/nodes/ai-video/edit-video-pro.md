@@ -86,6 +86,7 @@ The two 10-second spans on the same 20-second source land on different totals de
 - **Kept footage is re-encoded, not stream-copied.** The untouched footage before and after the replaced span is cut with a high-quality encode (crf 18) and joined to the generated bridge with the same splice encode the platform's other stitch operations use — the delivered file is a single consistently-encoded video, not a byte-identical copy of the original spliced with new content.
 - **Free-tier output carries the standard watermark**, the same as every other video-output node.
 - **Any failure or cancellation is a full refund, including the flat fee.** Unlike Generate Video Pro's multi-segment runs (which can keep and bill for whatever completed before an interruption), Edit Video Pro either delivers the fully stitched result or refunds the entire reservation — there's no partial delivery of a half-replaced span.
+- **Runs survive worker restarts.** Progress checkpoints after every bridge segment; if the processing worker restarts mid-run (for example during a platform deploy), the run resumes automatically from the checkpoint instead of failing — already-generated bridge segments are never re-generated. Only a run that stalls again after its automatic resume is failed and refunded.
 
 ## Best practices
 

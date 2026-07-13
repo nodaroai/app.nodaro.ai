@@ -251,14 +251,29 @@ RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
 # Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.
 FROM node:22-slim AS runner
 
+# ffmpeg is PINNED. Rendered audio/video output is ffmpeg-version-dependent
+# (e.g. afir's intrinsic output gain is ×2 on 5.1 and ×1 on 8 — a silent 6 dB
+# difference in customer-billed output), so an unpinned `apt-get install
+# ffmpeg` would let a base-image rebuild silently change what every render
+# sounds/looks like with zero code change and zero review.
+#
+# ACCEPTED FAILURE MODE (this is a feature): Debian's archive keeps only the
+# current version of a package, so when a security update supersedes this
+# one, the build FAILS LOUDLY with "version ... not found". That is the
+# point — a loud build failure forcing a deliberate, reviewed bump instead
+# of a silent DSP change. Do NOT "fix" that failure by unpinning: bump the
+# pin AND re-bless the output-characterization goldens
+# (backend `npm run characterize:check`) in the same PR.
+ARG FFMPEG_VERSION=7:5.1.9-0+deb12u1
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg curl ca-certificates \
+    ffmpeg=${FFMPEG_VERSION} curl ca-certificates \
     aubio-tools \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     libatspi2.0-0 \
     fonts-dejavu-core fonts-liberation fontconfig \
+    && ffmpeg -version | head -1 \
     && rm -rf /var/lib/apt/lists/* \
     && ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${ARCH}" -o /usr/bin/caddy \

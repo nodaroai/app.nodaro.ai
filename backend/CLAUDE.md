@@ -93,7 +93,9 @@ Cloud-only proprietary features (currently: voice-changer-pro, surround-continua
 
 **BORN-PRIVATE rule:** new cloud-secret features start life in `nodaroai/nodaro-cloud-plugins`, never as a public migration/route/handler here. Pricing is admin-seeded into `model_pricing` plus the plugin's own `staticCreditCosts()` fallback.
 
-**Guard:** `tools/check-private-leaks.mjs` (CI) greps tracked files (excluding `tools/`) for extracted implementation symbol names — a hit means private implementation detail leaked back into this public repo.
+**Checkpointed plugin jobs (gvp/evp) — reconcile resume + R2-key invariant (2026-07-13):**
+1. The multi-segment engines checkpoint to `output_data.pro` on every state change and RESUME from it on handler re-entry (done segments skipped, in-flight provider task re-polled). The reconcile cron's 90-min orchestrator sweep (`lib/reconcile/cron.ts`) therefore does NOT immediately fail these types: for `CHECKPOINT_RESUMABLE_JOB_TYPES` it first requeues the BullMQ job once (`reconcile_last_error: "requeued_for_resume"`, payload rebuilt from `input_data` + the checkpoint's embedded `pricing` + `usage_log_id`), skips rows that still have a live BullMQ entry (slow ≠ dead), and only fails+refunds on the SECOND stale encounter. History: job 1e209599 died to a deploy-restart with all 4 segments generated and only the stitch left — the old sweep failed+refunded it, wasting every segment's provider cost.
+2. Every intermediate artifact a plugin uploads (segments, tails, anchor frames, span cuts) must use a SUFFIXED upload id (`<jobId>-seg2`, `<jobId>-cut-head`, …) — `uploadFileToR2`/`uploadToR2` key R2 verbatim from the id (`videos/<id>.mp4`), so a bare job id aliases every artifact onto ONE object (that same job delivered segment 4 four times: "doubled parts"). The bare job id is reserved for the final deliverable, written exactly once at finalize.
 
 ---
 
