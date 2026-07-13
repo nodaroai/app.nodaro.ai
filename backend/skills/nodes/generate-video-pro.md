@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-12T06:23:11.366Z
-generated_from: 61416e7f
+generated_at: 2026-07-13T22:36:16.472Z
+generated_from: dbf9c8d98
 ---
 
 # Generate Video Pro
@@ -10,7 +10,7 @@ generated_from: 61416e7f
 **Type:** `generate-video-pro`
 **Category:** ai
 **Credit cost:** 82
-**Inputs (target handles):** `prompt`, `startFrame`, `imageReferences`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

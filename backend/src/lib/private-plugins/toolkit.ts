@@ -143,7 +143,11 @@ async function pluginImageToVideo(
     prompt,
     model,
     durationSec,
-    undefined, // no end frame — generate-video-pro segments never carry one
+    // The FINAL segment of a generate-video-pro run may carry the user's
+    // closing frame (plugin contract PluginVideoGenOptions.endFrameUrl) —
+    // positional here, where the Seedance-2 input resolver turns it into the
+    // closing-frame reference hint. Undefined for every other segment.
+    options?.endFrameUrl,
     toProviderOptions(options, aspectRatio),
     toReconcileOpts(options),
   )

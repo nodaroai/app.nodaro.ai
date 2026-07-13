@@ -2683,6 +2683,14 @@ export async function generateVideoPro(body: {
   generateAudio?: boolean
   startFrameUrl?: string
   referenceImageUrls?: string[]
+  /** Appended to every segment prompt as an "Avoid:" suffix (Seedance 2 has
+   *  no native negative param). */
+  negativePrompt?: string
+  /** The video's closing frame — applied to the FINAL segment only. */
+  endFrameUrl?: string
+  /** The Extend Source: the pro run continues from this clip (segment 1
+   *  rides the anchored continuation transport off its 2s tail). */
+  extendVideoUrl?: string
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

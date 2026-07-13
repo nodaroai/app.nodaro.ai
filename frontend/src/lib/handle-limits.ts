@@ -228,18 +228,24 @@ export function getHandleConnectionLimit(
   // SEEDANCE_2_REF_LIMITS via VIDEO_REF_LIMITS_BY_PROVIDER, images: 9), so
   // this reuses the same provider-limits source as generate-video above
   // rather than a hand-picked literal — it stays correct if that shared cap
-  // is ever retuned. Only two of generate-video's handles exist here.
+  // is ever retuned.
   if (node.type === "generate-video-pro") {
     const data = node.data as { provider?: string } | undefined
     const provider = data?.provider ?? "seedance-2"
     const providerLabel = getModel(provider)?.label ?? provider
     switch (handleId) {
       case "startFrame":
+      case "endFrame":
         return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "imageReferences": {
         const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 9
         return { limit: cap, providerLabel, isMultiProviderMin: false }
       }
+      case "videoReferences":
+        // The EXTEND SOURCE — exactly one, by design (the pro engine
+        // continues from it; Seedance's 3-video ref cap doesn't apply, this
+        // is a continuation-transport input, not a style-reference pool).
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
       default:
         return null
     }

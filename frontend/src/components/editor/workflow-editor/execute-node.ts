@@ -1884,6 +1884,10 @@ export function executeNode(
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
     const referenceImageUrls = inputs.referenceImageUrls?.length ? inputs.referenceImageUrls : undefined;
+    // Extend Source (videoReferences, limit 1): the pro run continues from
+    // this clip — the engine cuts its 2s tail as @video_1 and anchors segment
+    // 1 on its last frame, exactly like later segments continue each other.
+    const extendVideoUrl = inputs.referenceVideoUrls?.[0];
 
     setUserPromptTemplate(gvpData.prompt?.trim() || undefined);
     return pollJobWithNodeUpdate(
@@ -1898,6 +1902,9 @@ export function executeNode(
           generateAudio: gvpData.generateAudio,
           startFrameUrl,
           referenceImageUrls,
+          negativePrompt: inputs.negativePrompt,
+          endFrameUrl: inputs.endFrameUrl,
+          extendVideoUrl,
           idempotencyKey,
         }),
       "generatedVideoUrl",

@@ -15,11 +15,14 @@ Below that limit, Generate Video Pro behaves exactly like a normal single-shot S
 | Handle | Direction | Accepts | Notes |
 |---|---|---|---|
 | `prompt` | target | Text producers + visual pickers | Main prompt, carried into every segment |
-| `startFrame` | target | Image producers | Opening frame for the first segment |
+| `negative` | target | Text producers | Appended to every segment prompt as an `Avoid:` suffix (Seedance 2 has no native negative parameter) |
+| `startFrame` | target | Image producers | Opening frame for the first segment (ignored when an Extend Source is wired) |
+| `endFrame` | target | Image producers (limit 1) | Closing frame — applied to the **final segment** only. Requires a start anchor or a multi-segment run (a single-segment text-only run has no end-frame path) |
 | `imageReferences` | target | Image producers (ordered, multi) | Reference images carried into generation |
+| `videoReferences` | target | Video producers (limit 1) | **Extend Source** — the run continues from this clip: its final 2 seconds ride as the `@video_1` reference and its last frame anchors segment 1, the same continuation transport later segments use between themselves |
 | `video` | source | n/a | Output — the final stitched video |
 
-Generate Video Pro exposes a trimmed handle set compared to Generate Video — no `endFrame`, `videoReferences`, `audioReferences`, `audio`, or `negative` handles, and none of the picker clusters (`assets` / `look` / `elements`).
+Generate Video Pro still exposes a trimmed handle set compared to Generate Video — no `audioReferences` / `audio` handles (per-segment reference-audio semantics are undefined for a stitched multi-segment run; the Generate Audio toggle covers sound) and none of the picker clusters (`assets` / `look` / `elements`) — wire identity/style images through `imageReferences` instead.
 
 ## Configuration
 
@@ -42,7 +45,7 @@ Generate Video Pro is scoped to the Seedance 2 family:
 | `seedance-2-fast` | Seedance 2.0 Fast | 480p / 720p only |
 | `seedance-2-mini` | Seedance 2.0 Mini | 480p / 720p only |
 
-For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards `startFrame` and `imageReferences` into generation, but exposes none of that page's richer reference/token surface.
+For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards `startFrame`, `endFrame`, `imageReferences`, and the Extend Source (`videoReferences`) into generation, but exposes none of that page's richer reference/token surface.
 
 ## How segmentation works
 
@@ -50,7 +53,7 @@ A request at or below 15 seconds runs as a single segment — identical in shape
 
 A request above 15 seconds is automatically split into multiple segments (each 4–15s), generated in sequence and stitched into one output:
 
-- The **first segment** starts from the wired `startFrame` (if any) and the prompt.
+- The **first segment** starts from the wired `startFrame` (if any) and the prompt — or, when an Extend Source is wired, continues from that clip's final moments exactly like a later segment continues from the one before it.
 - Every **later segment** continues seamlessly from the final frames of the one before it, so the stitched result reads as one continuous shot.
 - Segment count and individual lengths are chosen automatically to cover the requested duration (with a small amount of per-join overlap reserved for a seamless stitch) — they are not user-configurable.
 

@@ -3772,6 +3772,15 @@ export function buildPayload(
         generateAudio: data.generateAudio as boolean | undefined,
         startFrameUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || (data.startFrameUrl as string | undefined),
         referenceImageUrls: resolvedInputs.referenceImageUrls || (data.referenceImageUrls as string[] | undefined),
+        // Typed-handle levers (wired-only, resolved generically by
+        // targetHandle in input-resolver.ts — negative/endFrame/
+        // videoReferences): the "Avoid:" suffix, the final segment's closing
+        // frame, and the Extend Source the run continues from (limit 1 —
+        // handle-limits.ts). Inert on plugin versions predating their
+        // consumption (extra payload keys are ignored by the handler).
+        negativePrompt: resolvedInputs.negativePrompt,
+        endFrameUrl: resolvedInputs.endFrameUrl,
+        extendVideoUrl: resolvedInputs.referenceVideoUrls?.[0],
         usageLogId,
       })
     }

@@ -6062,7 +6062,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Video Pro",
     category: "ai",
     creditCost: 82,
-    inputs: ["prompt", "startFrame", "imageReferences"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences"],
     outputs: ["video"],
     defaultData: {
       label: "Generate Video Pro",

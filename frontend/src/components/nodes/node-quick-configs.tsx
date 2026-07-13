@@ -423,14 +423,43 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       ],
     },
   ],
-  // ── Generate Video Pro (model · resolution — provider-aware; the config
-  // panel owns prompt/duration/aspect) ──
+  // ── Generate Video Pro (model · aspect · duration · resolution — mirrors
+  // generate-video's strip order; the config panel owns prompt/audio) ──
   "generate-video-pro": [
     {
       field: "provider",
       ariaLabel: "Model",
       icon: Sparkles,
       options: toOptions(GVP_PROVIDERS),
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      // The whole seedance-2 family shares one aspect set — the SAME list the
+      // config panel's AspectRatioSelector renders (it also pins "seedance-2").
+      options: getAspectRatiosForVideoModel("seedance-2"),
+    },
+    {
+      field: "duration",
+      ariaLabel: "Duration",
+      icon: Clock,
+      numeric: true,
+      // Long-form presets — the pro node spans 4–120s and splits into stitched
+      // segments above 15s, so the single-segment catalog list
+      // (getDurationsForVideoModel, 4–15s) is deliberately NOT used here. The
+      // node's CURRENT duration is injected when it isn't a preset (the config
+      // panel's slider writes any 4–120 integer) so QuickConfigSelect's
+      // stale-value snap never rewrites a custom duration to presets[0].
+      options: (data) => {
+        const presets = [8, 15, 20, 30, 45, 60, 90, 120]
+        const current = typeof data.duration === "number" ? Math.round(data.duration) : undefined
+        const values =
+          current !== undefined && !presets.includes(current)
+            ? [...presets, current].sort((a, b) => a - b)
+            : presets
+        return values.map((v) => ({ value: String(v), label: `${v}s` }))
+      },
     },
     {
       field: "resolution",
