@@ -368,7 +368,8 @@ export class KieImageProvider
       provider === "qwen-i2i" ||
       provider === "qwen-edit" ||
       provider === "seedream-edit" ||
-      provider === "seedream-5-lite-i2i"
+      provider === "seedream-5-lite-i2i" ||
+      provider === "seedream-5-pro-i2i"
     )) {
       input.prompt = prompt
     }

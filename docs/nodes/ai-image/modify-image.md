@@ -37,7 +37,7 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Ideogram Edit / Reframe / Remix | AI-guided editing, intelligent reframing, and restyling with character consistency |
 | Nano Banana / Nano Banana Pro | Fast iteration; Pro for higher detail |
 | Qwen / Qwen Edit | Versatile transformation and targeted editing |
-| Seedream 5 Lite / Seedream Edit | Latest Seedream image-to-image and photorealistic editing |
+| Seedream 5 Pro / Seedream 5 Lite / Seedream Edit | Seedream image-to-image — Pro for flagship instruction edits, Lite and Edit for lighter transforms |
 | Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 2 reference images) |
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
 | Nano Banana Edit | Context-aware editing from a text instruction (style presets, negative prompt, aspect ratio, seed, asset references) |
@@ -54,6 +54,7 @@ Credits depend on the selected provider, and several providers cost more at high
 | Ideogram Reframe | 2 (Balanced) → 1 (Turbo) / 3 (Quality) |
 | Flux-2 | 4 (1K) → 6 (2K) |
 | GPT Image | 4 (medium) → 6 (high) |
+| Seedream 5 Pro | 3 (basic / 1K) → 6 (high / 2K) |
 | Ideogram Edit / Remix | 5 (Balanced) → 3 (Turbo) / 6 (Quality) |
 | Nano Banana Pro | 5 (1K/2K) → 6 (4K) |
 | Flux 2 Max | ~7 credits at default (2 MP, 0 refs); ranges ~2–62 depending on resolution and reference count |

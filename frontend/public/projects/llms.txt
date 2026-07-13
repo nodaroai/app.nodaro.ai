@@ -386,7 +386,7 @@ Generate an image from a text prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `nano-banana-2`, `flux-kontext`, `flux-kontext-max`, `z-image`
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `nano-banana-2`, `flux-kontext`, `flux-kontext-max`, `z-image`
 
 **Aspect ratios by provider:**
 - Most: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
@@ -448,7 +448,7 @@ Transform an image with AI guided by a prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `flux-kontext`, `flux-kontext-max`
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `seedream-5-pro-i2i`, `flux-kontext`, `flux-kontext-max`
 
 **Optional fields:** `strength` (0-1), `aspectRatio`, `negativePrompt`, `seed`, `guidanceScale`
 

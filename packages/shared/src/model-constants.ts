@@ -48,7 +48,8 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "qwen-edit": 2000,           // docs.kie.ai/market/qwen/image-edit
   // verified == 5000 default (no entry needed): imagen4(-fast/-ultra), nano-banana,
   //   nano-banana-edit, flux, flux-flex, gpt-image-2, ideogram-v3/-edit/-remix,
-  //   z-image, grok, qwen-i2i.
+  //   z-image, grok, qwen-i2i, seedream-5-pro, seedream-5-pro-i2i
+  //   (docs.kie.ai/market/seedream/5-pro-text-to-image + 5-pro-image-to-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -340,6 +341,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "qwen",
   "seedream",
   "seedream-5-lite",
+  "seedream-5-pro",
   "flux",
   "flux-flex",
   // Image editing / image-to-image (reference = source image)
@@ -357,6 +359,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "qwen-edit",
   "seedream-edit",
   "seedream-5-lite-i2i",
+  "seedream-5-pro-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -386,6 +389,7 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "qwen": "qwen-i2i",
   "seedream": "seedream-edit",
   "seedream-5-lite": "seedream-5-lite-i2i",
+  "seedream-5-pro": "seedream-5-pro-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
 }
@@ -414,6 +418,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "flux-pro-i2i": 4,
   "seedream-edit": 16,
   "seedream-5-lite-i2i": 16,
+  "seedream-5-pro-i2i": 16,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -484,6 +489,8 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "seedream-edit": "quality",
   "seedream-5-lite": "quality",
   "seedream-5-lite-i2i": "quality",
+  "seedream-5-pro": "quality",
+  "seedream-5-pro-i2i": "quality",
   "topaz-image-upscale": "resolution",
   "ideogram-edit": "rendering-speed",
   "ideogram-remix": "rendering-speed",
@@ -495,7 +502,7 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
 
 
 // Models where quality=high triggers composite credit identifier
-export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-edit", "seedream-5-lite", "seedream-5-lite-i2i"])
+export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-edit", "seedream-5-lite", "seedream-5-lite-i2i", "seedream-5-pro", "seedream-5-pro-i2i"])
 
 // Models where resolution=2K triggers composite credit identifier
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
@@ -532,6 +539,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "qwen",
   "seedream",
   "seedream-5-lite",
+  "seedream-5-pro",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -561,6 +569,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "qwen-edit",
   "seedream-edit",
   "seedream-5-lite-i2i",
+  "seedream-5-pro-i2i",
   "flux-kontext",
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
@@ -1007,6 +1016,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "gpt-image-2": "prompt",
   "seedream": "prompt",
   "seedream-5-lite": "prompt",
+  "seedream-5-pro": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",

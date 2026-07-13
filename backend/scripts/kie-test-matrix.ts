@@ -510,6 +510,36 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 20,
     skipByDefault: false,
   },
+  {
+    modelKey: "seedream-5-pro",
+    category: "image",
+    kieModel: "seedream/5-pro-text-to-image",
+    expectedKieCredits: 7,
+    expectedCostUsd: 0.035,
+    configDesc: "Seedream 5 Pro T2I (basic / 1K)",
+    apiType: "standard",
+    input: { prompt: "test", aspect_ratio: "1:1", quality: "basic" },
+    requiresImage: false,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 20,
+    skipByDefault: false,
+  },
+  {
+    modelKey: "seedream-5-pro-i2i",
+    category: "image",
+    kieModel: "seedream/5-pro-image-to-image",
+    expectedKieCredits: 7.5, // 7 base + 0.5 per input image (1 input)
+    expectedCostUsd: 0.0375,
+    configDesc: "Seedream 5 Pro I2I (basic / 1K, 1 input image)",
+    apiType: "standard",
+    input: { prompt: "make it blue", image_urls: ["{{IMAGE}}"], aspect_ratio: "1:1", quality: "basic" },
+    requiresImage: true,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 20,
+    skipByDefault: false,
+  },
 
   // --- Z-Image ---
   {

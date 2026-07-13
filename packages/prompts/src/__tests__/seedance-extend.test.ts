@@ -21,11 +21,12 @@ describe("seedance-2-extend shared wiring", () => {
     expect(m.pricing[0]!.identifier).toBe("seedance-2-extend")
   })
 
-  it("stitch constants match the spike-validated recipe (4 tail / 3 head / 0.15s fades)", () => {
+  it("stitch constants match the spike-validated recipe (4 tail / 3 head / 0.15s fades / 1s ref tail)", () => {
     expect(SEEDANCE_2_EXTEND_STITCH).toEqual({
       trimTailFrames: 4,
       trimHeadFrames: 3,
       audioFadeSec: 0.15,
+      referenceTailSeconds: 1,
     })
   })
 

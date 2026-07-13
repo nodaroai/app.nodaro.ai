@@ -16,6 +16,7 @@ describe("imageReferenceLimit", () => {
     "flux-2-max": 8,
     "gpt-image-2": 16, // → gpt-image-2-i2i
     "seedream-5-lite": 16, // → seedream-5-lite-i2i
+    "seedream-5-pro": 16, // → seedream-5-pro-i2i
     "nano-banana-2": 4,
     flux: 4, // → flux-pro-i2i
     "flux-2-klein": 1, // product cap (schema array slices at 5)

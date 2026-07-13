@@ -59,6 +59,10 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `qwen-edit` | `qwen/image-edit` | [qwen edit](https://docs.kie.ai/market/qwen/image-edit.md) |
 | `seedream` | `seedream/4.5-text-to-image` | [seedream 4.5 t2i](https://docs.kie.ai/market/seedream/4.5-text-to-image.md) |
 | `seedream-edit` | `seedream/4.5-edit` | [seedream 4.5 edit](https://docs.kie.ai/market/seedream/4.5-edit.md) |
+| `seedream-5-lite` | `seedream/5-lite-text-to-image` | [seedream 5 lite t2i](https://docs.kie.ai/market/seedream/5-lite-text-to-image.md) |
+| `seedream-5-lite-i2i` | `seedream/5-lite-image-to-image` | [seedream 5 lite i2i](https://docs.kie.ai/market/seedream-5-lite-image-to-image.md) |
+| `seedream-5-pro` | `seedream/5-pro-text-to-image` | [seedream 5 pro t2i](https://docs.kie.ai/market/seedream/5-pro-text-to-image.md) |
+| `seedream-5-pro-i2i` | `seedream/5-pro-image-to-image` | [seedream 5 pro i2i](https://docs.kie.ai/market/seedream/5-pro-image-to-image.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | `topaz-image-upscale` | `topaz/image-upscale` | [topaz img upscale](https://docs.kie.ai/market/topaz/image-upscale.md) |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -224,6 +228,8 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | GPT Image 1.5 (T2I + I2I) | `quality` | `"medium"`, `"high"` |
 | GPT Image 2 (T2I + I2I) | Not supported (uses `resolution` instead) | — |
 | Seedream 4.5 (T2I + Edit) | `quality` | `"basic"` (2K), `"high"` (4K) |
+| Seedream 5 Lite (T2I + I2I) | `quality` | `"basic"` (2K), `"high"` (4K) |
+| Seedream 5 Pro (T2I + I2I) | `quality` | `"basic"` (1K), `"high"` (2K) — note: one tier LOWER than Lite/4.5 |
 | Other image models | Not supported | — |
 
 ### negative_prompt Support
