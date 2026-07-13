@@ -13,6 +13,14 @@ const mocks = vi.hoisted(() => ({
   // Rows returned by the stuck-render sweep (the one using `.filter("input_data->>type", ...)`).
   renderRows: [] as any[],
   renderChain: { data: null as any[] | null, error: null as { message: string } | null },
+  // Live BullMQ entries returned by videoQueue.getJobs (checkpoint-resume liveness scan).
+  queueJobs: [] as any[],
+  // [jobName, payload] tuples captured from videoQueue.add (checkpoint-resume requeue).
+  queueAddCalls: [] as Array<[string, Record<string, unknown>]>,
+  // UPDATE payloads captured from the resume CAS (`.update(...)` on the jobs table).
+  updateCalls: [] as Array<Record<string, unknown>>,
+  // What the resume CAS's terminal `.select("id")` resolves to.
+  updateResult: { data: [{ id: "u1" }] as any[] | null, error: null as { message: string } | null },
 }))
 
 vi.mock("../../supabase.js", () => ({
@@ -28,8 +36,20 @@ vi.mock("../../supabase.js", () => ({
       // The stuck-render sweep filters `.filter("input_data->>type","eq","render-video")`.
       // It ALSO calls `.is(...)`, so isRender must take precedence in `.limit()`.
       let isRender = false
+      // The checkpoint-resume CAS is an `.update(...)` builder terminated by
+      // `.select("id")` — in update mode `select` RESOLVES instead of chaining.
+      let isUpdate = false
       const chain: any = {
-        select: vi.fn(() => chain),
+        update: vi.fn((arg: Record<string, unknown>) => {
+          isUpdate = true
+          mocks.updateCalls.push(arg)
+          return chain
+        }),
+        select: vi.fn(() =>
+          isUpdate
+            ? Promise.resolve({ data: mocks.updateResult.data, error: mocks.updateResult.error })
+            : chain,
+        ),
         in: vi.fn((col?: string) => {
           if (col === "input_data->>type") isRender = true
           return chain
@@ -64,6 +84,15 @@ vi.mock("../../supabase.js", () => ({
   },
 }))
 
+vi.mock("../../queue.js", () => ({
+  videoQueue: {
+    getJobs: vi.fn(async () => mocks.queueJobs),
+    add: vi.fn(async (name: string, data: Record<string, unknown>) => {
+      mocks.queueAddCalls.push([name, data])
+    }),
+  },
+}))
+
 vi.mock("../sync-sweep.js", () => ({
   sweepStaleSyncJob: vi.fn().mockResolvedValue(undefined),
 }))
@@ -84,7 +113,7 @@ vi.mock("../fal.js", () => ({
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { reconcileInflightJobs } from "../cron.js"
+import { reconcileInflightJobs, STUCK_ORCHESTRATOR_JOB_TYPES, CHECKPOINT_RESUMABLE_JOB_TYPES } from "../cron.js"
 import { sweepStaleSyncJob } from "../sync-sweep.js"
 import { reconcileKieJob } from "../kie.js"
 import { reconcileReplicateJob } from "../replicate.js"
@@ -103,6 +132,11 @@ describe("reconcileInflightJobs", () => {
     mocks.renderRows.length = 0
     mocks.renderChain.data = null
     mocks.renderChain.error = null
+    mocks.queueJobs.length = 0
+    mocks.queueAddCalls.length = 0
+    mocks.updateCalls.length = 0
+    mocks.updateResult.data = [{ id: "u1" }]
+    mocks.updateResult.error = null
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
@@ -424,5 +458,158 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-director-1" }))
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-director-2" }))
     expect(result.swept).toBe(2)
+  })
+
+  describe("checkpointed plugin job resume (gvp/evp)", () => {
+    const gvpRow = (overrides: Record<string, unknown> = {}) => ({
+      id: "j-gvp-1",
+      provider_kind: null,
+      reconcile_attempts: 0,
+      user_id: "user-1",
+      usage_log_id: "usage-1",
+      input_data: {
+        type: "generate-video-pro",
+        prompt: "a man walking in the forest",
+        userPrompt: "a man walking in the forest",
+        provider: "seedance-2-fast",
+        duration: 46,
+        resolution: "480p",
+        aspectRatio: "adaptive",
+        generateAudio: true,
+        referenceImageUrls: [],
+      },
+      output_data: {
+        pro: {
+          version: 1,
+          pricing: { mode: "multi", reserveBase: 148, segmentDurations: [14, 11, 11, 11] },
+          segments: [{ status: "done", r2Url: "https://r2/j-gvp-1-seg1.mp4", duration: 14 }],
+        },
+      },
+      ...overrides,
+    })
+
+    it("membership: all four types are swept; only gvp/evp are checkpoint-resumable", () => {
+      expect([...STUCK_ORCHESTRATOR_JOB_TYPES]).toEqual(
+        ["render-video", "video-director", "generate-video-pro", "edit-video-pro"])
+      expect([...CHECKPOINT_RESUMABLE_JOB_TYPES].sort()).toEqual(["edit-video-pro", "generate-video-pro"])
+    })
+
+    it("gvp row with a checkpoint + attempts 0 → requeued for resume, NOT failed: payload reconstructed from the row, CAS bumps attempts + requeued_for_resume + fresh started_at", async () => {
+      mocks.renderRows.push(gvpRow())
+      const result = await reconcileInflightJobs()
+
+      // requeued, not swept
+      expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+      expect(result.recovered).toBe(1)
+      expect(result.swept).toBe(0)
+
+      // BullMQ payload: {jobId, userId, ...input_data, proPricing (from the
+      // checkpoint — money-authoritative), usageLogId}; inert extra keys ride along
+      expect(mocks.queueAddCalls).toHaveLength(1)
+      const [jobName, payload] = mocks.queueAddCalls[0]
+      expect(jobName).toBe("generate-video-pro")
+      expect(payload).toMatchObject({
+        jobId: "j-gvp-1",
+        userId: "user-1",
+        prompt: "a man walking in the forest",
+        provider: "seedance-2-fast",
+        duration: 46,
+        resolution: "480p",
+        aspectRatio: "adaptive",
+        generateAudio: true,
+        proPricing: { mode: "multi", reserveBase: 148, segmentDurations: [14, 11, 11, 11] },
+        usageLogId: "usage-1",
+      })
+
+      // CAS: one resume max, machine tag, started_at refreshed so queue-wait
+      // doesn't eat the next RENDER_STALE_MS window
+      expect(mocks.updateCalls).toHaveLength(1)
+      expect(mocks.updateCalls[0].reconcile_attempts).toBe(1)
+      expect(mocks.updateCalls[0].reconcile_last_error).toBe("requeued_for_resume")
+      expect(typeof mocks.updateCalls[0].started_at).toBe("string")
+      // the row is NOT failed — no status flip in the resume update
+      expect(mocks.updateCalls[0].status).toBeUndefined()
+    })
+
+    it("evp row with a checkpoint resumes the same way", async () => {
+      mocks.renderRows.push(gvpRow({
+        id: "j-evp-1",
+        input_data: { type: "edit-video-pro", videoUrl: "https://r2/src.mp4", spanStart: 2, spanEnd: 12, prompt: "p", provider: "seedance-2", mode: "replace" },
+        output_data: { pro: { kind: "edit", version: 1, pricing: { mode: "replace", reserveBase: 100 }, segments: [] } },
+      }))
+      const result = await reconcileInflightJobs()
+
+      expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+      expect(result.recovered).toBe(1)
+      expect(mocks.queueAddCalls).toHaveLength(1)
+      const [jobName, payload] = mocks.queueAddCalls[0]
+      expect(jobName).toBe("edit-video-pro")
+      expect(payload).toMatchObject({
+        jobId: "j-evp-1", videoUrl: "https://r2/src.mp4", spanStart: 2, spanEnd: 12,
+        proPricing: { mode: "replace", reserveBase: 100 },
+      })
+    })
+
+    it("resume already spent (attempts ≥ 1) → swept as before, no requeue", async () => {
+      mocks.renderRows.push(gvpRow({ reconcile_attempts: 1 }))
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-gvp-1", reconcile_attempts: 1 }))
+      expect(result.swept).toBe(1)
+      expect(result.recovered).toBe(0)
+    })
+
+    it("no checkpoint yet (single-mode gvp / crash before plan) → swept, no requeue", async () => {
+      mocks.renderRows.push(gvpRow({ output_data: null }))
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).toHaveBeenCalledTimes(1)
+      expect(result.swept).toBe(1)
+    })
+
+    it("checkpoint without pricing → swept (payload can't be reconstructed money-authoritatively)", async () => {
+      mocks.renderRows.push(gvpRow({ output_data: { pro: { version: 1, segments: [] } } }))
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(result.swept).toBe(1)
+    })
+
+    it("live BullMQ entry for the row (slow run, not dead) → neither requeued NOR swept", async () => {
+      mocks.queueJobs.push({ data: { jobId: "j-gvp-1" } })
+      mocks.renderRows.push(gvpRow())
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+      expect(mocks.updateCalls).toHaveLength(0)
+      expect(result.notStale).toBe(1)
+      expect(result.swept).toBe(0)
+      expect(result.recovered).toBe(0)
+    })
+
+    it("CAS lost (0 rows updated — cancel/complete landed or another tick won) → falls through to sweep, no requeue", async () => {
+      mocks.updateResult.data = []
+      mocks.renderRows.push(gvpRow())
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).toHaveBeenCalledTimes(1)
+      expect(result.swept).toBe(1)
+    })
+
+    it("render-video / video-director are NEVER resumed, even with checkpoint-shaped output_data", async () => {
+      mocks.renderRows.push(
+        gvpRow({ id: "j-r", input_data: { type: "render-video" } }),
+        gvpRow({ id: "j-d", input_data: { type: "video-director" } }),
+      )
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).toHaveBeenCalledTimes(2)
+      expect(result.swept).toBe(2)
+    })
   })
 })

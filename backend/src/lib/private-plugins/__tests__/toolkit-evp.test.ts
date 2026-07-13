@@ -162,6 +162,33 @@ describe("toolkit.ts — edit-video-pro members", () => {
         expect.objectContaining({ targetWidth: 1920, targetHeight: 1080 }),
       )
     })
+
+    it("threads smartCut through to core combineVideos (gvp/evp stitch boundary matcher)", async () => {
+      mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
+      mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")
+
+      await tk.ffmpeg.combineVideos({
+        videoUrls: ["https://a.mp4", "https://b.mp4"],
+        transition: "cut",
+        smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+      })
+
+      expect(mockCombineVideosCore).toHaveBeenCalledWith(
+        expect.objectContaining({ smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 } }),
+      )
+    })
+
+    it("omitted smartCut stays undefined at the core call (fixed trims — pre-smart-cut behavior)", async () => {
+      mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
+      mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")
+
+      await tk.ffmpeg.combineVideos({
+        videoUrls: ["https://a.mp4", "https://b.mp4"],
+        transition: "cut",
+      })
+
+      expect(mockCombineVideosCore.mock.calls.at(-1)![0].smartCut).toBeUndefined()
+    })
   })
 
   describe("http.computeEditVideoProPricing", () => {

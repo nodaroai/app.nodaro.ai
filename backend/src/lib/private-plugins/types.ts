@@ -221,6 +221,11 @@ export interface PluginFfmpegToolkit {
      *  can never flip the majority vote and letterbox the kept footage. */
     targetWidth?: number
     targetHeight?: number
+    /** PSNR boundary matcher (core `providers/video/smart-cut.ts`) — built
+     *  for tail-chained continuation clips whose boundary frames are
+     *  near-twins; unmatched boundaries keep the fixed trims. Additive-
+     *  optional so plugin versions on either side of this member interop. */
+    smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
   }): Promise<string>
   /**
    * New core helper added alongside this contract member
