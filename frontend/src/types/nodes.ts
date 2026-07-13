@@ -7584,7 +7584,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       systemPrompt: "",
       userInput: "",
       temperature: 0.7,
-      maxTokens: 2048,
+      maxTokens: 8192,
       fieldMappings: {},
       templateId: "custom",
     } as LLMChatData,

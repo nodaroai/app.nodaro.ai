@@ -14,8 +14,8 @@ interface LlmModelSelectProps {
   value?: string
   onChange: (modelId: string) => void
   /** Optional predicate to restrict the offered models (default: all models).
-   *  e.g. describe-to-picker passes `(m) => m.vendor === "anthropic"` because
-   *  its forced tool-use only works on Anthropic-direct. */
+   *  e.g. describe-to-picker restricts to STRUCTURED_VISION_MODELS because its
+   *  analyzer needs guaranteed schema-shaped output over an image. */
   filter?: (model: LlmModelDef) => boolean
 }
 

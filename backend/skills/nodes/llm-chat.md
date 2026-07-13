@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-07-13T16:15:38.348Z
-generated_from: 9af14ef89
+generated_at: 2026-07-13T18:58:11.041Z
+generated_from: 90fabdb66
 ---
 
 # LLM Chat
@@ -46,7 +46,7 @@ generated_from: 9af14ef89
   "systemPrompt": "",
   "userInput": "",
   "temperature": 0.7,
-  "maxTokens": 2048,
+  "maxTokens": 8192,
   "fieldMappings": {},
   "templateId": "custom"
 }
@@ -80,7 +80,7 @@ generated_from: 9af14ef89
     "systemPrompt": "",
     "userInput": "",
     "temperature": 0.7,
-    "maxTokens": 2048,
+    "maxTokens": 8192,
     "fieldMappings": {},
     "templateId": "custom"
   }

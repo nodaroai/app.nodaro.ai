@@ -30,7 +30,7 @@ import type {
   ImageCriticData,
   DescribeToPickerData,
 } from "@/types/nodes"
-import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared"
+import { IMAGE_CRITIC_MODES, STRUCTURED_VISION_MODELS, type ImageCriticMode } from "@nodaro/shared"
 import { pickerFanoutTargets } from "@nodaro/prompts"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -569,7 +569,7 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         feature="describe-to-picker"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
-        filter={(m) => m.vendor === "anthropic"}
+        filter={(m) => STRUCTURED_VISION_MODELS.some((v) => v.id === m.id)}
       />
       <ReasoningEffortSelect
         feature="describe-to-picker"

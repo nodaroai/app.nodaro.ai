@@ -365,8 +365,8 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
     expect(NODE_QUICK_CONFIGS["describe-to-picker"].map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
   })
 
-  it("forced-alignment keeps just the model control (ForcedAlignmentData has no reasoningEffort field)", () => {
-    expect(NODE_QUICK_CONFIGS["forced-alignment"].map((c) => c.field)).toEqual(["llmModel"])
+  it("forced-alignment has NO quick-config entry (fixed-price node — ForcedAlignmentData has no llmModel/reasoningEffort field)", () => {
+    expect(NODE_QUICK_CONFIGS["forced-alignment"]).toBeUndefined()
   })
 
   it("returns [] for a model with no declared reasoning levels (control self-hides)", () => {
