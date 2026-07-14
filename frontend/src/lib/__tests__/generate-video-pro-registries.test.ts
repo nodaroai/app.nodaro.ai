@@ -104,7 +104,19 @@ describe("isValidGenerateVideoProConnection", () => {
     expect(isValidGenerateVideoProConnection("videoReferences", "generate-image", isPicker)).toBe(false)
   })
 
+  it("audio + audioReferences accept audio producers (full parity)", () => {
+    expect(isValidGenerateVideoProConnection("audio", "text-to-speech", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("audioReferences", "generate-music", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("audio", "generate-image", isPicker)).toBe(false)
+  })
+
+  it("assets accepts identity nodes; look/elements accept their picker families", () => {
+    expect(isValidGenerateVideoProConnection("assets", "character", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("assets", "text-prompt", isPicker)).toBe(false)
+    expect(isValidGenerateVideoProConnection("look", "text-prompt", isPicker)).toBe(false)
+  })
+
   it("unknown handle returns false", () => {
-    expect(isValidGenerateVideoProConnection("audio", "text-to-speech", isPicker)).toBe(false)
+    expect(isValidGenerateVideoProConnection("nonexistent-handle", "text-prompt", isPicker)).toBe(false)
   })
 })

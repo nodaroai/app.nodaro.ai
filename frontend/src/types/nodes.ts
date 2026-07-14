@@ -1830,6 +1830,10 @@ export interface GenerateVideoProNodeData {
   aspectRatio?: string
   resolution?: string
   generateAudio?: boolean
+  /** Panel-typed negative — composed with the wired `negative` handle via
+   *  composeNegative (generate-video parity) and appended to every segment
+   *  prompt as an "Avoid:" suffix (Seedance 2 has no native negative). */
+  negativePrompt?: string
   selectedStartFrameNodeId?: string | null
   referenceImageOrder?: string[]
   fieldMappings?: FieldMappings
@@ -6063,7 +6067,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Video Pro",
     category: "ai",
     creditCost: 82,
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
     defaultData: {
       label: "Generate Video Pro",

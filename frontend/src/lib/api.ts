@@ -2691,6 +2691,11 @@ export async function generateVideoPro(body: {
   /** The Extend Source: the pro run continues from this clip (segment 1
    *  rides the anchored continuation transport off its 2s tail). */
   extendVideoUrl?: string
+  /** Post-gen soundtrack overlay — merged onto the final stitched
+   *  deliverable (voiceover 100% / generated audio 30%). */
+  audioUrl?: string
+  /** Seedance-2 r2v reference audio (max 3) — rides every segment. */
+  referenceAudioUrls?: string[]
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

@@ -106,6 +106,7 @@ function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRat
     generateAudio: options?.generateAudio,
     referenceImageUrls: options?.referenceImageUrls,
     referenceVideoUrls: options?.referenceVideoUrls,
+    referenceAudioUrls: options?.referenceAudioUrls,
     ...(aspectRatio !== undefined ? { aspectRatio } : {}),
   }
 }

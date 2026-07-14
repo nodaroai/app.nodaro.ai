@@ -3498,6 +3498,15 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
       </MappableField>
 
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={2}
+          value={data.negativePrompt || ""}
+          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+          placeholder="What to avoid (appended to every segment as an Avoid: suffix)..."
+        />
+      </MappableField>
+
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <div className="flex items-center gap-2">
           <input

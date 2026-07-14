@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-14T05:02:08.966Z
-generated_from: 1bff078c7
+generated_at: 2026-07-14T05:26:46.664Z
+generated_from: 523a84a40
 ---
 
 # Generate Video Pro
@@ -10,7 +10,7 @@ generated_from: 1bff078c7
 **Type:** `generate-video-pro`
 **Category:** ai
 **Credit cost:** 82
-**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
@@ -23,6 +23,7 @@ generated_from: 1bff078c7
 - `aspectRatio?: string`
 - `resolution?: string`
 - `generateAudio?: boolean`
+- `negativePrompt?: string`
 - `selectedStartFrameNodeId?: string | null`
 - `referenceImageOrder?: string[]`
 - `fieldMappings?: FieldMappings`

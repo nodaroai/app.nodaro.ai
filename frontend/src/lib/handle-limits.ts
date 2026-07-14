@@ -246,6 +246,18 @@ export function getHandleConnectionLimit(
         // continues from it; Seedance's 3-video ref cap doesn't apply, this
         // is a continuation-transport input, not a style-reference pool).
         return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "audio":
+        // Post-gen soundtrack overlay (merged onto the final stitched
+        // deliverable) — one track, mirroring generate-video's non-LTX cap.
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "audioReferences": {
+        // Seedance-2 r2v multimodal audio conditioning — same provider-cap
+        // source generate-video reads (SEEDANCE_2_REF_LIMITS.audio = 3).
+        const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.audio
+        return cap != null
+          ? { limit: cap, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      }
       default:
         return null
     }

@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, Type, Image as ImageIcon, Images, Film, Minus } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -32,11 +32,19 @@ const ACCEPTS_START_FRAME = (t: string) => isValidGenerateVideoProConnection("st
 const ACCEPTS_END_FRAME   = (t: string) => isValidGenerateVideoProConnection("endFrame", t, isPickerType)
 const ACCEPTS_IMAGE_REFS  = (t: string) => isValidGenerateVideoProConnection("imageReferences", t, isPickerType)
 const ACCEPTS_VIDEO_REFS  = (t: string) => isValidGenerateVideoProConnection("videoReferences", t, isPickerType)
+const ACCEPTS_AUDIO       = (t: string) => isValidGenerateVideoProConnection("audio", t, isPickerType)
+const ACCEPTS_AUDIO_REFS  = (t: string) => isValidGenerateVideoProConnection("audioReferences", t, isPickerType)
+const ACCEPTS_ASSETS      = (t: string) => isValidGenerateVideoProConnection("assets", t, isPickerType)
+const ACCEPTS_LOOK        = (t: string) => isValidGenerateVideoProConnection("look", t, isPickerType)
+const ACCEPTS_ELEMENTS    = (t: string) => isValidGenerateVideoProConnection("elements", t, isPickerType)
 
-// 6-pip stack in two clusters (text / image+video) — bottom-anchored, 28px
-// within a cluster, 40px between clusters: generate-video's exact convention
-// (see its HANDLE_OFFSET map) minus the audio + picker clusters gvp doesn't
-// carry (generate-video-pro-handles.ts documents why).
+// FULL 11-pip stack — generate-video's EXACT cluster layout (its
+// HANDLE_OFFSET map: 28px within a cluster, 40px between clusters):
+//   Text:    prompt(24) → negative(52)
+//   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)
+//   Audio:   audio(216) → audioRefs(244)
+//   Pickers: assets(284) → elements(312) → look(340)
+// gvp has no inline-prompt mode, so the offsets are static (no chrome shift).
 const HANDLE_TOP = {
   prompt: "calc(100% - 24px)",
   negative: "calc(100% - 52px)",
@@ -44,6 +52,11 @@ const HANDLE_TOP = {
   endFrame: "calc(100% - 120px)",
   imageReferences: "calc(100% - 148px)",
   videoReferences: "calc(100% - 176px)",
+  audio: "calc(100% - 216px)",
+  audioReferences: "calc(100% - 244px)",
+  assets: "calc(100% - 284px)",
+  elements: "calc(100% - 312px)",
+  look: "calc(100% - 340px)",
 } as const
 
 function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
@@ -115,6 +128,11 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
       { id: "endFrame",        type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.endFrame,        left: "-29px" }, external: true },
       { id: "imageReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.imageReferences, left: "-29px" }, external: true },
       { id: "videoReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.videoReferences, left: "-29px" }, external: true },
+      { id: "audio",           type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.audio,           left: "-29px" }, external: true },
+      { id: "audioReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.audioReferences, left: "-29px" }, external: true },
+      { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.assets,          left: "-29px" }, external: true },
+      { id: "elements",        type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.elements,        left: "-29px" }, external: true },
+      { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.look,            left: "-29px" }, external: true },
       { id: "video",           type: "source" as const, position: Position.Right, customStyle: { top: "24px",                     right: "-29px" }, external: true },
     ],
     [],
@@ -211,17 +229,21 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {/* 6 typed input pips + 1 output pip. Colors mirror generate-video's
-          category-color scheme: prompt → brand pink / negative → red (text),
-          startFrame/endFrame → cyan, imageReferences → emerald,
-          videoReferences (the extend source, limit 1) → purple, video out →
-          purple. */}
+      {/* FULL 11 typed input pips + 1 output pip — generate-video's exact
+          set, order, colors, and icons (parity by construction; see
+          generate-video-pro-handles.ts). The one semantic delta:
+          videoReferences here is the EXTEND SOURCE (limit 1). */}
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"        color={TEXT_HANDLE_COLOR}      icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}          accepts={ACCEPTS_PROMPT} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="negative"        type="target" position={Position.Left}  label="Negative"      color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={HANDLE_TOP.negative}        accepts={ACCEPTS_NEGATIVE} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame"   color={HANDLE_COLORS.image}    icon={<ImageIcon />} side="left"  top={HANDLE_TOP.startFrame}      accepts={ACCEPTS_START_FRAME} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"     color={HANDLE_COLORS.endFrame} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.endFrame}        accepts={ACCEPTS_END_FRAME} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"    color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={HANDLE_TOP.imageReferences} orderMatters accepts={ACCEPTS_IMAGE_REFS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="videoReferences" type="target" position={Position.Left}  label="Extend Source" color={HANDLE_COLORS.video}    icon={<Film />}      side="left"  top={HANDLE_TOP.videoReferences} accepts={ACCEPTS_VIDEO_REFS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="audio"           type="target" position={Position.Left}  label="Audio"         color={HANDLE_COLORS.audio}    icon={<Volume2 />}   side="left"  top={HANDLE_TOP.audio}           accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"    color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={HANDLE_TOP.audioReferences} orderMatters accepts={ACCEPTS_AUDIO_REFS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="assets"          type="target" position={Position.Left}  label="Assets"        color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={HANDLE_TOP.assets}          orderMatters accepts={ACCEPTS_ASSETS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="elements"        type="target" position={Position.Left}  label="Elements"      color={HANDLE_COLORS.look}     icon={<Sparkles />}  side="left"  top={HANDLE_TOP.elements}        accepts={ACCEPTS_ELEMENTS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="look"            type="target" position={Position.Left}  label="Look"          color={HANDLE_COLORS.look}     icon={<Aperture />}  side="left"  top={HANDLE_TOP.look}            accepts={ACCEPTS_LOOK} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="video"           type="source" position={Position.Right} label="Video"         color={HANDLE_COLORS.video}    icon={<Film />}      side="right" top="24px" />
 
       {activeUrl && (

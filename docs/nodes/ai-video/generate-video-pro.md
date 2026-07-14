@@ -20,9 +20,14 @@ Below that limit, Generate Video Pro behaves exactly like a normal single-shot S
 | `endFrame` | target | Image producers (limit 1) | Closing frame — applied to the **final segment** only. Requires a start anchor or a multi-segment run (a single-segment text-only run has no end-frame path) |
 | `imageReferences` | target | Image producers (ordered, multi) | Reference images carried into generation |
 | `videoReferences` | target | Video producers (limit 1) | **Extend Source** — the run continues from this clip: its final 2 seconds ride as the `@video_1` reference and its last frame anchors segment 1, the same continuation transport later segments use between themselves |
+| `audio` | target | Audio producers (limit 1) | Post-generation soundtrack overlay, merged onto the **final stitched video** (wired audio at full volume, generated audio ducked to background) |
+| `audioReferences` | target | Audio producers (ordered, max 3) | Seedance 2 multimodal reference audio — carried into **every segment** so voice/music conditioning stays consistent across the stitch |
+| `assets` | target | Characters / objects / creatures / locations / faces | Identity references — their images join the reference pool (carried into **every segment** so identity persists across the whole video) and `@mentions` in the prompt resolve exactly as on Generate Video |
+| `elements` | target | Element pickers | Prompt-fragment injection, identical to Generate Video |
+| `look` | target | Look/cinematography pickers | Prompt-fragment injection, identical to Generate Video |
 | `video` | source | n/a | Output — the final stitched video |
 
-Generate Video Pro still exposes a trimmed handle set compared to Generate Video — no `audioReferences` / `audio` handles (per-segment reference-audio semantics are undefined for a stitched multi-segment run; the Generate Audio toggle covers sound) and none of the picker clusters (`assets` / `look` / `elements`) — wire identity/style images through `imageReferences` instead.
+Generate Video Pro exposes **exactly Generate Video's input handles** — same names, same accepted producers (guarded by an automated parity test). The only behavioral deltas are the ones long-video stitching requires: `videoReferences` is the single Extend Source rather than a style-reference pool, reference images/audio are carried into every segment rather than a single call, and a lone `@mention` stays a reference instead of being promoted to the start frame (identity must persist beyond segment 1).
 
 ## Configuration
 
@@ -45,7 +50,7 @@ Generate Video Pro is scoped to the Seedance 2 family:
 | `seedance-2-fast` | Seedance 2.0 Fast | 480p / 720p only |
 | `seedance-2-mini` | Seedance 2.0 Mini | 480p / 720p only |
 
-For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards `startFrame`, `endFrame`, `imageReferences`, and the Extend Source (`videoReferences`) into generation, but exposes none of that page's richer reference/token surface.
+For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards the full reference surface — `startFrame`, `endFrame`, `imageReferences`, `audioReferences`, `assets` (with `@mention` / `{image:N}` token resolution), and the Extend Source (`videoReferences`) — into generation.
 
 ## How segmentation works
 
