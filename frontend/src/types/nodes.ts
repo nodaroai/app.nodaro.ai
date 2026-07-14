@@ -6069,6 +6069,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       provider: "seedance-2",
       prompt: "",
       duration: 8,
+      aspectRatio: "adaptive",
       resolution: "720p",
       generateAudio: true,
       fieldMappings: {},

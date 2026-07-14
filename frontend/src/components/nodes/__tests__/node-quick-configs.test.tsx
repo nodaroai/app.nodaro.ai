@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render } from "@testing-library/react"
+import { render, fireEvent } from "@testing-library/react"
 
 const updateNodeData = vi.fn()
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -16,6 +16,15 @@ vi.mock("@/components/ui/select", () => ({
   SelectContent: ({ children }: any) => <div>{children}</div>,
   SelectItem: ({ children, value }: any) => <div data-testid={`item-${value}`}>{children}</div>,
   SelectValue: ({ children }: any) => <span>{children}</span>,
+}))
+
+// Stub the popover the same way (the custom-range editor lives in it) — the
+// mock renders content unconditionally; Radix's real open-gating is not under
+// test here, the slider/input wiring is.
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <div data-testid="popover">{children}</div>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: ({ children }: any) => <div data-testid="popover-content">{children}</div>,
 }))
 
 import { QuickConfigSelect, getQuickConfigs, type QuickConfigControl } from "../node-quick-configs"
@@ -389,5 +398,119 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
     expect(effortControl.sentinelUndefined).toBe("auto")
     expect(opts[0]).toEqual({ value: "auto", label: "Auto" })
     expect(opts.find((o) => o.value === "max")?.label).toBe("Max (may bill one tier up)")
+  })
+})
+
+// ===========================================================================
+// generate-video-pro quick configs — strip parity (aspect default + custom
+// duration range)
+// ===========================================================================
+describe("generate-video-pro quick configs", () => {
+  const gvp = getQuickConfigs("generate-video-pro")!
+
+  it("registers model · aspect · duration · resolution, in generate-video's order", () => {
+    expect(gvp.map((c) => c.field)).toEqual(["provider", "aspectRatio", "duration", "resolution"])
+  })
+
+  it("aspect defaults to adaptive (the runtime default sits LAST in the shared list)", () => {
+    const aspect = gvp.find((c) => c.field === "aspectRatio")!
+    expect(aspect.defaultValue).toBe("adaptive")
+    const values = (aspect.options as ReadonlyArray<{ value: string }>).map((o) => o.value)
+    expect(values).toContain("adaptive")
+  })
+
+  it("duration carries the 4–120s custom range on top of the long-form presets", () => {
+    const duration = gvp.find((c) => c.field === "duration")!
+    expect(duration.numeric).toBe(true)
+    expect(duration.customRange).toEqual({ min: 4, max: 120, unit: "s" })
+    const values = (duration.options as ReadonlyArray<{ value: string }>).map((o) => o.value)
+    expect(values).toEqual(["8", "15", "20", "30", "45", "60", "90", "120"])
+  })
+})
+
+describe("QuickConfigSelect customRange (slider + manual input)", () => {
+  const durationControl: QuickConfigControl = {
+    field: "duration",
+    ariaLabel: "Duration",
+    numeric: true,
+    options: [
+      { value: "8", label: "8s" },
+      { value: "15", label: "15s" },
+    ],
+    customRange: { min: 4, max: 120, unit: "s" },
+  }
+
+  it("an in-range non-preset value is NOT snapped and labels the trigger directly", () => {
+    const { getByTestId } = render(
+      <QuickConfigSelect nodeId="n1" control={durationControl} value="46" data={{}} />,
+    )
+    expect(updateNodeData).not.toHaveBeenCalled()
+    expect(getByTestId("select-trigger").textContent).toContain("46s")
+  })
+
+  it("an out-of-range value still snaps to the first preset", () => {
+    render(<QuickConfigSelect nodeId="n1" control={durationControl} value="999" data={{}} />)
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { duration: 8 })
+  })
+
+  it("renders the Custom… item alongside the presets", () => {
+    const { getByTestId } = render(
+      <QuickConfigSelect nodeId="n1" control={durationControl} value="8" data={{}} />,
+    )
+    expect(getByTestId("item-__custom__").textContent).toContain("Custom…")
+  })
+
+  it("the popover slider writes the picked value as a NUMBER", () => {
+    const { getByLabelText } = render(
+      <QuickConfigSelect nodeId="n1" control={durationControl} value="8" data={{}} />,
+    )
+    fireEvent.change(getByLabelText("Duration (custom)"), { target: { value: "46" } })
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { duration: 46 })
+  })
+
+  it("the popover number input clamps to the range before writing", () => {
+    const { getByLabelText } = render(
+      <QuickConfigSelect nodeId="n1" control={durationControl} value="8" data={{}} />,
+    )
+    fireEvent.change(getByLabelText("Duration (custom value)"), { target: { value: "500" } })
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { duration: 120 })
+    fireEvent.change(getByLabelText("Duration (custom value)"), { target: { value: "1" } })
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { duration: 4 })
+  })
+
+  it("controls WITHOUT customRange render no Custom… item and no popover editor", () => {
+    const { queryByTestId } = render(
+      <QuickConfigSelect nodeId="n1" control={control} value="720p" data={{ provider: "wan" }} />,
+    )
+    expect(queryByTestId("item-__custom__")).toBeNull()
+    expect(queryByTestId("popover-content")).toBeNull()
+  })
+})
+
+describe("QuickConfigSelect defaultValue (unset-field display)", () => {
+  const aspectControl: QuickConfigControl = {
+    field: "aspectRatio",
+    ariaLabel: "Aspect",
+    options: [
+      { value: "16:9", label: "16:9 (Landscape)" },
+      { value: "adaptive", label: "Adaptive" },
+    ],
+    defaultValue: "adaptive",
+  }
+
+  it("an unset field displays the declared default, NOT the first option, and writes nothing", () => {
+    const { getByTestId } = render(
+      <QuickConfigSelect nodeId="n1" control={aspectControl} value="" data={{}} />,
+    )
+    expect(getByTestId("select-trigger").textContent).toContain("Adaptive")
+    expect(getByTestId("select-trigger").textContent).not.toContain("16:9")
+    expect(updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("an explicit value still wins over the default", () => {
+    const { getByTestId } = render(
+      <QuickConfigSelect nodeId="n1" control={aspectControl} value="16:9" data={{}} />,
+    )
+    expect(getByTestId("select-trigger").textContent).toContain("16:9 (Landscape)")
   })
 })

@@ -435,6 +435,16 @@ export const VIDEO_FPS_OPTIONS: Record<string, ReadonlyArray<{ value: number; la
  *  generic VIDEO_RATIOS triplet (16:9 / 9:16 / 1:1) when the catalog entry
  *  doesn't declare an `aspectRatios` field — matches the legacy
  *  video-configs behavior. */
+/**
+ * Generate Video Pro duration cap fallback (seconds) — mirrors the backend
+ * default (`GENERATE_VIDEO_PRO_MAX_DURATION` env var,
+ * `ee/billing/generate-video-pro-credits.ts`). Lives HERE (not in
+ * video-configs.tsx, which re-exports it for back-compat) so the node quick
+ * strip can import it without pulling the whole config-panel module graph
+ * into the canvas bundle.
+ */
+export const GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK = 120
+
 export function getAspectRatiosForVideoModel(
   provider: string,
 ): readonly LabeledOption[] {

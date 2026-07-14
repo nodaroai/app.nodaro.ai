@@ -38,7 +38,7 @@ import type {
   SwitchXData,
   VideoAnalysisNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
@@ -3431,17 +3431,11 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
 
 /**
- * Duration cap fallback (seconds) when no node-registry descriptor is
- * available to read the real cap from. No frontend consumer of the
- * `GET /v1/nodes` discovery endpoint exists yet — when one lands, replace
- * this with the descriptor's cap. Mirrors the backend default
- * (`GENERATE_VIDEO_PRO_MAX_DURATION` env var, `ee/billing/generate-video-pro-credits.ts`).
- *
- * Exported (not module-private) so every other GVP duration-slider consumer —
- * the published-app field renderer (`presentation/config-field-renderer.tsx`)
- * — imports the SAME constant instead of re-declaring the literal 120.
+ * Duration cap fallback — now DECLARED in model-options.ts (so the node quick
+ * strip's custom-duration control shares it without importing this module);
+ * re-exported here for existing consumers (config-field-renderer.tsx).
  */
-export const GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK = 120
+export { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "./model-options"
 
 /**
  * Generate Video Pro — trimmed, Seedance-2-family-only config panel for the

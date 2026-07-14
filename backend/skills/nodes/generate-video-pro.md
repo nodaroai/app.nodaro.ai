@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-13T22:36:16.472Z
-generated_from: dbf9c8d98
+generated_at: 2026-07-14T05:02:08.966Z
+generated_from: 1bff078c7
 ---
 
 # Generate Video Pro
@@ -41,6 +41,7 @@ generated_from: dbf9c8d98
   "provider": "seedance-2",
   "prompt": "",
   "duration": 8,
+  "aspectRatio": "adaptive",
   "resolution": "720p",
   "generateAudio": true,
   "fieldMappings": {},
@@ -78,6 +79,7 @@ generated_from: dbf9c8d98
     "provider": "seedance-2",
     "prompt": "",
     "duration": 8,
+    "aspectRatio": "adaptive",
     "resolution": "720p",
     "generateAudio": true,
     "fieldMappings": {},
