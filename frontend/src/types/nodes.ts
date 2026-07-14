@@ -5879,6 +5879,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "imagen4-ultra", label: "Imagen 4 Ultra" },
           { value: "nano-banana", label: "Nano Banana" },
           { value: "nano-banana-2", label: "Nano Banana 2" },
+          { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite" },
           { value: "nano-banana-pro", label: "Nano Banana Pro" },
           { value: "qwen", label: "Qwen" },
           { value: "seedream", label: "Seedream" },

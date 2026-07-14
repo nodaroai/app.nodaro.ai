@@ -80,6 +80,19 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
   },
 
+  // Nano Banana 2 Lite (Gemini 3.1 Flash-Lite Image) — fast, low-cost, 1K ONLY.
+  // Single-id t2i+i2i like nano-banana-2, but input images go via `image_urls`
+  // (array, up to 10) — NOT the family's `image_input`. No resolution, quality,
+  // or output_format params in its schema.
+  // See: docs.kie.ai/market/google/nano-banana-2-lite.md
+  "nano-banana-2-lite": {
+    model: "nano-banana-2-lite",
+    credits: 4,
+    cost: 0.02,
+    imageParam: "image_urls",
+    extraParams: { aspect_ratio: "16:9" },
+  },
+
   "nano-banana-edit": {
     model: "google/nano-banana-edit",
     credits: 4,

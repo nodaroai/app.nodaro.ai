@@ -20,7 +20,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
 | Style Type | select | -- | Ideogram-specific style parameter |
 | Expand Prompt | boolean | -- | Ideogram-specific prompt expansion toggle |
-| Reference Images | image list | -- | Supported by nano-banana, nano-banana-pro, nano-banana-2 only. Upload or select from library. |
+| Reference Images | image list | -- | Supported by nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-lite only. Upload or select from library. |
 | Character/Asset References | references | -- | Connect Character, Object, or Location nodes for visual consistency |
 | Strength | slider | varies | i2i denoising strength. Shown only for providers that support it (`ideogram-remix`, `qwen-i2i`). Lower = stays closer to the base image. |
 | Guidance Scale | slider | varies | Prompt-adherence guidance. Shown only for providers that support it (`qwen-i2i`, `qwen-edit`). |
@@ -68,6 +68,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding | Same as Nano Banana |
+| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **2 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | flux | Flux | Photorealistic, highest quality output | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
 | flux-flex | Flux Flex | Flexible Flux, fast generation | Same as Flux |
@@ -103,7 +104,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 
@@ -125,7 +126,7 @@ An inpaint or refine edit is **one generation at the provider's normal cost** �
 - Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.
 - Use GPT Image for scenes requiring accurate text rendering (signs, labels, UI mockups).
 - Append style presets rather than writing style instructions in the prompt -- the system handles appending automatically.
-- For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2), connect Character nodes upstream for consistent character appearance across shots.
+- For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-lite), connect Character nodes upstream for consistent character appearance across shots.
 - Set negative prompts for all providers to reduce unwanted artifacts. For imagen4/ideogram/qwen, the negative prompt is sent natively; for others it is appended as "Avoid:...".
 
 ## Common Use Cases

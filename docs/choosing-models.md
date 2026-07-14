@@ -63,6 +63,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Ideogram Reframe | Ideogram | Everyday | 2 | edit | Outpaint / reframe to a new aspect ratio while preserving subject. |
 | Ideogram V3 | Ideogram | Everyday | 2 | t2i | Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY). |
 | Imagen 4 | Google | Everyday | 2 | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
+| Nano Banana 2 Lite | Google | Everyday | 2 | t2i, i2i | Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing. |
 | Nano Banana Edit | Google | Everyday | 2 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |
 | Qwen Edit | Alibaba | Everyday | 2 | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Everyday | 2 | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
