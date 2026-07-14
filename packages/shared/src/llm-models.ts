@@ -37,14 +37,18 @@ export interface LlmModelDef {
   maxOutputTokens: number
   /**
    * How this model can be forced into schema-valid structured output.
-   * - "anthropic-tool"       → direct Anthropic SDK forced tool_choice (guaranteed).
-   * - "kie-response-format"  → KIE chat-completions `response_format: json_schema`
-   *                            (verified enforced for Gemini via KIE).
-   * - undefined              → no native structured mode (GPT-via-KIE doesn't honor
-   *                            response_format); callers fall back to parse + retry.
+   * - "anthropic-tool"          → forced tool_choice on the Claude wire (direct SDK
+   *                               guaranteed; KIE's proxy re-serializes the tool call
+   *                               as a `<tool_calls>` text tag — decoded in llm-client).
+   * - "kie-response-format"     → KIE chat-completions `response_format: json_schema`
+   *                               (verified enforced for Gemini via KIE).
+   * - "responses-json-schema"   → KIE codex/v1/responses `text.format: json_schema`
+   *                               (live-verified 2026-07-14 for gpt-5.4/5.5 and the
+   *                               whole GPT-5.6 family, text AND vision inputs).
+   * - undefined                 → no native mode; callers fall back to parse + retry.
    * Capability-driven so `llmCompleteStructured` never hardcodes provider ids.
    */
-  structuredOutputMode?: "anthropic-tool" | "kie-response-format"
+  structuredOutputMode?: "anthropic-tool" | "kie-response-format" | "responses-json-schema"
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
   /** Effort levels this model accepts (ascending). Absent/empty = no effort lever, picker hidden. */
@@ -142,6 +146,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-4",
     vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     reasoningEfforts: ["low", "medium", "high"],
@@ -154,6 +159,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-5",
     vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
@@ -167,6 +173,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-6-luna",
     vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
@@ -180,6 +187,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-6-terra",
     vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
@@ -193,6 +201,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-6-sol",
     vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
@@ -238,9 +247,10 @@ export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 /** Vision models that can return GUARANTEED structured output — the
  *  describe-to-picker analyzer forces a schema over an image, so its model
  *  pickers AND the backend route gate offer exactly these: Anthropic (forced
- *  tool) + Gemini (KIE `response_format`). GPT-via-KIE has no native structured
- *  mode (parse+retry only), so it's excluded. Single source of truth so the
- *  picker, the config panel, and the route gate can't drift. */
+ *  tool), Gemini (KIE `response_format`), and GPT responses-format models
+ *  (KIE `text.format` json_schema — vision+schema live-verified 2026-07-14).
+ *  Single source of truth so the picker, the config panel, and the route gate
+ *  can't drift. */
 export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
   (m) => m.supportsImages && m.structuredOutputMode != null,
 )

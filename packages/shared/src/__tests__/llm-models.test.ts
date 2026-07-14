@@ -430,20 +430,27 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "gemini-3.1-pro",
         "claude-sonnet-5",
         "claude-opus-4.8",
+        // responses-format GPTs — KIE text.format json_schema live-verified
+        // 2026-07-14 (text AND vision inputs).
+        "gpt-5.4",
+        "gpt-5.5",
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
       ].sort(),
     )
   })
 
-  it("includes Anthropic (forced-tool) AND Gemini (response_format) vendors", () => {
+  it("includes Anthropic (forced-tool), Gemini (response_format), and OpenAI (responses text.format) vendors", () => {
     const vendors = new Set(STRUCTURED_VISION_MODELS.map((m) => m.vendor))
     expect(vendors).toContain("anthropic")
     expect(vendors).toContain("google")
+    expect(vendors).toContain("openai")
   })
 
-  it("excludes GPT models — no native structured mode (parse+retry only)", () => {
+  it("excludes chat-completions GPT models — no native structured mode there (parse+retry only)", () => {
     const ids = STRUCTURED_VISION_MODELS.map((m) => m.id)
     expect(ids).not.toContain("gpt-5.2")
-    expect(ids).not.toContain("gpt-5.4")
   })
 
   it("every member is vision-capable and has a structuredOutputMode", () => {

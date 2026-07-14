@@ -15,7 +15,7 @@ import { calculateLlmCost } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
 import { z, type ZodType } from "zod"
-import { extractJsonFromAIResponse } from "./json-utils.js"
+import { extractJsonFromAIResponse, extractKieToolCallInput } from "./json-utils.js"
 import { restrictObjectSchemas } from "./json-schema-strict.js"
 
 const LLM_TIMEOUT_MS = 120_000
@@ -23,7 +23,15 @@ const LLM_TIMEOUT_MS = 120_000
 // KIE Claude-proxy passthrough facts. When false, the affected request class
 // routes direct-Anthropic instead of through KIE.
 const KIE_CLAUDE_EFFORT_VERIFIED = false // thinking/output_config passthrough NOT verified — effort-carrying calls route direct
-const KIE_CLAUDE_TOOLS_VERIFIED = true   // forced tool_choice passthrough verified 2026-07-13
+// Forced tool_choice DOES reach the model, but the response is NOT a tool_use
+// block: KIE re-serializes the call into a `<tool_calls>` text pseudo-tag with
+// malformed JSON (live-captured 2026-07-14 — the 2026-07-13 "verified" only
+// checked the call arrived, not the response shape; it broke every structured
+// call routed via KIE, e.g. the generate-video-pro planner). callKieMessages
+// decodes the pseudo-tag via extractKieToolCallInput and THROWS when a
+// structured response carries no decodable payload, so llmComplete falls back
+// to the direct SDK instead of burning the parse+retry loop on garbage.
+const KIE_CLAUDE_TOOLS_VERIFIED = true
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -160,8 +168,9 @@ export interface StructuredLlmOutput<T> {
  * point for "the LLM must return JSON shaped like X".
  *
  * The router enforces the schema natively where the model supports it
- * (Anthropic forced tool / Gemini `response_format`); for models with no native
- * mode (GPT-via-KIE) the call is plain text. Either way the result is parsed,
+ * (Anthropic forced tool / Gemini `response_format` / GPT responses
+ * `text.format`); for models with no native mode (GPT-5.2 via KIE
+ * chat-completions) the call is plain text. Either way the result is parsed,
  * Zod-validated, and on failure retried — the bad output + the validation error
  * are fed back — up to `maxRetries` times before throwing, so callers never see
  * a malformed object. Replaces ad-hoc `JSON.parse` + single-shot validation.
@@ -428,6 +437,22 @@ function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, 
 }
 
 /**
+ * KIE responses-API `text` param for models that natively enforce a JSON
+ * schema on the codex/v1/responses endpoint (gpt-5.4/5.5 + the GPT-5.6
+ * family — live-verified 2026-07-14, text AND vision inputs; the format is
+ * echoed back and output arrives schema-shaped). Same `strict: false`
+ * rationale as {@link kieResponseFormat}; `llmCompleteStructured`'s
+ * validate+retry remains the actual guarantee. Returns undefined for models
+ * without the mode.
+ */
+function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): Record<string, unknown> | undefined {
+  if (!req.jsonSchema || model.structuredOutputMode !== "responses-json-schema") return undefined
+  return {
+    format: { type: "json_schema", name: req.jsonSchema.name, strict: false, schema: req.jsonSchema.schema },
+  }
+}
+
+/**
  * KIE's non-stream responses carry `credits_consumed` (KIE credits; 1 credit
  * = $0.005) — the ACTUAL provider charge for that call, which can drift from
  * our per-token rate table as KIE repriced models. Returns undefined when the
@@ -622,14 +647,28 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   const data = await response.json() as Record<string, unknown>
   assertKieEnvelope(data, model.id, "messages")
   const content = data.content as Array<Record<string, unknown>> | undefined
-  // A forced-tool structured call (see buildMessagesBody) returns its result in
-  // a tool_use block, not text — prefer it so schema-carrying calls aren't
-  // silently parsed as empty text. Plain-text calls are unaffected (no tool_use
-  // block present, falls through to the text block exactly as before).
+  // A forced-tool structured call (see buildMessagesBody) should return its
+  // result in a tool_use block — prefer it when present. In practice KIE's
+  // proxy re-serializes the tool call into a `<tool_calls>` text pseudo-tag
+  // with malformed JSON (see extractKieToolCallInput), so decode that next.
+  // A structured call with NO decodable payload throws: llmComplete's catch
+  // then falls back to the direct SDK rather than feeding garbage to the
+  // parse+retry loop. Plain-text calls are unaffected.
   const toolUseBlock = content?.find((b) => b.type === "tool_use")
-  const text = toolUseBlock
-    ? JSON.stringify((toolUseBlock as { input?: unknown }).input ?? {})
-    : ((content?.find((b) => b.type === "text")?.text as string) ?? "")
+  const rawText = (content?.find((b) => b.type === "text")?.text as string) ?? ""
+  let text: string
+  if (toolUseBlock) {
+    const input = (toolUseBlock as { input?: unknown }).input
+    text = typeof input === "string" ? input : JSON.stringify(input ?? {})
+  } else if (req.jsonSchema && model.structuredOutputMode === "anthropic-tool") {
+    const unwrapped = extractKieToolCallInput(rawText)
+    if (unwrapped === null && (rawText.includes("<tool_calls>") || rawText.trim() === "")) {
+      throw new Error(`KIE.ai messages ${model.id}: structured call returned no decodable tool payload`)
+    }
+    text = unwrapped ?? rawText
+  } else {
+    text = rawText
+  }
   const usage = data.usage as Record<string, number> | undefined
 
   return buildResponse(
@@ -674,6 +713,8 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
     ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }
   if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
+  const textFormat = kieResponsesTextFormat(model, req)
+  if (textFormat) body.text = textFormat
 
   const response = await fetch(url, {
     method: "POST",
@@ -717,6 +758,8 @@ async function streamKieResponses(
     ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }
   if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
+  const textFormat = kieResponsesTextFormat(model, req)
+  if (textFormat) body.text = textFormat
 
   const response = await fetch(url, {
     method: "POST",

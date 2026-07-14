@@ -18,7 +18,7 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Analyzing (read-only) | derived | — | The picker nodes currently wired to this node's output — the set that will be analyzed. Not editable; change it by wiring/unwiring pickers. |
-| Model | select | `claude-opus-4.7` | The vision model used for analysis. **Vision models with guaranteed structured output**: Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Sonnet 5 / Claude Opus 4.7 / Claude Opus 4.8 and Gemini 3 Flash / Gemini 3.1 Pro. See [Why these models](#why-these-models). |
+| Model | select | `claude-opus-4.7` | The vision model used for analysis. **Vision models with guaranteed structured output**: Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Sonnet 5 / Claude Opus 4.7 / Claude Opus 4.8, Gemini 3 Flash / Gemini 3.1 Pro, and GPT-5.4 / GPT-5.5 / GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol. See [Why these models](#why-these-models). |
 | Extra guidance | text | `""` | Optional instructions appended to the analyzer's system prompt (e.g. "focus on the foreground subject"). Max 2000 characters. |
 
 ## Inputs & Outputs
@@ -31,7 +31,7 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 
 ## Why these models
 
-The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use, **Gemini** via KIE `response_format` — so only **vision-capable models with a native structured-output mode** are offered. GPT models are excluded (no native structured mode via KIE → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 4.7** — the highest-quality vision model, chosen for accurate trait extraction (e.g. skin tone).
+The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use, **Gemini** via KIE `response_format`, **GPT (responses API)** via `text.format` JSON schema — so only **vision-capable models with a native structured-output mode** are offered. GPT-5.2 is excluded (its chat-completions routing has no native structured mode → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 4.7** — the highest-quality vision model, chosen for accurate trait extraction (e.g. skin tone).
 
 If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provider_unavailable`.
 
