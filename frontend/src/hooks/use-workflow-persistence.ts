@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
+import { reconcileCompletedSingleNodeJobs } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
@@ -1010,6 +1011,19 @@ export function useWorkflowPersistence(projectId?: string) {
         // user can manually re-run if reconciliation can't reach the job.
         const { updateNodeData: storeUpdateNodeData } = useWorkflowStore.getState()
         reconcileWorkflowNodeResults(nodes, storeUpdateNodeData).catch(() => {})
+
+        // Recover the RESULT of a completed single-node Run whose in-memory poll
+        // died before it finished — the long-job case (generate-video-pro can
+        // run 10-40+ min; a reload/tab-close kills the poll, and `currentJobId`
+        // is stripped on save so nothing else reattaches). The result is in
+        // `jobs.output_data` + My Library but never reached the canvas node.
+        // Complements reconcileWorkflowNodeResults above, which only back-fills
+        // EXTRA variants onto already-completed nodes (never a single videoUrl
+        // onto an empty node). Fire-and-forget; guarded to never clobber a node
+        // that already has a result or user edits.
+        reconcileCompletedSingleNodeJobs(id, nodes, storeUpdateNodeData, {
+          listCompleted: (wfId) => listWorkflowExecutions(wfId, { limit: 50, status: "completed", source: "editor" }),
+        }).catch(() => {})
 
         // Refresh each placed character node from its live DB row. Character
         // assets (expressions, poses, wardrobe, …) are added in the Character

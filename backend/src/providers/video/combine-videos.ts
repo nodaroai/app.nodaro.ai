@@ -34,6 +34,16 @@ interface CombineOptions {
     readonly enabled: boolean
     readonly framesFromPrev: number
     readonly framesFromNext: number
+    /** Per-boundary override (length = clips − 1). When present, boundary k
+     *  runs the PSNR matcher ONLY if `boundaryMask[k]` is true; a false entry
+     *  is an INTENTIONAL hard cut (e.g. a camera-angle change between two
+     *  DIFFERENT shots) — the matcher is skipped AND that boundary's fixed
+     *  trims are zeroed so both shots play whole (no duplicate frame exists to
+     *  drop, and there is no transition artifact to trim). Absent → every
+     *  boundary is eligible (unchanged global behavior; characterization
+     *  goldens never pass a mask, so they're unaffected). Out-of-range/short
+     *  masks treat missing entries as `true`. */
+    readonly boundaryMask?: readonly boolean[]
   }
   /** Pin the normalization canvas (both together) instead of the majority-
    *  resolution pick — edit-video-pro pins the SOURCE dims so a long bridge
@@ -316,6 +326,19 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     if (smartCut?.enabled && normalizedPaths.length >= 2) {
       smartCuts = []
       for (let k = 0; k < normalizedPaths.length - 1; k++) {
+        // Intentional hard cut (mask entry false): a camera-angle change to a
+        // DIFFERENT shot. There's no boundary twin to find and nothing to
+        // clean — skip the matcher and keep both frames whole (zero trims).
+        if (smartCut.boundaryMask && smartCut.boundaryMask[k] === false) {
+          endTrims[k] = 0
+          startTrims[k + 1] = 0
+          console.log(`[combineVideos] Boundary ${k}: intentional hard cut (mask) — smart cut skipped, no trim`)
+          smartCuts.push({
+            boundary: k, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 0,
+            psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null,
+          })
+          continue
+        }
         try {
           const cut = await findSmartCutBoundary(
             normalizedPaths[k], normalizedPaths[k + 1],

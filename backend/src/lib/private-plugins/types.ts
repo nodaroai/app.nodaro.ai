@@ -232,7 +232,7 @@ export interface PluginFfmpegToolkit {
      *  for tail-chained continuation clips whose boundary frames are
      *  near-twins; unmatched boundaries keep the fixed trims. Additive-
      *  optional so plugin versions on either side of this member interop. */
-    smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
+    smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[] }
   }): Promise<string>
   /**
    * New core helper added alongside this contract member
