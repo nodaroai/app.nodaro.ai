@@ -1,38 +1,24 @@
 /**
  * Canonical handle IDs for the Generate Video Pro node.
  *
- * Trimmed sibling of Generate Video (generate-video-handles.ts): only the
- * text cluster's `prompt` and the image cluster's `startFrame` +
- * `imageReferences` — no `negative` (the node has no negativePrompt field),
- * no end frame / video refs / audio clusters, no pickers cluster. The
- * provider set is Seedance-2-family only, which never uses those levers.
+ * FULL PARITY BY CONSTRUCTION (2026-07-14 directive): the pro node exposes
+ * EXACTLY generate-video's input handles — same ids, same names, same
+ * accepts semantics — so both are literal delegates of
+ * generate-video-handles.ts. A handle added to generate-video automatically
+ * appears here (and the parity guard test in
+ * __tests__/generate-video-pro-parity.test.ts fails if these ever diverge).
+ *
+ * The pro node's ONLY deltas vs generate-video are the ones its purpose
+ * requires (guarded/documented in that same test):
+ *  - longer-than-model durations via multi-segment stitching;
+ *  - the Seedance-2-family-only provider set;
+ *  - `videoReferences` carries the EXTEND SOURCE semantic (limit 1,
+ *    handle-limits.ts): the run CONTINUES from the wired clip via the same
+ *    anchored 2s-tail transport segments use between themselves — the
+ *    long-video counterpart of a style video reference.
  */
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
-import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
-
-export const GENERATE_VIDEO_PRO_INPUT_HANDLES = [
-  "prompt",
-  "startFrame",
-  "imageReferences",
-] as const
-
-export type GenerateVideoProInputHandle = typeof GENERATE_VIDEO_PRO_INPUT_HANDLES[number]
-
-export function isValidGenerateVideoProConnection(
-  targetHandle: string,
-  sourceType: string,
-  isPickerType: (s: string) => boolean,
-): boolean {
-  switch (targetHandle) {
-    case "prompt":
-      return TEXT_PRODUCER_TYPES.has(sourceType) || isPickerType(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
-    case "startFrame":
-    case "imageReferences":
-      // Dynamic producers (loop / list / sub-workflow / etc.) can emit image
-      // URLs at runtime — accept them at the canvas to match the
-      // orchestrator's runtime routing. Same escape hatch as generate-video.
-      return IMAGE_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
-    default:
-      return false
-  }
-}
+export {
+  GENERATE_VIDEO_INPUT_HANDLES as GENERATE_VIDEO_PRO_INPUT_HANDLES,
+  isValidGenerateVideoConnection as isValidGenerateVideoProConnection,
+} from "./generate-video-handles"
+export type { GenerateVideoInputHandle as GenerateVideoProInputHandle } from "./generate-video-handles"

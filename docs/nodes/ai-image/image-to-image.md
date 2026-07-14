@@ -38,6 +38,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 |----------|-------|-------------|----------------|
 | nano-banana | Nano Banana | Fast iteration, quick transforms | General I2I |
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution | General I2I, resolution options |
+| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K edits (Gemini 3.1 Flash-Lite); flat 2 credits | Up to 10 input images |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production images | General I2I, resolution options |
 | grok-i2i | Grok | Creative and stylized imagery | Stylized transforms |
 | flux-i2i | Flux-2 | Style-faithful transformations | Resolution options (1K/2K) |

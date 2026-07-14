@@ -17,6 +17,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "imagen4-ultra", label: "Imagen 4 Ultra", desc: "Highest quality Google image gen" },
   { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
   { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana with web grounding" },
+  { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite", desc: "Fast, low-cost 1K drafts and iteration" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
   { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
   { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
@@ -45,6 +46,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
   { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
   { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana — web-grounded transforms, up to 4K" },
+  { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite", desc: "Fast 1K edits, up to 10 reference images" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
   { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },
@@ -435,6 +437,16 @@ export const VIDEO_FPS_OPTIONS: Record<string, ReadonlyArray<{ value: number; la
  *  generic VIDEO_RATIOS triplet (16:9 / 9:16 / 1:1) when the catalog entry
  *  doesn't declare an `aspectRatios` field — matches the legacy
  *  video-configs behavior. */
+/**
+ * Generate Video Pro duration cap fallback (seconds) — mirrors the backend
+ * default (`GENERATE_VIDEO_PRO_MAX_DURATION` env var,
+ * `ee/billing/generate-video-pro-credits.ts`). Lives HERE (not in
+ * video-configs.tsx, which re-exports it for back-compat) so the node quick
+ * strip can import it without pulling the whole config-panel module graph
+ * into the canvas bundle.
+ */
+export const GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK = 120
+
 export function getAspectRatiosForVideoModel(
   provider: string,
 ): readonly LabeledOption[] {

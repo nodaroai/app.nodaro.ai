@@ -35,6 +35,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 |-----------|-------------|---------|
 | `nano-banana` | `nano-banana-pro` | [nano-banana](https://docs.kie.ai/market/google/nano-banana.md) |
 | `nano-banana-pro` | `nano-banana-pro` | [nano-banana-pro](https://docs.kie.ai/market/google/pro-image-to-image.md) |
+| `nano-banana-2-lite` | `nano-banana-2-lite` | [nano-banana-2-lite](https://docs.kie.ai/market/google/nano-banana-2-lite.md) |
 | `nano-banana-edit` | `google/nano-banana-edit` | [nano-banana-edit](https://docs.kie.ai/market/google/nano-banana-edit.md) |
 | `flux` | `flux-2/pro-text-to-image` | [flux-2 pro t2i](https://docs.kie.ai/market/flux2/pro-text-to-image.md) |
 | `flux-flex` | `flux-2/flex-text-to-image` | [flux-2 flex t2i](https://docs.kie.ai/market/flux2/flex-text-to-image.md) |
@@ -179,7 +180,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, ideogram-reframe, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -195,7 +196,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Param Name | Models | Values | Notes |
 |------------|--------|--------|-------|
 | `image_size` (ratio) | nano-banana, nano-banana-edit | `"1:1"`, `"16:9"`, etc. | Nano Banana base uses ratio strings as `image_size` |
-| `aspect_ratio` (ratio) | nano-banana-pro, flux, grok, gpt-image, imagen4, seedream, z-image | `"1:1"`, `"16:9"`, etc. | Standard param name |
+| `aspect_ratio` (ratio) | nano-banana-pro, flux, grok, gpt-image, imagen4, seedream, z-image, nano-banana-2-lite (also `auto` + banner ratios 8:1/1:8/4:1/1:4) | `"1:1"`, `"16:9"`, etc. | Standard param name |
 | `image_size` (named) | ideogram, qwen | `"square"`, `"landscape_16_9"`, etc. | Named values, NOT ratios! `image.ts` converts at runtime |
 | *(none)* | grok-i2i, recraft-*, grok-upscale | — | No aspect ratio control |
 
@@ -217,6 +218,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 |--------|-------|--------|
 | Nano Banana Pro | `resolution` | `"1K"`, `"2K"`, `"4K"` |
 | Nano Banana 2 | `resolution` | `"1K"`, `"2K"`, `"4K"` |
+| Nano Banana 2 Lite | Not supported — 1K ONLY (no resolution param; `image.ts` strips stale values) | — |
 | GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` (1:1 cannot use 4K; `auto` aspect_ratio limited to 1K) |
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
 | Other image models | Not supported | — |

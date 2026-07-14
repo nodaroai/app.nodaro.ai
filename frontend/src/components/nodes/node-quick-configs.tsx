@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge } from "lucide-react"
 import {
@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
+import { Input } from "@/components/ui/input"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   MODIFY_IMAGE_MODELS,
@@ -33,6 +35,7 @@ import {
   IMAGE_RESOLUTION_OPTIONS,
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
+  GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK,
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
@@ -95,6 +98,18 @@ export interface QuickConfigControl {
    *  only accepts male/female). Make the sentinel the FIRST option so an unset
    *  field falls back to its label. */
   readonly sentinelUndefined?: string
+  /** Displayed (and treated as selected) when the field is UNSET — for fields
+   *  whose runtime default is a specific option that is NOT the list's first
+   *  entry (gvp aspectRatio: the backend defaults to "adaptive", which sits
+   *  LAST in the shared aspect list; without this the trigger showed "16:9"
+   *  while runs were actually adaptive). Must be one of the options' values. */
+  readonly defaultValue?: string
+  /** Numeric free-entry range: appends a "Custom…" item that opens a popover
+   *  with a slider + number input (the same pair the config panels use), so
+   *  ANY in-range value is one tap away — not just the preset list. In-range
+   *  values are also exempt from the stale-value snap and render on the
+   *  trigger as `${value}${unit}`. Implies `numeric`. */
+  readonly customRange?: { readonly min: number; readonly max: number; readonly step?: number; readonly unit?: string }
 }
 
 /** Resolve a control's options against the node's current data. */
@@ -423,14 +438,41 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       ],
     },
   ],
-  // ── Generate Video Pro (model · resolution — provider-aware; the config
-  // panel owns prompt/duration/aspect) ──
+  // ── Generate Video Pro (model · aspect · duration · resolution — mirrors
+  // generate-video's strip order; the config panel owns prompt/audio) ──
   "generate-video-pro": [
     {
       field: "provider",
       ariaLabel: "Model",
       icon: Sparkles,
       options: toOptions(GVP_PROVIDERS),
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      // The whole seedance-2 family shares one aspect set — the SAME list the
+      // config panel's AspectRatioSelector renders (it also pins "seedance-2").
+      options: getAspectRatiosForVideoModel("seedance-2"),
+      // The runtime default (payload-builder/route both fall back to
+      // "adaptive") sits LAST in the shared list — without this the unset
+      // trigger displayed the list's first entry ("16:9") instead.
+      defaultValue: "adaptive",
+    },
+    {
+      field: "duration",
+      ariaLabel: "Duration",
+      icon: Clock,
+      numeric: true,
+      // Long-form presets — the pro node spans 4–120s and splits into stitched
+      // segments above 15s, so the single-segment catalog list
+      // (getDurationsForVideoModel, 4–15s) is deliberately NOT used here.
+      options: [8, 15, 20, 30, 45, 60, 90, 120].map((v) => ({ value: String(v), label: `${v}s` })),
+      // "Custom…" → slider + number input popover for ANY 4–120s value (the
+      // same pair the config panel's Duration field renders). In-range values
+      // are exempt from the stale-value snap and label the trigger directly,
+      // so a panel-slider value like 46s survives and displays.
+      customRange: { min: 4, max: GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, unit: "s" },
     },
     {
       field: "resolution",
@@ -694,8 +736,18 @@ export function QuickConfigSelect({
   readonly onOpenChange?: (open: boolean) => void
 }) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const [customOpen, setCustomOpen] = useState(false)
   const Icon = control.icon
   const options = resolveOptions(control, data)
+  const range = control.customRange
+  const inRange = (v: string): boolean => {
+    if (!range) return false
+    const n = Number(v)
+    return Number.isFinite(n) && n >= range.min && n <= range.max
+  }
+  // Unset field → the control's declared default (e.g. gvp aspect "adaptive"),
+  // both for the trigger label and for what reads as selected in the menu.
+  const effectiveValue = value !== "" && value != null ? value : (control.defaultValue ?? "")
 
   // Fail-safe (mirrors the config panels' provider-change snap; valid set is
   // single-sourced from model-options): if the current provider invalidated
@@ -703,6 +755,7 @@ export function QuickConfigSelect({
   // the provider has no such lever. Keeps the strip from leaving an
   // out-of-range value the route's Zod enum would reject. (For static option
   // lists `options` is a stable ref, so this only runs when `value` changes.)
+  // A customRange control accepts ANY in-range numeric — never snap those.
   useEffect(() => {
     if (value === "" || value == null) return
     if (options.length === 0) {
@@ -711,50 +764,123 @@ export function QuickConfigSelect({
       if (!control.preserveOnHide) {
         updateNodeData(nodeId, { [control.field]: undefined })
       }
-    } else if (!options.some((o) => o.value === value)) {
+    } else if (!options.some((o) => o.value === value) && !inRange(value)) {
       const next = options[0].value
       updateNodeData(nodeId, { [control.field]: coerceQuickConfigValue(control, next) })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, options, nodeId, control, updateNodeData])
 
   // No lever for the current provider → render nothing (matches the panel,
   // which hides provider-irrelevant controls).
   if (options.length === 0) return null
 
-  const current = options.find((o) => o.value === value)
+  const current = options.find((o) => o.value === effectiveValue)
+  const triggerLabel =
+    current?.label ??
+    // In-range custom numeric (customRange) → render it directly ("46s").
+    (effectiveValue !== "" && inRange(effectiveValue) ? `${effectiveValue}${range?.unit ?? ""}` : undefined) ??
+    // Fall back to the first option label when the field is unset — avoids
+    // a blank dropdown when the node was created before this control existed.
+    options[0]?.label ??
+    effectiveValue
+  const CUSTOM = "__custom__"
+  const writeValue = (v: string) => {
+    const patch: Record<string, unknown> = { [control.field]: coerceQuickConfigValue(control, v) }
+    if (control.additionalClear) {
+      for (const f of control.additionalClear) patch[f] = undefined
+    }
+    updateNodeData(nodeId, patch)
+  }
+  const draft = inRange(effectiveValue) ? Number(effectiveValue) : range?.min ?? 0
   return (
-    <Select
-      value={value || undefined}
-      onValueChange={(v) => {
-        const patch: Record<string, unknown> = { [control.field]: coerceQuickConfigValue(control, v) }
-        if (control.additionalClear) {
-          for (const f of control.additionalClear) patch[f] = undefined
-        }
-        updateNodeData(nodeId, patch)
-      }}
-      onOpenChange={onOpenChange}
-      disabled={disabled}
-    >
-      <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={control.ariaLabel}>
-        {Icon && <Icon />}
-        {/* Fall back to the first option label when the field is unset — avoids
-            a blank dropdown when the node was created before this control existed. */}
-        <SelectValue>{current?.label ?? options[0]?.label ?? value}</SelectValue>
-      </SelectTrigger>
-      <SelectContent className="node-menu-surface">
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.description ? (
-              <span className="flex flex-col gap-0.5">
-                <span>{o.label}</span>
-                <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
-              </span>
-            ) : (
-              o.label
-            )}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover open={customOpen} onOpenChange={setCustomOpen}>
+      <PopoverAnchor asChild>
+        <span className="inline-flex">
+          <Select
+            value={current ? effectiveValue : undefined}
+            onValueChange={(v) => {
+              // The Custom… item never writes — it opens the slider+input
+              // popover (the same pair the config panels' Duration field
+              // renders) for any in-range manual value.
+              if (v === CUSTOM) {
+                setCustomOpen(true)
+                return
+              }
+              writeValue(v)
+            }}
+            onOpenChange={onOpenChange}
+            disabled={disabled}
+          >
+            <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={control.ariaLabel}>
+              {Icon && <Icon />}
+              <SelectValue placeholder={triggerLabel}>{triggerLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="node-menu-surface">
+              {options.map((o) => (
+                <SelectItem key={o.value} value={o.value} className="text-xs">
+                  {o.description ? (
+                    <span className="flex flex-col gap-0.5">
+                      <span>{o.label}</span>
+                      <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
+                    </span>
+                  ) : (
+                    o.label
+                  )}
+                </SelectItem>
+              ))}
+              {range && (
+                <SelectItem key={CUSTOM} value={CUSTOM} className="text-xs">
+                  Custom…
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </span>
+      </PopoverAnchor>
+      {range && (
+        <PopoverContent
+          side="bottom"
+          align="start"
+          sideOffset={6}
+          className="node-menu-surface w-56 p-3"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {control.ariaLabel} — {range.min}–{range.max}
+              {range.unit ?? ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={range.min}
+                max={range.max}
+                step={range.step ?? 1}
+                value={draft}
+                onChange={(e) => writeValue(e.target.value)}
+                className="flex-1 h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
+                aria-label={`${control.ariaLabel} (custom)`}
+              />
+              <Input
+                type="number"
+                min={range.min}
+                max={range.max}
+                step={range.step ?? 1}
+                value={draft}
+                onChange={(e) => {
+                  if (e.target.value === "") return
+                  const parsed = Number(e.target.value)
+                  if (Number.isNaN(parsed)) return
+                  writeValue(String(Math.min(range.max, Math.max(range.min, Math.round(parsed)))))
+                }}
+                className="w-16 h-7 text-xs shrink-0"
+                aria-label={`${control.ariaLabel} (custom value)`}
+              />
+            </div>
+          </div>
+        </PopoverContent>
+      )}
+    </Popover>
   )
 }

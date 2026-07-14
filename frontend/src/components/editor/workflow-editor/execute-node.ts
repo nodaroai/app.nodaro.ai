@@ -1866,9 +1866,35 @@ export function executeNode(
   // pollJobWithNodeUpdate, mirroring the reference-board case's minimal shape.
   if (node.type === "generate-video-pro") {
     const gvpData = node.data as GenerateVideoProNodeData;
-    const prompt = promptOf("generate-video-pro");
-    if (!prompt) {
-      toast.error(`Node "${gvpData.label}": no prompt found`);
+    // FULL generate-video prompt assembly (parity by construction — mirrors
+    // the t2v block above AND the backend payload-builder's gvp case): user
+    // prompt + look/elements cinematography hints + identity-lock clause,
+    // then @mention/assets resolution numbering AFTER the leading image refs
+    // (D5) with wired entities attached.
+    let prompt: string | undefined = promptOf("generate-video-pro");
+    {
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
+        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
+    const gvpCountRefModality = (modality: ReferenceModality): number =>
+      countRefModalityEdges(edges, node.id, modality);
+    const gvpMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, gvpData.extraRefs as never, {
+      referenceOrder: gvpData.referenceImageOrder,
+      ordinalOffset: gvpCountRefModality("image"),
+      includeWiredEntities: true,
+      videoRefCount: gvpCountRefModality("video"),
+      audioRefCount: gvpCountRefModality("audio"),
+    });
+    prompt = gvpMention.prompt ?? prompt;
+    if (!prompt || !prompt.trim()) {
+      toast.error(`Node "${gvpData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
       return Promise.reject(new Error("No prompt"));
     }
 
@@ -1883,7 +1909,23 @@ export function executeNode(
     }
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
-    const referenceImageUrls = inputs.referenceImageUrls?.length ? inputs.referenceImageUrls : undefined;
+    // Merge upstream image refs with mention/asset-resolved URLs (appended,
+    // deduped) — NO mention→frame promotion, deliberately unlike
+    // generate-video: the pro engine sends the reference array with EVERY
+    // segment so identity persists across the whole stitched video.
+    let referenceImageUrls = inputs.referenceImageUrls?.length ? [...inputs.referenceImageUrls] : undefined;
+    if (gvpMention.additionalUrls.length > 0) {
+      const existing = referenceImageUrls ?? [];
+      const merged: string[] = [];
+      const seen = new Set<string>();
+      for (const u of existing) if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+      for (const u of gvpMention.additionalUrls) if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+      referenceImageUrls = merged;
+    }
+    // Extend Source (videoReferences, limit 1): the pro run continues from
+    // this clip — the engine cuts its 2s tail as @video_1 and anchors segment
+    // 1 on its last frame, exactly like later segments continue each other.
+    const extendVideoUrl = inputs.referenceVideoUrls?.[0];
 
     setUserPromptTemplate(gvpData.prompt?.trim() || undefined);
     return pollJobWithNodeUpdate(
@@ -1898,6 +1940,12 @@ export function executeNode(
           generateAudio: gvpData.generateAudio,
           startFrameUrl,
           referenceImageUrls,
+          // Panel-typed + wired negative composed exactly like generate-video.
+          negativePrompt: composeNegative(gvpData.negativePrompt, inputs.negativePrompt) || undefined,
+          endFrameUrl: inputs.endFrameUrl,
+          extendVideoUrl,
+          audioUrl: inputs.audioUrl,
+          referenceAudioUrls: inputs.referenceAudioUrls?.length ? inputs.referenceAudioUrls : undefined,
           idempotencyKey,
         }),
       "generatedVideoUrl",

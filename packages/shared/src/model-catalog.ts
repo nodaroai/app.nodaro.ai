@@ -165,6 +165,11 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
 // can consume them. Keep in sync when adding a new ratio set.)
 // =============================================================================
 const NANO_BANANA_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"] as const
+// Nano Banana 2 Lite only — the model's full documented enum incl. `auto`
+// (native default) and extreme banner ratios (docs.kie.ai/market/google/
+// nano-banana-2-lite). Kept separate so the wider set can't leak to the
+// rest of the family.
+const NANO_BANANA_2_LITE_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "4:1", "1:4", "8:1", "1:8"] as const
 // Note: these arrays are synchronized with the frontend's
 // `model-options.ts` constants of the same names. The frontend now imports
 // them via the `getAspectRatioOptions(modelId)` helper; if you update one
@@ -232,6 +237,22 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "nano-banana-2:2K", credits: 5, note: "2K" },
       { identifier: "nano-banana-2:4K", credits: 5, note: "4K" },
     ],
+  },
+  "nano-banana-2-lite": {
+    id: "nano-banana-2-lite",
+    kind: "image",
+    // Same single-id shape as nano-banana-2: optional input images on the one
+    // endpoint (via image_urls, up to 10), so reachable for both t2i and i2i.
+    modes: ["t2i", "i2i"] as const,
+    family: "Google",
+    label: "Nano Banana 2 Lite",
+    series: "Nano Banana",
+    description: "Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing.",
+    useCases: ["realistic", "drafts", "iteration"],
+    features: ["reference-image"],
+    aspectRatios: NANO_BANANA_2_LITE_RATIOS,
+    // 1K only — no resolution lever, flat pricing.
+    pricing: [{ identifier: "nano-banana-2-lite", credits: 2, note: "1K flat" }],
   },
   "nano-banana-pro": {
     id: "nano-banana-pro",

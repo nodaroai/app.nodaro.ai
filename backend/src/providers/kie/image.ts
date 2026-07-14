@@ -209,6 +209,12 @@ export class KieImageProvider
       delete input.resolution
     }
 
+    // Nano Banana 2 Lite: 1K only — its schema has no resolution param, so a
+    // stale value carried over from a resolution-tiered provider must not leak.
+    if (provider === "nano-banana-2-lite") {
+      delete input.resolution
+    }
+
     // Native negative_prompt: keep for supported models, remove for others.
     // The caller passes negative_prompt via extraParams; it was already spread into input above.
     if (input.negative_prompt && !NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {

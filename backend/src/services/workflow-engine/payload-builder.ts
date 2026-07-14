@@ -3761,17 +3761,61 @@ export function buildPayload(
       // object it also mutates in place (duration clamp + proPricing stamp)
       // before the credit reservation call.
       const gvpProvider = (data.provider as string | undefined) ?? "seedance-2"
+      // FULL generate-video prompt assembly (parity by construction): user
+      // prompt + look/elements cinematography hints + identity-lock clause,
+      // then @mention/assets resolution numbering AFTER the leading image
+      // refs (D5) with wired entities attached — the same calls the unified
+      // generate-video case above makes, minus its per-provider dispatch.
+      let gvpPrompt = composeVideoPrompt({
+        rawPrompt: promptFor("generate-video-pro", true),
+        nodeId: node.id,
+        buildCtx,
+      })
+      let gvpRefs = resolvedInputs.referenceImageUrls
+      const gvpMention = resolveVideoPromptMentions(gvpPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceImageOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx),
+        includeWiredEntities: true,
+        videoRefCount: countRefModalityEdges(node.id, "video", buildCtx),
+        audioRefCount: countRefModalityEdges(node.id, "audio", buildCtx),
+      })
+      gvpPrompt = gvpMention.prompt
+      if (gvpMention.additionalUrls.length > 0) {
+        // DELIBERATE parity delta (no mention→frame promotion, unlike
+        // generate-video): the pro engine sends the reference array with
+        // EVERY segment, so identity/style persist across the whole stitched
+        // video — promoting a lone mention into the seg1-only start-frame
+        // slot would LOSE the identity from segment 2 onward.
+        const existing = gvpRefs ?? []
+        const merged: string[] = []
+        const seen = new Set<string>()
+        for (const u of existing) if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        for (const u of gvpMention.additionalUrls) if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        gvpRefs = merged
+      }
       return simpleResult("generate-video-pro", "generate-video-pro", {
         jobId,
         type: "generate-video-pro",
-        prompt: promptFor("generate-video-pro", true),
+        prompt: gvpPrompt,
         provider: gvpProvider,
         duration: data.duration as number | undefined,
         aspectRatio: (data.aspectRatio as string | undefined) ?? "adaptive",
         resolution: (data.resolution as string | undefined) ?? "720p",
         generateAudio: data.generateAudio as boolean | undefined,
         startFrameUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || (data.startFrameUrl as string | undefined),
-        referenceImageUrls: resolvedInputs.referenceImageUrls || (data.referenceImageUrls as string[] | undefined),
+        referenceImageUrls: gvpRefs || (data.referenceImageUrls as string[] | undefined),
+        // Typed-handle levers (resolved generically by targetHandle in
+        // input-resolver.ts): panel-typed + wired negative composed exactly
+        // like generate-video; the final segment's closing frame; the Extend
+        // Source (limit 1); the post-gen audio overlay; per-segment r2v
+        // reference audio. Inert on plugin versions predating their
+        // consumption (extra payload keys are ignored by the handler).
+        negativePrompt: composeNegative(resolveRefs(data.negativePrompt as string | undefined, refMap), resolvedInputs.negativePrompt) || undefined,
+        endFrameUrl: resolvedInputs.endFrameUrl,
+        extendVideoUrl: resolvedInputs.referenceVideoUrls?.[0],
+        audioUrl: resolvedInputs.audioUrl,
+        referenceAudioUrls: resolvedInputs.referenceAudioUrls,
         usageLogId,
       })
     }

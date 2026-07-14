@@ -17,7 +17,7 @@ import {
   YtUrlNotAllowedError,
   type YtClientRung,
 } from "../youtube-video.js"
-import { VIDEO_FORMAT_SELECTOR } from "../video-format.js"
+import { VIDEO_FORMAT_SELECTOR, videoFormatSelector } from "../video-format.js"
 
 /** Minimal stand-in for a spawned child: emits stdout/stderr, then closes. */
 function fakeProc(opts: { stdout?: string; stderr?: string; code?: number; error?: Error }) {
@@ -90,6 +90,30 @@ describe("buildYtDlpVideoArgs", () => {
       expect(branch).toContain("+ba")
     }
     expect(branches.at(-1)).toBe("b")
+  })
+
+  it("caps the --format to <=maxHeight when set, and leaves it uncapped when absent", () => {
+    const capped = formatOf(
+      buildYtDlpVideoArgs({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4", maxHeight: 720 }),
+    )
+    expect(capped).toBe(videoFormatSelector(720))
+    expect(capped).toContain("[height<=720]")
+
+    // Absent maxHeight → byte-identical to the uncapped selector (no `height`).
+    const uncapped = formatOf(buildYtDlpVideoArgs({ url: "https://youtu.be/x", outPath: "/tmp/x.mp4" }))
+    expect(uncapped).toBe(VIDEO_FORMAT_SELECTOR)
+    expect(uncapped).not.toContain("height")
+  })
+
+  it("composes maxHeight WITH a section — capped format AND the padded --download-sections", () => {
+    const args = buildYtDlpVideoArgs({
+      url: "https://youtu.be/x",
+      outPath: "/tmp/x.mp4",
+      maxHeight: 480,
+      section: { startSec: 10, endSec: 20 },
+    })
+    expect(formatOf(args)).toBe(videoFormatSelector(480))
+    expect(args[args.indexOf("--download-sections") + 1]).toBe("*7-23")
   })
 })
 
@@ -344,6 +368,23 @@ describe("downloadYouTubeVideo — client ladder wiring", () => {
     for (const call of [0, 1, 2]) {
       const args = argsOfCall(call)
       expect(args[args.indexOf("--download-sections") + 1]).toBe("*7-23")
+    }
+  })
+
+  it("every ladder rung shares the capped --format — maxHeight lives in the BASE args", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: web down", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: tv down", code: 1 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stderr: "ERROR: android down", code: 1 }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.youtube.com/watch?v=x", outPath: "/tmp/x.mp4", maxHeight: 720 }),
+    ).rejects.toThrow("android down")
+
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(3)
+    for (const call of [0, 1, 2]) {
+      const args = argsOfCall(call)
+      expect(args[args.indexOf("--format") + 1]).toBe(videoFormatSelector(720))
     }
   })
 

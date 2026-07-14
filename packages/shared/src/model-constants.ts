@@ -37,6 +37,7 @@ export const IMAGE_PROMPT_MAX = 5000
 export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // ── higher than the 5000 default ──
   "nano-banana-2": 20000,      // docs.kie.ai/market/google/nano-banana-2
+  "nano-banana-2-lite": 20000, // docs.kie.ai/market/google/nano-banana-2-lite
   "nano-banana-pro": 20000,    // docs.kie.ai/market/google/pro-image-to-image
   "gpt-image-2-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-image-to-image
   // ── lower than the 5000 default (over-send risk if left at default) ──
@@ -334,6 +335,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana",
   "nano-banana-pro",
   "nano-banana-2",
+  "nano-banana-2-lite",
   // T2I providers that auto-route to their i2i sibling when refs are attached
   "gpt-image",
   "gpt-image-2",
@@ -409,6 +411,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana": 8,
   "nano-banana-pro": 8,
   "nano-banana-2": 4,
+  "nano-banana-2-lite": 10,
   "wan-2.7": 9,
   // Image-to-image (multi-source array)
   "nano-banana-edit": 8,
@@ -529,6 +532,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "flux",
   "nano-banana-pro",
   "nano-banana-2",
+  "nano-banana-2-lite",
   "grok",
   "gpt-image",
   "gpt-image-2",
@@ -556,6 +560,7 @@ export const IMAGE_GEN_PROVIDERS = [
 export const IMAGE_I2I_PROVIDERS = [
   "nano-banana",
   "nano-banana-2",
+  "nano-banana-2-lite",
   "nano-banana-pro",
   "grok-i2i",
   "flux-i2i",
@@ -1012,6 +1017,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "nano-banana": "prompt",
   "nano-banana-pro": "prompt",
   "nano-banana-2": "prompt",
+  "nano-banana-2-lite": "prompt",
   "gpt-image": "prompt",
   "gpt-image-2": "prompt",
   "seedream": "prompt",

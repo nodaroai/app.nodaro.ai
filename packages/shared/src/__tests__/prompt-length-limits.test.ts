@@ -28,6 +28,7 @@ describe("per-model prompt length limits", () => {
   describe("getMaxImagePromptChars", () => {
     it("returns the verified higher caps (provider supports more than 5000)", () => {
       expect(getMaxImagePromptChars("nano-banana-2")).toBe(20000)
+      expect(getMaxImagePromptChars("nano-banana-2-lite")).toBe(20000)
       expect(getMaxImagePromptChars("nano-banana-pro")).toBe(20000)
       expect(getMaxImagePromptChars("gpt-image-2-i2i")).toBe(20000)
     })

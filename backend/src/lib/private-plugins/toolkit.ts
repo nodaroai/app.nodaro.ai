@@ -106,6 +106,7 @@ function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRat
     generateAudio: options?.generateAudio,
     referenceImageUrls: options?.referenceImageUrls,
     referenceVideoUrls: options?.referenceVideoUrls,
+    referenceAudioUrls: options?.referenceAudioUrls,
     ...(aspectRatio !== undefined ? { aspectRatio } : {}),
   }
 }
@@ -143,7 +144,11 @@ async function pluginImageToVideo(
     prompt,
     model,
     durationSec,
-    undefined, // no end frame — generate-video-pro segments never carry one
+    // The FINAL segment of a generate-video-pro run may carry the user's
+    // closing frame (plugin contract PluginVideoGenOptions.endFrameUrl) —
+    // positional here, where the Seedance-2 input resolver turns it into the
+    // closing-frame reference hint. Undefined for every other segment.
+    options?.endFrameUrl,
     toProviderOptions(options, aspectRatio),
     toReconcileOpts(options),
   )
@@ -219,6 +224,10 @@ async function combineVideosToUrl(options: {
  * and uploads the result to R2.
  */
 async function extractTailToUrl(url: string, seconds: number, jobId: string): Promise<string> {
+  // One line of observability per cut (job dbf95612 post-mortem: the actual
+  // `seconds` that reached this function in production was unknowable from
+  // the logs — this is the line that would have answered it instantly).
+  console.log(`[extract-tail] ${jobId}: last ${seconds}s of ${url}`)
   const workDir = await createWorkDir("extract-tail")
   try {
     const inputPath = join(workDir, "input.mp4")

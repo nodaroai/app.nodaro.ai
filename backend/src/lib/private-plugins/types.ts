@@ -121,6 +121,13 @@ export interface PluginVideoGenOptions {
   generateAudio?: boolean
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
+  /** Seedance-2 r2v reference audio (max 3) — the gvp plugin sends it on
+   *  EVERY segment for consistent conditioning across the stitch. */
+  referenceAudioUrls?: string[]
+  /** Closing (last) frame — threaded to imageToVideo's POSITIONAL end-frame
+   *  param (Seedance-2 resolver builds the closing-frame hint). Sent by the
+   *  gvp plugin for the FINAL segment only. */
+  endFrameUrl?: string
   /** Invoked with the provider task id as soon as it exists. The pro engine
    * checkpoints it; jobs.provider_task_id is NEVER written (spec §6 linchpin). */
   onTaskCreated?: (taskId: string) => void | Promise<void>

@@ -162,6 +162,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "nano-banana": "Fast generation, style flexibility, reference image support",
     "nano-banana-pro": "Higher quality Nano Banana with better detail",
     "nano-banana-2": "Latest Nano Banana with resolution options (1K/2K/4K)",
+    "nano-banana-2-lite": "Fast, low-cost 1K generation for drafts and iteration",
     "gpt-image": "Creative concepts, illustration, variable quality tiers",
     "gpt-image-2": "Latest GPT Image — sharp text, photorealism, 1K/2K/4K resolution",
     "grok": "General purpose, good text understanding",

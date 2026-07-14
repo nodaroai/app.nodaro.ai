@@ -92,7 +92,31 @@ describe("isValidGenerateVideoProConnection", () => {
     expect(isValidGenerateVideoProConnection("imageReferences", "text-prompt", isPicker)).toBe(false)
   })
 
+  it("negative accepts text producers but rejects pickers (would invert their intent)", () => {
+    expect(isValidGenerateVideoProConnection("negative", "text-prompt", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("negative", "mood", isPicker)).toBe(false)
+  })
+
+  it("endFrame accepts image producers; videoReferences (Extend Source) accepts video producers only", () => {
+    expect(isValidGenerateVideoProConnection("endFrame", "generate-image", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("endFrame", "text-prompt", isPicker)).toBe(false)
+    expect(isValidGenerateVideoProConnection("videoReferences", "generate-video", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("videoReferences", "generate-image", isPicker)).toBe(false)
+  })
+
+  it("audio + audioReferences accept audio producers (full parity)", () => {
+    expect(isValidGenerateVideoProConnection("audio", "text-to-speech", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("audioReferences", "generate-music", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("audio", "generate-image", isPicker)).toBe(false)
+  })
+
+  it("assets accepts identity nodes; look/elements accept their picker families", () => {
+    expect(isValidGenerateVideoProConnection("assets", "character", isPicker)).toBe(true)
+    expect(isValidGenerateVideoProConnection("assets", "text-prompt", isPicker)).toBe(false)
+    expect(isValidGenerateVideoProConnection("look", "text-prompt", isPicker)).toBe(false)
+  })
+
   it("unknown handle returns false", () => {
-    expect(isValidGenerateVideoProConnection("negative", "text-prompt", isPicker)).toBe(false)
+    expect(isValidGenerateVideoProConnection("nonexistent-handle", "text-prompt", isPicker)).toBe(false)
   })
 })

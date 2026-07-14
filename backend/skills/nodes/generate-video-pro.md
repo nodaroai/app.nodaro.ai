@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-12T06:23:11.366Z
-generated_from: 61416e7f
+generated_at: 2026-07-14T05:26:46.664Z
+generated_from: 523a84a40
 ---
 
 # Generate Video Pro
@@ -10,7 +10,7 @@ generated_from: 61416e7f
 **Type:** `generate-video-pro`
 **Category:** ai
 **Credit cost:** 82
-**Inputs (target handles):** `prompt`, `startFrame`, `imageReferences`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
@@ -23,6 +23,7 @@ generated_from: 61416e7f
 - `aspectRatio?: string`
 - `resolution?: string`
 - `generateAudio?: boolean`
+- `negativePrompt?: string`
 - `selectedStartFrameNodeId?: string | null`
 - `referenceImageOrder?: string[]`
 - `fieldMappings?: FieldMappings`
@@ -41,6 +42,7 @@ generated_from: 61416e7f
   "provider": "seedance-2",
   "prompt": "",
   "duration": 8,
+  "aspectRatio": "adaptive",
   "resolution": "720p",
   "generateAudio": true,
   "fieldMappings": {},
@@ -78,6 +80,7 @@ generated_from: 61416e7f
     "provider": "seedance-2",
     "prompt": "",
     "duration": 8,
+    "aspectRatio": "adaptive",
     "resolution": "720p",
     "generateAudio": true,
     "fieldMappings": {},

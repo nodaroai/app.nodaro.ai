@@ -168,6 +168,17 @@ export async function loadPrivatePlugins(
     return handleLoadFailure(`${PRIVATE_PLUGINS_PACKAGE} exported no plugins[] array`, exit)
   }
 
+  // RUNTIME VERSION VISIBILITY (job dbf95612 post-mortem): the ONE question
+  // that couldn't be answered from outside the container was "which plugin
+  // build is this process actually executing?" — the image's install log and
+  // the registry both said one thing while runtime behavior suggested
+  // another. `pluginBuildId` ships from the plugin (v0.7.3+); older builds
+  // log "pre-0.7.3" so silence is impossible either way.
+  const buildId = (mod as { pluginBuildId?: unknown }).pluginBuildId
+  console.log(
+    `[private-plugins] loaded ${typeof buildId === "string" ? buildId : `${PRIVATE_PLUGINS_PACKAGE} (pre-0.7.3, no pluginBuildId)`}`,
+  )
+
   const plugins: NodaroPrivatePlugin[] = mod.plugins
   const getToolkit = makeToolkitGetter(opts.toolkit)
   const handlers: Record<string, PluginHandlerFn> = {}

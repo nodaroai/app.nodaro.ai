@@ -250,6 +250,7 @@ const GENERATE_IMAGE_PROVIDER_TO_MODEL: Record<string, string> = {
   "nano-banana": "gemini-2.5-flash-image",
   "nano-banana-pro": "gemini-2.5-flash-image",
   "nano-banana-2": "gemini-2.5-flash-image",
+  "nano-banana-2-lite": "gemini-3.1-flash-lite-image",
 }
 
 export function deriveLinkedFields(

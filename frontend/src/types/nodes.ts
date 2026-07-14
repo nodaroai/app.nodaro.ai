@@ -1830,6 +1830,10 @@ export interface GenerateVideoProNodeData {
   aspectRatio?: string
   resolution?: string
   generateAudio?: boolean
+  /** Panel-typed negative — composed with the wired `negative` handle via
+   *  composeNegative (generate-video parity) and appended to every segment
+   *  prompt as an "Avoid:" suffix (Seedance 2 has no native negative). */
+  negativePrompt?: string
   selectedStartFrameNodeId?: string | null
   referenceImageOrder?: string[]
   fieldMappings?: FieldMappings
@@ -5879,6 +5883,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "imagen4-ultra", label: "Imagen 4 Ultra" },
           { value: "nano-banana", label: "Nano Banana" },
           { value: "nano-banana-2", label: "Nano Banana 2" },
+          { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite" },
           { value: "nano-banana-pro", label: "Nano Banana Pro" },
           { value: "qwen", label: "Qwen" },
           { value: "seedream", label: "Seedream" },
@@ -6062,13 +6067,14 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Video Pro",
     category: "ai",
     creditCost: 82,
-    inputs: ["prompt", "startFrame", "imageReferences"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
     defaultData: {
       label: "Generate Video Pro",
       provider: "seedance-2",
       prompt: "",
       duration: 8,
+      aspectRatio: "adaptive",
       resolution: "720p",
       generateAudio: true,
       fieldMappings: {},

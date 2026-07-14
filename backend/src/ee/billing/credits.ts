@@ -186,6 +186,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "nano-banana-2": 4,             // (1K default)
   "nano-banana-2:2K": 5,
   "nano-banana-2:4K": 5,
+  "nano-banana-2-lite": 2,        // 1K only, flat
   "nano-banana-pro": 5,          // (1K/2K default)
   "nano-banana-pro:4K": 6,
   "flux": 2,                     // (1K default)

@@ -18,6 +18,7 @@ describe("imageReferenceLimit", () => {
     "seedream-5-lite": 16, // → seedream-5-lite-i2i
     "seedream-5-pro": 16, // → seedream-5-pro-i2i
     "nano-banana-2": 4,
+    "nano-banana-2-lite": 10, // schema maxItems (image_urls)
     flux: 4, // → flux-pro-i2i
     "flux-2-klein": 1, // product cap (schema array slices at 5)
     "flux-2-pro": 4, // product cap (BFL schema accepts 8)

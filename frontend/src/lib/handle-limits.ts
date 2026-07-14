@@ -228,17 +228,35 @@ export function getHandleConnectionLimit(
   // SEEDANCE_2_REF_LIMITS via VIDEO_REF_LIMITS_BY_PROVIDER, images: 9), so
   // this reuses the same provider-limits source as generate-video above
   // rather than a hand-picked literal — it stays correct if that shared cap
-  // is ever retuned. Only two of generate-video's handles exist here.
+  // is ever retuned.
   if (node.type === "generate-video-pro") {
     const data = node.data as { provider?: string } | undefined
     const provider = data?.provider ?? "seedance-2"
     const providerLabel = getModel(provider)?.label ?? provider
     switch (handleId) {
       case "startFrame":
+      case "endFrame":
         return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "imageReferences": {
         const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 9
         return { limit: cap, providerLabel, isMultiProviderMin: false }
+      }
+      case "videoReferences":
+        // The EXTEND SOURCE — exactly one, by design (the pro engine
+        // continues from it; Seedance's 3-video ref cap doesn't apply, this
+        // is a continuation-transport input, not a style-reference pool).
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "audio":
+        // Post-gen soundtrack overlay (merged onto the final stitched
+        // deliverable) — one track, mirroring generate-video's non-LTX cap.
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "audioReferences": {
+        // Seedance-2 r2v multimodal audio conditioning — same provider-cap
+        // source generate-video reads (SEEDANCE_2_REF_LIMITS.audio = 3).
+        const cap = VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.audio
+        return cap != null
+          ? { limit: cap, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
       }
       default:
         return null
