@@ -23,6 +23,10 @@ vi.mock("@/lib/query-keys", () => ({
 import {
   clientAppsQueryOptions,
   fetchListedAppSlugs,
+  projectVisibilityFilter,
+  readShowClientAppsFlag,
+  writeShowClientAppsFlag,
+  SHOW_CLIENT_APPS_STORAGE_KEY,
   workflowVisibilityFilter,
 } from "../use-client-apps-queries"
 
@@ -143,5 +147,51 @@ describe("fetchListedAppSlugs", () => {
     await expect(clientAppsQueryOptions.queryFn()).resolves.toEqual([
       { slug: "studio", name: "Studio", workflowsListed: true },
     ])
+  })
+})
+
+describe("projectVisibilityFilter — same rule, applied to projects.app_slug", () => {
+  const listed = ["studio"]
+
+  it("SHOWS a native project (app_slug IS NULL)", () => {
+    expect(admits(projectVisibilityFilter(listed), null)).toBe(true)
+  })
+
+  it("HIDES a registered-but-unlisted app's project (voice-changer-pro)", () => {
+    // The reported leak: the "Voice Changer Pro" project must not show.
+    expect(admits(projectVisibilityFilter(listed), "voice-changer-pro")).toBe(false)
+  })
+
+  it("SHOWS a listed app's project, HIDES an unknown app's — fails closed", () => {
+    expect(admits(projectVisibilityFilter(listed), "studio")).toBe(true)
+    expect(admits(projectVisibilityFilter(listed), "some-future-app")).toBe(false)
+  })
+
+  it("is the very same rule as the workflow filter", () => {
+    expect(projectVisibilityFilter(listed)).toBe(workflowVisibilityFilter(listed))
+  })
+})
+
+describe("readShowClientAppsFlag / writeShowClientAppsFlag — admin override", () => {
+  beforeEach(() => {
+    localStorage.removeItem(SHOW_CLIENT_APPS_STORAGE_KEY)
+  })
+
+  it("defaults to false when never set (hidden for everyone, admins included)", () => {
+    expect(readShowClientAppsFlag()).toBe(false)
+  })
+
+  it("round-trips true and false", () => {
+    writeShowClientAppsFlag(true)
+    expect(localStorage.getItem(SHOW_CLIENT_APPS_STORAGE_KEY)).toBe("true")
+    expect(readShowClientAppsFlag()).toBe(true)
+
+    writeShowClientAppsFlag(false)
+    expect(readShowClientAppsFlag()).toBe(false)
+  })
+
+  it("treats any non-\"true\" value as false", () => {
+    localStorage.setItem(SHOW_CLIENT_APPS_STORAGE_KEY, "1")
+    expect(readShowClientAppsFlag()).toBe(false)
   })
 })

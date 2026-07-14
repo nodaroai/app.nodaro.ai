@@ -44,6 +44,8 @@ vi.mock("@/lib/admin-check.js", () => ({
 
 import { projectRoutes } from "../projects.js"
 import { supabase } from "../../lib/supabase.js"
+import { checkIsAdmin } from "../../lib/admin-check.js"
+import { _resetClientAppStampCacheForTests } from "../../lib/client-app-stamp.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,6 +107,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.mocked(checkIsAdmin).mockResolvedValue(false)
+  _resetClientAppStampCacheForTests()
 
   app = Fastify({ logger: false })
 
@@ -188,6 +192,123 @@ describe("GET /v1/projects", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/projects?viewAll=true — admin "all users" + client-app exclusion
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/projects?viewAll=true — client-app visibility", () => {
+  /** Thenable supabase stub — every builder method returns the same object. */
+  function chain(result: { data: unknown; error: unknown }) {
+    const obj: Record<string, ReturnType<typeof vi.fn>> & { then?: unknown } = {}
+    for (const m of ["select", "eq", "is", "order", "limit", "not", "in", "or", "single", "maybeSingle"]) {
+      obj[m] = vi.fn(() => obj)
+    }
+    obj.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve)
+    return obj
+  }
+
+  /** The registry: studio is listed, voice-changer-pro is not. */
+  function registryChain() {
+    return chain({
+      data: [
+        { slug: "studio", settings_key: "studio", workflows_listed: true },
+        { slug: "voice-changer-pro", settings_key: "vcp", workflows_listed: false },
+      ],
+      error: null,
+    })
+  }
+
+  it("returns 403 for a non-admin even with includeClientApps=true", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(false)
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/projects?viewAll=true&includeClientApps=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+  })
+
+  it("excludes client-app projects by DEFAULT (native OR a listed app)", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const projectsChain = chain({ data: [DB_PROJECT], error: null })
+    const profilesChain = chain({ data: [{ id: TEST_USER_ID, email: "u@x.com" }], error: null })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "client_apps") return registryChain()
+      if (table === "profiles") return profilesChain
+      return projectsChain
+    }) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/projects?viewAll=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Native OR the one listed app (studio); the unlisted vcp is excluded.
+    expect(projectsChain.or).toHaveBeenCalledWith("app_slug.is.null,app_slug.in.(studio)")
+    expect(res.json().data).toHaveLength(1)
+  })
+
+  it("INCLUDES client-app projects with includeClientApps=true (no visibility filter)", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const projectsChain = chain({ data: [DB_PROJECT], error: null })
+    const profilesChain = chain({ data: [], error: null })
+    const clientApps = registryChain()
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "client_apps") return clientApps
+      if (table === "profiles") return profilesChain
+      return projectsChain
+    }) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/projects?viewAll=true&includeClientApps=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // No `.or` filter, and the registry is never consulted on this path.
+    expect(projectsChain.or).not.toHaveBeenCalled()
+    expect(clientApps.select).not.toHaveBeenCalled()
+  })
+
+  it("degrades to an unfiltered list when projects.app_slug is missing (pre-migration)", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    // Same chain awaited twice: run 1 (filtered) errors undefined_column, run 2
+    // (unfiltered retry) resolves rows.
+    let call = 0
+    const projectsChain: Record<string, ReturnType<typeof vi.fn>> & { then?: unknown } = {}
+    for (const m of ["select", "eq", "is", "order", "limit", "or"]) {
+      projectsChain[m] = vi.fn(() => projectsChain)
+    }
+    projectsChain.then = (resolve: (v: unknown) => unknown) => {
+      call += 1
+      return Promise.resolve(
+        call === 1
+          ? { data: null, error: { code: "42703", message: "column projects.app_slug does not exist" } }
+          : { data: [DB_PROJECT], error: null },
+      ).then(resolve)
+    }
+    const profilesChain = chain({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "client_apps") return registryChain()
+      if (table === "profiles") return profilesChain
+      return projectsChain
+    }) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/projects?viewAll=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toHaveLength(1)
   })
 })
 

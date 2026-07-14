@@ -2,6 +2,12 @@ import { create } from "zustand"
 import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+import {
+  fetchListedAppSlugs,
+  isAppSlugColumnMissing,
+  projectVisibilityFilter,
+  readShowClientAppsFlag,
+} from "@/hooks/queries/use-client-apps-queries"
 import type { Json } from "@/types/database.types"
 
 export interface Project {
@@ -105,16 +111,32 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false })
 
-      if (error) {
-        set({ error: error.message, loading: false })
+      // Hide client-app projects (voice-changer-pro's dedicated project) unless
+      // an admin opted in — same visibility rule as useProjects/the workflow list.
+      const showAll = readShowClientAppsFlag()
+      const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
+
+      const build = (applyFilter: boolean) => {
+        let q = supabase
+          .from("projects")
+          .select("*")
+          .order("created_at", { ascending: false })
+        if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        return q
+      }
+
+      let result = await build(!showAll)
+      // Pre-migration-256 DB (no projects.app_slug): degrade to unfiltered.
+      if (result.error && isAppSlugColumnMissing(result.error)) {
+        result = await build(false)
+      }
+
+      if (result.error) {
+        set({ error: result.error.message, loading: false })
         return
       }
-      set({ projects: data.map(toProject), loading: false })
+      set({ projects: result.data.map(toProject), loading: false })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to fetch projects", loading: false })
     }

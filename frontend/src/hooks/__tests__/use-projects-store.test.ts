@@ -8,7 +8,7 @@ let callLog: Array<{ table: string; method: string; args: unknown[] }> = []
 
 function makeChain(resolvedValue: { data: unknown; error: null } | { data: null; error: { message: string } }) {
   const chain: Record<string, unknown> = {}
-  const methods = ["select", "insert", "update", "delete", "eq", "single", "order"]
+  const methods = ["select", "insert", "update", "delete", "eq", "single", "order", "or"]
   for (const m of methods) {
     chain[m] = vi.fn((..._args: unknown[]) => chain)
   }
@@ -43,6 +43,19 @@ let mockSupabase: ReturnType<typeof createMockSupabase>
 
 vi.mock("@/lib/supabase", () => ({
   createClient: () => mockSupabase,
+}))
+
+// The list fetchers apply the client-app visibility filter; mock it to a fixed
+// PostgREST `or=` string so the store test stays focused on store behaviour and
+// never touches the real registry cache.
+vi.mock("@/hooks/queries/use-client-apps-queries", () => ({
+  fetchListedAppSlugs: vi.fn().mockResolvedValue([]),
+  projectVisibilityFilter: vi.fn().mockReturnValue("app_slug.is.null"),
+  readShowClientAppsFlag: vi.fn().mockReturnValue(false),
+  isAppSlugColumnMissing: (e: { code?: string; message?: string } | null) =>
+    e?.code === "42703" ||
+    e?.code === "PGRST204" ||
+    (typeof e?.message === "string" && e.message.includes("app_slug")),
 }))
 
 function resetStore() {

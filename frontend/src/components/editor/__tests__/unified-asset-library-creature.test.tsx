@@ -53,7 +53,11 @@ vi.mock("@tanstack/react-query", () => ({
 }))
 
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
-vi.mock("@/lib/query-keys", () => ({ queryKeys: { assets: { all: ["assets"] } } }))
+// clientApps.list() is read at module-load by use-client-apps-queries (imported
+// via the project-filter visibility rule), so the mock must expose it.
+vi.mock("@/lib/query-keys", () => ({
+  queryKeys: { assets: { all: ["assets"] }, clientApps: { list: () => ["clientApps", "list"] } },
+}))
 vi.mock("@/lib/asset-to-node", () => ({ assetToUploadNode: () => null }))
 vi.mock("../library-media-browser", () => ({ LibraryMediaBrowser: () => <div data-testid="media-browser" /> }))
 vi.mock("../character-page-modal", () => ({ CharacterPageModal: () => null }))
