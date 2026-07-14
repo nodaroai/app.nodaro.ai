@@ -18,6 +18,11 @@ import {
   workflowExportSchema,
 } from "../lib/workflow-assets.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
+import {
+  clientAppVisibilityFilter,
+  getListedAppSlugs,
+  inferAppSlugFromSettings,
+} from "../lib/client-app-stamp.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -167,6 +172,14 @@ const listWorkflowsQuery = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  // Admin-only, viewAll-only: lift the default client-app exclusion so the
+  // "all users" list includes unlisted client-app rows (voice-changer-pro
+  // conversions). Honored only on the admin-gated viewAll path, and only when
+  // the list is NOT already scoped to one `app`. Off by default.
+  includeClientApps: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 })
 
 const exportWorkflowQuery = z.object({
@@ -258,6 +271,40 @@ async function clientAppExists(slug: string): Promise<{ ok: boolean; error?: unk
     .maybeSingle()
   if (error) return { ok: false, error }
   return { ok: data !== null }
+}
+
+/**
+ * Decide a new workflow's `app_slug` (its origin) at create time.
+ *
+ * Precedence: an explicit body `appSlug` wins (already validated); else the
+ * settings marker (`settings.vcp` → voice-changer-pro, etc.); else INHERIT the
+ * project's slug, so a bare create inside a client app's project is classified
+ * as that app's from birth. The project read is scoped by `user_id` and tolerant
+ * — an unowned or missing project yields NULL and never blocks the create.
+ */
+async function resolveCreateAppSlug(
+  userId: string,
+  projectId: string,
+  settings: unknown,
+  explicitSlug: string | null,
+): Promise<string | null> {
+  if (explicitSlug) return explicitSlug
+  const fromSettings = await inferAppSlugFromSettings(settings)
+  if (fromSettings) return fromSettings
+  // Inheritance is best-effort: a read failure must never break the create
+  // (the row simply stays native and is reclassified by a later settings write
+  // or the backfill).
+  try {
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("app_slug")
+      .eq("id", projectId)
+      .eq("user_id", userId)
+      .maybeSingle()
+    return (proj?.app_slug as string | null) ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -357,6 +404,16 @@ export async function workflowRoutes(app: FastifyInstance) {
       ) as unknown as typeof body.edges
     }
 
+    // Classify the row's origin (see client-app-stamp.ts). This route carries no
+    // `appSlug` field, so infer from the settings marker; failing that, INHERIT
+    // the project's slug — a workflow created inside a client app's project (e.g.
+    // voice-changer-pro's per-user project) is that app's, even when the create
+    // itself is bare (vcp creates the conversion, then writes settings.vcp on the
+    // first PATCH). Inheriting here stamps it at birth so there is no window in
+    // which it shows as native. The project read is tolerant: an unowned/ missing
+    // project leaves the slug NULL and the insert proceeds as before.
+    const scopedAppSlug = await resolveCreateAppSlug(userId, params.projectId, body.settings, null)
+
     const { data, error } = await supabase
       .from("workflows")
       .insert({
@@ -369,6 +426,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
+        app_slug: scopedAppSlug,
       })
       .select(WORKFLOW_FULL_COLS)
       .single()
@@ -423,7 +481,16 @@ export async function workflowRoutes(app: FastifyInstance) {
         .order("updated_at", { ascending: false })
         .limit(limit)
       if (appSlug) {
+        // Already scoped to one client app — the default exclusion is moot, and
+        // `includeClientApps` has no effect here (you asked for exactly this app).
         allQuery = allQuery.eq("app_slug", appSlug)
+      } else if (query.includeClientApps !== true) {
+        // Unscoped "all workflows" view: hide client-app rows by default (native
+        // OR a listed app), the same rule the dashboard applies for everyone.
+        // `?includeClientApps=true` (admin-gated above) lifts it. workflows.app_slug
+        // predates this work (migration 253), so no pre-migration fallback is
+        // needed — unlike projects.app_slug.
+        allQuery = allQuery.or(clientAppVisibilityFilter(await getListedAppSlugs()))
       }
       const { data, error } = await allQuery
       if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
@@ -499,23 +566,33 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
 
     let projectId = body.projectId
+    // The project's own slug, inherited when the caller gives neither an explicit
+    // appSlug nor a settings marker (a bare create inside a client-app project).
+    let projectAppSlug: string | null = null
 
     if (projectId) {
-      // Caller specified a project — verify ownership before insert.
+      // Caller specified a project — verify ownership before insert (and read its
+      // slug in the same round-trip, for inheritance).
       const { data: proj, error: projErr } = await supabase
         .from("projects")
-        .select("id")
+        .select("id, app_slug")
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle()
       if (projErr) return sendInternalError(reply, req, projErr, "Failed to create workflow")
       if (!proj) return notFound(reply, "Project not found")
+      projectAppSlug = (proj.app_slug as string | null) ?? null
     } else {
-      // Resolve / lazy-create the default project.
+      // Resolve / lazy-create the default project (always native → slug stays NULL).
       const resolved = await ensureDefaultProject(userId)
       if ("error" in resolved) return sendInternalError(reply, req, resolved.error, "Failed to create workflow")
       projectId = resolved.projectId
     }
+
+    // Origin precedence: explicit appSlug (validated above) → settings marker →
+    // inherited project slug → NULL (native, created in app.nodaro.ai itself).
+    const appSlug =
+      body.appSlug ?? (await inferAppSlugFromSettings(body.settings)) ?? projectAppSlug
 
     const { data, error } = await supabase
       .from("workflows")
@@ -529,8 +606,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
-        // NULL = native (created in app.nodaro.ai itself).
-        app_slug: body.appSlug ?? null,
+        app_slug: appSlug,
       })
       .select(WORKFLOW_FULL_COLS)
       .single()
@@ -776,6 +852,34 @@ export async function workflowRoutes(app: FastifyInstance) {
       }
       return notFound(reply, "Workflow not found")
     }
+
+    // Late origin stamping: a client app (voice-changer-pro) creates a bare
+    // conversion and writes its `settings.<key>` marker on the FIRST PATCH. If
+    // this settings write reveals an app marker on a row that is still native
+    // (app_slug NULL — e.g. it was created before this project was classified),
+    // stamp it now so it drops out of the native workflow list. Guarded on
+    // `app_slug IS NULL` so an already-classified row is never re-labelled, and
+    // best-effort: the row is already saved, so a stamp hiccup must not 500 the
+    // save (the next settings write, or the backfill, reclassifies it). An
+    // app_slug-only update does not bump `version` (trigger 218), so this never
+    // disturbs optimistic concurrency.
+    if (body.settings !== undefined && (data.app_slug ?? null) === null) {
+      const inferred = await inferAppSlugFromSettings(body.settings)
+      if (inferred) {
+        const { error: stampErr } = await supabase
+          .from("workflows")
+          .update({ app_slug: inferred })
+          .eq("id", params.id)
+          .eq("user_id", userId)
+          .is("app_slug", null)
+        if (stampErr) {
+          req.log.warn({ err: stampErr, workflowId: params.id }, "workflow app_slug stamp failed")
+        } else {
+          ;(data as Record<string, unknown>).app_slug = inferred
+        }
+      }
+    }
+
     return { data: toWorkflowFull(data) }
   })
 

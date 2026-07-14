@@ -5,6 +5,11 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 import { ensureDefaultProject } from "../lib/default-project.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import {
+  clientAppVisibilityFilter,
+  getListedAppSlugs,
+  inferAppSlugFromSettings,
+} from "../lib/client-app-stamp.js"
 
 const projectIdParams = z.object({
   id: z.string().uuid(),
@@ -28,6 +33,19 @@ const updateProjectBody = z
 
 const PROJECT_COLS =
   "id, user_id, name, description, settings, is_default, created_at, updated_at"
+
+/**
+ * True when a PostgREST error means `projects.app_slug` does not exist yet — a
+ * DB that has not applied migration 256. Lets the admin viewAll list degrade to
+ * an unfiltered query (still renders) if the backend deploys ahead of the
+ * migration. Codes: 42703 (undefined_column) / PGRST204 (schema-cache miss).
+ * Backend mirror of the frontend `isAppSlugColumnMissing`.
+ */
+function isAppSlugColumnMissing(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  if (error.code === "42703" || error.code === "PGRST204") return true
+  return typeof error.message === "string" && error.message.includes("app_slug")
+}
 
 function toProjectResponse(row: Record<string, unknown>, ownerEmail?: string) {
   return {
@@ -64,10 +82,30 @@ export async function projectRoutes(app: FastifyInstance) {
         })
       }
 
-      const { data, error } = await supabase
-        .from("projects")
-        .select(PROJECT_COLS)
-        .order("created_at", { ascending: false })
+      // Client-app projects (voice-changer-pro's dedicated project) are hidden
+      // from the admin "all users" list BY DEFAULT — the same rule the dashboard
+      // applies to everyone, admins included. `?includeClientApps=true` (honored
+      // only on this admin-gated path) lifts the exclusion so an admin who opts
+      // in via the client-apps screen toggle can see them. Native OR a listed
+      // app; an unknown/unregistered slug stays hidden.
+      const includeClientApps = query.includeClientApps === "true"
+      const listedFilter = includeClientApps
+        ? null
+        : clientAppVisibilityFilter(await getListedAppSlugs())
+
+      const runViewAll = (withFilter: boolean) => {
+        let q = supabase.from("projects").select(PROJECT_COLS)
+        if (withFilter && listedFilter) q = q.or(listedFilter)
+        return q.order("created_at", { ascending: false })
+      }
+
+      let result = await runViewAll(!includeClientApps)
+      // Backend deployed ahead of migration 256 (no projects.app_slug) → degrade
+      // to unfiltered so the admin view still renders.
+      if (result.error && isAppSlugColumnMissing(result.error)) {
+        result = await runViewAll(false)
+      }
+      const { data, error } = result
 
       if (error) {
         return sendInternalError(reply, req, error, "Failed to fetch projects")
@@ -125,6 +163,13 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const { name, description, settings } = parsed.data
 
+    // Classify the project's origin (see client-app-stamp.ts). A client app that
+    // creates its per-user project writes its settings marker at birth (vcp's
+    // ensureVcpProject sets `settings.vcp`), so stamp `app_slug` from it — that is
+    // what keeps the "Voice Changer Pro" project out of the dashboard's project
+    // list. NULL = native (created in app.nodaro.ai itself).
+    const appSlug = await inferAppSlugFromSettings(settings)
+
     const { data, error } = await supabase
       .from("projects")
       .insert({
@@ -132,6 +177,7 @@ export async function projectRoutes(app: FastifyInstance) {
         name,
         description: description ?? null,
         settings: settings ?? {},
+        app_slug: appSlug,
       })
       .select(PROJECT_COLS)
       .single()
@@ -234,6 +280,26 @@ export async function projectRoutes(app: FastifyInstance) {
         })
       }
       return sendInternalError(reply, req, error, "Failed to update project")
+    }
+
+    // Late origin stamping: a client app may reveal its settings marker on an
+    // update (vcp's ensureProjectVcpSettings back-fills `settings.vcp` on an old
+    // project that predates it). Guarded on `app_slug IS NULL` so a native or
+    // already-classified project is never re-labelled; best-effort so a stamp
+    // hiccup never fails a save that already succeeded.
+    if (settings !== undefined) {
+      const inferred = await inferAppSlugFromSettings(settings)
+      if (inferred) {
+        const { error: stampErr } = await supabase
+          .from("projects")
+          .update({ app_slug: inferred })
+          .eq("id", id)
+          .eq("user_id", req.userId)
+          .is("app_slug", null)
+        if (stampErr) {
+          req.log.warn({ err: stampErr, projectId: id }, "project app_slug stamp failed")
+        }
+      }
     }
 
     return { data: toProjectResponse(data) }

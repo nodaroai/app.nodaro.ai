@@ -113,3 +113,54 @@ export function workflowVisibilityFilter(listedSlugs: readonly string[]): string
   if (safe.length === 0) return "app_slug.is.null"
   return `app_slug.is.null,app_slug.in.(${safe.join(",")})`
 }
+
+/**
+ * `projects.app_slug` carries the same semantics as `workflows.app_slug`, so the
+ * SAME visibility rule hides a client app's dedicated project (voice-changer-pro's
+ * "Voice Changer Pro" project) from the dashboard's project list. Aliased rather
+ * than duplicated so the rule lives in exactly one place.
+ */
+export const projectVisibilityFilter = workflowVisibilityFilter
+
+/**
+ * localStorage key for the admin-only "show client-app content in my lists"
+ * override. When set, the dashboard's project + workflow list fetchers skip the
+ * visibility filter so an admin can SEE the otherwise-hidden client-app rows
+ * (voice-changer-pro conversions and its project). Off by default — the whole
+ * point is that these are hidden for everyone, admins included.
+ */
+export const SHOW_CLIENT_APPS_STORAGE_KEY = "nodaro:admin:show-client-apps"
+
+/** Read the admin override flag. SSR-safe and never throws (private-mode etc.). */
+export function readShowClientAppsFlag(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem(SHOW_CLIENT_APPS_STORAGE_KEY) === "true"
+  } catch {
+    return false
+  }
+}
+
+/** Persist the admin override flag. SSR-safe and never throws. */
+export function writeShowClientAppsFlag(value: boolean): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SHOW_CLIENT_APPS_STORAGE_KEY, value ? "true" : "false")
+  } catch {
+    // best-effort; a blocked localStorage just means the toggle doesn't persist
+  }
+}
+
+/**
+ * True when a PostgREST error means `projects.app_slug` does not exist yet — a DB
+ * that has not applied migration 256. Lets the project-list fetchers degrade to
+ * an unfiltered query (list still renders) if the frontend deploys ahead of the
+ * migration, mirroring how useMyWorkflows tolerates a missing `is_default`.
+ * Codes: 42703 (undefined_column) / PGRST204 (schema-cache miss).
+ */
+export function isAppSlugColumnMissing(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null
+  if (!e) return false
+  if (e.code === "42703" || e.code === "PGRST204") return true
+  return typeof e.message === "string" && e.message.includes("app_slug")
+}

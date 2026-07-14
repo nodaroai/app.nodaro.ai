@@ -45,6 +45,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 import { workflowRoutes } from "../workflows.js"
 import { supabase } from "../../lib/supabase.js"
 import { checkIsAdmin } from "../../lib/admin-check.js"
+import { _resetClientAppStampCacheForTests } from "../../lib/client-app-stamp.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 
@@ -80,6 +81,8 @@ function chain(result: { data: unknown; error: unknown }) {
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.mocked(checkIsAdmin).mockResolvedValue(false)
+  _resetClientAppStampCacheForTests()
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
@@ -152,6 +155,94 @@ describe("GET /v1/workflows?viewAll=true — admin Studio all-users view", () =>
     expect(workflowsChain.eq).not.toHaveBeenCalledWith("user_id", expect.anything())
     // ...still top-level only.
     expect(workflowsChain.is).toHaveBeenCalledWith("parent_workflow_id", null)
+  })
+})
+
+describe("GET /v1/workflows?viewAll=true (no app scope) — client-app exclusion", () => {
+  /** The registry: studio is listed, voice-changer-pro is not. */
+  function registryChain() {
+    return chain({
+      data: [
+        { slug: "studio", settings_key: "studio", workflows_listed: true },
+        { slug: "voice-changer-pro", settings_key: "vcp", workflows_listed: false },
+      ],
+      error: null,
+    })
+  }
+
+  it("excludes client-app workflows by DEFAULT (native OR a listed app)", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const workflowsChain = chain({ data: [], error: null })
+    const profilesChain = chain({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "client_apps") return registryChain()
+      if (table === "profiles") return profilesChain
+      return workflowsChain
+    }) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/workflows?viewAll=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Native OR the one listed app (studio); the unlisted vcp is excluded.
+    expect(workflowsChain.or).toHaveBeenCalledWith("app_slug.is.null,app_slug.in.(studio)")
+    // Not an app-scoped list — no `.eq("app_slug", …)`.
+    expect(workflowsChain.eq).not.toHaveBeenCalledWith("app_slug", expect.anything())
+  })
+
+  it("INCLUDES client-app workflows with includeClientApps=true (no filter)", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const workflowsChain = chain({ data: [], error: null })
+    const profilesChain = chain({ data: [], error: null })
+    const clientApps = registryChain()
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "client_apps") return clientApps
+      if (table === "profiles") return profilesChain
+      return workflowsChain
+    }) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/workflows?viewAll=true&includeClientApps=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(workflowsChain.or).not.toHaveBeenCalled()
+    expect(clientApps.select).not.toHaveBeenCalled()
+  })
+
+  it("returns 403 for a non-admin even with includeClientApps=true", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(false)
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/workflows?viewAll=true&includeClientApps=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it("a scoped ?app= ignores includeClientApps and just scopes to that app", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const workflowsChain = chain({ data: [], error: null })
+    const profilesChain = chain({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "profiles") return profilesChain
+      return workflowsChain
+    }) as never)
+
+    await app.inject({
+      method: "GET",
+      url: "/v1/workflows?viewAll=true&app=studio&includeClientApps=true",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    // App scope wins; the visibility `.or` is moot and never applied.
+    expect(workflowsChain.eq).toHaveBeenCalledWith("app_slug", "studio")
+    expect(workflowsChain.or).not.toHaveBeenCalled()
   })
 })
 

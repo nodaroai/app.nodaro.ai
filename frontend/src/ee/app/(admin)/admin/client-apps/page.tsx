@@ -1,7 +1,14 @@
+import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { AppWindow, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { queryKeys } from "@/lib/query-keys"
+import {
+  readShowClientAppsFlag,
+  writeShowClientAppsFlag,
+} from "@/hooks/queries/use-client-apps-queries"
 import {
   useAdminClientApps,
   useToggleClientAppMutation,
@@ -91,6 +98,58 @@ function ClientAppRow({
   )
 }
 
+// ── "Show in my lists" admin override ────────────────────────────────
+
+/**
+ * Admin-only escape hatch for the visibility rule. Client-app workflows and
+ * projects (voice-changer-pro's conversions and its dedicated project) are
+ * hidden from EVERYONE'S dashboard lists, admins included — that is the whole
+ * point. This toggle lets an admin who needs to inspect them flip a local flag
+ * that the dashboard's project + workflow list fetchers read; it is persisted in
+ * localStorage (per-device, never leaves the browser) and off by default.
+ */
+function ShowInMyListsToggle() {
+  const qc = useQueryClient()
+  // Initialise to the SSR-safe default, then hydrate from localStorage on mount.
+  const [enabled, setEnabled] = useState(false)
+  useEffect(() => {
+    setEnabled(readShowClientAppsFlag())
+  }, [])
+
+  const handleToggle = (value: boolean) => {
+    setEnabled(value)
+    writeShowClientAppsFlag(value)
+    // Refresh the dashboard lists + the ⌘K search so the change takes effect
+    // without a reload. `projects.all` also covers the admin all-projects fetcher
+    // (its key is prefixed by it), and `search.all` covers the ⌘K modal.
+    qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+    qc.invalidateQueries({ queryKey: queryKeys.workflows.all })
+    qc.invalidateQueries({ queryKey: queryKeys.search.all })
+    toast.success(
+      value
+        ? "Client-app workflows and projects now shown in your lists"
+        : "Client-app workflows and projects hidden from your lists",
+    )
+  }
+
+  return (
+    <div className="border rounded-lg p-4 bg-card mb-6 flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-0.5">
+        <span className="font-medium text-sm">Show client-app workflows in my lists</span>
+        <span className="text-xs text-muted-foreground">
+          Admin-only, this device. Reveals otherwise-hidden client-app rows (e.g. Voice Changer Pro
+          conversions and its project) in your own workflow and project lists. Off by default.
+        </span>
+      </div>
+      <Switch
+        checked={enabled}
+        onCheckedChange={handleToggle}
+        aria-label="Show client-app workflows in my lists"
+      />
+    </div>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────────────
 
 /**
@@ -145,6 +204,8 @@ export default function AdminClientAppsPage() {
         in app.nodaro.ai itself are always listed, and an app that is not registered here is
         hidden.
       </p>
+
+      <ShowInMyListsToggle />
 
       <SummaryCards apps={apps} />
 

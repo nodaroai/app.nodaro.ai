@@ -15,6 +15,12 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters, useObjects, useCreatures, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
+import {
+  fetchListedAppSlugs,
+  isAppSlugColumnMissing,
+  projectVisibilityFilter,
+  readShowClientAppsFlag,
+} from "@/hooks/queries/use-client-apps-queries"
 import { queryKeys } from "@/lib/query-keys"
 const CharacterPageModal = lazy(() => import("./character-page-modal").then(m => ({ default: m.CharacterPageModal })))
 const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
@@ -113,13 +119,29 @@ function useAssetData() {
     queryKey: ["projects", "list", user?.id],
     queryFn: async () => {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, name")
-        .eq("user_id", user!.id)
-        .order("name")
-      if (error) throw error
-      return data as Array<{ id: string; name: string }>
+      // Hide client-app projects (voice-changer-pro's dedicated project) from the
+      // "Filter by project" dropdown — same visibility rule as the dashboard
+      // project list; an admin can reveal them via the client-apps toggle.
+      const showAll = readShowClientAppsFlag()
+      const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
+
+      const build = (applyFilter: boolean) => {
+        let q = supabase
+          .from("projects")
+          .select("id, name")
+          .eq("user_id", user!.id)
+          .order("name")
+        if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        return q
+      }
+
+      let result = await build(!showAll)
+      // Pre-migration-256 DB (no projects.app_slug): degrade to unfiltered.
+      if (result.error && isAppSlugColumnMissing(result.error)) {
+        result = await build(false)
+      }
+      if (result.error) throw result.error
+      return result.data as Array<{ id: string; name: string }>
     },
     enabled: !!user?.id,
     staleTime: 60_000,

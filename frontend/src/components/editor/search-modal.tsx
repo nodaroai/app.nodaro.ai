@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { createClient } from "@/lib/supabase"
 import { queryKeys } from "@/lib/query-keys"
+import {
+  fetchListedAppSlugs,
+  isAppSlugColumnMissing,
+  projectVisibilityFilter,
+  readShowClientAppsFlag,
+  workflowVisibilityFilter,
+} from "@/hooks/queries/use-client-apps-queries"
 
 interface Project {
   id: string
@@ -42,23 +49,40 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     return () => clearTimeout(timer)
   }, [open, query])
 
+  const queryClient = useQueryClient()
+
   const { data: searchResults, isLoading: loading } = useQuery({
     queryKey: queryKeys.search.results(debouncedQuery),
     queryFn: async () => {
       const supabase = createClient()
 
-      // Fetch projects
-      let projectsQuery = supabase
-        .from("projects")
-        .select("id, name, description, created_at")
-        .order("updated_at", { ascending: false })
-        .limit(10)
-      if (debouncedQuery) {
-        projectsQuery = projectsQuery.ilike("name", `%${debouncedQuery}%`)
-      }
-      const { data: projectsData } = await projectsQuery
+      // Same visibility rule as the dashboard lists: native OR a listed client
+      // app, unless an admin has revealed client-app rows. This matters MOST for
+      // the empty query — ⌘K with no text returns the 10 most-recently-updated
+      // of each, where unfiltered voice-changer-pro rows rode to the top.
+      const showAll = readShowClientAppsFlag()
+      const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
 
-      // Fetch workflows with project names
+      // Fetch projects. projects.app_slug is new (migration 256); tolerate a DB
+      // that hasn't applied it yet by retrying unfiltered (mirrors useProjects).
+      const buildProjects = (applyFilter: boolean) => {
+        let q = supabase
+          .from("projects")
+          .select("id, name, description, created_at")
+          .order("updated_at", { ascending: false })
+          .limit(10)
+        if (debouncedQuery) q = q.ilike("name", `%${debouncedQuery}%`)
+        if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        return q
+      }
+      let projectsRes = await buildProjects(!showAll)
+      if (projectsRes.error && isAppSlugColumnMissing(projectsRes.error)) {
+        projectsRes = await buildProjects(false)
+      }
+      const projectsData = projectsRes.data
+
+      // Fetch workflows with project names. workflows.app_slug predates this work
+      // (migration 253), so no pre-migration fallback is needed here.
       let workflowsQuery = supabase
         .from("workflows")
         .select("id, name, project_id, created_at, projects(name)")
@@ -66,6 +90,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
         .limit(10)
       if (debouncedQuery) {
         workflowsQuery = workflowsQuery.ilike("name", `%${debouncedQuery}%`)
+      }
+      if (!showAll) {
+        workflowsQuery = workflowsQuery.or(workflowVisibilityFilter(listed))
       }
       const { data: workflowsData } = await workflowsQuery
 

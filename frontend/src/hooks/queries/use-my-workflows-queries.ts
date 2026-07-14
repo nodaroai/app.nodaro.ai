@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
-import { STUDIO_APP_SLUG } from "./use-client-apps-queries"
+import { STUDIO_APP_SLUG, readShowClientAppsFlag } from "./use-client-apps-queries"
 
 export interface MyWorkflow {
   readonly id: string
@@ -91,15 +91,24 @@ export function useMyWorkflows() {
       const fullSelect = `${WORKFLOW_COLS}, projects(id, name, is_default)`
       const fallbackSelect = `${WORKFLOW_COLS}, projects(id, name)`
 
-      const baseQuery = (cols: string) =>
-        supabase
+      // Native-only is the DEFAULT and stays that way (see the doc comment above:
+      // listed apps have their own tabs). The ONE exception is the admin "show
+      // client-app content" override: when an admin opts in, we DROP the native
+      // filter so the otherwise-hidden client-app rows (voice-changer-pro
+      // conversions) become visible. This is NOT the `workflowVisibilityFilter`
+      // OR-with-listed path the comment warns against — it never runs by default,
+      // so it cannot reintroduce the studio double-listing for normal users.
+      const showClientApps = readShowClientAppsFlag()
+
+      const baseQuery = (cols: string) => {
+        let q = supabase
           .from("workflows")
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
-          .is("app_slug", null)
-          .order("updated_at", { ascending: false })
-          .limit(200)
+        if (!showClientApps) q = q.is("app_slug", null)
+        return q.order("updated_at", { ascending: false }).limit(200)
+      }
 
       const primary = await baseQuery(fullSelect)
       if (!primary.error) {
@@ -171,9 +180,16 @@ export function useAllStudioWorkflows(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.workflows.listStudioAll(),
     queryFn: async (): Promise<AllStudioWorkflowsResult> => {
-      const res = await fetch("/v1/workflows?viewAll=true&studio=true", {
-        headers: await getAuthHeaders(),
-      })
+      // Thread the one admin reveal flag so "the one toggle governs everything".
+      // NOTE: this call is scoped to `studio` (a LISTED app), so the backend's
+      // default client-app exclusion never applies and `includeClientApps` is a
+      // no-op here — studio workflows show regardless. It is wired for
+      // consistency and to future-proof a bare (un-scoped) all-workflows fetcher.
+      const includeClientApps = readShowClientAppsFlag()
+      const res = await fetch(
+        `/v1/workflows?viewAll=true&studio=true${includeClientApps ? "&includeClientApps=true" : ""}`,
+        { headers: await getAuthHeaders() },
+      )
       if (!res.ok) throw new Error("Failed to fetch all Studio workflows")
       const json = await res.json()
       const rows = (json.data as Record<string, unknown>[]) ?? []

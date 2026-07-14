@@ -85,8 +85,12 @@ function filteringChain(rows: ReadonlyArray<Record<string, unknown>>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
   mockUseQuery.mockReturnValue({ data: null })
 })
+
+/** localStorage key for the admin "show client-app content" override (mirrors the source constant). */
+const SHOW_CLIENT_APPS_KEY = "nodaro:admin:show-client-apps"
 
 describe("useMyWorkflows — NATIVE ONLY (app_slug IS NULL)", () => {
   it("filters on app_slug IS NULL and never reads settings->studio", async () => {
@@ -128,6 +132,26 @@ describe("useMyWorkflows — NATIVE ONLY (app_slug IS NULL)", () => {
     const result = (await mockUseQuery.mock.calls[0][0].queryFn()) as Array<{ id: string }>
 
     expect(result.map((w) => w.id)).toEqual(["native-1"])
+  })
+
+  // The admin-only override: with the localStorage flag set, the native-only
+  // filter is dropped so an admin can SEE the otherwise-hidden client-app rows
+  // (voice-changer-pro conversions). This never runs by default, so it cannot
+  // reintroduce the studio double-listing for normal users.
+  it("admin override ON drops the native-only filter and reveals client-app rows", async () => {
+    localStorage.setItem(SHOW_CLIENT_APPS_KEY, "true")
+    const wf = filteringChain([
+      { id: "native-1", user_id: "user-1", app_slug: null },
+      { id: "studio-1", user_id: "user-1", app_slug: "studio" },
+      { id: "vcp-1", user_id: "user-1", app_slug: "voice-changer-pro" },
+    ])
+    mockCreateClient.mockReturnValue(supabaseReturning(wf))
+
+    useMyWorkflows()
+    const result = (await mockUseQuery.mock.calls[0][0].queryFn()) as Array<{ id: string }>
+
+    expect(wf.is).not.toHaveBeenCalledWith("app_slug", null)
+    expect(result.map((w) => w.id).sort()).toEqual(["native-1", "studio-1", "vcp-1"])
   })
 
   it("returns [] without querying when signed out", async () => {

@@ -1,7 +1,13 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import {
+  fetchListedAppSlugs,
+  isAppSlugColumnMissing,
+  projectVisibilityFilter,
+  readShowClientAppsFlag,
+} from "./use-client-apps-queries"
 
 export interface Project {
   readonly id: string
@@ -66,21 +72,39 @@ function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
 }
 
 export function useProjects() {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: queryKeys.projects.list(),
     queryFn: async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      let query = supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false })
-      if (user) {
-        query = query.eq("user_id", user.id)
+
+      // Hide a client app's dedicated project (voice-changer-pro's "Voice Changer
+      // Pro" project) from the dashboard — same visibility rule as the workflow
+      // list. An admin can opt to see them via the client-apps screen toggle.
+      const showAll = readShowClientAppsFlag()
+      const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
+
+      const build = (applyFilter: boolean) => {
+        let q = supabase
+          .from("projects")
+          .select("*")
+          .order("created_at", { ascending: false })
+        if (user) q = q.eq("user_id", user.id)
+        if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        return q
       }
-      const { data, error } = await query
-      if (error) throw error
-      return data.map(toProject)
+
+      const primary = await build(!showAll)
+      if (!primary.error) return primary.data.map(toProject)
+      // A DB that has not applied migration 256 has no projects.app_slug — degrade
+      // to unfiltered so the list still renders. Any other error surfaces.
+      if (isAppSlugColumnMissing(primary.error)) {
+        const fallback = await build(false)
+        if (fallback.error) throw fallback.error
+        return fallback.data.map(toProject)
+      }
+      throw primary.error
     },
     staleTime: 30_000,
   })
@@ -95,9 +119,17 @@ export function useAllProjects(enabled: boolean) {
   return useQuery({
     queryKey: [...queryKeys.projects.all, "all-admin"] as const,
     queryFn: async (): Promise<AllProjectsResult> => {
-      const res = await fetch(`/v1/projects?viewAll=true`, {
-        headers: await getAuthHeaders(),
-      })
+      // The admin "all users" list hides client-app projects by default (server
+      // enforces the same rule). The one admin reveal flag governs it: when set,
+      // ask the backend to include them via `includeClientApps=true`. The flag is
+      // read here (not in the queryKey) and the client-apps toggle invalidates
+      // `queryKeys.projects.all`, which this key is prefixed by — so a toggle
+      // refetches.
+      const includeClientApps = readShowClientAppsFlag()
+      const res = await fetch(
+        `/v1/projects?viewAll=true${includeClientApps ? "&includeClientApps=true" : ""}`,
+        { headers: await getAuthHeaders() },
+      )
       if (!res.ok) throw new Error("Failed to fetch all projects")
       const json = await res.json()
       return {
