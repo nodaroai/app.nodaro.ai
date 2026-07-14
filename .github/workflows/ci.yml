@@ -111,6 +111,7 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
+        id: build-packages
         run: npm run build:packages
       - name: Verify skill content is up to date (gen-skills drift gate)
         run: cd backend && npm run gen:skills:check
@@ -137,6 +138,20 @@ jobs:
           name: Backend
           json-summary-path: backend/coverage/coverage-summary.json
           vite-config-path: backend/vitest.config.ts
+      # The workspace-package suites ran ONLY locally until 2026-07-14 —
+      # packages/prompts/seedance-extend.test.ts silently broke on dev twice
+      # (#83's new stitch field, #116's 1→2 retune) because nothing in CI ran
+      # it. Gate both suites here (inside an existing REQUIRED check) rather
+      # than as new jobs, so branch protection needs no new check names.
+      # `if: always() ...` so a backend-test failure doesn't mask package
+      # results (and vice versa) — all three suites report per run. Anchored
+      # on build-packages success: prompts tests import @nodaro/shared's dist.
+      - name: Run @nodaro/shared test suite
+        if: always() && steps.build-packages.outcome == 'success'
+        run: npm run test --workspace=@nodaro/shared
+      - name: Run @nodaro/prompts test suite
+        if: always() && steps.build-packages.outcome == 'success'
+        run: npm run test --workspace=@nodaro/prompts
 
   typecheck:
     name: Type Check
