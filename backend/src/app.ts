@@ -49,6 +49,7 @@ import { mediaProcessRoutes } from "./routes/media-process.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
 import { developerAppRoutes } from "./routes/developer-apps.js"
 import { downloadVideoRoutes } from "./routes/download-video.js"
+import { videoMetadataRoutes } from "./routes/video-metadata.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
 import { imageProxyRoutes } from "./routes/image-proxy.js"
@@ -349,6 +350,7 @@ export async function buildApp() {
   await app.register(youtubeAudioRoutes)
   await app.register(developerAppRoutes)
   await app.register(downloadVideoRoutes)
+  await app.register(videoMetadataRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
   await app.register(imageProxyRoutes)

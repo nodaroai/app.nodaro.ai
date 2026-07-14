@@ -18,6 +18,12 @@ const downloadVideoBody = z
       (url) => isAllowedSocialVideoUrl(url),
       { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
     ),
+    // Optional max video height (px). When present, caps yt-dlp's format
+    // selection to `<=maxHeight`; ABSENT keeps today's "best" behaviour
+    // byte-for-byte (the platform's own youtube-video-node passes nothing, and
+    // the DEFAULT-to-1080p decision lives in the VCP client, not here). A
+    // non-number is rejected (strict body); the value is clamped below.
+    maxHeight: z.number().int().optional(),
     // Optional section fetch: both-or-neither, 0 <= start < end (seconds).
     // The provider pads the range ±3s before handing it to yt-dlp, because
     // --download-sections cuts at keyframes; the client does the exact trim.
@@ -93,6 +99,7 @@ async function runDownloadWithProgress(
   outPath: string,
   userId: string,
   section?: { startSec: number; endSec: number },
+  maxHeight?: number,
 ): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
@@ -106,6 +113,7 @@ async function runDownloadWithProgress(
       url,
       outPath,
       section,
+      maxHeight,
       onProgress: (pct) => {
         if (state.phase === "downloading") {
           state.percent = Math.min(Math.round(pct), 99)
@@ -192,7 +200,12 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { url, sectionStartSec, sectionEndSec } = parsed.data
+    const { url, sectionStartSec, sectionEndSec, maxHeight: rawMaxHeight } = parsed.data
+    // Clamp to a sane pixel range: 144p floor (anything smaller is unusable),
+    // 8K ceiling. yt-dlp picks the best format under the cap; see
+    // videoFormatSelector. Absent stays absent (unchanged "best" behaviour).
+    const maxHeight =
+      rawMaxHeight !== undefined ? Math.min(4320, Math.max(144, rawMaxHeight)) : undefined
     const downloadId = randomUUID()
     const outputId = randomUUID()
     const baseName = `yt-video-${outputId}`
@@ -209,7 +222,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     activeDownloads.set(downloadId, state)
 
     // Start download in background
-    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath, userId, section)
+    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath, userId, section, maxHeight)
 
     return { downloadId }
   })

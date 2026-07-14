@@ -185,6 +185,58 @@ describe("POST /v1/download-video — section passthrough to the provider", () =
 })
 
 // ---------------------------------------------------------------------------
+// Tests — maxHeight validation, clamping, and passthrough to the provider
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/download-video — maxHeight", () => {
+  async function maxHeightSeenByProvider(): Promise<number | undefined> {
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    const seen = vi.mocked(downloadYouTubeVideo).mock.calls[0][0].maxHeight
+    // Drain the background pipeline so its tail can't leak into the next test.
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+    return seen
+  }
+
+  it("400 when maxHeight is not a number (strict body)", async () => {
+    const res = await post({ url: YT_URL, maxHeight: "720" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("400 when maxHeight is a non-integer number (strict body)", async () => {
+    const res = await post({ url: YT_URL, maxHeight: 720.5 })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("threads a valid maxHeight straight through to the provider", async () => {
+    const res = await post({ url: YT_URL, maxHeight: 720 })
+    expect(res.statusCode).toBe(200)
+    expect(await maxHeightSeenByProvider()).toBe(720)
+  })
+
+  it("clamps a below-floor value up to 144", async () => {
+    const res = await post({ url: YT_URL, maxHeight: 50 })
+    expect(res.statusCode).toBe(200)
+    expect(await maxHeightSeenByProvider()).toBe(144)
+  })
+
+  it("clamps an above-ceiling value down to 4320", async () => {
+    const res = await post({ url: YT_URL, maxHeight: 10000 })
+    expect(res.statusCode).toBe(200)
+    expect(await maxHeightSeenByProvider()).toBe(4320)
+  })
+
+  it("no maxHeight → provider called with maxHeight undefined (behavior unchanged)", async () => {
+    const res = await post({ url: YT_URL })
+    expect(res.statusCode).toBe(200)
+    expect(await maxHeightSeenByProvider()).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests — ownership row + storage accounting for the downloaded video
 // ---------------------------------------------------------------------------
 

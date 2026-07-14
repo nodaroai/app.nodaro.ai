@@ -8,7 +8,7 @@ import {
   hostnameMatchesAllowlist,
   isAllowedSocialVideoUrl,
 } from "../../lib/url-validator.js"
-import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
+import { videoFormatSelector } from "./video-format.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -110,6 +110,12 @@ export const SECTION_PAD_SEC = 3
  * `--max-filesize <N>M` only when `maxFilesizeBytes` is provided (the
  * video-analysis path caps download size; the download-video route does not).
  *
+ * `maxHeight` (optional) caps the `--format` selection to `<=maxHeight` px tall
+ * via `videoFormatSelector` — ABSENT leaves the selector byte-identical to the
+ * uncapped default. The selector lives in the BASE args, so every client-ladder
+ * rung (web/tv/android) shares the same cap; the caller (download-video route)
+ * is responsible for range-clamping the value.
+ *
  * `section` (optional) adds `--download-sections "*start-end"` with a
  * ±SECTION_PAD_SEC pad on both sides: `--download-sections` cuts at KEYFRAMES,
  * so the fetched range is imprecise — the client performs the frame-exact trim
@@ -123,11 +129,12 @@ export function buildYtDlpVideoArgs(opts: {
   url: string
   outPath: string
   maxFilesizeBytes?: number
+  maxHeight?: number
   section?: { startSec: number; endSec: number }
 }): string[] {
   const args = [
     opts.url,
-    "--format", VIDEO_FORMAT_SELECTOR,
+    "--format", videoFormatSelector(opts.maxHeight),
     "--output", deriveOutputTemplate(opts.outPath),
     "--no-playlist",
     "--no-check-certificates",
@@ -466,11 +473,12 @@ export async function downloadYouTubeVideo(opts: {
   url: string
   outPath: string
   maxFilesizeBytes?: number
+  maxHeight?: number
   section?: { startSec: number; endSec: number }
   onProgress?: (pct: number) => void
   onProcessingStart?: () => void
 }): Promise<void> {
-  const { url, outPath, maxFilesizeBytes, section, onProgress, onProcessingStart } = opts
+  const { url, outPath, maxFilesizeBytes, maxHeight, section, onProgress, onProcessingStart } = opts
 
   // SSRF gate — same broad allowlist the download-video route accepted before
   // extraction, so TikTok/Instagram/X/Facebook support is preserved.
@@ -478,7 +486,7 @@ export async function downloadYouTubeVideo(opts: {
     throw new YtUrlNotAllowedError(`host not allowed: ${url}`)
   }
 
-  const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, section })
+  const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, maxHeight, section })
 
   // YouTube 429s the default (web) client on the watch page from datacenter IPs,
   // so retry web → tv → android (the android rung never hits the watch page).
