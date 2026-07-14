@@ -3,7 +3,9 @@ import { stripTransientRuntimeData } from "@nodaro/shared"
 import {
   collectRestorableSingleNodeJobs,
   applySingleNodeJobRestore,
+  restoreMaxAgeMs,
   SINGLE_NODE_RESTORE_MAX_AGE_MS,
+  LONG_RUNNING_RESTORE_MAX_AGE_MS,
   type ActiveExecItem,
 } from "../single-node-restore"
 
@@ -109,6 +111,27 @@ describe("collectRestorableSingleNodeJobs", () => {
   it("keeps a job exactly at the horizon boundary", () => {
     const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS - 1 })]
     expect(collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)).toHaveLength(1)
+  })
+
+  it("restores a long-running gvp job PAST the 30-min horizon (long-job case)", () => {
+    // A generate-video-pro job legitimately runs longer than a regular node —
+    // the wider LONG_RUNNING horizon must not abandon it (the "long job never
+    // reappears" report).
+    const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", nodeType: "generate-video-pro", ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 60_000 })]
+    const out = collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-video-pro"]), NOW)
+    expect(out).toHaveLength(1)
+  })
+
+  it("still skips a gvp job past even the long-running horizon", () => {
+    const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", nodeType: "generate-video-pro", ageMs: LONG_RUNNING_RESTORE_MAX_AGE_MS + 1 })]
+    expect(collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-video-pro"]), NOW)).toEqual([])
+  })
+
+  it("restoreMaxAgeMs widens only for long-running plugin types", () => {
+    expect(restoreMaxAgeMs("generate-video-pro")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
+    expect(restoreMaxAgeMs("edit-video-pro")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
+    expect(restoreMaxAgeMs("generate-image")).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
+    expect(restoreMaxAgeMs(undefined)).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
   })
 
   it("restores multiple distinct running nodes at once", () => {

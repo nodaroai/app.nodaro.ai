@@ -59,8 +59,9 @@ A request at or below 15 seconds runs as a single segment — identical in shape
 A request above 15 seconds is automatically split into multiple segments (each 4–15s), generated in sequence and stitched into one output:
 
 - The **first segment** starts from the wired `startFrame` (if any) and the prompt — or, when an Extend Source is wired, continues from that clip's final moments exactly like a later segment continues from the one before it.
-- Every **later segment** continues seamlessly from the final frames of the one before it, so the stitched result reads as one continuous shot.
-- Segment count and individual lengths are chosen automatically to cover the requested duration (with a small amount of per-join overlap reserved for a seamless stitch) — they are not user-configurable.
+- Every **later segment** continues from the one before it — each is conditioned on the previous segment's final moments, so lighting, colour, subject and setting carry across the whole video.
+- **Continuous shots vs. camera cuts:** each boundary is planned automatically from your prompt. By default the camera keeps rolling — the next segment is anchored on the previous frame and the join is invisible (one continuous shot). When your prompt describes distinct shots (numbered shots, "cut to", a new location or subject), that boundary becomes a clean **hard cut to a new camera angle of the same scene** instead. Either way the look (lighting, colour, world) stays consistent and the audio runs continuously — only the camera changes.
+- Segment count, individual lengths, and where cuts fall are chosen automatically to cover the requested duration and match your prompt — they are not user-configurable.
 
 ## Credit pricing
 

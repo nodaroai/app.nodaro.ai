@@ -108,7 +108,7 @@ interface CombineCallOpts {
   audioMode?: "keep" | "crossfade" | "remove"
   audioCrossfadeCurve?: string
   audioCrossfadeDuration?: number
-  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number }
+  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[] }
   trimStartFrames?: number
   trimEndFrames?: number
   targetWidth?: number
@@ -483,6 +483,37 @@ describe("combineVideos — smart cut", () => {
     stubResolutionProbes(2)
     await combineVideos(defaultOptions({ videoUrls: ["a.mp4", "b.mp4"], transition: "cut" }))
     expect(smartCutMocks.findSmartCutBoundary).not.toHaveBeenCalled()
+  })
+
+  it("boundaryMask=false: an intentional hard cut skips the matcher AND zeroes that boundary's trims", async () => {
+    stubResolutionProbes(3)
+    // Only boundary 0 should run the matcher; boundary 1 is masked off.
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 2, trimStartFrames: 4, psnr: 31, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
+
+    const out = await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut",
+      trimStartFrames: 3,
+      trimEndFrames: 4,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8, boundaryMask: [true, false] },
+    }))
+
+    // Matcher ran for boundary 0 ONLY — boundary 1 (masked) never calls it.
+    expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledTimes(1)
+    expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledWith(
+      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8,
+    )
+    // clip 0: outer start 0, boundary-0 matched end 2.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2)
+    // clip 1: boundary-0 matched start 4, boundary-1 MASKED end 0 (not the fixed 4).
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 4, 0)
+    // clip 2: boundary-1 MASKED start 0 (not the fixed 3), outer end 0.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(3, "/tmp/work/normalized_2.mp4", "/tmp/work/trimmed_2.mp4", 0, 0)
+    // The masked boundary is reported as an unmatched hard cut with no PSNR.
+    expect(out.smartCuts?.[1]).toEqual({
+      boundary: 1, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 0,
+      psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null,
+    })
   })
 
   it("reports every boundary's applied cut in the result (per-junction values)", async () => {

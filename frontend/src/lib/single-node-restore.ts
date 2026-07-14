@@ -19,6 +19,28 @@
  *  backend reconcile cron to terminalize instead. */
 export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
 
+/** Long-running multi-segment plugin jobs (generate-video-pro / edit-video-pro)
+ *  legitimately run FAR past the 30-min horizon — a 48s stitched clip has been
+ *  observed at ~12 min execution and ~29 min end-to-end, and queued behind
+ *  others it goes longer. Capping their restore at 30 min made a reopened
+ *  mid-run node look idle and, worse, never reattach the poll (the "long job's
+ *  result never appears" report). These types checkpoint + are terminalized by
+ *  the reconcile cron on genuine hangs, so a restored poll still ends on a
+ *  cron-written failure — the wider horizon only avoids abandoning a healthy
+ *  long run. Keyed off the node type; everything else keeps the 30-min bound. */
+export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = new Set([
+  "generate-video-pro",
+  "edit-video-pro",
+])
+export const LONG_RUNNING_RESTORE_MAX_AGE_MS = 6 * 60 * 60 * 1000 // 6h
+
+/** The restore age horizon for a given node type. */
+export function restoreMaxAgeMs(nodeType: string | undefined): number {
+  return nodeType && LONG_RUNNING_NODE_TYPES.has(nodeType)
+    ? LONG_RUNNING_RESTORE_MAX_AGE_MS
+    : SINGLE_NODE_RESTORE_MAX_AGE_MS
+}
+
 /** Structural subset of the `GET /v1/workflows/:id/executions` list items. */
 export interface ActiveExecItem {
   readonly id: string
@@ -95,8 +117,9 @@ export function collectRestorableSingleNodeJobs(
     if ((jobsPerNode.get(nodeId) ?? 0) > 1) continue
 
     // Stuck-job age bound — let the backend reconcile cron terminalize it.
+    // Long multi-segment plugin jobs get a wider horizon (see restoreMaxAgeMs).
     const ageMs = nowMs - new Date(item.createdAt).getTime()
-    if (Number.isFinite(ageMs) && ageMs > SINGLE_NODE_RESTORE_MAX_AGE_MS) continue
+    if (Number.isFinite(ageMs) && ageMs > restoreMaxAgeMs(node.type)) continue
 
     seen.add(nodeId)
     out.push({
