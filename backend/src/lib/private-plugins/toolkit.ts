@@ -8,13 +8,33 @@ import {
   cleanupWorkDir,
   downloadFile,
   probeVideoSource,
+  runFfprobe,
+  getVideoDuration,
+  probeMediaDuration,
+  needsTranscode,
+  transcodeToBrowserSafe,
+  needsContainerRemux,
+  remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
+import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
 import { applyImageWatermark } from "../../utils/watermark.js"
-import { uploadBufferToR2, uploadFileToR2, uploadToR2 } from "../storage.js"
+import {
+  uploadBufferToR2,
+  uploadFileToR2,
+  uploadToR2,
+  uploadFileWithKeyToR2,
+  r2Url,
+  getR2ObjectSize,
+  downloadR2ObjectToFile,
+  readR2ObjectBuffer,
+  deleteFromR2,
+} from "../storage.js"
+import { markProviderCallStart } from "../reconcile/persistence.js"
+import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import {
   markJobCompleted,
@@ -26,7 +46,7 @@ import {
 import { supabase } from "../supabase.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { safeUrlSchema } from "../url-validator.js"
+import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
 import { extractMcpClient } from "../extract-mcp-client.js"
@@ -45,7 +65,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
-import type { PluginToolkit, PluginLlmRequest, PluginVideoGenOptions, PluginVideoGenResult } from "./types.js"
+import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult } from "./types.js"
 
 /**
  * Assembles the real `PluginToolkit` dependency-injection surface handed to
@@ -315,13 +335,20 @@ async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown>
  * next BullMQ attempt) rather than returning false — false means "skip the
  * credit commit", which is wrong for a delivered output.
  */
-async function pluginMarkJobCompleted(jobId: string, output: Record<string, unknown>): Promise<boolean> {
+async function pluginMarkJobCompleted(
+  jobId: string,
+  output: Record<string, unknown>,
+  extraColumns?: Record<string, unknown>,
+): Promise<boolean> {
   const { data, error } = await supabase.from("jobs").select("output_data").eq("id", jobId).single()
   if (error) {
     throw new Error(`Failed to read output_data for job ${jobId}: ${error.message}`)
   }
   const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
-  return markJobCompleted(jobId, { output_data: { ...existing, ...output } })
+  // `output` merges into output_data; `extraColumns` (optional) spread as real
+  // jobs-table COLUMNS (video-analysis writes provider_cost this way). markJobCompleted
+  // spreads its `fields` as UPDATE columns, so output_data + extraColumns land together.
+  return markJobCompleted(jobId, { output_data: { ...existing, ...output }, ...(extraColumns ?? {}) })
 }
 
 /**
@@ -351,6 +378,12 @@ export function buildToolkit(): PluginToolkit {
       textToVideo: pluginTextToVideo,
       imageToVideo: pluginImageToVideo,
       getVideoTaskStatus,
+      // The contract narrows `downloadYouTubeVideo`'s opts to {url,outPath,
+      // maxFilesizeBytes?}; the core fn's extra params are all optional, so the
+      // narrower shape is a valid subset and the reference assigns directly.
+      downloadYouTubeVideo,
+      ytMetadataProbe,
+      YtUrlNotAllowedError,
     },
     ffmpeg: {
       runFfmpeg,
@@ -362,6 +395,13 @@ export function buildToolkit(): PluginToolkit {
       extractTail: extractTailToUrl,
       trimVideo: trimVideoToUrl,
       probeVideoMeta,
+      runFfprobe,
+      getVideoDuration,
+      probeMediaDuration,
+      needsTranscode,
+      transcodeToBrowserSafe,
+      needsContainerRemux,
+      remuxToMp4,
     },
     media: {
       extractAudio,
@@ -377,6 +417,12 @@ export function buildToolkit(): PluginToolkit {
       runPostProcessing,
       // Mirrors `uploadToR2` (`lib/storage.ts:126`) narrowed to video.
       uploadVideoFromUrl: (url, jobId, trackUserId) => uploadToR2(url, jobId, "video", trackUserId),
+      uploadFileWithKeyToR2,
+      r2Url,
+      getR2ObjectSize,
+      downloadR2ObjectToFile,
+      readR2ObjectBuffer,
+      deleteFromR2,
     },
     jobs: {
       markJobCompleted: pluginMarkJobCompleted,
@@ -387,6 +433,12 @@ export function buildToolkit(): PluginToolkit {
       throwIfJobCancelled,
       updateJobCheckpoint,
       readJobCheckpoint,
+      // `kind` is narrowed to the reconcile `ProviderKind` union at the call
+      // boundary — the video-analysis handler only ever passes `"pre-task"`
+      // (a valid member); the cast keeps the contract's `string` param without
+      // importing the union type here.
+      markProviderCallStart: (jobId, kind) =>
+        markProviderCallStart(jobId, kind as Parameters<typeof markProviderCallStart>[1]),
     },
     http: {
       supabase,
@@ -430,6 +482,9 @@ export function buildToolkit(): PluginToolkit {
         )
         return computePricing(args)
       },
+      sendInternalError,
+      hostnameMatchesAllowlist,
+      youtubeHosts: YOUTUBE_HOSTS,
     },
     llm: {
       // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
@@ -451,6 +506,28 @@ export function buildToolkit(): PluginToolkit {
           opts,
         )
         return result.output
+      },
+      // Multimodal variant — a per-window `[{video},{text}]` turn, returning
+      // BOTH the validated output AND the summed providerCost (video-analysis
+      // accumulates per-window cost). PluginLlmContentBlock is a subset of the
+      // core LlmContentBlock union, so `req.messages` assigns to LlmMessage[].
+      completeStructuredMultimodal: async <T>(
+        req: PluginLlmMultimodalRequest,
+        schema: unknown,
+        opts?: { schemaName?: string; maxRetries?: number },
+      ): Promise<{ output: T; providerCost?: number }> => {
+        const result = await llmCompleteStructured(
+          {
+            modelId: req.model,
+            system: req.system ?? "",
+            messages: req.messages,
+            maxTokens: req.maxTokens,
+            timeoutMs: req.timeoutMs,
+          },
+          schema as ZodType<T>,
+          opts,
+        )
+        return { output: result.output, providerCost: result.providerCost }
       },
     },
   }

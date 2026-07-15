@@ -191,6 +191,35 @@ export interface PluginProvidersToolkit {
     state: "processing" | "succeeded" | "failed"
     videoUrl?: string
   }>
+  /**
+   * Mirrors `downloadYouTubeVideo` (`providers/video/youtube-video.ts`),
+   * narrowed to the three fields the video-analysis worker passes. Downloads
+   * (yt-dlp, UA-spoofed + client-ladder) to `outPath`, size-capped by
+   * `maxFilesizeBytes`. SSRF-gated internally (throws `YtUrlNotAllowedError`
+   * on a non-allowlisted host).
+   */
+  downloadYouTubeVideo(opts: {
+    url: string
+    outPath: string
+    maxFilesizeBytes?: number
+  }): Promise<void>
+  /**
+   * Mirrors `ytMetadataProbe` (`providers/video/youtube-video.ts`) — yt-dlp
+   * metadata-only probe (duration/title/live). Throws `YtUrlNotAllowedError`
+   * on a non-YouTube host; other failures reject with a plain Error.
+   */
+  ytMetadataProbe(url: string): Promise<{
+    durationSec: number | null
+    title: string | null
+    isLive: boolean
+  }>
+  /**
+   * Mirrors the `YtUrlNotAllowedError` CLASS (`providers/video/youtube-video.ts`)
+   * — the app passes its REAL constructor so the plugin can
+   * `err instanceof tk.providers.YtUrlNotAllowedError` across the module
+   * boundary (both members above throw instances of it).
+   */
+  YtUrlNotAllowedError: new (message?: string) => Error
 }
 
 // ============================================================================
@@ -262,6 +291,43 @@ export interface PluginFfmpegToolkit {
    * (`durationSeconds` → `durationSec`).
    */
   probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }>
+  /**
+   * Mirrors `runFfprobe` (`providers/video/ffmpeg-utils.ts`) — runs ffprobe with
+   * the given args and resolves its stdout (the video-analysis segmenter reads
+   * the keyframe packet PTS listing).
+   */
+  runFfprobe(args: readonly string[]): Promise<string>
+  /**
+   * Mirrors `getVideoDuration` (`providers/video/ffmpeg-utils.ts`) — the CONTAINER
+   * duration (NOT the video-stream duration) of a local file, in seconds.
+   */
+  getVideoDuration(filePath: string): Promise<number>
+  /**
+   * Mirrors `probeMediaDuration` (`providers/video/ffmpeg-utils.ts`) — remote-
+   * capable ffprobe duration (seconds) of a URL or path, SSRF-asserted. Used by
+   * the route's pre-reserve duration gate.
+   */
+  probeMediaDuration(srcUrlOrPath: string): Promise<number>
+  /**
+   * Mirrors `needsTranscode` (`providers/video/ffmpeg-utils.ts`) — true when the
+   * source stream isn't browser-safe and must be re-encoded.
+   */
+  needsTranscode(filePath: string): Promise<boolean>
+  /**
+   * Mirrors `transcodeToBrowserSafe` (`providers/video/ffmpeg-utils.ts`) —
+   * re-encodes to a browser-safe mp4 at `outputPath`, returning the output path.
+   */
+  transcodeToBrowserSafe(inputPath: string, outputPath: string): Promise<string>
+  /**
+   * Mirrors `needsContainerRemux` (`providers/video/ffmpeg-utils.ts`) — SYNC
+   * check: true when the container (not the codec) needs a remux to mp4.
+   */
+  needsContainerRemux(pathOrExt: string): boolean
+  /**
+   * Mirrors `remuxToMp4` (`providers/video/ffmpeg-utils.ts`) — stream-copy remux
+   * of the input container into an mp4 at `outputPath`.
+   */
+  remuxToMp4(inputPath: string, outputPath: string): Promise<void>
 }
 
 // ============================================================================
@@ -367,6 +433,22 @@ export interface PluginStorageToolkit {
    * per-segment persistence in generate-video-pro.
    */
   uploadVideoFromUrl(url: string, jobId: string, trackUserId?: string): Promise<string>
+  /**
+   * Mirrors `uploadFileWithKeyToR2` (`lib/storage.ts`) — uploads a local file to
+   * an EXPLICIT R2 key (not a jobId-derived key), returning its public URL. The
+   * video-analysis worker keys its jobId-scoped tmp clips/checkpoint verbatim.
+   */
+  uploadFileWithKeyToR2(filePath: string, key: string, contentType: string, trackUserId?: string): Promise<string>
+  /** Mirrors `r2Url` (`lib/storage.ts`) — the public CDN URL for an R2 key. */
+  r2Url(key: string): string
+  /** Mirrors `getR2ObjectSize` (`lib/storage.ts`) — byte size of an R2 object (0 if absent). */
+  getR2ObjectSize(key: string): Promise<number>
+  /** Mirrors `downloadR2ObjectToFile` (`lib/storage.ts`) — S3-origin download of an R2 object to a local path. */
+  downloadR2ObjectToFile(key: string, dest: string): Promise<void>
+  /** Mirrors `readR2ObjectBuffer` (`lib/storage.ts`) — S3-origin read of an R2 object into a Buffer, or null if absent. */
+  readR2ObjectBuffer(key: string): Promise<Buffer | null>
+  /** Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key. */
+  deleteFromR2(key: string): Promise<void>
 }
 
 // ============================================================================
@@ -382,7 +464,11 @@ export interface PluginJobsToolkit {
    *  column"), completion silently no-ops, and finished jobs rot in
    *  status=processing (jobs 1e209599, dbf95612). Returns false only for the
    *  cancelled/already-terminal CAS miss; transient read failures throw. */
-  markJobCompleted(jobId: string, output: Record<string, unknown>): Promise<boolean>
+  markJobCompleted(
+    jobId: string,
+    output: Record<string, unknown>,
+    extraColumns?: Record<string, unknown>,
+  ): Promise<boolean>
   /** Mirrors `setJobProgress` (`workers/shared.ts`). */
   setJobProgress(job: PluginJob, jobId: string, progress: number): Promise<void>
   /** Mirrors `withProgressRamp` (`workers/shared.ts`). */
@@ -433,6 +519,14 @@ export interface PluginJobsToolkit {
    * `toolkit.ts`'s `readJobCheckpoint` implementation.
    */
   readJobCheckpoint(jobId: string): Promise<Record<string, unknown> | null>
+  /**
+   * Mirrors `markProviderCallStart` (`lib/reconcile/persistence.ts`) — stamps
+   * `provider_kind` + `provider_call_started_at=now` on the job row. The
+   * video-analysis handler heartbeats `"pre-task"` every 60s so the reconcile
+   * sync-sweep never races a live 300s LLM window. `kind` is the reconcile
+   * `ProviderKind` (kept as `string` here — structural, no import).
+   */
+  markProviderCallStart(jobId: string, kind: string): Promise<void>
 }
 
 // ============================================================================
@@ -552,7 +646,7 @@ export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
-  videoQueue: { add(name: string, data: Record<string, unknown>): Promise<unknown> }
+  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number }): Promise<unknown> }
   /** Mirrors `creditGuard` (`middleware/credit-guard.ts`). */
   creditGuard(
     modelResolver: (req: FastifyRequest) => string,
@@ -618,6 +712,21 @@ export interface PluginHttpToolkit {
     spanStart: number
     spanEnd: number
   }): Promise<EditVideoProPricing>
+  /**
+   * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side
+   * and sends a sanitized `internal_error` 500 with the curated `clientMessage`
+   * (marked so the global onSend net leaves it intact). The video-analysis route
+   * uses it for the job-insert failure path.
+   */
+  sendInternalError(reply: FastifyReply, req: FastifyRequest, err: unknown, clientMessage?: string): FastifyReply
+  /**
+   * Mirrors `hostnameMatchesAllowlist` (`lib/url-validator.ts`) — exact-suffix
+   * host allowlist match (SSRF gate). Used with `youtubeHosts` below for the
+   * route's YouTube-URL check and the worker's D2 re-validation.
+   */
+  hostnameMatchesAllowlist(hostname: string, domains: readonly string[]): boolean
+  /** Mirrors `YOUTUBE_HOSTS` (`lib/url-validator.ts`) — the narrow YouTube host allowlist. */
+  youtubeHosts: readonly string[]
 }
 
 // ============================================================================
@@ -633,6 +742,31 @@ export interface PluginLlmRequest {
   maxTokens?: number
 }
 
+/**
+ * Multimodal content block — a structural subset of `lib/llm-client.ts`'s
+ * `LlmContentBlock` union (text | image | image_base64 | video | audio),
+ * narrowed to the parts the video-analysis window turn uses (video + text;
+ * image kept for forward-compat). A real app `LlmContentBlock[]` satisfies this.
+ */
+export type PluginLlmContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; url: string }
+  | { type: "video"; url: string; mimeType?: string }
+
+/**
+ * Multimodal structured request — mirrors the subset of `lib/llm-client.ts`'s
+ * `LlmRequest` the video-analysis handler builds: one or more messages whose
+ * content is a block array (a per-window `[{video},{text}]` turn), plus an
+ * optional per-request timeout. `system` maps to the request's system prompt.
+ */
+export interface PluginLlmMultimodalRequest {
+  model: string
+  system?: string
+  messages: Array<{ role: "user" | "assistant"; content: PluginLlmContentBlock[] }>
+  timeoutMs?: number
+  maxTokens?: number
+}
+
 export interface PluginLlmToolkit {
   /** Mirrors `llmCompleteStructured` (`lib/llm-client.ts:133`). */
   completeStructured<T>(
@@ -640,6 +774,18 @@ export interface PluginLlmToolkit {
     schema: unknown, // ZodType<T> — kept opaque to avoid pinning zod's type identity across repos
     opts?: { schemaName?: string; maxRetries?: number },
   ): Promise<T>
+  /**
+   * Multimodal variant of `completeStructured` — mirrors `llmCompleteStructured`
+   * (`lib/llm-client.ts`) called with a MULTIMODAL `messages` array. Returns BOTH
+   * the validated output AND the summed `providerCost` (the video-analysis
+   * handler accumulates per-window provider cost), unlike `completeStructured`
+   * which unwraps to a bare `T`.
+   */
+  completeStructuredMultimodal<T>(
+    req: PluginLlmMultimodalRequest,
+    schema: unknown,
+    opts?: { schemaName?: string; maxRetries?: number },
+  ): Promise<{ output: T; providerCost?: number }>
 }
 
 // ============================================================================

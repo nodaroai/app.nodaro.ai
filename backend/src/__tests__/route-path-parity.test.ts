@@ -235,6 +235,15 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // that this scanner walks. The node is CLOUD_ONLY-gated, so community builds
   // never expose the frontend entry point; only cloud edition serves the route.
   "/v1/edit-video-pro",
+
+  // video-analysis's route + probe endpoint moved to the private
+  // @nodaroai/cloud-plugins package — it registers at runtime via
+  // loadPrivatePlugins({ app }) (see backend/src/lib/private-plugins/load.ts),
+  // not a static file under backend/src/routes/ this scanner walks. Cloud
+  // edition serves POST /v1/video-analysis + /v1/video-analysis/probe;
+  // community/business get 404 (the node was already cloud-gated).
+  "/v1/video-analysis",
+  "/v1/video-analysis/probe",
 ])
 
 // ---------------------------------------------------------------------------

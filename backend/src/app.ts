@@ -24,7 +24,6 @@ import { referenceSheetRoutes } from "./routes/reference-sheet.js"
 import { referenceBoardRoutes } from "./routes/reference-board.js"
 import { mergeVideoAudioRoutes } from "./routes/merge-video-audio.js"
 import videoSfxRoutes from "./routes/video-sfx.js"
-import { videoAnalysisRoutes } from "./routes/video-analysis.js"
 import { trimAudioRoutes } from "./routes/trim-audio.js"
 import { trimVideoRoutes } from "./routes/trim-video.js"
 import { extractFrameRoutes } from "./routes/extract-frame.js"
@@ -325,7 +324,8 @@ export async function buildApp() {
   await app.register(referenceBoardRoutes)
   await app.register(mergeVideoAudioRoutes)
   await app.register(videoSfxRoutes)
-  await app.register(videoAnalysisRoutes)
+  // video-analysis route moved to @nodaroai/cloud-plugins — it registers via
+  // loadPrivatePlugins({ app }) below (POST /v1/video-analysis + /probe).
   await app.register(trimAudioRoutes)
   await app.register(trimVideoRoutes)
   await app.register(extractFrameRoutes)

@@ -2939,8 +2939,8 @@ export function buildPayload(
       //   2. data.probedYoutube.durationSec  — ONLY when URL-bound to the
       //                                        effective youtubeUrl (exact match)
       //   3. unknown → <model>:600s ceiling  — the only silent-ceiling path
-      // videoUrl wins over youtubeUrl (mirrors routes/video-analysis.ts), so a
-      // wired/config clip nulls youtubeUrl downstream.
+      // videoUrl wins over youtubeUrl (mirrors the video-analysis route, now in
+      // @nodaroai/cloud-plugins), so a wired/config clip nulls youtubeUrl downstream.
       const videoUrl = resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined)
       const youtubeUrl = videoUrl ? undefined : (data.youtubeUrl as string | undefined)
       const probed = data.probedYoutube as { url: string; durationSec: number } | undefined

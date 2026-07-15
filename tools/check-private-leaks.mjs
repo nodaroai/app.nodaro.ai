@@ -82,6 +82,36 @@ const SYMBOLS = [
   "IMPROVE_PROMPT_SYSTEM",
   "OPTIMIZE_FOR_MODEL_SYSTEM",
   "VALIDATE_MATCH_CUT_SYSTEM",
+  // video-analysis: the whole node implementation (route + windowed multimodal
+  // LLM handler + segmentation/merge/checkpoint pipeline + prompt builders +
+  // the analysis doctrine) moved to @nodaroai/cloud-plugins
+  // (src/plugins/video-analysis/). This repo keeps ONLY the public wire
+  // contract (@nodaro/shared schemas/pricing), the node UI, the orchestration
+  // glue keyed on the "video-analysis" node-type string, the MCP verb, and the
+  // credit formula (lib/pricing/video-analysis-cost.ts — public by the
+  // 2026-07-06 IP audit). These implementation symbols must never reappear
+  // here. NOTE: `VIDEO_ANALYSIS_TMP_PREFIX` is DELIBERATELY excluded — the
+  // core cleanup-cron reaper legitimately re-declares that literal (a
+  // documented sync-twin of the plugin's constant).
+  "handleVideoAnalysis",
+  "analyzeWindowViaKie",
+  "segmentAndUploadWindows",
+  "recutWindowFromSource",
+  "mergeWindowResults",
+  "computeWindowPlan",
+  "buildVideoAnalysisSystemPrompt",
+  "buildVideoAnalysisUserText",
+  "stripFocusCloseTag",
+  "vaTmpKeys",
+  "readVaState",
+  "writeVaState",
+  "deleteVaTmp",
+  "VaDurationError",
+  "resolveVideoAnalysisIdentifier",
+  "probeVideoAnalysisDurationPreHandler",
+  // A distinctive line from the analysis doctrine (guards the doctrine PROSE
+  // reappearing, since it moved as a bundled string, not a named constant).
+  "second unit to reshoot",
 ]
 
 const PATTERN = SYMBOLS.join("|")

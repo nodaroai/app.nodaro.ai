@@ -55,6 +55,14 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: vi.fn(),
   downloadFile: vi.fn(),
   probeVideoSource: mockProbeVideoSource,
+  // video-analysis toolkit members (not exercised by the evp suite):
+  runFfprobe: vi.fn(),
+  getVideoDuration: vi.fn(),
+  probeMediaDuration: vi.fn(),
+  needsTranscode: vi.fn(),
+  transcodeToBrowserSafe: vi.fn(),
+  needsContainerRemux: vi.fn(),
+  remuxToMp4: vi.fn(),
 }))
 
 vi.mock("@/providers/video/combine-videos.js", () => ({
@@ -65,11 +73,22 @@ vi.mock("@/lib/storage.js", () => ({
   uploadBufferToR2: vi.fn(),
   uploadFileToR2: mockUploadFileToR2,
   uploadToR2: vi.fn(),
+  // video-analysis toolkit members (not exercised by the evp suite):
+  uploadFileWithKeyToR2: vi.fn(),
+  r2Url: vi.fn(),
+  getR2ObjectSize: vi.fn(),
+  downloadR2ObjectToFile: vi.fn(),
+  readR2ObjectBuffer: vi.fn(),
+  deleteFromR2: vi.fn(),
 }))
 
-vi.mock("node:fs", () => ({
-  promises: { rm: mockFsRm },
-}))
+// Preserve the real node:fs (toolkit.ts now transitively imports
+// youtube-video.ts, which calls existsSync at module load via resolveYtDlpBin)
+// while overriding only promises.rm for the combineVideos cleanup assertion.
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>()
+  return { ...actual, promises: { ...actual.promises, rm: mockFsRm } }
+})
 
 // http.computeEditVideoProPricing reaches ee/ via the same runtime-gated
 // dynamic import() shim as computeGenerateVideoProPricing (toolkit.ts may

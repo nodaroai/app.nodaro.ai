@@ -1,7 +1,19 @@
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { deleteFromR2, batchDeleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
-import { VIDEO_ANALYSIS_TMP_PREFIX } from "../../workers/handlers/video-analysis-state.js"
+/**
+ * R2 prefix under which the video-analysis worker writes its transient
+ * intermediates (`<prefix>/<jobId>/{source.mp4,window-<k>.mp4,state.json}`).
+ * The WRITER now lives in the private `@nodaroai/cloud-plugins` package
+ * (`src/plugins/video-analysis/pipeline/state.ts`), which this public repo
+ * cannot import — so this reaper carries its own copy of the literal.
+ *
+ * SYNC NOTE: keep this in lockstep with the plugin's `VIDEO_ANALYSIS_TMP_PREFIX`
+ * (a matching sync note lives there). They MUST be equal or this cron reaps the
+ * wrong prefix and orphaned tmp files accumulate. (A shared constant would
+ * couple the plugin to a `@nodaro/shared` release for one folder name.)
+ */
+export const VIDEO_ANALYSIS_TMP_PREFIX = "video-analysis-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
@@ -943,7 +955,8 @@ interface VaTmpSweepResult {
  * WHY this exists: the video-analysis worker keys ALL of its intermediates
  * (`source.mp4`, `window-<k>.mp4`, `state.json`) under
  * `video-analysis-tmp/<jobId>/` and best-effort deletes them in its `finally`
- * (`deleteVaTmp`). A double-stall / crash means that `finally` never runs, and
+ * (the worker now lives in @nodaroai/cloud-plugins). A double-stall / crash
+ * means that `finally` never runs, and
  * NO other lifecycle covers these keys — the media-cleanup reapers only delete
  * DB-referenced keys (assets / jobs.output_data / locations), and these
  * transient files are referenced by NOTHING in the DB. Left alone they

@@ -46,8 +46,7 @@ vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
 // scopes to the exact same `video-analysis-tmp/` the worker writes under.
 // ---------------------------------------------------------------------------
 
-import { sweepVideoAnalysisTmp } from "../cleanup-service.js"
-import { VIDEO_ANALYSIS_TMP_PREFIX } from "@/workers/handlers/video-analysis-state.js"
+import { sweepVideoAnalysisTmp, VIDEO_ANALYSIS_TMP_PREFIX } from "../cleanup-service.js"
 
 const PREFIX = `${VIDEO_ANALYSIS_TMP_PREFIX}/`
 
