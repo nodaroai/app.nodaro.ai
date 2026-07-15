@@ -14,6 +14,8 @@ import {
   downloadYouTubeVideo,
   youtubeClientLadder,
   runThroughClientLadder,
+  reencodeToH264,
+  assertAudioPresent,
   YtUrlNotAllowedError,
   type YtClientRung,
 } from "../youtube-video.js"
@@ -409,5 +411,59 @@ describe("downloadYouTubeVideo — client ladder wiring", () => {
     ).rejects.toThrow("tiktok boom")
     expect(vi.mocked(spawn)).toHaveBeenCalledTimes(1)
     expect(argsOfCall(0).join(" ")).not.toContain("player_client")
+  })
+})
+
+/**
+ * "No audio makes no sense for a voice changer": import callers pass
+ * `requireAudio`, so a silent download fails honestly instead of being ingested.
+ * A DEFINITE no-audio (`false`) is required — a probe glitch (`null`) never fails
+ * an import.
+ */
+describe("assertAudioPresent", () => {
+  it("throws only when requireAudio AND the download is definitely silent", () => {
+    expect(() => assertAudioPresent(false, true)).toThrow(/no audio track/i)
+  })
+  it("does not throw when audio is present", () => {
+    expect(() => assertAudioPresent(true, true)).not.toThrow()
+  })
+  it("does not throw on unknown audio (null probe) — never fail an import on a probe glitch", () => {
+    expect(() => assertAudioPresent(null, true)).not.toThrow()
+  })
+  it("does not throw when requireAudio is unset — a silent video is valid for general callers", () => {
+    expect(() => assertAudioPresent(false, undefined)).not.toThrow()
+    expect(() => assertAudioPresent(false, false)).not.toThrow()
+  })
+})
+
+/**
+ * The re-encode must not add `-c:a aac` to a video with no audio stream — that
+ * makes ffmpeg abort ("Invalid argument", exit 234), the crash that turned a
+ * silent download into a failed import.
+ */
+describe("reencodeToH264 — audio-conditional args", () => {
+  beforeEach(() => vi.mocked(spawn).mockReset())
+  const ffmpegArgs = () => vi.mocked(spawn).mock.calls[0][1] as string[]
+
+  it("re-encodes video-only (`-an`, no `-c:a`) when hasAudio is false", async () => {
+    vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+    await reencodeToH264("/tmp/in.webm", "/tmp/out.mp4", false)
+    const args = ffmpegArgs()
+    expect(args).toContain("-an")
+    expect(args).not.toContain("-c:a")
+  })
+
+  it("encodes aac when hasAudio is true", async () => {
+    vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+    await reencodeToH264("/tmp/in.webm", "/tmp/out.mp4", true)
+    const args = ffmpegArgs()
+    expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
+    expect(args).not.toContain("-an")
+  })
+
+  it("keeps aac on unknown audio (null probe) — the safe default", async () => {
+    vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+    await reencodeToH264("/tmp/in.webm", "/tmp/out.mp4", null)
+    expect(ffmpegArgs()).toContain("-c:a")
   })
 })

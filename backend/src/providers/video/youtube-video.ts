@@ -409,15 +409,29 @@ export function probeStreams(filePath: string): Promise<ProbedStreams> {
   })
 }
 
-/** Re-encode to h264/aac mp4 for downstream compatibility. Rejects on failure. */
-function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
+/**
+ * Re-encode to h264 mp4 for downstream compatibility. Rejects on failure.
+ * Exported for testability.
+ *
+ * `hasAudio === false` (a DEFINITE no-audio stream) re-encodes video-only with
+ * `-an`: adding `-c:a aac` to an input that has no audio makes ffmpeg abort with
+ * "Error opening output files: Invalid argument" (exit 234) — the crash that
+ * turned a silent YouTube download into a failed import. `null` (probe failed →
+ * unknown) and `true` keep `-c:a aac`, the safe default.
+ */
+export function reencodeToH264(
+  inputPath: string,
+  outputPath: string,
+  hasAudio: boolean | null,
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    const audioArgs = hasAudio === false ? ["-an"] : ["-c:a", "aac"]
     const proc = spawn("ffmpeg", [
       "-i", inputPath,
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "23",
-      "-c:a", "aac",
+      ...audioArgs,
       "-movflags", "+faststart",
       "-y",
       outputPath,
@@ -478,11 +492,35 @@ function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void):
 }
 
 /**
+ * Enforce "this import needs audio". Exported for testability. Throws a
+ * user-facing error only when `requireAudio` is set AND the download has a
+ * DEFINITE no-audio stream (`hasAudio === false`). `null` (probe failed →
+ * unknown) is NOT treated as missing — we never fail an import on a probe glitch.
+ *
+ * WHY import callers set requireAudio: a voice changer can't do anything with a
+ * silent clip, and in practice a no-audio YouTube result means a degraded
+ * session (bot-block → android fallback → SABR stripping the audio formats), so
+ * failing honestly with "try again" beats importing a useless silent video.
+ */
+export function assertAudioPresent(hasAudio: boolean | null, requireAudio: boolean | undefined): void {
+  if (requireAudio && hasAudio === false) {
+    throw new Error(
+      "This video has no audio track — Voice Changer needs audio to work. " +
+        "YouTube may be limiting downloads right now; try again, or use a different video.",
+    )
+  }
+}
+
+/**
  * Download a social video (YouTube/TikTok/Instagram/X/Facebook) to `outPath`
- * as an h264/aac mp4. Validates the host against the BROAD social allowlist
- * BEFORE spawning (SSRF gate — the worker calls this directly), applies the
- * referer/UA spoof, optionally caps size, then re-encodes to h264 when the
- * download isn't already h264. Throws on any failure.
+ * as an h264 mp4 (h264/aac when audio is present). Validates the host against
+ * the BROAD social allowlist BEFORE spawning (SSRF gate — the worker calls this
+ * directly), applies the referer/UA spoof, optionally caps size, then re-encodes
+ * to h264 when the download isn't already h264. Throws on any failure.
+ *
+ * `requireAudio` (optional) — when true, a download with NO audio stream fails
+ * (see assertAudioPresent). The import route sets it (a voice changer needs
+ * audio); the general video path leaves it unset (a silent video is valid there).
  *
  * Progress reporting (both optional, used by the SSE download-video route):
  *   - `onProgress(pct)` — download percent (0–100) as yt-dlp reports it.
@@ -499,10 +537,11 @@ export async function downloadYouTubeVideo(opts: {
   maxFilesizeBytes?: number
   maxHeight?: number
   section?: { startSec: number; endSec: number }
+  requireAudio?: boolean
   onProgress?: (pct: number) => void
   onProcessingStart?: () => void
 }): Promise<void> {
-  const { url, outPath, maxFilesizeBytes, maxHeight, section, onProgress, onProcessingStart } = opts
+  const { url, outPath, maxFilesizeBytes, maxHeight, section, requireAudio, onProgress, onProcessingStart } = opts
 
   // SSRF gate — same broad allowlist the download-video route accepted before
   // extraction, so TikTok/Instagram/X/Facebook support is preserved.
@@ -544,20 +583,25 @@ export async function downloadYouTubeVideo(opts: {
 
     const { videoCodec, hasAudio } = await probeStreams(actualPath)
 
-    // A silent video is not itself a download failure — fetching a clip with no
-    // soundtrack is legitimate — but every audio consumer downstream (transcribe,
-    // trim-audio, voice-changer) will then die with an error that names ffmpeg
-    // instead of the cause. Name it here, where the cause is still in view.
+    // Import callers (requireAudio) fail on a silent download — a voice changer
+    // can't use it, and it's the signal of a degraded session (bot-block →
+    // android → SABR strips audio). Throws before the re-encode, so no silent
+    // file is ever imported. General callers (no requireAudio) just warn: a
+    // silent clip is a legitimate download for them, but every audio consumer
+    // downstream would otherwise die naming ffmpeg instead of the cause.
+    assertAudioPresent(hasAudio, requireAudio)
     if (hasAudio === false) {
       console.warn(`[download-video] ${url} produced a video with NO audio stream`)
     }
 
-    // Re-encode to h264/aac if needed for downstream compatibility. A null codec
-    // means the probe failed — re-encode anyway; normalizing is the safe fallback.
+    // Re-encode to h264 if needed for downstream compatibility. A null codec
+    // means the probe failed — re-encode anyway; normalizing is the safe
+    // fallback. Pass hasAudio so a legit silent video re-encodes video-only
+    // (`-an`) instead of aborting on `-c:a aac` (exit 234).
     if (videoCodec !== "h264") {
       onProcessingStart?.()
       const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
-      await reencodeToH264(actualPath, tmpPath)
+      await reencodeToH264(actualPath, tmpPath, hasAudio)
       await fs.unlink(actualPath).catch(() => {})
       await fs.rename(tmpPath, outPath)
     } else if (actualPath !== outPath) {
