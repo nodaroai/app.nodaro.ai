@@ -127,11 +127,17 @@ export async function startProxyAuthShim(upstreamProxyUrl: string): Promise<Prox
       new Promise<void>((resolve) => {
         // Destroy the outgoing upstream sockets we opened (server.close() doesn't
         // track those) AND force-close the hijacked CONNECT sockets the http
-        // server still holds — otherwise server.close()'s callback never fires.
+        // server still holds.
         for (const s of sockets) s.destroy()
         sockets.clear()
         server.closeAllConnections()
-        server.close(() => resolve())
+        // Stop the listener but DO NOT await server.close()'s drain callback: in
+        // production it can hang on a half-closed hijacked tunnel, and this close()
+        // runs in the download route's finally{} — a hang there strands the whole
+        // request (the download itself already succeeded). Destroying the sockets
+        // above frees the connections; closing the listener frees the port.
+        server.close()
+        resolve()
       }),
   }
 }
