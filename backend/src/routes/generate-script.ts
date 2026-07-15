@@ -6,13 +6,15 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
+import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
 const generateScriptBody = z.object({
-  prompt: z.string().min(1).max(10000),
-  userPrompt: z.string().max(8000).optional(),
+  // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: LLM input, huge
+  // context, so the old flat 10000 falsely blocked long source material.
+  prompt: z.string().min(1).max(LLM_TEXT_INPUT_MAX),
+  userPrompt: z.string().max(LLM_TEXT_INPUT_MAX).optional(),
   sceneCount: z.number().int().min(1).max(20).optional(),
   tone: z.string().max(200).optional(),
   targetDuration: z.number().int().min(5).max(600).optional(),

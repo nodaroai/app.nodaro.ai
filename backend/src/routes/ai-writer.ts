@@ -7,16 +7,18 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const aiWriterBody = z.object({
-  systemPrompt: z.string().max(10000),
-  userInput: z.string().min(1).max(10000),
-  userPrompt: z.string().max(8000).optional(),
+  // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: the input feeds an
+  // LLM with a huge context, so the old flat 10000 falsely blocked long briefs.
+  systemPrompt: z.string().max(LLM_TEXT_INPUT_MAX),
+  userInput: z.string().min(1).max(LLM_TEXT_INPUT_MAX),
+  userPrompt: z.string().max(LLM_TEXT_INPUT_MAX).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(8192),
   userId: z.string().uuid().optional(),

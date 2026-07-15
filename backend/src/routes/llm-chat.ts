@@ -7,7 +7,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -15,9 +15,12 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const llmChatBody = z.object({
-  systemPrompt: z.string().max(10000),
-  userInput: z.string().min(1).max(10000),
-  userPrompt: z.string().max(8000).optional(),
+  // LLM_TEXT_INPUT_MAX (100K): the "Generate Text" node feeds an LLM whose
+  // context is huge, so the old flat 10000 falsely blocked pasting a document
+  // to summarize/rewrite ("cannot use generate-text for longer than 10K").
+  systemPrompt: z.string().max(LLM_TEXT_INPUT_MAX),
+  userInput: z.string().min(1).max(LLM_TEXT_INPUT_MAX),
+  userPrompt: z.string().max(LLM_TEXT_INPUT_MAX).optional(),
   referenceImageUrls: z.array(z.string().url()).max(5).optional(),
   referenceVideoUrls: z.array(z.string().url()).max(3).optional(),
   referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
