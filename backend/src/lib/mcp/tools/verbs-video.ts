@@ -17,8 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC } from "@nodaro/shared"
-import { videoAnalysisBucketCredits } from "../../pricing/video-analysis-cost.js"
+import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -46,7 +45,7 @@ const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true
 // the single source of truth, pinned by packages/shared's pricing test).
 // Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 2/3/7/11 credits".
 const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_LLM_MODELS.map(
-  (m) => `${m} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => videoAnalysisBucketCredits(m, b)).join("/")} credits`,
+  (m) => `${m} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(m, b)]).join("/")} credits`,
 ).join("; ")
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }

@@ -10,13 +10,16 @@
  * these.
  *
  * The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
- * formula live in `backend/src/lib/pricing/video-analysis-cost.ts` (core,
- * not ee/ — the MCP tool description builder needs them regardless of
- * edition). They were moved out of this package (published Apache-2.0 on
- * npm — an irrevocable grant) per the 2026-07-06 public-flip IP audit, S5.
+ * formula that GENERATE these numbers live PRIVATELY in the
+ * `@nodaroai/cloud-plugins` package (`src/plugins/video-analysis/cost.ts`) —
+ * never in this public repo. They were first moved out of this package
+ * (published Apache-2.0 on npm) per the 2026-07-06 public-flip IP audit S5,
+ * then out of the app repo entirely alongside the rest of the video-analysis
+ * node. A cross-check test in that private package guards this table so the
+ * public numbers can't silently drift from the formula.
  *
  * `VIDEO_ANALYSIS_BUCKET_CREDITS` below is the precomputed OUTPUT of that
- * backend formula for every (model × bucket) combination — a plain credit
+ * private formula for every (model × bucket) combination — a plain credit
  * lookup table, not a formula, mirroring the same wire-contract pattern
  * `VIDEO_CLIP_CREDITS` uses in `film-pricing.ts`. It is what the frontend's
  * client-side cost preview (`estimateNodeCredits` in
@@ -34,11 +37,12 @@ const WINDOW_LEN = 150, WINDOW_STRIDE = 145, WINDOW_OVERLAP = 5
 export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, OVERLAP: WINDOW_OVERLAP, SINGLE_MAX: 180 } as const
 
 /**
- * Precomputed credit cost per (model, bucket) — the OUTPUT of the backend's
- * `videoAnalysisBucketCredits` formula, not a formula itself. Regenerate by
- * running that function for every `VIDEO_ANALYSIS_LLM_MODELS` × duration
- * bucket combination whenever the underlying rate/token constants change
- * (backend test guards drift). Keep in sync with
+ * Precomputed credit cost per (model, bucket) — the OUTPUT of the private
+ * `videoAnalysisBucketCredits` formula (in `@nodaroai/cloud-plugins`), not a
+ * formula itself. Regenerate by running that function for every
+ * `VIDEO_ANALYSIS_LLM_MODELS` × duration bucket combination whenever the
+ * underlying rate/token constants change (the plugin's cost test guards drift).
+ * Keep in sync with
  * `docs/nodes/processing-video/video-analysis.md`.
  */
 export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {

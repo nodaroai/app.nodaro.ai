@@ -109,6 +109,14 @@ const SYMBOLS = [
   "VaDurationError",
   "resolveVideoAnalysisIdentifier",
   "probeVideoAnalysisDurationPreHandler",
+  // The $-derived cost formula + measured-rate constants (moved private
+  // alongside the node). The PRICES stay public (VIDEO_ANALYSIS_BUCKET_CREDITS
+  // in @nodaro/shared); the FORMULA that generates them lives in the plugin.
+  // These two constant names are distinctive markers of that formula reverting
+  // into public. `videoAnalysisBucketCredits` is DELIBERATELY excluded — the
+  // NAME still legitimately appears in comments/docs/applied SQL migrations.
+  "VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS",
+  "OUTPUT_TOKENS_PER_WINDOW",
   // A distinctive line from the analysis doctrine (guards the doctrine PROSE
   // reappearing, since it moved as a bundled string, not a named constant).
   "second unit to reshoot",

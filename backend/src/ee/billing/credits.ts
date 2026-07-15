@@ -2,13 +2,12 @@ import { supabase } from "../../lib/supabase.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
-import { videoAnalysisBucketCredits } from "../../lib/pricing/video-analysis-cost.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -58,33 +57,31 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 }
 
 // ── Video Analysis (Gemini vision) duration-bucketed reserve holds ──
-// Values are DERIVED from the structural formula `videoAnalysisBucketCredits`
-// (packages/shared/src/video-analysis-pricing.ts) — never hand-written —
-// mirroring the FLUX2/AI_AVATAR/CINEMATIC spreads above.
+// The credit numbers ARE the precomputed VIDEO_ANALYSIS_BUCKET_CREDITS table in
+// @nodaro/shared (the public prices). The $-derived formula + measured-rate
+// constants that GENERATE them are private, in @nodaroai/cloud-plugins
+// (src/plugins/video-analysis/cost.ts), with a CI cross-check against this same
+// shared table so the numbers can't silently drift.
 // Per model: a bare id `video-analysis:<model>` (= the 600s unknown-duration
 // ceiling) + one composite per bucket `video-analysis:<model>:<bucket>s`.
 // The two models mirror the catalog's video-analysis entries (model-catalog.ts)
 // and the model_pricing rows (migrations 247+248) — extend all of them together
 // if a third video+audio model ships.
 //
-// Current formula output (see backend/src/lib/pricing/video-analysis-cost.ts):
+// Current values:
 //   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
 //   gemini-3.1-pro → bare 11 · 60s 2 · 180s 3 · 360s 7 · 600s 11
-// The pricing test pins these worked examples; if a rate or constant shifts
-// them, ship a convergence migration (mirror 248) in the same PR.
 const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
 for (const model of ["gemini-3-flash", "gemini-3.1-pro"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
   // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
   // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG
   // lists `video-analysis:<model>` as each model's base pricing row.
-  VIDEO_ANALYSIS_STATIC[`video-analysis:${model}`] = videoAnalysisBucketCredits(
-    model,
-    VIDEO_ANALYSIS_MAX_DURATION_SEC,
-  )
+  VIDEO_ANALYSIS_STATIC[`video-analysis:${model}`] =
+    VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, VIDEO_ANALYSIS_MAX_DURATION_SEC)]!
   for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
     VIDEO_ANALYSIS_STATIC[`video-analysis:${model}:${bucketSec}s`] =
-      videoAnalysisBucketCredits(model, bucketSec)
+      VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, bucketSec)]!
   }
 }
 
@@ -238,9 +235,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Node-type bare = estimate fallback ONLY (STATIC_CREDIT_COSTS[node.type] in
   // estimateWorkflowCredits; never reserved). Pinned to the cheapest model's
   // 10-min ceiling (gemini-3-flash @ 600s = 3). Per-model bares + 8 duration
-  // composites are formula-derived above (VIDEO_ANALYSIS_STATIC); see that block
-  // for the PROVISIONAL/Gate-0.5 (18b) reconciliation note.
-  "video-analysis": videoAnalysisBucketCredits("gemini-3-flash", VIDEO_ANALYSIS_MAX_DURATION_SEC),
+  // composites are read from the shared table above (VIDEO_ANALYSIS_STATIC); see
+  // that block for the PROVISIONAL/Gate-0.5 (18b) reconciliation note.
+  "video-analysis": VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId("gemini-3-flash", VIDEO_ANALYSIS_MAX_DURATION_SEC)]!,
   ...VIDEO_ANALYSIS_STATIC,
   "flux-lora-character": 2,      // flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
   "character-lora-training": 150, // Replicate ostris/flux-dev-lora-trainer (1000 steps, one-shot). Refunded by webhook on failure/cancel.

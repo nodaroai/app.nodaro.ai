@@ -8,10 +8,10 @@ import {
 import { VIDEO_ANALYSIS_LLM_MODELS } from "../llm-models.js"
 
 // The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
-// formula moved to backend/src/lib/pricing/video-analysis-cost.ts (S5) — its
-// tests (including the worked-example bucket-credit values and the
-// cross-check against VIDEO_ANALYSIS_BUCKET_CREDITS below) live in
-// backend/src/lib/pricing/__tests__/video-analysis-cost.test.ts. This file
+// formula are PRIVATE, in @nodaroai/cloud-plugins
+// (src/plugins/video-analysis/cost.ts) — its tests (the worked-example
+// bucket-credit values and the cross-check against VIDEO_ANALYSIS_BUCKET_CREDITS
+// below) live in that private package's __tests__/cost.test.ts. This file
 // covers only the NON-monetary duration-bucketing, window-batching, and
 // credit-id-construction logic that stays in the published package.
 
