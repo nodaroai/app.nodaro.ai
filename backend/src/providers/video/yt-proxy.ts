@@ -18,7 +18,7 @@ import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.
  *   - NO-OP WHEN UNSET. With `YTDLP_PROXY` absent (local dev, any un-provisioned environment)
  *     this adds nothing at all, so the download/probe args are unchanged until the secret lands.
  */
-function ytdlpProxyFor(url: string): string | undefined {
+export function ytdlpProxyFor(url: string): string | undefined {
   const proxy = process.env.YTDLP_PROXY?.trim()
   if (!proxy) return undefined
   return isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS) ? proxy : undefined
