@@ -13,13 +13,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
 import type { VideoAnalysisNodeData } from "@/types/nodes"
-
-// Mirrors the route default (backend/src/routes/video-analysis.ts DEFAULT_LLM_MODEL)
-// so the pre-run credit estimate matches what the server will charge when the
-// node carries no explicit model yet.
-const DEFAULT_LLM_MODEL = "gemini-3-flash"
 
 function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoAnalysisNodeData
@@ -39,7 +34,9 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.probedYoutube && nodeData.probedYoutube.url === nodeData.youtubeUrl
       ? nodeData.probedYoutube.durationSec
       : undefined
-  const model = nodeData.llmModel ?? DEFAULT_LLM_MODEL
+  // Resolve the tier ("fast"/"pro") or raw model to the internal model (default
+  // pro) so the pre-run credit estimate matches what the server charges.
+  const model = resolveVideoAnalysisModel(nodeData.llmModel)
   const creditModelId = useMemo(
     () => buildVideoAnalysisCreditId(model, probedDuration ?? upstreamDuration ?? undefined),
     [model, probedDuration, upstreamDuration],

@@ -386,3 +386,36 @@ export function resolveLlmCreditId(feature: string, body: unknown): string {
 export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
   .filter((m) => getLlmModalityCaps(m.id).video && getLlmModalityCaps(m.id).audio)
   .map((m) => m.id)
+
+/**
+ * Video-analysis quality TIERS — the ONLY analyzer identifiers exposed to users
+ * (API, UI, docs). Each maps to an internal analysis model; the underlying
+ * vendor/model name is never surfaced. Default is `pro`. The guard test
+ * (video-analysis-pricing.test.ts) asserts every tier target is a real
+ * VIDEO_ANALYSIS_LLM_MODELS member AND every such model is reachable by a tier,
+ * so adding a video model forces a tier decision instead of silently leaking.
+ */
+export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3-flash", pro: "gemini-3.1-pro" } as const
+export type VideoAnalysisTier = keyof typeof VIDEO_ANALYSIS_TIERS
+/** UI/listing order — recommended (pro) first. */
+export const VIDEO_ANALYSIS_TIER_ORDER = ["pro", "fast"] as const
+export const DEFAULT_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "pro"
+export const DEFAULT_VIDEO_ANALYSIS_MODEL: string = VIDEO_ANALYSIS_TIERS[DEFAULT_VIDEO_ANALYSIS_TIER]
+/** Neutral, vendor-free display labels for the UI. */
+export const VIDEO_ANALYSIS_TIER_LABELS: Record<VideoAnalysisTier, string> = { fast: "Fast", pro: "Pro" }
+
+export function isVideoAnalysisTier(v: string): v is VideoAnalysisTier {
+  return Object.prototype.hasOwnProperty.call(VIDEO_ANALYSIS_TIERS, v)
+}
+
+/**
+ * Resolve a user-supplied tier (`"fast"`/`"pro"`) OR a raw internal model id to
+ * the internal analysis model id. Empty/unknown → the default tier's model.
+ * Real model ids pass through (back-compat for existing stored `llmModel`
+ * values); anything else falls back to the default rather than erroring.
+ */
+export function resolveVideoAnalysisModel(input?: string | null): string {
+  if (input && isVideoAnalysisTier(input)) return VIDEO_ANALYSIS_TIERS[input]
+  if (input && VIDEO_ANALYSIS_LLM_MODELS.includes(input)) return input
+  return DEFAULT_VIDEO_ANALYSIS_MODEL
+}

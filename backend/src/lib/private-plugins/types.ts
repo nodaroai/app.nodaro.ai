@@ -765,6 +765,12 @@ export interface PluginLlmMultimodalRequest {
   messages: Array<{ role: "user" | "assistant"; content: PluginLlmContentBlock[] }>
   timeoutMs?: number
   maxTokens?: number
+  /** Sampling temperature — pinned deliberately by callers that must not ride the
+   *  vendor default. Mirrors `LlmRequest.temperature`. */
+  temperature?: number
+  /** Nucleus-sampling cutoff — pinned deliberately (1.0 disables it). Mirrors
+   *  `LlmRequest.topP`. */
+  topP?: number
 }
 
 export interface PluginLlmToolkit {

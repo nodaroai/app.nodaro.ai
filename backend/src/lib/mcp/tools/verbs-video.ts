@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIERS, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -44,8 +44,9 @@ const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true
 // shared duration-bucket formula (NEVER hand-write the numbers; the formula is
 // the single source of truth, pinned by packages/shared's pricing test).
 // Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 2/3/7/11 credits".
-const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_LLM_MODELS.map(
-  (m) => `${m} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(m, b)]).join("/")} credits`,
+// Priced per quality TIER (fast/pro) — the underlying model is never surfaced.
+const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_TIER_ORDER.map(
+  (tier) => `${tier} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(VIDEO_ANALYSIS_TIERS[tier], b)]).join("/")} credits`,
 ).join("; ")
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -2272,9 +2273,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         video_url: z.string().url().optional().describe("Direct URL of a video file."),
         youtube_url: z.string().optional().describe("YouTube video URL (youtube.com / youtu.be). Max 10 minutes; no live streams."),
         llm_model: z
-          .enum(VIDEO_ANALYSIS_LLM_MODELS as [string, ...string[]])
+          .enum(VIDEO_ANALYSIS_TIER_ORDER)
           .optional()
-          .describe(`Analysis model. Default gemini-3-flash. Options: ${VIDEO_ANALYSIS_LLM_MODELS.join(", ")}.`),
+          .describe(`Analysis quality tier. Default "pro" (higher fidelity); "fast" is cheaper. Options: ${VIDEO_ANALYSIS_TIER_ORDER.join(", ")}.`),
         analysis_focus: z
           .string()
           .max(2000)
@@ -2337,7 +2338,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "generic",
         widgetData: {
           prompt: args.analysis_focus ? args.analysis_focus.slice(0, 80) : "(video analysis)",
-          model: args.llm_model ?? "gemini-3-flash",
+          model: args.llm_model ?? DEFAULT_VIDEO_ANALYSIS_TIER,
         },
       })
     },

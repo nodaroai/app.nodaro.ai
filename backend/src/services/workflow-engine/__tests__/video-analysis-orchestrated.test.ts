@@ -12,7 +12,7 @@
  *       outage class the registry-walk guard protects, exercised live) and the
  *       orchestrator enqueues jobName "video-analysis".
  *   (b) With no probed/upstream duration, the reserved model identifier is the
- *       CEILING composite `video-analysis:gemini-3-flash:600s`, and that value
+ *       CEILING composite `video-analysis:gemini-3.1-pro:600s`, and that value
  *       is the SAME `reservedCreditId` the enqueued payload carries (single
  *       source of truth — commit/refund key by it).
  *   (c) A completed job's `{ json }` flows through DIRECT_OUTPUT_KEYS into
@@ -90,7 +90,7 @@ import type {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const CEILING_ID = "video-analysis:gemini-3-flash:600s"
+const CEILING_ID = "video-analysis:gemini-3.1-pro:600s"
 
 // Minimal-but-valid merged analysis result. Parsed through the SHARED schema so
 // a future contract drift makes THIS fixture fail loudly rather than asserting
@@ -106,7 +106,7 @@ const ANALYSIS = videoAnalysisResultSchema.parse({
       shotType: "wide",
       camera: "slow push-in",
       visual: "a wide establishing shot of a neon city at night",
-      audio: { mode: "music", content: "brooding synthwave" },
+      audio: [{ mode: "music", content: "brooding synthwave" }],
       sceneNumber: 1,
       visualResolved: "a wide establishing shot of a neon city at night",
       slotRefs: [],

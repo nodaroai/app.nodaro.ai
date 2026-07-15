@@ -1,6 +1,6 @@
 # Video Analysis
 
-> Break a video down scene-by-scene into a prompt-ready, AI-recreatable JSON breakdown — segmented shots, mode-tagged audio, and castable entity slots.
+> Break a video down scene-by-scene into a prompt-ready, AI-recreatable JSON breakdown — segmented shots, layered audio, and castable entity slots.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The Video Analysis node ingests a video and returns a structured, scene-segmente
 breakdown built for AI re-creation. It cuts the video at natural boundaries into
 scenes of **at most 8 seconds** (one image/video generation maps to one scene),
 and for each scene emits a self-contained visual description, shot type, camera
-movement, a mode-tagged audio track, and any transition out. Recurring
+movement, its concurrent audio layers, and any transition out. Recurring
 people, objects, and places are lifted out as reusable **entity slots** so a
 scene can later be re-cast onto your own characters, objects, or locations.
 
@@ -44,13 +44,15 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Analysis Model (`llmModel`) | Select | `gemini-3-flash` | `gemini-3-flash` (fast, default) or `gemini-3.1-pro` (higher fidelity, costs more — see [Credit Cost](#credit-cost)) |
+| Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy) or `pro` (default — higher fidelity, costs more; see [Credit Cost](#credit-cost)) |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
-**Only Gemini models are offered here.** The model list is capability-derived, not
-hand-picked — Video Analysis requires native video *and* audio ingestion, which today
-only `gemini-3-flash` / `gemini-3.1-pro` provide. The GPT-5.6/Claude 5-era chat models
-are text+image only and are not offered here.
+**Two quality tiers, no model to pick.** You choose a *tier* — `fast` for an
+economy pass or `pro` for higher fidelity — not a specific model. The underlying
+analysis model is selected for you (Video Analysis requires native video *and*
+audio understanding, which only a subset of models provide) and is intentionally
+not surfaced, so a tier's backing model can improve over time without changing
+your workflow.
 
 **Analysis Focus steers attention, never format.** It biases what the model
 attends to; it does **not** change the output JSON shape, the ≤8s scene
@@ -100,16 +102,20 @@ your own entities.
 | `visualResolved` | string | Self-contained, prompt-ready visual description — **the field downstream consumers read**. |
 | `oversized` | boolean, optional | Present and `true` when the scene exceeds 8 seconds (couldn't be cut shorter). Still one generation per scene. |
 | `transitionOut` | enum, optional | Transition into the next scene: `cut` / `fade` / `wipe` / `whip`. |
-| `audio` | object | Mode-tagged audio track — see below. |
+| `audio` | array | Concurrent audio layers (empty array `[]` = silence) — see below. |
 | `slotRefs` | string[] | Slot ids referenced by this scene, derived from its `visual` `{slot:x}` tokens. |
 
-**`audio`** object:
+**`audio`** — an **array of concurrent sound layers**. Real footage stacks sound
+(a music bed under dialogue over ambient sfx), so a scene captures every
+simultaneous layer as its own entry: a music bed + a sung vocal + a water splash
+is three entries. An **empty array `[]` means genuine silence** — there is no
+`silence` mode. Each layer:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `mode` | enum | `speech` / `music` / `sfx` / `silence`. |
-| `content` | string | `speech`: verbatim quote; `music` / `sfx`: generation-ready description; `silence`: empty string. |
-| `voice` | string, optional | Speaker / voice descriptor when `mode` is `speech`. |
+| `mode` | enum | `speech` / `music` / `sfx`. |
+| `content` | string | `speech`: verbatim words; `music` / `sfx`: generation-ready description. |
+| `voice` | string, optional | Speaker / voice descriptor — `speech` layers only. |
 
 **Read `visualResolved`, not `visual`.** `visual` retains `{slot:x}` tokens so
 the scene can be re-cast onto your own characters / objects / locations later;
@@ -118,24 +124,24 @@ every downstream consumer should render from today.
 
 ## Credit Cost
 
-Video Analysis is **dynamically priced** by duration bucket and model. The
+Video Analysis is **dynamically priced** by duration bucket and quality tier. The
 bucket is the smallest of **60s / 180s / 360s / 600s** that fits the video's
-probed duration; each model has its own per-bucket price. The table below is
+probed duration; each tier has its own per-bucket price. The table below is
 published as `VIDEO_ANALYSIS_BUCKET_CREDITS` in
 `packages/shared/src/video-analysis-pricing.ts` (the credit prices users are
 charged) — generated and drift-guarded internally, never hand-written.
 
-| Model | ≤60s | ≤180s | ≤360s | ≤600s |
-|-------|------|-------|-------|-------|
-| `gemini-3-flash` (default) | 1 | 1 | 2 | 3 |
-| `gemini-3.1-pro` | 2 | 3 | 7 | 11 |
+| Tier | ≤60s | ≤180s | ≤360s | ≤600s |
+|------|------|-------|-------|-------|
+| `fast` (economy) | 1 | 1 | 2 | 3 |
+| `pro` (default) | 2 | 3 | 7 | 11 |
 
 > These values are the internal pricing formula's current outputs, with the
 > formula's token and rate constants anchored to live billing measurements.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a
-video over 180s is split into ~150-second windows), and `gemini-3.1-pro` costs
-more per token than the default `gemini-3-flash`.
+video over 180s is split into ~150-second windows), and the `pro` tier costs
+more per token than the `fast` tier.
 
 **±3-second duration tolerance.** Credits are reserved up front from the bucket
 that fits the probed (metadata) duration. After download, the worker re-probes
@@ -163,8 +169,9 @@ safety net.
 
 ## Best Practices
 
-- Use `gemini-3-flash` (default) for most breakdowns — it's fast and cheap. Reach
-  for `gemini-3.1-pro` when you need higher-fidelity scene and entity detail.
+- The default `pro` tier suits most breakdowns — higher-fidelity scene and entity
+  detail. Drop to the `fast` tier for a cheaper, quicker pass when you can trade
+  some fidelity.
 - Set **Analysis Focus** to bias the model toward what matters for your
   re-creation (product shots, on-screen text, a specific character) — but don't
   expect it to change the JSON shape.
@@ -179,5 +186,5 @@ safety net.
   characters, objects, and locations.
 - Produce prompt-ready per-scene descriptions to feed image/video generation
   nodes.
-- Pull a mode-tagged audio track (speech quotes, music/sfx descriptions) per
-  scene for a matching soundtrack pass.
+- Pull each scene's layered audio (speech quotes plus music/sfx descriptions —
+  every concurrent layer) for a matching soundtrack pass.

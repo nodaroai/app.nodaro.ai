@@ -5,7 +5,10 @@ import {
   pickVideoAnalysisBucket, buildVideoAnalysisCreditId, bucketSecondsFromCreditId,
   videoAnalysisNumWindows,
 } from "../video-analysis-pricing.js"
-import { VIDEO_ANALYSIS_LLM_MODELS } from "../llm-models.js"
+import {
+  VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_TIER_ORDER,
+  DEFAULT_VIDEO_ANALYSIS_TIER, DEFAULT_VIDEO_ANALYSIS_MODEL, resolveVideoAnalysisModel,
+} from "../llm-models.js"
 
 // The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
 // formula are PRIVATE, in @nodaroai/cloud-plugins
@@ -38,6 +41,26 @@ describe("video-analysis-pricing", () => {
 
   it("model SSOT is capability-derived and Gemini-only today", () => {
     expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.1-pro"])
+  })
+
+  it("tier layer: every tier maps to a real model AND every model is tier-reachable (no vendor leak)", () => {
+    // Adding a video-analysis model without a tier would silently leave it
+    // unreachable / unnamed — this fails until a tier decision is made.
+    const tierTargets = Object.values(VIDEO_ANALYSIS_TIERS)
+    for (const m of tierTargets) expect(VIDEO_ANALYSIS_LLM_MODELS).toContain(m)
+    for (const m of VIDEO_ANALYSIS_LLM_MODELS) expect(tierTargets).toContain(m)
+    expect(new Set(VIDEO_ANALYSIS_TIER_ORDER)).toEqual(new Set(Object.keys(VIDEO_ANALYSIS_TIERS)))
+  })
+
+  it("resolveVideoAnalysisModel: tier → model, raw model passthrough, default pro on empty/unknown", () => {
+    expect(DEFAULT_VIDEO_ANALYSIS_TIER).toBe("pro")
+    expect(DEFAULT_VIDEO_ANALYSIS_MODEL).toBe("gemini-3.1-pro")
+    expect(resolveVideoAnalysisModel("pro")).toBe("gemini-3.1-pro")
+    expect(resolveVideoAnalysisModel("fast")).toBe("gemini-3-flash")
+    expect(resolveVideoAnalysisModel("gemini-3-flash")).toBe("gemini-3-flash") // raw passthrough
+    expect(resolveVideoAnalysisModel(undefined)).toBe("gemini-3.1-pro") // default → pro
+    expect(resolveVideoAnalysisModel("")).toBe("gemini-3.1-pro")
+    expect(resolveVideoAnalysisModel("nonsense")).toBe("gemini-3.1-pro") // unknown → default, never throws
   })
 
   // Full drift-detection against the live $-formula lives in

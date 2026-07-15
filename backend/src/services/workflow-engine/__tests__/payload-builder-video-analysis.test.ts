@@ -44,10 +44,10 @@ describe("buildPayload — video-analysis", () => {
   it("(a) unknown duration → <model>:600s ceiling composite", () => {
     // youtubeUrl but no probe, no upstream duration → ceiling.
     const result = buildPayload(node({ youtubeUrl: YT }), jobId, {}, usageLogId)
-    expect(result.modelIdentifier).toBe("video-analysis:gemini-3-flash:600s")
-    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3-flash:600s")
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:600s")
+    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3.1-pro:600s")
     // Default model when data.llmModel is absent.
-    expect(result.payload.llmModel).toBe("gemini-3-flash")
+    expect(result.payload.llmModel).toBe("gemini-3.1-pro")
   })
 
   it("(a') respects an explicit llmModel in the ceiling composite", () => {
@@ -69,8 +69,8 @@ describe("buildPayload — video-analysis", () => {
       usageLogId,
     )
     // 170s → 180s bucket.
-    expect(result.modelIdentifier).toBe("video-analysis:gemini-3-flash:180s")
-    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3-flash:180s")
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:180s")
+    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3.1-pro:180s")
     expect(result.payload.youtubeUrl).toBe(YT)
   })
 
@@ -86,7 +86,7 @@ describe("buildPayload — video-analysis", () => {
       {},
       usageLogId,
     )
-    expect(result.modelIdentifier).toBe("video-analysis:gemini-3-flash:600s")
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:600s")
   })
 
   it("(d) resolvedInputs.videoDuration wins over probedYoutube", () => {
@@ -99,8 +99,8 @@ describe("buildPayload — video-analysis", () => {
       inputs,
       usageLogId,
     )
-    expect(result.modelIdentifier).toBe("video-analysis:gemini-3-flash:60s")
-    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3-flash:60s")
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:60s")
+    expect(result.payload.reservedCreditId).toBe("video-analysis:gemini-3.1-pro:60s")
   })
 
   it("(e) videoUrl presence nulls youtubeUrl in the payload", () => {
@@ -117,7 +117,7 @@ describe("buildPayload — video-analysis", () => {
     expect(result.payload.youtubeUrl).toBeUndefined()
     // videoUrl carries no youtube pairing; duration comes from the trusted
     // upstream metadata (50s → 60s).
-    expect(result.modelIdentifier).toBe("video-analysis:gemini-3-flash:60s")
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:60s")
   })
 
   it("forwards jobId, analysisFocus, nodeId and usageLogId in the payload", () => {

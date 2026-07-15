@@ -2,7 +2,7 @@ import { supabase } from "../../lib/supabase.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -237,7 +237,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 10-min ceiling (gemini-3-flash @ 600s = 3). Per-model bares + 8 duration
   // composites are read from the shared table above (VIDEO_ANALYSIS_STATIC); see
   // that block for the PROVISIONAL/Gate-0.5 (18b) reconciliation note.
-  "video-analysis": VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId("gemini-3-flash", VIDEO_ANALYSIS_MAX_DURATION_SEC)]!,
+  "video-analysis": VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_ANALYSIS_MAX_DURATION_SEC)]!,
   ...VIDEO_ANALYSIS_STATIC,
   "flux-lora-character": 2,      // flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
   "character-lora-training": 150, // Replicate ostris/flux-dev-lora-trainer (1000 steps, one-shot). Refunded by webhook on failure/cancel.
@@ -2212,7 +2212,7 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
     const durationSec =
       youtubeUrl && probed && probed.url === youtubeUrl ? probed.durationSec : undefined
     return buildVideoAnalysisCreditId(
-      (data.llmModel as string | undefined) ?? "gemini-3-flash",
+      resolveVideoAnalysisModel(data.llmModel as string | undefined),
       durationSec,
     )
   }

@@ -55,6 +55,10 @@ export interface LlmRequest {
   messages: LlmMessage[]
   maxTokens?: number
   temperature?: number
+  /** Nucleus-sampling cutoff (`top_p`). Passed through to the KIE body when set;
+   *  a caller pins it (e.g. 1.0 to disable nucleus filtering) to avoid riding an
+   *  unknown vendor default. Undefined → not sent. */
+  topP?: number
   /**
    * Requested reasoning effort. Clamped to the model's declared levels
    * (`effectiveReasoningEffort`); undefined / unsupported → nothing is sent
@@ -270,10 +274,14 @@ function effectiveTimeout(req: LlmRequest): number {
 function deriveParams(model: LlmModelDef, req: LlmRequest): {
   eff: LlmReasoningEffort | undefined
   temperature: number | undefined
+  topP: number | undefined
   maxTokens: number
 } {
   const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
   const temperature = model.supportsTemperature === false ? undefined : req.temperature
+  // top_p rides the same support gate as temperature — a reasoning model that
+  // rejects sampling params gets neither.
+  const topP = model.supportsTemperature === false ? undefined : req.topP
   let maxTokens = req.maxTokens ?? model.maxOutputTokens
   if (eff === "xhigh" || eff === "max") {
     // Reasoning tokens share the output budget on these models. Floor the cap
@@ -284,7 +292,7 @@ function deriveParams(model: LlmModelDef, req: LlmRequest): {
     // model actually generates that much.
     maxTokens = Math.max(maxTokens, 32768)
   }
-  return { eff, temperature, maxTokens }
+  return { eff, temperature, topP, maxTokens }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,11 +353,12 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
     return { role: m.role, content: blocks }
   })
 
-  const { eff, temperature, maxTokens } = deriveParams(model, req)
+  const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
   return {
     model: model.kieSlugOrModel,
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { top_p: topP } : {}),
     ...(eff !== undefined ? { thinking: { type: "adaptive" }, output_config: { effort: eff } } : {}),
     // Forced-tool structured output — mirrors callAnthropicDirect's pattern.
     // KIE_CLAUDE_TOOLS_VERIFIED gates routing (see llmComplete/llmStream); once
@@ -557,12 +566,13 @@ async function streamKie(
 
 async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
-  const { eff, temperature, maxTokens } = deriveParams(model, req)
+  const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { top_p: topP } : {}),
     ...(eff !== undefined ? { reasoning_effort: eff } : {}),
   }
   const responseFormat = kieResponseFormat(model, req)
@@ -598,12 +608,13 @@ async function streamKieChatCompletions(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
-  const { eff, temperature, maxTokens } = deriveParams(model, req)
+  const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { top_p: topP } : {}),
     ...(eff !== undefined ? { reasoning_effort: eff } : {}),
     stream: true,
   }

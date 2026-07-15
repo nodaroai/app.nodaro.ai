@@ -1204,13 +1204,14 @@ describe("video_analysis verb", () => {
     registerVerbs({ server, session: executeSession(), fastify })
     const result = await callTool(server, "video_analysis", {
       video_url: "https://a/clip.mp4",
-      llm_model: "gemini-3.1-pro",
+      llm_model: "pro",
       analysis_focus: "focus on the product shots",
     })
     expect(result.isError).toBeUndefined()
     expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-va")
     expect(received.body?.videoUrl).toBe("https://a/clip.mp4")
-    expect(received.body?.llmModel).toBe("gemini-3.1-pro")
+    // Verb forwards the quality tier; the route resolves tier→internal model.
+    expect(received.body?.llmModel).toBe("pro")
     expect(received.body?.analysisFocus).toBe("focus on the product shots")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
