@@ -522,6 +522,8 @@ export function buildToolkit(): PluginToolkit {
             system: req.system ?? "",
             messages: req.messages,
             maxTokens: req.maxTokens,
+            temperature: req.temperature,
+            topP: req.topP,
             timeoutMs: req.timeoutMs,
           },
           schema as ZodType<T>,

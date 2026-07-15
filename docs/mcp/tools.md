@@ -451,7 +451,7 @@ prompt with no questions round-trip.
 | `motion_transfer` | Transfer the motion pattern from one video onto a target image or video. |
 | `face_swap` | Swap a face in a source image/video with a reference face. |
 | `video_upscale` | AI upscale a video to a higher resolution (powered by Topaz via KIE). |
-| `video_analysis` | Scene-by-scene analysis of a video for AI re-creation — ≤8s scenes with prompt-ready `visualResolved` descriptions, mode-tagged audio, and castable entity slots. Exactly one source: `video_asset_id` / `video_url` / `youtube_url` (max 10 minutes, no live streams). See [`video_analysis`](#video_analysis) below. |
+| `video_analysis` | Scene-by-scene analysis of a video for AI re-creation — ≤8s scenes with prompt-ready `visualResolved` descriptions, layered audio, and castable entity slots. Exactly one source: `video_asset_id` / `video_url` / `youtube_url` (max 10 minutes, no live streams). See [`video_analysis`](#video_analysis) below. |
 
 **Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The cheaper variants are resolution-capped: `seedance-2-fast` and `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K). Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
 
@@ -463,9 +463,10 @@ Analyze a video into a scene-by-scene breakdown built for AI re-creation.
 Scenes are cut at natural boundaries, each at most **8 seconds** (one
 image/video generation per scene). Every scene carries `visualResolved` — a
 self-contained, prompt-ready visual description and **the field downstream
-consumers read** — plus shot type, camera movement, a mode-tagged audio track
-(`speech` quoted verbatim; `music`/`sfx` as generation-ready descriptions;
-`silence`), and recurring people/objects/places extracted as castable **entity
+consumers read** — plus shot type, camera movement, an array of concurrent
+audio layers (`speech` quoted verbatim; `music`/`sfx` as generation-ready
+descriptions; an empty array `[]` means silence), and recurring
+people/objects/places extracted as castable **entity
 slots** so they can be re-cast with your own characters. Returns a `job_id` —
 poll `get_job`; the full analysis JSON (`meta` + `slots` + `scenes[]`) is in
 the job's `output_data`.
@@ -477,7 +478,7 @@ the job's `output_data`.
 | `video_asset_id` | uuid, optional | Nodaro video job id or uploaded-asset id. |
 | `video_url` | string, optional | Direct URL of a video file. |
 | `youtube_url` | string, optional | YouTube video URL (youtube.com / youtu.be). |
-| `llm_model` | enum, optional | Analysis model: `gemini-3-flash` (default) or `gemini-3.1-pro`. |
+| `llm_model` | enum, optional | Analysis quality tier: `fast` (economy) or `pro` (default, higher fidelity). |
 | `analysis_focus` | string ≤2000, optional | Steer the analysis (e.g. "focus on the product shots and on-screen text"). |
 
 Pass **exactly one** of `video_asset_id` / `video_url` / `youtube_url` —
@@ -485,14 +486,14 @@ passing zero or more than one returns a tool error naming what was provided.
 Maximum duration is **10 minutes** (600s) for any source; YouTube live streams
 are rejected.
 
-**Pricing** — duration-bucketed credits per model. The bucket is the smallest
+**Pricing** — duration-bucketed credits per quality tier. The bucket is the smallest
 of 60s / 180s / 360s / 600s that fits the video's probed duration. The values
 below are the shared pricing formula's current outputs:
 
-| Model | ≤60s | ≤180s | ≤360s | ≤600s |
-|-------|------|-------|-------|-------|
-| `gemini-3-flash` (default) | 1 | 1 | 2 | 3 |
-| `gemini-3.1-pro` | 2 | 3 | 7 | 11 |
+| Tier | ≤60s | ≤180s | ≤360s | ≤600s |
+|------|------|-------|-------|-------|
+| `fast` (economy) | 1 | 1 | 2 | 3 |
+| `pro` (default) | 2 | 3 | 7 | 11 |
 
 ---
 

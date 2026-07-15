@@ -7,7 +7,7 @@ import {
 } from "../video-analysis.js"
 
 const slot: EntitySlot = { slotId: "hero", label: "Protagonist", source: "wired-character", role: "person", description: "tan man, mustache, black tee" }
-const baseScene = { startSec: 0, endSec: 4, label: "Hook", shotType: "Medium Close-Up", camera: "slow push-in", visual: "{slot:hero} juggles a ball", audio: { mode: "speech" as const, content: "As a kid…", voice: "male, warm" } }
+const baseScene = { startSec: 0, endSec: 4, label: "Hook", shotType: "Medium Close-Up", camera: "slow push-in", visual: "{slot:hero} juggles a ball", audio: [{ mode: "speech" as const, content: "As a kid…", voice: "male, warm" }] }
 
 describe("windowAnalysisSchema", () => {
   it("accepts a zero-scene window (quiet footage is a VALID result)", () => {

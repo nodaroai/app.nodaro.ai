@@ -34,11 +34,18 @@ export const entitySlotSchema = z.object({
 })
 export type EntitySlot = z.infer<typeof entitySlotSchema>
 
-const audioSchema = z.object({
-  mode: z.enum(["speech", "music", "sfx", "silence"]),
-  content: z.string(), // speech: verbatim quote; music/sfx: gen-ready description; silence: "" allowed
+/**
+ * One concurrent sound layer in a scene. Real footage stacks sound (music bed
+ * under dialogue over ambient sfx), so a scene carries an ARRAY of these — an
+ * empty array means genuine silence. `content`: speech = verbatim words;
+ * music/sfx = gen-ready description. `voice` is speech-only voice-casting.
+ */
+const audioLayerSchema = z.object({
+  mode: z.enum(["speech", "music", "sfx"]),
+  content: z.string().min(1),
   voice: z.string().optional(),
 })
+export type AudioLayer = z.infer<typeof audioLayerSchema>
 
 const windowSceneBase = z.object({
   startSec: z.number().min(0),
@@ -48,7 +55,8 @@ const windowSceneBase = z.object({
   camera: z.string(),
   visual: z.string().min(1),
   transitionOut: z.enum(["cut", "fade", "wipe", "whip"]).optional(),
-  audio: audioSchema,
+  // Array of concurrent layers (music + speech + sfx together); [] = silence.
+  audio: z.array(audioLayerSchema),
 })
 // .strip() (default) drops model-emitted oversized/slotRefs — validator-computed only.
 const windowSceneSchema = windowSceneBase.refine((s) => s.endSec > s.startSec, { message: "endSec must be > startSec" })

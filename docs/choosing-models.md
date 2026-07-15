@@ -96,7 +96,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | --- | --- | --- | --- | --- | --- |
 | VEO 1080p Upscale | Google | Everyday | 2 | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 3 | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
-| Video Analysis (Gemini 3 Flash) | Google | Everyday | 3 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast Gemini tier. Billed per duration bucket. |
+| Video Analysis (Fast) | Nodaro | Everyday | 3 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
 | Grok Imagine (I2V) | xAI | Everyday | 5 | i2v | Grok image-to-video — stylized motion. Up to 15s. |
 | Bytedance Lite I2V | Bytedance | Everyday | 6 | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
 | Hailuo 02 Standard | MiniMax | Everyday | 8 | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
@@ -105,7 +105,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 9 | i2v | Faster Bytedance Pro variant. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 10 | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 11 | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
-| Video Analysis (Gemini 3.1 Pro) | Google | Everyday | 11 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — high-fidelity Gemini tier. Billed per duration bucket. |
+| Video Analysis (Pro) | Nodaro | Everyday | 11 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — higher-fidelity, default tier. Billed per duration bucket. |
 | Wan Flash V2V | Alibaba | Everyday | 13 | v2v | Faster Wan V2V variant. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 15 | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 15 | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |

@@ -39,7 +39,7 @@ import type {
   VideoAnalysisNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_LLM_MODELS, LLM_MODELS } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
@@ -4408,7 +4408,8 @@ function formatProbedDuration(sec: number): string {
 }
 
 export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysisNodeData>) {
-  const model = data.llmModel ?? "gemini-3-flash"
+  // Show the quality tier; a legacy raw model id falls back to the default tier.
+  const tier = isVideoAnalysisTier(data.llmModel ?? "") ? (data.llmModel as string) : DEFAULT_VIDEO_ANALYSIS_TIER
   const url = data.youtubeUrl ?? ""
   const [probeError, setProbeError] = useState<string | undefined>(undefined)
   const [probing, setProbing] = useState(false)
@@ -4462,15 +4463,15 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
     <div className="flex flex-col gap-3">
       {/* Model */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="video-analysis-model">Analysis model</Label>
-        <Select value={model} onValueChange={(v) => onUpdate({ llmModel: v })}>
+        <Label htmlFor="video-analysis-model">Analysis quality</Label>
+        <Select value={tier} onValueChange={(v) => onUpdate({ llmModel: v })}>
           <SelectTrigger id="video-analysis-model" className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {VIDEO_ANALYSIS_LLM_MODELS.map((id) => (
-              <SelectItem key={id} value={id}>
-                {LLM_MODELS.find((m) => m.id === id)?.displayName ?? id}
+            {VIDEO_ANALYSIS_TIER_ORDER.map((t) => (
+              <SelectItem key={t} value={t}>
+                {VIDEO_ANALYSIS_TIER_LABELS[t]}
               </SelectItem>
             ))}
           </SelectContent>
