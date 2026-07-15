@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
+import { ytProxyOption } from "../providers/video/yt-proxy.js"
 import { variantJobId } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -73,6 +74,8 @@ export async function downloadAudioToR2(url: string): Promise<string> {
     noPlaylist: true,
     noCheckCertificates: true,
     preferFreeFormats: true,
+    // Residential proxy for YouTube (datacenter IP bot-block); no-op when unset.
+    ...ytProxyOption(url),
     extractorArgs: "youtube:player_client=android",
     addHeader: [
       "referer:youtube.com",

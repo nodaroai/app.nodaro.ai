@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import youtubedl from "youtube-dl-exec"
+import { ytProxyOption } from "./yt-proxy.js"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
@@ -40,6 +41,8 @@ export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioRes
           mergeOutputFormat: "mp4",
           noPlaylist: true,
           noCheckCertificates: true,
+          // Residential proxy for YouTube (datacenter IP bot-block); no-op when unset.
+          ...ytProxyOption(videoUrl),
           extractorArgs: "youtube:player_client=android",
           addHeader: [
             "referer:youtube.com",

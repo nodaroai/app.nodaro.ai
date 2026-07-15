@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import youtubedl from "youtube-dl-exec"
 import { uploadFileToR2 } from "../../lib/storage.js"
+import { ytProxyOption } from "../video/yt-proxy.js"
 
 export async function extractYouTubeAudio(youtubeUrl: string): Promise<string> {
   const outputId = randomUUID()
@@ -19,6 +20,8 @@ export async function extractYouTubeAudio(youtubeUrl: string): Promise<string> {
       output: outputPath,
       noPlaylist: true,
       noCheckCertificates: true,
+      // Residential proxy for YouTube (datacenter IP bot-block); no-op when unset.
+      ...ytProxyOption(youtubeUrl),
     })
 
     await fs.access(outputPath)
