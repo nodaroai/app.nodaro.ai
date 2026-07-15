@@ -48,9 +48,12 @@ describe("generate-video-pro discovery gating", () => {
 })
 
 describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => {
-  it("the shared set includes both cloud-only nodes", () => {
+  it("the shared set includes the cloud-only nodes", () => {
     expect(CLOUD_ONLY_NODE_TYPES.has("voice-changer-pro")).toBe(true)
     expect(CLOUD_ONLY_NODE_TYPES.has("generate-video-pro")).toBe(true)
+    // video-analysis's implementation moved to @nodaroai/cloud-plugins, so its
+    // node is Cloud-only too (else it would 404 on run under community/business).
+    expect(CLOUD_ONLY_NODE_TYPES.has("video-analysis")).toBe(true)
   })
 
   // Source-text guard (mirrors node-toolbar.test.tsx's file-parsing approach,
