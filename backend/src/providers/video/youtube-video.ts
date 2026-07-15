@@ -9,7 +9,8 @@ import {
   isAllowedSocialVideoUrl,
 } from "../../lib/url-validator.js"
 import { videoFormatSelector } from "./video-format.js"
-import { ytProxyArgs } from "./yt-proxy.js"
+import { ytProxyArgs, ytdlpProxyFor } from "./yt-proxy.js"
+import { startProxyAuthShim } from "./proxy-auth-shim.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -132,6 +133,13 @@ export function buildYtDlpVideoArgs(opts: {
   maxFilesizeBytes?: number
   maxHeight?: number
   section?: { startSec: number; endSec: number }
+  /**
+   * Override the `--proxy` args. Defaults to `ytProxyArgs(url)` (the direct
+   * residential proxy). The section-download path passes the auth-injecting
+   * shim's credential-free localhost url here so ffmpeg's fetch can authenticate
+   * (see `downloadYouTubeVideo` / `proxy-auth-shim`).
+   */
+  proxyArgs?: string[]
 }): string[] {
   const args = [
     opts.url,
@@ -145,8 +153,9 @@ export function buildYtDlpVideoArgs(opts: {
     ...YT_SPOOF_ARGS,
     // Route YouTube through the residential proxy when configured — the datacenter IP is
     // bot-blocked (see `yt-proxy`). YouTube-scoped + no-op when unset, so non-YouTube hosts
-    // and un-provisioned environments are byte-for-byte unchanged.
-    ...ytProxyArgs(opts.url),
+    // and un-provisioned environments are byte-for-byte unchanged. `proxyArgs` (when the
+    // caller supplies it) swaps in the auth-injecting shim for the section path.
+    ...(opts.proxyArgs ?? ytProxyArgs(opts.url)),
     "--newline",
     "--progress-template", "download:%(progress._percent_str)s",
   ]
@@ -492,39 +501,62 @@ export async function downloadYouTubeVideo(opts: {
     throw new YtUrlNotAllowedError(`host not allowed: ${url}`)
   }
 
-  const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, maxHeight, section })
+  // A section (trim) download fetches the media with a SEPARATE ffmpeg process
+  // (yt-dlp's FFmpegFD), which can't authenticate to the residential proxy: its
+  // no-credentials first CONNECT dies against the proxy ("ffmpeg exited with
+  // code 187") where the native whole-video downloader (proactive auth)
+  // succeeds. Route the section path through a localhost shim that injects the
+  // proxy credentials for ffmpeg (see proxy-auth-shim). Non-section downloads,
+  // and any path without a proxy configured, are byte-for-byte unchanged.
+  const upstreamProxy = section ? ytdlpProxyFor(url) : undefined
+  const shim = upstreamProxy ? await startProxyAuthShim(upstreamProxy) : undefined
 
-  // YouTube 429s the default (web) client on the watch page from datacenter IPs,
-  // so retry web → tv → android (the android rung never hits the watch page).
-  // Non-YouTube hosts get a single unchanged attempt. The last rung's error
-  // propagates verbatim — the route's SSE and VCP's mapYtdlpError depend on it.
-  await runThroughClientLadder(url, (rung) =>
-    spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
-  )
+  try {
+    const args = buildYtDlpVideoArgs({
+      url,
+      outPath,
+      maxFilesizeBytes,
+      maxHeight,
+      section,
+      proxyArgs: shim ? ["--proxy", shim.url] : undefined,
+    })
 
-  const actualPath = await findDownloadedFile(outPath)
-  const stat = await fs.stat(actualPath)
-  if (stat.size === 0) throw new Error("Downloaded video file is empty")
+    // YouTube 429s the default (web) client on the watch page from datacenter IPs,
+    // so retry web → tv → android (the android rung never hits the watch page).
+    // Non-YouTube hosts get a single unchanged attempt. The last rung's error
+    // propagates verbatim — the route's SSE and VCP's mapYtdlpError depend on it.
+    await runThroughClientLadder(url, (rung) =>
+      spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
+    )
 
-  const { videoCodec, hasAudio } = await probeStreams(actualPath)
+    const actualPath = await findDownloadedFile(outPath)
+    const stat = await fs.stat(actualPath)
+    if (stat.size === 0) throw new Error("Downloaded video file is empty")
 
-  // A silent video is not itself a download failure — fetching a clip with no
-  // soundtrack is legitimate — but every audio consumer downstream (transcribe,
-  // trim-audio, voice-changer) will then die with an error that names ffmpeg
-  // instead of the cause. Name it here, where the cause is still in view.
-  if (hasAudio === false) {
-    console.warn(`[download-video] ${url} produced a video with NO audio stream`)
-  }
+    const { videoCodec, hasAudio } = await probeStreams(actualPath)
 
-  // Re-encode to h264/aac if needed for downstream compatibility. A null codec
-  // means the probe failed — re-encode anyway; normalizing is the safe fallback.
-  if (videoCodec !== "h264") {
-    onProcessingStart?.()
-    const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
-    await reencodeToH264(actualPath, tmpPath)
-    await fs.unlink(actualPath).catch(() => {})
-    await fs.rename(tmpPath, outPath)
-  } else if (actualPath !== outPath) {
-    await fs.rename(actualPath, outPath)
+    // A silent video is not itself a download failure — fetching a clip with no
+    // soundtrack is legitimate — but every audio consumer downstream (transcribe,
+    // trim-audio, voice-changer) will then die with an error that names ffmpeg
+    // instead of the cause. Name it here, where the cause is still in view.
+    if (hasAudio === false) {
+      console.warn(`[download-video] ${url} produced a video with NO audio stream`)
+    }
+
+    // Re-encode to h264/aac if needed for downstream compatibility. A null codec
+    // means the probe failed — re-encode anyway; normalizing is the safe fallback.
+    if (videoCodec !== "h264") {
+      onProcessingStart?.()
+      const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
+      await reencodeToH264(actualPath, tmpPath)
+      await fs.unlink(actualPath).catch(() => {})
+      await fs.rename(tmpPath, outPath)
+    } else if (actualPath !== outPath) {
+      await fs.rename(actualPath, outPath)
+    }
+  } finally {
+    // Tear the shim down whether the download succeeded or threw — it holds a
+    // listening socket and any live tunnels open otherwise.
+    await shim?.close()
   }
 }

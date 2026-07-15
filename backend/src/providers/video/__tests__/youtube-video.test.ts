@@ -115,6 +115,20 @@ describe("buildYtDlpVideoArgs", () => {
     expect(formatOf(args)).toBe(videoFormatSelector(480))
     expect(args[args.indexOf("--download-sections") + 1]).toBe("*7-23")
   })
+
+  it("uses the supplied proxyArgs verbatim instead of the default proxy (the auth-shim path)", () => {
+    const args = buildYtDlpVideoArgs({
+      url: "https://youtu.be/x",
+      outPath: "/tmp/x.mp4",
+      section: { startSec: 10, endSec: 20 },
+      proxyArgs: ["--proxy", "http://127.0.0.1:54321"],
+    })
+    const i = args.indexOf("--proxy")
+    expect(i).toBeGreaterThan(-1)
+    expect(args[i + 1]).toBe("http://127.0.0.1:54321")
+    // The override REPLACES the default proxy — exactly one --proxy in the args.
+    expect(args.filter((a) => a === "--proxy")).toHaveLength(1)
+  })
 })
 
 /**
