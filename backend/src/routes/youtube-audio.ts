@@ -6,6 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import youtubedl from "youtube-dl-exec"
+import { ytProxyOption } from "../providers/video/yt-proxy.js"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -45,6 +46,9 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
         preferFreeFormats: true,
         writeThumbnail: true,
         convertThumbnails: "jpg",
+        // Route YouTube through the residential proxy when configured — the datacenter IP is
+        // bot-blocked. YouTube-scoped + no-op when unset (see `yt-proxy`).
+        ...ytProxyOption(url),
         // Use Android client to bypass JS runtime requirement
         extractorArgs: "youtube:player_client=android",
         addHeader: [

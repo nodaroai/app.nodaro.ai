@@ -9,6 +9,7 @@ import {
   isAllowedSocialVideoUrl,
 } from "../../lib/url-validator.js"
 import { videoFormatSelector } from "./video-format.js"
+import { ytProxyArgs } from "./yt-proxy.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -142,6 +143,10 @@ export function buildYtDlpVideoArgs(opts: {
     "--write-thumbnail",
     "--convert-thumbnails", "jpg",
     ...YT_SPOOF_ARGS,
+    // Route YouTube through the residential proxy when configured — the datacenter IP is
+    // bot-blocked (see `yt-proxy`). YouTube-scoped + no-op when unset, so non-YouTube hosts
+    // and un-provisioned environments are byte-for-byte unchanged.
+    ...ytProxyArgs(opts.url),
     "--newline",
     "--progress-template", "download:%(progress._percent_str)s",
   ]
@@ -291,7 +296,8 @@ export async function ytMetadataProbe(
   // fully sufficient — this only needs the fetch to succeed, not best quality.
   const raw = await runThroughClientLadder(url, (rung) =>
     runYtDlp(
-      ["--dump-json", "--skip-download", "--no-playlist", ...YT_SPOOF_ARGS, ...rung.extractorArgs, url],
+      // Same residential-proxy routing as the download (the probe hits the identical bot-block).
+      ["--dump-json", "--skip-download", "--no-playlist", ...YT_SPOOF_ARGS, ...ytProxyArgs(url), ...rung.extractorArgs, url],
       { timeoutMs: 15_000 },
     ),
   )
