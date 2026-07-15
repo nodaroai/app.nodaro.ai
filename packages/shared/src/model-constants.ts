@@ -96,6 +96,18 @@ export const SUNO_TEXT_MAX = 5000
 export const PROMPT_HARD_CEILING = 20000
 
 /**
+ * Ceiling for LLM TEXT-generation node inputs (the "Generate Text"/llm-chat node
+ * + AI Writer + Generate Script `systemPrompt`/`userInput`/`prompt` fields).
+ * Distinct from PROMPT_HARD_CEILING (an image/video PROMPT budget): these inputs
+ * go straight into an LLM whose context is huge (Claude 200K / GPT 128K+ /
+ * Gemini 1M tokens), so the old flat 10000 was a false blocker on pasting a
+ * document to summarize or rewrite. 100000 chars (~25K input tokens) covers
+ * long-form inputs while still bounding abuse; the OUTPUT stays capped by each
+ * route's maxTokens.
+ */
+export const LLM_TEXT_INPUT_MAX = 100_000
+
+/**
  * Per-provider maximum VIDEO prompt length (chars), VERIFIED against each model's
  * official docs.kie.ai schema (2026-06). Absent → {@link VIDEO_PROMPT_MAX} (8000)
  * default (used for models whose schema states NO limit: veo3 family, kling-3.0,
