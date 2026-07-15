@@ -11,6 +11,7 @@ import {
 import { videoFormatSelector } from "./video-format.js"
 import { ytProxyArgs, ytdlpProxyFor } from "./yt-proxy.js"
 import { startProxyAuthShim } from "./proxy-auth-shim.js"
+import { ytDataApiProbe } from "./youtube-data-api.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -283,9 +284,12 @@ function runYtDlp(args: string[], opts: { timeoutMs: number }): Promise<string> 
 
 /**
  * YouTube-ONLY metadata probe. Validates the host against the NARROW
- * `YOUTUBE_HOSTS` list BEFORE spawning (throws `YtUrlNotAllowedError`), then
- * `--dump-json --skip-download --no-playlist` with the shared spoof and a
- * 15s hard timeout. Returns null fields when yt-dlp omits them.
+ * `YOUTUBE_HOSTS` list BEFORE spawning (throws `YtUrlNotAllowedError`).
+ *
+ * Prefers the official YouTube Data API (`ytDataApiProbe`) when `YOUTUBE_API_KEY`
+ * is set — no proxy, no bot-block, no client ladder — and only falls back to the
+ * yt-dlp `--dump-json --skip-download --no-playlist` probe (shared spoof, 15s
+ * hard timeout) on an API miss. Returns null fields when the source omits them.
  */
 export async function ytMetadataProbe(
   url: string,
@@ -299,6 +303,11 @@ export async function ytMetadataProbe(
   if (!hostnameMatchesAllowlist(host, YOUTUBE_HOSTS)) {
     throw new YtUrlNotAllowedError(`host not allowed: ${host}`)
   }
+  // Official Data API first (keyed, proxy-free, bot-block-immune). Null on any
+  // miss (no key / unextractable id / API error / not found) → fall through to
+  // the yt-dlp ladder below, so behaviour is unchanged until the key is set.
+  const apiResult = await ytDataApiProbe(url)
+  if (apiResult) return apiResult
   // Same watch-page 429 exposure as the download, so run the probe through the
   // client ladder too (it's YouTube-only, so all three rungs apply). Metadata
   // (duration/title/isLive) is client-independent, so the android fallback is
