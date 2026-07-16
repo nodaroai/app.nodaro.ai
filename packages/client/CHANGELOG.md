@@ -1,5 +1,12 @@
 # @nodaro/sdk
 
+## 1.5.0
+
+### Minor Changes
+
+- 6d3c4c7: Voice adjacent ops on `client.voices`, bringing the SDK to parity with the MCP surface: adds `design()` (`POST /v1/voice-design`), `remix()` (`POST /v1/voice-remix`), `dub()` (`POST /v1/dubbing`), and `createCloneFromFile()` (`POST /v1/voice-clones`, multipart — the file counterpart to `createClone` from a URL). Also fills a param gap on the single-voice `change()`: `model`, `useSpeakerBoost`, and `seed` are now accepted (the backend already supported them). New exported types: `VoiceDesignInput`, `VoiceRemixInput`, `DubbingInput`. README `client.voices` summary corrected to reflect the full surface.
+- 66dc3d5: Two new SDK namespaces for the media/audio building blocks a Voice Changer Pro flow composes. `client.media`: `downloadVideo` (social-video import, with range/section fetch), `saveToStorage` (copy a URL into storage), `trimVideo`, `trimAudio`, and `videoMetadata` (probe duration/dimensions without downloading). `client.audio`: `separate` (Demucs stems), `isolate` (denoise/voice-isolate), `applyFx` (reverb/echo/telephone/megaphone), `mix` (layer tracks), `adjustVolume`, and `combine` (concatenate segments). Each generation op returns a job id to poll; `videoMetadata` is a direct read. New exported `VideoMetadata` type.
+
 ## 1.4.0
 
 ### Minor Changes
