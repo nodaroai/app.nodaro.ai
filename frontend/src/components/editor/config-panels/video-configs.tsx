@@ -39,7 +39,7 @@ import type {
   VideoAnalysisNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
@@ -4410,6 +4410,20 @@ function formatProbedDuration(sec: number): string {
 export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysisNodeData>) {
   // Show the quality tier; a legacy raw model id falls back to the default tier.
   const tier = isVideoAnalysisTier(data.llmModel ?? "") ? (data.llmModel as string) : DEFAULT_VIDEO_ANALYSIS_TIER
+  // FAIL-SAFE write-back (Provider Enum Sync pitfall 12b): a pre-tier node
+  // stores a RAW model id ("gemini-3-flash"). Without this, the dropdown
+  // DISPLAYS the default tier ("Pro") while the run path honors the stored raw
+  // value — display lies, data wins (observed: user saw Pro, flash executed).
+  // Reverse-map the raw id to its true tier — derived from VIDEO_ANALYSIS_TIERS,
+  // never a hardcoded list — so the UI tells the truth; unknown ids snap to the
+  // default tier.
+  useEffect(() => {
+    const v = data.llmModel
+    if (!v || isVideoAnalysisTier(v)) return
+    const trueTier =
+      VIDEO_ANALYSIS_TIER_ORDER.find((t) => VIDEO_ANALYSIS_TIERS[t] === v) ?? DEFAULT_VIDEO_ANALYSIS_TIER
+    onUpdate({ llmModel: trueTier })
+  }, [data.llmModel, onUpdate])
   const url = data.youtubeUrl ?? ""
   const [probeError, setProbeError] = useState<string | undefined>(undefined)
   const [probing, setProbing] = useState(false)

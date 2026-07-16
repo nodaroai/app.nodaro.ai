@@ -9,6 +9,7 @@ import { spawn } from "node:child_process"
 import {
   ytMetadataProbe,
   buildYtDlpVideoArgs,
+  sectionFormatSelector,
   resolveYtDlpBin,
   probeStreams,
   downloadYouTubeVideo,
@@ -107,14 +108,18 @@ describe("buildYtDlpVideoArgs", () => {
     expect(uncapped).not.toContain("height")
   })
 
-  it("composes maxHeight WITH a section — capped format AND the padded --download-sections", () => {
+  it("a section uses the PROGRESSIVE single-stream format (not the HD two-stream selector)", () => {
     const args = buildYtDlpVideoArgs({
       url: "https://youtu.be/x",
       outPath: "/tmp/x.mp4",
       maxHeight: 480,
       section: { startSec: 10, endSec: 20 },
     })
-    expect(formatOf(args)).toBe(videoFormatSelector(480))
+    // Progressive selector (single stream) — the HD two-stream DASH fetch stalls
+    // through a proxy. Height cap still composes in.
+    expect(formatOf(args)).toBe(sectionFormatSelector(480))
+    expect(formatOf(args)).not.toBe(videoFormatSelector(480))
+    expect(formatOf(args)).not.toContain("+") // no "video+audio" merge — one stream
     expect(args[args.indexOf("--download-sections") + 1]).toBe("*7-23")
   })
 
@@ -134,10 +139,10 @@ describe("buildYtDlpVideoArgs", () => {
 })
 
 /**
- * Section downloads: `--download-sections "*start-end"` with a ±3s pad —
- * yt-dlp cuts at keyframes, so the fetched range is imprecise; the pad
- * guarantees the requested range survives, and the CLIENT does the frame-exact
- * trim on the small file afterwards.
+ * Section downloads: a SINGLE progressive stream (the HD two-stream fetch stalls
+ * through a proxy) + `--download-sections "*start-end"` (±3s keyframe pad) +
+ * `--force-keyframes-at-cuts` for an accurate cut. Only the range's bytes are
+ * fetched — an efficient trim, no whole-video download.
  */
 describe("buildYtDlpVideoArgs — section downloads", () => {
   const base = { url: "https://youtu.be/x", outPath: "/tmp/x.mp4" }
@@ -154,8 +159,14 @@ describe("buildYtDlpVideoArgs — section downloads", () => {
     expect(args[args.indexOf("--download-sections") + 1]).toBe("*0-8")
   })
 
-  it("never adds --force-keyframes-at-cuts — that re-encodes server-side", () => {
+  it("adds --force-keyframes-at-cuts for an accurate section cut", () => {
     const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 10, endSec: 20 } })
+    expect(args).toContain("--force-keyframes-at-cuts")
+  })
+
+  it("a WHOLE download (no section) never adds --download-sections or --force-keyframes-at-cuts", () => {
+    const args = buildYtDlpVideoArgs(base)
+    expect(args).not.toContain("--download-sections")
     expect(args).not.toContain("--force-keyframes-at-cuts")
   })
 
@@ -183,6 +194,23 @@ describe("buildYtDlpVideoArgs — section downloads", () => {
 function formatOf(args: string[]): string {
   return args[args.indexOf("--format") + 1]
 }
+
+describe("sectionFormatSelector", () => {
+  it("selects a SINGLE combined stream — no `+` merge (two-stream fetch stalls through a proxy)", () => {
+    for (const sel of [sectionFormatSelector(), sectionFormatSelector(720)]) {
+      expect(sel).not.toContain("+")
+      // every branch is a `b`/`b[...]` combined selector, never `bv*`/`ba`
+      for (const branch of sel.split("/")) expect(branch).toMatch(/^b(\[|$)/)
+    }
+  })
+
+  it("composes the height cap into the mp4 branches", () => {
+    expect(sectionFormatSelector(720)).toContain("b[ext=mp4][height<=720]")
+    expect(sectionFormatSelector()).not.toContain("height")
+    // always keeps uncapped fallbacks so a video only offered above the cap still imports
+    expect(sectionFormatSelector(720).split("/").slice(-1)[0]).toBe("b")
+  })
+})
 
 describe("probeStreams", () => {
   beforeEach(() => vi.mocked(spawn).mockReset())
