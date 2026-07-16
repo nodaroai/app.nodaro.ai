@@ -501,6 +501,11 @@ export function buildToolkit(): PluginToolkit {
             system: req.system ?? "",
             messages: [{ role: "user", content: req.prompt }],
             maxTokens: req.maxTokens,
+            // Forward pinned sampling (video-analysis grader pins temperature 0 for
+            // a deterministic judge). deriveParams gates on `!== undefined`, so 0
+            // survives; an unset field stays vendor-default as before.
+            temperature: req.temperature,
+            topP: req.topP,
           },
           schema as ZodType<T>,
           opts,

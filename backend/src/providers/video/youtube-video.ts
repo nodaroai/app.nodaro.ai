@@ -9,7 +9,7 @@ import {
   isAllowedSocialVideoUrl,
 } from "../../lib/url-validator.js"
 import { videoFormatSelector } from "./video-format.js"
-import { ytProxyArgs, ytdlpProxyFor } from "./yt-proxy.js"
+import { ytProxyArgs, resolveProxyChain } from "./yt-proxy.js"
 import { startProxyAuthShim } from "./proxy-auth-shim.js"
 import { ytDataApiProbe } from "./youtube-data-api.js"
 
@@ -149,6 +149,12 @@ export function buildYtDlpVideoArgs(opts: {
     "--no-playlist",
     "--no-check-certificates",
     "--merge-output-format", "mp4",
+    // Overwrite (implies --no-continue): proxy failover re-attempts the download
+    // from a DIFFERENT IP, and the media URLs are IP-locked — resuming a `.part`
+    // fetched through the previous proxy would corrupt the file. Force a clean
+    // fetch each attempt. Harmless for the common single-attempt case (the output
+    // path is a fresh per-job temp that never pre-exists).
+    "--force-overwrites",
     "--write-thumbnail",
     "--convert-thumbnails", "jpg",
     ...YT_SPOOF_ARGS,
@@ -549,67 +555,78 @@ export async function downloadYouTubeVideo(opts: {
     throw new YtUrlNotAllowedError(`host not allowed: ${url}`)
   }
 
-  // A section (trim) download fetches the media with a SEPARATE ffmpeg process
-  // (yt-dlp's FFmpegFD), which can't authenticate to the residential proxy: its
-  // no-credentials first CONNECT dies against the proxy ("ffmpeg exited with
-  // code 187") where the native whole-video downloader (proactive auth)
-  // succeeds. Route the section path through a localhost shim that injects the
-  // proxy credentials for ffmpeg (see proxy-auth-shim). Non-section downloads,
-  // and any path without a proxy configured, are byte-for-byte unchanged.
-  const upstreamProxy = section ? ytdlpProxyFor(url) : undefined
-  const shim = upstreamProxy ? await startProxyAuthShim(upstreamProxy) : undefined
+  // The ordered proxy chain to try: each YTDLP_PROXY_POOL tier then the legacy
+  // YTDLP_PROXY fallback (see yt-proxy). `[]` for non-YouTube / unconfigured — we
+  // then run ONE attempt with no proxy, byte-for-byte the pre-pool behaviour.
+  const chain = resolveProxyChain(url)
+  const attempts: (string | null)[] = chain.length > 0 ? chain : [null]
 
-  try {
-    const args = buildYtDlpVideoArgs({
-      url,
-      outPath,
-      maxFilesizeBytes,
-      maxHeight,
-      section,
-      proxyArgs: shim ? ["--proxy", shim.url] : undefined,
-    })
-
-    // YouTube 429s the default (web) client on the watch page from datacenter IPs,
-    // so retry web → tv → android (the android rung never hits the watch page).
-    // Non-YouTube hosts get a single unchanged attempt. The last rung's error
-    // propagates verbatim — the route's SSE and VCP's mapYtdlpError depend on it.
-    await runThroughClientLadder(url, (rung) =>
-      spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
-    )
-
-    const actualPath = await findDownloadedFile(outPath)
-    const stat = await fs.stat(actualPath)
-    if (stat.size === 0) throw new Error("Downloaded video file is empty")
-
-    const { videoCodec, hasAudio } = await probeStreams(actualPath)
-
-    // Import callers (requireAudio) fail on a silent download — a voice changer
-    // can't use it, and it's the signal of a degraded session (bot-block →
-    // android → SABR strips audio). Throws before the re-encode, so no silent
-    // file is ever imported. General callers (no requireAudio) just warn: a
-    // silent clip is a legitimate download for them, but every audio consumer
-    // downstream would otherwise die naming ffmpeg instead of the cause.
-    assertAudioPresent(hasAudio, requireAudio)
-    if (hasAudio === false) {
-      console.warn(`[download-video] ${url} produced a video with NO audio stream`)
+  // Try each proxy in turn: exhaust the (cheap, main) tier before escalating to
+  // the fallback. First success wins; on failure advance to the next proxy. When
+  // ALL fail, the LAST proxy's error propagates verbatim — the route's SSE and
+  // VCP's mapYtdlpError depend on that message shape.
+  let lastError: unknown = new Error("download not attempted")
+  let downloaded = false
+  for (let i = 0; i < attempts.length && !downloaded; i++) {
+    const proxy = attempts[i]
+    // A section (trim) download fetches the media with a SEPARATE ffmpeg process
+    // (yt-dlp's FFmpegFD), which can't authenticate to the proxy: its no-creds
+    // first CONNECT dies ("ffmpeg exited with code 187") where the native
+    // whole-video downloader (proactive auth) succeeds. Route the section path
+    // through a localhost shim that injects THIS proxy's credentials for ffmpeg
+    // (see proxy-auth-shim). Non-section uses the proxy directly; no proxy → none.
+    const shim = section && proxy ? await startProxyAuthShim(proxy) : undefined
+    try {
+      const proxyArgs = proxy ? ["--proxy", shim ? shim.url : proxy] : []
+      const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, maxHeight, section, proxyArgs })
+      // YouTube 429s the default (web) client on the watch page from datacenter
+      // IPs, so within each proxy we still retry web → tv → android.
+      await runThroughClientLadder(url, (rung) =>
+        spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
+      )
+      downloaded = true
+    } catch (err) {
+      lastError = err
+      if (i < attempts.length - 1) {
+        const firstLine = (err instanceof Error ? err.message : String(err)).split("\n")[0]
+        console.log(`[download-video] proxy ${i + 1}/${attempts.length} failed (${firstLine}); trying next proxy`)
+      }
+    } finally {
+      // Tear the shim down whether the attempt succeeded or threw — it holds a
+      // listening socket and any live tunnels open otherwise.
+      await shim?.close()
     }
+  }
+  if (!downloaded) throw lastError
 
-    // Re-encode to h264 if needed for downstream compatibility. A null codec
-    // means the probe failed — re-encode anyway; normalizing is the safe
-    // fallback. Pass hasAudio so a legit silent video re-encodes video-only
-    // (`-an`) instead of aborting on `-c:a aac` (exit 234).
-    if (videoCodec !== "h264") {
-      onProcessingStart?.()
-      const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
-      await reencodeToH264(actualPath, tmpPath, hasAudio)
-      await fs.unlink(actualPath).catch(() => {})
-      await fs.rename(tmpPath, outPath)
-    } else if (actualPath !== outPath) {
-      await fs.rename(actualPath, outPath)
-    }
-  } finally {
-    // Tear the shim down whether the download succeeded or threw — it holds a
-    // listening socket and any live tunnels open otherwise.
-    await shim?.close()
+  const actualPath = await findDownloadedFile(outPath)
+  const stat = await fs.stat(actualPath)
+  if (stat.size === 0) throw new Error("Downloaded video file is empty")
+
+  const { videoCodec, hasAudio } = await probeStreams(actualPath)
+
+  // Import callers (requireAudio) fail on a silent download — a voice changer
+  // can't use it, and it's the signal of a degraded session (bot-block → android
+  // → SABR strips audio). Throws before the re-encode, so no silent file is ever
+  // imported. General callers (no requireAudio) just warn: a silent clip is a
+  // legitimate download for them, but every audio consumer downstream would
+  // otherwise die naming ffmpeg instead of the cause.
+  assertAudioPresent(hasAudio, requireAudio)
+  if (hasAudio === false) {
+    console.warn(`[download-video] ${url} produced a video with NO audio stream`)
+  }
+
+  // Re-encode to h264 if needed for downstream compatibility. A null codec means
+  // the probe failed — re-encode anyway; normalizing is the safe fallback. Pass
+  // hasAudio so a legit silent video re-encodes video-only (`-an`) instead of
+  // aborting on `-c:a aac` (exit 234).
+  if (videoCodec !== "h264") {
+    onProcessingStart?.()
+    const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
+    await reencodeToH264(actualPath, tmpPath, hasAudio)
+    await fs.unlink(actualPath).catch(() => {})
+    await fs.rename(tmpPath, outPath)
+  } else if (actualPath !== outPath) {
+    await fs.rename(actualPath, outPath)
   }
 }

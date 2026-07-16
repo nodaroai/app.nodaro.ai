@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -159,7 +159,7 @@ describe("buildYtDlpVideoArgs — section downloads", () => {
     expect(args).not.toContain("--force-keyframes-at-cuts")
   })
 
-  it("without a section, args are byte-identical to the pre-section behavior", () => {
+  it("without a section, args are the stable base list (incl. --force-overwrites for clean retries)", () => {
     const args = buildYtDlpVideoArgs(base)
     expect(args).toEqual([
       "https://youtu.be/x",
@@ -168,6 +168,7 @@ describe("buildYtDlpVideoArgs — section downloads", () => {
       "--no-playlist",
       "--no-check-certificates",
       "--merge-output-format", "mp4",
+      "--force-overwrites",
       "--write-thumbnail",
       "--convert-thumbnails", "jpg",
       "--add-header", "referer:youtube.com",
@@ -411,6 +412,46 @@ describe("downloadYouTubeVideo — client ladder wiring", () => {
     ).rejects.toThrow("tiktok boom")
     expect(vi.mocked(spawn)).toHaveBeenCalledTimes(1)
     expect(argsOfCall(0).join(" ")).not.toContain("player_client")
+  })
+})
+
+/**
+ * Proxy-pool failover: a download tries each proxy in the resolved chain
+ * (YTDLP_PROXY_POOL tiers, then the legacy fallback), running the full client
+ * ladder per proxy, until one succeeds — then it stops.
+ */
+describe("downloadYouTubeVideo — proxy pool failover", () => {
+  beforeEach(() => vi.mocked(spawn).mockReset())
+  afterEach(() => {
+    delete process.env.YTDLP_PROXY_POOL
+    delete process.env.YTDLP_PROXY
+  })
+  const argsOfCall = (call: number) => vi.mocked(spawn).mock.calls[call][1] as string[]
+
+  it("exhausts the main tier then the fallback (2 proxies × 3 rungs), last error propagates", async () => {
+    process.env.YTDLP_PROXY_POOL = "http://u:p@main:1 | http://u:p@fallback:2"
+    for (let i = 0; i < 6; i++) {
+      vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ stderr: `ERROR: attempt ${i} down`, code: 1 }) as never)
+    }
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.youtube.com/watch?v=x", outPath: "/tmp/x.mp4" }),
+    ).rejects.toThrow("attempt 5 down") // the LAST proxy's last rung
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(6)
+    for (const c of [0, 1, 2]) expect(argsOfCall(c)).toContain("http://u:p@main:1")
+    for (const c of [3, 4, 5]) expect(argsOfCall(c)).toContain("http://u:p@fallback:2")
+  })
+
+  it("stops at the first proxy when its download succeeds — the fallback is never spawned", async () => {
+    process.env.YTDLP_PROXY_POOL = "http://u:p@main:1 | http://u:p@fallback:2"
+    // Rung 1 (web) on the main proxy succeeds → the ladder returns and the loop
+    // breaks; findDownloadedFile then fails (no real file), but crucially the
+    // fallback proxy is never tried.
+    vi.mocked(spawn).mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.youtube.com/watch?v=x", outPath: "/tmp/x.mp4" }),
+    ).rejects.toThrow(/did not produce an output file/i)
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(1)
+    expect(argsOfCall(0)).toContain("http://u:p@main:1")
   })
 })
 
