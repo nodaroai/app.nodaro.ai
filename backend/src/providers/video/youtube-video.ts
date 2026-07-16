@@ -105,28 +105,41 @@ function deriveOutputTemplate(outPath: string): string {
   return outPath.replace(/\.[^./\\]+$/, "") + ".%(ext)s"
 }
 
-/** Seconds of slack added on each side of a requested section (see below). */
+/** Seconds of slack added on each side of a requested section (keyframe pad). */
 export const SECTION_PAD_SEC = 3
+
+/**
+ * The `--format` selector for a SECTION (trim) download: a SINGLE combined
+ * (progressive) stream, NOT the HD two-stream DASH selector.
+ *
+ * WHY (measured): a section download fetches the media with a separate ffmpeg
+ * process, and ffmpeg fetching the TWO separate DASH streams (video + audio) of
+ * an HD format concurrently THROUGH AN HTTP PROXY stalls indefinitely — the exact
+ * "trim hangs forever" bug. A SINGLE progressive stream (YouTube format 22=720p
+ * or 18=360p, both muxed h264/aac mp4) fetches fine through the same proxy.
+ * Progressive tops out at 720p — there is no 1080p muxed stream — which is the
+ * accepted quality trade for an EFFICIENT trim (only the range's bytes, no
+ * whole-video download). `b`/`best` already means "best PRE-MUXED format", so
+ * these branches never select a video-only stream.
+ */
+export function sectionFormatSelector(maxHeight?: number): string {
+  const h = maxHeight ? `[height<=${maxHeight}]` : ""
+  return [`b[ext=mp4]${h}`, `b${h}`, "b[ext=mp4]", "b"].join("/")
+}
 
 /**
  * yt-dlp video download args. Exported for testability. Adds
  * `--max-filesize <N>M` only when `maxFilesizeBytes` is provided (the
  * video-analysis path caps download size; the download-video route does not).
  *
- * `maxHeight` (optional) caps the `--format` selection to `<=maxHeight` px tall
- * via `videoFormatSelector` — ABSENT leaves the selector byte-identical to the
- * uncapped default. The selector lives in the BASE args, so every client-ladder
- * rung (web/tv/android) shares the same cap; the caller (download-video route)
- * is responsible for range-clamping the value.
+ * `maxHeight` (optional) caps the `--format` selection to `<=maxHeight` px tall —
+ * ABSENT leaves the whole-video selector byte-identical to the uncapped default.
  *
- * `section` (optional) adds `--download-sections "*start-end"` with a
- * ±SECTION_PAD_SEC pad on both sides: `--download-sections` cuts at KEYFRAMES,
- * so the fetched range is imprecise — the client performs the frame-exact trim
- * afterwards on the (small) result, and the pad guarantees the requested range
- * survives the keyframe rounding. Clamped at 0 on the left; overshooting the
- * video's end is fine (yt-dlp clamps). Deliberately NO
- * `--force-keyframes-at-cuts`: that re-encodes server-side, and precision is
- * the client's second-stage cut, not ours.
+ * `section` (optional) fetches ONLY that time range via `--download-sections`
+ * (±SECTION_PAD_SEC keyframe pad) with `--force-keyframes-at-cuts` for accuracy.
+ * A section forces `sectionFormatSelector` (single progressive stream) instead of
+ * the HD two-stream selector, because the two-stream fetch stalls through a proxy
+ * (see sectionFormatSelector). Efficient: only the range's bytes are downloaded.
  */
 export function buildYtDlpVideoArgs(opts: {
   url: string
@@ -135,16 +148,16 @@ export function buildYtDlpVideoArgs(opts: {
   maxHeight?: number
   section?: { startSec: number; endSec: number }
   /**
-   * Override the `--proxy` args. Defaults to `ytProxyArgs(url)` (the direct
-   * residential proxy). The section-download path passes the auth-injecting
-   * shim's credential-free localhost url here so ffmpeg's fetch can authenticate
-   * (see `downloadYouTubeVideo` / `proxy-auth-shim`).
+   * The `--proxy` args for this attempt — one `["--proxy", url]` from the
+   * download's proxy chain, or `[]` for no proxy. For a SECTION download this is
+   * the auth-injecting shim's localhost url (ffmpeg's fetch needs it); the loop
+   * passes each chain proxy in turn. Defaults to `ytProxyArgs(url)`.
    */
   proxyArgs?: string[]
 }): string[] {
   const args = [
     opts.url,
-    "--format", videoFormatSelector(opts.maxHeight),
+    "--format", opts.section ? sectionFormatSelector(opts.maxHeight) : videoFormatSelector(opts.maxHeight),
     "--output", deriveOutputTemplate(opts.outPath),
     "--no-playlist",
     "--no-check-certificates",
@@ -158,10 +171,10 @@ export function buildYtDlpVideoArgs(opts: {
     "--write-thumbnail",
     "--convert-thumbnails", "jpg",
     ...YT_SPOOF_ARGS,
-    // Route YouTube through the residential proxy when configured — the datacenter IP is
-    // bot-blocked (see `yt-proxy`). YouTube-scoped + no-op when unset, so non-YouTube hosts
-    // and un-provisioned environments are byte-for-byte unchanged. `proxyArgs` (when the
-    // caller supplies it) swaps in the auth-injecting shim for the section path.
+    // Route YouTube through the residential/ISP proxy when configured — the
+    // datacenter IP is bot-blocked (see `yt-proxy`). `proxyArgs` carries the
+    // chosen proxy for this attempt; `[]` (non-YouTube / unconfigured) leaves the
+    // download proxy-free, byte-for-byte unchanged.
     ...(opts.proxyArgs ?? ytProxyArgs(opts.url)),
     "--newline",
     "--progress-template", "download:%(progress._percent_str)s",
@@ -173,9 +186,9 @@ export function buildYtDlpVideoArgs(opts: {
   if (opts.section) {
     const start = Math.max(0, opts.section.startSec - SECTION_PAD_SEC)
     const end = opts.section.endSec + SECTION_PAD_SEC
-    // These live in the BASE args, so every client-ladder rung (web/tv/android)
-    // inherits the section — a rung retry must never fall back to a full fetch.
-    args.push("--download-sections", `*${start}-${end}`)
+    // `--force-keyframes-at-cuts` re-encodes only around the cut points for an
+    // accurate range (the section is small, so this is fast).
+    args.push("--download-sections", `*${start}-${end}`, "--force-keyframes-at-cuts")
   }
   return args
 }
@@ -469,12 +482,39 @@ export function reencodeToH264(
  * logic that used to live inline in `downloadYouTubeVideo`; it was extracted only
  * so the client ladder can call it once per rung.
  */
+/**
+ * Idle (no-output) watchdog for a download: a healthy yt-dlp/ffmpeg emits progress
+ * (`download:NN%` or ffmpeg `frame=…`) sub-second, so this only fires on a genuine
+ * STALL — most importantly the section-download-through-a-proxy hang, which goes
+ * silent right after "Destination". Idle-based (reset on any output), NOT a total
+ * cap, so a legitimately long whole-video download never trips it.
+ */
+const DOWNLOAD_STALL_TIMEOUT_MS = 90_000
+
 function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
     let stderrBuf = ""
+    let settled = false
+    let watchdog: ReturnType<typeof setTimeout>
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(watchdog)
+      fn()
+    }
+    // Reset the idle timer on every byte of output; fire only after silence.
+    const kick = () => {
+      clearTimeout(watchdog)
+      watchdog = setTimeout(() => {
+        proc.kill("SIGKILL")
+        finish(() => reject(new Error(`yt-dlp stalled (no output for ${DOWNLOAD_STALL_TIMEOUT_MS / 1000}s)`)))
+      }, DOWNLOAD_STALL_TIMEOUT_MS)
+    }
+    kick()
 
     proc.stdout.on("data", (chunk: Buffer) => {
+      kick()
       const lines = chunk.toString().split("\n")
       for (const line of lines) {
         const trimmed = line.trim()
@@ -488,12 +528,14 @@ function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void):
       }
     })
 
-    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
-    proc.on("error", (err) => reject(err))
-    proc.on("close", (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(stderrBuf.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
-    })
+    proc.stderr.on("data", (chunk: Buffer) => { kick(); stderrBuf += chunk.toString() })
+    proc.on("error", (err) => finish(() => reject(err)))
+    proc.on("close", (code) =>
+      finish(() => {
+        if (code === 0) resolve()
+        else reject(new Error(stderrBuf.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
+      }),
+    )
   })
 }
 
