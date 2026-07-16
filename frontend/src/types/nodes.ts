@@ -4338,6 +4338,10 @@ export type VideoAnalysisNodeData = {
   // Analysis config
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
+  // best-of-N result strategy: "choose" (judge picks the best roll — default) or
+  // "combine" (judge picks, then a grounded refine pass folds video-verified
+  // details from the losing rolls into the winner).
+  selectionMode?: "choose" | "combine"
   analysisFocus?: string
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"

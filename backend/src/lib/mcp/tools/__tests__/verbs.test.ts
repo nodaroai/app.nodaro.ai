@@ -1205,6 +1205,7 @@ describe("video_analysis verb", () => {
     const result = await callTool(server, "video_analysis", {
       video_url: "https://a/clip.mp4",
       llm_model: "pro",
+      selection_mode: "combine",
       analysis_focus: "focus on the product shots",
     })
     expect(result.isError).toBeUndefined()
@@ -1212,6 +1213,8 @@ describe("video_analysis verb", () => {
     expect(received.body?.videoUrl).toBe("https://a/clip.mp4")
     // Verb forwards the quality tier; the route resolves tier→internal model.
     expect(received.body?.llmModel).toBe("pro")
+    // Best-of-N strategy forwards snake→camel (audit gap: was untested).
+    expect(received.body?.selectionMode).toBe("combine")
     expect(received.body?.analysisFocus).toBe("focus on the product shots")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")

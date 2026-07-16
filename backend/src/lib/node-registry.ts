@@ -137,7 +137,10 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       fields: [
         { key: "videoUrl", type: "string" },
         { key: "youtubeUrl", type: "string" },
-        { key: "llmModel", type: "select", options: ["gemini-3-flash", "gemini-3.1-pro"] },
+        // Public tiers, never vendor model ids (raw ids remain accepted for
+        // back-compat but are not advertised).
+        { key: "llmModel", type: "select", options: ["fast", "pro"] },
+        { key: "selectionMode", type: "select", options: ["choose", "combine"] },
         { key: "analysisFocus", type: "string" },
       ],
     },

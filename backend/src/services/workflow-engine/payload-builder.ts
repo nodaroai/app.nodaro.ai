@@ -2956,6 +2956,9 @@ export function buildPayload(
         videoUrl,
         youtubeUrl,
         llmModel: model,
+        // best-of-N strategy — fail-safe narrowed: anything but the literal
+        // "combine" is omitted (worker defaults to "choose").
+        selectionMode: data.selectionMode === "combine" ? "combine" : undefined,
         analysisFocus: data.analysisFocus,
         reservedCreditId: creditId,
         // nodeId echoes the route's payload key (node.id == the canvas node id the
