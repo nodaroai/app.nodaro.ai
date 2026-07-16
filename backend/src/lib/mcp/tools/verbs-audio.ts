@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
+import { config, hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -572,9 +572,41 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── voice_changer_pro ──
-  // Detect each speaker and recast each to the voice at its position
-  // (first-appearance order). Cloud-only.
+  // ── list_voices ──
+  // Enumerate the premade voice catalog so an agent can pick a voice_id for
+  // generate_speech / voice_changer / voice_changer_pro — all of which require a
+  // voice id, and there was previously no way to discover them. Read-only; the
+  // premade catalog is public (no user auth needed), so a plain GET inject.
   server.registerTool(
+    "list_voices",
+    {
+      title: "List Voices",
+      description:
+        "List the available premade voices (id, name, and any gender / accent / " +
+        "description metadata) so you can pick a voice_id for generate_speech, " +
+        "voice_changer, or voice_changer_pro — all of which require a voice id. " +
+        "Returns the catalog as JSON; this is a read, not a job.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      const res = await fastify.inject({
+        method: "GET",
+        url: "/v1/voices",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const parsed = JSON.parse(res.body) as { voices?: unknown }
+      return { content: [{ type: "text" as const, text: JSON.stringify(parsed.voices ?? [], null, 2) }] }
+    },
+  )
+
+  // Detect each speaker and recast each to the voice at its position (first-
+  // appearance order). CLOUD-ONLY: the /v1/voice-changer-pro route ships in the
+  // born-private cloud-plugins package (mounted only under hasCredits()), so gate
+  // registration to match — otherwise the tool would list off-cloud and 404 on
+  // dispatch (the same guard server.ts applies to Film Director / Pipelines).
+  if (hasCredits()) server.registerTool(
     "voice_changer_pro",
     {
       title: "Voice Changer Pro",
