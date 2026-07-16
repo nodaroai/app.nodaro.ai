@@ -81,6 +81,9 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // EDITION=cloud (see the module-level note above).
     expect(names.has("list_voices")).toBe(true)
     expect(names.has("voice_changer_pro")).toBe(true)
+    // The interactive VCP flow tools — also hasCredits()-gated (cloud).
+    expect(names.has("voice_changer_pro_analyze")).toBe(true)
+    expect(names.has("voice_changer_pro_export")).toBe(true)
     // character / location / object / creature
     expect(names.has("generate_character")).toBe(true)
     expect(names.has("generate_location")).toBe(true)

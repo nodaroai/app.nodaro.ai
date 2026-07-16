@@ -511,7 +511,9 @@ below are the shared pricing formula's current outputs:
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Accepts `text`, `voice_description`, `model` (default `eleven_ttv_v3`; `eleven_multilingual_ttv_v2` is the legacy model), `loudness`, `guidance_scale`, `seed`, `quality`, `should_enhance`. Returns a `voice_id`. |
 | `voice_changer` | Transform the speaker identity in an audio clip to a target voice. |
-| `voice_changer_pro` | Detect each speaker in a multi-speaker clip and recast each to a chosen voice, preserving words and timing (Cloud only). A `null` entry in `ordered_voices` is a keep-slot — that speaker keeps their original voice while later speakers are still recast. |
+| `voice_changer_pro` | Detect each speaker in a multi-speaker clip and recast each to a chosen voice, preserving words and timing (Cloud only). A `null` entry in `ordered_voices` is a keep-slot — that speaker keeps their original voice while later speakers are still recast. `output: "stems"` returns the dry per-track stems for interactive mixing instead of a finished video. |
+| `voice_changer_pro_analyze` | Detect the speakers in a clip WITHOUT recasting (Cloud only) — the first step of the interactive flow. The job output carries the separated stems + the detected speaker list (id, segments, first-appearance, word count, snippet) + language; feed it back into `voice_changer_pro` to skip re-detection. |
+| `voice_changer_pro_export` | Render a finished video from a mixed set of stems (Cloud only) — the last step of the interactive flow. Provide the source video + the `tracks` (stem url, `gain`, `muted`, `kind`); `voice_fx` lands on the voice tracks at render time. Stream-copied (never re-encoded). |
 | `voice_remix` | Re-stylize or re-arrange an existing audio clip. |
 | `dubbing` | Dub a video or audio clip into a target language with voice preservation. |
 | `transcribe` | Speech-to-text transcription. Returns a transcript + optional timestamps. |
