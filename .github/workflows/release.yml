@@ -105,11 +105,17 @@ jobs:
           # Pin + verify the gitleaks release artifact (supply-chain integrity):
           # sha256 from the official gitleaks_${VER}_checksums.txt. `set -e` fails
           # the step if the download is tampered/corrupted before it is ever run.
+          # Extract OUTSIDE the working tree: the changesets action's fallback
+          # version-PR path (stray changeset on the mirror's main) runs `git add .`
+          # right after this step, so a binary left in CWD gets committed to
+          # changeset-release/main (2026-07-16: public PR #7 carried gitleaks +
+          # gitleaks.tar.gz that way).
           SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          curl -sSL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
-          echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -
-          tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks detect --no-banner --redact --source .
+          GLDIR=$(mktemp -d)
+          curl -sSL -o "$GLDIR/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
+          echo "${SHA256}  $GLDIR/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$GLDIR/gitleaks.tar.gz" -C "$GLDIR" gitleaks
+          "$GLDIR/gitleaks" detect --no-banner --redact --source .
       - name: Publish unpublished versions
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0

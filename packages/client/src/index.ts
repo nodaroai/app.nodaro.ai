@@ -45,6 +45,8 @@ export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
+export { MediaResource } from "./resources/media.js"
+export { AudioResource } from "./resources/audio.js"
 export { CreditsResource } from "./resources/credits.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
@@ -286,7 +288,11 @@ export type {
   VcpAnalysisSpeaker,
   VcpExportInput,
   VcpExportTrack,
+  VoiceDesignInput,
+  VoiceRemixInput,
+  DubbingInput,
 } from "./resources/voices.js"
+export type { VideoMetadata } from "./resources/media.js"
 
 export type {
   UserBalance,

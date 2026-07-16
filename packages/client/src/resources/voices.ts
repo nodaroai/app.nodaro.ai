@@ -80,10 +80,16 @@ export class VoicesResource {
     voiceId: string
     audioUrl?: string
     videoUrl?: string
+    /** Speech-to-speech model id. Defaults to the server-configured default when omitted. */
+    model?: string
     stability?: number
     similarityBoost?: number
     /** Style exaggeration (0–1). Default 0; >0 amplifies delivery at the cost of latency/stability. */
     style?: number
+    /** ElevenLabs speaker boost — sharpens fidelity to the target speaker (small latency cost). */
+    useSpeakerBoost?: boolean
+    /** Deterministic speech-to-speech seed (integer 0–4294967295) for reproducible output. Omit for random. */
+    seed?: number
     removeBackgroundNoise?: boolean
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer", { body: input })
@@ -160,6 +166,64 @@ export class VoicesResource {
    */
   exportMix(input: VcpExportInput): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer-pro/export", { body: input })
+  }
+
+  /**
+   * Design a brand-new synthetic voice from a text description
+   * (`POST /v1/voice-design`) — ElevenLabs text-to-voice. `text` (100–1000 chars)
+   * is a preview line spoken in the designed voice; `voiceDescription` describes
+   * the voice to create. Costs credits and runs async — poll `jobs.get(jobId)`
+   * for the preview + the reusable voice id.
+   */
+  design(input: VoiceDesignInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-design", { body: input })
+  }
+
+  /**
+   * Generate speech in a voice described in natural language, without cloning
+   * (`POST /v1/voice-remix`). `text` (1–5000 chars) is spoken in a voice matching
+   * `voiceDescription`. Costs credits and runs async — poll `jobs.get(jobId)`.
+   */
+  remix(input: VoiceRemixInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-remix", { body: input })
+  }
+
+  /**
+   * Dub an audio clip into another language while preserving each speaker's voice
+   * (`POST /v1/dubbing`). `targetLanguage` is an ISO code (e.g. `"es"`, `"fr"`);
+   * `sourceLanguage` is auto-detected when omitted. Costs credits and runs async
+   * — poll `jobs.get(jobId)`.
+   */
+  dub(input: DubbingInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/dubbing", { body: input })
+  }
+
+  /**
+   * Clone a voice from an audio FILE you hold in memory
+   * (`POST /v1/voice-clones`, multipart) — the counterpart to
+   * {@link VoicesResource.createClone}, which clones from an already-uploaded
+   * URL. Pass the raw audio `file` (a `Blob`/`File` in the browser, or a
+   * `Uint8Array`/`Buffer` in Node) plus a `name`. Costs credits. Returns the new
+   * {@link VoiceClone} (`elevenlabsVoiceId` is the id to recast/synthesize with).
+   */
+  createCloneFromFile(input: {
+    name: string
+    file: Blob | Uint8Array | ArrayBuffer
+    /** File name for the upload part (default `sample`). */
+    filename?: string
+    /** MIME type when `file` is a raw buffer (default `audio/mpeg`). */
+    contentType?: string
+  }): Promise<VoiceClone> {
+    const form = new FormData()
+    // Append the name field BEFORE the file so the route sees it in `fields`
+    // (fastify-multipart's `req.file()` exposes fields parsed up to the file).
+    form.append("name", input.name)
+    const blob =
+      input.file instanceof Blob
+        ? input.file
+        : new Blob([input.file as BlobPart], { type: input.contentType ?? "audio/mpeg" })
+    form.append("file", blob, input.filename ?? "sample")
+    return this.client.request<VoiceClone>("POST", "/v1/voice-clones", { body: form })
   }
 }
 
@@ -347,4 +411,52 @@ export interface VcpExportInput {
    * export. Same shape as {@link VoiceChangerProInput.voiceFx}.
    */
   voiceFx?: VoiceChangerProInput["voiceFx"]
+}
+
+/** Input for {@link VoicesResource.design}. */
+export interface VoiceDesignInput {
+  /** A preview line (100–1000 chars) spoken in the designed voice. */
+  text: string
+  /** Natural-language description of the voice to create. */
+  voiceDescription: string
+  /** Voice-design model id. Defaults to the server-configured default. */
+  model?: string
+  /** Output loudness (-1..1). */
+  loudness?: number
+  /** How strongly the description steers the design (0–100). */
+  guidanceScale?: number
+  /** Deterministic seed for a reproducible design. */
+  seed?: number
+  /** Design quality knob (provider-specific). */
+  quality?: number
+  /** Enhance the generated voice. */
+  shouldEnhance?: boolean
+  /** Optional extra prompt context (≤8000 chars). */
+  userPrompt?: string
+}
+
+/** Input for {@link VoicesResource.remix}. */
+export interface VoiceRemixInput {
+  /** The text (1–5000 chars) to speak in the described voice. */
+  text: string
+  /** Natural-language description of the voice to speak in. */
+  voiceDescription: string
+  /** Optional extra prompt context (≤8000 chars). */
+  userPrompt?: string
+}
+
+/** Input for {@link VoicesResource.dub}. */
+export interface DubbingInput {
+  /** URL of the audio to dub. */
+  audioUrl: string
+  /** Target language ISO code (2–10 chars), e.g. `"es"`, `"pt-BR"`. */
+  targetLanguage: string
+  /** Source language ISO code; auto-detected when omitted. */
+  sourceLanguage?: string
+  /** Expected number of speakers (1–20) — improves separation when known. */
+  numSpeakers?: number
+  /** Keep the original voices instead of cloning them into the target language. */
+  disableVoiceCloning?: boolean
+  /** Drop the background/music bed from the dubbed output. */
+  dropBackgroundAudio?: boolean
 }

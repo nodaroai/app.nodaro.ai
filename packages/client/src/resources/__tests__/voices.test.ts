@@ -129,4 +129,54 @@ describe("voices resource", () => {
     expect(JSON.parse(init.body)).toEqual(input)
     expect(out.jobId).toBe("j-export")
   })
+
+  it("change() forwards the new model / useSpeakerBoost / seed params", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-change" }))
+    const c = make(fetchMock)
+    await c.voices.change({ voiceId: "Rachel", audioUrl: "https://r2/a.mp3", model: "eleven_multilingual_sts_v2", useSpeakerBoost: false, seed: 42 })
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(JSON.parse(init.body)).toEqual({ voiceId: "Rachel", audioUrl: "https://r2/a.mp3", model: "eleven_multilingual_sts_v2", useSpeakerBoost: false, seed: 42 })
+  })
+
+  it("design() POSTs /v1/voice-design and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-design" }))
+    const c = make(fetchMock)
+    const out = await c.voices.design({ text: "x".repeat(120), voiceDescription: "a warm narrator", guidanceScale: 40 })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-design")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
+    expect(out.jobId).toBe("j-design")
+  })
+
+  it("remix() POSTs /v1/voice-remix", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-remix" }))
+    const c = make(fetchMock)
+    await c.voices.remix({ text: "hello", voiceDescription: "a raspy detective" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-remix")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
+  })
+
+  it("dub() POSTs /v1/dubbing with the target language", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-dub" }))
+    const c = make(fetchMock)
+    await c.voices.dub({ audioUrl: "https://r2/a.mp3", targetLanguage: "es", numSpeakers: 2 })
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/dubbing")
+    expect(JSON.parse(init.body)).toEqual({ audioUrl: "https://r2/a.mp3", targetLanguage: "es", numSpeakers: 2 })
+  })
+
+  it("createCloneFromFile() POSTs multipart /v1/voice-clones (FormData with name + file)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ id: "vc3", name: "Mine", elevenlabsVoiceId: "el3", sampleAudioUrl: "https://r2/s.mp3", createdAt: "2026-07-16T00:00:00Z" }),
+    )
+    const c = make(fetchMock)
+    const out = await c.voices.createCloneFromFile({ name: "Mine", file: new Uint8Array([1, 2, 3]), filename: "s.mp3", contentType: "audio/mpeg" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-clones")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: unknown }
+    expect(init.method).toBe("POST")
+    expect(init.body).toBeInstanceOf(FormData)
+    const fd = init.body as FormData
+    expect(fd.get("name")).toBe("Mine")
+    expect(fd.get("file")).toBeInstanceOf(Blob)
+    expect(out.elevenlabsVoiceId).toBe("el3")
+  })
 })
