@@ -527,6 +527,18 @@ export interface PluginJobsToolkit {
    * `ProviderKind` (kept as `string` here — structural, no import).
    */
   markProviderCallStart(jobId: string, kind: string): Promise<void>
+  /**
+   * Reads a job row by id. Returns the job's id, status, user_id,
+   * output_data (parsed JSON or null), and error_message, or null if not found.
+   * Mirrors a narrow jobs-row read for the pipeline seed lane.
+   */
+  readJob(jobId: string): Promise<{
+    id: string
+    status: string
+    user_id: string | null
+    output_data: Record<string, unknown> | null
+    error_message: string | null
+  } | null>
 }
 
 // ============================================================================
@@ -802,6 +814,76 @@ export interface PluginLlmToolkit {
 }
 
 // ============================================================================
+// tk.pipelines — backend/src/ee/pipelines/* seed-lane execution
+// ============================================================================
+
+/**
+ * Seeded pipeline input — the request shape for `createSeeded` and estimation.
+ * Structural mirror of `SeededPipelineInput` (`ee/pipelines/seed-pipeline.ts`).
+ * `plan` and `scenes[].sceneNodeData` are `unknown` on the wire; the seed lane
+ * validates them against `ShowrunnerPlanSchema` and `SceneNodeDataSchema`
+ * respectively.
+ */
+export interface SeededPipelineInput {
+  userId: string
+  workflowId: string
+  rootNodeId?: string
+  inputPrompt: string
+  plan: unknown
+  scenes?: Array<{ sceneIndex: number; sceneNodeData: unknown }>
+  config?: Record<string, unknown>
+  maxCostCredits?: number
+}
+
+/** Seeded pipeline estimate input — the subset of `SeededPipelineInput` used for credit estimation. */
+export type SeededPipelineEstimateInput = Pick<SeededPipelineInput, "plan" | "scenes" | "config">
+
+/**
+ * Pipeline snapshot — the status/progress shape returned by `getSnapshot`.
+ * Structural mirror of the seeded-run status query result: the
+ * `GET /v1/pipelines/:id` select (`routes/pipelines.ts`) plus the
+ * `pipeline_stages` list (ordered by `stage_order`), with
+ * `final_output_asset_id` resolved to a public `finalOutputUrl`.
+ */
+export interface PipelineSnapshot {
+  id: string
+  status: string
+  currentStage: string | null
+  stages: Array<{ stageName: string; status: string }>
+  spentCredits: number
+  reservedCredits: number
+  upfrontCreditEstimate: number
+  finalOutputUrl: string | null
+  failureReason: string | null
+  progressMessage: string | null
+}
+
+/**
+ * Pipelines toolkit — the seeded execution and monitoring surface
+ * (`ee/pipelines/seed-pipeline.ts` + `ee/pipelines/credits.ts`, reached from
+ * core `toolkit.ts` via a runtime dynamic `import()`).
+ */
+export interface PluginPipelinesToolkit {
+  /**
+   * Creates a seeded pipeline from the input and immediately reserves credits.
+   * Returns the pipeline id and reserved credit amount.
+   */
+  createSeeded(input: SeededPipelineInput): Promise<{ pipelineId: string; reservedCredits: number }>
+  /**
+   * Estimates credits for a seeded pipeline without executing it.
+   * Returns the total credits and a breakdown by stage.
+   */
+  estimateSeeded(
+    input: SeededPipelineEstimateInput,
+  ): Promise<{ totalCredits: number; breakdown: Record<string, number> }>
+  /**
+   * Gets the current snapshot (status, progress, credits) of a seeded pipeline.
+   * Returns null if the pipeline is not found or ownership check fails.
+   */
+  getSnapshot(pipelineId: string, userId: string): Promise<PipelineSnapshot | null>
+}
+
+// ============================================================================
 // PluginToolkit — the full dependency-injection surface handed to every plugin
 // ============================================================================
 
@@ -813,6 +895,7 @@ export interface PluginToolkit {
   jobs: PluginJobsToolkit
   http: PluginHttpToolkit
   llm: PluginLlmToolkit
+  pipelines: PluginPipelinesToolkit
 }
 
 // ============================================================================
