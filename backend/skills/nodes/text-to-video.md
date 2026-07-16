@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-07-10T13:39:33.240Z
-generated_from: de3f9958
+generated_at: 2026-07-16T15:25:02.751Z
+generated_from: be2cab0e0
 ---
 
 # Text to Video
@@ -145,6 +145,33 @@ precise subject → action details → scene/environment → lighting & color to
 - Text rendering is weak: keep on-screen text to short common words; for exact text or logos, attach the artwork as a reference image and instruct "the logo from Image N stays in the corner unchanged".
 - More than 4 referenced people gets unstable: group people into composite images of ≤4 first (image generation), then reference those composites.
 - Repeated extension degrades quality: prefer high-definition reference assets and avoid stacking many continuations.
+
+### Kling 2.6 / 3.0 / 3 Omni (kling, kling-3.0, kling-3-omni)
+
+Prompt structure: Scene (setting, light) → Character/Element (who, appearance) → Motion (action, camera) → Audio (dialogue / SFX / ambience / music) → Others (style, emotion).
+
+**Dialogue (native speech + lip sync — verified on the KIE path 2026-07-16)**
+- Quote the spoken line and enable the sound toggle; the model bakes the voice AND matching lip movement: the woman says "The quick brown fox jumps over the lazy dog."
+- Prefer labeled dialogue with a voice description: [Character label: voice/tone description]: "line". Example: [Exhausted Partner: trembling frustrated voice]: "You never listen to me."
+- Keep character labels unique and reuse them verbatim — never switch to pronouns mid-prompt; the label is what binds a voice to a speaker across lines. Kling 2.6 additionally supports [Character@VoiceName] platform-voice binding.
+- Tone words inside the bracket steer delivery: whispering, crying voice, controlled serious voice, fast urgent voice. Sequence speech with temporal markers ("Immediately", "after a pause") when two lines must not overlap.
+- Languages: Kling 2.6 outputs English/Chinese voices only (other languages are auto-translated to English). Kling 3.0 supports multiple languages, dialects, accents, and code-switching within one scene — mark the language explicitly ("says in Japanese …").
+
+**SFX / ambience / music**
+- Put them in the same Audio block, described plainly: "Rain tapping softly on the window, distant thunder, no music."
+- State exclusions explicitly — "no background music, no other sounds" — or the model tends to add a bed under dialogue.
+
+**Toggle + cost**
+- The audio lever is the node's sound toggle (KIE `sound` param). On kling (2.6) and kling-3.0 enabling audio raises the credit cost (the `:audio` composite); kling-3.0 generates audio by DEFAULT — pass sound: false for the cheaper silent tier. kling-3-omni (Replicate) includes audio in its flat per-duration rate.
+- Multi-shot kling-3.0 (`multi_shots`) forces sound ON — budget for the audio rate.
+
+**References & elements (kling-3.0 / omni)**
+- Wired references are injected as `kling_elements` and MUST be mentioned as @element_name in the prompt — the editor's {image:N} tokens and the server prefixer handle this automatically; when hand-writing prompts, mention every element or it is silently ignored.
+- kling-3-omni is image-to-video only (start frame required) and accepts up to 7 reference images; element voice references (element_input_audio_urls, 5-30s clips) bind a voice to an element.
+
+**Limits**
+- Kling 2.6 prompts cap at 1000 characters — front-load scene + dialogue and trim style tails first. kling-3.0 accepts long prompts.
+- Durations: 2.6 = 5/10s; 3.0/omni = 3-15s. A spoken line needs roughly 1s per 2-3 words — don't script more dialogue than the clip can hold.
 
 _Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/shared` — edit there, then `npm run gen:skills`._
 <!-- AUTO-GEN:END provider-prompting -->
