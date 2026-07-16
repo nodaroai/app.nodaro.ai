@@ -97,6 +97,7 @@ import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
 import { mediaDeleteRoutes } from "./routes/media-delete.js"
+import { mediaImportUrlRoutes } from "./routes/media-import-url.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
@@ -401,6 +402,7 @@ export async function buildApp() {
   await app.register(libraryRoutes)
   await app.register(storageStatusRoutes)
   await app.register(mediaDeleteRoutes)
+  await app.register(mediaImportUrlRoutes)
   await app.register(transcribeRoutes)
   if (hasCredits()) await app.register(adminCreditsRoutes)  // CreditsService + TIER_CREDITS
   await app.register(workflowCostRoutes)
