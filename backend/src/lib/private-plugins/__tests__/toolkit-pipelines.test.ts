@@ -223,6 +223,71 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
   })
 
   // -------------------------------------------------------------------------
+  // Error handling: the primary pipelines read must SURFACE a DB fault (throw,
+  // so the consuming route can 500 instead of a spurious 404) — a swallowed
+  // error → null is indistinguishable from not-found/ownership-fail. The
+  // stages/asset follow-up reads degrade gracefully (partial snapshot) but log
+  // the swallowed error so it's observable.
+  // -------------------------------------------------------------------------
+  describe("pipelines.getSnapshot error handling", () => {
+    const okPipeline = (overrides: Record<string, unknown> = {}) => ({
+      id: "pipe-1",
+      status: "running",
+      current_stage: "script",
+      spent_credits: 5,
+      reserved_credits: 120,
+      upfront_credit_estimate: 120,
+      final_output_asset_id: null,
+      failure_reason: null,
+      current_progress_message: null,
+      ...overrides,
+    })
+
+    it("read 1 (pipelines) DB error → THROWS (route can 500), not a null not-found", async () => {
+      routeTables({ pipelines: { data: null, error: { message: "connection reset" } } })
+
+      await expect(tk.pipelines.getSnapshot("pipe-1", "user-1")).rejects.toThrow(/connection reset/)
+      // The fault surfaced on the primary read; no stages/asset follow-up ran.
+      expect(mockFrom).toHaveBeenCalledTimes(1)
+      expect(mockFrom).toHaveBeenCalledWith("pipelines")
+    })
+
+    it("read 2 (stages) DB error → snapshot still returned with empty stages, error logged", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+      routeTables({
+        pipelines: { data: okPipeline(), error: null },
+        pipeline_stages: { data: null, error: { message: "stages boom" } },
+      })
+
+      const snap = await tk.pipelines.getSnapshot("pipe-1", "user-1")
+
+      expect(snap?.id).toBe("pipe-1")
+      expect(snap?.stages).toEqual([]) // degraded but present, not a throw
+      expect(errSpy).toHaveBeenCalled()
+      errSpy.mockRestore()
+    })
+
+    it("read 3 (asset) DB error → snapshot still returned with finalOutputUrl null, error logged", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+      routeTables({
+        pipelines: {
+          data: okPipeline({ status: "completed", final_output_asset_id: "asset-final" }),
+          error: null,
+        },
+        pipeline_stages: { data: [{ stage_name: "script", status: "approved" }], error: null },
+        assets: { data: null, error: { message: "asset boom" } },
+      })
+
+      const snap = await tk.pipelines.getSnapshot("pipe-1", "user-1")
+
+      expect(snap?.finalOutputUrl).toBeNull() // degraded but snapshot present
+      expect(snap?.stages).toEqual([{ stageName: "script", status: "approved" }])
+      expect(errSpy).toHaveBeenCalled()
+      errSpy.mockRestore()
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // Case 4: jobs.readJob returns the narrow {id,status,user_id,output_data,
   // error_message} shape, or null when the row is missing.
   // -------------------------------------------------------------------------

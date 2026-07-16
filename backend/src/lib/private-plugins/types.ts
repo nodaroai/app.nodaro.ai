@@ -529,7 +529,7 @@ export interface PluginJobsToolkit {
   markProviderCallStart(jobId: string, kind: string): Promise<void>
   /**
    * Reads a job row by id. Returns the job's id, status, user_id,
-   * output_data (parsed JSON or null), and error_message, or null if not found.
+   * output_data (jsonb object or null), and error_message, or null if not found.
    * Mirrors a narrow jobs-row read for the pipeline seed lane.
    */
   readJob(jobId: string): Promise<{

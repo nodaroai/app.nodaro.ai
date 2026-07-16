@@ -410,12 +410,20 @@ async function readJob(jobId: string): Promise<{
  * `final_output_asset_id` → a public `finalOutputUrl` (the same asset-id → URL
  * resolution the pipeline stages use, e.g. `locations.ts`'s `assetUrlForId`).
  * Field mapping matches `PipelineSnapshot` (camelCase keys).
+ *
+ * Error handling mirrors `routes/pipelines.ts`'s `GET /v1/pipelines/:id`
+ * (500-on-error vs 404-on-missing): a DB fault on the PRIMARY pipelines read
+ * THROWS so the consuming route can surface a 500 — swallowing it to `null`
+ * would be indistinguishable from not-found/ownership-fail (a transient fault
+ * would read as a spurious "not found" under status polling). The follow-up
+ * stages / asset reads degrade gracefully (empty stages / null URL) but log
+ * the swallowed error so the partial degradation stays observable.
  */
 async function getPipelineSnapshot(
   pipelineId: string,
   userId: string,
 ): Promise<PipelineSnapshot | null> {
-  const { data: pipelineData } = await supabase
+  const { data: pipelineData, error: pipelineError } = await supabase
     .from("pipelines")
     .select(
       "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,final_output_asset_id,failure_reason,current_progress_message",
@@ -423,6 +431,11 @@ async function getPipelineSnapshot(
     .eq("id", pipelineId)
     .eq("user_id", userId)
     .maybeSingle()
+  if (pipelineError) {
+    throw new Error(
+      `Failed to read pipeline snapshot for ${pipelineId}: ${pipelineError.message}`,
+    )
+  }
   if (!pipelineData) return null
   const pipeline = pipelineData as {
     id: string
@@ -436,20 +449,36 @@ async function getPipelineSnapshot(
     current_progress_message: string | null
   }
 
-  const { data: stages } = await supabase
+  const { data: stages, error: stagesError } = await supabase
     .from("pipeline_stages")
     .select("stage_name, status")
     .eq("pipeline_id", pipelineId)
     .order("stage_order", { ascending: true })
+  if (stagesError) {
+    // Non-fatal: return the snapshot with an empty stage list rather than
+    // failing the whole read — but log so the blanked list is observable.
+    console.error(
+      `[private-plugins/pipelines] Failed to read stages for pipeline ${pipelineId}:`,
+      stagesError.message,
+    )
+  }
   const stageRows = (stages ?? []) as Array<{ stage_name: string; status: string }>
 
   let finalOutputUrl: string | null = null
   if (pipeline.final_output_asset_id) {
-    const { data: asset } = await supabase
+    const { data: asset, error: assetError } = await supabase
       .from("assets")
       .select("r2_url")
       .eq("id", pipeline.final_output_asset_id)
       .maybeSingle()
+    if (assetError) {
+      // Non-fatal: leave finalOutputUrl null rather than failing the read —
+      // but log so the missing URL is observable.
+      console.error(
+        `[private-plugins/pipelines] Failed to resolve final output URL for pipeline ${pipelineId}:`,
+        assetError.message,
+      )
+    }
     finalOutputUrl = (asset as { r2_url: string | null } | null)?.r2_url ?? null
   }
 
