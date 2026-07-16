@@ -114,6 +114,10 @@ async function runDownloadWithProgress(
       outPath,
       section,
       maxHeight,
+      // A voice changer can't use a silent clip — fail the import on a no-audio
+      // download instead of ingesting/processing it (also avoids the re-encode's
+      // "-c:a aac" crash). See assertAudioPresent.
+      requireAudio: true,
       onProgress: (pct) => {
         if (state.phase === "downloading") {
           state.percent = Math.min(Math.round(pct), 99)
