@@ -18,6 +18,7 @@ import {
   MOTION_DURATION_TIERS,
   T2I_TO_I2I_VARIANT,
   isVeoProvider,
+  getVideoAudioCapability,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MODEL_CATALOG } from "./model-catalog.js"
@@ -227,8 +228,13 @@ export function buildVideoCreditModelIdentifier(
   const tier = tiers.find(t => durationSec <= t.maxSeconds) ?? tiers[tiers.length - 1]
   let identifier = `${effectiveProvider}:${tier.suffix}`
 
-  // Append audio suffix if applicable
-  if (AUDIO_ADDON_PROVIDERS.has(effectiveProvider) && sound) {
+  // Append audio suffix if applicable. When the caller expressed no intent
+  // (sound === undefined), fall back to the model's own default (capability
+  // `defaultOn` — kling-3.0 generates audio unless explicitly disabled), so an
+  // intent-less request is billed for the audio it actually produces instead
+  // of reserving the cheaper no-audio tier against an audio-on generation.
+  const soundOn = sound ?? (getVideoAudioCapability(effectiveProvider).defaultOn === true)
+  if (AUDIO_ADDON_PROVIDERS.has(effectiveProvider) && soundOn) {
     identifier += ":audio"
   }
 

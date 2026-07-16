@@ -853,9 +853,15 @@ describe("CreditsService", () => {
       ])).toBe(26)
     })
 
-    it("resolves I2V kling-3.0:5s", () => {
+    it("resolves I2V kling-3.0:5s — no sound field estimates the :audio tier (model default is audio ON)", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 5 } },
+      ])).toBe(50) // 0%-base — capability defaultOn mirrors the provider's sound default
+    })
+
+    it("resolves I2V kling-3.0:5s with sound explicitly off", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-video", data: { provider: "kling-3.0", duration: 5, sound: false } },
       ])).toBe(34) // 0%-base
     })
 

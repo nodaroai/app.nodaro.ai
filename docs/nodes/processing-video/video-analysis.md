@@ -45,6 +45,7 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy) or `pro` (default — higher fidelity, costs more; see [Credit Cost](#credit-cost)) |
+| Result Selection (`selectionMode`) | Select | `choose` | `choose` — keep the strongest of several analysis passes. `combine` — keep the strongest pass, then fold in details from the other passes that are verified against the footage (slightly slower, most complete) |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
 **Two quality tiers, no model to pick.** You choose a *tier* — `fast` for an
@@ -53,6 +54,14 @@ analysis model is selected for you (Video Analysis requires native video *and*
 audio understanding, which only a subset of models provide) and is intentionally
 not surfaced, so a tier's backing model can improve over time without changing
 your workflow.
+
+**Result Selection.** Every run analyzes the video several times and grades the
+passes. `choose` keeps the single strongest pass. `combine` additionally reviews
+the discarded passes for details the winner missed (named places, on-screen
+text, brands, extra audio layers), re-checks each one against the actual
+footage, and folds in only what is confirmed — the scene timeline itself is
+never altered. `combine` never produces less than `choose`: if the extra pass
+fails or degrades the result, the strongest pass is kept as-is.
 
 **Analysis Focus steers attention, never format.** It biases what the model
 attends to; it does **not** change the output JSON shape, the ≤8s scene

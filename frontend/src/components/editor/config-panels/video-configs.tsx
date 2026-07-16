@@ -4493,6 +4493,27 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
       </div>
       {/* reasoning-effort selector deliberately absent: video-analysis models expose no effort levels (v1) */}
 
+      {/* Best-of-N result strategy */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="video-analysis-selection">Result selection</Label>
+        <Select
+          value={data.selectionMode === "combine" ? "combine" : "choose"}
+          onValueChange={(v) => onUpdate({ selectionMode: v as "choose" | "combine" })}
+        >
+          <SelectTrigger id="video-analysis-selection" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="choose">Choose best</SelectItem>
+            <SelectItem value="combine">Combine (best + verified details)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          The video is analyzed several times. "Choose best" keeps the strongest pass; "Combine" also folds in
+          details from the other passes after verifying them against the footage (slightly slower, most complete).
+        </p>
+      </div>
+
       {/* YouTube URL (alternative to a wired video source) */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="video-analysis-url">YouTube URL</Label>

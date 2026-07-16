@@ -479,6 +479,7 @@ the job's `output_data`.
 | `video_url` | string, optional | Direct URL of a video file. |
 | `youtube_url` | string, optional | YouTube video URL (youtube.com / youtu.be). |
 | `llm_model` | enum, optional | Analysis quality tier: `fast` (economy) or `pro` (default, higher fidelity). |
+| `selection_mode` | enum, optional | Best-of-N result strategy: `choose` (default — keep the strongest analysis pass) or `combine` (fold in footage-verified details from the other passes; slightly slower, most complete). |
 | `analysis_focus` | string ≤2000, optional | Steer the analysis (e.g. "focus on the product shots and on-screen text"). |
 
 Pass **exactly one** of `video_asset_id` / `video_url` / `youtube_url` —

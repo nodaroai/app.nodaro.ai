@@ -1393,8 +1393,13 @@ export const AUDIO_ADDON_PROVIDERS = new Set([
  *                     lip-synced spoken dialogue. Toggle is offered; the
  *                     pipeline still uses TTS + lip-sync for dialogue.
  *   "native_speech" — bakes spoken dialogue + lip movement from the prompt
- *                     (VEO 3.x). The pipeline injects the dialogue line, enables
- *                     audio, and revoices the clip to the character's saved voice.
+ *                     (VEO 3.x always-on; Kling 2.6/3.0 behind the `sound`
+ *                     toggle — probe-verified 2026-07-16: scripted lines come
+ *                     back word-for-word with articulated lips on the KIE
+ *                     path, matching the official Kling 2.6 audio guide and
+ *                     Kling 3.0 prompting docs). The pipeline injects the
+ *                     dialogue line, enables audio, and revoices the clip to
+ *                     the character's saved voice.
  *   "audio_driven"  — lip-syncs to a supplied reference-audio track (Seedance
  *                     2.0 multimodal). The pipeline synthesises the character's
  *                     voice first, feeds it as reference audio, and skips the
@@ -1410,6 +1415,14 @@ export interface VideoAudioCapability {
   alwaysOn?: boolean
   /** Enabling audio raises the credit cost (Kling — see AUDIO_ADDON_PROVIDERS). */
   affectsCost?: boolean
+  /**
+   * The model generates audio when the caller expresses NO intent (its own
+   * config default is on — kling-3.0's `sound: true`, kling-3-omni's
+   * `generate_audio: true`). The `:audio` credit suffix mirrors this default
+   * so an intent-less request is billed for the audio it actually produces
+   * (see buildVideoCreditModelIdentifier). Absent ⇒ default off.
+   */
+  defaultOn?: boolean
 }
 
 /**
@@ -1426,9 +1439,22 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   veo3: { mode: "native_speech", alwaysOn: true },
   "veo3.1": { mode: "native_speech", alwaysOn: true },
   veo3_lite: { mode: "native_speech", alwaysOn: true },
-  // Kling 2.6 / 3.0 — ambient sound/SFX toggle; not lip-synced speech. Cost-affecting.
-  kling: { mode: "ambient", field: "sound", affectsCost: true },
-  "kling-3.0": { mode: "ambient", field: "sound", affectsCost: true },
+  // Kling 2.6 / 3.0 — native spoken dialogue + lip sync behind the `sound`
+  // toggle (probe-verified on the KIE path 2026-07-16: scripted quoted lines
+  // are spoken verbatim with articulated lips; the official Kling 2.6 audio
+  // guide documents speech/dialogue/narration/singing with [Character@Voice]
+  // binding, zh+en voices). Cost-affecting: `:audio` credit suffix.
+  // kling-3.0's model default is sound ON (kie models.ts extraParams +
+  // kling3-client `?? true`) → defaultOn keeps billing aligned with what an
+  // intent-less request actually generates; kling 2.6 defaults OFF.
+  kling: { mode: "native_speech", field: "sound", affectsCost: true },
+  "kling-3.0": { mode: "native_speech", field: "sound", affectsCost: true, defaultOn: true },
+  // Kling 3.0 Omni (Replicate kwaivgi/kling-v3-omni-video) — the Omni tier's
+  // headline feature IS native dialogue (per-character voices, unified audio
+  // timeline). Lever is Replicate's `generate_audio` (default true in our
+  // provider config → defaultOn); audio is priced into the flat per-duration
+  // rate, so NOT cost-affecting (no :audio composite).
+  "kling-3-omni": { mode: "native_speech", field: "generateAudio", defaultOn: true },
   // Seedance 1.x — optional ambient audio (generate_audio); not dialogue.
   seedance: { mode: "ambient", field: "generateAudio" },
   // Seedance 2.0 — multimodal; lip-syncs to a supplied reference-audio track.
@@ -1457,11 +1483,11 @@ export function videoModelSupportsAudio(model: string | undefined): boolean {
 
 /**
  * True when the model can produce lip-synced spoken DIALOGUE — either natively
- * (VEO) or driven by a supplied audio track (Seedance 2.0). Drives the Story→Video
- * dialogue auto-pick: in-model speech + character revoice (VEO) / character-voiced
- * reference audio (Seedance 2.0) vs. the TTS + separate-lip-sync fallback.
- * Ambient-only models (Kling, Seedance 1.x) return `false` — their audio is SFX,
- * not speech.
+ * (VEO 3.x, Kling 2.6/3.0/Omni) or driven by a supplied audio track (Seedance
+ * 2.0). Drives the Story→Video dialogue auto-pick: in-model speech + character
+ * revoice (VEO, Kling) / character-voiced reference audio (Seedance 2.0) vs.
+ * the TTS + separate-lip-sync fallback. Ambient-only models (Seedance 1.x)
+ * return `false` — their audio is SFX, not speech.
  */
 export function videoModelCanSpeakDialogue(model: string | undefined): boolean {
   const mode = getVideoAudioCapability(model).mode

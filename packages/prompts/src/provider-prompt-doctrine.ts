@@ -7,10 +7,18 @@
  *   4. compact recipes in MCP tool descriptions point here via get_node_skill
  *
  * Sources, in precedence order (conflicts resolve top-down):
+ *   Seedance 2.0:
  *   - Official BytePlus ModelArk "Dreamina Seedance 2.0 series prompt guide"
  *     https://docs.byteplus.com/en/docs/ModelArk/2222480
  *   - Official launch post https://seed.bytedance.com/en/blog/official-launch-of-seedance-2-0
  *   - KIE API docs https://docs.kie.ai/market/bytedance/seedance-2
+ *   Kling:
+ *   - Official "Kling Video 2.6 Audio User Guide"
+ *     https://kling.ai/quickstart/klingai-video-26-audio-user-guide
+ *   - fal.ai "Kling 3.0 Prompting Guide" https://blog.fal.ai/kling-3-0-prompting-guide/
+ *   - KIE API docs https://docs.kie.ai/market/kling/kling-3-0
+ *   - Live KIE-path dialogue probe 2026-07-16 (scripted lines spoken verbatim,
+ *     lip-synced, on both kling-2.6 and kling-3.0 with sound=true)
  */
 export interface ProviderPromptDoctrine {
   /** MODEL_CATALOG ids this doctrine covers. */
@@ -66,8 +74,46 @@ precise subject → action details → scene/environment → lighting & color to
 - Repeated extension degrades quality: prefer high-definition reference assets and avoid stacking many continuations.`,
 }
 
+const KLING_AUDIO_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["kling", "kling-3.0", "kling-3-omni"],
+  heading: "Kling 2.6 / 3.0 / 3 Omni (kling, kling-3.0, kling-3-omni)",
+  tips: [
+    "Kling speaks scripted dialogue natively with lip sync — quote the line and enable sound: [Anna: warm calm voice]: \"We made it.\" On kling/kling-3.0 audio raises the credit cost; kling-3-omni includes it.",
+    "Structure prompts as Scene → character/element → Motion → Audio → style. Put ALL sound in one 'Audio:' block: dialogue in quotes, then SFX and ambience described plainly ('rain tapping on glass, no music').",
+    "Give each speaker a stable label + voice description and reuse it exactly — [Detective: low raspy voice, tired] — pronouns or renamed speakers break voice binding in multi-character scenes.",
+    "Tone words in the bracket steer delivery (whispering, crying, fast urgent voice); pace with 'Immediately' / 'after a pause'. 2.6 voices are English/Chinese only; 3.0 adds dialects and code-switching.",
+    "kling-3.0 wired references become @element_name mentions (handled automatically by the editor); multi-shot mode forces sound ON. Kling 2.6 prompts cap at 1000 chars — keep the Audio block tight.",
+    "Say what should NOT sound: 'no background music, no other sounds' — otherwise Kling invents a music bed under dialogue.",
+  ],
+  doctrine: `Prompt structure: Scene (setting, light) → Character/Element (who, appearance) → Motion (action, camera) → Audio (dialogue / SFX / ambience / music) → Others (style, emotion).
+
+**Dialogue (native speech + lip sync — verified on the KIE path 2026-07-16)**
+- Quote the spoken line and enable the sound toggle; the model bakes the voice AND matching lip movement: the woman says "The quick brown fox jumps over the lazy dog."
+- Prefer labeled dialogue with a voice description: [Character label: voice/tone description]: "line". Example: [Exhausted Partner: trembling frustrated voice]: "You never listen to me."
+- Keep character labels unique and reuse them verbatim — never switch to pronouns mid-prompt; the label is what binds a voice to a speaker across lines. Kling 2.6 additionally supports [Character@VoiceName] platform-voice binding.
+- Tone words inside the bracket steer delivery: whispering, crying voice, controlled serious voice, fast urgent voice. Sequence speech with temporal markers ("Immediately", "after a pause") when two lines must not overlap.
+- Languages: Kling 2.6 outputs English/Chinese voices only (other languages are auto-translated to English). Kling 3.0 supports multiple languages, dialects, accents, and code-switching within one scene — mark the language explicitly ("says in Japanese …").
+
+**SFX / ambience / music**
+- Put them in the same Audio block, described plainly: "Rain tapping softly on the window, distant thunder, no music."
+- State exclusions explicitly — "no background music, no other sounds" — or the model tends to add a bed under dialogue.
+
+**Toggle + cost**
+- The audio lever is the node's sound toggle (KIE \`sound\` param). On kling (2.6) and kling-3.0 enabling audio raises the credit cost (the \`:audio\` composite); kling-3.0 generates audio by DEFAULT — pass sound: false for the cheaper silent tier. kling-3-omni (Replicate) includes audio in its flat per-duration rate.
+- Multi-shot kling-3.0 (\`multi_shots\`) forces sound ON — budget for the audio rate.
+
+**References & elements (kling-3.0 / omni)**
+- Wired references are injected as \`kling_elements\` and MUST be mentioned as @element_name in the prompt — the editor's {image:N} tokens and the server prefixer handle this automatically; when hand-writing prompts, mention every element or it is silently ignored.
+- kling-3-omni is image-to-video only (start frame required) and accepts up to 7 reference images; element voice references (element_input_audio_urls, 5-30s clips) bind a voice to an element.
+
+**Limits**
+- Kling 2.6 prompts cap at 1000 characters — front-load scene + dialogue and trim style tails first. kling-3.0 accepts long prompts.
+- Durations: 2.6 = 5/10s; 3.0/omni = 3-15s. A spoken line needs roughly 1s per 2-3 words — don't script more dialogue than the clip can hold.`,
+}
+
 export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   SEEDANCE_2_DOCTRINE,
+  KLING_AUDIO_DOCTRINE,
 ]
 
 const DOCTRINE_BY_PROVIDER: ReadonlyMap<string, ProviderPromptDoctrine> = new Map(

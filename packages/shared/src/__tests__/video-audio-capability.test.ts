@@ -22,13 +22,31 @@ describe("getVideoAudioCapability", () => {
     }
   })
 
-  it("returns ambient (sound toggle, cost-affecting) for Kling", () => {
+  it("returns native_speech (sound toggle, cost-affecting) for KIE Kling", () => {
+    // Probe-verified 2026-07-16: scripted quoted dialogue comes back verbatim
+    // with articulated lips on the KIE path for BOTH kling (2.6) and kling-3.0.
     for (const m of ["kling", "kling-3.0"]) {
       const cap = getVideoAudioCapability(m)
-      expect(cap.mode, m).toBe("ambient")
+      expect(cap.mode, m).toBe("native_speech")
       expect(cap.field, m).toBe("sound")
       expect(cap.affectsCost, m).toBe(true)
     }
+  })
+
+  it("returns native_speech (generateAudio lever, flat-priced) for kling-3-omni", () => {
+    const cap = getVideoAudioCapability("kling-3-omni")
+    expect(cap.mode).toBe("native_speech")
+    expect(cap.field).toBe("generateAudio")
+    // Audio is priced into the Replicate flat per-duration rate — no :audio composite.
+    expect(cap.affectsCost).toBeUndefined()
+    expect(cap.defaultOn).toBe(true)
+  })
+
+  it("defaultOn mirrors each model's own config default", () => {
+    // kling-3.0 generates audio unless explicitly disabled (models.ts
+    // extraParams.sound: true + kling3-client `?? true`); kling 2.6 defaults off.
+    expect(getVideoAudioCapability("kling-3.0").defaultOn).toBe(true)
+    expect(getVideoAudioCapability("kling").defaultOn).toBeUndefined()
   })
 
   it("returns audio_driven for Seedance 2.0", () => {
@@ -66,6 +84,7 @@ describe("videoModelSupportsAudio", () => {
   it("is true for any model with an audio mode, false for silent", () => {
     expect(videoModelSupportsAudio("veo3")).toBe(true)
     expect(videoModelSupportsAudio("kling-3.0")).toBe(true)
+    expect(videoModelSupportsAudio("kling-3-omni")).toBe(true)
     expect(videoModelSupportsAudio("seedance-2")).toBe(true)
     expect(videoModelSupportsAudio("seedance")).toBe(true)
     expect(videoModelSupportsAudio("minimax")).toBe(false)
@@ -80,9 +99,12 @@ describe("videoModelCanSpeakDialogue", () => {
     expect(videoModelCanSpeakDialogue("seedance-2")).toBe(true)
     expect(videoModelCanSpeakDialogue("seedance-2-fast")).toBe(true)
     expect(videoModelCanSpeakDialogue("seedance-2-mini")).toBe(true)
+    // Kling 2.6 / 3.0 / Omni speak scripted dialogue natively (probe-verified
+    // 2026-07-16) — the Story→Video auto-pick uses in-model speech + revoice.
+    expect(videoModelCanSpeakDialogue("kling")).toBe(true)
+    expect(videoModelCanSpeakDialogue("kling-3.0")).toBe(true)
+    expect(videoModelCanSpeakDialogue("kling-3-omni")).toBe(true)
     // ambient-only models are NOT dialogue-capable — their audio is SFX/ambient
-    expect(videoModelCanSpeakDialogue("kling")).toBe(false)
-    expect(videoModelCanSpeakDialogue("kling-3.0")).toBe(false)
     expect(videoModelCanSpeakDialogue("seedance")).toBe(false)
     expect(videoModelCanSpeakDialogue("minimax")).toBe(false)
     expect(videoModelCanSpeakDialogue(undefined)).toBe(false)
@@ -101,10 +123,16 @@ describe("seedance-2-mini is a full Seedance 2 family member", () => {
 })
 
 describe("VIDEO_AUDIO_CAPABILITY internal consistency", () => {
-  it("every Kling AUDIO_ADDON provider is ambient + affectsCost", () => {
+  it("every AUDIO_ADDON provider is cost-affecting on the canonical `sound` lever", () => {
+    // The billing-critical invariant: the `:audio` surcharge keys off `sound`,
+    // so every surcharged model must declare audio, be marked cost-affecting,
+    // and carry its toggle on that exact field (applyVideoAudioToggle then
+    // refuses the generateAudio alias for these, making a billed/generated
+    // divergence structurally impossible).
     for (const m of AUDIO_ADDON_PROVIDERS) {
       const cap = getVideoAudioCapability(m)
-      expect(cap.mode, m).toBe("ambient")
+      expect(cap.mode, m).not.toBe("none")
+      expect(cap.field, m).toBe("sound")
       expect(cap.affectsCost, m).toBe(true)
     }
   })

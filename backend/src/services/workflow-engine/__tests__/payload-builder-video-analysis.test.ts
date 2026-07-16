@@ -132,4 +132,17 @@ describe("buildPayload — video-analysis", () => {
     expect(result.payload.analysisFocus).toBe("Focus on the camera moves.")
     expect(result.payload.nodeId).toBe("va-node")
   })
+
+  it("forwards selectionMode 'combine'; fail-safe narrows anything else to undefined (choose)", () => {
+    const combine = buildPayload(node({ youtubeUrl: YT, selectionMode: "combine" }), jobId, {}, usageLogId)
+    expect(combine.payload.selectionMode).toBe("combine")
+
+    // Absent → undefined (worker defaults to choose).
+    const absent = buildPayload(node({ youtubeUrl: YT }), jobId, {}, usageLogId)
+    expect(absent.payload.selectionMode).toBeUndefined()
+
+    // Forged/unknown value → undefined, never passed through verbatim.
+    const forged = buildPayload(node({ youtubeUrl: YT, selectionMode: "merge-everything" }), jobId, {}, usageLogId)
+    expect(forged.payload.selectionMode).toBeUndefined()
+  })
 })

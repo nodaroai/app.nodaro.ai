@@ -47,13 +47,30 @@ describe("VIDEO_AUDIO_CAPABILITY drift guard vs KIE model configs", () => {
     }
   })
 
-  it("Kling audio-addon models are ambient + cost-affecting", () => {
+  it("Kling audio-addon models are audio-capable + cost-affecting on `sound`", () => {
     for (const [key] of ALL_VIDEO_MODELS) {
       if (AUDIO_ADDON_PROVIDERS.has(key)) {
         const cap = getVideoAudioCapability(key)
-        expect(cap.mode, key).toBe("ambient")
+        expect(cap.mode, key).not.toBe("none")
+        expect(cap.field, key).toBe("sound")
         expect(cap.affectsCost, key).toBe(true)
       }
+    }
+  })
+
+  it("capability defaultOn mirrors the model config's own `sound` default", () => {
+    // The `:audio` billing suffix falls back to `defaultOn` when the caller
+    // expressed no intent — it must therefore match what the provider layer
+    // actually does by default (models.ts extraParams.sound). A mismatch
+    // re-opens the billed-without-generating / generated-without-billing gap
+    // for intent-less requests.
+    for (const [key, cfg] of ALL_VIDEO_MODELS) {
+      if (!AUDIO_ADDON_PROVIDERS.has(key)) continue
+      const ep = (cfg.extraParams ?? {}) as Record<string, unknown>
+      if (!("sound" in ep)) continue
+      const cap = getVideoAudioCapability(key)
+      expect(cap.defaultOn === true, `${key}: capability defaultOn must equal models.ts extraParams.sound`)
+        .toBe(ep.sound === true)
     }
   })
 

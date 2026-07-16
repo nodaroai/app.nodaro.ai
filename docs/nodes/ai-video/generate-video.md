@@ -183,6 +183,8 @@ The model identifier is then looked up in:
 
 If neither has the identifier, the route returns HTTP 503 `price_not_configured` — no silent fallback to 1 credit.
 
+**Audio default (`sound` omitted).** When the request doesn't set `sound`, the `:audio` composite follows the model's own default: `kling-3.0` generates audio by default, so an intent-less request is billed at the `:audio` rate (pass `sound: false` for the cheaper silent tier); `kling` (2.6) defaults to silent. Explicit `sound: true` / `false` always wins.
+
 ### Worked examples
 
 | Provider | Duration | Resolution | Mode | Refs | Credits |
@@ -255,12 +257,14 @@ The single-node path — `client.nodes.run("generate-video", { … })` (also the
 | `characterVoices` | `Array<{ voiceId, voiceType?, ttsProvider?, speaker? }>` (max 8) | The voice(s) to speak. `voiceType` is `premade` / `library` / `custom`; `speaker` is the label joined to dialogue lines. |
 | `dialogue` | `Array<{ speaker, line }>` (max 50) | Optional structured dialogue. When omitted, the route extracts attributed dialogue (`Anna: "good morning"`) from `prompt`. |
 
-A request is **voiced** only when a spec is present **and** the model can carry dialogue (`videoModelCanSpeakDialogue` — VEO 3.x or Seedance 2). The chain is chosen by the model's audio capability (`getVideoAudioCapability`):
+A request is **voiced** only when a spec is present **and** the model can carry dialogue (`videoModelCanSpeakDialogue` — VEO 3.x, Kling 2.6 / 3.0 / 3 Omni, or Seedance 2). The chain is chosen by the model's audio capability (`getVideoAudioCapability`):
 
 | Audio mode | Models | Chain |
 |---|---|---|
 | `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
-| `native_speech` | `veo3`, `veo3.1`, `veo3_lite` | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
+| `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
+
+Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
 **Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5000 characters (the Dialogue v3 limit); lines over the budget are dropped with a log entry.
 

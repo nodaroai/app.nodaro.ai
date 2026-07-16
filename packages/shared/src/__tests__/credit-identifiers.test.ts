@@ -313,31 +313,31 @@ describe("buildVideoCreditModelIdentifier", () => {
   // --- Duration tiers for kling-3.0 ---
   describe("kling-3.0 duration tiers", () => {
     it("5s duration returns :5s tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 5)).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 5, false)).toBe("kling-3.0:5s")
     })
 
     it("3s duration falls into 5s tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 3)).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 3, false)).toBe("kling-3.0:5s")
     })
 
     it("10s duration returns :10s tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 10)).toBe("kling-3.0:10s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 10, false)).toBe("kling-3.0:10s")
     })
 
     it("7s duration falls into 10s tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 7)).toBe("kling-3.0:10s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 7, false)).toBe("kling-3.0:10s")
     })
 
     it("15s duration returns :15s tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 15)).toBe("kling-3.0:15s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 15, false)).toBe("kling-3.0:15s")
     })
 
     it("duration exceeding max tier clamps to last tier (20s -> 15s)", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 20)).toBe("kling-3.0:15s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 20, false)).toBe("kling-3.0:15s")
     })
 
     it("duration exceeding max tier clamps to last tier (100s -> 15s)", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 100)).toBe("kling-3.0:15s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 100, false)).toBe("kling-3.0:15s")
     })
   })
 
@@ -349,6 +349,18 @@ describe("buildVideoCreditModelIdentifier", () => {
 
     it("kling + sound=true appends :audio", () => {
       expect(buildVideoCreditModelIdentifier("kling", 5, true)).toBe("kling:5s:audio")
+    })
+
+    it("kling-3.0 + sound UNDEFINED appends :audio (model default is audio ON)", () => {
+      // The provider layer generates audio when the caller expressed no intent
+      // (models.ts extraParams.sound: true + kling3-client `?? true`). Billing
+      // must mirror that via capability defaultOn — reserving the no-audio
+      // tier against an audio-on generation was a silent under-bill.
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 5, undefined)).toBe("kling-3.0:5s:audio")
+    })
+
+    it("kling (2.6) + sound UNDEFINED does not append :audio (model default is OFF)", () => {
+      expect(buildVideoCreditModelIdentifier("kling", 5, undefined)).toBe("kling:5s")
     })
 
     it("kling-3.0 + sound=false does not append :audio", () => {
@@ -407,7 +419,7 @@ describe("buildVideoCreditModelIdentifier", () => {
   // --- String duration parsing ---
   describe("duration parsing", () => {
     it('string duration "10" is parsed as number 10', () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", "10")).toBe("kling-3.0:10s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", "10", false)).toBe("kling-3.0:10s")
     })
 
     it('string duration "5" works', () => {
@@ -415,19 +427,19 @@ describe("buildVideoCreditModelIdentifier", () => {
     })
 
     it("NaN duration defaults to 5", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", "abc")).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", "abc", false)).toBe("kling-3.0:5s")
     })
 
     it("undefined duration defaults to 5", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0")).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", undefined, false)).toBe("kling-3.0:5s")
     })
 
     it("0 duration falls into first tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 0)).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 0, false)).toBe("kling-3.0:5s")
     })
 
     it("1 duration falls into first tier", () => {
-      expect(buildVideoCreditModelIdentifier("kling-3.0", 1)).toBe("kling-3.0:5s")
+      expect(buildVideoCreditModelIdentifier("kling-3.0", 1, false)).toBe("kling-3.0:5s")
     })
   })
 

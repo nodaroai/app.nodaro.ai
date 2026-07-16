@@ -55,12 +55,13 @@ export interface PipelineAnimateShotArgs {
   pipelineMode?: PipelineMode
   /** #63 dialogue auto-pick — when set, the shot's spoken line is injected into
    *  the animate prompt AND the model's audio is enabled so a native-speech
-   *  model (VEO 3.x) bakes the dialogue + lip movement directly. The caller
-   *  (`scene-internal-pipeline`) only sets this for shots whose scene
-   *  `video_model` is `native_speech` per `getVideoAudioCapability`; it then
-   *  revoices the baked clip to the character's voice. Absent for every other
-   *  shot → the payload is byte-identical to the silent-animate path. Only the
-   *  standard i2v/t2v dispatch honors it (Method 3/8/10 ignore it). */
+   *  model (VEO 3.x always-on; Kling 2.6/3.0 via the canonical `sound` toggle,
+   *  reserving the `:audio` composite) bakes the dialogue + lip movement
+   *  directly. The caller (`scene-internal-pipeline`) only sets this for shots
+   *  whose scene `video_model` is `native_speech` per `getVideoAudioCapability`;
+   *  it then revoices the baked clip to the character's voice. Absent for every
+   *  other shot → the payload is byte-identical to the silent-animate path.
+   *  Only the standard i2v/t2v dispatch honors it (Method 3/8/10 ignore it). */
   spokenDialogue?: string
   /** #63 audio-driven dialogue (Seedance 2.0) — character-voiced TTS fed as the
    *  model's reference audio so it lip-syncs the dialogue in-model. The caller
@@ -307,10 +308,15 @@ export async function pipelineAnimateShot(
   }
 
   const hasVideoRef = false // 1C.1 doesn't wire reference videos (Method 3 = 1C.3).
+  // Baked-dialogue shots reserve the `:audio` composite on AUDIO_ADDON models
+  // (Kling) — the same canonical `sound` intent the payload carries below, so
+  // the surcharge and the generation can never diverge. Non-dialogue shots
+  // express no intent (the identifier builder then mirrors the model's own
+  // audio default via capability `defaultOn`).
   const modelIdentifier = buildVideoCreditModelIdentifier(
     videoModel,
     duration,
-    /* sound */ undefined,
+    /* sound */ spokenDialogue ? true : undefined,
     dispatchKind,
     /* mode/videoSize */ undefined,
     /* resolution */ undefined,
@@ -339,9 +345,13 @@ export async function pipelineAnimateShot(
       type: dispatchKind,
       shot_id: shot.shot_id,
       // Only enable model audio when baking a spoken line — keeps non-dialogue
-      // shots on the existing (silent / provider-default) path. VEO is not an
-      // AUDIO_ADDON model, so this does not change the credit identifier.
-      ...(spokenDialogue ? { generateAudio: true } : {}),
+      // shots on the existing (silent / provider-default) path. `sound` is the
+      // canonical neutral lever: cost-affecting models (Kling) honour ONLY it
+      // (applyVideoAudioToggle drops the generateAudio alias there, precisely
+      // so the model and the `:audio` surcharge read the same flag); the alias
+      // is kept alongside for free models. Matches the `:audio` composite
+      // reserved via modelIdentifier above.
+      ...(spokenDialogue ? { sound: true, generateAudio: true } : {}),
       ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
     },
     queueName: "videoQueue",
@@ -356,7 +366,7 @@ export async function pipelineAnimateShot(
             provider: videoModel,
             duration,
             referenceImageUrls: refsForPayload,
-            ...(spokenDialogue ? { generateAudio: true } : {}),
+            ...(spokenDialogue ? { sound: true, generateAudio: true } : {}),
             ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
             usageLogId,
           }
@@ -366,7 +376,7 @@ export async function pipelineAnimateShot(
             provider: videoModel,
             duration,
             referenceImageUrls: refsForPayload,
-            ...(spokenDialogue ? { generateAudio: true } : {}),
+            ...(spokenDialogue ? { sound: true, generateAudio: true } : {}),
             ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
             usageLogId,
           },

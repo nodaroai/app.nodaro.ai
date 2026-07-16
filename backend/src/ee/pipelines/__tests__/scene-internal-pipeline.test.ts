@@ -87,7 +87,10 @@ function makeSceneNodeData(
     object_keys: [],
     continuity_from_prev: "hard_cut",
     image_model: "nano-banana-2",
-    video_model: "kling",
+    // A silent (`none` audio capability) model — the default fixture exercises
+    // the TTS + separate-lip-sync dialogue fallback. Kling is native_speech
+    // since 2026-07-16 (bake + revoice), so it no longer takes that path.
+    video_model: "minimax",
     shots: Array.from({ length: shotCount }, (_, i) =>
       makeShot(`shot_${String(i + 1).padStart(2, "0")}`),
     ),
@@ -121,7 +124,7 @@ function defaultAnimateSuccess(shotId: string) {
     assetId: `vid-asset-${shotId}`,
     assetUrl: `https://r2/vid-${shotId}.mp4`,
     creditsSpent: 25,
-    videoModel: "kling",
+    videoModel: "minimax",
   }
 }
 

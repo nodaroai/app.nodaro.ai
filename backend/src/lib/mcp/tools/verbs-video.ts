@@ -2276,6 +2276,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(VIDEO_ANALYSIS_TIER_ORDER)
           .optional()
           .describe(`Analysis quality tier. Default "pro" (higher fidelity); "fast" is cheaper. Options: ${VIDEO_ANALYSIS_TIER_ORDER.join(", ")}.`),
+        selection_mode: z
+          .enum(["choose", "combine"])
+          .optional()
+          .describe(
+            'Best-of-N result strategy. "choose" (default): keep the best analysis pass. "combine": keep the best pass, then fold in details from the other passes that are verified against the footage (slightly slower, most complete).',
+          ),
         analysis_focus: z
           .string()
           .max(2000)
@@ -2327,6 +2333,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(videoUrl ? { videoUrl } : {}),
         ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
         ...(args.llm_model ? { llmModel: args.llm_model } : {}),
+        ...(args.selection_mode ? { selectionMode: args.selection_mode } : {}),
         ...(args.analysis_focus ? { analysisFocus: args.analysis_focus } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
