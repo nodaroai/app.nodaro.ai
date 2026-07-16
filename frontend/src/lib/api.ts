@@ -3626,6 +3626,7 @@ export async function startVideoAnalysis(params: {
   videoUrl?: string
   youtubeUrl?: string
   llmModel?: string
+  selectionMode?: "choose" | "combine"
   analysisFocus?: string
   userId?: string
 }): Promise<{ jobId: string }> {
@@ -3633,6 +3634,11 @@ export async function startVideoAnalysis(params: {
   if (params.videoUrl) body.videoUrl = params.videoUrl
   if (params.youtubeUrl) body.youtubeUrl = params.youtubeUrl
   if (params.llmModel) body.llmModel = params.llmModel
+  // best-of-N strategy — omitted (or any non-"combine" value upstream) means the
+  // worker's default "choose". Without this line the panel's Combine selection
+  // saved to node data but never reached a single-node Run (the combine
+  // no-op bug: output always == the judge's raw winner).
+  if (params.selectionMode) body.selectionMode = params.selectionMode
   if (params.analysisFocus) body.analysisFocus = params.analysisFocus
   if (params.userId) body.userId = params.userId
   return apiJson("/v1/video-analysis", {
