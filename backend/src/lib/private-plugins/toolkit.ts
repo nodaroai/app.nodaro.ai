@@ -65,7 +65,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
-import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult } from "./types.js"
+import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PipelineSnapshot } from "./types.js"
 
 /**
  * Assembles the real `PluginToolkit` dependency-injection surface handed to
@@ -364,6 +364,138 @@ async function clearReconcileSentinel(jobId: string): Promise<void> {
     .eq("id", jobId)
 }
 
+/**
+ * `tk.jobs.readJob` — narrow jobs-row read for the seed lane. Returns the
+ * job's id/status/user_id/output_data/error_message, or null when the row is
+ * absent. `output_data` (and `user_id`/`error_message`) normalize to null when
+ * unset so the shape is exactly the contract's.
+ */
+async function readJob(jobId: string): Promise<{
+  id: string
+  status: string
+  user_id: string | null
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+} | null> {
+  const { data } = await supabase
+    .from("jobs")
+    .select("id,status,user_id,output_data,error_message")
+    .eq("id", jobId)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as {
+    id: string
+    status: string
+    user_id: string | null
+    output_data: Record<string, unknown> | null
+    error_message: string | null
+  }
+  return {
+    id: row.id,
+    status: row.status,
+    user_id: row.user_id ?? null,
+    output_data: row.output_data ?? null,
+    error_message: row.error_message ?? null,
+  }
+}
+
+/**
+ * `tk.pipelines.getSnapshot` — user-scoped status/progress read for a seeded
+ * run. Three reads: the ownership-scoped `pipelines` row (`.eq("user_id",
+ * userId)` → null on a foreign caller or a missing id, since the service-role
+ * client bypasses RLS — same enforcement `routes/pipelines.ts`'s
+ * `GET /v1/pipelines/:id` applies), the `pipeline_stages` list ordered by
+ * `stage_order` (mirrors `ee/pipelines/engine.ts`'s stage read), and — only
+ * when a final asset exists — the `assets.r2_url` lookup that resolves
+ * `final_output_asset_id` → a public `finalOutputUrl` (the same asset-id → URL
+ * resolution the pipeline stages use, e.g. `locations.ts`'s `assetUrlForId`).
+ * Field mapping matches `PipelineSnapshot` (camelCase keys).
+ *
+ * Error handling mirrors `routes/pipelines.ts`'s `GET /v1/pipelines/:id`
+ * (500-on-error vs 404-on-missing): a DB fault on the PRIMARY pipelines read
+ * THROWS so the consuming route can surface a 500 — swallowing it to `null`
+ * would be indistinguishable from not-found/ownership-fail (a transient fault
+ * would read as a spurious "not found" under status polling). The follow-up
+ * stages / asset reads degrade gracefully (empty stages / null URL) but log
+ * the swallowed error so the partial degradation stays observable.
+ */
+async function getPipelineSnapshot(
+  pipelineId: string,
+  userId: string,
+): Promise<PipelineSnapshot | null> {
+  const { data: pipelineData, error: pipelineError } = await supabase
+    .from("pipelines")
+    .select(
+      "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,final_output_asset_id,failure_reason,current_progress_message",
+    )
+    .eq("id", pipelineId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (pipelineError) {
+    throw new Error(
+      `Failed to read pipeline snapshot for ${pipelineId}: ${pipelineError.message}`,
+    )
+  }
+  if (!pipelineData) return null
+  const pipeline = pipelineData as {
+    id: string
+    status: string
+    current_stage: string | null
+    spent_credits: number | null
+    reserved_credits: number | null
+    upfront_credit_estimate: number | null
+    final_output_asset_id: string | null
+    failure_reason: string | null
+    current_progress_message: string | null
+  }
+
+  const { data: stages, error: stagesError } = await supabase
+    .from("pipeline_stages")
+    .select("stage_name, status")
+    .eq("pipeline_id", pipelineId)
+    .order("stage_order", { ascending: true })
+  if (stagesError) {
+    // Non-fatal: return the snapshot with an empty stage list rather than
+    // failing the whole read — but log so the blanked list is observable.
+    console.error(
+      `[private-plugins/pipelines] Failed to read stages for pipeline ${pipelineId}:`,
+      stagesError.message,
+    )
+  }
+  const stageRows = (stages ?? []) as Array<{ stage_name: string; status: string }>
+
+  let finalOutputUrl: string | null = null
+  if (pipeline.final_output_asset_id) {
+    const { data: asset, error: assetError } = await supabase
+      .from("assets")
+      .select("r2_url")
+      .eq("id", pipeline.final_output_asset_id)
+      .maybeSingle()
+    if (assetError) {
+      // Non-fatal: leave finalOutputUrl null rather than failing the read —
+      // but log so the missing URL is observable.
+      console.error(
+        `[private-plugins/pipelines] Failed to resolve final output URL for pipeline ${pipelineId}:`,
+        assetError.message,
+      )
+    }
+    finalOutputUrl = (asset as { r2_url: string | null } | null)?.r2_url ?? null
+  }
+
+  return {
+    id: pipeline.id,
+    status: pipeline.status,
+    currentStage: pipeline.current_stage ?? null,
+    stages: stageRows.map((s) => ({ stageName: s.stage_name, status: s.status })),
+    spentCredits: pipeline.spent_credits ?? 0,
+    reservedCredits: pipeline.reserved_credits ?? 0,
+    upfrontCreditEstimate: pipeline.upfront_credit_estimate ?? 0,
+    finalOutputUrl,
+    failureReason: pipeline.failure_reason ?? null,
+    progressMessage: pipeline.current_progress_message ?? null,
+  }
+}
+
 export function buildToolkit(): PluginToolkit {
   return {
     providers: {
@@ -439,6 +571,7 @@ export function buildToolkit(): PluginToolkit {
       // importing the union type here.
       markProviderCallStart: (jobId, kind) =>
         markProviderCallStart(jobId, kind as Parameters<typeof markProviderCallStart>[1]),
+      readJob,
     },
     http: {
       supabase,
@@ -536,6 +669,24 @@ export function buildToolkit(): PluginToolkit {
         )
         return { output: result.output, providerCost: result.providerCost }
       },
+    },
+    pipelines: {
+      // Core (`lib/private-plugins/`) may not STATICALLY import `ee/`
+      // (tools/check-ee-imports.mjs) — each method reaches the seed lane via a
+      // runtime dynamic import() inside its body, mirroring load.ts's
+      // applyPipelinePrompts()/applyStaticCreditCosts() and the
+      // http.computeGenerateVideoProPricing shim above. No hasCredits() gate:
+      // tk.pipelines is only ever called by a loaded Cloud plugin, and the
+      // seed lane guards its own prompt availability internally.
+      createSeeded: async (input) => {
+        const { createSeededPipeline } = await import("../../ee/pipelines/seed-pipeline.js")
+        return createSeededPipeline(supabase, input)
+      },
+      estimateSeeded: async (input) => {
+        const { estimateSeededPipelineCredits } = await import("../../ee/pipelines/credits.js")
+        return estimateSeededPipelineCredits(supabase, input)
+      },
+      getSnapshot: getPipelineSnapshot,
     },
   }
 }

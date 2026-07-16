@@ -171,6 +171,9 @@ import { KieError } from "../../providers/kie/client.js"
 // Real class (module not mocked) — the worker's self-heal branch discriminates
 // on isPostProcessingError, so tests must throw the genuine type.
 import { PostProcessingError } from "../../lib/post-processing-error.js"
+// Real class (module not mocked) — the drain branch discriminates on
+// instanceof DrainAbortError, so tests must throw the genuine type.
+import { DrainAbortError } from "../../lib/worker-drain.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -639,5 +642,31 @@ describe("video worker processor", () => {
     // fast crash, not a silent stall on a queue with no handler.
     const job = makeBullJob("generate-video")
     await expect(processor(job)).rejects.toThrow("Unknown job type: generate-video")
+  })
+
+  // -------------------------------------------------------------------------
+  // Drain-abort classification (incident 2026-07-15).
+  //
+  // A DrainAbortError means the WORKER is dying (deploy SIGTERM), not that the
+  // job failed: the row must be left exactly as-is (reservation intact, status
+  // untouched) and the error rethrown so BullMQ requeues the job with its lock
+  // released — the replacement process re-picks it seconds after boot. Marking
+  // it failed+refunded would throw away a provider task that is still running
+  // (or already delivered) upstream.
+  // -------------------------------------------------------------------------
+
+  it("DrainAbortError on the FINAL attempt → rethrows untouched: no mark-failed, no refund, no self-heal select", async () => {
+    mocks.mockIsFinalJobAttempt.mockReturnValueOnce(true)
+    mocks.mockHandler.mockRejectedValueOnce(new DrainAbortError())
+
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).rejects.toBeInstanceOf(DrainAbortError)
+
+    // Only the pickup jobRecord fetch — no self-heal row re-select.
+    expect(mocks.mockSingle).toHaveBeenCalledTimes(1)
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    )
   })
 })

@@ -9,6 +9,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
+import { DrainAbortError } from "../lib/worker-drain.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -236,6 +237,22 @@ export function createVideoWorker() {
           return
         }
 
+        // Drain abort (deploy SIGTERM — lib/worker-drain.ts): the WORKER is
+        // dying, not the job. Leave the row exactly as-is (reservation intact,
+        // status untouched — the provider task may still be running or already
+        // delivered upstream) and rethrow REGARDLESS of attempt number: BullMQ
+        // requeues the job with its lock released, so the replacement process
+        // re-picks it seconds after boot and the stall guard's inline
+        // reconcile resumes/recovers it. Marking failed+refunding here would
+        // charge nothing for a result we can still collect (incident
+        // 2026-07-15: 15–20 min stalls when locks died with the process).
+        if (err instanceof DrainAbortError) {
+          console.warn(
+            `[worker] Job ${jobId} interrupted by worker drain — rethrowing for BullMQ requeue (row left for stall-retry recovery)`,
+          )
+          throw err
+        }
+
         const message = err instanceof Error ? err.message : "Unknown error"
 
         // For KieError, log the internal details for debugging
@@ -328,6 +345,26 @@ export function createVideoWorker() {
         throw err
       }
     },
-    { connection: connection as unknown as ConnectionOptions, concurrency: config.VIDEO_WORKER_CONCURRENCY, lockDuration: 900_000, stalledInterval: 300_000 },
+    {
+      connection: connection as unknown as ConnectionOptions,
+      concurrency: config.VIDEO_WORKER_CONCURRENCY,
+      // Lock/stall geometry (incident 2026-07-15): a job whose process dies
+      // WITHOUT the drain path (OOM, SIGKILL, crash) is invisible to stall
+      // recovery until its lock expires + the next stalled check runs — that
+      // window is user-visible "stuck at processing". 300s lock (auto-renewed
+      // every 150s while the handler runs, so long renders are safe) + 60s
+      // stalled checks cap the blackout at ~6 min, down from the old
+      // 900s+300s ≈ 15–20 min. Safe to re-pick early: the stall guard never
+      // re-runs a handler once provider_task_id is persisted (inline
+      // reconcile instead), and finalize is CAS-claimed.
+      lockDuration: 300_000,
+      stalledInterval: 60_000,
+      // Deploy storms can stall the same job more than once before a healthy
+      // process gets to it (2026-07-15 batch B stalled under two consecutive
+      // deploys). Default maxStalledCount=1 would move it to failed-permanent
+      // on the second stall; each extra re-pick is a cheap idempotent inline
+      // reconcile, so allow a few.
+      maxStalledCount: 3,
+    },
   )
 }

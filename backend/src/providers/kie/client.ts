@@ -10,6 +10,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
@@ -264,8 +265,19 @@ export type ProgressCallback = (progress: number) => Promise<void>
 // HELPERS
 // =============================================================================
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/**
+ * Poll-loop sleep, drain-aware. Every KIE poll loop (this file + the
+ * kling3/kontext/luma/runway/suno clients) waits through this helper, so a
+ * worker drain (SIGTERM on deploy — see `lib/worker-drain.ts`) aborts ALL
+ * in-flight provider waits at their next wait point: checked on entry and
+ * again after the timeout, worst-case abort latency is one poll delay
+ * (≤10s), inside the worker's 25s drain window. Non-worker processes never
+ * set the drain flag, so API/cron behavior is unchanged.
+ */
+export async function sleep(ms: number): Promise<void> {
+  if (isWorkerDraining()) throw new DrainAbortError()
+  await new Promise<void>((resolve) => setTimeout(resolve, ms))
+  if (isWorkerDraining()) throw new DrainAbortError()
 }
 
 /** Exponential backoff: 2s for first 5, ramp to 10s cap */

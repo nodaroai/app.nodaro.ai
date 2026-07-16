@@ -443,3 +443,59 @@ describe("reconcileKieJob", () => {
     expect(bumpCall).toBeTruthy()
   })
 })
+
+// ---------------------------------------------------------------------------
+// pollAttempts threading (stall-guard resume polling, incident 2026-07-15)
+// ---------------------------------------------------------------------------
+//
+// The worker's stall re-pick (inline reconcile) runs INSIDE a live BullMQ
+// handler, so it can afford to RESUME polling a still-running upstream task
+// with a full attempt budget instead of the cron's one-shot probe. Without
+// this, a job re-picked while the provider is still generating gets one
+// failed probe, a bumped attempt counter, and then waits for the cron's
+// 20-minute staleness threshold — the exact UX hole the drain fix closes.
+describe("reconcileKieJob pollAttempts threading", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.finalizeMock.mockResolvedValue({ ok: true })
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+  })
+
+  const successPoll = {
+    resultJson: { resultUrls: ["https://kie.example/r.png"] },
+    taskId: "t-poll",
+  }
+
+  it("kie-standard: opts.pollAttempts is forwarded to pollKieTask", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce(successPoll)
+    await reconcileKieJob(
+      { id: "j-pa", provider_kind: "kie-standard", provider_task_id: "t-pa", reconcile_attempts: 0, job_type: "generate-image" },
+      { claimant: "worker", pollAttempts: 120 },
+    )
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa", 120)
+  })
+
+  it("kie-standard: defaults to a single probe when opts.pollAttempts is absent (cron path unchanged)", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce(successPoll)
+    await reconcileKieJob(
+      { id: "j-pa-default", provider_kind: "kie-standard", provider_task_id: "t-pa1", reconcile_attempts: 0, job_type: "generate-image" },
+    )
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa1", 1)
+  })
+
+  it("kie-kontext + kie-luma: pollAttempts forwarded to their pollers too", async () => {
+    mocks.pollKontextTaskMock.mockResolvedValueOnce(successPoll)
+    await reconcileKieJob(
+      { id: "j-kontext", provider_kind: "kie-kontext", provider_task_id: "t-k", reconcile_attempts: 0, job_type: "generate-image" },
+      { claimant: "worker", pollAttempts: 60 },
+    )
+    expect(mocks.pollKontextTaskMock).toHaveBeenCalledWith("t-k", 60)
+
+    mocks.pollLumaTaskMock.mockResolvedValueOnce(successPoll)
+    await reconcileKieJob(
+      { id: "j-luma", provider_kind: "kie-luma", provider_task_id: "t-l", reconcile_attempts: 0, job_type: "image-to-video" },
+      { claimant: "worker", pollAttempts: 60 },
+    )
+    expect(mocks.pollLumaTaskMock).toHaveBeenCalledWith("t-l", 60)
+  })
+})
