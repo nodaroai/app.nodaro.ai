@@ -90,6 +90,29 @@ describe("tk.jobs.markJobCompleted — output-payload nesting wrapper", () => {
     })
   })
 
+  it("keys a plugin persisted into output_data at INSERT time survive the completion read-merge", async () => {
+    // Some plugins persist business-data keys into output_data at INSERT
+    // time — before the job ever reaches this completion wrapper — not just
+    // engine checkpoints like `pro` (already covered above). The read-merge
+    // must preserve those insert-time keys verbatim and add the completion
+    // payload's keys alongside them, never overwrite the row wholesale.
+    mockSingle.mockResolvedValue({
+      data: { output_data: { markerA: "inspired", markerB: "aj-1" } },
+      error: null,
+    })
+    mockCoreMarkJobCompleted.mockResolvedValue(true)
+
+    await tk.jobs.markJobCompleted("job-5", { json: { pipelineId: "p-1" } })
+
+    expect(mockCoreMarkJobCompleted).toHaveBeenCalledWith("job-5", {
+      output_data: {
+        markerA: "inspired",
+        markerB: "aj-1",
+        json: { pipelineId: "p-1" },
+      },
+    })
+  })
+
   it("core CAS false (cancelled/terminal) passes through as false — caller skips the credit commit", async () => {
     mockSingle.mockResolvedValue({ data: { output_data: {} }, error: null })
     mockCoreMarkJobCompleted.mockResolvedValue(false)
