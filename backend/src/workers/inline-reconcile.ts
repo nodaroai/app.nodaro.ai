@@ -39,6 +39,8 @@ import {
   ELEVENLABS_RECOVER_KINDS as ELEVENLABS_KINDS,
   FAL_RECOVER_KINDS as FAL_KINDS,
 } from "../lib/reconcile/types.js"
+import { DrainAbortError } from "../lib/worker-drain.js"
+import { MAX_POLL_ATTEMPTS } from "../providers/kie/client.js"
 
 export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void> {
   const kind = row.provider_kind
@@ -59,7 +61,11 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
         `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
         `(kind=${kind}, task=${row.provider_task_id}) — running reconcileKieJob inline`,
       )
-      await reconcileKieJob(row, { claimant: "worker" })
+      // Full resume-poll budget (incident 2026-07-15): this runs inside a live
+      // BullMQ handler (lock auto-renews), so a task the dead worker left
+      // STILL RUNNING upstream is polled to completion right here — not
+      // one-shot-probed and parked for the cron's 20-min staleness threshold.
+      await reconcileKieJob(row, { claimant: "worker", pollAttempts: MAX_POLL_ATTEMPTS })
       return
     }
     if (REPLICATE_KINDS.has(kind)) {
@@ -99,8 +105,13 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       `(kind=${kind}, task=${row.provider_task_id}) — unknown async kind, leaving to cron`,
     )
   } catch (err) {
-    // Never throw — the BullMQ job should exit successfully so the next
-    // attempt isn't retried again. The cron picks up any row we couldn't
+    // Drain (deploy SIGTERM) mid-recovery is the ONE error that must escape:
+    // swallowing it completes the BullMQ job and strands the row until the
+    // cron's staleness threshold. Rethrowing fails this attempt, releases the
+    // lock, and the replacement process re-picks it within seconds of boot.
+    if (err instanceof DrainAbortError) throw err
+    // Otherwise never throw — the BullMQ job should exit successfully so the
+    // next attempt isn't retried again. The cron picks up any row we couldn't
     // recover here.
     console.error(
       `[worker:inline-reconcile] Inline reconcile threw for job ${row.id} ` +

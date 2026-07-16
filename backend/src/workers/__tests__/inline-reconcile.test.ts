@@ -25,16 +25,21 @@ vi.mock("../../lib/reconcile/fal.js", () => ({
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
 import { KIE_RECOVER_KINDS } from "../../lib/reconcile/types.js"
+import { MAX_POLL_ATTEMPTS } from "../../providers/kie/client.js"
+import { DrainAbortError } from "../../lib/worker-drain.js"
 
 describe("tryInlineReconcile", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it("dispatches every kie-* kind to reconcileKieJob as claimant 'worker'", async () => {
+  it("dispatches every kie-* kind to reconcileKieJob as claimant 'worker' with a FULL resume-poll budget", async () => {
     // Iterate the SHARED dispatch set (audit M5) — a hardcoded copy here was
     // the fourth divergent list. Claimant "worker" (audit H1) lets the stall
     // re-pick re-claim its own crashed predecessor's finalize claim.
+    // pollAttempts (incident 2026-07-15): the stall re-pick runs inside a live
+    // BullMQ handler, so it resumes polling a still-running task to completion
+    // instead of one-shot-probing and parking the row for the cron.
     for (const kind of KIE_RECOVER_KINDS) {
       mocks.reconcileKieJob.mockClear()
       await tryInlineReconcile({
@@ -47,9 +52,26 @@ describe("tryInlineReconcile", () => {
       expect(mocks.reconcileKieJob).toHaveBeenCalledTimes(1)
       expect(mocks.reconcileKieJob).toHaveBeenCalledWith(
         expect.objectContaining({ provider_kind: kind }),
-        { claimant: "worker" },
+        { claimant: "worker", pollAttempts: MAX_POLL_ATTEMPTS },
       )
     }
+  })
+
+  it("rethrows DrainAbortError so BullMQ requeues the job instead of parking it for the cron", async () => {
+    // A drain (deploy SIGTERM) mid-resume-poll must NOT be swallowed like a
+    // transient error: swallowing completes the BullMQ job and strands the row
+    // until the cron's staleness threshold. Rethrowing fails the attempt, the
+    // lock releases, and the replacement process re-picks it within seconds.
+    mocks.reconcileKieJob.mockRejectedValueOnce(new DrainAbortError())
+    await expect(
+      tryInlineReconcile({
+        id: "j-drain",
+        provider_kind: "kie-standard",
+        provider_task_id: "t-drain",
+        reconcile_attempts: 0,
+        job_type: "generate-image",
+      }),
+    ).rejects.toBeInstanceOf(DrainAbortError)
   })
 
   it("dispatches replicate-* kinds to reconcileReplicateJob", async () => {

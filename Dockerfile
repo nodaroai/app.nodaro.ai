@@ -395,21 +395,47 @@ if [ -z "$INTERNAL_ORCHESTRATOR_SECRET" ]; then
   echo "Generated INTERNAL_ORCHESTRATOR_SECRET (set the env var to persist across restarts)"
 fi
 
+# --- Signal topology (incident 2026-07-15) -----------------------------------
+# This script stays PID 1. Docker/Railway deliver SIGTERM to PID 1 ONLY; the
+# previous `exec caddy` made Caddy PID 1, so on every deploy Caddy shut down
+# gracefully while the node siblings (server + BullMQ workers) were SIGKILLed
+# without ever seeing SIGTERM — worker.ts's drain never ran, active jobs died
+# holding their BullMQ locks, and users watched `processing` rows freeze for
+# lockDuration + stalled-check before recovery. On TERM/INT we forward the
+# signal to every child and wait for them to drain before exiting.
+TERMINATING=""
+CHILD_PIDS=""
+
+forward_term() {
+  TERMINATING=1
+  echo "[start.sh] TERM/INT received — forwarding to children:$CHILD_PIDS"
+  kill -TERM $CHILD_PIDS 2>/dev/null
+}
+trap forward_term TERM INT
+
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000
 PORT=$BACKEND_PORT node dist/server.js &
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Supervised process runner: the queue consumers below are background
-# siblings with Caddy as PID 1 — without supervision, a crashed worker
+# siblings of this PID-1 script — without supervision, a crashed worker
 # (e.g. OOM-killed during a render burst) stays dead while /health keeps
 # serving 200 from server.js (incident 2026-06-11: orchestrator + worker
 # died at ~21:08/21:12 UTC, queues froze for 10h, container stayed green).
 # 10s backoff prevents a hot crash-loop; the loop dies with the container.
+# On TERM/INT the subshell forwards to its current node child, waits for the
+# child's drain, and exits WITHOUT restarting — a fresh worker in a dying
+# container would pick up jobs only to be SIGKILLed holding their locks.
 supervise() {
   name="$1"; shift
+  sup_child=""
+  trap '[ -n "$sup_child" ] && kill -TERM "$sup_child" 2>/dev/null; [ -n "$sup_child" ] && wait "$sup_child"; echo "[supervise] $name stopped (drained)"; exit 0' TERM INT
   while :; do
-    "$@"
+    "$@" &
+    sup_child=$!
+    wait "$sup_child"
     code=$?
     echo "[supervise] $name exited (code $code) — restarting in 10s"
     sleep 10
@@ -418,12 +444,15 @@ supervise() {
 
 # Start BullMQ worker (job processor)
 supervise worker node dist/worker.js &
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Start BullMQ render worker (Remotion video rendering)
 supervise render-worker node dist/render-worker.js &
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Start BullMQ orchestrator worker (workflow execution)
 supervise orchestrator node dist/orchestrator.js &
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Start BullMQ pipeline worker (Story-to-Video orchestration).
 # Cloud-only — exits cleanly on non-cloud editions so the same image runs
@@ -434,10 +463,12 @@ if [ "$EDITION" = "cloud" ]; then
 else
   node dist/pipeline-worker.js &
 fi
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do
+  if [ -n "$TERMINATING" ]; then break; fi
   if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
     echo "Backend is ready"
     break
@@ -445,9 +476,20 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Start Caddy as main process (PID 1 for signal handling)
-cd /app
-exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+# Start Caddy (reverse proxy). Backgrounded — start.sh remains PID 1 so it
+# owns signal forwarding; Caddy still receives a clean TERM through the trap.
+if [ -z "$TERMINATING" ]; then
+  cd /app
+  caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+  CHILD_PIDS="$CHILD_PIDS $!"
+fi
+
+# Reap children. On TERM the trap forwards the signal, the interrupted first
+# `wait` returns, and the second `wait` blocks until every child has actually
+# drained (Railway's SIGKILL at grace-end is the backstop for hung drains).
+wait
+wait
+exit 0
 EOF
 
 RUN chmod +x /app/start.sh

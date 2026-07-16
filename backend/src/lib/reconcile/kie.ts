@@ -31,6 +31,15 @@ export interface KieJobRow {
  *  tryInlineReconcile so it can re-claim its crashed predecessor's claim. */
 export interface ReconcileOpts {
   claimant?: FinalizeClaimant
+  /** Poll attempt budget for the upstream probe. Defaults to 1 (the cron's
+   *  one-shot probe). The worker's stall re-pick (inline reconcile) passes a
+   *  full budget so a job re-picked while the provider is STILL RUNNING
+   *  resumes polling to completion inside the live BullMQ handler, instead of
+   *  burning one probe and parking the row for the cron's staleness threshold
+   *  (incident 2026-07-15: 15–20 min user-visible stalls). Honored by the
+   *  kinds whose pollers take an attempt budget (kie-standard, kie-lip-sync,
+   *  kie-kontext, kie-luma); the rest keep their existing one-shot semantics. */
+  pollAttempts?: number
 }
 
 /** Suno music job_types whose poll shape matches `SunoTaskResult` (multi-track
@@ -52,7 +61,7 @@ const SUNO_MUSIC_JOB_TYPES: ReadonlySet<string> = new Set([
  *  throws when the upstream task is still running OR has terminally failed.
  *  Caller distinguishes terminal failure via `isUpstreamKieFailure(err)` (the
  *  structured flag) vs transient (timeout/network → bump). */
-async function singlePoll(row: KieJobRow): Promise<{
+async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
   url: string
   extraUrls: readonly string[]
   providerMs?: number
@@ -64,7 +73,7 @@ async function singlePoll(row: KieJobRow): Promise<{
     case "kie-standard":
     case "kie-lip-sync": {
       // Kling avatar / InfiniTalk use the standard /jobs/recordInfo endpoint.
-      const r = await pollKieTask(id, 1)
+      const r = await pollKieTask(id, pollAttempts)
       const urls = r.resultJson.resultUrls ?? (
         r.resultJson.videoUrl ? [r.resultJson.videoUrl]
         : r.resultJson.audioUrl ? [r.resultJson.audioUrl]
@@ -93,13 +102,13 @@ async function singlePoll(row: KieJobRow): Promise<{
       return { url: videoUrl, extraUrls: [] }
     }
     case "kie-kontext": {
-      const r = await pollKontextTask(id, 1)
+      const r = await pollKontextTask(id, pollAttempts)
       const urls = r.resultJson.resultUrls ?? []
       if (!urls[0]) throw new Error("Kontext success but no resultUrls")
       return { url: urls[0]!, extraUrls: urls.slice(1) }
     }
     case "kie-luma": {
-      const r = await pollLumaTask(id, 1)
+      const r = await pollLumaTask(id, pollAttempts)
       const urls = r.resultJson.resultUrls ?? []
       if (!urls[0]) throw new Error("Luma success but no resultUrls")
       return { url: urls[0]!, extraUrls: urls.slice(1) }
@@ -253,7 +262,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
 
   let result: { url: string; extraUrls: readonly string[]; providerMs?: number }
   try {
-    result = await singlePoll(row)
+    result = await singlePoll(row, opts?.pollAttempts ?? 1)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     // Classify off the STRUCTURED flag via the shared isUpstreamKieFailure helper,
