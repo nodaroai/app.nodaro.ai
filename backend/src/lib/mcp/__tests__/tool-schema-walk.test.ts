@@ -138,6 +138,11 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // params (only 8 presets; a filter would add complexity without value).
   // See brand-presets.ts.
   "list_brand_presets",
+  // Premade voice catalog listing — returns the curated premade ElevenLabs
+  // voices (id + name) so a caller can pick a voice_id. The catalog is small
+  // and fixed; no filter/pagination params. See verbs-audio.ts. (Cloned voices
+  // are user-scoped and will be a separate, auth-carrying addition.)
+  "list_voices",
 ])
 
 // ---------------------------------------------------------------------------

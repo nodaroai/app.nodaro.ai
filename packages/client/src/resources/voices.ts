@@ -126,6 +126,41 @@ export class VoicesResource {
   recast(input: VoiceChangerProInput): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer-pro", { body: input })
   }
+
+  /**
+   * Detect the speakers in a clip WITHOUT recasting yet
+   * (`POST /v1/voice-changer-pro/analyze`) — the first step of the interactive
+   * flow. Separates voice from music once and diarizes the vocals, returning the
+   * speaker list so a user (or agent) can choose a voice per speaker before
+   * committing to a paid recast. Poll `jobs.get(jobId)`: the completed job's
+   * `output_data` carries the separated stem urls + the detected `speakers`
+   * (each with `id`, time `segments`, `firstStartSec`, `wordCount`, `snippet`)
+   * and the detected language — reshape it into a {@link VcpAnalysis} and pass it
+   * as `recast({ ..., analysis })` to skip re-detection. With `suggestTitle`,
+   * `output_data.suggestedTitle` also carries an LLM-proposed title.
+   *
+   * Cloud-only; costs credits and runs async.
+   */
+  analyze(input: VcpAnalyzeInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer-pro/analyze", { body: input })
+  }
+
+  /**
+   * Render a final video from a mixed set of stems
+   * (`POST /v1/voice-changer-pro/export`) — the last step of the interactive
+   * flow. After `recast({ output: "stems" })` hands back the dry per-track stems
+   * and the user has set levels / mutes / an effect in your editor, pass those
+   * `tracks` (plus the source `videoUrl`) here to mix and remux into the finished
+   * video. The video is stream-copied (never re-encoded), so the export is
+   * bit-identical to your preview. At least one track must be un-muted (all-muted
+   * is a 400); `voiceFx` is applied to the voice tracks at render time.
+   *
+   * Cloud-only; costs credits and runs async — poll `jobs.get(jobId)` for the
+   * result (`output_data.videoUrl`).
+   */
+  exportMix(input: VcpExportInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer-pro/export", { body: input })
+  }
 }
 
 /**
@@ -220,4 +255,96 @@ export interface VoiceChangerProInput {
     /** Echo decay / feedback (0–1). Higher = more repeats. Used by the `echo` / `custom` presets. */
     decay?: number
   }
+  /**
+   * Output mode. `"video"` (default) mixes the recast voices with the preserved
+   * background and returns a finished merged video. `"stems"` returns the dry,
+   * unleveled per-track stems instead (rendering nothing) so you can drive an
+   * INTERACTIVE mix — adjust levels/mutes/effect in your own UI, then render the
+   * final video with {@link VoicesResource.exportMix}. This is how an app builds
+   * a full editor around VCP rather than a one-shot recast.
+   */
+  output?: "video" | "stems"
+  /**
+   * A prior {@link VoicesResource.analyze} result. Pass it to SKIP re-detection:
+   * the recast reuses the already-separated stems and speaker segments instead of
+   * running separation + diarization again. This is the fast-path for the
+   * detect → pick voices → recast interactive flow (analyze once, recast N times
+   * as the user tweaks voice assignments). Omit to auto-detect from the source.
+   */
+  analysis?: VcpAnalysis
+}
+
+/** One detected speaker in a {@link VcpAnalysis} (from `analyze`). */
+export interface VcpAnalysisSpeaker {
+  /** Stable speaker id (first-appearance order). */
+  id: string
+  /** The speaker's spoken time ranges (seconds). */
+  segments: Array<{ start: number; end: number }>
+  /** When the speaker first speaks (seconds). */
+  firstStartSec?: number
+  /** Rough word count across the clip — a proxy for how much this speaker says. */
+  wordCount?: number
+  /** The first few transcribed words, to help a user tell speakers apart. */
+  snippet?: string
+}
+
+/**
+ * The result of {@link VoicesResource.analyze}, reshaped to pass back into
+ * {@link VoiceChangerProInput.analysis}. Read a completed analyze job's
+ * `output_data` into this shape (it carries the separated stem urls + the
+ * detected speakers) and thread it into `recast` to skip re-detection.
+ */
+export interface VcpAnalysis {
+  /** URL of the isolated vocal stem. */
+  vocalsUrl: string
+  /** URL of the separated music/SFX stem (absent when the source had none). */
+  backgroundUrl?: string
+  /** The detected speakers, in first-appearance order. */
+  speakers: VcpAnalysisSpeaker[]
+  /** Scribe's detected language code, round-tripped so the recast auto-selects the STS model. */
+  languageCode?: string
+  /** Confidence (0–1) of {@link VcpAnalysis.languageCode}. */
+  languageProbability?: number
+}
+
+/** Input for {@link VoicesResource.analyze}. */
+export interface VcpAnalyzeInput {
+  /** URL of an audio file to analyze. Exactly one of `audioUrl` / `videoUrl` is required. */
+  audioUrl?: string
+  /** URL of a video file to analyze (its audio track is used). Exactly one of `audioUrl` / `videoUrl` is required. */
+  videoUrl?: string
+  /** Quality of the voice/music separation run before diarization: `"fast"` (default) or `"best"`. */
+  separationQuality?: "fast" | "best"
+  /** Also suggest a conversion title from the transcript (returned on the job's `output_data.suggestedTitle`). */
+  suggestTitle?: boolean
+}
+
+/** One track in a {@link VcpExportInput} mix. */
+export interface VcpExportTrack {
+  /** URL of the stem for this lane (a recast voice stem or the background stem). */
+  url: string
+  /** Fader position as a percentage: 0 = silent, 100 = unity, 200 = +6dB. */
+  gain: number
+  /** Whether this lane is muted in the mix. */
+  muted: boolean
+  /**
+   * Which bucket the track is in, and so whether `voiceFx` lands on it. Defaults
+   * to `"voice"`. Set `"background"` for the music/SFX lane (the effect never
+   * touches it).
+   */
+  kind?: "voice" | "background"
+}
+
+/** Input for {@link VoicesResource.exportMix}. */
+export interface VcpExportInput {
+  /** The source video to remux the mixed audio onto (stream-copied — never re-encoded). */
+  videoUrl: string
+  /** The mix: one entry per lane. At least one must be un-muted (all-muted is a 400). Max 16 tracks. */
+  tracks: VcpExportTrack[]
+  /**
+   * A reverb/echo applied to the VOICE tracks only (not `"background"` lanes)
+   * at render time — so iterating the effect in your editor is free until you
+   * export. Same shape as {@link VoiceChangerProInput.voiceFx}.
+   */
+  voiceFx?: VoiceChangerProInput["voiceFx"]
 }
