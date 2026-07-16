@@ -91,6 +91,8 @@ Cloud-only proprietary features (voice-changer-pro, surround-continuation, film-
 
 **Deploy:** Dockerfile's `prod-deps` stage installs `@nodaroai/cloud-plugins@${CLOUD_PLUGINS_VERSION}` only when the `NPM_TOKEN` build-arg is present (unset for self-hosted/community/public CI — no-op, byte-identical image). Railway supplies both on staging and prod.
 
+**Plugin-version bump ORDERING (when a plugin release depends on a toolkit change):** the contract is additive-optional by design, so a plugin built against a NEWER toolkit surface loads cleanly on an older app — new request fields are silently ignored (no crash, no boot error, no signal beyond the `[private-plugins] loaded …@<ver>` log line). `CLOUD_PLUGINS_VERSION` is a Railway build-arg tracked nowhere in git, so nothing stops it being bumped against a stale `main`. Therefore: merge the app-side toolkit change to `main` FIRST, then bump `CLOUD_PLUGINS_VERSION` — the reverse order silently no-ops the plugin's new behavior until the app catches up (e.g. plugin 0.11.0's grader `temperature: 0` pin needs `toolkit.ts::completeStructured` to forward `temperature`/`topP`; pinned earlier, the judge silently rides the vendor default again).
+
 **BORN-PRIVATE rule:** new cloud-secret features start life in `nodaroai/nodaro-cloud-plugins`, never as a public migration/route/handler here. Pricing is admin-seeded into `model_pricing` plus the plugin's own `staticCreditCosts()` fallback.
 
 **Checkpointed plugin jobs (gvp/evp) — reconcile resume + R2-key invariant (2026-07-13):**

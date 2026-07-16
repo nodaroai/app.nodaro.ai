@@ -740,6 +740,13 @@ export interface PluginLlmRequest {
   system?: string
   prompt: string
   maxTokens?: number
+  /** Sampling temperature — pinned deliberately by callers that must not ride the
+   *  vendor default (the video-analysis grader pins 0 for a deterministic judge).
+   *  Mirrors `LlmRequest.temperature`. Additive-optional. */
+  temperature?: number
+  /** Nucleus-sampling cutoff (`top_p`) — pinned deliberately (1.0 disables it).
+   *  Mirrors `LlmRequest.topP`. Additive-optional. */
+  topP?: number
 }
 
 /**
