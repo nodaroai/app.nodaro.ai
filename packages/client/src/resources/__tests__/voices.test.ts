@@ -83,4 +83,50 @@ describe("voices resource", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-clones/vc1")
     expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("DELETE")
   })
+
+  it("recast() POSTs /v1/voice-changer-pro, forwarding output + analysis (the interactive fast-path)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-recast" }))
+    const c = make(fetchMock)
+    const analysis = {
+      vocalsUrl: "https://r2/vocals.wav",
+      speakers: [{ id: "spk_0", segments: [{ start: 0, end: 5 }] }],
+      languageCode: "en",
+    }
+    const out = await c.voices.recast({ audioUrl: "https://r2/a.mp3", orderedVoices: ["Rachel"], output: "stems", analysis })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-changer-pro")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ audioUrl: "https://r2/a.mp3", orderedVoices: ["Rachel"], output: "stems", analysis })
+    expect(out.jobId).toBe("j-recast")
+  })
+
+  it("analyze() POSTs /v1/voice-changer-pro/analyze and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-analyze" }))
+    const c = make(fetchMock)
+    const out = await c.voices.analyze({ videoUrl: "https://r2/clip.mp4", separationQuality: "best", suggestTitle: true })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-changer-pro/analyze")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ videoUrl: "https://r2/clip.mp4", separationQuality: "best", suggestTitle: true })
+    expect(out.jobId).toBe("j-analyze")
+  })
+
+  it("exportMix() POSTs /v1/voice-changer-pro/export with the mixed tracks", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-export" }))
+    const c = make(fetchMock)
+    const input = {
+      videoUrl: "https://r2/clip.mp4",
+      tracks: [
+        { url: "https://r2/spk0.wav", gain: 100, muted: false, kind: "voice" as const },
+        { url: "https://r2/bg.wav", gain: 60, muted: false, kind: "background" as const },
+      ],
+      voiceFx: { preset: "hall" as const, wetDryMix: 30 },
+    }
+    const out = await c.voices.exportMix(input)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-changer-pro/export")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(input)
+    expect(out.jobId).toBe("j-export")
+  })
 })

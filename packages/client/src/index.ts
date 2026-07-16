@@ -281,6 +281,11 @@ export type {
   VoiceLibraryResponse,
   VoiceChangerProInput,
   VoiceChangerProVoice,
+  VcpAnalyzeInput,
+  VcpAnalysis,
+  VcpAnalysisSpeaker,
+  VcpExportInput,
+  VcpExportTrack,
 } from "./resources/voices.js"
 
 export type {
