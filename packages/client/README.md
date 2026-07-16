@@ -270,7 +270,7 @@ try {
 | `client.locations` | Location Studio: CRUD, assets, atmosphere motion |
 | `client.objects` | Object Studio: CRUD, assets, motion |
 | `client.creatures` | Creature Studio: CRUD, assets, motion |
-| `client.voices` | Voice design, clone, remix, recast |
+| `client.voices` | Voice catalog + clones (from URL or file), voice changer, multi-speaker recast + the interactive `analyze`/stems/`exportMix` flow, design, remix, dubbing |
 | `client.pipelines` | Showrunner pipelines: stages, approvals, chat, branch |
 | `client.reduce` | Fan-in reducer (pick-best, concat, vote, merge…) |
 | `client.promptHelper` | Prompt enhancement / wizard |

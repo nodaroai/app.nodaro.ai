@@ -286,6 +286,9 @@ export type {
   VcpAnalysisSpeaker,
   VcpExportInput,
   VcpExportTrack,
+  VoiceDesignInput,
+  VoiceRemixInput,
+  DubbingInput,
 } from "./resources/voices.js"
 
 export type {
