@@ -1839,9 +1839,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "video-analysis:gemini-3.1-pro:600s", credits: 11, note: "10-min ceiling" },
     ],
   },
-  // Both mixed tiers (`mixed` = best-of-all skeleton, `mixed-fast` = fast-base
-  // skeleton) run the identical plan (3 fast + 2 pro passes + judge + refine)
-  // and share this ONE credit family (videoAnalysisCreditSegment maps both).
+  // Both mixed tiers are variants of the same advanced multi-engine analysis
+  // and share this ONE credit family (videoAnalysisCreditSegment maps both;
+  // plan internals live in the private analysis plugin).
   "mixed-video-analysis": {
     id: "mixed-video-analysis",
     kind: "video",
@@ -1849,8 +1849,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Nodaro",
     label: "Video Analysis (Mixed)",
     series: "Video Analysis",
-    description: "Analyze a video with multiple fast + pro passes, then keep the strongest result enriched with footage-verified details from the others — the most complete tier. Billed per duration bucket.",
-    useCases: ["video-analysis", "shot-list", "best-of-n", "most-complete"],
+    description: "Our most advanced analysis tier — multiple analysis engines combined into one result for maximum completeness and accuracy. Billed per duration bucket.",
+    useCases: ["video-analysis", "shot-list", "premium", "most-complete"],
     pricing: [
       { identifier: "video-analysis:mixed", credits: 14, note: "10-min ceiling (no duration given)" },
       { identifier: "video-analysis:mixed:60s", credits: 3 },

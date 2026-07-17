@@ -138,9 +138,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "videoUrl", type: "string" },
         { key: "youtubeUrl", type: "string" },
         // Public tiers, never vendor model ids (raw ids remain accepted for
-        // back-compat but are not advertised). Mixed tiers = multi-model
-        // best-of-N roll plans (mixed: any roll may win the skeleton;
-        // mixed-fast: fast rolls only win, pro rolls donate to the refine).
+        // back-compat but are not advertised). Mixed tiers = advanced
+        // multi-engine plans (internals live in the private analysis plugin).
         // Derived from the shared tier vocabulary — never hand-listed.
         { key: "llmModel", type: "select", options: [...VIDEO_ANALYSIS_TIER_ORDER] },
         { key: "selectionMode", type: "select", options: ["choose", "combine"] },

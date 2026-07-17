@@ -44,26 +44,23 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy), `pro` (default — higher fidelity), `mixed` (most complete — multiple fast + pro passes, best skeleton wins), or `mixed-fast` (same passes; a fast pass always wins the skeleton). See [Credit Cost](#credit-cost) |
-| Result Selection (`selectionMode`) | Select | `choose` | `choose` — keep the strongest of several analysis passes. `combine` — keep the strongest pass, then fold in details from the other passes that are verified against the footage (slightly slower, most complete) |
+| Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy), `pro` (default — higher fidelity), or the mixed tiers `mixed` / `mixed-fast` — our most advanced analysis, built for maximum completeness and accuracy. See [Credit Cost](#credit-cost) |
+| Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended) |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
 **Quality tiers, no model to pick.** You choose a *tier* — `fast` for an
-economy pass, `pro` for higher fidelity, or the `mixed` tiers for the most
-complete result (several fast **and** pro passes in one run) — not a specific
-model. The underlying
+economy analysis, `pro` for higher fidelity, or the `mixed` tiers for our most
+advanced, most complete analysis — not a specific model. The underlying
 analysis model is selected for you (Video Analysis requires native video *and*
 audio understanding, which only a subset of models provide) and is intentionally
 not surfaced, so a tier's backing model can improve over time without changing
 your workflow.
 
-**Result Selection.** Every run analyzes the video several times and grades the
-passes. `choose` keeps the single strongest pass. `combine` additionally reviews
-the discarded passes for details the winner missed (named places, on-screen
-text, brands, extra audio layers), re-checks each one against the actual
-footage, and folds in only what is confirmed — the scene timeline itself is
-never altered. `combine` never produces less than `choose`: if the extra pass
-fails or degrades the result, the strongest pass is kept as-is.
+**Result Selection.** `choose` returns the standard analysis. `combine` runs
+additional verification to maximize captured detail — named places, on-screen
+text, brands, concurrent audio — and is guaranteed to return at least the
+standard result's quality. Use `combine` whenever completeness matters; `choose`
+is the faster baseline.
 
 **Analysis Focus steers attention, never format.** It biases what the model
 attends to; it does **not** change the output JSON shape, the ≤8s scene
@@ -148,18 +145,15 @@ charged) — generated and drift-guarded internally, never hand-written.
 | `pro` (default) | 2 | 3 | 7 | 11 |
 | `mixed` / `mixed-fast` | 3 | 4 | 9 | 14 |
 
-The two mixed tiers run the **identical analysis plan** (several fast passes +
-several pro passes, one grading pass, one verification pass), so they share one
-price. They differ only in which pass may become the base result: `mixed` lets
-the strongest pass of any kind win; `mixed-fast` always bases the result on a
-fast pass (the pro passes contribute verified details).
+The two mixed tiers are variants of the same advanced analysis and share one
+price: `mixed` is tuned for maximum result quality; `mixed-fast` for the most
+consistent output character run-to-run.
 
-> These values are the internal pricing formula's current outputs, with the
-> formula's token and rate constants anchored to live billing measurements.
+> These values are the internal pricing formula's current outputs.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a
-video over 180s is split into ~150-second windows), and the `pro` tier costs
-more per token than the `fast` tier.
+video over 180s is split into ~150-second windows), and higher tiers cost more
+per window.
 
 **±3-second duration tolerance.** Credits are reserved up front from the bucket
 that fits the probed (metadata) duration. After download, the worker re-probes

@@ -2283,7 +2283,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(["choose", "combine"])
           .optional()
           .describe(
-            'Best-of-N result strategy. "choose" (default): keep the best analysis pass. "combine": keep the best pass, then fold in details from the other passes that are verified against the footage (slightly slower, most complete).',
+            'Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended).',
           ),
         analysis_focus: z
           .string()

@@ -107,7 +107,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 11 | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Video Analysis (Pro) | Nodaro | Everyday | 11 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — higher-fidelity, default tier. Billed per duration bucket. |
 | Wan Flash V2V | Alibaba | Everyday | 13 | v2v | Faster Wan V2V variant. |
-| Video Analysis (Mixed) | Nodaro | Everyday | 14 | video-analysis | Analyze a video with multiple fast + pro passes, then keep the strongest result enriched with footage-verified details from the others — the most complete tier. Billed per duration bucket. |
+| Video Analysis (Mixed) | Nodaro | Everyday | 14 | video-analysis | Our most advanced analysis tier — multiple analysis engines combined into one result for maximum completeness and accuracy. Billed per duration bucket. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 15 | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 15 | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |
 | ⭐ VEO 3.1 Fast | Google | Everyday | 15 | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
