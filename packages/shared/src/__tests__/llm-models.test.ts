@@ -12,6 +12,7 @@ import {
   effectiveReasoningEffort,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
 
 // The provider-$ per-token rate table and `calculateLlmCost` moved to
 // backend/src/lib/pricing/llm-cost.ts (S5) — its tests live in
@@ -128,6 +129,32 @@ describe("LLM_MODEL_IDS", () => {
 // getLlmModel
 // ---------------------------------------------------------------------------
 describe("getLlmModel", () => {
+  // Dash-alias resolution: wire contracts (PIPELINE_PINNABLE_SCRIPT_LLMS,
+  // provider slugs, persisted configs) carry dash forms while LLM_MODELS keys
+  // canonical dot ids — getLlmModel must accept both or the film pipeline's
+  // own script default throws "Unknown LLM model" at run time.
+  it("resolves dash-form aliases to their canonical dot-form models", () => {
+    expect(getLlmModel("claude-sonnet-4-6")?.id).toBe("claude-sonnet-4.6")
+    expect(getLlmModel("claude-opus-4-7")?.id).toBe("claude-opus-4.7")
+    expect(getLlmModel("claude-haiku-4-5")?.id).toBe("claude-haiku-4.5")
+  })
+
+  it("resolves every PIPELINE_PINNABLE_SCRIPT_LLMS member (the film pipeline's pin surface)", () => {
+    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+      expect(getLlmModel(id), `pinnable script llm ${id} must resolve`).toBeDefined()
+    }
+  })
+
+  it("resolves provider slugs as historical aliases", () => {
+    const dated = LLM_MODELS.find((m) => m.directFallbackModel && m.directFallbackModel !== m.id)
+    if (dated) expect(getLlmModel(dated.directFallbackModel!)?.id).toBe(dated.id)
+  })
+
+  it("still returns undefined for a genuinely unknown id", () => {
+    expect(getLlmModel("claude-sonnet-9-9")).toBeUndefined()
+    expect(getLlmModel("not-a-model")).toBeUndefined()
+  })
+
   it('returns model def for "gemini-3-flash"', () => {
     const model = getLlmModel("gemini-3-flash")
     expect(model).toBeDefined()

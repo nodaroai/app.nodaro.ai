@@ -327,8 +327,29 @@ export function getLlmModalityCaps(modelId: string | undefined): { image: boolea
   return LLM_MODALITY_CAPS[modelId] ?? { image: true, video: false, audio: false }
 }
 
+/**
+ * Dash-form aliases resolve to their canonical dot-form ids. Several wire
+ * contracts carry dash forms (`PIPELINE_PINNABLE_SCRIPT_LLMS`, provider slugs,
+ * configs persisted before the id scheme settled), while `LLM_MODELS` keys the
+ * canonical `major.minor` form — an exact-only lookup makes every such caller
+ * throw "Unknown LLM model" at run time. Normalizing here (instead of editing
+ * the enums) keeps stored configs and published-package consumers valid.
+ */
+function dashAliasToCanonical(id: string): string {
+  return id.replace(/-(\d+)-(\d+)$/, "-$1.$2")
+}
+
 export function getLlmModel(id: string): LlmModelDef | undefined {
-  return LLM_MODELS.find((m) => m.id === id)
+  const exact = LLM_MODELS.find((m) => m.id === id)
+  if (exact) return exact
+  const canonical = dashAliasToCanonical(id)
+  if (canonical !== id) {
+    const aliased = LLM_MODELS.find((m) => m.id === canonical)
+    if (aliased) return aliased
+  }
+  // Last resort: provider slugs double as historical aliases (e.g. the
+  // dated Anthropic slugs) — accept any model whose slug matches exactly.
+  return LLM_MODELS.find((m) => m.kieSlugOrModel === id || m.directFallbackModel === id)
 }
 
 export function getLlmTier(id: string): LlmTier {
