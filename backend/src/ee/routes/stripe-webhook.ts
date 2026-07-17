@@ -38,7 +38,13 @@ function extractSubscriptionPeriod(sub: Stripe.Subscription): { periodStart: str
 }
 
 export async function stripeWebhookRoutes(app: FastifyInstance) {
-  // Override JSON parser in this plugin scope to capture raw body
+  // Override JSON parser in this plugin scope to capture raw body.
+  // The root scope installs a CUSTOM application/json parser
+  // (lib/tolerant-json-parser.ts), and Fastify treats an inherited custom
+  // parser as "already present" even across encapsulation — adding without
+  // removing first throws FST_ERR_CTP_ALREADY_PRESENT at boot. The removal is
+  // scoped to this plugin; root routes keep the tolerant parser.
+  app.removeContentTypeParser("application/json")
   app.addContentTypeParser(
     "application/json",
     { parseAs: "string" },

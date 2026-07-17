@@ -25,7 +25,10 @@ scene can later be re-cast onto your own characters, objects, or locations.
 **Inputs:** Video (optional handle) — a wired upstream video, or a YouTube URL
 set in config.
 **Outputs:** Analysis JSON (`meta` + `slots` + `scenes[]`) on the `json` output
-handle. The full result is also stored in the job's `output_data`.
+handle, and the same analysis as a plain string on the `text` output handle —
+wire `text` directly into any prompt/text input (for example Generate Video
+Pro's prompt) to recreate the analyzed video without copy-pasting. The full
+result is also stored in the job's `output_data`.
 
 ### Source precedence
 

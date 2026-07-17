@@ -94,6 +94,10 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // inputs.prompt). Without these, qa-check/image-critic outputs and
   // list/loop/extract-field text values can't feed any typed prompt.
   "extract-field", "qa-check", "image-critic", "forced-alignment", "list",
+  // video-analysis's `text` handle emits the scene-breakdown JSON as a plain
+  // string (extractNodeOutput stringifies) — lets the analysis wire straight
+  // into prompt/text inputs (generate-video-pro etc.) without a paste.
+  "video-analysis",
 ])
 
 /** Source node types whose output image feeds References (mirrors backend

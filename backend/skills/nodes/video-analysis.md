@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-07-16T15:00:05.573Z
-generated_from: be2cab0e0
+generated_at: 2026-07-17T13:03:13.681Z
+generated_from: ff2cc494f
 ---
 
 # Video Analysis
@@ -11,7 +11,7 @@ generated_from: be2cab0e0
 **Category:** processing
 **Credit cost:** 3
 **Inputs (target handles):** `video`
-**Outputs (source handles):** `json`
+**Outputs (source handles):** `json`, `text`
 
 **Required data fields:**
 - `label: string`

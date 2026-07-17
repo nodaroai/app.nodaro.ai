@@ -197,7 +197,7 @@ import { registerAuthHook } from "./middleware/auth.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
-import { installEmptyJsonBodyFix } from "./lib/empty-json-body-fix.js"
+import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
 import { registerInternalErrorSanitizer } from "./lib/http-errors.js"
 
 /**
@@ -247,11 +247,15 @@ export async function buildApp() {
   // drops the body and Zod sees undefined fields.
   await app.register(formbody)
 
-  // Drop a misleading application/json content-type from BODYLESS requests (e.g.
-  // a DELETE that still carries Content-Type: application/json from the SDK) so
-  // Fastify skips parsing instead of 400ing on the empty body. A global parser
-  // can't be used — the Stripe webhook registers its own. See the helper.
-  installEmptyJsonBodyFix(app)
+  // Tolerant root-level application/json parser: an empty body with a JSON
+  // content-type parses to `undefined` instead of 400 (the SDK sets the header
+  // on bodyless writes), and bodied requests parse normally even when the edge
+  // forwards them chunked (no content-length). Replaces the old header-stripping
+  // onRequest hook, which equated "no content-length" with "no body" and 415'd
+  // every JSON write when the edge switched to chunked forwarding (2026-07-17
+  // outage). The Stripe/Replicate webhook parsers stay scoped via app.register()
+  // and override this only for their own routes. See the helper's doc comment.
+  installTolerantJsonParser(app)
 
   // Global backstop: strip raw error detail from any `internal_error` 500 body
   // (logging the original server-side) unless the route used `sendInternalError`.
