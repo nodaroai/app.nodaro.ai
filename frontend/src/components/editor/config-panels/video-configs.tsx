@@ -39,7 +39,7 @@ import type {
   VideoAnalysisNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, LLM_MODELS } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
@@ -3572,6 +3572,40 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-generateAudio" className="text-xs">Generate Audio (default on)</label>
+      </div>
+
+      {/* Planner model — the LLM that splits the script into segment prompts. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="gvp-planner-model">Planner model</Label>
+        <Select value={data.plannerModel ?? "claude-opus-4.7"} onValueChange={(v) => onUpdate({ plannerModel: v })}>
+          <SelectTrigger id="gvp-planner-model" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LLM_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.displayName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Splits your script into per-segment prompts. Default: Claude Opus 4.7.
+        </p>
+      </div>
+
+      {/* PLAN ONLY — cheap plan iteration without video generation. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-planOnly"
+          checked={data.planOnly ?? false}
+          onChange={(e) => onUpdate({ planOnly: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-planOnly" className="text-xs">
+          Plan only — return the full segment plan without generating video (charged the plan fee only)
+        </label>
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -77,6 +77,17 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
   const provider = nodeData.provider ?? "seedance-2"
+
+  // PLAN-ONLY result — the engine's full per-segment configuration (no video).
+  const plan = nodeData.generatedPlan as
+    | {
+        plannerModel?: string
+        totalDurationSec?: number
+        segmentCount?: number
+        segments?: Array<{ index: number; prompt?: string; duration?: number; transition?: string }>
+      }
+    | undefined
+  const planSegments = Array.isArray(plan?.segments) ? plan.segments : []
 
   // Reset the video-error gate whenever the active result changes (mirrors
   // voice-changer-pro-node.tsx) so a stale error doesn't hide a fresh result.
@@ -200,7 +211,46 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 ) : null}
               </div>
             )}
-            {status !== "running" && !activeUrl && status !== "failed" && (
+            {/* PLAN-ONLY result: per-segment configuration table (mirrors the
+                video-analysis scene-table pattern; copy button → full JSON). */}
+            {status !== "running" && status !== "failed" && !activeUrl && plan && (
+              <div className="relative group p-1.5">
+                <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-medium text-muted-foreground">
+                  <ListChecks className="w-3 h-3 shrink-0" />
+                  <span>
+                    Plan — {planSegments.length || plan.segmentCount || 0} segment{(planSegments.length || plan.segmentCount) === 1 ? "" : "s"}
+                    {plan.totalDurationSec ? ` · ${plan.totalDurationSec}s` : ""}
+                  </span>
+                </div>
+                <div className="rounded-md border bg-muted/30 text-[10px] max-h-40 overflow-y-auto divide-y divide-border/60">
+                  {planSegments.map((s) => (
+                    <div key={s.index} className="flex flex-col gap-0.5 px-2 py-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-muted-foreground tabular-nums">#{s.index + 1}</span>
+                        {s.duration != null && <span className="text-muted-foreground/70 tabular-nums">{s.duration}s</span>}
+                        {s.transition && <span className="text-muted-foreground/60 uppercase text-[9px] tracking-wide">{s.transition}</span>}
+                      </div>
+                      {s.prompt && <span className="text-muted-foreground/70 line-clamp-2">{s.prompt}</span>}
+                    </div>
+                  ))}
+                  {planSegments.length === 0 && (
+                    <div className="px-2 py-1 text-muted-foreground/60">Plan ready — copy JSON for details</div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Copy plan JSON"
+                  className="absolute top-0.5 right-0.5 w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigator.clipboard.writeText(JSON.stringify(nodeData.generatedPlan, null, 2))
+                  }}
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+            {status !== "running" && !activeUrl && status !== "failed" && !plan && (
               <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
                 <Clapperboard className="w-10 h-10" />
               </div>
