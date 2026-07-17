@@ -1,5 +1,5 @@
 import type { ExecutionStatus, JobStatus } from "@nodaro/sdk"
-import { emit, info, success, type OutputOpts } from "./output.js"
+import { dim, emit, info, success, type OutputOpts } from "./output.js"
 
 /**
  * Commander variadic-arity collector. Used as the second argument to
@@ -59,8 +59,12 @@ interface WatchOpts<T extends PollableResult> extends OutputOpts {
  *   - 0  on completed
  *   - 2  on failed (exits via `process.exit`)
  *   - 130 on cancelled (exits via `process.exit`)
+ *
+ * Returns the terminal fetch result, so a caller can render op-specific
+ * output (e.g. `voice analyze` prints the detected-speaker table) after the
+ * generic status loop finishes.
  */
-export async function watchUntilTerminal<T extends PollableResult>(opts: WatchOpts<T>): Promise<void> {
+export async function watchUntilTerminal<T extends PollableResult>(opts: WatchOpts<T>): Promise<T> {
   const intervalMs = opts.intervalMs ?? 2000
   const start = Date.now()
   let lastStatus = ""
@@ -85,10 +89,47 @@ export async function watchUntilTerminal<T extends PollableResult>(opts: WatchOp
       if (opts.json) emit(result.data, opts)
       else if (status === "completed") success(`completed in ${elapsed(start)}s`)
       else process.exit(status === "failed" ? 2 : 130)
-      return
+      return result
     }
     await sleep(intervalMs)
   }
+}
+
+interface QueuedJobOpts extends OutputOpts {
+  watch?: boolean
+  pollInterval?: number
+  /** Short parenthetical after the queued line, e.g. "video mode". */
+  note?: string
+}
+
+/**
+ * Standard tail for every command that queues an async job: in `--json` mode
+ * without `--watch`, emit the raw `{ jobId }` and stop; otherwise print the
+ * queued line (+ follow hint), and with `--watch` poll to a terminal status.
+ * Returns the terminal fetch result when it watched, `undefined` otherwise.
+ *
+ * Shared across the voice / media / audio command groups.
+ */
+export async function reportQueuedJob<T extends PollableResult>(
+  result: { jobId: string },
+  fetchJob: () => Promise<T>,
+  opts: QueuedJobOpts,
+): Promise<T | undefined> {
+  if (opts.json && !opts.watch) {
+    emit(result, opts)
+    return undefined
+  }
+  success(`job ${result.jobId} queued${opts.note ? ` (${opts.note})` : ""}`)
+  if (!opts.watch) {
+    dim(`follow: nodaro jobs get ${result.jobId}`)
+    return undefined
+  }
+  return watchUntilTerminal({
+    fetch: fetchJob,
+    label: result.jobId,
+    intervalMs: opts.pollInterval,
+    json: opts.json,
+  })
 }
 
 function elapsed(startMs: number): string {

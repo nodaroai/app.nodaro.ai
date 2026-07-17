@@ -3199,6 +3199,9 @@ export function executeNode(
         videoUrl,
         youtubeUrl,
         llmModel: d.llmModel,
+        // Fail-safe narrowing mirrors payload-builder: only the literal
+        // "combine" is sent; anything else omits the field (worker → choose).
+        selectionMode: d.selectionMode === "combine" ? "combine" : undefined,
         analysisFocus: d.analysisFocus,
         userId: ctx.userId,
       })

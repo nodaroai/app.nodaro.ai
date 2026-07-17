@@ -117,6 +117,32 @@ nodaro executions cancel <id> [--mode cancelled|stopping]
 
 nodaro jobs get <id>
 nodaro jobs cancel <id>
+
+# Voice — voice changer, multi-speaker recast (Voice Changer Pro), design/remix/dub, clones
+nodaro voice list [--clones]                            # premade catalog / your clones
+nodaro voice changer --voice Rachel --audio <url> --watch
+nodaro voice recast --video <url> --voices Rachel,keep,Aria --watch      # Cloud only
+nodaro voice analyze --video <url> --watch              # detect speakers first (Cloud only)
+nodaro voice export --source <url> --tracks-file mix.json --watch        # render a mixed stem set
+nodaro voice design --description "..." --text "..." --watch
+nodaro voice remix --description "..." --text "..." --watch
+nodaro voice dub --audio <url> --target-language es --watch
+nodaro voice clones create --name Me --file ./sample.wav
+
+# Media — social-video import, trim, save, metadata probe
+nodaro media download <url> [--max-height 720] [--section 30-90] --watch
+nodaro media metadata <url>
+nodaro media trim-video --video <url> --start 12 --end 48 --watch
+nodaro media trim-audio --video <url> --format wav --watch
+nodaro media save <url> [--type video] --watch
+
+# Audio — separation, isolation, fx, mix, level, combine
+nodaro audio separate --audio <url> [--mode stems] --watch
+nodaro audio isolate --audio <url> --watch
+nodaro audio fx --audio <url> --preset hall --mix 35 --watch
+nodaro audio mix --audio <url> --audio <url> --volumes 100,60 --watch
+nodaro audio adjust-volume --audio <url> --normalize --watch
+nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 ```
 
 ### Three ways to run something

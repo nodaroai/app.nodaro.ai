@@ -25,6 +25,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
   - [`client.voices`](#clientvoices)
+  - [`client.media`](#clientmedia)
+  - [`client.audio`](#clientaudio)
   - [`client.credits`](#clientcredits)
   - [`client.uploads`](#clientuploads)
   - [`client.presets`](#clientpresets)
@@ -2496,6 +2498,208 @@ const { jobId: vjobId } = await client.voices.recast({
   orderedVoices: ["Callum", "Charlotte", "Liam"],
 })
 ```
+
+---
+
+### `client.media`
+
+Media ingestion + trimming — the source-preparation steps a pipeline needs
+before it has a clip to work on. Each generation-style op returns a job id to
+poll with `client.jobs.get(jobId)`; `videoMetadata` is a direct read.
+
+#### `downloadVideo(input)`
+
+```ts
+downloadVideo(input: {
+  url: string
+  maxHeight?: number
+  sectionStartSec?: number
+  sectionEndSec?: number
+}): Promise<{ downloadId: string }>
+```
+
+Download a social video (YouTube / TikTok / Instagram / X / Facebook) into your
+storage (`POST /v1/download-video`). `maxHeight` caps the resolution (omit for
+best available); `sectionStartSec` + `sectionEndSec` (both-or-neither) fetch
+only that time range. Returns a `downloadId` — not a job id — whose progress
+streams from `downloadVideoProgress()`. The finished file lands in your library.
+
+#### `downloadVideoProgress(downloadId, opts?)`
+
+```ts
+downloadVideoProgress(
+  downloadId: string,
+  opts?: { signal?: AbortSignal },
+): AsyncGenerator<DownloadVideoProgress>
+```
+
+Stream a download's live progress (`GET /v1/download-video/progress/:id`,
+server-sent events) as an async iterable. Yields
+`{ phase, percent, videoUrl?, thumbnailUrl?, error? }` roughly every 500ms
+until the download reaches `completed` (the event carries the stored
+`videoUrl`) or `failed` (the event carries `error`), then ends. The progress
+state expires server-side shortly after the download finishes — start
+iterating promptly after `downloadVideo()` returns. No request timeout is
+applied (large imports legitimately take minutes); pass an `AbortSignal` to
+cancel.
+
+```ts
+const { downloadId } = await client.media.downloadVideo({
+  url: "https://youtu.be/dQw4w9WgXcQ",
+  maxHeight: 720,
+})
+for await (const ev of client.media.downloadVideoProgress(downloadId)) {
+  console.log(`${ev.phase} ${ev.percent}%`)
+  if (ev.phase === "completed") console.log("stored at", ev.videoUrl)
+}
+```
+
+#### `trimVideo(input)`
+
+```ts
+trimVideo(input: {
+  videoUrl: string
+  startTime?: number
+  endTime?: number
+  trimStartFrames?: number
+  trimEndFrames?: number
+  trimStartSeconds?: number
+  trimEndSeconds?: number
+  keepFirstSeconds?: number
+  keepLastSeconds?: number
+}): Promise<{ jobId: string }>
+```
+
+Trim a video to a range (`POST /v1/trim-video`). Give the range in whichever
+unit fits: `startTime`/`endTime` seconds, `trim*Frames`, `trim*Seconds`, or
+`keepFirstSeconds`/`keepLastSeconds`.
+
+#### `trimAudio(input)`
+
+```ts
+trimAudio(input: {
+  videoUrl?: string
+  audioUrl?: string
+  audioFormat?: "mp3" | "wav" | "aac"
+  startTime?: number
+  endTime?: number
+}): Promise<{ jobId: string }>
+```
+
+Trim (and extract) audio from a video or audio source (`POST /v1/trim-audio`)
+to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
+
+#### `saveToStorage(input)`
+
+```ts
+saveToStorage(input: {
+  mediaUrl: string
+  filename?: string
+  mediaType?: "image" | "video" | "audio"
+}): Promise<{ jobId: string }>
+```
+
+Copy an external media URL into your Nodaro storage
+(`POST /v1/save-to-storage`) — a server-side fetch, so nothing round-trips
+through the client.
+
+#### `videoMetadata(input)`
+
+```ts
+videoMetadata(input: { url: string }): Promise<VideoMetadata>
+```
+
+Probe a social video's metadata (`POST /v1/video-metadata`) — duration,
+dimensions, title, live status — **without** downloading it. A direct read,
+not a job. Use it to decide whether to trim before importing.
+
+---
+
+### `client.audio`
+
+Audio primitives — the building blocks Voice Changer Pro composes internally
+(separation, isolation, effect, mix, level), exposed standalone so a consumer
+can run any single step or assemble its own pipeline. Every method returns a
+job id to poll with `client.jobs.get(jobId)`.
+
+#### `separate(input)`
+
+```ts
+separate(input: {
+  audioUrl: string
+  mode?: "vocal_instrumental" | "stems"
+  quality?: "auto" | "fast" | "best"
+}): Promise<{ jobId: string }>
+```
+
+Separate an audio track into stems (`POST /v1/audio-separation`, Demucs).
+`"vocal_instrumental"` (default) splits voice from music/SFX; `"stems"`
+returns the full drums/bass/other/… breakdown.
+
+#### `isolate(input)`
+
+```ts
+isolate(input: { audioUrl: string }): Promise<{ jobId: string }>
+```
+
+Isolate the primary voice and strip background noise
+(`POST /v1/audio-isolation`).
+
+#### `applyFx(input)`
+
+```ts
+applyFx(input: {
+  audioUrl: string
+  preset?: AudioFxPreset
+  mix?: number
+  delayMs?: number
+  decay?: number
+  eqLow?: number
+  eqHigh?: number
+}): Promise<{ jobId: string }>
+```
+
+Apply a reverb / echo / telephone / megaphone effect (`POST /v1/audio-fx`) —
+the same presets the voice changer's `voiceFx` uses, standalone. `mix` (0–100)
+is the reverb wet/dry; `delayMs` + `decay` drive `echo`/`custom`;
+`eqLow`/`eqHigh` (dB) shape telephone/megaphone.
+
+#### `mix(input)`
+
+```ts
+mix(input: { audioUrls: string[]; trackVolumes?: number[] }): Promise<{ jobId: string }>
+```
+
+Layer multiple audio tracks into one (`POST /v1/mix-audio`). `audioUrls`
+(2–20) are summed; optional `trackVolumes` (0–200% each, positionally) set
+per-track level.
+
+#### `adjustVolume(input)`
+
+```ts
+adjustVolume(input: {
+  audioUrl?: string
+  videoUrl?: string
+  volume?: number
+  normalize?: boolean
+  fadeIn?: number
+  fadeOut?: number
+}): Promise<{ jobId: string }>
+```
+
+Adjust an audio (or a video's audio) level (`POST /v1/adjust-volume`):
+`volume` % (default 100), `normalize` to loudnorm, `fadeIn`/`fadeOut` seconds.
+
+#### `combine(input)`
+
+```ts
+combine(input: {
+  segments: Array<{ url: string; startTime?: number; endTime?: number }>
+}): Promise<{ jobId: string }>
+```
+
+Concatenate audio segments end-to-end (`POST /v1/combine-audio`). Each segment
+is a `url` with an optional `[startTime, endTime]` sub-range.
 
 ---
 

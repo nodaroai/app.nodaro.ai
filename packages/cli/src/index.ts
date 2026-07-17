@@ -9,6 +9,8 @@ import { nodesCommand } from "./commands/nodes.js"
 import { charactersCommand } from "./commands/characters.js"
 import { promptCommand } from "./commands/prompt.js"
 import { voiceCommand } from "./commands/voice.js"
+import { mediaCommand } from "./commands/media.js"
+import { audioCommand } from "./commands/audio.js"
 import { presetsCommand } from "./commands/presets.js"
 import { communityCommand } from "./commands/community.js"
 import { pickerCatalogsCommand } from "./commands/picker-catalogs.js"
@@ -41,6 +43,8 @@ program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())
 program.addCommand(promptCommand())
 program.addCommand(voiceCommand())
+program.addCommand(mediaCommand())
+program.addCommand(audioCommand())
 program.addCommand(presetsCommand())
 program.addCommand(communityCommand())
 program.addCommand(pickerCatalogsCommand())

@@ -291,8 +291,9 @@ export type {
   VoiceDesignInput,
   VoiceRemixInput,
   DubbingInput,
+  AudioFxPreset,
 } from "./resources/voices.js"
-export type { VideoMetadata } from "./resources/media.js"
+export type { VideoMetadata, DownloadVideoProgress } from "./resources/media.js"
 
 export type {
   UserBalance,

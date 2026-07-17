@@ -728,6 +728,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Remove background noise before recasting — yields a clean voice-only result.",
           ),
+        output: z
+          .enum(["video", "stems"])
+          .optional()
+          .describe(
+            "Output mode. 'video' (default) returns a finished merged video. 'stems' returns the dry per-track stems instead (for interactive mixing) — then render with voice_changer_pro_export.",
+          ),
       },
       outputSchema: {
         jobId: z.string(),
@@ -796,6 +802,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
       if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx
+      if (args.output !== undefined) payload.output = args.output
       // ordered_voices entries can be objects or null keep-slots — surface the
       // voice id (or "keep") in the widget prompt either way.
       const voiceLabels = args.ordered_voices
@@ -810,6 +817,154 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           prompt: `recast → ${voiceLabels}`,
           model: "voice-changer-pro",
         },
+      })
+    },
+  )
+
+  // ── voice_changer_pro_analyze ── (CLOUD-ONLY, like voice_changer_pro)
+  // Detect the speakers WITHOUT recasting — the first step of the interactive
+  // flow. Returns a job whose output carries the separated stems + the detected
+  // speaker list, so a caller can choose a voice per speaker before committing to
+  // a paid recast.
+  if (hasCredits()) server.registerTool(
+    "voice_changer_pro_analyze",
+    {
+      title: "Voice Changer Pro — Analyze",
+      description:
+        "Detect the speakers in a clip WITHOUT recasting (the first step of the " +
+        "interactive Voice Changer Pro flow). Separates voice from music once and " +
+        "diarizes the vocals; the job output carries the separated stem urls and " +
+        "the detected speakers (id, time segments, first-appearance, word count, a " +
+        "transcript snippet) plus the detected language. Feed that back into " +
+        "voice_changer_pro to skip re-detection. Provide ONE source: audio_url / " +
+        "audio_asset_id OR video_url / video_asset_id. Cloud-only.",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        separation_quality: z
+          .enum(["fast", "best"])
+          .optional()
+          .describe("Quality of the voice/music separation: 'fast' (default) or 'best'."),
+        suggest_title: z
+          .boolean()
+          .optional()
+          .describe("Also suggest a conversion title from the transcript (job output's suggestedTitle)."),
+      },
+      outputSchema: { jobId: z.string(), prompt: z.string().optional(), model: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })
+          : null)
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!videoUrl && !audioUrl) {
+        return {
+          content: [{ type: "text", text: "Pass audio_url/audio_asset_id or video_url/video_asset_id to analyze." }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        ...(videoUrl ? { videoUrl } : { audioUrl }),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      if (args.separation_quality !== undefined) payload.separationQuality = args.separation_quality
+      if (args.suggest_title !== undefined) payload.suggestTitle = args.suggest_title
+      return dispatchJob(fastify, session, {
+        url: "/v1/voice-changer-pro/analyze",
+        payload,
+        label: "detect speakers",
+        widgetKind: "audio",
+        widgetData: { prompt: "detect speakers", model: "voice-changer-pro-analyze" },
+      })
+    },
+  )
+
+  // ── voice_changer_pro_export ── (CLOUD-ONLY)
+  // Render a final video from a mixed set of stems — the last step of the
+  // interactive flow (after voice_changer_pro { output: "stems" } and mixing).
+  if (hasCredits()) server.registerTool(
+    "voice_changer_pro_export",
+    {
+      title: "Voice Changer Pro — Export",
+      description:
+        "Render a finished video from a mixed set of stems (the last step of the " +
+        "interactive Voice Changer Pro flow — after voice_changer_pro with " +
+        "output:'stems' and setting per-track levels). Provide the source video " +
+        "and the tracks (each a stem url with a gain %, a muted flag, and a kind — " +
+        "'voice' or 'background'); voice_fx is applied to the voice tracks at " +
+        "render time. At least one track must be un-muted. The video is stream-" +
+        "copied (never re-encoded). Cloud-only.",
+      inputSchema: {
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        tracks: z
+          .array(
+            z.object({
+              url: z.string().url(),
+              gain: z.number().min(0).max(200).describe("Fader %: 0 silent, 100 unity, 200 +6dB."),
+              muted: z.boolean(),
+              kind: z.enum(["voice", "background"]).optional().describe("Bucket — decides whether voice_fx lands on it. Default 'voice'."),
+            }),
+          )
+          .min(1)
+          .max(16)
+          .describe("The mix — one entry per lane. At least one must be un-muted."),
+        voice_fx: z
+          .object({
+            preset: z.enum([...AUDIO_FX_PRESETS] as [string, ...string[]]),
+            wetDryMix: z.number().min(0).max(100).optional(),
+            delayMs: z.number().min(20).max(2000).optional(),
+            decay: z.number().min(0).max(1).optional(),
+          })
+          .optional()
+          .describe("Reverb/echo applied to the VOICE tracks at render time (not background lanes)."),
+      },
+      outputSchema: { jobId: z.string(), prompt: z.string().optional(), model: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [{ type: "text", text: "Pass video_url or video_asset_id — export renders a video." }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        tracks: args.tracks,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx
+      return dispatchJob(fastify, session, {
+        url: "/v1/voice-changer-pro/export",
+        payload,
+        label: "export mix",
+        widgetKind: "audio",
+        widgetData: { prompt: "export mix", model: "voice-changer-pro-export" },
       })
     },
   )
