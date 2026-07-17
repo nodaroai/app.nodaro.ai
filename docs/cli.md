@@ -191,13 +191,67 @@ nodaro objects approve-main-image <id> --candidate-job-id <jobId> [--expected-up
 nodaro objects recaption <id> [--json]
 
 # Voice — revoice an audio track or a talking video
-nodaro voice changer --voice <id> --audio <url>|--video <url> [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
+nodaro voice list [--clones] [--json]                    # the premade voice catalog (or your clones) — names/ids for --voice / --voices
+nodaro voice changer --voice <id> --audio <url>|--video <url> [--model <id>] [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--use-speaker-boost] [--seed <n>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
 nodaro voice change ...                                  # alias of `voice changer`
-nodaro voice recast --audio <url>|--video <url> --voices <v1,v2,...>|--voices-json <json> [--model <id>] [--no-preserve-background] [--separation-quality fast|best] [--music-volume-mode match|normalize|manual] [--music-volume <0-200>] [--remove-background-noise] [--voice-fx <preset>] [--voice-fx-mix <0-100>] [--voice-fx-delay <20-2000>] [--voice-fx-decay <0-1>] [--watch] [--poll-interval <ms>] [--json]
+nodaro voice recast --audio <url>|--video <url> --voices <v1,v2,...>|--voices-json <json> [--model <id>] [--output video|stems] [--analysis-json <json>|--analysis-file <path>] [--no-preserve-background] [--separation-quality fast|best] [--music-volume-mode match|normalize|manual] [--music-volume <0-200>] [--remove-background-noise] [--voice-fx <preset>] [--voice-fx-mix <0-100>] [--voice-fx-delay <20-2000>] [--voice-fx-decay <0-1>] [--watch] [--poll-interval <ms>] [--json]
                                                          # multi-speaker recast (Voice Changer Pro, Cloud only). --voices maps speakers in detection order;
                                                          # the literal `keep` keeps that speaker's original voice (e.g. --voices Rachel,keep,Aria).
                                                          # --voices-json takes the raw SDK array: voice ids, per-voice settings objects, or null keep-slots.
+                                                         # --output stems returns dry per-track stems for an interactive mix (render with `voice export`).
 nodaro voice pro ...                                     # alias of `voice recast`
+nodaro voice analyze --audio <url>|--video <url> [--separation-quality fast|best] [--suggest-title] [--watch] [--poll-interval <ms>] [--json]
+                                                         # detect the speakers WITHOUT recasting (Cloud only) — prints the speaker list on --watch.
+                                                         # Save the completed job's output_data and pass it to `voice recast --analysis-file` to skip re-detection.
+nodaro voice export --source <videoUrl> --tracks-json <json>|--tracks-file <path> [--voice-fx <preset>] [--voice-fx-mix <0-100>] [--voice-fx-delay <20-2000>] [--voice-fx-decay <0-1>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # render the final video from a mixed track set (Cloud only) — tracks are { url, gain 0-200, muted, kind? } lanes
+                                                         # from a `voice recast --output stems` job; the video stream is copied, never re-encoded.
+nodaro voice design --text <line> --description <desc> [--model <id>] [--loudness <-1..1>] [--guidance-scale <0-100>] [--seed <n>] [--quality <n>] [--enhance] [--user-prompt <text>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # design a brand-new synthetic voice from a text description
+nodaro voice remix --text <text> --description <desc> [--user-prompt <text>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # speak a text in a described voice, without cloning
+nodaro voice dub --audio <url> --target-language <code> [--source-language <code>] [--num-speakers <1-20>] [--disable-voice-cloning] [--drop-background-audio] [--watch] [--poll-interval <ms>] [--json]
+                                                         # dub into another language while preserving each speaker's voice
+nodaro voice clones list [--json]
+nodaro voice clones create --name <name> --audio <url>|--file <path> [--json]   # clone from an uploaded URL or a local audio file
+nodaro voice clones delete <id> [--json]
+
+# Media — ingestion: social-video import, trim, save-to-storage, metadata probe
+nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
+                                                         # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
+                                                         # that time range (seconds). --watch streams live progress (no job to poll later).
+nodaro media metadata <url> [--json]                     # probe duration/dimensions/title WITHOUT downloading
+nodaro media trim-video --video <url> --start <sec> --end <sec>|--keep-first <sec>|--keep-last <sec> [--watch] [--poll-interval <ms>] [--json]
+nodaro media trim-audio --video <url>|--audio <url> [--start <sec>] [--end <sec>] [--format mp3|wav|aac] [--watch] [--poll-interval <ms>] [--json]
+nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
+
+# Audio — the primitives Voice Changer Pro composes, standalone
+nodaro audio separate --audio <url> [--mode vocal_instrumental|stems] [--quality auto|fast|best] [--watch] [--poll-interval <ms>] [--json]
+nodaro audio isolate --audio <url> [--watch] [--poll-interval <ms>] [--json]
+nodaro audio fx --audio <url> [--preset <preset>] [--mix <0-100>] [--delay <20-2000>] [--decay <0-1>] [--eq-low <db>] [--eq-high <db>] [--watch] [--poll-interval <ms>] [--json]
+nodaro audio mix --audio <url> --audio <url> ... [--volumes <csv>] [--watch] [--poll-interval <ms>] [--json]
+nodaro audio adjust-volume --audio <url>|--video <url> [--volume <0-200>] [--normalize] [--fade-in <sec>] [--fade-out <sec>] [--watch] [--poll-interval <ms>] [--json]
+nodaro audio combine --segment <url[@a-b]> --segment ... [--watch] [--poll-interval <ms>] [--json]
+```
+
+### The interactive recast flow (analyze → recast stems → export)
+
+The one-shot `voice recast` renders a finished video in a single call. The
+three-step flow instead lets you inspect the speakers first and mix the result
+before rendering:
+
+```bash
+# 1. Detect the speakers (prints the list; save output_data for the fast-path)
+nodaro voice analyze --video https://.../panel.mp4 --watch --json > analyze.json
+jq .output_data analyze.json > analysis.json
+
+# 2. Recast to dry stems, reusing the analysis (no re-detection)
+nodaro voice recast --video https://.../panel.mp4 --voices Rachel,keep,Aria \
+  --analysis-file analysis.json --output stems --watch
+
+# 3. Set levels/mutes per lane and render (video stream-copied, bit-identical)
+nodaro voice export --source https://.../panel.mp4 --tracks-file mix.json \
+  --voice-fx hall --voice-fx-mix 25 --watch
 ```
 
 ## Param syntax

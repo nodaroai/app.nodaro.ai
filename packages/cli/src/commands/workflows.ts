@@ -234,7 +234,7 @@ export async function watchExecution(
   executionId: string,
   opts: OutputOpts,
 ): Promise<void> {
-  return watchUntilTerminal({
+  await watchUntilTerminal({
     fetch: () => client.executions.get(executionId),
     label: executionId,
     ...opts,

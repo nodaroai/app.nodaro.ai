@@ -52,3 +52,63 @@ describe("media resource", () => {
     expect(out.height).toBe(720)
   })
 })
+
+/** A Response whose body is an SSE stream emitting the given raw chunks. */
+function mockSse(chunks: string[]) {
+  const encoder = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk))
+      controller.close()
+    },
+  })
+  return Promise.resolve({ ok: true, status: 200, body } as unknown as Response)
+}
+
+describe("media.downloadVideoProgress", () => {
+  it("GETs the progress endpoint with auth and yields each SSE event until the stream ends", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockSse([
+        'data: {"phase":"downloading","percent":12}\n\n',
+        'data: {"phase":"uploading","percent":100}\n\ndata: {"phase":"completed","percent":100,"videoUrl":"https://r2/x.mp4"}\n\n',
+      ]),
+    )
+    const c = make(fetchMock)
+    const events = []
+    for await (const ev of c.media.downloadVideoProgress("dl-1")) events.push(ev)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/download-video/progress/dl-1")
+    const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string> }
+    expect(init.headers.Authorization).toBe("Bearer t")
+    expect(events).toEqual([
+      { phase: "downloading", percent: 12 },
+      { phase: "uploading", percent: 100 },
+      { phase: "completed", percent: 100, videoUrl: "https://r2/x.mp4" },
+    ])
+  })
+
+  it("reassembles an SSE frame split across chunk boundaries", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockSse(['data: {"phase":"downloadi', 'ng","percent":55}\n', "\n"]),
+    )
+    const c = make(fetchMock)
+    const events = []
+    for await (const ev of c.media.downloadVideoProgress("dl-2")) events.push(ev)
+    expect(events).toEqual([{ phase: "downloading", percent: 55 }])
+  })
+
+  it("throws the typed error on a non-OK response (expired download → 404)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: { code: "not_found", message: "Download not found or expired" } }),
+      } as unknown as Response),
+    )
+    const c = make(fetchMock)
+    const iterate = async () => {
+      for await (const ev of c.media.downloadVideoProgress("dl-gone")) void ev
+    }
+    await expect(iterate()).rejects.toThrow("Download not found or expired")
+  })
+})
