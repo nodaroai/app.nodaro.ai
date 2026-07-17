@@ -133,6 +133,23 @@ describe("buildPayload — video-analysis", () => {
     expect(result.payload.nodeId).toBe("va-node")
   })
 
+  it("mixed tiers: sentinel rides the payload, credit id prices under the shared mixed family", () => {
+    for (const tier of ["mixed", "mixed-fast"] as const) {
+      const result = buildPayload(
+        node({ youtubeUrl: YT, llmModel: tier, probedYoutube: { url: YT, durationSec: 170 } }),
+        jobId,
+        {},
+        usageLogId,
+      )
+      // BOTH variants price under the ONE mixed family (identical compute)…
+      expect(result.modelIdentifier).toBe("video-analysis:mixed:180s")
+      expect(result.payload.reservedCreditId).toBe("video-analysis:mixed:180s")
+      // …but the payload carries the DISTINCT sentinel — the analysis engine
+      // expands it to the roll plan and judge scope.
+      expect(result.payload.llmModel).toBe(tier)
+    }
+  })
+
   it("forwards selectionMode 'combine'; fail-safe narrows anything else to undefined (choose)", () => {
     const combine = buildPayload(node({ youtubeUrl: YT, selectionMode: "combine" }), jobId, {}, usageLogId)
     expect(combine.payload.selectionMode).toBe("combine")

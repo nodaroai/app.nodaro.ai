@@ -396,26 +396,56 @@ export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
  * so adding a video model forces a tier decision instead of silently leaking.
  */
 export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3-flash", pro: "gemini-3.1-pro" } as const
-export type VideoAnalysisTier = keyof typeof VIDEO_ANALYSIS_TIERS
+export type VideoAnalysisModelTier = keyof typeof VIDEO_ANALYSIS_TIERS
+/**
+ * MIXED tiers — multi-model best-of-N plans (3× fast + 2× pro rolls) whose
+ * identifier resolves to a roll-plan SENTINEL consumed by the analysis engine,
+ * never to a single model id. Two variants, identical compute + price
+ * (one shared `video-analysis:mixed:*` credit family):
+ *  - `mixed`      — the judge may pick ANY roll as the winning skeleton.
+ *  - `mixed-fast` — the judge picks among the fast rolls only (consistent fast
+ *                   skeleton); pro rolls act purely as refine-pass donors.
+ * The plan composition itself (roll counts, judge scope) is engine-internal —
+ * deliberately NOT published here (Apache irrevocability; only the wire
+ * vocabulary below is contract).
+ */
+export const VIDEO_ANALYSIS_MIXED_TIERS = ["mixed", "mixed-fast"] as const
+export type VideoAnalysisMixedTier = (typeof VIDEO_ANALYSIS_MIXED_TIERS)[number]
 /** UI/listing order — recommended (pro) first. */
-export const VIDEO_ANALYSIS_TIER_ORDER = ["pro", "fast"] as const
+export const VIDEO_ANALYSIS_TIER_ORDER = ["pro", "fast", "mixed", "mixed-fast"] as const
+export type VideoAnalysisTier = (typeof VIDEO_ANALYSIS_TIER_ORDER)[number]
 export const DEFAULT_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "pro"
 export const DEFAULT_VIDEO_ANALYSIS_MODEL: string = VIDEO_ANALYSIS_TIERS[DEFAULT_VIDEO_ANALYSIS_TIER]
 /** Neutral, vendor-free display labels for the UI. */
-export const VIDEO_ANALYSIS_TIER_LABELS: Record<VideoAnalysisTier, string> = { fast: "Fast", pro: "Pro" }
+export const VIDEO_ANALYSIS_TIER_LABELS: Record<VideoAnalysisTier, string> = {
+  fast: "Fast",
+  pro: "Pro",
+  mixed: "Mixed (best of all)",
+  "mixed-fast": "Mixed (Fast base)",
+}
 
 export function isVideoAnalysisTier(v: string): v is VideoAnalysisTier {
-  return Object.prototype.hasOwnProperty.call(VIDEO_ANALYSIS_TIERS, v)
+  return (VIDEO_ANALYSIS_TIER_ORDER as readonly string[]).includes(v)
+}
+
+export function isVideoAnalysisMixedTier(v: string): v is VideoAnalysisMixedTier {
+  return (VIDEO_ANALYSIS_MIXED_TIERS as readonly string[]).includes(v)
 }
 
 /**
- * Resolve a user-supplied tier (`"fast"`/`"pro"`) OR a raw internal model id to
- * the internal analysis model id. Empty/unknown → the default tier's model.
- * Real model ids pass through (back-compat for existing stored `llmModel`
- * values); anything else falls back to the default rather than erroring.
+ * Resolve a user-supplied tier OR a raw internal model id to the analysis
+ * ENGINE IDENTIFIER carried in the worker payload:
+ *  - model-backed tiers ("fast"/"pro") → the internal model id;
+ *  - mixed tiers ("mixed"/"mixed-fast") → the sentinel ITSELF (the engine
+ *    expands it to a multi-model roll plan);
+ *  - raw model ids pass through (back-compat for stored `llmModel` values);
+ *  - empty/unknown → the default tier's model (never an error).
  */
 export function resolveVideoAnalysisModel(input?: string | null): string {
-  if (input && isVideoAnalysisTier(input)) return VIDEO_ANALYSIS_TIERS[input]
+  if (input && isVideoAnalysisMixedTier(input)) return input
+  if (input && Object.prototype.hasOwnProperty.call(VIDEO_ANALYSIS_TIERS, input)) {
+    return VIDEO_ANALYSIS_TIERS[input as VideoAnalysisModelTier]
+  }
   if (input && VIDEO_ANALYSIS_LLM_MODELS.includes(input)) return input
   return DEFAULT_VIDEO_ANALYSIS_MODEL
 }

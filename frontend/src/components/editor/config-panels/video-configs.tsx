@@ -4420,8 +4420,12 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
   useEffect(() => {
     const v = data.llmModel
     if (!v || isVideoAnalysisTier(v)) return
+    // Reverse-map over the MODEL-BACKED tier map only — mixed tiers are
+    // roll-plan sentinels with no model to reverse-map (and isVideoAnalysisTier
+    // already returned above for them).
     const trueTier =
-      VIDEO_ANALYSIS_TIER_ORDER.find((t) => VIDEO_ANALYSIS_TIERS[t] === v) ?? DEFAULT_VIDEO_ANALYSIS_TIER
+      (Object.entries(VIDEO_ANALYSIS_TIERS).find(([, model]) => model === v)?.[0] as string | undefined) ??
+      DEFAULT_VIDEO_ANALYSIS_TIER
     onUpdate({ llmModel: trueTier })
   }, [data.llmModel, onUpdate])
   const url = data.youtubeUrl ?? ""

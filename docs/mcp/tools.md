@@ -478,7 +478,7 @@ the job's `output_data`.
 | `video_asset_id` | uuid, optional | Nodaro video job id or uploaded-asset id. |
 | `video_url` | string, optional | Direct URL of a video file. |
 | `youtube_url` | string, optional | YouTube video URL (youtube.com / youtu.be). |
-| `llm_model` | enum, optional | Analysis quality tier: `fast` (economy) or `pro` (default, higher fidelity). |
+| `llm_model` | enum, optional | Analysis quality tier: `fast` (economy), `pro` (default, higher fidelity), `mixed` (most complete — multiple fast + pro passes, best skeleton wins), or `mixed-fast` (same passes; a fast pass always wins the skeleton). |
 | `selection_mode` | enum, optional | Best-of-N result strategy: `choose` (default — keep the strongest analysis pass) or `combine` (fold in footage-verified details from the other passes; slightly slower, most complete). |
 | `analysis_focus` | string ≤2000, optional | Steer the analysis (e.g. "focus on the product shots and on-screen text"). |
 

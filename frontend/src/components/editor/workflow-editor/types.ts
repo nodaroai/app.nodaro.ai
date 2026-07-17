@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -281,7 +281,11 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
     return SCRAPER_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["web-scrape"] ?? 0
   }
   if (nodeType === "video-analysis" && node.data) {
-    const model = (node.data.llmModel as string) ?? "gemini-3-flash"
+    // data.llmModel stores the TIER string ("fast"/"pro"/"mixed"/"mixed-fast") —
+    // resolve it to the engine id first (audit fix: the raw tier built
+    // non-existent ids like "video-analysis:fast:180s", silently falling back
+    // to the flat 1-credit placeholder for every fast/pro node).
+    const model = resolveVideoAnalysisModel(node.data.llmModel as string | undefined)
     // A probed YouTube duration is trusted only while it still matches the node's
     // current youtubeUrl (a URL edit invalidates it). No graph context here, so a
     // wired video's duration isn't reachable — that falls to the ceiling bucket

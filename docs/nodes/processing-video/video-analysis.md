@@ -44,12 +44,14 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy) or `pro` (default — higher fidelity, costs more; see [Credit Cost](#credit-cost)) |
+| Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy), `pro` (default — higher fidelity), `mixed` (most complete — multiple fast + pro passes, best skeleton wins), or `mixed-fast` (same passes; a fast pass always wins the skeleton). See [Credit Cost](#credit-cost) |
 | Result Selection (`selectionMode`) | Select | `choose` | `choose` — keep the strongest of several analysis passes. `combine` — keep the strongest pass, then fold in details from the other passes that are verified against the footage (slightly slower, most complete) |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
-**Two quality tiers, no model to pick.** You choose a *tier* — `fast` for an
-economy pass or `pro` for higher fidelity — not a specific model. The underlying
+**Quality tiers, no model to pick.** You choose a *tier* — `fast` for an
+economy pass, `pro` for higher fidelity, or the `mixed` tiers for the most
+complete result (several fast **and** pro passes in one run) — not a specific
+model. The underlying
 analysis model is selected for you (Video Analysis requires native video *and*
 audio understanding, which only a subset of models provide) and is intentionally
 not surfaced, so a tier's backing model can improve over time without changing
@@ -144,6 +146,13 @@ charged) — generated and drift-guarded internally, never hand-written.
 |------|------|-------|-------|-------|
 | `fast` (economy) | 1 | 1 | 2 | 3 |
 | `pro` (default) | 2 | 3 | 7 | 11 |
+| `mixed` / `mixed-fast` | 3 | 4 | 9 | 14 |
+
+The two mixed tiers run the **identical analysis plan** (several fast passes +
+several pro passes, one grading pass, one verification pass), so they share one
+price. They differ only in which pass may become the base result: `mixed` lets
+the strongest pass of any kind win; `mixed-fast` always bases the result on a
+fast pass (the pro passes contribute verified details).
 
 > These values are the internal pricing formula's current outputs, with the
 > formula's token and rate constants anchored to live billing measurements.
