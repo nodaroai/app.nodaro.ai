@@ -642,10 +642,11 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   }
   if (type === "video-analysis") {
     const d = node.data as VideoAnalysisNodeData;
-    // Single json handle — stringify the merged scene breakdown for text
-    // consumers; Extract Field / JSON Process read d.generatedJson directly
+    // `json` + `text` handles carry the SAME stringified scene breakdown —
+    // text is the prompt-typed alias so the analysis wires into text inputs;
+    // Extract Field / JSON Process read d.generatedJson directly
     // (bypasses extractNodeOutput). Mirrors web-scrape's json branch.
-    if (sourceHandle === "json" || !sourceHandle) {
+    if (sourceHandle === "json" || sourceHandle === "text" || !sourceHandle) {
       return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
     }
     return undefined;

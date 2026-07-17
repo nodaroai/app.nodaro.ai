@@ -983,6 +983,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "forced-alignment",
   "qa-check",
   "image-critic",
+  // Scene-breakdown JSON pre-stringified by getHandleOutput — routes into
+  // inputs.prompt for text consumers (mirrors frontend TEXT_PRODUCER_TYPES).
+  "video-analysis",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)

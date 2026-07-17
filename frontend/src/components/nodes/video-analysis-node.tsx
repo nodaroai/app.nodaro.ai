@@ -2,7 +2,7 @@
 
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ScanSearch, Film, Braces, Loader2, AlertCircle, Copy } from "lucide-react"
+import { ScanSearch, Film, Braces, Type, Loader2, AlertCircle, Copy } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -66,6 +66,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
           { id: "json",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+          { id: "text",  type: "source", position: Position.Right, customStyle: { top: '52px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-2 p-3" style={{ minHeight: 160 }}>
@@ -136,6 +137,9 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="video" type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
       <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="json"  type="source" position={Position.Right} label="Scenes JSON" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
+      {/* Same payload as `json`, typed as TEXT — wires straight into prompt/
+          text inputs (extractNodeOutput stringifies for both handles). */}
+      <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="text"  type="source" position={Position.Right} label="Text"        color={DATA_HANDLE_COLORS.text} icon={<Type />}   side="right" top="52px" />
     </div>
   )
 }

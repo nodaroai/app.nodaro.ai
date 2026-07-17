@@ -622,10 +622,11 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
-  // Video-analysis: single `json` output handle carrying the scene-segmented
-  // analysis object. Mirrors the web-scrape json branch — stringify for generic
-  // text consumers; Extract Field reads state.output.json directly.
-  if (sourceType === "video-analysis" && sourceHandle === "json") {
+  // Video-analysis: `json` + `text` output handles carry the SAME stringified
+  // scene-segmented analysis (text is the prompt-typed alias). Mirrors the
+  // web-scrape json branch — stringify for generic text consumers; Extract
+  // Field reads state.output.json directly.
+  if (sourceType === "video-analysis" && (sourceHandle === "json" || sourceHandle === "text")) {
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 

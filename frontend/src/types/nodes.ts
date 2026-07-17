@@ -6723,7 +6723,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // per-run cost is dynamic (buildVideoAnalysisCreditId → useModelCredits).
     creditCost: 3,
     inputs: ["video"],
-    outputs: ["json"],
+    outputs: ["json", "text"],
     defaultData: {
       label: "Video Analysis",
       analysisFocus: "",
