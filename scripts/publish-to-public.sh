@@ -26,7 +26,13 @@ node tools/check-private-leaks.mjs
 node tools/check-pricing-leaks.mjs
 node tools/check-ee-imports.mjs
 if command -v gitleaks >/dev/null; then
-  gitleaks detect --no-banner --redact --source .
+  # Scoped to THIS branch's history, not the default --all refs. The gate's
+  # contract is "nothing secret reaches public", and only $BRANCH is being
+  # published — unscoped, any in-flight feature branch on origin can block
+  # every publish (2026-07-17: false positives on a just-pushed branch stalled
+  # the npm release), and local vs CI runs scan different ref sets. Pre-merge
+  # coverage of feature branches lives in secret-scan.yml (PR-time half).
+  gitleaks detect --no-banner --redact --source . --log-opts="--full-history $BRANCH"
 else
   echo "!! gitleaks not installed — the secret gate is MANDATORY before publishing. Install it and re-run."; exit 1
 fi
