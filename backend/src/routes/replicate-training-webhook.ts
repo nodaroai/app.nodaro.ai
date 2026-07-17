@@ -31,9 +31,13 @@ export async function replicateTrainingWebhookRoutes(
 ): Promise<void> {
   if (!hasCredits()) return
 
-  // Mirror backend/src/ee/routes/stripe-webhook.ts:42-53 — no fastify-raw-body
+  // Mirror backend/src/ee/routes/stripe-webhook.ts — no fastify-raw-body
   // plugin exists, so { config: { rawBody: true } } is a no-op. This parser
-  // stashes the raw text on req before JSON parsing.
+  // stashes the raw text on req before JSON parsing. The scoped remove is
+  // required: the root tolerant application/json parser
+  // (lib/tolerant-json-parser.ts) is inherited into this scope and Fastify
+  // rejects a second add with FST_ERR_CTP_ALREADY_PRESENT.
+  app.removeContentTypeParser("application/json")
   app.addContentTypeParser(
     "application/json",
     { parseAs: "string" },
