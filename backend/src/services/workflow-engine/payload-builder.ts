@@ -3821,6 +3821,10 @@ export function buildPayload(
         extendVideoUrl: resolvedInputs.referenceVideoUrls?.[0],
         audioUrl: resolvedInputs.audioUrl,
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+        // Planner override + PLAN-ONLY mode — fail-safe narrowed; inert on
+        // plugin versions predating them (extra keys ignored by the handler).
+        plannerModel: typeof data.plannerModel === "string" && data.plannerModel ? data.plannerModel : undefined,
+        planOnly: data.planOnly === true ? true : undefined,
         usageLogId,
       })
     }

@@ -2696,6 +2696,10 @@ export async function generateVideoPro(body: {
   audioUrl?: string
   /** Seedance-2 r2v reference audio (max 3) — rides every segment. */
   referenceAudioUrls?: string[]
+  /** Planner LLM override (shared-registry model id). */
+  plannerModel?: string
+  /** PLAN-ONLY: return the planned configuration, generate no video. */
+  planOnly?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

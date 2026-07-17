@@ -1837,9 +1837,17 @@ export interface GenerateVideoProNodeData {
   selectedStartFrameNodeId?: string | null
   referenceImageOrder?: string[]
   fieldMappings?: FieldMappings
+  /** Planner LLM override (shared-registry model id). Omitted → engine default. */
+  plannerModel?: string
+  /** PLAN-ONLY mode: run the planner and return the full per-segment
+   *  configuration (expanded prompts, provider-prompt previews) WITHOUT
+   *  generating any video — cheap plan iteration (reserved at the plan fee). */
+  planOnly?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
+  /** planOnly result — the full planned configuration returned by the engine. */
+  generatedPlan?: Record<string, unknown>
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string

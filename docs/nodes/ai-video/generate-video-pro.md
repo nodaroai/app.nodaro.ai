@@ -39,6 +39,8 @@ Generate Video Pro exposes **exactly Generate Video's input handles** — same n
 | Aspect Ratio | Select | `adaptive` | 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9 / Adaptive (matches the wired input) |
 | Resolution | Select | `720p` | By provider — see [Providers](#providers) |
 | Generate Audio | Checkbox | on | |
+| Planner model | Select | Claude Opus 4.7 | The AI model that plans the segment breakdown for multi-segment runs — any model from the [LLM model registry](../../choosing-models.md) |
+| Plan only | Checkbox | off | Return the full segment plan **without generating any video** — see [Plan-only mode](#plan-only-mode) |
 
 ## Providers
 
@@ -62,6 +64,18 @@ A request above 15 seconds is automatically split into multiple segments (each 4
 - Every **later segment** continues from the one before it — each is conditioned on the previous segment's final moments, so lighting, colour, subject and setting carry across the whole video.
 - **Continuous shots vs. camera cuts:** each boundary is planned automatically from your prompt. By default the camera keeps rolling — the next segment is anchored on the previous frame and the join is invisible (one continuous shot). When your prompt describes distinct shots (numbered shots, "cut to", a new location or subject), that boundary becomes a clean **hard cut to a new camera angle of the same scene** instead. Either way the look (lighting, colour, world) stays consistent and the audio runs continuously — only the camera changes.
 - Segment count, individual lengths, and where cuts fall are chosen automatically to cover the requested duration and match your prompt — they are not user-configurable.
+- **Planner model** picks which AI model does that planning. The default (Claude Opus 4.7) works well for most scripts; you can select any model from the [LLM model registry](../../choosing-models.md) to trade speed against planning quality.
+
+## Plan-only mode
+
+Enable **Plan only** to run everything up to (and including) the planning step — and stop there. The node completes with the full planned configuration instead of a video:
+
+- Per-segment breakdown: each segment's prompt (exactly as it would be sent), duration, and whether the boundary is a continuous shot or a hard cut.
+- The run's global settings: provider, resolution, aspect ratio, total planned length.
+
+The plan renders as a segment table on the node (hover for a copy-JSON button). Use it to iterate on long scripts cheaply — check how your prompt splits, where cuts land, and what each segment will say **before** paying for video generation. Turn Plan only off and run again to generate for real.
+
+**Pricing:** a plan-only run is charged a small flat planning fee (the multi-segment fee base, minimum 2 credits) — never the video price. No video provider is ever called.
 
 ## Credit pricing
 

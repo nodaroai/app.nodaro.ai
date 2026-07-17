@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-14T05:26:46.664Z
-generated_from: 523a84a40
+generated_at: 2026-07-17T11:00:59.183Z
+generated_from: 366e9aecf
 ---
 
 # Generate Video Pro
@@ -27,9 +27,12 @@ generated_from: 523a84a40
 - `selectedStartFrameNodeId?: string | null`
 - `referenceImageOrder?: string[]`
 - `fieldMappings?: FieldMappings`
+- `plannerModel?: string`
+- `planOnly?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
+- `generatedPlan?: Record<string, unknown>`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `currentJobId?: string`

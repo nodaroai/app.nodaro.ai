@@ -1006,9 +1006,14 @@ export async function computeGenerateVideoProCreditOverride(
   payload.proPricing = pricing
 
   const { cost_markup_percent } = await getAppSettings()
+  // PLAN-ONLY reserves the plan fee only (mirror of the plugin route's own
+  // computeCredits: max(2, feeBase)) — the engine makes zero provider calls in
+  // this mode and commits the reserved amount at completion, so reserving
+  // reserveBase here would bill the full video price for a plan.
+  const base = payload.planOnly === true ? Math.max(2, pricing.feeBase) : pricing.reserveBase
   const override = cost_markup_percent > 0
-    ? Math.ceil(pricing.reserveBase * (1 + cost_markup_percent / 100))
-    : pricing.reserveBase
+    ? Math.ceil(base * (1 + cost_markup_percent / 100))
+    : base
   return { override, pricing }
 }
 

@@ -1928,26 +1928,136 @@ export function executeNode(
     const extendVideoUrl = inputs.referenceVideoUrls?.[0];
 
     setUserPromptTemplate(gvpData.prompt?.trim() || undefined);
+    // One request body for both modes (planOnly must exercise the exact same
+    // inputs a real run would — that's the point of plan-only testing).
+    const gvpRequest = {
+      prompt,
+      provider: gvpData.provider || "seedance-2",
+      duration: gvpData.duration,
+      aspectRatio: gvpData.aspectRatio ?? "adaptive",
+      resolution: gvpData.resolution ?? "720p",
+      generateAudio: gvpData.generateAudio,
+      startFrameUrl,
+      referenceImageUrls,
+      // Panel-typed + wired negative composed exactly like generate-video.
+      negativePrompt: composeNegative(gvpData.negativePrompt, inputs.negativePrompt) || undefined,
+      endFrameUrl: inputs.endFrameUrl,
+      extendVideoUrl,
+      audioUrl: inputs.audioUrl,
+      referenceAudioUrls: inputs.referenceAudioUrls?.length ? inputs.referenceAudioUrls : undefined,
+      // Fail-safe narrowed like payload-builder — omitted unless meaningful.
+      plannerModel: gvpData.plannerModel?.trim() || undefined,
+      planOnly: gvpData.planOnly === true ? true : undefined,
+      idempotencyKey,
+    };
+
+    // PLAN-ONLY: the job completes with output_data.plan (no videoUrl), so
+    // pollJobWithNodeUpdate's videoUrl completion contract can't apply — poll
+    // inline (mirrors the video-analysis block) and store the plan on the node.
+    if (gvpRequest.planOnly === true) {
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        generatedPlan: undefined,
+        errorMessage: undefined,
+        currentJobId: undefined,
+        currentJobProgress: undefined,
+      });
+      return new Promise<string>((resolve, reject) => {
+        generateVideoPro(gvpRequest)
+          .then(({ jobId }) => {
+            guardedToast.info("Planning started", { description: `Job ID: ${jobId}` });
+            updateNodeData(node.id, { currentJobId: jobId });
+
+            let pollFailures = 0;
+            const poll = ctx.trackInterval(
+              setInterval(async () => {
+                if (ctx.isWorkflowStale()) {
+                  ctx.untrackInterval(poll);
+                  reject(new WorkflowStaleError());
+                  return;
+                }
+                try {
+                  const job = await getJobStatusLean(jobId);
+                  pollFailures = 0;
+                  if (job.status === "processing" && job.progress != null) {
+                    updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                  }
+
+                  if (job.status === "completed" || job.status === "failed") {
+                    if (shouldAbandonNode(node.id, jobId)) {
+                      ctx.untrackInterval(poll);
+                      resolve("");
+                      return;
+                    }
+                  }
+
+                  if (job.status === "completed") {
+                    ctx.untrackInterval(poll);
+                    const plan = (job.output_data as Record<string, unknown> | undefined)?.plan;
+                    updateNodeData(node.id, {
+                      executionStatus: "completed",
+                      generatedPlan: plan as Record<string, unknown> | undefined,
+                      currentJobId: undefined,
+                      currentJobProgress: undefined,
+                    });
+                    guardedToast.success("Plan ready — no video was generated");
+                    resolve(plan === undefined ? "" : JSON.stringify(plan, null, 2));
+                  } else if (job.status === "failed") {
+                    ctx.untrackInterval(poll);
+                    const errMsg = job.error_message ?? "Planning failed";
+                    updateNodeData(node.id, {
+                      executionStatus: "failed",
+                      errorMessage: errMsg,
+                      currentJobId: undefined,
+                      currentJobProgress: undefined,
+                    });
+                    guardedToast.error("Planning failed", { description: errMsg });
+                    reject(new Error(errMsg));
+                  }
+                } catch (err) {
+                  pollFailures++;
+                  if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                    ctx.untrackInterval(poll);
+                    if (shouldAbandonNode(node.id, jobId)) {
+                      resolve("");
+                      return;
+                    }
+                    updateNodeData(node.id, {
+                      executionStatus: "failed",
+                      currentJobId: undefined,
+                      currentJobProgress: undefined,
+                    });
+                    guardedToast.error("Failed to check planning status");
+                    reject(err);
+                  }
+                }
+              }, 2000),
+            );
+          })
+          .catch((err) => {
+            updateNodeData(node.id, {
+              executionStatus: "failed",
+              currentJobId: undefined,
+              currentJobProgress: undefined,
+            });
+            if (!checkStorageError(err, ctx)) {
+              guardedToast.error("Failed to start planning", {
+                description: err instanceof Error ? err.message : String(err),
+              });
+            }
+            reject(err);
+          });
+      });
+    }
+
+    // A fresh REAL run invalidates any prior plan-only preview on the node.
+    if (gvpData.generatedPlan !== undefined) {
+      useWorkflowStore.getState().updateNodeData(node.id, { generatedPlan: undefined });
+    }
     return pollJobWithNodeUpdate(
       node.id,
-      () =>
-        generateVideoPro({
-          prompt,
-          provider: gvpData.provider || "seedance-2",
-          duration: gvpData.duration,
-          aspectRatio: gvpData.aspectRatio ?? "adaptive",
-          resolution: gvpData.resolution ?? "720p",
-          generateAudio: gvpData.generateAudio,
-          startFrameUrl,
-          referenceImageUrls,
-          // Panel-typed + wired negative composed exactly like generate-video.
-          negativePrompt: composeNegative(gvpData.negativePrompt, inputs.negativePrompt) || undefined,
-          endFrameUrl: inputs.endFrameUrl,
-          extendVideoUrl,
-          audioUrl: inputs.audioUrl,
-          referenceAudioUrls: inputs.referenceAudioUrls?.length ? inputs.referenceAudioUrls : undefined,
-          idempotencyKey,
-        }),
+      () => generateVideoPro(gvpRequest),
       "generatedVideoUrl",
       "Video generation",
       ctx,
