@@ -95,6 +95,37 @@ Wire any talking video into the **video** input and the node will:
 
 **Keeping the background.** Leave **Preserve Background** on (default) to keep any music or sound effects baked into the clip's audio under the new voices. Turn it off for clean, voice-only results.
 
+## Interactive flow (analyze → recast stems → export)
+
+The node is a one-shot: configure voices, run, get the finished result. API
+consumers (SDK / CLI / MCP / REST) can instead drive the same engine as a
+**three-step interactive flow** — inspect the speakers before paying for a
+recast, and mix the result before rendering:
+
+1. **Analyze** — `POST /v1/voice-changer-pro/analyze` (SDK
+   `client.voices.analyze`, CLI `nodaro voice analyze`, MCP
+   `voice_changer_pro_analyze`). Separates voice from music once and diarizes,
+   returning the speaker list (`id`, time `segments`, first-appearance, word
+   count, a transcript snippet), the detected language, and the persisted stem
+   URLs. Flat-priced — no recast committed yet.
+2. **Recast to stems** — the normal recast call with `output: "stems"` and the
+   analyze result passed back as `analysis` (skips re-detection, so you can
+   re-recast with different voice assignments without paying detection again).
+   Returns the **dry, unleveled per-track stems** instead of a rendered video.
+3. **Export** — `POST /v1/voice-changer-pro/export` (SDK
+   `client.voices.exportMix`, CLI `nodaro voice export`, MCP
+   `voice_changer_pro_export`). Send the mixed track list — per-lane `gain`
+   (0–200), `muted`, `kind` (`voice`/`background`), ≤16 tracks — plus an
+   optional export-time `voiceFx`. The video stream is copied, never
+   re-encoded, so the export is bit-identical to your preview. Iterating
+   levels and effects before exporting is free; only the final render is
+   charged (flat-priced).
+
+Each step returns a `jobId`; one step's completed `output_data` slots into the
+next step's input. See the [API integration worked example](../../api-integration.md#worked-example-recast-a-multi-speaker-interview-end-to-end)
+for the full REST walkthrough, and the [SDK](../../sdk-reference.md#clientvoices) /
+[CLI](../../cli.md) references for the typed equivalents.
+
 ## Best Practices
 
 - Order your voices carefully — the mapping is positional (first-appearance speaker order). If you are unsure of speaker order, run the clip through a transcription node first to inspect the ordering.
@@ -105,7 +136,7 @@ Wire any talking video into the **video** input and the node will:
 - Use a per-voice **volumeMode** (`match` / `normalize` / `manual`) to balance loudness across recast speakers — `match` mirrors the original speaker, `manual` lets you dial in an exact percentage.
 - You can map fewer voices than speakers: only the listed speakers are revoiced; the rest pass through in the original voice.
 - Use keep-slots (**Keep original**) to recast only some speakers — e.g. voices `[Rachel, (keep), Aria]` recast speakers 1 and 3 while speaker 2 keeps their original voice. Keep-slots don't cost credits.
-- Custom cloned voices (created via the Voice Clone node) work as target voices for personalized per-speaker recast.
+- Custom cloned voices (see [Voice Clone](./voice-clone.md)) work as target voices for personalized per-speaker recast.
 
 ## Common Use Cases
 

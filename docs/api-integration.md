@@ -1001,6 +1001,113 @@ curl -s -X POST "$BASE/v1/freecut-export" \
 # → { "url": "https://…/exports/<userId>/freecut-<uuid>.json", "format": "json", "assetId": "<uuid>" }
 ```
 
+## Voice, Voice Changer Pro & media endpoints
+
+Everything the voice stack exposes is plain REST under `/v1/` — the same
+async-job contract as the rest of the platform: `POST` returns `{ jobId }`,
+poll `GET /v1/jobs/:id/status` (or batch, [§13](#13-job-batch-polling))
+until `status` is `completed`, read the result from `output_data`.
+
+### Voices & clones
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/voices` | Premade voice catalog (name, `voice_id`, gender/accent/age metadata). |
+| `GET` | `/v1/voices/library` | Search the shared Voice Library (`?search=`, `?gender=`, `?language=`, … `?page=`, `?page_size=`). |
+| `GET` | `/v1/voice-clones` | List your voice clones. |
+| `POST` | `/v1/voice-clones` | Clone from an uploaded **file** (multipart: `name` field + `file` part, ≤10 MB). |
+| `POST` | `/v1/voice-clones/from-url` | Clone from an already-uploaded sample URL (`{ name, audioUrl }`). |
+| `PATCH` | `/v1/voice-clones/:id` | Rename / edit a clone. |
+| `DELETE` | `/v1/voice-clones/:id` | Delete a clone. |
+| `POST` | `/v1/voice-design` | Design a synthetic voice from a description (`{ text, voiceDescription, model?, loudness?, guidanceScale?, seed?, quality?, shouldEnhance? }`) → job. |
+| `POST` | `/v1/voice-remix` | Speak a text in a described voice, no cloning (`{ text, voiceDescription }`) → job. |
+| `POST` | `/v1/dubbing` | Translate-and-revoice (`{ audioUrl, targetLanguage, sourceLanguage?, numSpeakers?, disableVoiceCloning?, dropBackgroundAudio? }`) → job. |
+
+The id to use everywhere a voice is accepted is the clone's
+`elevenlabsVoiceId` (create/list responses) or the catalog's `voice_id`.
+
+### Voice Changer & Voice Changer Pro
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/voice-changer` | Single-voice re-voicing of an audio track or a talking video (`{ voiceId, audioUrl? \| videoUrl?, model?, stability?, similarityBoost?, style?, useSpeakerBoost?, seed?, removeBackgroundNoise? }`) → job. |
+| `POST` | `/v1/voice-changer-pro` | Multi-speaker recast (**Cloud only**): `orderedVoices` maps detected speaker N to entry N (string id, per-voice settings object, or `null` keep-slot). `output: "video"` (default) renders the finished result; `output: "stems"` returns dry per-track stems for an interactive mix. Pass a prior `analysis` to skip re-detection. → job. |
+| `POST` | `/v1/voice-changer-pro/analyze` | Detect the speakers WITHOUT recasting (**Cloud only**): separates voice from music once and diarizes, returning `speakers` (id, segments, first-appearance, word count, snippet), detected language, and the persisted stem urls. `suggestTitle: true` adds an LLM title. → job. |
+| `POST` | `/v1/voice-changer-pro/export` | Render the final video from a mixed track set (**Cloud only**): `{ videoUrl, tracks: [{ url, gain 0–200, muted, kind?: "voice"\|"background" }] (≤16), voiceFx? }`. The video stream is copied, never re-encoded; at least one track must be un-muted. → job. |
+
+Credits: recast charges per **mapped** speaker; analyze and export are
+flat-priced (see the [Voice Changer Pro node page](./nodes/ai-audio/voice-changer-pro.md)
+for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (404).
+
+### Media ingestion
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec? }`). Returns `{ downloadId }` — not a job. |
+| `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
+| `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
+| `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |
+| `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
+| `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |
+
+### Audio primitives
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/audio-separation` | Demucs stems (`{ audioUrl, mode?: vocal_instrumental\|stems, quality?: auto\|fast\|best }`) → job. |
+| `POST` | `/v1/audio-isolation` | Voice isolation / denoise (`{ audioUrl }`) → job. |
+| `POST` | `/v1/audio-fx` | Reverb/echo/telephone/megaphone (`{ audioUrl, preset?, mix?, delayMs?, decay?, eqLow?, eqHigh? }`) → job. |
+| `POST` | `/v1/mix-audio` | Sum 2–20 tracks (`{ audioUrls, trackVolumes? }`) → job. |
+| `POST` | `/v1/adjust-volume` | Level/normalize/fade (`{ audioUrl? \| videoUrl?, volume?, normalize?, fadeIn?, fadeOut? }`) → job. |
+| `POST` | `/v1/combine-audio` | Concatenate segments (`{ segments: [{ url, startTime?, endTime? }] }`) → job. |
+
+### Worked example: recast a multi-speaker interview end-to-end
+
+The interactive Voice Changer Pro flow — ingest → detect → recast to stems →
+mix → export — over plain REST. (One-shot recast is the same second call with
+`output` omitted and no prior analyze.)
+
+```bash
+BASE=https://app.nodaro.ai
+AUTH="Authorization: Bearer $NODARO_ACCESS_TOKEN"
+
+# 0. Ingest: import the interview from YouTube (or skip if you have a URL)
+DL=$(curl -s -X POST $BASE/v1/download-video -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"url":"https://youtu.be/XXXX","maxHeight":720}' | jq -r .downloadId)
+curl -sN $BASE/v1/download-video/progress/$DL -H "$AUTH"   # SSE until phase=completed → videoUrl
+VIDEO=…                                                     # the completed event's videoUrl
+
+# 1. Detect the speakers (charges the flat analyze price; recast not yet committed)
+JOB=$(curl -s -X POST $BASE/v1/voice-changer-pro/analyze -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"videoUrl\":\"$VIDEO\",\"suggestTitle\":true}" | jq -r .jobId)
+# poll until completed, then keep the whole output_data as the analysis fast-path
+ANALYSIS=$(curl -s "$BASE/v1/jobs/$JOB/status" -H "$AUTH" | jq .data.output_data)
+echo $ANALYSIS | jq '.speakers[] | {id, firstStartSec, wordCount, snippet}'   # pick voices per speaker
+
+# 2. Recast to dry stems, reusing the analysis (no re-detection, re-recast as often as needed)
+JOB=$(curl -s -X POST $BASE/v1/voice-changer-pro -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"videoUrl\":\"$VIDEO\",\"orderedVoices\":[\"Rachel\",null,\"Aria\"],
+       \"output\":\"stems\",\"analysis\":$ANALYSIS}" | jq -r .jobId)
+STEMS=$(curl -s "$BASE/v1/jobs/$JOB/status" -H "$AUTH" | jq .data.output_data)  # per-track stem urls
+
+# 3. Mix in your UI (levels / mutes / fx are free to iterate), then render once
+curl -s -X POST $BASE/v1/voice-changer-pro/export -H "$AUTH" -H 'Content-Type: application/json' -d "{
+  \"videoUrl\": \"$VIDEO\",
+  \"tracks\": [
+    { \"url\": \"<voice stem 0>\", \"gain\": 100, \"muted\": false },
+    { \"url\": \"<voice stem 1>\", \"gain\": 90,  \"muted\": false },
+    { \"url\": \"<background stem>\", \"gain\": 70, \"muted\": false, \"kind\": \"background\" }
+  ],
+  \"voiceFx\": { \"preset\": \"hall\", \"wetDryMix\": 25 }
+}"   # → { jobId }; the completed job's output_data.videoUrl is the finished video
+```
+
+The same chain is one method per step in the SDK
+(`client.voices.analyze` → `client.voices.recast({ output: "stems", analysis })`
+→ `client.voices.exportMix`) and one command per step in the CLI
+(`nodaro voice analyze` → `voice recast --output stems --analysis-file` →
+`voice export` — see the [CLI reference](./cli.md)).
+
 ## 19. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:

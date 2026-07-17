@@ -2253,7 +2253,10 @@ const info = await client.oauth.getAppInfo("app_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
 ### `client.voices`
 
 ElevenLabs voices: the premade catalog, the community Voice Library, the
-signed-in user's voice clones, and the **voice changer**.
+signed-in user's voice clones (from URL or file), and the **voice changer** —
+one-shot single-voice / multi-speaker recasts plus the interactive Voice
+Changer Pro flow (`analyze` → `recast({ output: "stems" })` → `exportMix`),
+voice design/remix, and dubbing.
 
 #### `list()`
 
@@ -2336,6 +2339,33 @@ const clone = await client.voices.createClone({
 console.log(clone.elevenlabsVoiceId)
 ```
 
+#### `createCloneFromFile(input)`
+
+```ts
+createCloneFromFile(input: {
+  name: string
+  file: Blob | Uint8Array | ArrayBuffer
+  filename?: string      // upload part name, default "sample"
+  contentType?: string   // MIME when `file` is a raw buffer, default "audio/mpeg"
+}): Promise<VoiceClone>
+```
+
+Clone a voice from an audio **file you hold in memory**
+(`POST /v1/voice-clones`, multipart, ≤10 MB) — the counterpart to
+`createClone`, which clones from an already-uploaded URL. Pass a `Blob`/`File`
+in the browser or a `Uint8Array`/`Buffer` in Node. Costs credits. The returned
+clone's `elevenlabsVoiceId` is the id to synthesize/recast with.
+
+```ts
+import { readFileSync } from "node:fs"
+const clone = await client.voices.createCloneFromFile({
+  name: "Narrator",
+  file: readFileSync("./sample.wav"),
+  filename: "sample.wav",
+  contentType: "audio/wav",
+})
+```
+
 #### `deleteClone(id)`
 
 ```ts
@@ -2355,9 +2385,12 @@ change(input: {
   voiceId: string
   audioUrl?: string
   videoUrl?: string
+  model?: string           // speech-to-speech model override
   stability?: number
   similarityBoost?: number
   style?: number
+  useSpeakerBoost?: boolean
+  seed?: number            // deterministic STS seed (integer) for reproducible output
   removeBackgroundNoise?: boolean
 }): Promise<{ jobId: string }>
 ```
@@ -2368,7 +2401,9 @@ audio→audio, or **`videoUrl`** to revoice an entire clip: the server demuxes t
 audio, runs speech-to-speech, and remuxes the new voice onto the original video.
 Exactly one of `audioUrl` / `videoUrl` is required; **when both are sent, video
 wins**. `style` is a style exaggeration factor (0–1; default 0 — >0 amplifies
-delivery at the cost of latency/stability). `removeBackgroundNoise` off keeps
+delivery at the cost of latency/stability). `useSpeakerBoost` sharpens fidelity
+to the target speaker (small latency cost); `seed` makes the output reproducible
+across runs. `removeBackgroundNoise` off keeps
 the music/SFX bed under the new voice; on yields a clean voice-only result.
 Runs async — poll `client.jobs.get(jobId)`.
 
@@ -2418,6 +2453,8 @@ recast(input: {
     delayMs?: number                       // 20–2000, echo delay
     decay?: number                         // 0–1, echo decay
   }
+  output?: "video" | "stems"               // default "video"; "stems" = dry per-track stems for an interactive mix
+  analysis?: VcpAnalysis                   // a prior analyze() result — skips re-detection (the fast-path)
 }): Promise<{ jobId: string }>
 ```
 
@@ -2457,6 +2494,14 @@ back in (so the effect sits on the voices, not the music/SFX bed): reverb preset
 presets use `delayMs` + `decay`. Cloud-only — costs credits and runs async; poll
 `client.jobs.get(jobId)` for the result (`output_data.videoUrl` +
 `output_data.audioUrl` in video mode).
+
+`output` selects the result shape: `"video"` (default) renders the finished
+merged result; `"stems"` returns the **dry, unleveled per-track stems** instead,
+so you can drive an interactive mix in your own UI and render later with
+`exportMix()`. `analysis` accepts a prior `analyze()` result (see below) to
+**skip re-detection** — the recast reuses the already-separated stems and
+speaker segments, so re-recasting with different voice assignments doesn't pay
+detection again.
 
 ```ts
 // Two-speaker audio recast (bare voice ids)
@@ -2498,6 +2543,122 @@ const { jobId: vjobId } = await client.voices.recast({
   orderedVoices: ["Callum", "Charlotte", "Liam"],
 })
 ```
+
+#### `analyze(input)`
+
+```ts
+analyze(input: {
+  audioUrl?: string       // exactly one of audioUrl / videoUrl
+  videoUrl?: string
+  separationQuality?: "fast" | "best"
+  suggestTitle?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Detect the speakers in a clip **without recasting yet**
+(`POST /v1/voice-changer-pro/analyze`, Cloud only) — the first step of the
+interactive flow. Separates voice from music once and diarizes the vocals.
+The completed job's `output_data` carries the separated stem urls
+(`vocalsUrl`, `backgroundUrl`), the detected `speakers` (each with `id`,
+time `segments`, `firstStartSec`, `wordCount`, `snippet`), the detected
+language (`languageCode` + `languageProbability`), and — with `suggestTitle` —
+an LLM-proposed `suggestedTitle`. That `output_data` is exactly the
+`VcpAnalysis` shape: pass it back as `recast({ …, analysis })` to skip
+re-detection on every subsequent recast. Flat-priced; runs async.
+
+#### `exportMix(input)`
+
+```ts
+exportMix(input: VcpExportInput): Promise<{ jobId: string }>
+// VcpExportInput = {
+//   videoUrl: string                      // stream-copied, never re-encoded
+//   tracks: VcpExportTrack[]              // ≤16; at least one un-muted
+//   voiceFx?: VoiceChangerProInput["voiceFx"]
+// }
+// VcpExportTrack = { url: string, gain: number /* 0–200 */, muted: boolean, kind?: "voice" | "background" }
+```
+
+Render the final video from a mixed set of stems
+(`POST /v1/voice-changer-pro/export`, Cloud only) — the last step of the
+interactive flow, after `recast({ output: "stems" })`. Per-lane `gain`/`muted`
+and the export-time `voiceFx` (voice lanes only — never a `"background"` lane)
+are applied at render; the video stream is copied, so the export is
+bit-identical to your preview and iterating the mix before exporting is free.
+All-muted mixes are rejected (400). Flat-priced; poll `client.jobs.get(jobId)`
+for `output_data.videoUrl`.
+
+```ts
+// The interactive flow end-to-end: analyze once, recast to stems, render.
+const { jobId: aJob } = await client.voices.analyze({ videoUrl, suggestTitle: true })
+const analysis = (await pollUntilDone(aJob)).output_data as VcpAnalysis
+
+const { jobId: rJob } = await client.voices.recast({
+  videoUrl,
+  orderedVoices: ["Rachel", null, "Aria"],   // speaker 2 keeps their voice
+  output: "stems",
+  analysis,                                   // skip re-detection
+})
+const stems = (await pollUntilDone(rJob)).output_data
+
+const { jobId: eJob } = await client.voices.exportMix({
+  videoUrl,
+  tracks: [
+    { url: stems.tracks[0].url, gain: 100, muted: false },
+    { url: stems.tracks[1].url, gain: 90, muted: false },
+    { url: stems.backgroundUrl, gain: 70, muted: false, kind: "background" },
+  ],
+  voiceFx: { preset: "hall", wetDryMix: 25 },
+})
+```
+
+#### `design(input)`
+
+```ts
+design(input: {
+  text: string               // preview line, 100–1000 chars
+  voiceDescription: string
+  model?: string
+  loudness?: number          // -1..1
+  guidanceScale?: number     // 0–100
+  seed?: number
+  quality?: number
+  shouldEnhance?: boolean
+  userPrompt?: string
+}): Promise<{ jobId: string }>
+```
+
+Design a brand-new synthetic voice from a text description
+(`POST /v1/voice-design`, ElevenLabs text-to-voice). The completed job carries
+an audio preview and the reusable generated voice id.
+
+#### `remix(input)`
+
+```ts
+remix(input: {
+  text: string               // 1–5000 chars
+  voiceDescription: string
+  userPrompt?: string
+}): Promise<{ jobId: string }>
+```
+
+Generate speech in a voice described in natural language, without cloning
+(`POST /v1/voice-remix`).
+
+#### `dub(input)`
+
+```ts
+dub(input: {
+  audioUrl: string
+  targetLanguage: string     // ISO code, e.g. "es", "pt-BR"
+  sourceLanguage?: string    // auto-detected when omitted
+  numSpeakers?: number       // 1–20 — improves separation when known
+  disableVoiceCloning?: boolean
+  dropBackgroundAudio?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Dub an audio clip into another language while preserving each speaker's voice
+(`POST /v1/dubbing`).
 
 ---
 
@@ -3156,6 +3317,18 @@ Every type used in a public method signature is re-exported from
 - `VoiceClone` — user clone record (`elevenlabsVoiceId` is the TTS-time id), re-exported from `@nodaro/shared`
 - `VoiceLibraryParams` — query params for `searchLibrary()`, re-exported from `@nodaro/shared`
 - `VoiceLibraryResponse` — `{ voices: Voice[]; hasMore: boolean; ... }`, re-exported from `@nodaro/shared`
+- `VoiceChangerProInput` — full `recast()` input (see its section above)
+- `VoiceChangerProVoice` — one `orderedVoices` entry: voice id string or per-voice settings object
+- `VcpAnalyzeInput` — `analyze()` input
+- `VcpAnalysis` / `VcpAnalysisSpeaker` — an analyze result, reshaped for `recast({ analysis })`
+- `VcpExportInput` / `VcpExportTrack` — `exportMix()` input / one mix lane
+- `VoiceDesignInput`, `VoiceRemixInput`, `DubbingInput` — inputs for `design()` / `remix()` / `dub()`
+- `AudioFxPreset` — the fx preset union used by `voiceFx.preset` and `audio.applyFx`, re-exported from `@nodaro/shared`
+
+### Media & audio
+
+- `VideoMetadata` — `media.videoMetadata()` result (best-effort probe fields)
+- `DownloadVideoProgress` — one `media.downloadVideoProgress()` event: `{ phase, percent, videoUrl?, thumbnailUrl?, error? }`
 
 ### Credits
 

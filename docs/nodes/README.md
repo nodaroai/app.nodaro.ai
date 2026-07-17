@@ -225,6 +225,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
 | [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Voice Changer Pro](./ai-audio/voice-changer-pro.md) | Replace each speaker's voice independently in multi-speaker audio or video | Re-voice multi-speaker recordings with per-speaker voice mapping (Cloud only) |
+| [Voice Clone](./ai-audio/voice-clone.md) | Clone a voice from a short audio sample | Create a reusable custom voice for TTS, Voice Changer, and Voice Changer Pro |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |
 | [Voice Remix](./ai-audio/voice-remix.md) | Generate voice from natural language description | Create custom voice from text description |
 | [Voice Design](./ai-audio/voice-design.md) | Design custom voices with full controls | Create reusable voices with loudness, guidance, and quality controls |
