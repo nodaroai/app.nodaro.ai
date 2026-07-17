@@ -12,6 +12,7 @@ import { VideoResultOverlay } from "./video-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { getJobStatusLean } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -94,6 +95,48 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   useEffect(() => {
     setVideoError(false)
   }, [activeUrl])
+
+  // PLAN-ONLY refresh-resume: the executor's inline poll dies with the page.
+  // Media jobs have the My Library backstop, but a plan exists ONLY in the
+  // job's output_data — after a reload a node saved mid-run would stay
+  // "running" forever with a completed plan nobody can see (user-hit on the
+  // feature's first prod run). While this node mounts running a plan-only
+  // job, poll lean status and hydrate the terminal state. Idempotent next to
+  // a live executor poll: both write the same terminal fields, and the effect
+  // stops itself the moment status leaves "running".
+  const planResumeJobId = status === "running" && nodeData.planOnly === true ? (nodeData.currentJobId as string | undefined) : undefined
+  useEffect(() => {
+    if (!planResumeJobId) return
+    let stopped = false
+    const t = setInterval(async () => {
+      try {
+        const job = await getJobStatusLean(planResumeJobId)
+        if (stopped) return
+        if (job.status === "completed") {
+          const plan = (job.output_data as Record<string, unknown> | undefined)?.plan
+          updateNodeData(id, {
+            executionStatus: "completed",
+            generatedPlan: plan as Record<string, unknown> | undefined,
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          })
+        } else if (job.status === "failed") {
+          updateNodeData(id, {
+            executionStatus: "failed",
+            errorMessage: job.error_message ?? "Planning failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          })
+        }
+      } catch {
+        /* transient poll failure — keep trying while mounted */
+      }
+    }, 3000)
+    return () => {
+      stopped = true
+      clearInterval(t)
+    }
+  }, [planResumeJobId, id, updateNodeData])
 
   // Run-strip credit estimate via the SAME closed-form the popup badge and
   // the backend reservation use (fee + first segment at the no-ref rate +
