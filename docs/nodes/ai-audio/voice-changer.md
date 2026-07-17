@@ -65,7 +65,7 @@ This collapses what used to be a four-node chain (generate video → extract aud
 ## Tips
 
 - The emotion and pacing of the original are preserved in the output -- this is Speech-to-Speech, not Text-to-Speech. The input performance matters.
-- Custom cloned voices (created via the Voice Clone node) can be used as the target voice for personalized re-voicing.
+- Custom cloned voices (see [Voice Clone](./voice-clone.md)) can be used as the target voice for personalized re-voicing.
 - If the output sounds robotic or unnatural, try lowering the Similarity Boost to give the model more freedom.
 - In video mode, both the revoiced **video** and the revoiced **audio** are available as outputs — wire whichever the rest of your workflow needs.
 - This node works with any media input -- it does not need to come from another Nodaro node. Uploaded clips and externally hosted URLs both work.

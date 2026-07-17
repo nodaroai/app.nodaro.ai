@@ -49,12 +49,24 @@ UX rules (generation takes seconds-to-minutes — never block silently):
     For manual loops use client.jobs.getStatus(jobId) (id/status/progress).
   - Let the user cancel: pass { signal } (AbortSignal) in the same options.
 
+Voice / audio surface (client.voices, client.media, client.audio):
+  - Multi-speaker recast (Voice Changer Pro, Cloud-hosted instances):
+      await client.voices.recast({ videoUrl, orderedVoices: ["Rachel", null, "Aria"] })
+    null = that speaker keeps their original voice (positional mapping).
+  - Interactive flow: voices.analyze (detect speakers first) →
+    voices.recast({ output: "stems", analysis }) → voices.exportMix(tracks) —
+    inspect speakers before paying, mix stems before rendering.
+  - Also: voices.change (single-voice), design / remix / dub, clone from URL
+    or file; client.media.downloadVideo (+downloadVideoProgress SSE) / trim /
+    videoMetadata; client.audio.separate / isolate / applyFx / mix.
+
 Rules:
   - Generations cost credits; catch InsufficientCreditsError (has .required /
     .available). All errors are typed classes exported from @nodaro/sdk.
   - Prefer client.nodes.runAndWait over hand-rolled polling; for manual loops
     use client.jobs.getStatus(id) (lean poll endpoint).
-  - 22 resources on the client (workflows, characters, voices, pipelines, …):
+  - 24 resources on the client (workflows, characters, voices, media, audio,
+    pipelines, …):
     full reference https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
   - Node catalog + per-node params:
     https://nodaroai.github.io/app.nodaro.ai/nodes/ (all pages exist as .md)

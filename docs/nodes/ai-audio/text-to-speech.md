@@ -61,7 +61,7 @@ An explicitly-set `provider` is always respected as-is.
 - Use ElevenLabs v3 for the widest language support and audio tag capabilities.
 - Keep Stability around 0.5 for a balance between expressiveness and consistency. Push toward 1.0 for narration that needs to sound uniform.
 - When using audio tags with v3, place them inline in the text at the point where the effect should occur (e.g., `"I can't believe it [laughs] that's amazing"`).
-- For custom voices, clone a voice first using the Voice Clone node, then select it here via the "My Voices" tab in the Voice Browser.
+- For custom voices, clone a voice first (see [Voice Clone](./voice-clone.md) — the "My Voices" tab in the Voice Browser), then select it here.
 - Avoid mixing audio tags into text that will be sent to v2 models -- the tags are stripped automatically, but the resulting text may read awkwardly.
 
 ## Common Use Cases

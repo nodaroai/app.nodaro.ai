@@ -53,4 +53,5 @@ yet for your edition. Check back later.
 
 - [Embed App Guide](./embed-app-guide.md) — ship your own workflows as runnable MiniApps
 - [SDK Quickstart](./sdk-quickstart.md) — drive workflows from code
+- [API Integration](./api-integration.md) — server-to-server REST recipes, including the multi-speaker interview recast walkthrough (ingest → detect → recast → mix → export)
 - [Node Reference](./nodes/) — what each node does, and when to use it
