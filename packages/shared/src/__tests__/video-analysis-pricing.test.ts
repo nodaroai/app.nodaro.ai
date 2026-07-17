@@ -7,6 +7,7 @@ import {
 } from "../video-analysis-pricing.js"
 import {
   VIDEO_ANALYSIS_LLM_MODELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_TIER_ORDER,
+  VIDEO_ANALYSIS_MIXED_TIERS,
   DEFAULT_VIDEO_ANALYSIS_TIER, DEFAULT_VIDEO_ANALYSIS_MODEL, resolveVideoAnalysisModel,
 } from "../llm-models.js"
 
@@ -43,24 +44,49 @@ describe("video-analysis-pricing", () => {
     expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.1-pro"])
   })
 
-  it("tier layer: every tier maps to a real model AND every model is tier-reachable (no vendor leak)", () => {
+  it("tier layer: every model-backed tier maps to a real model AND every model is tier-reachable (no vendor leak)", () => {
     // Adding a video-analysis model without a tier would silently leave it
     // unreachable / unnamed — this fails until a tier decision is made.
     const tierTargets = Object.values(VIDEO_ANALYSIS_TIERS)
     for (const m of tierTargets) expect(VIDEO_ANALYSIS_LLM_MODELS).toContain(m)
     for (const m of VIDEO_ANALYSIS_LLM_MODELS) expect(tierTargets).toContain(m)
-    expect(new Set(VIDEO_ANALYSIS_TIER_ORDER)).toEqual(new Set(Object.keys(VIDEO_ANALYSIS_TIERS)))
+    // TIER_ORDER = model-backed tiers + mixed roll-plan tiers, exactly.
+    expect(new Set(VIDEO_ANALYSIS_TIER_ORDER)).toEqual(
+      new Set([...Object.keys(VIDEO_ANALYSIS_TIERS), ...VIDEO_ANALYSIS_MIXED_TIERS]),
+    )
+    // Mixed tiers are SENTINELS, never model ids — a mixed id leaking into the
+    // model list would break the roll-plan dispatch in the analysis engine.
+    for (const t of VIDEO_ANALYSIS_MIXED_TIERS) expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain(t)
   })
 
-  it("resolveVideoAnalysisModel: tier → model, raw model passthrough, default pro on empty/unknown", () => {
+  it("resolveVideoAnalysisModel: tier → model, mixed → sentinel, raw model passthrough, default pro on empty/unknown", () => {
     expect(DEFAULT_VIDEO_ANALYSIS_TIER).toBe("pro")
     expect(DEFAULT_VIDEO_ANALYSIS_MODEL).toBe("gemini-3.1-pro")
     expect(resolveVideoAnalysisModel("pro")).toBe("gemini-3.1-pro")
     expect(resolveVideoAnalysisModel("fast")).toBe("gemini-3-flash")
+    expect(resolveVideoAnalysisModel("mixed")).toBe("mixed") // roll-plan sentinel passthrough
+    expect(resolveVideoAnalysisModel("mixed-fast")).toBe("mixed-fast")
     expect(resolveVideoAnalysisModel("gemini-3-flash")).toBe("gemini-3-flash") // raw passthrough
     expect(resolveVideoAnalysisModel(undefined)).toBe("gemini-3.1-pro") // default → pro
     expect(resolveVideoAnalysisModel("")).toBe("gemini-3.1-pro")
     expect(resolveVideoAnalysisModel("nonsense")).toBe("gemini-3.1-pro") // unknown → default, never throws
+  })
+
+  it("mixed tiers price under ONE shared credit family (video-analysis:mixed:*)", () => {
+    // Both variants are the identical compute plan — a per-variant price split
+    // would be a phantom distinction and double the admin surface.
+    for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
+      expect(buildVideoAnalysisCreditId("mixed", bucketSec)).toBe(`video-analysis:mixed:${bucketSec}s`)
+      expect(buildVideoAnalysisCreditId("mixed-fast", bucketSec)).toBe(`video-analysis:mixed:${bucketSec}s`)
+      const credits = VIDEO_ANALYSIS_BUCKET_CREDITS[`video-analysis:mixed:${bucketSec}s`]
+      expect(credits, `missing mixed entry for ${bucketSec}s`).toBeDefined()
+      expect(Number.isInteger(credits)).toBe(true)
+      // Sanity: mixed (3 fast + 2 pro rolls + refine) must never price below
+      // the pro tier it supersets.
+      expect(credits).toBeGreaterThanOrEqual(
+        VIDEO_ANALYSIS_BUCKET_CREDITS[`video-analysis:gemini-3.1-pro:${bucketSec}s`],
+      )
+    }
   })
 
   // Full drift-detection against the live $-formula lives in

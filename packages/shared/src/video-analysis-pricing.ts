@@ -54,6 +54,24 @@ export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   "video-analysis:gemini-3.1-pro:180s": 3,
   "video-analysis:gemini-3.1-pro:360s": 7,
   "video-analysis:gemini-3.1-pro:600s": 11,
+  // Mixed tiers (`mixed` + `mixed-fast`) share ONE credit family — identical
+  // compute plan (3 fast + 2 pro rolls + judge + refine). Ladder = fast + pro
+  // per bucket; admin-tunable via model_pricing like every other row.
+  "video-analysis:mixed:60s": 3,
+  "video-analysis:mixed:180s": 4,
+  "video-analysis:mixed:360s": 9,
+  "video-analysis:mixed:600s": 14,
+}
+
+/**
+ * The credit-id MODEL SEGMENT for an engine identifier: both mixed-tier
+ * sentinels share the `mixed` price family (identical compute); everything
+ * else prices under its own identifier. Single source of truth — used by
+ * `buildVideoAnalysisCreditId` below, so route/orchestrator/UI callers can
+ * never diverge on where a sentinel prices.
+ */
+export function videoAnalysisCreditSegment(modelOrSentinel: string): string {
+  return modelOrSentinel === "mixed-fast" ? "mixed" : modelOrSentinel
 }
 
 export function pickVideoAnalysisBucket(durationSec: number): number {
@@ -65,7 +83,7 @@ export function buildVideoAnalysisCreditId(model: string, durationSec?: number):
   const bucket = durationSec !== undefined && durationSec > 0
     ? pickVideoAnalysisBucket(Math.min(durationSec, VIDEO_ANALYSIS_MAX_DURATION_SEC))
     : VIDEO_ANALYSIS_MAX_DURATION_SEC // unknown → ceiling composite (the ONLY silent-ceiling path)
-  return `video-analysis:${model}:${bucket}s`
+  return `video-analysis:${videoAnalysisCreditSegment(model)}:${bucket}s`
 }
 
 export function bucketSecondsFromCreditId(creditId: string): number | null {

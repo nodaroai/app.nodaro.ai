@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, SEEDANCE_2_PROVIDERS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 
@@ -132,14 +132,17 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     // unknown duration reserves the 600s ceiling. See @nodaro/shared video-analysis-pricing.ts.
     description: "Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots.",
     outputType: "data",
-    creditCost: "1-11",
+    creditCost: "1-14",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "string" },
         { key: "youtubeUrl", type: "string" },
         // Public tiers, never vendor model ids (raw ids remain accepted for
-        // back-compat but are not advertised).
-        { key: "llmModel", type: "select", options: ["fast", "pro"] },
+        // back-compat but are not advertised). Mixed tiers = multi-model
+        // best-of-N roll plans (mixed: any roll may win the skeleton;
+        // mixed-fast: fast rolls only win, pro rolls donate to the refine).
+        // Derived from the shared tier vocabulary — never hand-listed.
+        { key: "llmModel", type: "select", options: [...VIDEO_ANALYSIS_TIER_ORDER] },
         { key: "selectionMode", type: "select", options: ["choose", "combine"] },
         { key: "analysisFocus", type: "string" },
       ],
@@ -297,7 +300,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
     // Range is pre-markup; the admin-configured markup and version count are
     // applied to the user-visible cost.
-    creditCost: "1-11",
+    creditCost: "1-14",
     providers: ["replicate-mmaudio"],
     capabilities: ["sound-effect"],
     inputSchema: {

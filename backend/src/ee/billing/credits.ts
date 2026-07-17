@@ -71,8 +71,12 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 // Current values:
 //   gemini-3-flash → bare 3 · 60s 1 · 180s 1 · 360s 2 · 600s 3
 //   gemini-3.1-pro → bare 11 · 60s 2 · 180s 3 · 360s 7 · 600s 11
+//   mixed          → bare 14 · 60s 3 · 180s 4 · 360s 9 · 600s 14
+// `mixed` is the shared credit family for BOTH mixed roll-plan tiers
+// (`mixed` + `mixed-fast` — identical compute: 3 fast + 2 pro rolls + judge +
+// refine); videoAnalysisCreditSegment maps the sentinels here.
 const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
-for (const model of ["gemini-3-flash", "gemini-3.1-pro"]) {
+for (const model of ["gemini-3-flash", "gemini-3.1-pro", "mixed"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
   // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
   // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG

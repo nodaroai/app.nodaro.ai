@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIERS, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
+import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -43,10 +43,13 @@ const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true
 // Credit hint for the video_analysis tool description — derived from the
 // shared duration-bucket formula (NEVER hand-write the numbers; the formula is
 // the single source of truth, pinned by packages/shared's pricing test).
-// Renders like: "gemini-3-flash 1/1/2/3 credits; gemini-3.1-pro 2/3/7/11 credits".
-// Priced per quality TIER (fast/pro) — the underlying model is never surfaced.
+// Renders like: "pro 2/3/7/11 credits; fast 1/1/2/3 credits; mixed 3/4/9/14 …".
+// Priced per quality TIER — the underlying model is never surfaced.
+// resolveVideoAnalysisModel is sentinel-aware: mixed tiers resolve to their
+// roll-plan sentinel, which buildVideoAnalysisCreditId prices under the shared
+// `mixed` credit family (both mixed variants share one ladder).
 const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_TIER_ORDER.map(
-  (tier) => `${tier} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(VIDEO_ANALYSIS_TIERS[tier], b)]).join("/")} credits`,
+  (tier) => `${tier} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)]).join("/")} credits`,
 ).join("; ")
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
