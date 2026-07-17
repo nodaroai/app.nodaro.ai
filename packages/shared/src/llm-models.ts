@@ -398,16 +398,13 @@ export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
 export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3-flash", pro: "gemini-3.1-pro" } as const
 export type VideoAnalysisModelTier = keyof typeof VIDEO_ANALYSIS_TIERS
 /**
- * MIXED tiers — multi-model best-of-N plans (3× fast + 2× pro rolls) whose
- * identifier resolves to a roll-plan SENTINEL consumed by the analysis engine,
- * never to a single model id. Two variants, identical compute + price
- * (one shared `video-analysis:mixed:*` credit family):
- *  - `mixed`      — the judge may pick ANY roll as the winning skeleton.
- *  - `mixed-fast` — the judge picks among the fast rolls only (consistent fast
- *                   skeleton); pro rolls act purely as refine-pass donors.
- * The plan composition itself (roll counts, judge scope) is engine-internal —
- * deliberately NOT published here (Apache irrevocability; only the wire
- * vocabulary below is contract).
+ * MIXED tiers — advanced multi-engine analysis plans whose identifier resolves
+ * to an engine-plan SENTINEL consumed by the analysis engine, never to a single
+ * model id. Two variants, same price (one shared `video-analysis:mixed:*`
+ * credit family): `mixed` targets maximum result quality; `mixed-fast` targets
+ * run-to-run output consistency. What each plan does internally is deliberately
+ * NOT published here (Apache irrevocability; only the wire vocabulary below is
+ * contract — the engine lives in the private analysis plugin).
  */
 export const VIDEO_ANALYSIS_MIXED_TIERS = ["mixed", "mixed-fast"] as const
 export type VideoAnalysisMixedTier = (typeof VIDEO_ANALYSIS_MIXED_TIERS)[number]
@@ -420,8 +417,8 @@ export const DEFAULT_VIDEO_ANALYSIS_MODEL: string = VIDEO_ANALYSIS_TIERS[DEFAULT
 export const VIDEO_ANALYSIS_TIER_LABELS: Record<VideoAnalysisTier, string> = {
   fast: "Fast",
   pro: "Pro",
-  mixed: "Mixed (best of all)",
-  "mixed-fast": "Mixed (Fast base)",
+  mixed: "Mixed",
+  "mixed-fast": "Mixed (consistent)",
 }
 
 export function isVideoAnalysisTier(v: string): v is VideoAnalysisTier {

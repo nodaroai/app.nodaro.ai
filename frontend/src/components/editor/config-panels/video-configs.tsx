@@ -4508,12 +4508,12 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="choose">Choose best</SelectItem>
-            <SelectItem value="combine">Combine (best + verified details)</SelectItem>
+            <SelectItem value="choose">Choose</SelectItem>
+            <SelectItem value="combine">Combine</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          The video is analyzed several times. "Choose best" keeps the strongest pass; "Combine" also folds in
+          The video is analyzed several times. "Choose" keeps the strongest pass as-is; "Combine" also folds in
           details from the other passes after verifying them against the footage (slightly slower, most complete).
         </p>
       </div>
