@@ -45,4 +45,22 @@ describe("installEmptyJsonBodyFix", () => {
     expect(r.statusCode).toBe(200)
     expect(r.json()).toEqual({ body: { a: 1 } })
   })
+
+  it("CHUNKED json body (no content-length) keeps its content-type and parses — 2026-07-17 Cloudflare outage regression", async () => {
+    // Simulate an intermediary (Cloudflare) forwarding the POST body with
+    // Transfer-Encoding: chunked and no Content-Length. The old hook read
+    // "no content-length" as "no body", stripped the JSON content-type, and
+    // Fastify 415-rejected every API call routed through the proxy.
+    const r = await app.inject({
+      method: "POST",
+      url: "/echo",
+      headers: {
+        "content-type": "application/json",
+        "transfer-encoding": "chunked",
+      },
+      payload: JSON.stringify({ a: 1 }),
+    })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toEqual({ body: { a: 1 } })
+  })
 })
