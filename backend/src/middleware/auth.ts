@@ -124,6 +124,9 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { path: "/v1/webhooks", prefix: true },
   { method: "POST", path: "/v1/telegram/webhook/", prefix: true },
   { method: "GET", path: "/v1/social/callback", prefix: true },
+  // Between-steps account picker: the popup posts the one-time Redis token
+  // (10-min TTL, consumed once) — the token IS the auth, like /v1/webhooks.
+  { method: "POST", path: "/v1/social/connect/finalize" },
   { method: "GET", path: "/v1/present/", prefix: true },
   { method: "GET", path: "/v1/app/", prefix: true },
   { method: "GET", path: "/og/app/", prefix: true },
