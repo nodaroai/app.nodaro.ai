@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { description: "Bandana amarrada na cabeça" },
   "headwear-hood": { label: "Capuz", description: "Capuz do moletom levantado" },
   "headwear-crown": { label: "Coroa", description: "Coroa real ou decorativa" },
+  "headwear-nemes": { label: "Toucado nemes", description: "Nemes faraônico listrado com uraeus" },
   "headwear-helmet": { label: "Capacete", description: "Capacete de proteção" },
   "headwear-veil": { label: "Véu", description: "Véu caindo sobre o rosto/cabelo" },
   "headwear-bucket-hat": { label: "Chapéu Bucket", description: "Chapéu bucket casual de aba mole" },
@@ -130,6 +131,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "Pintura Facial Dramática", description: "Pintura facial artística e ousada" },
   "face-paint-costume": { label: "Pintura de Fantasia", description: "Pintura cosplay / teatral" },
   "face-paint-tribal": { label: "Marcas Tribais", description: "Marcas faciais inspiradas em padrões tribais" },
+  "face-paint-flag": { label: "Bandeira no rosto", description: "Bandeira nacional pintada nas bochechas, estilo torcedor" },
   "face-paint-warpaint": { label: "Pintura de Guerra", description: "Listras de pintura de guerra de guerreiro" },
 
   // Fabric (clothing) — same as material catalog vocabulary, but worn
@@ -156,12 +158,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "Vestido de Festa", description: "Vestido de festa longo até o chão" },
   "outfit-wedding-dress": { label: "Vestido de Noiva", description: "Vestido de noiva branco" },
   "outfit-cocktail-dress": { label: "Vestido de Coquetel", description: "Vestido de coquetel até o joelho" },
+  "outfit-sundress": { label: "Vestido de verão / maxi", description: "Vestido de verão fluido com gola halter / maxi estampado" },
   "outfit-lab-coat": { label: "Jaleco", description: "Jaleco médico branco" },
   "outfit-scrubs": { label: "Pijama Cirúrgico", description: "Pijama cirúrgico em cor sólida" },
   "outfit-military": { label: "Uniforme Militar", description: "Uniforme militar verde-oliva" },
   "outfit-lifeguard": { label: "Roupa de Salva-vidas", description: "Top e shorts vermelhos de salva-vidas" },
   "outfit-athleisure": { label: "Conjunto Athleisure", description: "Top e calça combinando athleisure" },
   "outfit-tracksuit": { label: "Agasalho", description: "Agasalho de duas peças com zíper" },
+  "outfit-soccer-jersey": { label: "Camisa de futebol", description: "Camisa de seleção nacional com escudo" },
   "outfit-bikini": { label: "Biquíni", description: "Maiô de duas peças" },
   "outfit-one-piece-swim": { label: "Maiô Inteiro", description: "Maiô inteiro ajustado" },
   "outfit-lingerie": { label: "Conjunto de Lingerie", description: "Conjunto de lingerie combinando" },
@@ -181,6 +185,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "Pirata", description: "Fantasia de pirata: chapéu tricorne, faixa, camisa rendada, botas" },
   "outfit-fairy": { label: "Fada", description: "Fada de fantasia: asas vaporosas, coroa de flores, vestido etéreo" },
   "outfit-mermaid": { label: "Sereia", description: "Sereia de fantasia: cauda/saia escamada, top de conchas" },
+  "outfit-pharaoh": { label: "Traje de faraó", description: "Realeza do Egito Antigo: colar usekh, peitoral, saiote plissado" },
 
   // Top
   "top-tshirt": { label: "Camiseta", description: "Camiseta lisa de gola careca" },
@@ -293,6 +298,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "Por Dentro", description: "Top por dentro da peça de baixo" },
   "state-half-tucked": { label: "Meio por Dentro", description: "Frente por dentro, traseira solta" },
   "state-off-shoulder": { label: "Ombro à Mostra", description: "Caída em um dos ombros" },
+  "state-halter-neck": { label: "Frente única", description: "Alças amarradas atrás do pescoço" },
+  "state-plunging-neck": { label: "Decote profundo", description: "Decote em V profundo" },
   "state-unbuttoned": { label: "Desabotoada", description: "Aberta / desabotoada" },
   "state-rolled-sleeves": { label: "Mangas Dobradas", description: "Mangas dobradas até o antebraço" },
   "state-layered": { label: "Sobreposta", description: "Várias camadas sobrepostas" },

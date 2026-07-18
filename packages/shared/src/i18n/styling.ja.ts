@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { label: "バンダナ", description: "頭に巻いたバンダナ" },
   "headwear-hood": { label: "フード", description: "フード付きスウェットを被る" },
   "headwear-crown": { label: "クラウン", description: "王冠または装飾的な冠" },
+  "headwear-nemes": { label: "ネメス頭巾", description: "ウラエウス付き縞模様のファラオのネメス" },
   "headwear-helmet": { label: "ヘルメット", description: "保護用のヘルメット" },
   "headwear-veil": { label: "ベール", description: "顔／髪に掛かるベール" },
 
@@ -130,6 +131,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "ドラマチック・フェイスペイント", description: "大胆で芸術的なフェイスペイント" },
   "face-paint-costume": { label: "コスチュームペイント", description: "コスプレ／演劇的なペイント" },
   "face-paint-tribal": { label: "トライバル模様", description: "トライバル風の顔のマーキング" },
+  "face-paint-flag": { label: "国旗フェイスペイント", description: "頬に描いた国旗、スポーツ観戦スタイル" },
   "face-paint-warpaint": { label: "ウォーペイント", description: "戦士のウォーペイントの線" },
 
   // Fabric
@@ -156,12 +158,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "イブニングガウン", description: "床まで届くフォーマルガウン" },
   "outfit-wedding-dress": { label: "ウェディングドレス", description: "白いウェディングガウン" },
   "outfit-cocktail-dress": { label: "カクテルドレス", description: "膝丈のカクテルドレス" },
+  "outfit-sundress": { label: "サンドレス/マキシ", description: "ホルターネックの軽やかなサンドレス/柄物マキシ" },
   "outfit-lab-coat": { label: "白衣", description: "白い医療用の白衣" },
   "outfit-scrubs": { label: "医療用スクラブ", description: "単色の医療用スクラブ" },
   "outfit-military": { label: "ミリタリーフィットウェア", description: "オリーブドラブのミリタリー・ファティーグ" },
   "outfit-lifeguard": { label: "ライフガードの衣装", description: "赤いライフガードのトップとショーツ" },
   "outfit-athleisure": { label: "アスレジャーセット", description: "揃いのアスレジャーのトップとボトム" },
   "outfit-tracksuit": { label: "ジャージ", description: "2ピースのジップアップ・ジャージ" },
+  "outfit-soccer-jersey": { label: "サッカーユニフォーム", description: "エンブレム付きナショナルチームユニフォーム" },
   "outfit-bikini": { label: "ビキニ", description: "2ピースの水着" },
   "outfit-one-piece-swim": { label: "ワンピース水着", description: "フィットした1ピースの水着" },
   "outfit-lingerie": { label: "ランジェリーセット", description: "揃いのランジェリーセット" },
@@ -266,6 +270,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "タックイン", description: "トップをボトムに入れる" },
   "state-half-tucked": { label: "ハーフタック", description: "前だけ入れて後ろは出した" },
   "state-off-shoulder": { label: "オフショルダー", description: "片肩から滑り落ちた" },
+  "state-halter-neck": { label: "ホルターネック", description: "首の後ろで結ぶストラップ" },
+  "state-plunging-neck": { label: "プランジネック", description: "深いVネックライン" },
   "state-unbuttoned": { label: "ボタンを外した", description: "開いた／ボタンを外した" },
   "state-rolled-sleeves": { label: "袖まくり", description: "前腕まで袖をまくり上げる" },
   "state-layered": { label: "レイヤード", description: "複数の層を重ねた" },
@@ -282,6 +288,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "海賊", description: "海賊衣装：トリコーンハット、サッシュ、フリル付きシャツ、ブーツ" },
   "outfit-fairy": { label: "妖精", description: "ファンタジーフェアリー：薄い翼、花冠、エーテルなドレス" },
   "outfit-mermaid": { label: "人魚", description: "ファンタジーマーメイド：鱗のあるテール／スカート、シェルトップ" },
+  "outfit-pharaoh": { label: "ファラオの装束", description: "古代エジプト王族:ウセク襟飾り、胸飾り、プリーツ腰布" },
 
   // Headwear (additional)
   "headwear-bucket-hat": { label: "バケットハット", description: "柔らかいつばのカジュアルなバケットハット" },

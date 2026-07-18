@@ -100,6 +100,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "headwear-bandana",      label: "Bandana",       dimension: "headwear", description: "Bandana tied around head", promptHint: "wearing a bandana tied around the head" },
   { id: "headwear-hood",         label: "Hood",          dimension: "headwear", description: "Hooded sweatshirt up",    promptHint: "with a hood pulled up over the head" },
   { id: "headwear-crown",        label: "Crown",         dimension: "headwear", description: "Royal or decorative crown", promptHint: "wearing a crown atop the head" },
+  { id: "headwear-nemes",        label: "Nemes Headdress", dimension: "headwear", description: "Striped pharaonic nemes with uraeus", promptHint: "wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow" },
   { id: "headwear-helmet",       label: "Helmet",        dimension: "headwear", description: "Protective helmet",       promptHint: "wearing a helmet" },
   { id: "headwear-veil",         label: "Veil",          dimension: "headwear", description: "Veil draped over face/hair", promptHint: "wearing a veil draped over the head" },
   { id: "headwear-bucket-hat",   label: "Bucket Hat",    dimension: "headwear", description: "Soft-brimmed casual bucket hat", promptHint: "wearing a soft-brimmed casual bucket hat" },
@@ -218,6 +219,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "face-paint-dramatic", label: "Dramatic Face Paint", dimension: "face-paint", description: "Bold artistic face paint",       promptHint: "with dramatic, artistic face paint covering portions of the face" },
   { id: "face-paint-costume",  label: "Costume Paint",     dimension: "face-paint", description: "Cosplay / theatrical paint",       promptHint: "with theatrical costume face paint" },
   { id: "face-paint-tribal",   label: "Tribal Markings",   dimension: "face-paint", description: "Tribal-inspired face markings",    promptHint: "with tribal-inspired face markings" },
+  { id: "face-paint-flag",     label: "Flag Face Paint",   dimension: "face-paint", description: "National flag painted on cheeks, sports-fan", promptHint: "with a national flag painted on the cheeks, sports-fan face paint" },
   { id: "face-paint-warpaint", label: "War Paint",         dimension: "face-paint", description: "Warrior war paint streaks",        promptHint: "with warrior war paint streaked across the face" },
 
   // -------------------- Fabric (clothing material) --------------------
@@ -248,12 +250,14 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-evening-gown",     label: "Evening Gown",     dimension: "outfit", description: "Floor-length formal gown",          promptHint: "dressed in a floor-length evening gown with a fitted bodice and a flowing skirt" },
   { id: "outfit-wedding-dress",    label: "Wedding Dress",    dimension: "outfit", description: "White wedding gown",                promptHint: "dressed in a white wedding gown with intricate lace detailing and a sweeping train" },
   { id: "outfit-cocktail-dress",   label: "Cocktail Dress",   dimension: "outfit", description: "Knee-length cocktail dress",        promptHint: "dressed in a sleek knee-length cocktail dress" },
+  { id: "outfit-sundress",         label: "Sundress / Maxi",  dimension: "outfit", description: "Flowy halter-neck sundress / patterned maxi", promptHint: "dressed in a flowy halter-neck sundress with a patterned maxi-length skirt" },
   { id: "outfit-lab-coat",         label: "Lab Coat",         dimension: "outfit", description: "White medical lab coat",            promptHint: "wearing a crisp white lab coat layered over the rest of the clothing" },
   { id: "outfit-scrubs",           label: "Medical Scrubs",   dimension: "outfit", description: "Solid-color medical scrubs",        promptHint: "dressed in solid-color medical scrubs — loose-fit top and matching drawstring pants" },
   { id: "outfit-military",         label: "Military Fatigues", dimension: "outfit", description: "Olive-drab military fatigues",     promptHint: "dressed in olive-drab military fatigues with utility pockets and a sturdy belt" },
   { id: "outfit-lifeguard",        label: "Lifeguard Outfit", dimension: "outfit", description: "Red lifeguard top and shorts",      promptHint: "dressed in a bright red lifeguard outfit — a fitted top and matching shorts" },
   { id: "outfit-athleisure",       label: "Athleisure Set",   dimension: "outfit", description: "Matching athleisure top and bottom", promptHint: "dressed in a matching athleisure set — a fitted top and leggings in the same tone" },
   { id: "outfit-tracksuit",        label: "Tracksuit",        dimension: "outfit", description: "Two-piece zip-front tracksuit",     promptHint: "dressed in a two-piece tracksuit — a zip-front jacket and matching joggers" },
+  { id: "outfit-soccer-jersey",    label: "Soccer Jersey",    dimension: "outfit", description: "National-team football jersey with crest", promptHint: "wearing a national-team soccer jersey — team colors and trim with the team crest on the chest" },
   { id: "outfit-bikini",           label: "Bikini",           dimension: "outfit", description: "Two-piece swimsuit",                promptHint: "in a two-piece bikini" },
   { id: "outfit-one-piece-swim",   label: "One-Piece Swimsuit", dimension: "outfit", description: "Fitted one-piece swimsuit",       promptHint: "in a fitted one-piece swimsuit" },
   { id: "outfit-lingerie",         label: "Lingerie Set",     dimension: "outfit", description: "Matching lingerie set",             promptHint: "in a matching lingerie set" },
@@ -273,6 +277,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-pirate",           label: "Pirate",           dimension: "outfit", description: "Pirate costume: tricorn hat, sash, frilly shirt, boots", promptHint: "wearing a pirate costume — a tricorn hat, a frilly shirt with a sash at the waist, and tall leather boots" },
   { id: "outfit-fairy",            label: "Fairy",            dimension: "outfit", description: "Fantasy fairy: gauzy wings, flower crown, ethereal dress", promptHint: "wearing a fantasy fairy costume — gauzy translucent wings, a flower crown, and an ethereal flowing dress" },
   { id: "outfit-mermaid",          label: "Mermaid",          dimension: "outfit", description: "Fantasy mermaid: scaled tail/skirt, shell top, flowing hair", promptHint: "wearing a fantasy mermaid costume — a scaled tail or fitted scaled skirt, a shell top, and long flowing hair" },
+  { id: "outfit-pharaoh",          label: "Pharaoh Regalia",  dimension: "outfit", description: "Ancient Egyptian royalty: usekh collar, pectoral, pleated kilt", promptHint: "wearing ancient Egyptian pharaoh regalia — a broad beaded usekh collar, a jeweled falcon pectoral, and a pleated linen shendyt kilt with golden arm cuffs" },
 
   // -------------------- Top (upper-body garment) --------------------
   { id: "top-tshirt",        label: "T-Shirt",        dimension: "top", description: "Plain crewneck t-shirt",         promptHint: "wearing a fitted plain crewneck t-shirt with short sleeves" },
@@ -385,6 +390,8 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "state-tucked-in",     label: "Tucked In",       dimension: "wardrobe-state", description: "Top tucked into bottom",    promptHint: "the top neatly tucked into the bottom" },
   { id: "state-half-tucked",   label: "Half-Tucked",     dimension: "wardrobe-state", description: "Front-tucked, back loose",  promptHint: "the top half-tucked — front neatly tucked in, back hanging loose" },
   { id: "state-off-shoulder",  label: "Off-Shoulder",    dimension: "wardrobe-state", description: "Slipped off one shoulder",  promptHint: "the top slipped off one shoulder, baring the skin and collarbone" },
+  { id: "state-halter-neck",   label: "Halter Neck",     dimension: "wardrobe-state", description: "Straps tied behind the neck", promptHint: "the top cut as a halter — straps tied behind the neck, shoulders and upper back bare" },
+  { id: "state-plunging-neck", label: "Plunging Neckline", dimension: "wardrobe-state", description: "Deep plunging V neckline",  promptHint: "the neckline cut in a deep plunging V" },
   { id: "state-unbuttoned",    label: "Unbuttoned",      dimension: "wardrobe-state", description: "Open / unbuttoned",         promptHint: "the outerwear hanging open and unbuttoned, falling loose at the sides" },
   { id: "state-rolled-sleeves", label: "Rolled Sleeves", dimension: "wardrobe-state", description: "Sleeves rolled up forearm", promptHint: "the sleeves rolled up to the forearm" },
   { id: "state-layered",       label: "Layered",         dimension: "wardrobe-state", description: "Multiple stacked layers",   promptHint: "the outfit composed of multiple stacked layers, each piece visible at the edges" },
