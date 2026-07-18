@@ -1501,8 +1501,8 @@ const COMMON_SECTIONS: ReadonlyArray<CommonSection> = [
 const COMMON_PICKER_SECTIONS: ReadonlyArray<CommonSection> = [
   { title: "Camera", types: ["camera-motion", "transition", "framing"] },
   { title: "Look", types: ["atmosphere", "action-fx", "style", "setting"] },
-  { title: "Subject", types: ["person", "pose", "styling", "held-prop", "animal"] },
-  { title: "Object", types: ["vehicle", "weapon", "furniture", "material"] },
+  { title: "Subject", types: ["person", "pose", "styling", "held-prop"] },
+  { title: "Object", types: ["animal", "vehicle", "weapon", "furniture", "material"] },
   { title: "Sound", types: ["music-genre", "music-mood", "instrumentation"] },
 ];
 const COMMON_ASSETS_SECTION: CommonSection = {

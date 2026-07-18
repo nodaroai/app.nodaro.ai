@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES, getParameterValue } from "@nodaro/shared"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 
 // Catalog-driven types need real ids — the prompt-hint builders look them up.
@@ -155,16 +155,11 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
 }
 
 // Types that intentionally do NOT inject a prompt hint via
-// getParameterPromptHint. They carry pure runtime parameters (counts,
-// durations, aspect ratios, motion intensity) consumed by the executor
-// directly, not appended to a downstream prompt.
-const HINT_EXEMPT: ReadonlySet<string> = new Set([
-  "motion",
-  "style-guide",
-  "scene-count",
-  "duration",
-  "aspect-ratio",
-])
+// getParameterPromptHint. Canonical set lives in @nodaro/shared next to
+// PARAMETER_NODE_TYPES — Test 4 below keeps it honest by asserting each
+// member REALLY returns "" (so a type can't be quietly exempted to dodge a
+// missing-case failure).
+const HINT_EXEMPT = HINT_EXEMPT_PARAMETER_TYPES
 
 // =============================================================================
 // Test 1 — every type in the set has a sample (forces the developer who adds

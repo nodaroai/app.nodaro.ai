@@ -57,6 +57,26 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "voice-delivery",
 ])
 
+/**
+ * Parameter types that intentionally produce NO prompt hint from
+ * `getParameterPromptHint` (in `@nodaro/prompts`). They carry pure runtime
+ * parameters — counts, durations, aspect ratios, legacy motion intensity —
+ * consumed by the executor directly, never appended to a downstream prompt.
+ *
+ * Consumers that treat "parameter node" as "text producer" (the `{Label}`
+ * auto-fill in `main-text-handle.ts`, ref-map builders) must exclude these:
+ * their extracted output is undefined, so an auto-filled `{Label}` would stay
+ * in the outgoing prompt as literal brace text. Guarded by
+ * `parameter-registry-sync.test.ts` (each member really returns "") and
+ * `main-text-handle.test.ts` (members are not text-producing).
+ */
+export const HINT_EXEMPT_PARAMETER_TYPES: ReadonlySet<string> = new Set([
+  "motion",
+  "scene-count",
+  "duration",
+  "aspect-ratio",
+])
+
 export function getParameterValue(
   data: Record<string, unknown>,
   nodeType: string,

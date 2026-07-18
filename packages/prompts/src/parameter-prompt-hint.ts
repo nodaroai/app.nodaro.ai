@@ -273,6 +273,12 @@ export function getParameterPromptHint(
 
     case "tone":
       return asStr(data.tone).trim()
+    case "style-guide":
+      // The node's whole purpose is injecting its style text into consumer
+      // prompts; without this case, {Style Guide} refs stayed as literal
+      // brace text and direct wires injected nothing (only fieldMappings
+      // worked, via getParameterValue).
+      return asStr(data.text).trim()
     case "text-prompt":
       return asStr(data.text).trim()
     default:
