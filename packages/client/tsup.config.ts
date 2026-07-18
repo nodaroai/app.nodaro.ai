@@ -1,12 +1,12 @@
 import { defineConfig } from "tsup"
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/supabase-browser.ts"],
   format: ["esm", "cjs"],
   dts: true,
   sourcemap: true,
   clean: true,
   splitting: false,
   treeshake: true,
-  external: ["@nodaro/shared"],
+  external: ["@nodaro/shared", "@supabase/ssr", "@supabase/supabase-js"],
 })

@@ -19,6 +19,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./supabase": {
+      "types": "./dist/supabase-browser.d.ts",
+      "import": "./dist/supabase-browser.js",
+      "require": "./dist/supabase-browser.cjs"
     }
   },
   "files": [
@@ -38,6 +43,14 @@
   "dependencies": {
     "@nodaro/shared": "^1.9.0",
     "@nodaro/prompts": "^1.0.1"
+  },
+  "peerDependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.5"
+  },
+  "peerDependenciesMeta": {
+    "@supabase/ssr": { "optional": true },
+    "@supabase/supabase-js": { "optional": true }
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",
