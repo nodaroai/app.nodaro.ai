@@ -1,5 +1,18 @@
 # @nodaro/sdk
 
+## 1.7.0
+
+### Minor Changes
+
+- 87e7d64: New `@nodaro/sdk/supabase` subpath export: `createSharedSupabaseClient` — a browser Supabase client that stores the session in cookies (optionally scoped to a parent domain such as `.nodaro.ai`) instead of localStorage, enabling shared login across sibling-subdomain apps. Includes one-time adoption of an existing localStorage session. `@supabase/ssr` + `@supabase/supabase-js` are optional peer dependencies used only by this subpath.
+
+### Patch Changes
+
+- Updated dependencies [dca72ad]
+- Updated dependencies [02cc802]
+  - @nodaro/shared@1.13.0
+  - @nodaro/prompts@1.2.1
+
 ## 1.6.0
 
 ### Minor Changes

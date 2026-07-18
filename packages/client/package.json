@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/sdk",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -41,16 +41,20 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@nodaro/shared": "^1.9.0",
-    "@nodaro/prompts": "^1.0.1"
+    "@nodaro/shared": "^1.13.0",
+    "@nodaro/prompts": "^1.2.1"
   },
   "peerDependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.5"
   },
   "peerDependenciesMeta": {
-    "@supabase/ssr": { "optional": true },
-    "@supabase/supabase-js": { "optional": true }
+    "@supabase/ssr": {
+      "optional": true
+    },
+    "@supabase/supabase-js": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",
