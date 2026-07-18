@@ -3,6 +3,7 @@ import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
+import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import {
   startWorkflowExecutionsReconcileCron,
@@ -53,6 +54,10 @@ async function main() {
   // gated behind hasCredits() inside the billing cleanup cron, which left
   // Community/Business with no reconcile tick at all.
   startReconcileCron()
+
+  // Classify recent failed jobs into app_reports (model rejections) — a
+  // sweep, because job failure has no single write choke point.
+  startAppReportSweepCron()
 
   // Start schedule cron for workflow triggers
   startScheduleCron()

@@ -13,6 +13,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
@@ -28,6 +29,9 @@ const describeToPickerBody = z
     /** Legacy single-picker form (pre-multi-picker SDK callers). Normalized to an array. */
     targetPicker: z.enum(PICKER_TYPES as [string, ...string[]]).optional(),
     instructions: z.string().max(2000).optional(),
+    /** Originating client app slug ('person', 'studio', …) — attribution for
+     *  diagnostic app_reports. Optional and free of behavior otherwise. */
+    origin: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
     userId: z.string().uuid().optional(),
     llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
     reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
@@ -95,6 +99,40 @@ export function buildGapRecords(
     })
   }
   return recs
+}
+
+/** Per-incident missing-picker report (kind 'missing-picker') — the aggregate
+ *  counters live in picker_catalog_gaps; this row keeps what the aggregate
+ *  can't: WHICH image, the full gap detail, and the originating app. Returns
+ *  null when the analysis had no gaps. Exported for unit testing. */
+export function buildMissingPickerReport(
+  gaps: PickerGaps | undefined,
+  ctx: {
+    imageUrl: string
+    llmModel: string
+    targetPickers: readonly string[]
+    origin?: string
+    userId: string
+    jobId: string
+  },
+): AppReportInput | null {
+  const count = (gaps?.missingItems?.length ?? 0) + (gaps?.missingCategories?.length ?? 0)
+  if (count === 0) return null
+  return {
+    appSlug: ctx.origin ?? null,
+    node: "describe-to-picker",
+    kind: "missing-picker",
+    severity: "info",
+    title: `${count} unmatched attribute${count === 1 ? "" : "s"} in image analysis`,
+    payload: {
+      imageUrl: ctx.imageUrl,
+      gaps,
+      llmModel: ctx.llmModel,
+      targetPickers: ctx.targetPickers,
+    },
+    userId: ctx.userId,
+    jobId: ctx.jobId,
+  }
 }
 
 function buildSystemPrompt(legend: string, instructions?: string): string {
@@ -198,12 +236,23 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
 
         // Persist catalog-gap feedback (best-effort — never breaks the analysis).
         // Parallel so a 0-8 gap batch doesn't add serial RPC latency to the response.
-        await Promise.all(
-          buildGapRecords(gaps, pickerJson, userId).map(async (rec) => {
+        // Two sinks: the aggregate counters (picker_catalog_gaps) and one
+        // per-incident app_report carrying the image link + app origin.
+        const missingReport = buildMissingPickerReport(gaps, {
+          imageUrl,
+          llmModel: model.id,
+          targetPickers,
+          origin: parsed.data.origin,
+          userId,
+          jobId: job.id,
+        })
+        await Promise.all([
+          ...buildGapRecords(gaps, pickerJson, userId).map(async (rec) => {
             const { error: gapErr } = await supabase.rpc("record_picker_catalog_gap", rec)
             if (gapErr) req.log.warn({ err: gapErr.message }, "picker gap upsert failed")
           }),
-        )
+          ...(missingReport ? [insertAppReport(missingReport)] : []),
+        ])
 
         return reply.send({ jobId: job.id, pickerJson, gaps })
       } catch (err) {

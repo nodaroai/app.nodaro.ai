@@ -1,14 +1,40 @@
 import { useState, useDeferredValue } from "react"
-import { Loader2, CheckCircle, XCircle, PlusCircle } from "lucide-react"
+import { Loader2, CheckCircle, XCircle, PlusCircle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { hasAdmin } from "@/lib/edition"
-import { useAdminPickerGaps, usePatchPickerGapMutation, type PickerGap } from "@/ee/hooks/queries/use-admin-queries"
+import {
+  useAdminPickerGaps,
+  usePatchPickerGapMutation,
+  fetchAdminPickerGapsPage,
+  type PickerGap,
+} from "@/ee/hooks/queries/use-admin-queries"
+import { downloadMarkdown, exportDateStamp, exportPreamble, fetchAllRows, markdownTable } from "@/ee/lib/admin-export"
 
 const LIMIT = 50
 const isAdmin = hasAdmin()
+
+/** LLM-handoff document: every filtered gap with the semantics spelled out, so
+ *  the export can be pasted to a model with "draft the missing catalog entries". */
+function gapsMarkdown(rows: PickerGap[], total: number, filters: Record<string, string>): string {
+  return (
+    exportPreamble({
+      title: "Picker catalog gaps",
+      description:
+        "Each row is an attribute the image analyzer SAW but the picker catalogs could not express. `observed` is the LLM's description; `chosen` is the closest existing option id it settled for (empty for missing-category rows, where NO dimension covered the attribute); `count` is how often this gap recurred. Task for an LLM: for each row, propose the new picker item (or new dimension, for category rows) to add to the catalogs.",
+      filters,
+      rowCount: rows.length,
+      total,
+    }) +
+    markdownTable(
+      ["Picker", "Type", "Dimension", "Observed", "Chosen (closest)", "Count", "Status"],
+      rows.map((g) => [g.picker_type, g.gap_type, g.dimension, g.observed, g.chosen_id, g.count, g.status]),
+    ) +
+    "\n"
+  )
+}
 
 export default function AdminPickerGapsPage() {
   const [offset, setOffset] = useState(0)
@@ -17,6 +43,7 @@ export default function AdminPickerGapsPage() {
   const [status, setStatus] = useState("new")
   const deferredPicker = useDeferredValue(picker)
 
+  const [exporting, setExporting] = useState(false)
   const listQuery = useAdminPickerGaps(offset, deferredPicker, gapType, status)
   const patch = usePatchPickerGapMutation()
   if (!isAdmin) return null
@@ -24,6 +51,21 @@ export default function AdminPickerGapsPage() {
   const gaps = listQuery.data?.data ?? []
   const total = listQuery.data?.total ?? 0
   const loading = listQuery.isLoading && gaps.length === 0
+
+  const exportMd = async () => {
+    setExporting(true)
+    try {
+      const { rows, total: all } = await fetchAllRows((off, lim) =>
+        fetchAdminPickerGapsPage(off, lim, deferredPicker, gapType, status),
+      )
+      downloadMarkdown(
+        `picker-gaps-${exportDateStamp()}.md`,
+        gapsMarkdown(rows, all, { picker: deferredPicker, type: gapType, status }),
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -61,6 +103,10 @@ export default function AdminPickerGapsPage() {
             </SelectContent>
           </Select>
         </div>
+        <Button variant="outline" size="sm" className="ml-auto" disabled={exporting || total === 0} onClick={exportMd}>
+          {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+          Export .md
+        </Button>
       </div>
 
       {loading ? (

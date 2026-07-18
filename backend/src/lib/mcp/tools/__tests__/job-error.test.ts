@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isRetryableFailure } from "../_job-error.js"
+import { isContentRejection, isRetryableFailure } from "../_job-error.js"
 
 describe("isRetryableFailure", () => {
   it("marks content-policy / safety failures NON-retryable", () => {
@@ -31,5 +31,29 @@ describe("isRetryableFailure", () => {
     expect(isRetryableFailure(null)).toBe(true)
     expect(isRetryableFailure(undefined)).toBe(true)
     expect(isRetryableFailure("")).toBe(true)
+  })
+})
+
+describe("isContentRejection", () => {
+  it("matches the safety/moderation subset", () => {
+    expect(
+      isContentRejection(
+        "Content policy violation: The output was blocked by the provider's safety filter.",
+      ),
+    ).toBe(true)
+    expect(isContentRejection("Request flagged for moderation")).toBe(true)
+    expect(isContentRejection("NSFW content detected")).toBe(true)
+  })
+
+  it("does NOT match input-shape limits (non-retryable but not rejections)", () => {
+    expect(isContentRejection("Input file exceeds the size or duration limit.")).toBe(false)
+    expect(isContentRejection("Image too large")).toBe(false)
+  })
+
+  it("does NOT match transient / absent reasons", () => {
+    expect(isContentRejection("Provider timeout after 30s")).toBe(false)
+    expect(isContentRejection(null)).toBe(false)
+    expect(isContentRejection(undefined)).toBe(false)
+    expect(isContentRejection("")).toBe(false)
   })
 })
