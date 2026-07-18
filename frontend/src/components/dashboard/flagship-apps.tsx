@@ -1,16 +1,17 @@
 import type { CSSProperties } from "react"
-import { Layers, UserRound, ExternalLink, Bell, Film, Image as ImageIcon } from "lucide-react"
+import { Layers, AudioWaveform, ExternalLink, Bell, Film, Image as ImageIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
+import { voiceBaseUrl } from "@/lib/voice"
 
 /**
  * Flagship "Apps" band — Nodaro's dedicated, purpose-built products (Studio,
- * Avatar), promoted above the marketplace MiniApps. This is the content of the
- * default "Apps" tab in the dashboard discovery panel.
+ * Voice Changer Pro), promoted above the marketplace MiniApps. This is the
+ * content of the default "Apps" tab in the dashboard discovery panel.
  *
  * Data is a small static array: flagships are team-curated and rarely change,
  * so a config surface would be over-engineering. Each card supports a real
@@ -45,14 +46,18 @@ const FLAGSHIP_APPS: readonly FlagshipApp[] = [
     // media: { type: "video", url: "<studio teaser>" } — drop in later, no code change
   },
   {
-    id: "avatar",
-    name: "Avatar",
+    id: "voice-changer-pro",
+    name: "Voice Changer Pro",
     tagline:
-      "Turn a single photo into a lifelike avatar that speaks your script — in your own voice.",
+      "Swap every speaker's voice in any video — paste a link or upload, pick a voice per speaker, and get the converted video back.",
+    meta: "voice.nodaro.ai",
+    // Kept the violet card signature (VCP's own primary is the shared Nodaro
+    // pink — duplicating Studio's sig would make the band monochrome).
     sig: "#8b5cf6",
-    status: "coming-soon",
-    icon: UserRound,
-    // media: { type: "image", url: "<avatar still>" }
+    status: "live",
+    icon: AudioWaveform,
+    href: voiceBaseUrl(),
+    // media: { type: "video", url: "<vcp teaser>" } — drop in later, no code change
   },
 ]
 
@@ -146,7 +151,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           {app.status === "live" ? (
             <>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Open Studio
+              Open {app.name}
             </>
           ) : (
             <>
