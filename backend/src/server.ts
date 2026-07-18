@@ -5,6 +5,8 @@ import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
+import { startScheduledPostsCron, stopScheduledPostsCron } from "./lib/scheduled-posts-cron.js"
+import { createSocialPublishWorker } from "./workers/social-publish-worker.js"
 import {
   startWorkflowExecutionsReconcileCron,
   stopWorkflowExecutionsReconcileCron,
@@ -61,6 +63,13 @@ async function main() {
 
   // Start schedule cron for workflow triggers
   startScheduleCron()
+
+  // Scheduled social posts: 60s due-row scanner + in-process publish worker.
+  // Not edition-gated — scheduling works on self-host too (credit calls
+  // inside the worker no-op when !hasCredits()).
+  startScheduledPostsCron()
+  const socialPublishWorker = createSocialPublishWorker()
+  console.log("[social-publish] Worker started in-process")
 
   // Backstop reaper for orphaned community-listing blobs (multi-user editions)
   if (isMultiUser()) startCommunityReaperCron()
@@ -145,11 +154,13 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     stopScheduleCron()
+    stopScheduledPostsCron()
     stopWorkflowExecutionsReconcileCron()
     stopPipelinesReconcileCron()
     await orchestratorWorker.close()
     if (videoDirectorWorker) await videoDirectorWorker.close()
     if (pipelineWorker) await pipelineWorker.close()
+    await socialPublishWorker.close()
     await app.close()
     process.exit(0)
   }

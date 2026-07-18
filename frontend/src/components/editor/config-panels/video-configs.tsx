@@ -3594,6 +3594,28 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </p>
       </div>
 
+      {/* Context tail — continuation-reference length per join (A/B lever:
+          longer = more boundary-motion context for slow moves/tempo, small
+          per-join surcharge at the ref rate). */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="gvp-context-tail">Continuation context (seconds)</Label>
+        <Select value={String(data.contextTailSec ?? 2)} onValueChange={(v) => onUpdate({ contextTailSec: Number(v) })}>
+          <SelectTrigger id="gvp-context-tail" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[2, 3, 4, 5].map((s) => (
+              <SelectItem key={s} value={String(s)}>
+                {s}s{s === 2 ? " (default)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          How much of the previous segment each continuation sees. Raise for slow camera moves or music-timed motion; adds a small per-join cost.
+        </p>
+      </div>
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input

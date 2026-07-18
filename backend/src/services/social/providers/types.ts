@@ -67,19 +67,31 @@ export interface AccountChoice {
 
 /** OAuth2 wire config. Values come from env at call time (never cached). */
 export interface OAuth2Config {
-  authUrl: string
-  tokenUrl: string
+  /** Static, or a thunk for env-derived hosts (mastodon's MASTODON_URL). */
+  authUrl: string | (() => string)
+  tokenUrl: string | (() => string)
   scopes: readonly string[]
   clientId(): string
   clientSecret(): string
   /** Meta "Facebook Login for Business": config_id replaces scope. */
   configId?(): string | undefined
-  /** S256 PKCE (x, linkedin, tiktok). */
+  /** S256 PKCE (x, linkedin, tiktok, reddit). */
   pkce?: boolean
+  /**
+   * Where client credentials go on token calls: request body (default) or an
+   * HTTP Basic Authorization header (reddit, pinterest).
+   */
+  tokenAuth?: "body" | "basic"
   /** Authorize-URL quirks (YouTube offline access, TikTok client_key). */
   decorateAuthParams?(params: URLSearchParams, cfg: { clientId: string }): void
   /** Token-exchange body quirks (TikTok client_key). */
   decorateTokenBody?(body: Record<string, string>, cfg: { clientId: string }): void
+  /** Non-standard refresh flows (threads' GET th_refresh_token). */
+  customRefresh?(refreshToken: string): Promise<{
+    accessToken: string
+    refreshToken?: string
+    expiresIn?: number
+  }>
 }
 
 export interface SocialProvider {
@@ -104,6 +116,18 @@ export interface SocialProvider {
   readonly oauth?: OAuth2Config
   /** Present for `custom_fields`. */
   readonly customFields?: () => FieldSpec[]
+  /**
+   * `custom_fields`: validate the submitted form against the network and
+   * resolve the account. `accessToken` is the primary secret (API key /
+   * app password) — the route encrypts it into `access_token_encrypted`;
+   * non-secret extras (service host, publication id, …) go in
+   * `userInfo.metadata`. Publishers then receive the decrypted secret as
+   * their `accessToken`, same as OAuth providers.
+   */
+  connectWithFields?(fields: Record<string, string>): Promise<{
+    userInfo: PlatformUserInfo
+    accessToken: string
+  }>
   /** `oauth2`: resolve the single connected account. */
   fetchUserInfo?(accessToken: string): Promise<PlatformUserInfo>
   /** `oauth2_between_steps`: list candidate accounts for the picker. */

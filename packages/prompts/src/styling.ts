@@ -568,9 +568,21 @@ export function buildStylingHints(
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) hints.push(pre)
 
+  // The Person catalog's `lip-state-bold-red` and this catalog's
+  // `makeup-bold-lips` say the same thing; consumers that fold BOTH pickers
+  // off one shared value map (person.nodaro.ai's subject fold) double the
+  // lipstick clause. When the shared map shows the person clause already
+  // covers it, skip the makeup twin. Separate-node consumers (platform
+  // workflows) don't carry `lipState` here, so this no-ops for them.
+  const lipStateRaw = (data as Record<string, unknown>).lipState
+  const boldRedAlready = Array.isArray(lipStateRaw)
+    ? lipStateRaw.includes("lip-state-bold-red")
+    : lipStateRaw === "lip-state-bold-red"
+
   for (const dimension of STYLING_DIMENSION_ORDER) {
     const field = STYLING_FIELD_BY_DIMENSION[dimension]
     const raw = data[field]
+    if (dimension === "makeup" && boldRedAlready && raw === "makeup-bold-lips") continue
     // jewelry / wardrobe-state / hair-state are multi-pick (string | string[]);
     // emit each id's hint independently and let the comma-join compose.
     if (typeof raw === "string" && raw.length > 0) {

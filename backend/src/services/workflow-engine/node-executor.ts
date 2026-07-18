@@ -999,6 +999,8 @@ export async function computeGenerateVideoProCreditOverride(
     provider: String(payload.provider ?? "seedance-2"),
     resolution: String(payload.resolution ?? "720p"),
     durationSec: Number(payload.duration ?? 8),
+    // Context-tail override (helper clamps to [2,5]; undefined → default 2).
+    ...(typeof payload.contextTailSec === "number" ? { tailSec: payload.contextTailSec } : {}),
   })
 
   // DAG clamp (spec §5/§6 — the route's Zod clamp never runs on this path).

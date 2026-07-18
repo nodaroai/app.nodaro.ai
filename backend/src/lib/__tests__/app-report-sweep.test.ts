@@ -99,4 +99,14 @@ describe("rejectionReportFor / excerptPrompt", () => {
     const report = rejectionReportFor({ ...REJECTED, input_data: { type: "video-generate" } })
     expect(report.title).toContain("video-generate")
   })
+
+  it("reads character-asset jobs' model from the legacy `provider` key and attributes origin", () => {
+    const report = rejectionReportFor({
+      ...REJECTED,
+      input_data: { type: "generate-character", provider: "nano-banana", origin: "person" },
+    })
+    expect(report.title).toContain("nano-banana")
+    expect(report.appSlug).toBe("person")
+    expect(report.payload).toMatchObject({ model: "nano-banana" })
+  })
 })

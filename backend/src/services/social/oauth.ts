@@ -23,6 +23,22 @@ function requireOAuth(provider: SocialProvider): OAuth2Config {
   return provider.oauth
 }
 
+/** authUrl/tokenUrl may be thunks for env-derived hosts (mastodon). */
+function resolveUrl(url: string | (() => string)): string {
+  return typeof url === "function" ? url() : url
+}
+
+/** reddit/pinterest want client creds as HTTP Basic, not body fields. */
+function tokenRequestInit(oauth: OAuth2Config, body: Record<string, string>): RequestInit {
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" }
+  if (oauth.tokenAuth === "basic") {
+    headers.Authorization = `Basic ${Buffer.from(`${oauth.clientId()}:${oauth.clientSecret()}`).toString("base64")}`
+    delete body.client_id
+    delete body.client_secret
+  }
+  return { method: "POST", headers, body: new URLSearchParams(body).toString() }
+}
+
 export async function generateAuthUrl(provider: SocialProvider, userId: string): Promise<string> {
   const oauth = requireOAuth(provider)
   const state = crypto.randomUUID()
@@ -54,7 +70,7 @@ export async function generateAuthUrl(provider: SocialProvider, userId: string):
 
   oauth.decorateAuthParams?.(params, { clientId })
 
-  return `${oauth.authUrl}?${params.toString()}`
+  return `${resolveUrl(oauth.authUrl)}?${params.toString()}`
 }
 
 export interface TokenSet {
@@ -84,11 +100,7 @@ export async function exchangeCodeForTokens(
   }
   oauth.decorateTokenBody?.(body, { clientId })
 
-  const res = await fetch(oauth.tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(body).toString(),
-  })
+  const res = await fetch(resolveUrl(oauth.tokenUrl), tokenRequestInit(oauth, body))
 
   if (!res.ok) {
     const errText = await res.text()
@@ -113,6 +125,12 @@ export async function refreshAccessToken(
   refreshToken: string,
 ): Promise<Omit<TokenSet, "scopes">> {
   const oauth = requireOAuth(provider)
+
+  // Non-standard refresh flows (threads' GET th_refresh_token).
+  if (oauth.customRefresh) {
+    return oauth.customRefresh(refreshToken)
+  }
+
   const clientId = oauth.clientId()
 
   const body: Record<string, string> = {
@@ -123,11 +141,7 @@ export async function refreshAccessToken(
   }
   oauth.decorateTokenBody?.(body, { clientId })
 
-  const res = await fetch(oauth.tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(body).toString(),
-  })
+  const res = await fetch(resolveUrl(oauth.tokenUrl), tokenRequestInit(oauth, body))
 
   if (!res.ok) {
     throw new Error(`Token refresh failed for ${provider.id}`)

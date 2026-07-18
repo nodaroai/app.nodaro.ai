@@ -116,6 +116,26 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.reserveBase).toBe(189)
   })
 
+  it("tailSec=4 raises the per-join overlap: D=16 reserveBase 189 -> 202; clamps 9->5 and 1->2", async () => {
+    // Same D=16 split as above; only the (n-1)×tailSec term moves:
+    // 10 + 154 + ceil(6.25 × (1×4 + 2)) = 10 + 154 + ceil(37.5) = 202
+    const r4 = await computeGenerateVideoProPricing({
+      provider: "seedance-2", resolution: "720p", durationSec: 16, tailSec: 4,
+    })
+    expect(r4.tailSec).toBe(4)
+    expect(r4.reserveBase).toBe(202)
+    // Out-of-range clamps to [2,5]:
+    const r9 = await computeGenerateVideoProPricing({
+      provider: "seedance-2", resolution: "720p", durationSec: 16, tailSec: 9,
+    })
+    expect(r9.tailSec).toBe(5)
+    const r1 = await computeGenerateVideoProPricing({
+      provider: "seedance-2", resolution: "720p", durationSec: 16, tailSec: 1,
+    })
+    expect(r1.tailSec).toBe(2)
+    expect(r1.reserveBase).toBe(189)
+  })
+
   it("D=43 -> multi, n=3, s=44, durations [15,15,14], reserveBase 371", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",

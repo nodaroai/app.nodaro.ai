@@ -137,12 +137,6 @@
     {
       "file": "src/routes/social-publish.ts",
       "table": "jobs",
-      "hash": "084d98fa019a",
-      "line": 190
-    },
-    {
-      "file": "src/routes/social-publish.ts",
-      "table": "jobs",
       "hash": "2845a555e477",
       "line": 207
     },
@@ -151,12 +145,6 @@
       "table": "jobs",
       "hash": "38b6089f19d5",
       "line": 228
-    },
-    {
-      "file": "src/routes/social-publish.ts",
-      "table": "social_connections",
-      "hash": "f8c670e94b37",
-      "line": 137
     },
     {
       "file": "src/routes/suno.ts",

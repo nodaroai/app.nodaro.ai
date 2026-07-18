@@ -111,6 +111,16 @@ OAuth app credentials are set. Unconfigured networks still appear in
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` |
 | X (Twitter) | `X_CLIENT_ID`, `X_CLIENT_SECRET` |
 | Telegram | none — users paste their own bot token |
+| Reddit | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` |
+| Pinterest | `PINTEREST_CLIENT_ID`, `PINTEREST_CLIENT_SECRET` |
+| Discord | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN` |
+| Twitch | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` |
+| Threads | `THREADS_APP_ID`, `THREADS_APP_SECRET` |
+| Mastodon | `MASTODON_CLIENT_ID`, `MASTODON_CLIENT_SECRET` (optional `MASTODON_URL`, default mastodon.social) |
+| Bluesky | none — users connect with a handle + app password |
+| Dev.to / Hashnode / Medium | none — users connect with their own API key / token |
+| WordPress | none — users connect with site URL + application password |
+| Lemmy | none — users connect with instance + login + community |
 
 Each OAuth app must whitelist the redirect URI
 `https://YOUR-DOMAIN/v1/social/callback/{network}`.

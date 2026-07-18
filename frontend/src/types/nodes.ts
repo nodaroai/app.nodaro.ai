@@ -1843,6 +1843,10 @@ export interface GenerateVideoProNodeData {
    *  configuration (expanded prompts, provider-prompt previews) WITHOUT
    *  generating any video — cheap plan iteration (reserved at the plan fee). */
   planOnly?: boolean
+  /** Continuation-tail length per join (seconds, 2-5; default 2). Longer =
+   *  more boundary-motion context for slow camera moves / tempo, at a small
+   *  per-join surcharge (billed at the ref rate). */
+  contextTailSec?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

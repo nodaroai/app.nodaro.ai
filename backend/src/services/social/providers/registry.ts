@@ -1,9 +1,21 @@
+import { blueskyProvider } from "./bluesky.js"
+import { devtoProvider } from "./devto.js"
+import { discordProvider } from "./discord.js"
 import { facebookProvider } from "./facebook.js"
+import { hashnodeProvider } from "./hashnode.js"
 import { instagramProvider } from "./instagram.js"
+import { lemmyProvider } from "./lemmy.js"
 import { linkedinProvider } from "./linkedin.js"
+import { mastodonProvider } from "./mastodon.js"
+import { mediumProvider } from "./medium.js"
+import { pinterestProvider } from "./pinterest.js"
+import { redditProvider } from "./reddit.js"
 import { telegramProvider } from "./telegram.js"
+import { threadsProvider } from "./threads.js"
 import { tiktokProvider } from "./tiktok.js"
+import { twitchProvider } from "./twitch.js"
 import type { FieldSpec, ProviderCapabilities, SocialProvider } from "./types.js"
+import { wordpressProvider } from "./wordpress.js"
 import { xProvider } from "./x.js"
 import { youtubeProvider } from "./youtube.js"
 
@@ -21,6 +33,21 @@ export const PROVIDERS: Readonly<Record<string, SocialProvider>> = Object.freeze
   linkedin: linkedinProvider,
   x: xProvider,
   telegram: telegramProvider,
+  // custom_fields wave (2a) — no dev app, no review, work on any deployment
+  bluesky: blueskyProvider,
+  devto: devtoProvider,
+  hashnode: hashnodeProvider,
+  medium: mediumProvider,
+  wordpress: wordpressProvider,
+  lemmy: lemmyProvider,
+  // oauth2 wave (2b) — ship dormant; each activates when its app creds land
+  // in env (requiredEnv drives `available` in GET /v1/social/providers)
+  reddit: redditProvider,
+  pinterest: pinterestProvider,
+  discord: discordProvider,
+  twitch: twitchProvider,
+  threads: threadsProvider,
+  mastodon: mastodonProvider,
 })
 
 /** Non-empty tuple for `z.enum(...)` derivation. */

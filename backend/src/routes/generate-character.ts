@@ -47,6 +47,9 @@ const generateCharacterBody = z
     resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
     quality: z.enum(["medium", "high", "basic"]).optional(),
     userId: z.string().uuid().optional(),
+    // Originating client app slug ('person', 'studio', …) — rides input_data
+    // for diagnostic attribution (the app_reports rejection sweep).
+    origin: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
     // Character Studio auto-attach: when set, the worker writes the resulting
     // image URL to `characters.source_image_url` on this row after generation
     // succeeds. Lets the studio survive page closes mid-generation.
