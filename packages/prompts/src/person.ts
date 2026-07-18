@@ -708,8 +708,8 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-nostril-piercing", label: "Nostril Piercing", dimension: "distinctive-features", description: "Single nostril stud or ring", promptHint: "with a single nostril piercing, a small stud or ring at the nostril" },
   { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered" },
   { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light" },
-  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with the midriff exposed, a strip of bare stomach visible between the top and the bottom" },
-  { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with a visible navel on a bare stomach" },
+  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "wearing a cropped style with the midriff visible" },
+  { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with the navel visible" },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended" },
   { id: "feature-under-eye-circles", label: "Under-Eye Circles", dimension: "distinctive-features", description: "Subtle dark circles under the eyes (distinct from puffy eye-bags)", promptHint: "with subtle dark circles under the eyes" },
   { id: "feature-fangs",          label: "Fangs",            dimension: "distinctive-features", description: "Visible fangs (vampire / character archetype)", promptHint: "with visible fangs at the canines, character / vampire archetype" },
@@ -1242,7 +1242,18 @@ export function buildAgeHint(
 function emitIndependentHints(value: unknown): string[] {
   const ids = normalizePickIds(value)
   const out: string[] = []
+  // Skin-exposure clauses COMPOUND in providers' output-safety classifiers:
+  // "midriff visible" + "navel visible" as separate clauses reads twice as
+  // exposed as it is, and stacked with glamour hints it tips borderline draws
+  // into content blocks (observed on kie-standard, 2026-07-18 app_reports).
+  // When both are picked, fold them into ONE neutral clause.
+  const midriff = ids.includes("feature-midriff-visible")
+  const navel = ids.includes("feature-navel-visible")
   for (const id of ids) {
+    if (midriff && navel && (id === "feature-midriff-visible" || id === "feature-navel-visible")) {
+      if (id === "feature-midriff-visible") out.push("wearing a cropped style, midriff and navel visible")
+      continue
+    }
     const hint = getPersonPromptHint(id)
     if (hint) out.push(hint)
   }

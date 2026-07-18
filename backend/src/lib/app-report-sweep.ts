@@ -39,10 +39,23 @@ export function excerptPrompt(inputData: Record<string, unknown> | null): string
   return typeof p === "string" && p.length > 0 ? p.slice(0, PROMPT_EXCERPT_MAX) : null
 }
 
+/** The model id key varies by job type: generate-image stores `model`,
+ *  character/entity assets store it as `provider` (legacy naming — it holds a
+ *  MODEL_CATALOG id), LLM jobs store `llmModel`. First string wins. */
+function modelOf(inputData: Record<string, unknown> | null): string | null {
+  for (const key of ["model", "provider", "llmModel"] as const) {
+    const v = inputData?.[key]
+    if (typeof v === "string" && v.length > 0) return v
+  }
+  return null
+}
+
 export function rejectionReportFor(job: FailedJobRow): Parameters<typeof insertAppReport>[0] {
-  const model = typeof job.input_data?.model === "string" ? job.input_data.model : null
+  const model = modelOf(job.input_data)
   const jobType = typeof job.input_data?.type === "string" ? job.input_data.type : null
+  const origin = typeof job.input_data?.origin === "string" ? job.input_data.origin : null
   return {
+    appSlug: origin,
     node: "rejection-sweep",
     kind: "model-rejection",
     severity: "warning",

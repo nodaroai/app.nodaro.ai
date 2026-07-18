@@ -67,6 +67,9 @@ const generateCharacterAssetBody = z.object({
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   userId: z.string().uuid().optional(),
+  // Originating client app slug ('person', 'studio', …) — rides input_data
+  // for diagnostic attribution (the app_reports rejection sweep).
+  origin: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
   // Character Studio auto-attach: when all three are set, the worker appends
   // `{name: attachName, url: <result>}` to the named JSONB array column on the
   // user's character row after generation. `attachToColumn` is the *DB column*

@@ -281,6 +281,9 @@ export interface GenerateCharacterInput {
   baseOutfit?: string
   sourceImageUrl?: string
   provider?: string
+  /** Originating client app slug ('person', 'studio', …) — diagnostic
+   *  attribution only (the platform's app_reports); never affects output. */
+  origin?: string
   /** Auto-attach the result to this character row. */
   attachToCharacterId?: string
   seedPrompt?: string
@@ -342,6 +345,9 @@ export interface GenerateAssetInput {
   /** Real-life reference URLs (cap 5). */
   realLifeRefs?: string[]
   provider?: string
+  /** Originating client app slug ('person', 'studio', …) — diagnostic
+   *  attribution only (the platform's app_reports); never affects output. */
+  origin?: string
   /** Auto-attach to character row + asset bucket on completion. */
   attachToCharacterId?: string
   /** Shared type — auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
