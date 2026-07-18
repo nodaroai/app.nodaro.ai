@@ -116,7 +116,10 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "suno-style-boost": { text: "text" },
   "suno-upload-extend": { audio: "audio" },
   "suno-voice": { voicePersona: "identity" },
-  "telegram-trigger": { out: "control" },
+  // The Message handle carries the incoming message CONTENT (text primary,
+  // media alongside server-side) — typed "text" so it wires into prompt/
+  // caption inputs. "control" made the labeled Message output unconnectable.
+  "telegram-trigger": { out: "text" },
   "text-to-audio": { audio: "audio" },
   "text-to-dialogue": { audio: "audio" },
   "text-to-speech": { audio: "audio" },

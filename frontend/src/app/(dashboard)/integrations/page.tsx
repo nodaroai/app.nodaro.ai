@@ -3,14 +3,17 @@
 import { useState, useEffect, useCallback } from "react"
 import { Loader2 } from "lucide-react"
 import { PlatformCard } from "@/components/integrations/platform-card"
-import { getSocialConnections } from "@/lib/api"
-import type { SocialPlatformType, SocialConnection } from "@/types/nodes"
+import { getSocialConnections, getSocialProviders, type SocialProviderInfo } from "@/lib/api"
+import type { SocialConnection } from "@/types/nodes"
 
-const PLATFORMS: SocialPlatformType[] = ["instagram", "facebook", "tiktok", "youtube", "linkedin", "x", "telegram"]
-
-const COMING_SOON_PLATFORMS: ReadonlySet<SocialPlatformType> = new Set(["tiktok", "youtube", "linkedin", "x"])
-
+/**
+ * The grid derives ENTIRELY from GET /v1/social/providers — a network added
+ * to the backend registry appears here with zero frontend changes.
+ * Unconfigured networks render disabled with their setup requirements
+ * (show-don't-hide, so self-hosters discover what's possible).
+ */
 export default function IntegrationsPage() {
+  const [providers, setProviders] = useState<SocialProviderInfo[]>([])
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -20,14 +23,18 @@ export default function IntegrationsPage() {
       setConnections(data.connections)
     } catch {
       // ignore
-    } finally {
-      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    loadConnections()
+    Promise.allSettled([
+      getSocialProviders().then((data) => setProviders(data.providers)),
+      loadConnections(),
+    ]).finally(() => setLoading(false))
   }, [loadConnections])
+
+  // Available networks first (registry order within each group).
+  const sorted = [...providers.filter((p) => p.available), ...providers.filter((p) => !p.available)]
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -44,13 +51,12 @@ export default function IntegrationsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {PLATFORMS.map((platform) => (
+          {sorted.map((provider) => (
             <PlatformCard
-              key={platform}
-              platform={platform}
-              connections={connections.filter((c) => c.platform === platform)}
+              key={provider.id}
+              provider={provider}
+              connections={connections.filter((c) => c.platform === provider.id)}
               onConnectionChange={loadConnections}
-              comingSoon={COMING_SOON_PLATFORMS.has(platform)}
             />
           ))}
         </div>

@@ -1,3 +1,4 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /**
@@ -17,7 +18,7 @@ export async function fetchWordpressUser(
   const res = await fetch(`${domain}/wp-json/wp/v2/users/me`, {
     headers: { Authorization: authHeader(username, appPassword) },
   })
-  const data = (await res.json()) as { id?: number; name?: string; message?: string }
+  const data = await parseJsonOrThrow<{ id?: number; name?: string; message?: string }>(res, "WordPress")
   if (!res.ok || !data.id) {
     throw new Error(data.message || "WordPress login failed — check domain, username, and application password")
   }
@@ -46,7 +47,7 @@ export const wordpressPublisher: PlatformPublisher = {
       headers: { "Content-Type": "application/json", Authorization: authHeader(username, accessToken) },
       body: JSON.stringify({ title, content, status: "publish" }),
     })
-    const data = (await res.json()) as { id?: number; link?: string; message?: string }
+    const data = await parseJsonOrThrow<{ id?: number; link?: string; message?: string }>(res, "WordPress")
     if (!res.ok || !data.id) return { success: false, error: data.message || "WordPress publish failed" }
     return { success: true, platformPostId: String(data.id), platformPostUrl: data.link }
   },

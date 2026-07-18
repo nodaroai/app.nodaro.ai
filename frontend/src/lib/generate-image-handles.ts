@@ -98,6 +98,10 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // string (extractNodeOutput stringifies) — lets the analysis wire straight
   // into prompt/text inputs (generate-video-pro etc.) without a paste.
   "video-analysis",
+  // telegram-trigger's `Message` handle emits the incoming message text — the
+  // "pull from a channel → rewrite → publish" source. Without this, the
+  // connection validator rejected it as a non-text-producer.
+  "telegram-trigger",
 ])
 
 /** Source node types whose output image feeds References (mirrors backend
