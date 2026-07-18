@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana":      { label: "头巾",       description: "绑在头上的方巾" },
   "headwear-hood":         { label: "帽兜",       description: "拉起的连帽衫帽兜" },
   "headwear-crown":        { label: "皇冠",       description: "皇冠或装饰冠" },
+  "headwear-nemes": { label: "奈迈斯头巾", description: "带圣蛇的条纹法老头巾" },
   "headwear-helmet":       { label: "头盔",       description: "防护头盔" },
   "headwear-veil":         { label: "面纱",       description: "覆盖脸 / 头发的面纱" },
   "headwear-bucket-hat":   { label: "渔夫帽",     description: "软帽檐的休闲渔夫帽" },
@@ -136,6 +137,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "戏剧脸绘",       description: "大胆艺术化的脸部彩绘" },
   "face-paint-costume":  { label: "角色彩妆",       description: "Cosplay / 戏剧妆" },
   "face-paint-tribal":   { label: "部族纹绘",       description: "部族风格的脸部纹绘" },
+  "face-paint-flag": { label: "国旗脸彩", description: "画在脸颊上的国旗,球迷风格" },
   "face-paint-warpaint": { label: "战士涂彩",       description: "勇士战斗般的涂彩条纹" },
 
   // -------------------- Fabric --------------------
@@ -162,12 +164,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown":  { label: "晚礼服",     description: "落地长款正式礼服" },
   "outfit-wedding-dress": { label: "婚纱",       description: "白色婚纱礼服" },
   "outfit-cocktail-dress":{ label: "鸡尾酒裙",   description: "及膝鸡尾酒裙" },
+  "outfit-sundress": { label: "太阳裙/长裙", description: "飘逸的挂脖太阳裙/印花长裙" },
   "outfit-lab-coat":      { label: "实验室白大褂", description: "白色医用大褂" },
   "outfit-scrubs":        { label: "医用刷手服", description: "纯色医用刷手服" },
   "outfit-military":      { label: "军装",       description: "橄榄绿军用作训服" },
   "outfit-lifeguard":     { label: "救生员服",   description: "红色救生员上衣加短裤" },
   "outfit-athleisure":    { label: "运动休闲套装", description: "上下成套的运动休闲" },
   "outfit-tracksuit":     { label: "运动套装",   description: "前拉链两件套运动套装" },
+  "outfit-soccer-jersey": { label: "足球球衣", description: "带队徽的国家队球衣" },
   "outfit-bikini":        { label: "比基尼",     description: "两件式泳装" },
   "outfit-one-piece-swim":{ label: "连体泳衣",   description: "贴身连体泳衣" },
   "outfit-lingerie":      { label: "内衣套装",   description: "成套内衣" },
@@ -187,6 +191,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate":        { label: "海盗装",     description: "海盗服:三角帽、腰带、荷叶边衬衫、长靴" },
   "outfit-fairy":         { label: "仙女装",     description: "奇幻仙女:轻纱翅膀、花环、空灵长裙" },
   "outfit-mermaid":       { label: "美人鱼装",   description: "奇幻美人鱼:鱼鳞鱼尾 / 半裙、贝壳上衣" },
+  "outfit-pharaoh": { label: "法老盛装", description: "古埃及王室:乌塞克项圈、胸饰、百褶围裙" },
 
   // -------------------- Top --------------------
   "top-tshirt":     { label: "T 恤",       description: "纯色圆领 T 恤" },
@@ -299,6 +304,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in":     { label: "塞进腰间",     description: "上衣塞进下装" },
   "state-half-tucked":   { label: "半塞",         description: "前面塞进、后面散开" },
   "state-off-shoulder":  { label: "一字肩",       description: "滑落一边肩膀" },
+  "state-halter-neck": { label: "挂脖式", description: "肩带系于颈后" },
+  "state-plunging-neck": { label: "深V领口", description: "深邃的V形领口" },
   "state-unbuttoned":    { label: "敞开",         description: "敞开 / 不扣扣子" },
   "state-rolled-sleeves":{ label: "卷起袖子",     description: "袖子卷至前臂" },
   "state-layered":       { label: "叠搭",         description: "多层叠搭" },

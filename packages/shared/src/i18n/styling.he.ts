@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { label: "בנדנה", description: "בנדנה קשורה סביב הראש" },
   "headwear-hood": { label: "ברדס", description: "ברדס מורם" },
   "headwear-crown": { label: "כתר", description: "כתר מלכותי או דקורטיבי" },
+  "headwear-nemes": { label: "כיסוי ראש נמס", description: "נמס פרעוני מפוספס עם אוראוס" },
   "headwear-helmet": { label: "קסדה", description: "קסדת מגן" },
   "headwear-veil": { label: "צעיף", description: "צעיף נופל על הפנים/השיער" },
   "headwear-bucket-hat": { label: "כובע דלי", description: "כובע דלי קז'ואל עם שוליים רכים" },
@@ -136,6 +137,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "צבע פנים דרמטי", description: "צבע פנים אמנותי נועז" },
   "face-paint-costume": { label: "צבע תחפושת", description: "צבע cosplay / תיאטרלי" },
   "face-paint-tribal": { label: "סימני שבט", description: "סימני פנים בהשפעה שבטית" },
+  "face-paint-flag": { label: "דגל על הפנים", description: "דגל לאומי מצויר על הלחיים בסגנון אוהדים" },
   "face-paint-warpaint": { label: "צבע מלחמה", description: "פסי צבע מלחמה לוחמני" },
 
   // Fabric (clothing)
@@ -162,12 +164,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "שמלת ערב", description: "שמלה פורמלית באורך רצפה" },
   "outfit-wedding-dress": { label: "שמלת חתונה", description: "שמלת חתונה לבנה" },
   "outfit-cocktail-dress": { label: "שמלת קוקטייל", description: "שמלת קוקטייל באורך ברך" },
+  "outfit-sundress": { label: "שמלת קיץ / מקסי", description: "שמלת קיץ קלילה עם צווארון קולר / מקסי מודפסת" },
   "outfit-lab-coat": { label: "חלוק מעבדה", description: "חלוק מעבדה רפואי לבן" },
   "outfit-scrubs": { label: "סקרבס רפואיים", description: "סקרבס רפואיים בצבע אחיד" },
   "outfit-military": { label: "מדי צבא", description: "מדי צבא בצבע ירוק זית" },
   "outfit-lifeguard": { label: "תלבושת מציל", description: "חולצה ומכנסיים אדומים של מציל" },
   "outfit-athleisure": { label: "סט Athleisure", description: "חולצה ומכנסיים תואמים של athleisure" },
   "outfit-tracksuit": { label: "חליפת אימון", description: "חליפת אימון דו-חלקית עם רוכסן בחזית" },
+  "outfit-soccer-jersey": { label: "חולצת כדורגל", description: "חולצת נבחרת לאומית עם סמל" },
   "outfit-bikini": { label: "ביקיני", description: "בגד ים דו-חלקי" },
   "outfit-one-piece-swim": { label: "בגד ים שלם", description: "בגד ים שלם מוצמד" },
   "outfit-lingerie": { label: "סט לבני נשים", description: "סט לבני נשים תואם" },
@@ -187,6 +191,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "פיראט", description: "תחפושת פיראט: כובע tricorn, חגורת בד, חולצה עם מלמלה, מגפיים" },
   "outfit-fairy": { label: "פיה", description: "פיית פנטזיה: כנפיים שקופות, כתר פרחים, שמלה אתרית" },
   "outfit-mermaid": { label: "בת ים", description: "בת ים פנטזיה: זנב/חצאית מקושקשים, חלק עליון מצדפים" },
+  "outfit-pharaoh": { label: "לבוש פרעוני", description: "מלוכה מצרית עתיקה: ענק אוסח, חושן, חצאית קפלים" },
 
   // Top
   "top-tshirt": { label: "טי-שירט", description: "טי-שירט פשוט עם צווארון עגול" },
@@ -299,6 +304,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "תחוב פנימה", description: "Top תחוב לתוך התחתון" },
   "state-half-tucked": { label: "תחוב למחצה", description: "תחוב מקדימה, רפוי מאחור" },
   "state-off-shoulder": { label: "ללא כתף", description: "מוחלק מכתף אחת" },
+  "state-halter-neck": { label: "צווארון קולר", description: "כתפיות קשורות מאחורי הצוואר" },
+  "state-plunging-neck": { label: "מחשוף עמוק", description: "מחשוף V עמוק" },
   "state-unbuttoned": { label: "פתוח", description: "פתוח / לא מכופתר" },
   "state-rolled-sleeves": { label: "שרוולים מגולגלים", description: "שרוולים מגולגלים עד האמה" },
   "state-layered": { label: "בשכבות", description: "מספר שכבות מוערמות" },

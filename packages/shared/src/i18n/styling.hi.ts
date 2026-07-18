@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { label: "Bandana", description: "सिर पर बंधा bandana" },
   "headwear-hood": { label: "Hood", description: "Hooded sweatshirt का hood ऊपर" },
   "headwear-crown": { label: "Crown", description: "Royal या सजावटी crown" },
+  "headwear-nemes": { label: "नेमेस शिरोवस्त्र", description: "धारीदार फ़राओ नेमेस, यूरेअस के साथ" },
   "headwear-helmet": { label: "Helmet", description: "Protective helmet" },
   "headwear-veil": { label: "घूँघट", description: "चेहरे/बालों पर draped घूँघट" },
 
@@ -136,6 +137,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "Dramatic Face Paint", description: "Bold artistic face paint" },
   "face-paint-costume": { label: "Costume Paint", description: "Cosplay / theatrical paint" },
   "face-paint-tribal": { label: "Tribal Markings", description: "Tribal-inspired face markings" },
+  "face-paint-flag": { label: "चेहरे पर झंडा", description: "गालों पर बना राष्ट्रीय ध्वज, फैन स्टाइल" },
   "face-paint-warpaint": { label: "War Paint", description: "योद्धा का war paint streaks" },
 
   // -------------------- Fabric --------------------
@@ -162,12 +164,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "Evening Gown", description: "ज़मीन तक की औपचारिक gown" },
   "outfit-wedding-dress": { label: "Wedding Dress", description: "सफ़ेद wedding gown" },
   "outfit-cocktail-dress": { label: "Cocktail Dress", description: "घुटने तक की cocktail dress" },
+  "outfit-sundress": { label: "सनड्रेस / मैक्सी", description: "बहती हुई हॉल्टर-नेक सनड्रेस / प्रिंटेड मैक्सी" },
   "outfit-lab-coat": { label: "Lab Coat", description: "सफ़ेद medical lab coat" },
   "outfit-scrubs": { label: "Medical Scrubs", description: "Solid-color medical scrubs" },
   "outfit-military": { label: "Military Fatigues", description: "Olive-drab military fatigues" },
   "outfit-lifeguard": { label: "Lifeguard Outfit", description: "लाल lifeguard top और shorts" },
   "outfit-athleisure": { label: "Athleisure Set", description: "मेल खाते athleisure top और bottom" },
   "outfit-tracksuit": { label: "Tracksuit", description: "दो-piece zip-front tracksuit" },
+  "outfit-soccer-jersey": { label: "फुटबॉल जर्सी", description: "राष्ट्रीय टीम की जर्सी, क्रेस्ट के साथ" },
   "outfit-bikini": { label: "Bikini", description: "दो-piece swimsuit" },
   "outfit-one-piece-swim": { label: "One-Piece Swimsuit", description: "Fitted one-piece swimsuit" },
   "outfit-lingerie": { label: "Lingerie Set", description: "मेल खाता lingerie set" },
@@ -272,6 +276,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "Tucked In", description: "Top bottom में tucked" },
   "state-half-tucked": { label: "Half-Tucked", description: "सामने tucked, पीछे ढीला" },
   "state-off-shoulder": { label: "Off-Shoulder", description: "एक कंधे से slipped" },
+  "state-halter-neck": { label: "हॉल्टर नेक", description: "गर्दन के पीछे बंधी पट्टियाँ" },
+  "state-plunging-neck": { label: "गहरा गला", description: "गहरा V आकार का गला" },
   "state-unbuttoned": { label: "Unbuttoned", description: "खुला / unbuttoned" },
   "state-rolled-sleeves": { label: "Rolled Sleeves", description: "Sleeves कोहनी तक rolled" },
   "state-layered": { label: "Layered", description: "कई stacked परतें" },
@@ -288,6 +294,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "Pirate", description: "Pirate costume: tricorn टोपी, sash, frilly shirt, boots" },
   "outfit-fairy": { label: "Fairy", description: "Fantasy परी: gauzy पंख, फूलों का मुकुट, ethereal dress" },
   "outfit-mermaid": { label: "Mermaid", description: "Fantasy जलपरी: scaled tail/skirt, shell top" },
+  "outfit-pharaoh": { label: "फ़राओ की पोशाक", description: "प्राचीन मिस्र की राजसी पोशाक: उसेख हार, पेक्टोरल, प्लीटेड किल्ट" },
 
   // -------------------- Headwear (Round 2) --------------------
   "headwear-bucket-hat": { label: "Bucket Hat", description: "नर्म-brim casual bucket hat" },

@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { label: "반다나", description: "머리에 묶은 반다나입니다" },
   "headwear-hood": { label: "후드", description: "후드를 머리 위로 올린 모습입니다" },
   "headwear-crown": { label: "왕관", description: "왕실 또는 장식용 왕관입니다" },
+  "headwear-nemes": { label: "네메스 두건", description: "우라에우스가 달린 줄무늬 파라오 네메스" },
   "headwear-helmet": { label: "헬멧", description: "보호용 헬멧입니다" },
   "headwear-veil": { label: "베일", description: "얼굴/머리에 드리운 베일입니다" },
 
@@ -124,6 +125,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "드라마틱 페이스 페인트", description: "대담하고 예술적인 페이스 페인트입니다" },
   "face-paint-costume": { label: "코스튬 페인트", description: "코스프레 / 무대용 페인트입니다" },
   "face-paint-tribal": { label: "부족 마킹", description: "부족에서 영감받은 얼굴 마킹입니다" },
+  "face-paint-flag": { label: "국기 페이스페인팅", description: "뺨에 그린 국기, 응원 스타일" },
   "face-paint-warpaint": { label: "워 페인트", description: "전사의 워 페인트 줄무늬입니다" },
 
   // Fabric (clothing material)
@@ -150,12 +152,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "이브닝 가운", description: "발목까지 오는 격식 있는 가운입니다" },
   "outfit-wedding-dress": { label: "웨딩드레스", description: "흰색 웨딩 가운입니다" },
   "outfit-cocktail-dress": { label: "칵테일 드레스", description: "무릎 길이 칵테일 드레스입니다" },
+  "outfit-sundress": { label: "선드레스 / 맥시", description: "홀터넥의 하늘하늘한 선드레스 / 패턴 맥시" },
   "outfit-lab-coat": { label: "실험복", description: "흰색 의료용 실험복입니다" },
   "outfit-scrubs": { label: "수술복", description: "단색의 의료용 수술복입니다" },
   "outfit-military": { label: "군복", description: "올리브 드랩 군복 페티그입니다" },
   "outfit-lifeguard": { label: "라이프가드 의상", description: "빨간색 라이프가드 상의와 반바지입니다" },
   "outfit-athleisure": { label: "애슬레저 세트", description: "어울리는 애슬레저 상하의입니다" },
   "outfit-tracksuit": { label: "트레이닝복", description: "지퍼 프론트 투피스 트레이닝복입니다" },
+  "outfit-soccer-jersey": { label: "축구 유니폼", description: "엠블럼이 있는 국가대표 유니폼" },
   "outfit-bikini": { label: "비키니", description: "투피스 수영복입니다" },
   "outfit-one-piece-swim": { label: "원피스 수영복", description: "몸에 맞는 원피스 수영복입니다" },
   "outfit-lingerie": { label: "란제리 세트", description: "어울리는 란제리 세트입니다" },
@@ -260,6 +264,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "턱드 인", description: "상의를 하의에 넣어 입은 모습입니다" },
   "state-half-tucked": { label: "하프 턱", description: "앞은 넣고 뒤는 빼낸 모습입니다" },
   "state-off-shoulder": { label: "오프 숄더", description: "한쪽 어깨가 흘러내린 모습입니다" },
+  "state-halter-neck": { label: "홀터넥", description: "목 뒤로 묶는 끈" },
+  "state-plunging-neck": { label: "깊은 네크라인", description: "깊게 파인 V 네크라인" },
   "state-unbuttoned": { label: "단추 풀린", description: "단추가 풀려 열린 상태입니다" },
   "state-rolled-sleeves": { label: "걷어 올린 소매", description: "소매를 팔뚝까지 걷어 올린 모습입니다" },
   "state-layered": { label: "레이어드", description: "여러 겹으로 쌓아 입은 모습입니다" },
@@ -276,6 +282,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "해적", description: "해적 코스튬: 트라이콘 햇, 새시, 프릴 셔츠, 부츠입니다" },
   "outfit-fairy": { label: "요정", description: "판타지 요정: 얇은 거즈 날개, 꽃 화관, 신비로운 드레스입니다" },
   "outfit-mermaid": { label: "인어", description: "판타지 인어: 비늘 꼬리/스커트, 조개 톱입니다" },
+  "outfit-pharaoh": { label: "파라오 복장", description: "고대 이집트 왕족: 우세크 목걸이, 가슴 장식, 주름 킬트" },
 
   // Headwear (additional)
   "headwear-bucket-hat": { label: "버킷햇", description: "부드러운 챙의 캐주얼 버킷햇입니다" },

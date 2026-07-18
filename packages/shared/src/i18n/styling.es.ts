@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "headwear-bandana": { label: "Bandana", description: "Bandana atada alrededor de la cabeza" },
   "headwear-hood": { label: "Capucha", description: "Capucha levantada" },
   "headwear-crown": { label: "Corona", description: "Corona real o decorativa" },
+  "headwear-nemes": { label: "Tocado nemes", description: "Nemes faraónico a rayas con uraeus" },
   "headwear-helmet": { label: "Casco", description: "Casco protector" },
   "headwear-veil": { label: "Velo", description: "Velo cubriendo la cara/cabello" },
 
@@ -130,6 +131,7 @@ const map: LocaleCatalogMap = {
   "face-paint-dramatic": { label: "Face Paint Dramático", description: "Face paint artístico y atrevido" },
   "face-paint-costume": { label: "Pintura de Disfraz", description: "Pintura cosplay / teatral" },
   "face-paint-tribal": { label: "Marcas Tribales", description: "Marcas faciales de inspiración tribal" },
+  "face-paint-flag": { label: "Bandera en la cara", description: "Bandera nacional pintada en las mejillas, estilo aficionado" },
   "face-paint-warpaint": { label: "Pintura de Guerra", description: "Trazos de pintura de guerra de guerrero" },
 
   // -------------------- Fabric --------------------
@@ -156,12 +158,14 @@ const map: LocaleCatalogMap = {
   "outfit-evening-gown": { label: "Vestido de Noche", description: "Vestido formal hasta el suelo" },
   "outfit-wedding-dress": { label: "Vestido de Novia", description: "Vestido de novia blanco" },
   "outfit-cocktail-dress": { label: "Vestido de Cóctel", description: "Vestido de cóctel hasta la rodilla" },
+  "outfit-sundress": { label: "Vestido de verano / maxi", description: "Vestido veraniego fluido con cuello halter / maxi estampado" },
   "outfit-lab-coat": { label: "Bata de Laboratorio", description: "Bata blanca de laboratorio médica" },
   "outfit-scrubs": { label: "Uniforme Quirúrgico", description: "Uniforme quirúrgico médico de color sólido" },
   "outfit-military": { label: "Uniforme Militar", description: "Uniforme militar verde oliva" },
   "outfit-lifeguard": { label: "Outfit de Salvavidas", description: "Top y shorts rojos de salvavidas" },
   "outfit-athleisure": { label: "Conjunto Athleisure", description: "Top y bottom athleisure a juego" },
   "outfit-tracksuit": { label: "Pants Deportivos", description: "Conjunto de dos piezas con cierre" },
+  "outfit-soccer-jersey": { label: "Camiseta de fútbol", description: "Camiseta de selección nacional con escudo" },
   "outfit-bikini": { label: "Bikini", description: "Traje de baño de dos piezas" },
   "outfit-one-piece-swim": { label: "Traje de Baño Entero", description: "Traje de baño entero ajustado" },
   "outfit-lingerie": { label: "Conjunto de Lencería", description: "Conjunto de lencería a juego" },
@@ -266,6 +270,8 @@ const map: LocaleCatalogMap = {
   "state-tucked-in": { label: "Metido por Dentro", description: "Top metido en el bottom" },
   "state-half-tucked": { label: "Medio Metido", description: "Frente metido, atrás suelto" },
   "state-off-shoulder": { label: "Caído del Hombro", description: "Caído por un hombro" },
+  "state-halter-neck": { label: "Cuello halter", description: "Tirantes atados detrás del cuello" },
+  "state-plunging-neck": { label: "Escote pronunciado", description: "Escote en V profundo" },
   "state-unbuttoned": { label: "Desabotonado", description: "Abierto / desabotonado" },
   "state-rolled-sleeves": { label: "Mangas Arremangadas", description: "Mangas arremangadas hasta el antebrazo" },
   "state-layered": { label: "En Capas", description: "Múltiples capas apiladas" },
@@ -282,6 +288,7 @@ const map: LocaleCatalogMap = {
   "outfit-pirate": { label: "Pirata", description: "Disfraz de pirata: tricornio, faja, camisa con volantes, botas" },
   "outfit-fairy": { label: "Hada", description: "Hada de fantasía: alas vaporosas, corona de flores, vestido etéreo" },
   "outfit-mermaid": { label: "Sirena", description: "Sirena de fantasía: cola/falda escamada, top de conchas" },
+  "outfit-pharaoh": { label: "Atuendo de faraón", description: "Realeza del antiguo Egipto: collar usej, pectoral, faldellín plisado" },
 
   // -------------------- Headwear (round 2) --------------------
   "headwear-bucket-hat": { label: "Gorro de Cubo", description: "Gorro de cubo casual con ala blanda" },
