@@ -17,8 +17,10 @@
  * only mark non-retryable on high-confidence permanent signals so we never
  * discourage re-running a genuinely transient failure.
  */
-const NON_RETRYABLE_PATTERNS = [
-  // Content-policy / moderation (permanent for the given prompt/image).
+// Content-policy / moderation (permanent for the given prompt/image). Split
+// out so the app-report rejection sweep can classify EXACTLY this subset —
+// input-shape limits are non-retryable too, but they aren't rejections.
+const CONTENT_REJECTION_PATTERNS = [
   "content policy",
   "safety filter",
   "safety policy",
@@ -28,13 +30,29 @@ const NON_RETRYABLE_PATTERNS = [
   "inappropriate",
   "violat", // violation / violates
   "filtered",
-  // Input-shape limits (permanent until the caller changes the input).
+]
+
+// Input-shape limits (permanent until the caller changes the input).
+const INPUT_LIMIT_PATTERNS = [
   "exceeds",
   "too large",
   "too long",
   "file size",
   "duration limit",
 ]
+
+const NON_RETRYABLE_PATTERNS = [...CONTENT_REJECTION_PATTERNS, ...INPUT_LIMIT_PATTERNS]
+
+/**
+ * True when the error reads as a provider content-policy / moderation block —
+ * the safety-filter subset of the non-retryable vocabulary. Used by the
+ * app-report rejection sweep; absent/unknown reasons are NOT rejections.
+ */
+export function isContentRejection(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage) return false
+  const lower = errorMessage.toLowerCase()
+  return CONTENT_REJECTION_PATTERNS.some((p) => lower.includes(p))
+}
 
 /**
  * True when re-running the same request could plausibly succeed. Defaults to

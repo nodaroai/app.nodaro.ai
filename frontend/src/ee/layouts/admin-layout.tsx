@@ -28,6 +28,7 @@ import {
   FolderTree,
   Puzzle,
   Blocks,
+  Inbox,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -59,6 +60,7 @@ const ADMIN_NAV = [
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
   { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
   { href: "/admin/picker-gaps", label: "Picker Gaps", icon: Puzzle },
+  { href: "/admin/app-reports", label: "App Reports", icon: Inbox },
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },

@@ -846,18 +846,27 @@ export interface PickerGap {
   readonly last_seen: string
 }
 
+/** Shared by the list hook and the .md export (which pages through ALL rows). */
+export async function fetchAdminPickerGapsPage(
+  offset: number,
+  limit: number,
+  picker: string,
+  gapType: string,
+  status: string,
+): Promise<{ data: PickerGap[]; total: number }> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+  if (picker !== "all") params.set("picker", picker)
+  if (gapType !== "all") params.set("gapType", gapType)
+  if (status !== "all") params.set("status", status)
+  const res = await fetch(`/v1/admin/picker-gaps?${params}`, { headers: await getAuthHeaders() })
+  if (!res.ok) throw new Error("Failed to fetch picker gaps")
+  return res.json()
+}
+
 export function useAdminPickerGaps(offset: number, picker: string, gapType: string, status: string) {
   return useQuery({
     queryKey: queryKeys.admin.pickerGaps(offset, picker, gapType, status),
-    queryFn: async (): Promise<{ data: PickerGap[]; total: number }> => {
-      const params = new URLSearchParams({ offset: String(offset), limit: "50" })
-      if (picker !== "all") params.set("picker", picker)
-      if (gapType !== "all") params.set("gapType", gapType)
-      if (status !== "all") params.set("status", status)
-      const res = await fetch(`/v1/admin/picker-gaps?${params}`, { headers: await getAuthHeaders() })
-      if (!res.ok) throw new Error("Failed to fetch picker gaps")
-      return res.json()
-    },
+    queryFn: () => fetchAdminPickerGapsPage(offset, 50, picker, gapType, status),
     enabled: hasAdmin(),
     staleTime: 15_000,
   })
@@ -876,6 +885,64 @@ export function usePatchPickerGapMutation() {
       return res.json()
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "picker-gaps"] }),
+  })
+}
+
+// --- App Reports (generic diagnostic inbox) ---
+
+export interface AppReport {
+  readonly id: string
+  readonly app_slug: string | null
+  readonly node: string
+  readonly kind: string
+  readonly severity: "info" | "warning" | "error"
+  readonly title: string
+  readonly payload: Record<string, unknown>
+  readonly user_id: string | null
+  readonly job_id: string | null
+  readonly status: "new" | "reviewed" | "resolved" | "dismissed"
+  readonly created_at: string
+}
+
+/** Shared by the list hook and the .md export (which pages through ALL rows). */
+export async function fetchAdminAppReportsPage(
+  offset: number,
+  limit: number,
+  kind: string,
+  appSlug: string,
+  status: string,
+): Promise<{ data: AppReport[]; total: number }> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+  if (kind !== "all") params.set("kind", kind)
+  if (appSlug !== "all") params.set("appSlug", appSlug)
+  if (status !== "all") params.set("status", status)
+  const res = await fetch(`/v1/admin/app-reports?${params}`, { headers: await getAuthHeaders() })
+  if (!res.ok) throw new Error("Failed to fetch app reports")
+  return res.json()
+}
+
+export function useAdminAppReports(offset: number, kind: string, appSlug: string, status: string) {
+  return useQuery({
+    queryKey: queryKeys.admin.appReports(offset, kind, appSlug, status),
+    queryFn: () => fetchAdminAppReportsPage(offset, 50, kind, appSlug, status),
+    enabled: hasAdmin(),
+    staleTime: 15_000,
+  })
+}
+
+export function usePatchAppReportMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: AppReport["status"] }) => {
+      const res = await fetch(`/v1/admin/app-reports/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error("Failed to update report")
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "app-reports"] }),
   })
 }
 

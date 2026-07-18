@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveTargetPickers, buildGapRecords } from "../describe-to-picker.js"
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -48,5 +48,47 @@ describe("buildGapRecords", () => {
   it("returns [] for empty/absent gaps", () => {
     expect(buildGapRecords(undefined, pickerJson, "u1")).toEqual([])
     expect(buildGapRecords({ missingItems: [], missingCategories: [] }, pickerJson, "u1")).toEqual([])
+  })
+})
+
+describe("buildMissingPickerReport", () => {
+  const ctx = {
+    imageUrl: "https://cdn.example/img.png",
+    llmModel: "claude-opus-4.7",
+    targetPickers: ["person"],
+    origin: "person",
+    userId: "u1",
+    jobId: "j1",
+  }
+
+  it("builds a per-incident app_report carrying the image link and app origin", () => {
+    const gaps = {
+      missingItems: [{ picker: "person", dimension: "hair-color", observed: "blue-green ombre" }],
+      missingCategories: [{ picker: "person", suggestedDimension: "freckles", observed: "dense freckles" }],
+    }
+    const report = buildMissingPickerReport(gaps, ctx)
+    expect(report).toMatchObject({
+      appSlug: "person",
+      node: "describe-to-picker",
+      kind: "missing-picker",
+      title: "2 unmatched attributes in image analysis",
+      userId: "u1",
+      jobId: "j1",
+    })
+    expect(report?.payload).toMatchObject({ imageUrl: ctx.imageUrl, gaps, llmModel: ctx.llmModel })
+  })
+
+  it("is null when the analysis had no gaps (no report row)", () => {
+    expect(buildMissingPickerReport(undefined, ctx)).toBeNull()
+    expect(buildMissingPickerReport({ missingItems: [], missingCategories: [] }, ctx)).toBeNull()
+  })
+
+  it("omits the app slug when no origin was sent", () => {
+    const report = buildMissingPickerReport(
+      { missingItems: [{ picker: "person", dimension: "age", observed: "x" }], missingCategories: [] },
+      { ...ctx, origin: undefined },
+    )
+    expect(report?.appSlug).toBeNull()
+    expect(report?.title).toBe("1 unmatched attribute in image analysis")
   })
 })

@@ -1050,6 +1050,21 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |
 
+### Social connections & publishing
+
+Connect flows are popup-based and meant for the web app; publishing is available to personal tokens (OAuth apps are deliberately blocked from managing connections).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/social/providers` | Registry of supported networks with per-deployment availability: `{ id, label, connectKind, editor, capabilities, available, missingEnv?, setupHint? }`. Unconfigured networks are listed with `available: false` — never hidden. |
+| `GET` | `/v1/social/auth-url?platform=` | Start an OAuth connect (popup URL). `400 provider_not_configured` (with the missing env var names) when the deployment lacks that network's app credentials. |
+| `GET` | `/v1/social/callback/:platform` | OAuth redirect target (public). For Facebook/Instagram logins managing multiple Pages/accounts, responds with an **account picker** page instead of silently connecting the first account. |
+| `POST` | `/v1/social/connect/finalize` | Completes an account-picker selection (`{ token, accountId }`; the one-time token authorizes the call — public route, popup-internal). |
+| `GET` | `/v1/social/connections` | List the caller's connected accounts. |
+| `DELETE` | `/v1/social/connections/:id` | Disconnect an account. |
+| `POST` | `/v1/social/telegram/connect` | Connect Telegram by pasting a bot token (`{ botToken }`). |
+| `POST` | `/v1/social/publish` | Publish now (`{ platform, action, connectionId?, caption?, mediaUrl? \| mediaItems?, … }`) → job. 1 credit. |
+
 ### Audio primitives
 
 | Method | Path | Purpose |

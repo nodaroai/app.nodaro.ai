@@ -3,8 +3,9 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { decryptToken, encryptToken } from "../services/social/encryption.js"
-import { refreshAccessToken, type SocialPlatform } from "../services/social/oauth.js"
-import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
+import { refreshAccessToken } from "../services/social/oauth.js"
+import type { PublishRequest } from "../services/social/platforms/index.js"
+import { getProvider, providerIds } from "../services/social/providers/registry.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -25,7 +26,9 @@ const MEDIA_REQUIRED_ACTIONS = new Set([
 ])
 
 const publishSchema = z.object({
-  platform: z.enum(["instagram", "tiktok", "youtube", "linkedin", "x", "facebook", "telegram"]),
+  // Derived from the provider registry — adding a network there updates this
+  // enum automatically (no hand-maintained platform list).
+  platform: z.enum(providerIds()),
   action: z.enum(VALID_ACTIONS),
   connectionId: z.string().uuid().optional(),
   caption: z.string().optional(),
@@ -105,12 +108,15 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       })
     }
 
+    // The registry validated `platform` via the Zod enum above.
+    const provider = getProvider(platform)!
+
     // Decrypt access token
     let accessToken = decryptToken(connection.access_token_encrypted)
 
     // Check if token is expired and refresh
     if (connection.token_expires_at && new Date(connection.token_expires_at) <= new Date()) {
-      if (!connection.refresh_token_encrypted) {
+      if (!connection.refresh_token_encrypted || !provider.oauth) {
         return reply.status(400).send({
           error: { code: "token_expired", message: `Your ${platform} connection has expired. Please reconnect.` },
         })
@@ -118,7 +124,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
 
       try {
         const refreshToken = decryptToken(connection.refresh_token_encrypted)
-        const refreshed = await refreshAccessToken(platform as SocialPlatform, refreshToken)
+        const refreshed = await refreshAccessToken(provider, refreshToken)
         accessToken = refreshed.accessToken
 
         // Update stored tokens
@@ -167,7 +173,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
     if (reply.sent) return
 
     try {
-      const publisher = platformPublishers[platform as SocialPlatform]
+      const publisher = provider.publisher
       const metadata = (connection.metadata as Record<string, unknown>) || {}
 
       // Decrypt page_access_token if present (stored encrypted in metadata)

@@ -80,6 +80,7 @@ const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"
 const AdminStuckPipelines = lazy(() => import("@/ee/app/(admin)/admin/stuck-pipelines/page"))
 const AdminTutorialCategories = lazy(() => import("@/ee/app/(admin)/admin/tutorial-categories/page"))
 const AdminClientApps = lazy(() => import("@/ee/app/(admin)/admin/client-apps/page"))
+const AdminAppReports = lazy(() => import("@/ee/app/(admin)/admin/app-reports/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -124,6 +125,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
       { path: "stuck-pipelines", element: <SuspenseWrapper><AdminStuckPipelines /></SuspenseWrapper> },
       { path: "client-apps", element: <SuspenseWrapper><AdminClientApps /></SuspenseWrapper> },
+      { path: "app-reports", element: <SuspenseWrapper><AdminAppReports /></SuspenseWrapper> },
     ],
   },
 ] : []

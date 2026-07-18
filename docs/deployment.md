@@ -95,6 +95,30 @@ echo "SOCIAL_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
 the API server within a Nodaro container. `SOCIAL_ENCRYPTION_KEY` is
 AES-256-GCM key material used to encrypt social-OAuth tokens at rest.
 
+### 2b-2. Social network apps (optional, per network)
+
+Social publishing works per-network: a network becomes connectable once its
+OAuth app credentials are set. Unconfigured networks still appear in
+**Settings → Integrations** (and in `GET /v1/social/providers`) as
+*unavailable* with the missing variable names — nothing breaks without them.
+
+| Network | Required env vars |
+|---|---|
+| Instagram | `META_APP_ID`, `META_APP_SECRET` (optional `META_INSTAGRAM_CONFIG_ID` for Facebook Login for Business) |
+| Facebook | `META_APP_ID`, `META_APP_SECRET` (optional `META_FACEBOOK_CONFIG_ID`) |
+| TikTok | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` |
+| YouTube | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` |
+| X (Twitter) | `X_CLIENT_ID`, `X_CLIENT_SECRET` |
+| Telegram | none — users paste their own bot token |
+
+Each OAuth app must whitelist the redirect URI
+`https://YOUR-DOMAIN/v1/social/callback/{network}`.
+
+When a Facebook/Instagram login manages more than one Page or Instagram
+account, the connect popup shows an **account picker** — the user chooses
+which account to connect (single-account logins connect directly, as before).
+
 ### 2c. Apply database migrations
 
 In the Supabase dashboard for your project, open **SQL editor** and

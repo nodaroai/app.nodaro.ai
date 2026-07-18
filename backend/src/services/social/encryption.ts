@@ -9,7 +9,9 @@ let cachedKey: Buffer | null = null
 
 function getKey(): Buffer {
   if (cachedKey) return cachedKey
-  const hex = config.SOCIAL_ENCRYPTION_KEY ?? process.env.SOCIAL_ENCRYPTION_KEY
+  // `||`, not `??`: config defaults this to "" (z.string().default("")), so a
+  // nullish check never reaches the process.env fallback — empty means unset.
+  const hex = config.SOCIAL_ENCRYPTION_KEY || process.env.SOCIAL_ENCRYPTION_KEY
   if (!hex || hex.length !== 64) {
     throw new Error("SOCIAL_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)")
   }

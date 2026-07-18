@@ -1,12 +1,3 @@
-import type { SocialPlatform } from "../oauth.js"
-import { instagramPublisher } from "./instagram.js"
-import { tiktokPublisher } from "./tiktok.js"
-import { youtubePublisher } from "./youtube.js"
-import { linkedinPublisher } from "./linkedin.js"
-import { xPublisher } from "./x.js"
-import { facebookPublisher } from "./facebook.js"
-import { telegramPublisher } from "./telegram.js"
-
 export interface MediaItem {
   type: "photo" | "video"
   url: string
@@ -38,12 +29,7 @@ export interface PlatformPublisher {
   ): Promise<PublishResult>
 }
 
-export const platformPublishers: Record<SocialPlatform, PlatformPublisher> = {
-  instagram: instagramPublisher,
-  tiktok: tiktokPublisher,
-  youtube: youtubePublisher,
-  linkedin: linkedinPublisher,
-  x: xPublisher,
-  facebook: facebookPublisher,
-  telegram: telegramPublisher,
-}
+// The per-platform publisher map moved to the provider registry
+// (services/social/providers/registry.ts) — each descriptor carries its
+// publisher. This file keeps only the publish wire types the platform
+// implementations import.
