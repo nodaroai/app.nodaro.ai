@@ -43,6 +43,18 @@ describe("provider registry totality", () => {
       }
       if (p.connectKind === "custom_fields") {
         expect(p.customFields, `${p.id} missing customFields()`).toBeDefined()
+        expect(typeof p.connectWithFields, `${p.id} missing connectWithFields()`).toBe("function")
+        // Every declared field must be renderable: key+label+type present.
+        for (const f of p.customFields!()) {
+          expect(f.key.length, `${p.id} field key`).toBeGreaterThan(0)
+          expect(f.label.length, `${p.id} field label`).toBeGreaterThan(0)
+          expect(["text", "password"]).toContain(f.type)
+        }
+        // At least one secret field — it becomes access_token_encrypted.
+        expect(
+          p.customFields!().some((f) => f.type === "password"),
+          `${p.id} needs a password-type field`,
+        ).toBe(true)
       }
     }
   })

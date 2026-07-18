@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { supabase } from "../lib/supabase.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
 import { generateAuthUrl, exchangeCodeForTokens, type TokenSet } from "../services/social/oauth.js"
 import { getProvider, missingEnv, PROVIDERS, providerPublicInfo } from "../services/social/providers/registry.js"
@@ -54,6 +55,11 @@ export async function socialAuthRoutes(app: FastifyInstance) {
     if (provider.connectKind === "bot_token") {
       return reply.status(400).send({
         error: { code: "invalid_platform", message: `${provider.label} connects via POST /v1/social/${provider.id}/connect, not OAuth.` },
+      })
+    }
+    if (provider.connectKind === "custom_fields") {
+      return reply.status(400).send({
+        error: { code: "invalid_platform", message: `${provider.label} connects via POST /v1/social/connect/custom, not OAuth.` },
       })
     }
     if (provider.connectKind !== "oauth2" && provider.connectKind !== "oauth2_between_steps") {
@@ -157,6 +163,63 @@ export async function socialAuthRoutes(app: FastifyInstance) {
       req.log.error({ err }, "Social finalize error")
       const message = err instanceof Error ? err.message : "Failed to complete connection."
       return reply.status(500).send({ error: { code: "finalize_failed", message } })
+    }
+  })
+
+  // POST /v1/social/connect/custom — custom_fields networks (API key / app
+  // password / instance login). The provider's FieldSpec list drives both the
+  // frontend form AND this validation, so the two cannot drift.
+  app.post("/v1/social/connect/custom", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
+    if (rejectProgrammaticAuth(req, reply, SOCIAL_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+
+    const schema = z.object({ platform: z.string().min(1), fields: z.record(z.string(), z.string()) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid connect request" } })
+    }
+
+    const provider = getProvider(parsed.data.platform)
+    if (!provider || provider.connectKind !== "custom_fields" || !provider.connectWithFields || !provider.customFields) {
+      return reply.status(400).send({ error: { code: "invalid_platform", message: "Invalid platform" } })
+    }
+
+    // Validate against the provider's own FieldSpec list.
+    const normalized: Record<string, string> = {}
+    for (const spec of provider.customFields()) {
+      const value = (parsed.data.fields[spec.key] ?? spec.defaultValue ?? "").trim()
+      if (!value) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `${spec.label} is required` },
+        })
+      }
+      if (spec.validation && !new RegExp(spec.validation).test(value)) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `${spec.label} is invalid` },
+        })
+      }
+      // SSRF gate on user-supplied instance hosts (bluesky service, wordpress
+      // domain, lemmy instance): same safeUrlSchema as user media URLs.
+      if (spec.validation?.startsWith("^https?") && !safeUrlSchema.safeParse(value).success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `${spec.label} must be a public https URL` },
+        })
+      }
+      normalized[spec.key] = value
+    }
+
+    try {
+      const { userInfo, accessToken } = await provider.connectWithFields(normalized)
+      const saveErr = await saveConnection(userId, provider.id, userInfo, { accessToken })
+      if (saveErr) {
+        req.log.error({ saveErr }, "Failed to save social connection (custom fields)")
+        return reply.status(500).send({ error: { code: "internal_error" } })
+      }
+      return { success: true, platform: provider.id, username: userInfo.username ?? provider.label }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to connect."
+      return reply.status(400).send({ error: { code: "connect_failed", message } })
     }
   })
 
