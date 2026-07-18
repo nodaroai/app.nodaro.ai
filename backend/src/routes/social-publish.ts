@@ -2,28 +2,25 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { decryptToken, encryptToken } from "../services/social/encryption.js"
-import { refreshAccessToken } from "../services/social/oauth.js"
+import { MEDIA_REQUIRED_ACTIONS as SHARED_MEDIA_REQUIRED, VALID_ACTIONS as SHARED_ACTIONS } from "../services/social/actions.js"
+import {
+  executePublish,
+  NotConnectedError,
+  UnknownOutcomeError,
+} from "../services/social/execute-publish.js"
 import type { PublishRequest } from "../services/social/platforms/index.js"
-import { getProvider, providerIds } from "../services/social/providers/registry.js"
+import { providerIds } from "../services/social/providers/registry.js"
+import { BadBodyError, RefreshTokenError } from "../services/social/providers/types.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared"
 
-const VALID_ACTIONS = [
-  "post-image", "post-reel", "post-story", "post-carousel",
-  "post-video", "upload-video", "upload-short",
-  "post-text", "post-tweet",
-  "send-message", "send-photo", "send-video", "send-media-group",
-] as const
-
-const MEDIA_REQUIRED_ACTIONS = new Set([
-  "post-image", "post-reel", "post-story", "post-carousel",
-  "post-video", "upload-video", "upload-short",
-  "send-photo", "send-video", "send-media-group",
-])
+// Shared with scheduled-posts CRUD (services/social/actions.ts) so the two
+// routes can't drift.
+const VALID_ACTIONS = SHARED_ACTIONS
+const MEDIA_REQUIRED_ACTIONS = SHARED_MEDIA_REQUIRED
 
 const publishSchema = z.object({
   // Derived from the provider registry — adding a network there updates this
@@ -87,69 +84,6 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       }
     }
 
-    // Get connection — by ID if provided, otherwise first match for platform
-    let connQuery = supabase
-      .from("social_connections")
-      .select("*")
-      .eq("user_id", userId)
-
-    if (connectionId) {
-      connQuery = connQuery.eq("id", connectionId).eq("platform", platform)
-    } else {
-      connQuery = connQuery.eq("platform", platform).limit(1)
-    }
-
-    const { data: connRows, error: connErr } = await connQuery
-    const connection = connRows?.[0]
-
-    if (connErr || !connection) {
-      return reply.status(400).send({
-        error: { code: "not_connected", message: `No ${platform} account connected. Please connect in Settings > Integrations.` },
-      })
-    }
-
-    // The registry validated `platform` via the Zod enum above.
-    const provider = getProvider(platform)!
-
-    // Decrypt access token
-    let accessToken = decryptToken(connection.access_token_encrypted)
-
-    // Check if token is expired and refresh
-    if (connection.token_expires_at && new Date(connection.token_expires_at) <= new Date()) {
-      if (!connection.refresh_token_encrypted || !provider.oauth) {
-        return reply.status(400).send({
-          error: { code: "token_expired", message: `Your ${platform} connection has expired. Please reconnect.` },
-        })
-      }
-
-      try {
-        const refreshToken = decryptToken(connection.refresh_token_encrypted)
-        const refreshed = await refreshAccessToken(provider, refreshToken)
-        accessToken = refreshed.accessToken
-
-        // Update stored tokens
-        const updateData: Record<string, unknown> = {
-          access_token_encrypted: encryptToken(refreshed.accessToken),
-          updated_at: new Date().toISOString(),
-        }
-        if (refreshed.refreshToken) {
-          updateData.refresh_token_encrypted = encryptToken(refreshed.refreshToken)
-        }
-        if (refreshed.expiresIn) {
-          updateData.token_expires_at = new Date(Date.now() + refreshed.expiresIn * 1000).toISOString()
-        }
-
-        await supabase
-          .from("social_connections")
-          .update(updateData)
-          .eq("id", connection.id)
-      } catch {
-        return reply.status(400).send({
-          error: { code: "refresh_failed", message: `Failed to refresh ${platform} token. Please reconnect.` },
-        })
-      }
-    }
-
     // Create job record
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
@@ -173,40 +107,20 @@ export async function socialPublishRoutes(app: FastifyInstance) {
     if (reply.sent) return
 
     try {
-      const publisher = provider.publisher
-      const metadata = (connection.metadata as Record<string, unknown>) || {}
-
-      // Decrypt page_access_token if present (stored encrypted in metadata)
-      if (metadata.page_access_token && typeof metadata.page_access_token === "string") {
-        metadata.page_access_token = decryptToken(metadata.page_access_token)
-      }
-
-      // Pass Telegram-specific fields via metadata
-      if (chatId) metadata.chatId = chatId
-      if (parseMode) metadata.parseMode = parseMode
-
       const publishReq: PublishRequest = { action, caption, mediaUrl, mediaItems, title, description, tags, privacy }
-      const result = await publisher.publish(accessToken, publishReq, metadata)
+      const extraMetadata: Record<string, unknown> = {}
+      if (chatId) extraMetadata.chatId = chatId
+      if (parseMode) extraMetadata.parseMode = parseMode
 
-      if (!result.success) {
-        const message = result.error ?? "Publish failed"
-        app.log.error({ platform, action, error: message }, "Social publish returned failure")
-
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
-
-        if (reservation?.usageLogId) {
-          try {
-            await CreditsService.refundCredits(reservation.usageLogId)
-          } catch (refundErr) {
-            app.log.error({ refundErr, jobId: job.id }, "Failed to refund credits after social publish failure")
-          }
-        }
-
-        return reply.status(400).send({ error: { code: "publish_failed", message } })
-      }
+      // Shared executor — same token-refresh/reconnect/typed-error semantics
+      // as the scheduled-publish worker (services/social/execute-publish.ts).
+      const result = await executePublish({
+        userId,
+        platform,
+        connectionId,
+        request: publishReq,
+        extraMetadata,
+      })
 
       // Update job as completed
       await supabase
@@ -244,6 +158,19 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         }
       }
 
+      // Typed outcomes map to the same wire responses as before the refactor.
+      if (err instanceof NotConnectedError) {
+        return reply.status(400).send({ error: { code: "not_connected", message } })
+      }
+      if (err instanceof RefreshTokenError) {
+        const code = (err as RefreshTokenError & { code?: string }).code ?? "token_expired"
+        return reply.status(400).send({ error: { code, message } })
+      }
+      if (err instanceof BadBodyError) {
+        return reply.status(400).send({ error: { code: "publish_failed", message } })
+      }
+      // UnknownOutcomeError (provider call in flight when it failed — the
+      // message says the post MAY have gone out) + unexpected errors: 500.
       return reply.status(500).send({ error: { code: "publish_failed", message } })
     }
   })

@@ -1064,6 +1064,10 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `DELETE` | `/v1/social/connections/:id` | Disconnect an account. |
 | `POST` | `/v1/social/telegram/connect` | Connect Telegram by pasting a bot token (`{ botToken }`). |
 | `POST` | `/v1/social/publish` | Publish now (`{ platform, action, connectionId?, caption?, mediaUrl? \| mediaItems?, … }`) → job. 1 credit. |
+| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 1 credit, charged at publish. |
+| `GET` | `/v1/social/scheduled-posts?from=&to=&status=` | List the caller's scheduled posts (calendar range). |
+| `PATCH` | `/v1/social/scheduled-posts/:id` | Edit while still `queued`/`draft` (`409 not_editable` once publishing). |
+| `DELETE` | `/v1/social/scheduled-posts/:id` | Cancel a queued post (soft — history retained). |
 
 ### Audio primitives
 
