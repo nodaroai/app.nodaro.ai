@@ -62,11 +62,17 @@ function computeSplit(requestedSec: number, capSec: number): SplitResult {
   return { mode: "multi" as const, clampedD: d, n, s, durations }
 }
 
-/** Fixed per-join tail overlap (seconds) the reserve formula charges at the
- *  video-ref rate for every join after the first segment. Single-sourced
- *  from the shared continuation-ref length (KIE r2v floor 1.8s) so the
- *  billed overlap always matches what the engine actually cuts. */
-const TAIL_SEC = SEEDANCE_2_CONTINUATION_REF_SEC
+/** User-selectable context-tail bounds (seconds). Floor = the default 2s
+ *  (clears KIE's 1.8s r2v minimum); ceiling 5s keeps the reference short
+ *  enough to stay a continuation cue rather than replay material, and keeps
+ *  the per-join surcharge bounded. The engine cuts EXACTLY what this bills —
+ *  transport and formula read the same clamped value. */
+export const CONTEXT_TAIL_MIN_SEC = SEEDANCE_2_CONTINUATION_REF_SEC
+export const CONTEXT_TAIL_MAX_SEC = 5
+export function clampContextTailSec(v: unknown): number {
+  const n = typeof v === "number" && Number.isFinite(v) ? v : CONTEXT_TAIL_MIN_SEC
+  return Math.min(CONTEXT_TAIL_MAX_SEC, Math.max(CONTEXT_TAIL_MIN_SEC, n))
+}
 
 /**
  * Clamp a requested resolution to the provider's catalog resolutions (single
@@ -103,8 +109,12 @@ export async function computeGenerateVideoProPricing(args: {
   provider: string
   resolution: string
   durationSec: number
+  /** Continuation-tail length per join (seconds), clamped to
+   *  [CONTEXT_TAIL_MIN_SEC, CONTEXT_TAIL_MAX_SEC]; omitted → default 2s. */
+  tailSec?: number
 }): Promise<GenerateVideoProPricing> {
   const { provider, durationSec } = args
+  const tailSec = clampContextTailSec(args.tailSec)
   const resolution = clampResolution(provider, args.resolution)
 
   const cap = Number(process.env.GENERATE_VIDEO_PRO_MAX_DURATION || 120)
@@ -142,7 +152,7 @@ export async function computeGenerateVideoProPricing(args: {
       feeBase: 0,
       noRefPerSec,
       refPerSec,
-      tailSec: TAIL_SEC,
+      tailSec,
       reserveBase: creditCost,
       creditIdentifier,
     }
@@ -159,7 +169,7 @@ export async function computeGenerateVideoProPricing(args: {
   const reserveBase =
     feeBase +
     Math.ceil(noRefPerSec * SPLIT.maxSeg) +
-    Math.ceil(refPerSec * ((split.n - 1) * TAIL_SEC + (split.s - SPLIT.maxSeg)))
+    Math.ceil(refPerSec * ((split.n - 1) * tailSec + (split.s - SPLIT.maxSeg)))
 
   return {
     mode: "multi",
@@ -170,7 +180,7 @@ export async function computeGenerateVideoProPricing(args: {
     feeBase,
     noRefPerSec,
     refPerSec,
-    tailSec: TAIL_SEC,
+    tailSec,
     reserveBase,
   }
 }

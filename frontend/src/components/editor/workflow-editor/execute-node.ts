@@ -1948,6 +1948,7 @@ export function executeNode(
       // Fail-safe narrowed like payload-builder — omitted unless meaningful.
       plannerModel: gvpData.plannerModel?.trim() || undefined,
       planOnly: gvpData.planOnly === true ? true : undefined,
+      contextTailSec: typeof gvpData.contextTailSec === "number" ? gvpData.contextTailSec : undefined,
       idempotencyKey,
     };
 

@@ -2700,6 +2700,8 @@ export async function generateVideoPro(body: {
   plannerModel?: string
   /** PLAN-ONLY: return the planned configuration, generate no video. */
   planOnly?: boolean
+  /** Continuation-tail seconds per join (2-5; default 2). */
+  contextTailSec?: number
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

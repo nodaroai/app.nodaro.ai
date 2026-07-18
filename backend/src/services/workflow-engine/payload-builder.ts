@@ -3825,6 +3825,7 @@ export function buildPayload(
         // plugin versions predating them (extra keys ignored by the handler).
         plannerModel: typeof data.plannerModel === "string" && data.plannerModel ? data.plannerModel : undefined,
         planOnly: data.planOnly === true ? true : undefined,
+        contextTailSec: typeof data.contextTailSec === "number" ? data.contextTailSec : undefined,
         usageLogId,
       })
     }

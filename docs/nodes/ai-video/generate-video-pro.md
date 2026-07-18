@@ -41,6 +41,7 @@ Generate Video Pro exposes **exactly Generate Video's input handles** — same n
 | Generate Audio | Checkbox | on | |
 | Planner model | Select | Claude Opus 4.7 | The AI model that plans the segment breakdown for multi-segment runs — any model from the [LLM model registry](../../choosing-models.md) |
 | Plan only | Checkbox | off | Return the full segment plan **without generating any video** — see [Plan-only mode](#plan-only-mode) |
+| Continuation context | Select (2-5s) | 2s | How much of the previous segment each continuation segment sees as its reference. Raise for slow camera moves or music-timed motion; each extra second adds a small per-join cost (see the pricing formula) |
 
 ## Providers
 
@@ -88,7 +89,7 @@ Billed via the same per-second Seedance 2 composite identifiers Generate Video u
 ### Multi-segment (> 15s)
 
 ```
-reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 2 + (S − 15)))
+reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × T + (S − 15)))
 ```
 
 - **10** — flat fee covering the segmentation/stitch overhead, charged once per run regardless of segment count.
@@ -96,7 +97,7 @@ reserve = 10 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 2
 - **15** — the per-segment maximum. The first segment is always reserved at the full 15s cap, even when its actual length ends up shorter (see the worked example below).
 - **N** — the number of segments the request splits into.
 - **S** — the combined length (seconds) of all segments, which runs slightly longer than the requested duration to cover the per-join overlap needed for a seamless stitch.
-- **`(N − 1) × 2`** — two seconds of overlap per join, billed at the reference rate (each joining segment continues from the previous one's final 2-second tail — the minimum reference length the Seedance 2 family accepts).
+- **`(N − 1) × T`** — the continuation-context overlap per join, billed at the reference rate. **T** is the Continuation context setting (2s by default — the minimum reference length the Seedance 2 family accepts; raisable to 5s). Each joining segment continues from the previous one's final T-second tail, so the worked examples below (all at the default T = 2) grow by `refPerSec × (N − 1)` credits per extra second of context.
 
 #### Worked examples (720p, `seedance-2`)
 

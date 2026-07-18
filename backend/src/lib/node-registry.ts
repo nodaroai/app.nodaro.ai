@@ -254,6 +254,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         // PLAN-ONLY: return the full per-segment plan without generating video
         // (charged the plan fee only) — cheap plan iteration/testing.
         { key: "planOnly", type: "boolean" },
+        // Continuation-tail seconds per join (2-5, default 2).
+        { key: "contextTailSec", type: "number" },
       ],
     },
     // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at

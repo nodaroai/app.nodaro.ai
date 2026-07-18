@@ -711,6 +711,9 @@ export interface PluginHttpToolkit {
     provider: string
     resolution: string
     durationSec: number
+    /** Per-join continuation-tail length (seconds), clamped app-side to
+     *  [2, 5]; omitted → default 2. Additive-optional (no contract bump). */
+    tailSec?: number
   }): Promise<GenerateVideoProPricing>
   /**
    * Mirrors `computeEditVideoProPricing` (`ee/billing/edit-video-pro-credits.ts`)
