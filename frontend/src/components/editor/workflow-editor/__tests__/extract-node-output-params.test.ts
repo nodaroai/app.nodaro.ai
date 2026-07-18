@@ -49,4 +49,12 @@ describe("extractNodeOutput — parameter nodes", () => {
   it("returns tone value for tone nodes", () => {
     expect(extractNodeOutput(makeNode("tone", { tone: "dramatic" }))).toBe("dramatic")
   })
+  it("returns the style guide text for style-guide nodes", () => {
+    // Style Guide exists to inject its text into downstream prompts — a
+    // missing hint case left {Style Guide} refs unresolved (literal braces
+    // in the outgoing prompt) and direct wires injecting nothing.
+    expect(
+      extractNodeOutput(makeNode("style-guide", { text: "muted pastel palette, soft window light" })),
+    ).toBe("muted pastel palette, soft window light")
+  })
 })

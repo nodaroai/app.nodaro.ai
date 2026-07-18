@@ -162,6 +162,37 @@ const auth = supabaseAuth(supabase)
 The argument is structurally typed — only `supabase.auth.getSession()` is called.
 Any client matching that shape works.
 
+### `createSharedSupabaseClient(options)` — `@nodaro/sdk/supabase`
+
+Browser Supabase client that stores the session in **cookies** instead of
+localStorage — optionally scoped to a parent domain so several apps on sibling
+subdomains share one login (sign in on any of them, signed in on all; sign out
+anywhere, signed out everywhere).
+
+```ts
+import { createSharedSupabaseClient } from "@nodaro/sdk/supabase"
+import { supabaseAuth } from "@nodaro/sdk"
+
+const supabase = createSharedSupabaseClient({
+  url: SUPABASE_URL,
+  anonKey: SUPABASE_ANON_KEY,
+  cookieDomain: ".example.com", // optional — omit for host-only cookies
+})
+const auth = supabaseAuth(supabase)
+```
+
+**Signature:** `createSharedSupabaseClient<Db = any>(options: { url: string; anonKey: string; cookieDomain?: string }): SupabaseClient<Db>`
+
+- `cookieDomain` is applied only when the page's hostname is that domain or a
+  subdomain of it; on any other host (`localhost`, preview URLs) cookies stay
+  host-only, so local dev keeps per-origin sessions.
+- On first load it adopts an existing localStorage session (the storage
+  supabase-js used previously) into the cookie, then removes the old key — an
+  already-signed-in user survives the switch. Dead tokens are discarded.
+- Ships as a separate subpath so the base SDK stays Supabase-free.
+  `@supabase/ssr` and `@supabase/supabase-js` are **optional peer
+  dependencies** — install both to use this export.
+
 ---
 
 ## Errors

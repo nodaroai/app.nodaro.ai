@@ -20,6 +20,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@nodaro/prompts": "*",
     "@nodaro/sdk": "*",
     "@nodaro/shared": "*",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -40,7 +41,8 @@
     "@remotion/lottie": "4.0.486",
     "@remotion/player": "^4.0.0",
     "@stripe/stripe-js": "^8.9.0",
-    "@supabase/supabase-js": "^2.93.3",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.7",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-devtools": "^5.91.3",
     "@tanstack/react-virtual": "^3.13.26",
@@ -73,8 +75,7 @@
     "tailwind-merge": "^3.4.0",
     "wavesurfer.js": "^7.12.7",
     "zod": "^4.4.0",
-    "zustand": "^5.0.10",
-    "@nodaro/prompts": "*"
+    "zustand": "^5.0.10"
   },
   "engines": {
     "node": ">=22"

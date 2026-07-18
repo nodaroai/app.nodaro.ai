@@ -39,4 +39,5 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 ## Tips
 
 - Style Guide text is injected into the generation context of downstream nodes. The exact integration point varies by node type -- for image generation it typically augments the style portion of the prompt.
+- Wiring the node into a consumer's prompt handle auto-inserts a `{Style Guide}` variable when the prompt is empty. You can also type `{Style Guide}` (the node's label) anywhere in a prompt yourself to control exactly where the text lands -- the reference resolves to the node's text at run time.
 - Combine Style Guide with Tone for comprehensive creative direction: Style Guide for "how it looks" and Tone for "how it feels".

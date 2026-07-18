@@ -467,6 +467,7 @@ export type { LocationCatalogRef } from "./location-preset-catalog-map.js"
 
 export {
   PARAMETER_NODE_TYPES,
+  HINT_EXEMPT_PARAMETER_TYPES,
   getParameterValue,
 } from "./parameter-node-value.js"
 

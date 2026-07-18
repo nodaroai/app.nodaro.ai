@@ -1,3 +1,5 @@
+import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES } from "@nodaro/shared"
+
 /**
  * Main text input handle per consumer node type.
  *
@@ -25,20 +27,23 @@ export interface MainTextHandle {
  * prompt + system-prompt handle feeding two different data fields).
  */
 export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHandle>>> = {
-  "generate-image": [{ handle: "in", field: "prompt" }],
-  "text-to-video": [{ handle: "in", field: "prompt" }],
-  "generate-video": [{ handle: "in", field: "prompt" }],
-  // Unlike generate-video's entry above (a known-stale "in" — the node
-  // actually renders "prompt"), this uses the real rendered handle id.
+  // Handle ids MUST be the node's real rendered handle ids — onConnect
+  // matches `m.handle === connection.targetHandle` exactly, so a stale id
+  // means the auto-fill silently never fires for that node. An earlier "in"
+  // era left 9 entries dead. Guarded by main-text-handle.test.ts against
+  // the typed target-handle registry.
+  "generate-image": [{ handle: "prompt", field: "prompt" }],
+  "text-to-video": [{ handle: "prompt", field: "prompt" }],
+  "generate-video": [{ handle: "prompt", field: "prompt" }],
   "generate-video-pro": [{ handle: "prompt", field: "prompt" }],
-  // Span-replace sibling of generate-video-pro — same real rendered handle id.
+  // Span-replace sibling of generate-video-pro — same rendered handle id.
   "edit-video-pro": [{ handle: "prompt", field: "prompt" }],
-  "text-to-speech": [{ handle: "in", field: "directText" }],
-  "text-to-audio": [{ handle: "in", field: "prompt" }],
-  "generate-music": [{ handle: "in", field: "prompt" }],
-  "video-to-video": [{ handle: "in", field: "prompt" }],
-  "generate-script": [{ handle: "in", field: "prompt" }],
-  "extend-video": [{ handle: "in", field: "prompt" }],
+  "text-to-speech": [{ handle: "prompt", field: "directText" }],
+  "text-to-audio": [{ handle: "prompt", field: "prompt" }],
+  "generate-music": [{ handle: "prompt", field: "prompt" }],
+  "video-to-video": [{ handle: "prompt", field: "prompt" }],
+  "generate-script": [{ handle: "prompt", field: "prompt" }],
+  "extend-video": [{ handle: "prompt", field: "prompt" }],
   "llm-chat": [
     { handle: "prompt", field: "userInput" },
     { handle: "system-prompt", field: "systemPrompt" },
@@ -48,10 +53,8 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
   "cinematic-avatar": [{ handle: "prompt", field: "prompt" }],
 }
 
-/** Node types whose `extractNodeOutput` produces text (including parameter
- *  nodes whose hint is prose). Used by the auto-fill logic to avoid writing
- *  `{SomeVideo}` into a prompt when the source is an image/video/audio node. */
-export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
+/** Non-parameter node types whose `extractNodeOutput` produces text. */
+const NON_PARAMETER_TEXT_SOURCES: ReadonlyArray<string> = [
   "text-prompt",
   "llm-chat",
   "combine-text",
@@ -72,33 +75,19 @@ export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  // Parameter nodes — their extracted output is the prompt hint.
-  "tone",
-  "style-guide",
-  "motion",
-  "camera-motion",
-  "framing",
-  "lens",
-  "camera-format",
-  "lighting",
-  "color-look",
-  "atmosphere",
-  "action-fx",
-  "style",
-  "setting",
-  "person",
-  "mood",
-  "photographer",
-  "aesthetic",
-  "era",
-  "pose",
-  "styling",
-  "photo-genre",
-  "backdrop",
-  "held-prop",
-  "temporal",
-  "exposure-settings",
-  "render-quality",
-  "composition-effects",
-  "post-process-effects",
+]
+
+/** Node types whose `extractNodeOutput` produces text (including parameter
+ *  nodes whose hint is prose). Used by the auto-fill logic to avoid writing
+ *  `{SomeVideo}` into a prompt when the source is an image/video/audio node.
+ *
+ *  The parameter portion is DERIVED from PARAMETER_NODE_TYPES minus the
+ *  hint-exempt set, so a new picker joins automatically. A hand-list here
+ *  once silently dropped the whole Object family (animal / vehicle / weapon /
+ *  furniture / material) plus transition, character-fx, loop-subject, and the
+ *  five sound pickers — canvas-legal prompt-handle wires that injected
+ *  nothing. Guarded by main-text-handle.test.ts. */
+export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
+  ...NON_PARAMETER_TEXT_SOURCES,
+  ...[...PARAMETER_NODE_TYPES].filter((t) => !HINT_EXEMPT_PARAMETER_TYPES.has(t)),
 ])
