@@ -27,7 +27,7 @@ function toTelegramHtml(text: string): string {
 export const telegramPublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest, metadata: Record<string, unknown>): Promise<PublishResult> {
     const chatId = metadata.chatId as string
-    if (!chatId) throw new Error("Telegram chat ID not found in connection metadata")
+    if (!chatId) throw new Error("Telegram needs a Chat ID — set it on the node (e.g. @yourchannel, and add the bot to that channel as admin)")
 
     const { action, caption, mediaUrl } = request
     const baseUrl = `https://api.telegram.org/bot${accessToken}`

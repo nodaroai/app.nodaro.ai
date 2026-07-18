@@ -7473,6 +7473,16 @@ export function executeNode(
   ) {
     const { updateNodeData } = useWorkflowStore.getState();
     const d = node.data as SocialPostData;
+
+    // Telegram needs an explicit target chat — fail BEFORE credits/API with a
+    // human message (the backend's mid-publish error is jargon by comparison).
+    if (node.type === "telegram-post" && !(d.chatId || "").trim()) {
+      const msg = "Telegram Post: Chat ID is required — e.g. @yourchannel (add the bot to it as admin)";
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      toast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
 
     // Typed-primary caption resolution via the shared helper — identical to the
