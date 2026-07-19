@@ -21,6 +21,14 @@ name: Release (npm)
 on:
   push:
     branches: [dev, main]
+    # Only pushes that can affect a release: new/consumed changesets or a
+    # package version bump. Everything else (the vast majority of dev pushes)
+    # has nothing to version or publish — skipping them was ~290 no-op runs
+    # in 14 days. workflow_dispatch below remains the run-anyway lever.
+    paths:
+      - ".changeset/**"
+      - "packages/*/package.json"
+      - ".github/workflows/release.yml"
   # Manual re-run lever: republish any versions missing from the registry
   # (e.g. after an unpublish window) without needing a new commit on main.
   workflow_dispatch:
