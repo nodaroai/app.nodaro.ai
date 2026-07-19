@@ -163,6 +163,7 @@ import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { presentationRoutes } from "./routes/presentation.js"
 import { apiTokenRoutes } from "./routes/api-tokens.js"
+import { metaCallbackRoutes } from "./routes/meta-callbacks.js"
 import { socialAuthRoutes } from "./routes/social-auth.js"
 import { socialPublishRoutes } from "./routes/social-publish.js"
 import { scheduledPostsRoutes } from "./routes/scheduled-posts.js"
@@ -475,6 +476,7 @@ export async function buildApp() {
   await app.register(presentationRoutes)
   await app.register(apiTokenRoutes)
   await app.register(socialAuthRoutes)
+  await app.register(metaCallbackRoutes)
   await app.register(socialPublishRoutes)
   await app.register(scheduledPostsRoutes)
   await app.register(telegramWebhookRoutes)

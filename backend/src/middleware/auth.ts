@@ -124,6 +124,12 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { path: "/v1/webhooks", prefix: true },
   { method: "POST", path: "/v1/telegram/webhook/", prefix: true },
   { method: "GET", path: "/v1/social/callback", prefix: true },
+  // Meta privacy callbacks: server-to-server POSTs from Meta with no session of
+  // ours. The HMAC over META_APP_SECRET is the auth (same shape as the Stripe
+  // webhook); the status page is reached by a signed one-off code.
+  { method: "POST", path: "/v1/social/meta/data-deletion" },
+  { method: "POST", path: "/v1/social/meta/deauthorize" },
+  { method: "GET", path: "/v1/social/meta/data-deletion/status" },
   // Between-steps account picker: the popup posts the one-time Redis token
   // (10-min TTL, consumed once) — the token IS the auth, like /v1/webhooks.
   { method: "POST", path: "/v1/social/connect/finalize" },

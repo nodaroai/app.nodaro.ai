@@ -57,6 +57,12 @@ const ALLOWED_PATHS = [
   /^src\/routes\/webhook-triggers\.ts$/,
   /^src\/routes\/webhook-output\.ts$/,
   /^src\/routes\/telegram-webhook\.ts$/,
+  // Meta privacy callbacks: server-to-server POSTs from Meta with no user JWT.
+  // Authenticated by a timing-safe HMAC over META_APP_SECRET (signed_request).
+  // Service-role required because the deletion looks rows up by the Meta user
+  // id in `root_internal_id` — there is no session to scope by, and refusing to
+  // delete would fail a legal deletion request.
+  /^src\/routes\/meta-callbacks\.ts$/,
 
   // Public / share-token / app runtime — cross-user access by design.
   /^src\/routes\/presentation\.ts$/,
