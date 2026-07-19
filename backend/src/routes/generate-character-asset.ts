@@ -199,13 +199,16 @@ function buildVariantPrompt(
 
   if (assetType === "poses") {
     const poseMap: Record<string, string> = {
-      standing: "standing relaxed pose, arms at sides",
+      standing: "standing in a relaxed natural pose, subtle weight shift, hands resting naturally",
       walking: "walking mid-stride, natural gait",
       sitting: "sitting on a chair, relaxed posture",
       running: "running action pose, dynamic movement",
       crouching: "crouching low, knees bent, ready",
       pointing: "pointing forward with one arm extended",
-      "fighting stance": "fighting stance, fists raised, weight balanced",
+      // "fighting" strongly invites an opponent (or a second copy of the
+      // subject) into frame — the base's "Single character" isn't enough, so
+      // the solo framing is pinned here explicitly.
+      "fighting stance": "alone in a fighting stance, fists raised in a guard, weight balanced, exactly one person in the frame, no opponent, no second copy of the character",
       jumping: "mid-jump, both feet off the ground, dynamic",
       turning: "turning to look over the shoulder, body in three-quarter view",
     }
@@ -219,8 +222,11 @@ function buildVariantPrompt(
     const angleMap: Record<string, string> = {
       front: "front view, facing camera directly",
       "3/4 left": "three-quarter view, head angled 45 degrees toward the left of the frame, face partially visible",
-      "left profile": "left profile view, head turned to the left, full side silhouette of the face visible",
-      "right profile": "right profile view, head turned to the right, full side silhouette of the face visible",
+      // Never say "silhouette" here — image models read it as a backlit
+      // cutout (cf. the lighting catalog's silhouette-backlight = dark
+      // subject), which rendered profiles lit from behind.
+      "left profile": "left profile view, head turned to the left, the full side of the face visible, face clearly and evenly lit",
+      "right profile": "right profile view, head turned to the right, the full side of the face visible, face clearly and evenly lit",
       "3/4 right": "three-quarter view, head angled 45 degrees toward the right of the frame, face partially visible",
       back: "back of head view, facing away from camera",
       above: "high-angle view, camera looking down at the head from above",
@@ -242,7 +248,10 @@ function buildVariantPrompt(
       below: "low-angle view, camera looking up at the body from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
-    return `Full body view of ${subject}, ${angle}, standing naturally with arms relaxed at sides. FULL BODY visible including feet, plain background. ${base}`
+    // "arms relaxed at sides" produced stiff mannequin turnarounds — ask for
+    // a natural stance instead (kept calm/neutral so the 8 angles still read
+    // as one consistent standing figure).
+    return `Full body view of ${subject}, ${angle}, standing in a relaxed natural pose that suits their look and outfit, subtle weight shift, hands resting naturally. FULL BODY visible including feet, plain background. ${base}`
   }
 
   // lighting
