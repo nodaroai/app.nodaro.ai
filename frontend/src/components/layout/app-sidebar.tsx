@@ -226,11 +226,11 @@ export function AppSidebar({
                 <NodaroLogo size="md" />
               )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="min-w-56">
               <DropdownMenuLabel>Nodaro</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {NODARO_SURFACES.map((surface) => (
-                <DropdownMenuItem key={surface.id} asChild>
+                <DropdownMenuItem key={surface.id} asChild className="px-3">
                   <a href={surface.href} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-4" />
                     <span className="flex flex-col">

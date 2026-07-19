@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Loader2, Unlink, Plus, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send, Share2, MessageCircle, Cloud, PenLine, BookOpen, Globe, Users, Pin, Gamepad2, AtSign, Hash } from "lucide-react"
+import { Loader2, Unlink, Plus, AlertTriangle, RefreshCw, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send, Share2, MessageCircle, Cloud, PenLine, BookOpen, Globe, Users, Pin, Gamepad2, AtSign, Hash } from "lucide-react"
 import { getSocialAuthUrl, disconnectSocial, connectTelegram, connectSocialCustom, type SocialProviderInfo } from "@/lib/api"
 import { toast } from "sonner"
 import type { SocialConnection } from "@/types/nodes"
@@ -222,27 +222,65 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       {/* Connected accounts */}
       {connections.length > 0 && (
         <div className="space-y-2">
-          {connections.map((conn) => (
-            <div key={conn.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-[#252525]">
-              <div className="flex items-center gap-2 min-w-0">
-                {conn.platform_avatar_url && (
-                  <img src={conn.platform_avatar_url} alt="" className="h-7 w-7 rounded-full shrink-0" />
-                )}
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                  {conn.display_name || conn.platform_username || "Connected"}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDisconnect(conn.id)}
-                disabled={disconnectingId === conn.id}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 shrink-0 ml-2"
+          {connections.map((conn) => {
+            // Meta page/business tokens don't self-heal — the publish worker
+            // flags the row and the account keeps LOOKING connected until we
+            // say otherwise. Surface it per account, not per card: a card can
+            // hold several accounts and only one of them may be dead.
+            const needsReconnect = conn.reconnect_needed === true
+            return (
+              <div
+                key={conn.id}
+                className={`flex items-center justify-between p-2 rounded-lg ${
+                  needsReconnect
+                    ? "bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50"
+                    : "bg-gray-50 dark:bg-[#252525]"
+                }`}
               >
-                {disconnectingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center gap-2 min-w-0">
+                  {conn.platform_avatar_url && (
+                    <img src={conn.platform_avatar_url} alt="" className="h-7 w-7 rounded-full shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                      {conn.display_name || conn.platform_username || "Connected"}
+                    </span>
+                    {needsReconnect && (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        Session expired — reconnect to keep publishing
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center shrink-0 ml-2">
+                  {needsReconnect && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleConnect}
+                      disabled={connecting}
+                      className="text-amber-700 hover:text-amber-800 hover:bg-amber-100 dark:text-amber-500 dark:hover:bg-amber-900/40"
+                    >
+                      {connecting
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                      Reconnect
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDisconnect(conn.id)}
+                    disabled={disconnectingId === conn.id}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                  >
+                    {disconnectingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

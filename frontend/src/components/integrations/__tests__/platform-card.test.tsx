@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, fireEvent, screen, waitFor } from "@testing-library/react"
 import { PlatformCard } from "../platform-card"
 import type { SocialProviderInfo } from "@/lib/api"
+import type { SocialConnection } from "@/types/nodes"
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
@@ -23,8 +24,9 @@ const connectSocialCustom = vi.fn(async (_platform: string, _fields: Record<stri
   platform: "bluesky",
   username: "@me",
 }))
+const getSocialAuthUrl = vi.fn(async (_platform: string) => ({ url: "https://example.test/oauth" }))
 vi.mock("@/lib/api", () => ({
-  getSocialAuthUrl: vi.fn(),
+  getSocialAuthUrl: (platform: string) => getSocialAuthUrl(platform),
   disconnectSocial: vi.fn(),
   connectTelegram: vi.fn(),
   connectSocialCustom: (platform: string, fields: Record<string, string>) => connectSocialCustom(platform, fields),
@@ -93,5 +95,79 @@ describe("PlatformCard (provider-driven)", () => {
     // identifier/password empty -> validation error -> submit disabled
     const submit = screen.getAllByRole("button", { name: /^Connect$/ }).at(-1)!
     expect((submit as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+function connection(overrides: Partial<SocialConnection> = {}): SocialConnection {
+  return {
+    id: "conn-1",
+    platform: "facebook",
+    platform_user_id: "p1",
+    platform_username: "pageone",
+    platform_avatar_url: null,
+    display_name: "Page One",
+    ...overrides,
+  }
+}
+
+describe("PlatformCard (reconnect surfacing)", () => {
+  const meta = (): SocialProviderInfo =>
+    provider({
+      id: "facebook",
+      label: "Facebook",
+      connectKind: "oauth2",
+      customFields: undefined,
+      capabilities: { schedule: true, comment: false, media: ["image", "video"], refresh: "reconnect" },
+    })
+
+  beforeEach(() => {
+    getSocialAuthUrl.mockClear()
+    // jsdom has no real popup; handleConnect only needs a truthy handle.
+    vi.stubGlobal("open", vi.fn(() => ({ closed: false })))
+  })
+
+  it("warns and offers Reconnect for an account the worker flagged", () => {
+    render(
+      <PlatformCard
+        provider={meta()}
+        connections={[connection({ reconnect_needed: true })]}
+        onConnectionChange={() => {}}
+      />,
+    )
+    expect(screen.getByText(/Session expired/i)).toBeTruthy()
+    expect(screen.getByRole("button", { name: /Reconnect/i })).toBeTruthy()
+  })
+
+  it("stays quiet for a healthy account", () => {
+    render(<PlatformCard provider={meta()} connections={[connection()]} onConnectionChange={() => {}} />)
+    expect(screen.queryByText(/Session expired/i)).toBeNull()
+    expect(screen.queryByRole("button", { name: /Reconnect/i })).toBeNull()
+  })
+
+  it("flags only the account that actually expired", () => {
+    render(
+      <PlatformCard
+        provider={meta()}
+        connections={[
+          connection({ id: "a", display_name: "Live Page" }),
+          connection({ id: "b", display_name: "Dead Page", reconnect_needed: true }),
+        ]}
+        onConnectionChange={() => {}}
+      />,
+    )
+    expect(screen.getAllByText(/Session expired/i)).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: /Reconnect/i })).toHaveLength(1)
+  })
+
+  it("re-runs the OAuth flow when Reconnect is clicked", async () => {
+    render(
+      <PlatformCard
+        provider={meta()}
+        connections={[connection({ reconnect_needed: true })]}
+        onConnectionChange={() => {}}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /Reconnect/i }))
+    await waitFor(() => expect(getSocialAuthUrl).toHaveBeenCalledWith("facebook"))
   })
 })
