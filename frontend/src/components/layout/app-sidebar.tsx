@@ -22,6 +22,7 @@ import {
   Compass,
   Flag,
   Clapperboard,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -38,7 +39,21 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
 import { NodaroLogo } from "@/components/nodaro-logo"
+import { otherNodaroApps } from "@/lib/nodaro-apps"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
+
+/** The rest of the Nodaro family, one hop away — the canonical fleet order
+ *  minus Flow (see `nodaro-apps.ts`). All open in NEW tabs: the logo must
+ *  never navigate a mid-edit user away. */
+const NODARO_SURFACES = otherNodaroApps("flow")
 
 const STORAGE_KEY = "nodaro-sidebar-collapsed"
 
@@ -193,20 +208,42 @@ export function AppSidebar({
       >
         {/* Logo - matches editor header height (h-[41px] = py-2 + border-b) */}
         <div className="flex items-center justify-between h-[41px] px-3 border-b border-zinc-200 dark:border-zinc-800">
-          <Link
-            to="/projects"
-            onClick={handleNavClick}
-            className={cn(
-              "flex items-center gap-2 transition-all duration-300",
-              isCollapsed ? "justify-center w-full" : "ml-1",
-            )}
-          >
-            {isCollapsed ? (
-              <NodaroLogo variant="icon" size="md" />
-            ) : (
-              <NodaroLogo size="md" />
-            )}
-          </Link>
+          {/* The logo opens the fleet quick-switch menu (fleet pattern — see
+              the client apps' AppShell mark). Home stays one click away via
+              the Projects nav item right below, so no navigation is lost. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Open a Nodaro app"
+              title="Nodaro apps"
+              className={cn(
+                "flex items-center gap-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
+                isCollapsed ? "justify-center w-full" : "ml-1",
+              )}
+            >
+              {isCollapsed ? (
+                <NodaroLogo variant="icon" size="md" />
+              ) : (
+                <NodaroLogo size="md" />
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Nodaro</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {NODARO_SURFACES.map((surface) => (
+                <DropdownMenuItem key={surface.id} asChild>
+                  <a href={surface.href} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="size-4" />
+                    <span className="flex flex-col">
+                      <span>{surface.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new URL(surface.href).host}
+                      </span>
+                    </span>
+                  </a>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* Mobile close button */}
           {!isCollapsed && (
             <Button
