@@ -88,9 +88,18 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
       // frontend client.
       const joined = capped.map((p) => p.text).filter(Boolean).join("\n\n---\n\n")
 
+      // `output_data` MUST carry the text, not just the cursor. Returning a
+      // `jobId` (below) routes the orchestrator down its job-POLLING branch,
+      // where the node's output is rebuilt from this row via
+      // buildNodeOutputFromJobData — which normalizes `generatedText` -> `text`.
+      // Omit it and backend/scheduled runs emit an EMPTY output while the HTTP
+      // body still looks correct to the editor.
       await supabase
         .from("jobs")
-        .update({ status: "completed", output_data: { latestId, count: capped.length } })
+        .update({
+          status: "completed",
+          output_data: { text: joined, generatedText: joined, latestId, count: capped.length },
+        })
         .eq("id", job.id)
         .eq("user_id", userId)
       await commitReservedCreditsForJob(job.id)
