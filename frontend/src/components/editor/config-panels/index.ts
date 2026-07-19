@@ -17,7 +17,7 @@ export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextC
 export { CollectConfig } from "./collect-config"
 export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } from "./sub-workflow-configs"
 export { ComponentConfig } from "./component-config"
-export { WebhookTriggerConfig, ScheduleTriggerConfig, TelegramTriggerConfig } from "./trigger-configs"
+export { WebhookTriggerConfig, ScheduleTriggerConfig, TelegramTriggerConfig, TelegramChannelFeedConfig } from "./trigger-configs"
 export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPostConfig, XPostConfig, FacebookPostConfig, TelegramPostConfig, PublishSocialConfig } from "./social-configs"
 export { WebScrapeConfig } from "./scraper-configs"
 export { ResultsGallery } from "./results-gallery"

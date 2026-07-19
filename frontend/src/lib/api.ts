@@ -6245,6 +6245,26 @@ export async function oauthAuthorize(input: OAuthAuthorizeInput): Promise<OAuthA
 
 // ---------- Social Media ----------
 
+export interface TelegramChannelPost {
+  id: number
+  text: string
+  imageUrl?: string
+  date?: string
+  url: string
+}
+
+/** Read recent posts from a public Telegram channel (Channel Feed node). */
+export async function telegramChannelFetchApi(params: {
+  channel: string
+  sinceId?: number
+  limit?: number
+}): Promise<{ posts: TelegramChannelPost[]; latestId: number; text: string; count: number }> {
+  const body: Record<string, unknown> = { channel: params.channel }
+  if (params.sinceId !== undefined) body.sinceId = params.sinceId
+  if (params.limit !== undefined) body.limit = params.limit
+  return apiJson("/v1/telegram-channel/fetch", { body, label: "Failed to read Telegram channel" })
+}
+
 export async function socialPublishApi(params: {
   platform: string
   action: string

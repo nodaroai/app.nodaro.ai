@@ -47,6 +47,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Triggers" },
   { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Triggers" },
   { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
+  { type: "telegram-channel-feed", label: "Telegram Channel Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
   // Data
   { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Data" },
   { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },

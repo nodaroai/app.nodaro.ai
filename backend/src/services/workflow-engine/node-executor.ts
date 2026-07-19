@@ -54,6 +54,7 @@ const SYNC_HTTP_NODES = new Set([
   "image-to-text",
   "describe-to-picker",
   "suno-style-boost",
+  "telegram-channel-feed",
   "instagram-post",
   "tiktok-post",
   "youtube-upload",
@@ -84,6 +85,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "image-to-text": "/v1/image-to-text/describe",
   "describe-to-picker": "/v1/describe-to-picker",
   "suno-style-boost": "/v1/suno/style-boost",
+  "telegram-channel-feed": "/v1/telegram-channel/fetch",
   "qa-check": "/v1/qa-check",
   "image-critic": "/v1/image-critic",
   "save-to-storage": "/v1/save-to-storage",
@@ -870,6 +872,15 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
       })
     }
+
+    case "telegram-channel-feed":
+      return withUserPrompt({
+        channel: (data.channel as string) || resolvedInputs.prompt || "",
+        // Cursor: only emit posts newer than the last run's highest id.
+        sinceId: typeof data.lastSeenId === "number" ? data.lastSeenId : undefined,
+        limit: typeof data.limit === "number" ? data.limit : undefined,
+        userId: ctx.userId,
+      })
 
     case "web-scrape": {
       // Default to google-search — cheapest SKU, avoids the max-cost fallback.

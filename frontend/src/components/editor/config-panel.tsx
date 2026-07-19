@@ -194,6 +194,7 @@ import {
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
+  TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
   YoutubeUploadConfig,
@@ -387,6 +388,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "facebook-post": "Facebook Post",
   "telegram-post": "Telegram Post",
   "publish-social": "Publish to Social",
+  "telegram-channel-feed": "Telegram Channel Feed",
   "telegram-trigger": "Telegram Trigger",
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
@@ -669,6 +671,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-post": return <TelegramPostConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
+    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />

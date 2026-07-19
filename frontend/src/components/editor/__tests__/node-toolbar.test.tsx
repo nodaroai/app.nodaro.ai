@@ -240,9 +240,10 @@ describe("NODE_DEFINITIONS category distribution", () => {
     // rather than emitting a local value:
     //   web-scrape — Apify network call
     //   suno-voice — Suno voice-create call (paid once in the modal flow)
+    //   telegram-channel-feed — fetches + parses a public channel's posts
     // The invariant this test guards is "users don't accidentally pay for
     // uploading or writing text", which these exceptions preserve.
-    const paidInputExceptions = new Set(["web-scrape", "suno-voice"])
+    const paidInputExceptions = new Set(["web-scrape", "suno-voice", "telegram-channel-feed"])
     const zeroCostCategories = ["input", "parameter"]
     for (const def of NODE_DEFINITIONS) {
       if (zeroCostCategories.includes(def.category) && !paidInputExceptions.has(def.type)) {

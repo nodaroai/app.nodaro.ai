@@ -980,6 +980,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "facebook-post": 1,
   "telegram-post": 1,
   "publish-social": 1,
+  "telegram-channel-feed": 1,
   "save-to-storage": 0,
   "router": 0,
   "component": 0,               // Component node itself is free; inner nodes have their own costs

@@ -216,6 +216,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Send className="h-4 w-4" />,
     category: "Triggers",
   },
+  {
+    type: "telegram-channel-feed",
+    label: "Telegram Channel Feed",
+    icon: <Rss className="h-4 w-4" />,
+    category: "Input",
+    keywords: ["telegram", "channel", "feed", "monitor", "follow", "scrape", "rss"],
+  },
   // Data
   {
     type: "list",

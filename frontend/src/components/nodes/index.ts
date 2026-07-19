@@ -169,6 +169,7 @@ import { WebhookTriggerNode } from "./webhook-trigger-node";
 import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
 import { TelegramTriggerNode } from "./telegram-trigger-node";
+import { TelegramChannelFeedNode } from "./telegram-channel-feed-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
 import { CollectNode } from "./collect-node";
@@ -380,6 +381,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "facebook-post": SocialNode,
   "telegram-post": SocialNode,
   "publish-social": SocialNode,
+  "telegram-channel-feed": TelegramChannelFeedNode,
   "telegram-trigger": TelegramTriggerNode,
   // Generative Pipeline
   "generative-pipeline": GenerativePipelineNode,

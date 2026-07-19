@@ -829,6 +829,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "facebook-post", label: "Facebook Post", category: "output", description: "Post text, images, video, and stories to Facebook.", outputType: "none" },
   { type: "telegram-post", label: "Telegram Post", category: "output", description: "Send a message, photo, or video to a Telegram chat, channel, or group via a connected bot (send type auto-detected from connected media).", outputType: "none" },
   { type: "publish-social", label: "Publish to Social", category: "output", description: "Publish to any connected social account (Instagram, Facebook, X, LinkedIn, TikTok, YouTube, Telegram, Bluesky, Reddit, and more) — pick the account and the platform follows.", outputType: "none" },
+  { type: "telegram-channel-feed", label: "Telegram Channel Feed", category: "input", description: "Read recent posts from a PUBLIC Telegram channel (t.me/s/<channel>) — emits their text for rewrite/repost workflows. Pair with a Schedule Trigger to poll; dedupes via a per-node cursor so each post is processed once.", outputType: "text" },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },

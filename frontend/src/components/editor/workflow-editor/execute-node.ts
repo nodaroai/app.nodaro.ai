@@ -192,6 +192,7 @@ import type {
   ImageCriticData,
   GeneratedResult,
   WebScrapeNodeData,
+  TelegramChannelFeedData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
   FilterListNodeData,
@@ -4361,6 +4362,37 @@ export function executeNode(
         guardedToast.error(`Generate Text failed: ${err.message}`);
         throw err;
       });
+  }
+
+  if (node.type === "telegram-channel-feed") {
+    const d = node.data as TelegramChannelFeedData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    const channel = (d.channel || inputs.prompt || "").trim();
+    if (!channel) {
+      const msg = "Telegram Channel Feed: set a public channel (e.g. @channelname)";
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    return import("@/lib/api").then(({ telegramChannelFetchApi }) =>
+      telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit })
+        .then((res) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedText: res.text,
+            // Advance the cursor so the next run only emits newer posts.
+            lastSeenId: res.latestId,
+          });
+          guardedToast.success(res.count > 0 ? `Read ${res.count} new post(s)` : "No new posts");
+          return res.text ?? "";
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || "Failed to read channel" });
+          guardedToast.error(err.message || "Failed to read channel");
+          throw err;
+        }),
+    );
   }
 
   if (node.type === "web-scrape") {
