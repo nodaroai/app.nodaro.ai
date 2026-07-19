@@ -38,6 +38,7 @@ import { metaCallbackRoutes, issueConfirmationCode } from "../meta-callbacks.js"
 
 // ---- helpers ---------------------------------------------------------------
 const SECRET = "meta-app-secret-fixture" // gitleaks:allow — fake fixture
+const IG_SECRET = "instagram-app-secret-fixture" // gitleaks:allow — fake fixture
 
 /** Build a Meta-shaped signed_request: base64url(sig) "." base64url(payload). */
 function sign(payload: Record<string, unknown>, secret = SECRET): string {
@@ -56,11 +57,15 @@ function form(signedRequest: string): { payload: string; headers: Record<string,
 const VALID = () => sign({ algorithm: "HMAC-SHA256", user_id: "fb-user-1", issued_at: 1_700_000_000 })
 
 let app: FastifyInstance
-let savedSecret: string | undefined
+const SECRET_ENVS = ["META_APP_SECRET", "INSTAGRAM_APP_SECRET"] as const
+const savedEnv: Record<string, string | undefined> = {}
 
 beforeEach(async () => {
-  savedSecret = process.env.META_APP_SECRET
+  for (const k of SECRET_ENVS) savedEnv[k] = process.env[k]
   process.env.META_APP_SECRET = SECRET
+  // The developer .env carries a real Instagram app secret; clear it so the
+  // suite controls exactly which apps are "configured".
+  delete process.env.INSTAGRAM_APP_SECRET
   deleteCalls = []
   deletedRows = [{ id: "conn-1" }]
   deleteError = null
@@ -74,8 +79,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close()
-  if (savedSecret === undefined) delete process.env.META_APP_SECRET
-  else process.env.META_APP_SECRET = savedSecret
+  for (const k of SECRET_ENVS) {
+    if (savedEnv[k] === undefined) delete process.env[k]
+    else process.env[k] = savedEnv[k]
+  }
 })
 
 // ---- tests -----------------------------------------------------------------
@@ -170,12 +177,47 @@ describe("POST /v1/social/meta/data-deletion", () => {
   })
 
   it("503s when the deployment has no Meta app configured", async () => {
-    delete process.env.META_APP_SECRET
+    for (const k of SECRET_ENVS) delete process.env[k]
 
     const r = await app.inject({ method: "POST", url: "/v1/social/meta/data-deletion", ...form(VALID()) })
 
     expect(r.statusCode).toBe(503)
     expect(deleteCalls).toHaveLength(0)
+  })
+
+  it("accepts a request signed by the Instagram app, not just the Facebook one", async () => {
+    // Facebook Login and Instagram Login are separate Meta apps with separate
+    // secrets. Meta signs with whichever the user authorized, so verifying
+    // against only one would silently drop half the deletion requests.
+    process.env.INSTAGRAM_APP_SECRET = IG_SECRET
+    const signedByIg = sign({ algorithm: "HMAC-SHA256", user_id: "ig-user-9" }, IG_SECRET)
+
+    const r = await app.inject({ method: "POST", url: "/v1/social/meta/data-deletion", ...form(signedByIg) })
+
+    expect(r.statusCode).toBe(200)
+    expect(deleteCalls[0]!.eq).toEqual(["root_internal_id", "ig-user-9"])
+  })
+
+  it("still rejects a request signed by neither app", async () => {
+    process.env.INSTAGRAM_APP_SECRET = IG_SECRET
+
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/social/meta/data-deletion",
+      ...form(sign({ algorithm: "HMAC-SHA256", user_id: "x" }, "third-party-secret")),
+    })
+
+    expect(r.statusCode).toBe(400)
+    expect(deleteCalls).toHaveLength(0)
+  })
+
+  it("covers instagram-standalone in the deletion scope", async () => {
+    await app.inject({ method: "POST", url: "/v1/social/meta/data-deletion", ...form(VALID()) })
+
+    const [, platforms] = deleteCalls[0]!.in as [string, string[]]
+    // Registry-derived: the standalone provider uses INSTAGRAM_APP_ID, a
+    // different app from facebook/instagram, and must still be swept.
+    expect(platforms).toEqual(expect.arrayContaining(["facebook", "instagram", "instagram-standalone"]))
   })
 })
 

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify"
 import { appBaseUrl } from "../lib/deployment-urls.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { supabase } from "../lib/supabase.js"
+import { configuredMetaAppSecrets, isMetaBackedProvider } from "../services/social/meta-apps.js"
 import { PROVIDERS } from "../services/social/providers/registry.js"
 
 /**
@@ -15,18 +16,27 @@ import { PROVIDERS } from "../services/social/providers/registry.js"
  * the authentication, exactly like the Stripe webhook's signature.
  */
 
-const META_APP_ID_ENV = "META_APP_ID"
-
 /**
- * Platforms served by our Meta app, DERIVED from the registry instead of a
- * hardcoded ["facebook", "instagram"]: every provider that needs META_APP_ID
- * authenticates through the same app, so a Meta-backed provider added later is
+ * Platforms served by our Meta apps, DERIVED from the registry instead of a
+ * hardcoded ["facebook", "instagram"]: a Meta-backed provider added later is
  * covered by these callbacks the day it is registered.
  */
 function metaPlatformIds(): string[] {
-  return Object.values(PROVIDERS)
-    .filter((p) => (p.requiredEnv ?? []).includes(META_APP_ID_ENV))
-    .map((p) => p.id)
+  return Object.values(PROVIDERS).filter(isMetaBackedProvider).map((p) => p.id)
+}
+
+/**
+ * Verify against EVERY Meta app secret this deployment has configured. Meta
+ * signs with whichever app the user authorized, and Facebook Login and
+ * Instagram Login are separate apps with separate secrets — checking only one
+ * would silently drop half the deletion requests.
+ */
+function verifyWithAnyMetaApp(signed: string): { metaUserId: string; appSecret: string } | null {
+  for (const appSecret of configuredMetaAppSecrets()) {
+    const parsed = parseSignedRequest(signed, appSecret)
+    if (parsed) return { metaUserId: parsed.metaUserId, appSecret }
+  }
+  return null
 }
 
 function base64UrlDecode(input: string): Buffer {
@@ -130,13 +140,12 @@ function statusPage(state: "deleted" | "unknown"): string {
 export async function metaCallbackRoutes(app: FastifyInstance) {
   // POST /v1/social/meta/data-deletion — Meta's "Data Deletion Request" callback.
   app.post("/v1/social/meta/data-deletion", async (req, reply) => {
-    const appSecret = process.env.META_APP_SECRET
-    if (!appSecret) {
+    if (configuredMetaAppSecrets().length === 0) {
       return reply.status(503).send({ error: { code: "provider_not_configured" } })
     }
 
     const signed = readSignedRequest(req.body)
-    const parsed = signed ? parseSignedRequest(signed, appSecret) : null
+    const parsed = signed ? verifyWithAnyMetaApp(signed) : null
     if (!parsed) {
       return reply.status(400).send({ error: { code: "invalid_signed_request" } })
     }
@@ -146,7 +155,7 @@ export async function metaCallbackRoutes(app: FastifyInstance) {
       req.log.info({ deleted }, "[meta] data deletion request fulfilled")
 
       // Mint the code only AFTER the delete succeeds, so a code always means done.
-      const code = issueConfirmationCode(parsed.metaUserId, appSecret, Date.now())
+      const code = issueConfirmationCode(parsed.metaUserId, parsed.appSecret, Date.now())
       return {
         url: `${appBaseUrl()}/v1/social/meta/data-deletion/status?code=${encodeURIComponent(code)}`,
         confirmation_code: code,
@@ -160,13 +169,12 @@ export async function metaCallbackRoutes(app: FastifyInstance) {
   // their Facebook settings. Same signature scheme; we treat it as a deletion
   // because a revoked login leaves the stored tokens dead anyway.
   app.post("/v1/social/meta/deauthorize", async (req, reply) => {
-    const appSecret = process.env.META_APP_SECRET
-    if (!appSecret) {
+    if (configuredMetaAppSecrets().length === 0) {
       return reply.status(503).send({ error: { code: "provider_not_configured" } })
     }
 
     const signed = readSignedRequest(req.body)
-    const parsed = signed ? parseSignedRequest(signed, appSecret) : null
+    const parsed = signed ? verifyWithAnyMetaApp(signed) : null
     if (!parsed) {
       return reply.status(400).send({ error: { code: "invalid_signed_request" } })
     }
@@ -183,9 +191,8 @@ export async function metaCallbackRoutes(app: FastifyInstance) {
   // GET /v1/social/meta/data-deletion/status?code=... — the human-readable page
   // Meta links the user to. Public by design: the code is the capability.
   app.get("/v1/social/meta/data-deletion/status", async (req, reply) => {
-    const appSecret = process.env.META_APP_SECRET
     const { code } = req.query as { code?: string }
-    const valid = Boolean(appSecret && code && verifyConfirmationCode(code, appSecret))
+    const valid = Boolean(code) && configuredMetaAppSecrets().some((s) => verifyConfirmationCode(code!, s))
     return reply.status(valid ? 200 : 404).type("text/html; charset=utf-8").send(statusPage(valid ? "deleted" : "unknown"))
   })
 }
