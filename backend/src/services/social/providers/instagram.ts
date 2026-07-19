@@ -19,12 +19,12 @@ export const instagramProvider: SocialProvider = {
   oauth: {
     authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v25.0/oauth/access_token",
-    scopes: [
-      "instagram_business_basic",
-      "instagram_content_publish",
-      "instagram_manage_comments",
-      "instagram_manage_messages",
-    ],
+    // Publishing only. instagram_manage_comments / _manage_messages were
+    // requested here with nothing behind them — no provider implements
+    // commenting or DMs (every registry entry is `comment: false`), so App
+    // Review has no in-product flow to screencast and rejects the whole
+    // submission. Re-add a scope in the same PR that ships the feature.
+    scopes: ["instagram_business_basic", "instagram_content_publish"],
     clientId: () => process.env.META_APP_ID || "",
     clientSecret: () => process.env.META_APP_SECRET || "",
     configId: () => process.env.META_INSTAGRAM_CONFIG_ID,
