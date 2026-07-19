@@ -55,7 +55,7 @@ const ASSET_FRAMING_BY_TYPE: Record<string, string> = {
   poses: "full body visible including feet",
   angles: "head-and-shoulders portrait, same neutral expression",
   headAngles: "head-and-shoulders portrait, same neutral expression",
-  bodyAngles: "full body, a freely chosen natural pose that suits the character — crossed arms, hand in pocket, thinking pose, or similar — plain background",
+  bodyAngles: "full body, a freely chosen natural pose that suits the character — crossed arms, hands on hips, hand in pocket, thinking pose, or similar — plain background",
   lighting: "full body, same neutral standing pose",
 }
 
