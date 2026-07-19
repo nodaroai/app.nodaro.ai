@@ -199,7 +199,7 @@ function buildVariantPrompt(
 
   if (assetType === "poses") {
     const poseMap: Record<string, string> = {
-      standing: "standing in a relaxed natural pose, subtle weight shift, hands resting naturally",
+      standing: "standing in a natural relaxed pose of the model's choice — crossed arms, a hand in a pocket, a thoughtful pose, or any other natural stance that suits the character's personality and outfit",
       walking: "walking mid-stride, natural gait",
       sitting: "sitting on a chair, relaxed posture",
       running: "running action pose, dynamic movement",
@@ -251,7 +251,11 @@ function buildVariantPrompt(
     // "arms relaxed at sides" produced stiff mannequin turnarounds — ask for
     // a natural stance instead (kept calm/neutral so the 8 angles still read
     // as one consistent standing figure).
-    return `Full body view of ${subject}, ${angle}, standing in a relaxed natural pose that suits their look and outfit, subtle weight shift, hands resting naturally. FULL BODY visible including feet, plain background. ${base}`
+    // The pose is deliberately the MODEL's choice — the examples communicate
+    // breadth, not a fixed menu. Purely abstract wording ("hands resting
+    // naturally") still rendered near-mannequin arms, and a prescribed stance
+    // ("arms relaxed at sides") was the original stiff-mannequin bug.
+    return `Full body view of ${subject}, ${angle}, standing in a natural pose freely chosen to suit the character's personality, look and outfit — crossed arms, a hand in a pocket, a thoughtful pose, one hand raised, or any other natural relaxed stance. FULL BODY visible including feet, plain background. ${base}`
   }
 
   // lighting
