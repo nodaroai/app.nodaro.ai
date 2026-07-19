@@ -76,6 +76,7 @@ export function useSocialConnections(platform: SocialPlatformType) {
 }
 
 function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
+  const [chatIdHelpOpen, setChatIdHelpOpen] = useState(false)
   const d = data as SocialPostData
   const { connections, loading } = useSocialConnections(platform)
   const actions = PLATFORM_ACTIONS[platform]
@@ -159,19 +160,52 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
         </div>
       )}
 
-      {/* Telegram-specific: Chat ID */}
+      {/* Telegram-specific: Chat ID (required — a bot can sit in many chats,
+          so every send needs an explicit target) */}
       {platform === "telegram" && (
         <div>
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Chat ID</Label>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+            Chat ID <span className="text-red-500">*</span>
+          </Label>
           <Input
             value={d.chatId || ""}
             onChange={(e) => onUpdate({ chatId: e.target.value })}
             placeholder="@channelname or -100..."
-            className="mt-1.5"
+            className={`mt-1.5${(d.chatId || "").trim() ? "" : " border-red-400 dark:border-red-500 focus-visible:ring-red-400"}`}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Channel: @username or -100xxx. Group/DM: numeric ID.
-          </p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className={`text-[10px] ${(d.chatId || "").trim() ? "text-muted-foreground" : "text-red-500 dark:text-red-400"}`}>
+              {(d.chatId || "").trim()
+                ? "Channel: @username or -100xxx. Group/DM: numeric ID."
+                : "Required — e.g. @yourchannel."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setChatIdHelpOpen((v) => !v)}
+              className="text-[10px] text-[#ff0073] hover:text-[#e0005f] underline underline-offset-2 shrink-0"
+            >
+              How to find your Chat ID
+            </button>
+          </div>
+          {chatIdHelpOpen && (
+            <div className="mt-2 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#252525] p-3 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 space-y-2">
+              <p>
+                <b>Public channel:</b> use its <code>@username</code> — the part after{" "}
+                <code>t.me/</code>. Example: <code>t.me/mychannel</code> → <code>@mychannel</code>.
+              </p>
+              <p>
+                <b>Private channel / group:</b> you need the numeric <code>-100…</code> id. Add
+                your bot to the chat, post any message there, then open{" "}
+                <code className="break-all">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> in
+                a browser and copy <code>"chat":&#123;"id":-100…&#125;</code>. (Or forward a
+                message from the chat to <code>@getidsbot</code>.)
+              </p>
+              <p className="text-amber-600 dark:text-amber-400">
+                Either way, the bot must be added to that channel/group — for channels, as an{" "}
+                <b>admin</b> with permission to post.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

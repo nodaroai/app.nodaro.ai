@@ -1,10 +1,11 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /** dev.to — API-key connect, markdown articles. accessToken = the API key. */
 
 export async function fetchDevtoUser(apiKey: string): Promise<{ id: string; username: string }> {
   const res = await fetch("https://dev.to/api/users/me", { headers: { "api-key": apiKey } })
-  const data = (await res.json()) as { id?: number; username?: string; error?: string }
+  const data = await parseJsonOrThrow<{ id?: number; username?: string; error?: string }>(res, "Dev.to")
   if (!res.ok || !data.id) throw new Error(data.error || "dev.to API key rejected")
   return { id: String(data.id), username: data.username ?? String(data.id) }
 }
@@ -28,7 +29,7 @@ export const devtoPublisher: PlatformPublisher = {
         },
       }),
     })
-    const data = (await res.json()) as { id?: number; url?: string; error?: string }
+    const data = await parseJsonOrThrow<{ id?: number; url?: string; error?: string }>(res, "Dev.to")
     if (!res.ok || !data.id) return { success: false, error: data.error || "dev.to publish failed" }
     return { success: true, platformPostId: String(data.id), platformPostUrl: data.url }
   },

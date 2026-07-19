@@ -1,3 +1,4 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { MediaItem, PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /**
@@ -23,7 +24,7 @@ export async function createBlueskySession(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ identifier, password }),
   })
-  const data = (await res.json()) as Record<string, unknown>
+  const data = await parseJsonOrThrow<Record<string, unknown>>(res, "Bluesky")
   if (!res.ok || !data.accessJwt) {
     throw new Error((data.message as string) || "Bluesky login failed — check handle and app password")
   }
@@ -41,7 +42,7 @@ async function uploadImageBlob(service: string, accessJwt: string, url: string):
     headers: { "Content-Type": contentType, Authorization: `Bearer ${accessJwt}` },
     body: bytes,
   })
-  const data = (await res.json()) as { blob?: unknown; message?: string }
+  const data = await parseJsonOrThrow<{ blob?: unknown; message?: string }>(res, "Bluesky")
   if (!res.ok || !data.blob) throw new Error(data.message || "Bluesky blob upload failed")
   return data.blob
 }
@@ -82,7 +83,7 @@ export const blueskyPublisher: PlatformPublisher = {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessJwt}` },
       body: JSON.stringify({ repo: session.did, collection: "app.bsky.feed.post", record }),
     })
-    const data = (await res.json()) as { uri?: string; message?: string }
+    const data = await parseJsonOrThrow<{ uri?: string; message?: string }>(res, "Bluesky")
     if (!res.ok || !data.uri) {
       return { success: false, error: data.message || "Bluesky post failed" }
     }

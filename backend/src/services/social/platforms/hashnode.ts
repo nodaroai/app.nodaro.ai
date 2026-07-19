@@ -1,3 +1,4 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /**
@@ -13,7 +14,7 @@ async function gql<T>(token: string, query: string, variables: Record<string, un
     headers: { "Content-Type": "application/json", Authorization: token },
     body: JSON.stringify({ query, variables }),
   })
-  const data = (await res.json()) as { data?: T; errors?: Array<{ message: string }> }
+  const data = await parseJsonOrThrow<{ data?: T; errors?: Array<{ message: string }> }>(res, "Hashnode")
   if (!res.ok || data.errors?.length || !data.data) {
     throw new Error(data.errors?.[0]?.message || "Hashnode API error")
   }

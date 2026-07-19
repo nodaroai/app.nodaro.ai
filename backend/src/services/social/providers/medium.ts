@@ -13,7 +13,7 @@ export const mediumProvider: SocialProvider = {
       key: "apiKey",
       label: "Integration token",
       type: "password",
-      hint: "medium.com → Settings → Security → Integration tokens",
+      hint: "Medium no longer issues new tokens in-app. If Settings → Security has no 'Integration tokens' section, request one from Medium support (yourfriends@medium.com). Existing tokens work.",
       validation: "^.{10,}$",
     },
   ],

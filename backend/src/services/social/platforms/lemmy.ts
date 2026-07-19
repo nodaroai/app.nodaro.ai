@@ -1,3 +1,4 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /**
@@ -12,7 +13,7 @@ export async function lemmyLogin(service: string, identifier: string, password: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username_or_email: identifier, password }),
   })
-  const data = (await res.json()) as { jwt?: string; error?: string }
+  const data = await parseJsonOrThrow<{ jwt?: string; error?: string }>(res, "Lemmy")
   if (!res.ok || !data.jwt) throw new Error(data.error || "Lemmy login failed")
   return data.jwt
 }
@@ -22,7 +23,7 @@ export async function resolveLemmyCommunity(service: string, jwt: string, name: 
     `${service}/api/v3/community?name=${encodeURIComponent(name)}`,
     { headers: { Authorization: `Bearer ${jwt}` } },
   )
-  const data = (await res.json()) as { community_view?: { community: { id: number } }; error?: string }
+  const data = await parseJsonOrThrow<{ community_view?: { community: { id: number } }; error?: string }>(res, "Lemmy")
   if (!res.ok || !data.community_view) throw new Error(data.error || `Lemmy community "${name}" not found`)
   return data.community_view.community.id
 }
@@ -55,7 +56,7 @@ export const lemmyPublisher: PlatformPublisher = {
         ...(request.mediaUrl ? { url: request.mediaUrl } : {}),
       }),
     })
-    const data = (await res.json()) as { post_view?: { post: { id: number } }; error?: string }
+    const data = await parseJsonOrThrow<{ post_view?: { post: { id: number } }; error?: string }>(res, "Lemmy")
     if (!res.ok || !data.post_view) return { success: false, error: data.error || "Lemmy publish failed" }
     return {
       success: true,

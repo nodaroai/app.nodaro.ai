@@ -24,6 +24,7 @@ beforeEach(() => {
       status: entry.status ?? 200,
       headers: new Headers({ "content-type": "application/json" }),
       json: async () => entry.json,
+      text: async () => JSON.stringify(entry.json),
       arrayBuffer: async () => new ArrayBuffer(4),
     } as Response
   }) as typeof fetch

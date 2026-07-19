@@ -986,6 +986,8 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // Scene-breakdown JSON pre-stringified by getHandleOutput — routes into
   // inputs.prompt for text consumers (mirrors frontend TEXT_PRODUCER_TYPES).
   "video-analysis",
+  // Incoming Telegram message — text is the primary output.
+  "telegram-trigger",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
@@ -1249,6 +1251,35 @@ function routeOutput(
     }
     return
   }
+  // --- Telegram trigger: route by the message's ACTUAL media kind, not by
+  // the target handle's default. The trigger's primary `output` is the message
+  // TEXT, so the generic REFERENCE_HANDLE_MAP path below would push that text
+  // into referenceImageUrls → "Invalid URL". Instead: image message → image
+  // lane, video → video lane, audio → audio lane, and text → prompt/caption
+  // (never a fake image ref). A photo message thus feeds a References/image
+  // input directly; a text message feeds a prompt. ---
+  if (srcType === "telegram-trigger") {
+    const out = nodeStates[src.id]?.output
+    const refKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
+    if (out?.imageUrl && (refKey === "referenceImageUrls" || edge.targetHandle === "image" || edge.targetHandle === "references")) {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), out.imageUrl]
+      return
+    }
+    if (out?.imageUrl) inputs.imageUrl = out.imageUrl
+    if (out?.videoUrl) routeVideoOutput(inputs, out.videoUrl, targetType, src.id)
+    if (out?.audioUrl) routeAudioOutput(inputs, out.audioUrl, targetType, src.id)
+    // Text goes to prompt/caption context — never into an image-ref array.
+    if (out?.text) {
+      if (SOCIAL_POST_NODE_TYPES.has(targetType)) inputs.caption = out.text
+      else inputs.prompt = out.text
+    } else if (!out?.imageUrl && !out?.videoUrl && !out?.audioUrl) {
+      // Empty trigger (e.g. a manual Run with no real message) — nothing to
+      // route. Do NOT fall through and push the empty output into a ref array.
+      if (!SOCIAL_POST_NODE_TYPES.has(targetType) && output) inputs.prompt = output
+    }
+    return
+  }
+
   const refHandleKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
   if (refHandleKey) {
     inputs[refHandleKey] = [...((inputs[refHandleKey] as string[] | undefined) ?? []), output]

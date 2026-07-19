@@ -13,7 +13,7 @@ export const hashnodeProvider: SocialProvider = {
       key: "apiKey",
       label: "Personal access token",
       type: "password",
-      hint: "hashnode.com → Account settings → Developer → Generate token",
+      hint: "Note: Hashnode moved its GraphQL API to a PAID offering (2026-05-13) — the free endpoint no longer works. A paid Hashnode plan is required. Token: hashnode.com → Account settings → Developer.",
       validation: "^.{10,}$",
     },
   ],

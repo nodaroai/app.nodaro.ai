@@ -1,3 +1,4 @@
+import { parseJsonOrThrow } from "./safe-json.js"
 import type { PlatformPublisher, PublishRequest, PublishResult } from "./index.js"
 
 /** Medium — integration-token connect. metadata stores the author id. */
@@ -6,7 +7,7 @@ export async function fetchMediumUser(token: string): Promise<{ id: string; user
   const res = await fetch("https://api.medium.com/v1/me", {
     headers: { Authorization: `Bearer ${token}` },
   })
-  const data = (await res.json()) as { data?: { id: string; username: string }; errors?: Array<{ message: string }> }
+  const data = await parseJsonOrThrow<{ data?: { id: string; username: string }; errors?: Array<{ message: string }> }>(res, "Medium")
   if (!res.ok || !data.data?.id) {
     throw new Error(data.errors?.[0]?.message || "Medium integration token rejected")
   }
@@ -35,7 +36,7 @@ export const mediumPublisher: PlatformPublisher = {
         publishStatus: "public",
       }),
     })
-    const data = (await res.json()) as { data?: { id: string; url: string }; errors?: Array<{ message: string }> }
+    const data = await parseJsonOrThrow<{ data?: { id: string; url: string }; errors?: Array<{ message: string }> }>(res, "Medium")
     if (!res.ok || !data.data?.id) {
       return { success: false, error: data.errors?.[0]?.message || "Medium publish failed" }
     }

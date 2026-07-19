@@ -297,7 +297,17 @@ async function apiJson<T>(
     const err = await res.json().catch(() => null)
     throwApiError(err, label)
   }
-  return res.json() as Promise<T>
+  // Guard the success path against a non-JSON 200 body. This happens when the
+  // Vite dev proxy serves the SPA index.html while the backend is mid-restart
+  // (tsx watch), or a gateway returns an HTML error page — parsing it raw
+  // surfaced "Unexpected token '<', <!DOCTYPE …" to the user. Keep using
+  // res.json() (so every existing response mock keeps working) but replace the
+  // raw parser error with the route's friendly label + a retry hint.
+  try {
+    return (await res.json()) as T
+  } catch {
+    throw new Error(`${label ?? "Request failed"} — the server returned an unexpected response. Please try again.`)
+  }
 }
 
 
@@ -6279,6 +6289,58 @@ export async function getSocialAuthUrl(platform: string): Promise<{ url: string 
   return apiJson(`/v1/social/auth-url?platform=${encodeURIComponent(platform)}`, {
     method: "GET",
     label: "Failed to get auth URL",
+  })
+}
+
+export interface SocialProviderField {
+  key: string
+  label: string
+  type: "text" | "password"
+  hint?: string
+  defaultValue?: string
+  validation?: string
+}
+
+export interface SocialProviderInfo {
+  id: string
+  label: string
+  connectKind:
+    | "oauth2"
+    | "oauth2_between_steps"
+    | "custom_fields"
+    | "self_hosted_oauth"
+    | "bot_token"
+    | "web3"
+    | "extension"
+  editor: "none" | "normal" | "markdown" | "html"
+  capabilities: {
+    schedule: boolean
+    comment: boolean
+    media: string[]
+    refresh: "real" | "reconnect" | "none"
+  }
+  available: boolean
+  missingEnv?: string[]
+  setupHint?: string
+  customFields?: SocialProviderField[]
+}
+
+/** Registry metadata + per-deployment availability — drives the Integrations grid. */
+export async function getSocialProviders(): Promise<{ providers: SocialProviderInfo[] }> {
+  return apiJson("/v1/social/providers", {
+    method: "GET",
+    label: "Failed to fetch social providers",
+  })
+}
+
+/** Connect a custom_fields network (API key / app password / instance login). */
+export async function connectSocialCustom(
+  platform: string,
+  fields: Record<string, string>,
+): Promise<{ success: boolean; platform: string; username?: string }> {
+  return apiJson("/v1/social/connect/custom", {
+    body: { platform, fields },
+    label: "Failed to connect",
   })
 }
 
