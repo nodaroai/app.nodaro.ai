@@ -18,6 +18,7 @@ import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
+import { readNodeCursor, writeNodeCursor } from "./node-cursor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
@@ -519,6 +520,16 @@ async function executeSyncHttpNode(
   // Build request body from node data + resolved inputs
   const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
 
+  // Polling sources resume from the DURABLE cursor, not from the node's saved
+  // data. Only the editor can persist back into node data (updateNodeData +
+  // autosave); a scheduled run has no editor, so without this every tick
+  // restarted from the same point and reprocessed the same items. Reading here
+  // rather than inside buildSyncHttpBody because that builder is synchronous.
+  if (node.type === "telegram-channel-feed") {
+    const cursor = await readNodeCursor(ctx.workflowId, node.id)
+    if (cursor !== undefined) body.sinceId = cursor
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
@@ -544,6 +555,14 @@ async function executeSyncHttpNode(
   }
 
   const result = await response.json() as Record<string, unknown>
+
+  // Advance the durable cursor BEFORE branching: the jobId path returns early
+  // into pollJobToCompletion, and `latestId` only exists on this HTTP body.
+  // Best-effort — a failed write degrades to "reprocess next tick", which is
+  // the old behavior, never a reason to fail the run.
+  if (node.type === "telegram-channel-feed" && typeof result.latestId === "number") {
+    await writeNodeCursor(ctx.workflowId, node.id, ctx.userId, "telegram-channel-feed", result.latestId)
+  }
 
   if (result.jobId) {
     // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can
