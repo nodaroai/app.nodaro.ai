@@ -4884,6 +4884,21 @@ export type TelegramTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+export type TelegramChannelFeedData = {
+  [key: string]: unknown
+  label: string
+  /** Public channel to read (@name, t.me/name, or bare id). */
+  channel: string
+  /** Max posts to emit per run (1–20). */
+  limit?: number
+  /** Cursor — highest post id seen last run; only newer posts are emitted. */
+  lastSeenId?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  currentJobProgress?: number
+}
+
 export interface GenerativePipelineNodeData {
   [key: string]: unknown
   label?: string
@@ -5131,6 +5146,7 @@ export type SceneNodeData =
   | WebhookTriggerData
   | ScheduleTriggerData
   | TelegramTriggerData
+  | TelegramChannelFeedData
   | SocialPostData
   | MusicGenreData
   | MusicMoodData
@@ -5313,7 +5329,9 @@ export type SceneNodeType =
   | "x-post"
   | "facebook-post"
   | "telegram-post"
+  | "publish-social"
   | "telegram-trigger"
+  | "telegram-channel-feed"
   | "component"
   | "music-genre"
   | "music-mood"
@@ -8054,6 +8072,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as SocialPostData,
   },
   {
+    type: "publish-social",
+    label: "Publish to Social",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    // No hardcoded platform — the config panel derives it from the chosen
+    // connection. Blank until an account is picked.
+    defaultData: {
+      label: "Publish to Social",
+      platform: "" as unknown as SocialPlatformType,
+      action: "",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
     type: "telegram-trigger",
     label: "Telegram Trigger",
     category: "input",
@@ -8064,6 +8099,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],
     } as TelegramTriggerData,
+  },
+  {
+    type: "telegram-channel-feed",
+    label: "Telegram Channel Feed",
+    category: "input",
+    creditCost: 1,
+    inputs: [],
+    outputs: ["text"],
+    defaultData: {
+      label: "Telegram Channel Feed",
+      channel: "",
+      limit: 5,
+    } as TelegramChannelFeedData,
   },
   // Components
   {

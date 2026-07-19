@@ -102,6 +102,43 @@ export const telegramPublisher: PlatformPublisher = {
       return { success: true, platformPostId: String(data.result?.message_id) }
     }
 
+    if (action === "send-audio") {
+      if (!mediaUrl) throw new Error("mediaUrl is required for send-audio")
+
+      // safeFetch: mediaUrl is user-supplied — block SSRF/DNS-rebinding to
+      // internal IPs (same gate as send-video).
+      const mediaRes = await safeFetch(mediaUrl)
+      if (!mediaRes.ok) throw new Error(`Failed to download audio: ${mediaRes.statusText}`)
+
+      const MAX_BYTES = 50 * 1024 * 1024
+      const contentLength = mediaRes.headers.get("content-length")
+      if (contentLength && parseInt(contentLength, 10) > MAX_BYTES) {
+        return { success: false, error: "Audio exceeds Telegram 50MB limit" }
+      }
+      const audioBlob = await mediaRes.blob()
+      if (audioBlob.size > MAX_BYTES) {
+        return { success: false, error: "Audio exceeds Telegram 50MB limit" }
+      }
+
+      // Filename extension hints Telegram at the format; default to mp3.
+      const ext = (mediaUrl.split("?")[0]?.split(".").pop() || "mp3").toLowerCase()
+      const filename = /^[a-z0-9]{2,4}$/.test(ext) ? `audio.${ext}` : "audio.mp3"
+
+      const form = new FormData()
+      form.append("chat_id", chatId)
+      form.append("audio", audioBlob, filename)
+      form.append("parse_mode", "HTML")
+      if (caption) form.append("caption", toTelegramHtml(caption.slice(0, 1024)))
+
+      const res = await fetch(`${baseUrl}/sendAudio`, {
+        method: "POST",
+        body: form,
+      })
+      const data = await res.json() as { ok: boolean; result?: { message_id: number }; description?: string }
+      if (!data.ok) return { success: false, error: data.description ?? "Telegram sendAudio failed" }
+      return { success: true, platformPostId: String(data.result?.message_id) }
+    }
+
     if (action === "send-media-group") {
       const { mediaItems } = request
       if (!mediaItems || mediaItems.length === 0) throw new Error("No media items for send-media-group")

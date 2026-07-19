@@ -54,6 +54,7 @@ const SYNC_HTTP_NODES = new Set([
   "image-to-text",
   "describe-to-picker",
   "suno-style-boost",
+  "telegram-channel-feed",
   "instagram-post",
   "tiktok-post",
   "youtube-upload",
@@ -61,6 +62,7 @@ const SYNC_HTTP_NODES = new Set([
   "x-post",
   "facebook-post",
   "telegram-post",
+  "publish-social",
   "qa-check",
   "image-critic",
   "save-to-storage",
@@ -83,6 +85,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "image-to-text": "/v1/image-to-text/describe",
   "describe-to-picker": "/v1/describe-to-picker",
   "suno-style-boost": "/v1/suno/style-boost",
+  "telegram-channel-feed": "/v1/telegram-channel/fetch",
   "qa-check": "/v1/qa-check",
   "image-critic": "/v1/image-critic",
   "save-to-storage": "/v1/save-to-storage",
@@ -94,6 +97,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "x-post": "/v1/social/publish",
   "facebook-post": "/v1/social/publish",
   "telegram-post": "/v1/social/publish",
+  "publish-social": "/v1/social/publish",
   "reduce": "/v1/reduce",
 }
 
@@ -246,6 +250,7 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     case "x-post":
     case "facebook-post":
     case "telegram-post":
+    case "publish-social":
       return pick("caption", "text")
 
     default:
@@ -812,12 +817,17 @@ export function buildSyncHttpBody(
     case "linkedin-post":
     case "x-post":
     case "facebook-post":
-    case "telegram-post": {
+    case "telegram-post":
+    case "publish-social": {
+      // Platform: the 7 legacy nodes derive it from node.type; the unified
+      // `publish-social` node derives it from the chosen connection
+      // (data.platform), which the config panel writes alongside connectionId.
+      const platform = (data.platform as string | undefined) ?? SOCIAL_NODE_TO_PLATFORM[node.type]
       const mediaUrl = resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl
       // Auto-detect Telegram action and collect all connected media
       let action = data.action as string
       let mediaItems: Array<{ type: string; url: string }> | undefined
-      if (node.type === "telegram-post") {
+      if (platform === "telegram") {
         const items: Array<{ type: "photo" | "video"; url: string }> = []
         if (resolvedInputs.imageUrl) items.push({ type: "photo", url: resolvedInputs.imageUrl })
         if (resolvedInputs.videoUrl) items.push({ type: "video", url: resolvedInputs.videoUrl })
@@ -827,6 +837,8 @@ export function buildSyncHttpBody(
           mediaItems = items
         } else if (items.length === 1) {
           action = items[0].type === "video" ? "send-video" : "send-photo"
+        } else if (resolvedInputs.audioUrl) {
+          action = "send-audio"
         } else {
           action = "send-message"
         }
@@ -845,7 +857,7 @@ export function buildSyncHttpBody(
         refMap,
       })
       return withUserPrompt({
-        platform: SOCIAL_NODE_TO_PLATFORM[node.type],
+        platform,
         action,
         connectionId: data.connectionId,
         caption,
@@ -860,6 +872,15 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
       })
     }
+
+    case "telegram-channel-feed":
+      return withUserPrompt({
+        channel: (data.channel as string) || resolvedInputs.prompt || "",
+        // Cursor: only emit posts newer than the last run's highest id.
+        sinceId: typeof data.lastSeenId === "number" ? data.lastSeenId : undefined,
+        limit: typeof data.limit === "number" ? data.limit : undefined,
+        userId: ctx.userId,
+      })
 
     case "web-scrape": {
       // Default to google-search — cheapest SKU, avoids the max-cost fallback.

@@ -8,6 +8,7 @@ import { MappableField } from "./mappable-field"
 import type { SocialPostData, SocialPlatformType, SocialConnection } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { getSocialConnections } from "@/lib/api"
+import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 
 const PLATFORM_ACTIONS: Record<SocialPlatformType, Array<{ value: string; label: string }>> = {
   instagram: [
@@ -41,6 +42,7 @@ const PLATFORM_ACTIONS: Record<SocialPlatformType, Array<{ value: string; label:
     { value: "send-message", label: "Send Message" },
     { value: "send-photo", label: "Send Photo" },
     { value: "send-video", label: "Send Video" },
+    { value: "send-audio", label: "Send Audio" },
   ],
 }
 
@@ -54,7 +56,9 @@ const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
   telegram: 4096,
 }
 
-export function useSocialConnections(platform: SocialPlatformType) {
+/** Pass a platform to filter; pass undefined ("all") to list every account —
+ *  the unified Publish-to-Social node uses the all-accounts form. */
+export function useSocialConnections(platform?: SocialPlatformType) {
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -64,7 +68,7 @@ export function useSocialConnections(platform: SocialPlatformType) {
       .then((data) => {
         if (cancelled) return
         setConnections(
-          data.connections.filter((c) => c.platform === platform)
+          platform ? data.connections.filter((c) => c.platform === platform) : data.connections
         )
       })
       .catch(() => { /* ignore */ })
@@ -75,22 +79,61 @@ export function useSocialConnections(platform: SocialPlatformType) {
   return { connections, loading }
 }
 
-function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
+/** First action for a platform. Networks without a defined action list (the
+ *  Phase-2 additions: bluesky, reddit, devto, …) publish text+media via
+ *  "post-text". */
+function defaultActionFor(platform: string): string {
+  return PLATFORM_ACTIONS[platform as SocialPlatformType]?.[0]?.value ?? "post-text"
+}
+
+/** Human label for any of the 19 networks (falls back to a capitalized id). */
+function platformLabel(platform: string): string {
+  return (PLATFORM_LABELS as Record<string, string>)[platform] ?? platform.charAt(0).toUpperCase() + platform.slice(1)
+}
+
+function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SocialPostData> & { platform?: SocialPlatformType; allAccounts?: boolean }) {
   const [chatIdHelpOpen, setChatIdHelpOpen] = useState(false)
   const d = data as SocialPostData
-  const { connections, loading } = useSocialConnections(platform)
-  const actions = PLATFORM_ACTIONS[platform]
-  const charLimit = CAPTION_LIMITS[platform]
+  // Unified node: list ALL accounts and derive the platform from the chosen
+  // connection (data.platform). Legacy per-platform nodes: fixed prop platform.
+  const { connections, loading } = useSocialConnections(allAccounts ? undefined : platform)
+  // For the unified node effectivePlatform can be ANY of the 19 networks (a
+  // string), not just the original 7 SocialPlatformType — guard the 7-keyed
+  // maps below.
+  const effectivePlatform: string | undefined = allAccounts ? d.platform : platform
+  const actions = (effectivePlatform && effectivePlatform in PLATFORM_ACTIONS)
+    ? PLATFORM_ACTIONS[effectivePlatform as SocialPlatformType]
+    : []
+  const charLimit = (effectivePlatform && effectivePlatform in CAPTION_LIMITS)
+    ? CAPTION_LIMITS[effectivePlatform as SocialPlatformType]
+    : 4096
   const captionLen = (d.caption || "").length
 
-  // Auto-select first connection if none selected
+  // Auto-select first connection if none selected. For the unified node this
+  // also seeds platform + a sensible default action from that connection.
   useEffect(() => {
     if (!d.connectionId && connections.length > 0) {
-      onUpdate({ connectionId: connections[0].id })
+      const first = connections[0]
+      if (allAccounts) {
+        onUpdate({ connectionId: first.id, platform: first.platform, action: defaultActionFor(first.platform) })
+      } else {
+        onUpdate({ connectionId: first.id })
+      }
     }
-  }, [connections, d.connectionId, onUpdate])
+  }, [connections, d.connectionId, onUpdate, allAccounts])
 
   const selectedConnection = connections.find((c) => c.id === d.connectionId)
+
+  // Unified account change: write connectionId + derived platform + reset the
+  // action to that platform's default (the old action may not exist there).
+  const onSelectConnection = (id: string) => {
+    const conn = connections.find((c) => c.id === id)
+    if (allAccounts && conn) {
+      onUpdate({ connectionId: id, platform: conn.platform, action: defaultActionFor(conn.platform) })
+    } else {
+      onUpdate({ connectionId: id })
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -113,7 +156,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Account</Label>
           <Select
             value={d.connectionId || ""}
-            onValueChange={(v) => onUpdate({ connectionId: v })}
+            onValueChange={onSelectConnection}
           >
             <SelectTrigger className="mt-1.5">
               <SelectValue placeholder="Select account">
@@ -123,6 +166,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
                       <img src={selectedConnection.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
                     <span>{selectedConnection.display_name || selectedConnection.platform_username || "Connected"}</span>
+                    {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(selectedConnection.platform)}</span>}
                   </div>
                 )}
               </SelectValue>
@@ -135,6 +179,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
                       <img src={conn.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
                     <span>{conn.display_name || conn.platform_username || "Connected"}</span>
+                    {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(conn.platform)}</span>}
                   </div>
                 </SelectItem>
               ))}
@@ -144,7 +189,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
       )}
 
       {/* Action selector (hidden for Telegram — auto-detected from connected media) */}
-      {actions.length > 1 && platform !== "telegram" && (
+      {actions.length > 1 && effectivePlatform !== "telegram" && (
         <div>
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Action</Label>
           <Select value={d.action} onValueChange={(v) => onUpdate({ action: v })}>
@@ -162,7 +207,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
 
       {/* Telegram-specific: Chat ID (required — a bot can sit in many chats,
           so every send needs an explicit target) */}
-      {platform === "telegram" && (
+      {effectivePlatform === "telegram" && (
         <div>
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
             Chat ID <span className="text-red-500">*</span>
@@ -212,7 +257,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
       {/* Caption */}
       <MappableField
         field="caption"
-        label={platform === "youtube" ? "Description" : "Caption"}
+        label={effectivePlatform === "youtube" ? "Description" : "Caption"}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -234,7 +279,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
       </MappableField>
 
       {/* YouTube-specific fields */}
-      {platform === "youtube" && (
+      {effectivePlatform === "youtube" && (
         <>
           <MappableField
             field="title"
@@ -329,4 +374,10 @@ export function FacebookPostConfig(props: ConfigProps<SocialPostData>) {
 
 export function TelegramPostConfig(props: ConfigProps<SocialPostData>) {
   return <SocialConfigBase {...props} platform="telegram" />
+}
+
+/** Unified node — one account picker across ALL connected networks; the
+ *  platform follows the chosen connection. */
+export function PublishSocialConfig(props: ConfigProps<SocialPostData>) {
+  return <SocialConfigBase {...props} allAccounts />
 }

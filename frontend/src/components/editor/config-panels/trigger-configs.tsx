@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { WebhookParam, TelegramTriggerData } from "@/types/nodes"
+import type { WebhookParam, TelegramTriggerData, TelegramChannelFeedData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { useSocialConnections } from "./social-configs"
 
@@ -366,6 +366,52 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
       >
         {isActive ? "Deactivate Trigger" : "Activate Trigger"}
       </Button>
+    </div>
+  )
+}
+
+export function TelegramChannelFeedConfig({ data, onUpdate }: ConfigProps<TelegramChannelFeedData>) {
+  const d = data as TelegramChannelFeedData
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+          Channel <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          value={d.channel || ""}
+          onChange={(e) => onUpdate({ channel: e.target.value })}
+          placeholder="@channelname or t.me/channelname"
+          className="mt-1.5"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Any PUBLIC channel with web preview enabled. Reads the most recent posts from t.me/s/&lt;channel&gt;.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Max posts per run</Label>
+        <Input
+          type="number"
+          min={1}
+          max={20}
+          value={d.limit ?? 5}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10)
+            onUpdate({ limit: Number.isFinite(n) ? Math.max(1, Math.min(20, n)) : 5 })
+          }}
+          className="mt-1.5"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Pair with a Schedule Trigger to poll on an interval — only posts newer than the last run are emitted.
+        </p>
+      </div>
+
+      {d.executionStatus === "failed" && d.errorMessage && (
+        <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+          <p className="text-xs text-red-700 dark:text-red-400">{d.errorMessage}</p>
+        </div>
+      )}
     </div>
   )
 }

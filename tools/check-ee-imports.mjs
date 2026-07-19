@@ -186,6 +186,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/scene-node.tsx",
   "frontend/src/components/nodes/social-media-format-node.tsx",
   "frontend/src/components/nodes/social-node.tsx",
+  "frontend/src/components/nodes/telegram-channel-feed-node.tsx",
   "frontend/src/components/nodes/speech-to-video-node.tsx",
   "frontend/src/components/nodes/speed-ramp-node.tsx",
   "frontend/src/components/nodes/split-media-node.tsx",

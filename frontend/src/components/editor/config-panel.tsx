@@ -194,6 +194,7 @@ import {
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
+  TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
   YoutubeUploadConfig,
@@ -201,6 +202,7 @@ import {
   XPostConfig,
   FacebookPostConfig,
   TelegramPostConfig,
+  PublishSocialConfig,
   MusicGenreConfig,
   MusicMoodConfig,
   InstrumentationConfig,
@@ -385,6 +387,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "x-post": "X Post",
   "facebook-post": "Facebook Post",
   "telegram-post": "Telegram Post",
+  "publish-social": "Publish to Social",
+  "telegram-channel-feed": "Telegram Channel Feed",
   "telegram-trigger": "Telegram Trigger",
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
@@ -410,7 +414,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",
   "render-video",
-  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
+  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
   "merge-video-audio", "combine-videos", "assemble-narrated-video", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
@@ -440,7 +444,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   t !== "filter-list" && t !== "deduplicate" && t !== "merge-lists" && t !== "sort-list" &&
   t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
-  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
+  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" && t !== "publish-social" &&
   t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat" &&
   t !== "describe-to-picker"
 ))
@@ -665,7 +669,9 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "x-post": return <XPostConfig {...configProps} />
     case "facebook-post": return <FacebookPostConfig {...configProps} />
     case "telegram-post": return <TelegramPostConfig {...configProps} />
+    case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
+    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />

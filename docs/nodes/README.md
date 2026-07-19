@@ -55,6 +55,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Webhook Trigger](./input/webhook-trigger.md) | Trigger workflow via HTTP webhook endpoint | Integrate with external systems, APIs, n8n, or Zapier |
 | [Schedule Trigger](./input/schedule-trigger.md) | Trigger workflow on a cron schedule | Daily content generation, recurring social posting |
 | [Telegram Trigger](./input/telegram-trigger.md) | Trigger workflow when a Telegram bot receives a message | Run pipelines from chat messages, photos, or videos sent to your bot |
+| [Telegram Channel Feed](./input/telegram-channel-feed.md) | Read recent posts from a public Telegram channel | Follow channels, pull posts, rewrite and repost |
 
 ---
 
@@ -356,6 +357,7 @@ Deliver results to storage, webhooks, or social media platforms.
 | [X Post](./output/x-post.md) | Post to X/Twitter | Share content on X (280 char limit) |
 | [Facebook Post](./output/facebook-post.md) | Post to Facebook | Share text, images, video, or stories |
 | [Telegram Post](./output/telegram-post.md) | Send a message, photo, or video to Telegram | Publish to a Telegram chat, channel, or group via a bot |
+| [Publish to Social](./output/publish-social.md) | Publish to ANY connected social account | One node for all networks — pick the account, the platform follows |
 
 ---
 

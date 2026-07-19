@@ -37,6 +37,8 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "x-post": "backend/src/routes/social-publish.ts",
   "facebook-post": "backend/src/routes/social-publish.ts",
   "telegram-post": "backend/src/routes/social-publish.ts",
+  "publish-social": "backend/src/routes/social-publish.ts",
+  "telegram-channel-feed": "backend/src/routes/telegram-channel.ts",
   "reduce": "backend/src/routes/reduce.ts",
 }
 

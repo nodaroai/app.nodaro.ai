@@ -988,6 +988,8 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "video-analysis",
   // Incoming Telegram message — text is the primary output.
   "telegram-trigger",
+  // Telegram Channel Feed — the recent posts' text.
+  "telegram-channel-feed",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)

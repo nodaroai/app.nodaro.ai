@@ -1,4 +1,9 @@
 ---
+generated_at: 2026-07-19T01:25:20.113Z
+generated_from: c0d91988e
+---
+
+---
 generated_at: 2026-07-12T19:47:44.882Z
 generated_from: 60b869779
 ---
@@ -157,6 +162,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `post-process-effects` — Post-Process Effects
 - `preview` — Preview
 - `provider` — Provider
+- `publish-social` — Publish to Social
 - `qa-check` — QA Check
 - `reduce` — Reduce
 - `reference-audio` — Reference Audio
@@ -203,6 +209,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-upload-extend` — Suno Upload Extend
 - `suno-voice` — Suno Voice
 - `switchx` — Relight & Switch
+- `telegram-channel-feed` — Telegram Channel Feed
 - `telegram-post` — Telegram Post
 - `telegram-trigger` — Telegram Trigger
 - `teleport-receive` — Teleport Receive

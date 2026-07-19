@@ -1629,7 +1629,7 @@ export function resolveNodeInputs(
       }
       const colType = loopCol?.type ?? "text";
       const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
-      const isCarouselTarget = node.type === "instagram-post" && targetAction === "post-carousel";
+      const isCarouselTarget = SOCIAL_POST_NODE_TYPES.has(node.type ?? "") && targetAction === "post-carousel";
       if (colType === "image-url") {
         if (isCarouselTarget) {
           inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }];
