@@ -1950,6 +1950,7 @@ export function executeNode(
       plannerModel: gvpData.plannerModel?.trim() || undefined,
       planOnly: gvpData.planOnly === true ? true : undefined,
       contextTailSec: typeof gvpData.contextTailSec === "number" ? gvpData.contextTailSec : undefined,
+      autoCastFromAnalysis: gvpData.autoCastFromAnalysis === false ? false : undefined,
       idempotencyKey,
     };
 

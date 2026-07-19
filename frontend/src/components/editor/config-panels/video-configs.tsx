@@ -3616,6 +3616,20 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </p>
       </div>
 
+      {/* AUTO-CAST — analysis-supplied per-slot frames as identity refs. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-autoCast"
+          checked={data.autoCastFromAnalysis ?? true}
+          onChange={(e) => onUpdate({ autoCastFromAnalysis: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-autoCast" className="text-xs">
+          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (default on)
+        </label>
+      </div>
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input

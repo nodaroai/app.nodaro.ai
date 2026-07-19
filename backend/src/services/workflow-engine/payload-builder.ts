@@ -3826,6 +3826,7 @@ export function buildPayload(
         plannerModel: typeof data.plannerModel === "string" && data.plannerModel ? data.plannerModel : undefined,
         planOnly: data.planOnly === true ? true : undefined,
         contextTailSec: typeof data.contextTailSec === "number" ? data.contextTailSec : undefined,
+        autoCastFromAnalysis: data.autoCastFromAnalysis === false ? false : undefined,
         usageLogId,
       })
     }

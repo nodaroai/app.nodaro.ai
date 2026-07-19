@@ -1847,6 +1847,9 @@ export interface GenerateVideoProNodeData {
    *  more boundary-motion context for slow camera moves / tempo, at a small
    *  per-join surcharge (billed at the ref rate). */
   contextTailSec?: number
+  /** AUTO-CAST: inject analysis-supplied per-slot reference frames as identity
+   *  refs (default on; inert for scripts without cast data). */
+  autoCastFromAnalysis?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

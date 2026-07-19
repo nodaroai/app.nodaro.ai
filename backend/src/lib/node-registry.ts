@@ -256,6 +256,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "planOnly", type: "boolean" },
         // Continuation-tail seconds per join (2-5, default 2).
         { key: "contextTailSec", type: "number" },
+        // AUTO-CAST analysis reference frames (default on).
+        { key: "autoCastFromAnalysis", type: "boolean" },
       ],
     },
     // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at
