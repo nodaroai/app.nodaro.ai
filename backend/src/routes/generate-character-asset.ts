@@ -199,7 +199,10 @@ function buildVariantPrompt(
 
   if (assetType === "poses") {
     const poseMap: Record<string, string> = {
-      standing: "standing in a natural relaxed pose of the model's choice — crossed arms, hands on hips, a hand in a pocket, a thoughtful pose, or any other natural stance that suits the character's personality and outfit",
+      // Deliberately neutral (product decision): "Standing" is a specific
+      // catalog pose the user picked — the free-pose treatment applies ONLY
+      // to the full-body hero (bodyAngles), not here.
+      standing: "standing relaxed pose, arms at sides",
       walking: "walking mid-stride, natural gait",
       sitting: "sitting on a chair, relaxed posture",
       running: "running action pose, dynamic movement",
@@ -222,9 +225,9 @@ function buildVariantPrompt(
     const angleMap: Record<string, string> = {
       front: "front view, facing camera directly",
       "3/4 left": "three-quarter view, head angled 45 degrees toward the left of the frame, face partially visible",
-      // Never say "silhouette" here — image models read it as a backlit
-      // cutout (cf. the lighting catalog's silhouette-backlight = dark
-      // subject), which rendered profiles lit from behind.
+      // Never say "silhouette" in the profiles — image models read it as a
+      // backlit cutout (cf. the lighting catalog's silhouette-backlight =
+      // dark subject); right profiles consistently rendered lit from behind.
       "left profile": "left profile view, head turned to the left, the full side of the face visible, face clearly and evenly lit",
       "right profile": "right profile view, head turned to the right, the full side of the face visible, face clearly and evenly lit",
       "3/4 right": "three-quarter view, head angled 45 degrees toward the right of the frame, face partially visible",
@@ -248,13 +251,10 @@ function buildVariantPrompt(
       below: "low-angle view, camera looking up at the body from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
-    // "arms relaxed at sides" produced stiff mannequin turnarounds — ask for
-    // a natural stance instead (kept calm/neutral so the 8 angles still read
-    // as one consistent standing figure).
     // The pose is deliberately the MODEL's choice — the examples communicate
-    // breadth, not a fixed menu. Purely abstract wording ("hands resting
-    // naturally") still rendered near-mannequin arms, and a prescribed stance
-    // ("arms relaxed at sides") was the original stiff-mannequin bug.
+    // breadth, not a fixed menu. A prescribed stance ("arms relaxed at sides")
+    // was the original stiff-mannequin bug, and purely abstract "natural"
+    // wording barely moved the needle.
     return `Full body view of ${subject}, ${angle}, standing in a natural pose freely chosen to suit the character's personality, look and outfit — crossed arms, hands on hips, a hand in a pocket, a thoughtful pose, one hand raised, or any other natural relaxed stance. FULL BODY visible including feet, plain background. ${base}`
   }
 
