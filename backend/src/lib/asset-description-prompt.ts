@@ -77,8 +77,19 @@ export function buildAssetDescriptionUserMessage(ctx: AssetDescriptionPromptCtx)
     ctx.assetType === "custom"
       ? (ctx.userPrompt ?? ctx.variant ?? "")
       : (ctx.variant ?? ctx.userPrompt ?? "")
+  // Full-body hero shots (bodyAngles) leave the pose to the IMAGE model — the
+  // product decision behind the route's free-pose framing. Without this, the
+  // draft reliably prescribes "neutral stance, arms at sides" (observed on
+  // 2/2 prod drafts, 2026-07-19), which overrides the free-pose framing and
+  // renders a stiff mannequin. Scoped to bodyAngles only: pose asset drafts
+  // (poses/expressions/…) SHOULD describe their specific pose.
+  const bodyAnglesGuidance =
+    ctx.assetType === "bodyAngles"
+      ? "\nThe body pose is freely chosen by the image model — do NOT prescribe a stance or arm/hand positions (no \"arms at sides\" or similar). Describe only the viewing angle, framing, and lighting."
+      : ""
   return (
     `Asset type: ${ctx.assetType}. Variant or prompt: "${variantOrPrompt}".` +
-    (ctx.canonicalDescription ? `\nCharacter: ${ctx.canonicalDescription}` : "")
+    (ctx.canonicalDescription ? `\nCharacter: ${ctx.canonicalDescription}` : "") +
+    bodyAnglesGuidance
   )
 }
