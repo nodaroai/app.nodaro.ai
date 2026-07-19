@@ -150,6 +150,24 @@ export async function processVideo(
 }
 
 /**
+ * Extract the first frame of a LOCAL video file as a PNG buffer — the poster
+ * fallback for downloads that arrive with no sidecar thumbnail (a direct file
+ * URL never has one). Local-file sibling of `generateThumbnailFromUrl`, same
+ * original-resolution first-frame contract as `processVideo`.
+ */
+export async function thumbnailFromLocalVideo(videoPath: string): Promise<Buffer> {
+  const workDir = join(tmpdir(), `poster-${randomUUID()}`)
+  await fs.mkdir(workDir, { recursive: true })
+  const framePath = join(workDir, "frame.png")
+  try {
+    await extractFrame(videoPath, framePath, 0)
+    return await fs.readFile(framePath)
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/**
  * Generate a thumbnail from a video URL (downloads, extracts first frame).
  * Stored at original resolution as JPEG — Cloudflare Image Resizing handles downsizing on the edge.
  */

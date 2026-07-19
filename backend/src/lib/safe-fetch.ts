@@ -143,6 +143,31 @@ export function filterSafeResolvedAddresses(
 }
 
 /**
+ * Pre-resolve `hostname` and report whether EVERY DNS answer is public.
+ *
+ * For server-side fetchers that do their own DNS+HTTP (yt-dlp) and therefore
+ * never pass through `safeAgent`'s connect-time gate — callers reject the URL
+ * up front instead of fetching it. Fail-closed: a lookup error counts as
+ * not-public (such a host can't be downloaded anyway). Best-effort by nature —
+ * TOCTOU/rebinding and redirect targets remain the external fetcher's exposure;
+ * this closes the plain resolves-to-private case.
+ */
+export async function resolvesOnlyToPublicAddresses(hostname: string): Promise<boolean> {
+  try {
+    const addrs = await new Promise<ResolvedAddress[]>((resolve, reject) => {
+      dnsLookup(hostname, { family: 0, all: true, verbatim: true }, (err, a) => {
+        if (err) reject(err)
+        else resolve(a as ResolvedAddress[])
+      })
+    })
+    filterSafeResolvedAddresses(addrs) // throws on any private/reserved answer
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Shared agent — a single instance across all safeFetch calls so the undici
  * connection pool is reused. The `connect.lookup` hook resolves the hostname
  * with `all: true` so multi-record answers are fully inspected; any private

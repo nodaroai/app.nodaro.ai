@@ -91,6 +91,40 @@ export function isAllowedSocialVideoUrl(url: string, domains: readonly string[] 
 }
 
 /**
+ * File extensions accepted as DIRECT video-file URLs (pathname suffix match).
+ * Mirrors save-to-storage's video auto-detect set.
+ */
+export const DIRECT_VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".avi"] as const
+
+/**
+ * True for a DIRECT video-file URL: http(s) whose PATHNAME ends in a video
+ * extension — `https://cdn.nodaro.ai/uploads/videos/<id>.mp4` and any other
+ * cdn-style link. Query/fragment are ignored (signed CDN URLs keep the
+ * extension in the path); an extension that appears only in the query does not
+ * qualify. Host-agnostic BY DESIGN, which is exactly why admission is not
+ * sufficient on its own: yt-dlp does its own DNS+HTTP (no `safeFetch`), so the
+ * download route must pre-resolve these hosts via
+ * `resolvesOnlyToPublicAddresses` before fetching.
+ */
+export function isDirectVideoFileUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false
+    const path = parsed.pathname.toLowerCase()
+    return DIRECT_VIDEO_EXTENSIONS.some((ext) => path.endsWith(ext))
+  } catch {
+    return false
+  }
+}
+
+/** True when the video-download paths accept `url`: a social host OR a direct
+ *  video file. The provider's defense-in-depth guard uses this; the route layers
+ *  the DNS pre-resolve on top for the direct (arbitrary-host) case. */
+export function isAllowedVideoImportUrl(url: string): boolean {
+  return isAllowedSocialVideoUrl(url) || isDirectVideoFileUrl(url)
+}
+
+/**
  * Bare origin URL — `https://example.com` (or `http://localhost`), no path /
  * query / fragment. Used for CORS allowlists and CSP `frame-ancestors` lists,
  * where any extra characters in the stored value would be either silently

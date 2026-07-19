@@ -7,6 +7,7 @@ import {
   YOUTUBE_HOSTS,
   hostnameMatchesAllowlist,
   isAllowedSocialVideoUrl,
+  isAllowedVideoImportUrl,
 } from "../../lib/url-validator.js"
 import { videoFormatSelector } from "./video-format.js"
 import { ytProxyArgs, resolveProxyChain } from "./yt-proxy.js"
@@ -591,9 +592,11 @@ export async function downloadYouTubeVideo(opts: {
 }): Promise<void> {
   const { url, outPath, maxFilesizeBytes, maxHeight, section, requireAudio, onProgress, onProcessingStart } = opts
 
-  // SSRF gate — same broad allowlist the download-video route accepted before
-  // extraction, so TikTok/Instagram/X/Facebook support is preserved.
-  if (!isAllowedSocialVideoUrl(url)) {
+  // SSRF gate — the same social-or-direct-file admission the download-video
+  // route enforces. Defense-in-depth only: for a direct-file (arbitrary) host
+  // the ROUTE additionally pre-resolves DNS and rejects private answers, which
+  // a sync guard here cannot do.
+  if (!isAllowedVideoImportUrl(url)) {
     throw new YtUrlNotAllowedError(`host not allowed: ${url}`)
   }
 
