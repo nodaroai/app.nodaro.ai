@@ -42,6 +42,7 @@ Generate Video Pro exposes **exactly Generate Video's input handles** — same n
 | Planner model | Select | Claude Opus 4.7 | The AI model that plans the segment breakdown for multi-segment runs — any model from the [LLM model registry](../../choosing-models.md) |
 | Plan only | Checkbox | off | Return the full segment plan **without generating any video** — see [Plan-only mode](#plan-only-mode) |
 | Continuation context | Select (2-5s) | 2s | How much of the previous segment each continuation segment sees as its reference. Raise for slow camera moves or music-timed motion; each extra second adds a small per-join cost (see the pricing formula) |
+| Auto-cast from analysis | Checkbox | on | When the script is a [Video Analysis](../processing-video/video-analysis.md) result whose entities carry reference frames, those frames are automatically added as identity references (after any images you wired yourself, up to the provider's 9-image limit) and each segment prompt is told which reference is which entity. Inert for scripts without cast data |
 
 ## Providers
 

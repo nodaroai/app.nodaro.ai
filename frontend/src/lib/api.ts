@@ -2712,6 +2712,8 @@ export async function generateVideoPro(body: {
   planOnly?: boolean
   /** Continuation-tail seconds per join (2-5; default 2). */
   contextTailSec?: number
+  /** AUTO-CAST analysis reference frames (default on). */
+  autoCastFromAnalysis?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

@@ -31,6 +31,10 @@ export const entitySlotSchema = z.object({
   source: z.enum(VIDEO_ANALYSIS_ENTITY_SOURCES),
   role: z.string().min(1),
   description: z.string().min(1),
+  /** Auto-cast visual reference — a hosted frame from the analyzed footage
+   *  where this entity is clearly visible. Optional/additive: producers may
+   *  omit it; consumers use it as an identity reference for recreation. */
+  refImageUrl: z.string().url().optional(),
 })
 export type EntitySlot = z.infer<typeof entitySlotSchema>
 

@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-18T19:38:04.578Z
-generated_from: 87e7d64ec
+generated_at: 2026-07-19T07:24:10.800Z
+generated_from: b3909392f
 ---
 
 # Generate Video Pro
@@ -30,6 +30,7 @@ generated_from: 87e7d64ec
 - `plannerModel?: string`
 - `planOnly?: boolean`
 - `contextTailSec?: number`
+- `autoCastFromAnalysis?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`

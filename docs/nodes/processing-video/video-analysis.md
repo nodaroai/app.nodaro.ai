@@ -30,6 +30,13 @@ wire `text` directly into any prompt/text input (for example Generate Video
 Pro's prompt) to recreate the analyzed video without copy-pasting. The full
 result is also stored in the job's `output_data`.
 
+Each entity slot may also carry a `refImageUrl` — a hosted frame from the
+analyzed footage where that entity is clearly visible, picked automatically.
+[Generate Video Pro](../ai-video/generate-video-pro.md) uses these as identity
+references when recreating the video (its **Auto-cast from analysis** option,
+on by default), so recreations keep each person and object looking like the
+original without you extracting or wiring a single frame.
+
 ### Source precedence
 
 You provide the source one of two ways:
