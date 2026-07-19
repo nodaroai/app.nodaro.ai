@@ -26,8 +26,64 @@ env:
   YOUTUBE_DL_SKIP_DOWNLOAD: "1"
 
 jobs:
+  # Classifies the PR's changed paths so the two expensive suites only run
+  # when their tree (or anything shared) changed. Frontend Tests + Backend
+  # Tests are ~70% of every CI run's billable minutes; most PRs touch one
+  # side only. SAFETY: required checks gated by a job-level `if` conclude
+  # "skipped", which SATISFIES branch protection (unlike workflow-level
+  # `paths:`, which leaves them "Expected" and blocks the merge forever).
+  # Unknown paths (packages/, root config, tools/) fail SAFE: both run.
+  # Push events (main) always run everything — post-merge coverage is total.
+  changes:
+    name: Diff Gate
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      frontend: ${{ steps.gate.outputs.frontend }}
+      backend: ${{ steps.gate.outputs.backend }}
+    steps:
+      - name: Classify changed paths
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
+          count=$(printf '%s\n' "$files" | wc -l)
+          # The files API caps at 3000 entries — if we're near it, assume the
+          # diff is bigger than we can see and run everything.
+          if [ "$count" -ge 2900 ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          frontend=false backend=false
+          while IFS= read -r f; do
+            case "$f" in
+              docs/*|*.md) ;;                                  # affects neither suite
+              .github/workflows/ci.yml) frontend=true; backend=true ;;
+              .github/*) ;;                                    # other workflows: neither
+              frontend/*) frontend=true ;;
+              backend/*|supabase/*) backend=true ;;
+              *) frontend=true; backend=true ;;                # packages/, root, unknown: both
+            esac
+          done <<< "$files"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "changed=$count frontend=$frontend backend=$backend"
+
   frontend-tests:
     name: Frontend Tests
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -88,6 +144,8 @@ jobs:
 
   backend-tests:
     name: Backend Tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     env:
       SUPABASE_URL: https://test.supabase.co

@@ -4,6 +4,7 @@ import { discordProvider } from "./discord.js"
 import { facebookProvider } from "./facebook.js"
 import { hashnodeProvider } from "./hashnode.js"
 import { instagramProvider } from "./instagram.js"
+import { instagramStandaloneProvider } from "./instagram-standalone.js"
 import { lemmyProvider } from "./lemmy.js"
 import { linkedinProvider } from "./linkedin.js"
 import { mastodonProvider } from "./mastodon.js"
@@ -27,6 +28,9 @@ import { youtubeProvider } from "./youtube.js"
  */
 export const PROVIDERS: Readonly<Record<string, SocialProvider>> = Object.freeze({
   instagram: instagramProvider,
+  // Second route to Instagram: Instagram Login, no Facebook Page, real token
+  // refresh. Dormant until INSTAGRAM_APP_ID/SECRET land in env.
+  "instagram-standalone": instagramStandaloneProvider,
   facebook: facebookProvider,
   tiktok: tiktokProvider,
   youtube: youtubeProvider,

@@ -14,6 +14,7 @@ import type { SocialConnection } from "@/types/nodes"
 // new backend network appears here with ZERO frontend changes.
 const PLATFORM_ICONS: Record<string, React.ReactNode> = {
   instagram: <Instagram className="h-6 w-6" />,
+  "instagram-standalone": <Instagram className="h-6 w-6" />,
   tiktok: <Video className="h-6 w-6" />,
   youtube: <Youtube className="h-6 w-6" />,
   linkedin: <Linkedin className="h-6 w-6" />,
@@ -36,6 +37,7 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
 
 const PLATFORM_DESCRIPTIONS: Record<string, string> = {
   instagram: "Post images, reels, and stories (uses Facebook Login)",
+  "instagram-standalone": "Post images, reels, and stories — connects directly, no Facebook Page",
   tiktok: "Upload videos directly",
   youtube: "Upload videos and shorts",
   linkedin: "Share posts with text, images, or video",
