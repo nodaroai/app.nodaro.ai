@@ -223,6 +223,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "x-post", label: "X Post", icon: <Twitter className="h-4 w-4" />, category: "Output", group: "Social Media" },
   { type: "facebook-post", label: "Facebook Post", icon: <Facebook className="h-4 w-4" />, category: "Output", group: "Social Media" },
   { type: "telegram-post", label: "Telegram Post", icon: <Send className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "publish-social", label: "Publish to Social", icon: <Share2 className="h-4 w-4" />, category: "Output", group: "Social Media" },
   // Workflow
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },

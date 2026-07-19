@@ -1368,6 +1368,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Output",
     group: "Social Media",
   },
+  {
+    type: "publish-social",
+    label: "Publish to Social",
+    icon: <Share2 className="h-4 w-4" />,
+    category: "Output",
+    group: "Social Media",
+  },
   // Workflow
   {
     type: "sub-workflow-input",

@@ -157,6 +157,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `post-process-effects` — Post-Process Effects
 - `preview` — Preview
 - `provider` — Provider
+- `publish-social` — Publish to Social
 - `qa-check` — QA Check
 - `reduce` — Reduce
 - `reference-audio` — Reference Audio

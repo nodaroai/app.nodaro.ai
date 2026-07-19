@@ -5313,6 +5313,7 @@ export type SceneNodeType =
   | "x-post"
   | "facebook-post"
   | "telegram-post"
+  | "publish-social"
   | "telegram-trigger"
   | "component"
   | "music-genre"
@@ -8049,6 +8050,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Telegram Post",
       platform: "telegram",
       action: "send-message",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "publish-social",
+    label: "Publish to Social",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    // No hardcoded platform — the config panel derives it from the chosen
+    // connection. Blank until an account is picked.
+    defaultData: {
+      label: "Publish to Social",
+      platform: "" as unknown as SocialPlatformType,
+      action: "",
       caption: "",
       fieldMappings: {},
     } as SocialPostData,

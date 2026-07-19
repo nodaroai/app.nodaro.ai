@@ -379,6 +379,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "x-post": SocialNode,
   "facebook-post": SocialNode,
   "telegram-post": SocialNode,
+  "publish-social": SocialNode,
   "telegram-trigger": TelegramTriggerNode,
   // Generative Pipeline
   "generative-pipeline": GenerativePipelineNode,

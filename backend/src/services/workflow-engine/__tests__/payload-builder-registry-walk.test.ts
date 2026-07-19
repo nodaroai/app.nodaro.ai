@@ -101,6 +101,7 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "x-post",
   "facebook-post",
   "telegram-post",
+  "publish-social",
   "qa-check",
   "save-to-storage",
   "web-scrape",

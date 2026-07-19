@@ -15,6 +15,8 @@ export const telegramProvider: SocialProvider = {
     schedule: true,
     comment: false,
     media: ["image", "video", "text"],
+    // NOTE: `media` is the picker vocabulary (image/video/carousel/story/text);
+    // Telegram audio is delivered via the send-audio action, not a media kind.
     refresh: "none", // bot tokens don't expire
   },
   requiredEnv: [],

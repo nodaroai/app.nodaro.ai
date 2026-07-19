@@ -7511,6 +7511,10 @@ export function executeNode(
         mediaItems = items;
       } else if (items.length === 1) {
         action = items[0].type === "video" ? "send-video" : "send-photo";
+      } else if (inputs.audioUrl) {
+        // Audio-only message (Telegram has no media-group with audio) — send it
+        // as an audio file. mediaUrl already falls back to audioUrl above.
+        action = "send-audio";
       } else {
         action = "send-message";
       }

@@ -6,7 +6,11 @@
  * on Instagram's carousel item limits.
  */
 
-/** Node types that publish to a social platform via POST /v1/social/publish. */
+/** Node types that publish to a social platform via POST /v1/social/publish.
+ *  The 7 per-platform nodes hardcode their platform via `node.type`;
+ *  `publish-social` is the UNIFIED node whose platform is derived from the
+ *  chosen connection (`data.platform`) instead. All shared-set-driven routing
+ *  (carousel accumulation, caption, refMap gate) covers it automatically. */
 export const SOCIAL_POST_NODE_TYPES = new Set([
   "instagram-post",
   "tiktok-post",
@@ -15,6 +19,7 @@ export const SOCIAL_POST_NODE_TYPES = new Set([
   "x-post",
   "facebook-post",
   "telegram-post",
+  "publish-social",
 ])
 
 /** Instagram carousel limits per Meta Graph API.
