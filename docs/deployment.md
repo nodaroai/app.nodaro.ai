@@ -105,6 +105,7 @@ OAuth app credentials are set. Unconfigured networks still appear in
 | Network | Required env vars |
 |---|---|
 | Instagram | `META_APP_ID`, `META_APP_SECRET` (optional `META_INSTAGRAM_CONFIG_ID` for Facebook Login for Business) |
+| Instagram (no Facebook Page) | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` — Meta issues these separately from the Facebook app. Connects an Instagram account directly, with no linked Page, and its tokens refresh on their own (~60 days) |
 | Facebook | `META_APP_ID`, `META_APP_SECRET` (optional `META_FACEBOOK_CONFIG_ID`) |
 | TikTok | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` |
 | YouTube | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
