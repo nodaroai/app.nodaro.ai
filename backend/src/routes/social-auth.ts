@@ -230,7 +230,10 @@ export async function socialAuthRoutes(app: FastifyInstance) {
 
     const { data, error } = await supabase
       .from("social_connections")
-      .select("id, platform, platform_user_id, platform_username, platform_avatar_url, display_name, created_at, updated_at, token_expires_at, scopes")
+      // reconnect_needed is what surfaces the "Reconnect" chip — providers whose
+      // tokens can't self-heal (capabilities.refresh === "reconnect") get marked
+      // by executePublish(). Dropping it from this list silently blinds the UI.
+      .select("id, platform, platform_user_id, platform_username, platform_avatar_url, display_name, created_at, updated_at, token_expires_at, scopes, reconnect_needed")
       .eq("user_id", userId)
 
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })

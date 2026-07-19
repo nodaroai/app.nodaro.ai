@@ -3200,6 +3200,12 @@ export interface SocialConnection {
   platform_username: string | null
   platform_avatar_url: string | null
   display_name: string | null
+  /**
+   * Set by the publish worker when a token can't self-heal (providers whose
+   * `capabilities.refresh === "reconnect"` — Meta page/business tokens). Drives
+   * the "Reconnect" chip; optional so pre-existing fixtures stay valid.
+   */
+  reconnect_needed?: boolean
 }
 
 export type SocialPostData = {

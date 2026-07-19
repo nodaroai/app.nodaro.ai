@@ -3,11 +3,27 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 // ---- mocks -----------------------------------------------------------------
 const upsertMock = vi.fn(async (_row: Record<string, unknown>, _opts?: unknown) => ({ error: null }))
+
+/** Rows the mocked `social_connections` table holds for the current test. */
+let connectionRows: ReadonlyArray<Record<string, unknown>> = []
+
+/** Mirror PostgREST: `.select("a, b")` yields ONLY the listed columns. */
+function projectColumns(row: Record<string, unknown>, cols?: string): Record<string, unknown> {
+  if (!cols) return { ...row }
+  const keys = cols.split(",").map((c) => c.trim()).filter(Boolean)
+  return Object.fromEntries(keys.filter((k) => k in row).map((k) => [k, row[k]]))
+}
+
 vi.mock("../../lib/supabase.js", () => ({
   supabase: {
     from: () => ({
       upsert: upsertMock,
-      select: () => ({ eq: () => ({ data: [], error: null }) }),
+      // Column-faithful on purpose: a route that forgets a column in its select
+      // list fails here exactly the way it fails in production — and one that
+      // over-selects leaks the same secrets it would leak on the wire.
+      select: (cols?: string) => ({
+        eq: () => ({ data: connectionRows.map((r) => projectColumns(r, cols)), error: null }),
+      }),
     }),
   },
 }))
@@ -59,6 +75,7 @@ beforeEach(async () => {
   for (const k of ENV_KEYS) savedEnv[k] = process.env[k]
   process.env.SOCIAL_ENCRYPTION_KEY = "a".repeat(64)
   redisStore.clear()
+  connectionRows = []
   upsertMock.mockClear()
 
   app = Fastify({ logger: false })
@@ -78,6 +95,45 @@ afterEach(async () => {
 })
 
 // ---- tests -----------------------------------------------------------------
+describe("GET /v1/social/connections", () => {
+  const row = {
+    id: "conn-1",
+    user_id: "user-1",
+    platform: "facebook",
+    platform_user_id: "p1",
+    platform_username: "Page One",
+    platform_avatar_url: null,
+    display_name: "Page One",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    token_expires_at: null,
+    scopes: ["pages_manage_posts"],
+    reconnect_needed: true,
+    access_token_encrypted: "enc-blob", // gitleaks:allow — fake fixture
+  }
+
+  it("passes reconnect_needed through so the UI can surface the Reconnect chip", async () => {
+    connectionRows = [row]
+
+    const r = await app.inject({ method: "GET", url: "/v1/social/connections" })
+    expect(r.statusCode).toBe(200)
+    const { connections } = r.json() as { connections: Array<Record<string, unknown>> }
+    expect(connections).toHaveLength(1)
+    // executePublish() maintains this flag for providers whose tokens can't
+    // self-heal. Drop it from the select list and the card can no longer tell a
+    // live connection from a dead one.
+    expect(connections[0]!.reconnect_needed).toBe(true)
+  })
+
+  it("never ships the encrypted token to the client", async () => {
+    connectionRows = [row]
+
+    const r = await app.inject({ method: "GET", url: "/v1/social/connections" })
+    expect((r.json() as { connections: Array<Record<string, unknown>> }).connections[0]!
+      .access_token_encrypted).toBeUndefined()
+  })
+})
+
 describe("GET /v1/social/providers", () => {
   it("returns every registered provider with availability flags", async () => {
     delete process.env.TIKTOK_CLIENT_KEY
