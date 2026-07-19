@@ -3,6 +3,8 @@ import {
   safeUrlSchema,
   hostnameMatchesAllowlist,
   isAllowedSocialVideoUrl,
+  isDirectVideoFileUrl,
+  isAllowedVideoImportUrl,
   SOCIAL_VIDEO_HOSTS,
   YOUTUBE_HOSTS,
 } from "../url-validator.js"
@@ -139,5 +141,54 @@ describe("hostnameMatchesAllowlist / isAllowedSocialVideoUrl (SSRF allowlist)", 
   it("handles FQDN trailing dot and case", () => {
     expect(hostnameMatchesAllowlist("YouTube.com.", SOCIAL_VIDEO_HOSTS)).toBe(true)
     expect(hostnameMatchesAllowlist("youtube.com.attacker.example.", SOCIAL_VIDEO_HOSTS)).toBe(false)
+  })
+})
+
+describe("isDirectVideoFileUrl (direct CDN-style video links)", () => {
+  it("accepts http(s) URLs whose PATH ends in a video extension — any host", () => {
+    expect(isDirectVideoFileUrl("https://cdn.nodaro.ai/uploads/videos/5b3f3a3b-c532-4b60-9815-c9525791389e.mp4")).toBe(true)
+    expect(isDirectVideoFileUrl("https://some.other.cdn.example/path/clip.webm")).toBe(true)
+    expect(isDirectVideoFileUrl("https://example.com/a/b/movie.mov")).toBe(true)
+    expect(isDirectVideoFileUrl("http://example.com/old.avi")).toBe(true)
+  })
+
+  it("matches case-insensitively and ignores query/fragment (signed CDN URLs)", () => {
+    expect(isDirectVideoFileUrl("https://cdn.example/CLIP.MP4")).toBe(true)
+    expect(isDirectVideoFileUrl("https://cdn.example/clip.mp4?X-Amz-Signature=abc&Expires=1")).toBe(true)
+    expect(isDirectVideoFileUrl("https://cdn.example/clip.mp4#t=30")).toBe(true)
+  })
+
+  it("rejects when the extension is only in the query, not the path", () => {
+    expect(isDirectVideoFileUrl("https://example.com/download?file=clip.mp4")).toBe(false)
+  })
+
+  it("rejects non-video paths, streams, and pages", () => {
+    expect(isDirectVideoFileUrl("https://example.com/watch?v=abc")).toBe(false)
+    expect(isDirectVideoFileUrl("https://example.com/stream.m3u8")).toBe(false)
+    expect(isDirectVideoFileUrl("https://example.com/clip.mp3")).toBe(false)
+    expect(isDirectVideoFileUrl("https://example.com/")).toBe(false)
+  })
+
+  it("rejects non-http protocols and malformed URLs", () => {
+    expect(isDirectVideoFileUrl("ftp://example.com/clip.mp4")).toBe(false)
+    expect(isDirectVideoFileUrl("file:///tmp/clip.mp4")).toBe(false)
+    expect(isDirectVideoFileUrl("not a url")).toBe(false)
+  })
+})
+
+describe("isAllowedVideoImportUrl (social OR direct file)", () => {
+  it("accepts social hosts exactly as isAllowedSocialVideoUrl does", () => {
+    expect(isAllowedVideoImportUrl("https://www.youtube.com/watch?v=abc")).toBe(true)
+    expect(isAllowedVideoImportUrl("https://www.tiktok.com/@x/video/1")).toBe(true)
+  })
+
+  it("accepts direct video-file URLs on arbitrary public hosts", () => {
+    expect(isAllowedVideoImportUrl("https://cdn.nodaro.ai/uploads/videos/x.mp4")).toBe(true)
+  })
+
+  it("still rejects a non-social page URL without a video-file path", () => {
+    expect(isAllowedVideoImportUrl("https://vimeo.com/123")).toBe(false)
+    // the substring-bypass host stays rejected even with a .mp4-less path
+    expect(isAllowedVideoImportUrl("https://youtube.com.attacker.example/x")).toBe(false)
   })
 })

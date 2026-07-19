@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema, isAllowedSocialVideoUrl } from "../lib/url-validator.js"
+import { safeUrlSchema, isAllowedSocialVideoUrl, isDirectVideoFileUrl } from "../lib/url-validator.js"
+import { resolvesOnlyToPublicAddresses } from "../lib/safe-fetch.js"
+import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -15,8 +17,8 @@ import { firstHeaderValue } from "../lib/request-helpers.js"
 const downloadVideoBody = z
   .object({
     url: safeUrlSchema.refine(
-      (url) => isAllowedSocialVideoUrl(url),
-      { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
+      (url) => isAllowedSocialVideoUrl(url) || isDirectVideoFileUrl(url),
+      { message: "Must be a social video URL (YouTube, Facebook, TikTok, Instagram, X) or a direct video file URL (.mp4, .webm, .mov, .avi)" },
     ),
     // Optional max video height (px). When present, caps yt-dlp's format
     // selection to `<=maxHeight`; ABSENT keeps today's "best" behaviour
@@ -49,6 +51,12 @@ const downloadVideoBody = z
       })
     }
   })
+
+/** Size cap for DIRECT-file downloads — parity with /v1/upload's and
+ *  save-to-storage's 500MB video limit (file-validation SIZE_LIMITS.video).
+ *  Social fetches stay uncapped: their sources are duration-bounded flows whose
+ *  behavior must not change. */
+const DIRECT_FILE_MAX_BYTES = 500 * 1024 * 1024
 
 interface ActiveDownload {
   percent: number
@@ -100,6 +108,7 @@ async function runDownloadWithProgress(
   userId: string,
   section?: { startSec: number; endSec: number },
   maxHeight?: number,
+  maxFilesizeBytes?: number,
 ): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
@@ -114,6 +123,7 @@ async function runDownloadWithProgress(
       outPath,
       section,
       maxHeight,
+      maxFilesizeBytes,
       // A voice changer can't use a silent clip — fail the import on a no-audio
       // download instead of ingesting/processing it (also avoids the re-encode's
       // "-c:a aac" crash). See assertAudioPresent.
@@ -138,9 +148,24 @@ async function runDownloadWithProgress(
     // (library.ts, media-process deleteSource) decrement by later.
     const videoSizeBytes = (await fs.stat(outPath)).size
     const videoR2Url = await uploadFileWithKeyToR2(outPath, videoR2Key, "video/mp4")
-    await fs.unlink(outPath).catch(() => {})
 
-    const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
+    // Sidecar thumbnail first (yt-dlp's --write-thumbnail); when the source had
+    // none — a direct file URL never does, and some social fetches come back
+    // bare — extract the file's own first frame while it is still on disk.
+    // Nice-to-have semantics, same as /v1/upload: a poster failure logs and the
+    // download proceeds without one.
+    let thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
+    if (!thumbnailUrl) {
+      try {
+        const poster = await thumbnailFromLocalVideo(outPath)
+        thumbnailUrl = await uploadBufferToR2(poster, `thumbnails/yt-${outputId}.png`, "image/png")
+      } catch (err) {
+        console.warn(
+          `[download-video] poster fallback failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
+    await fs.unlink(outPath).catch(() => {})
 
     // Ownership row + increment-only storage accounting — the same assets shape
     // /v1/upload and /v1/media/process insert. Without this row the downloaded
@@ -205,6 +230,19 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
 
     const userId = req.userId
     const { url, sectionStartSec, sectionEndSec, maxHeight: rawMaxHeight } = parsed.data
+
+    const isSocial = isAllowedSocialVideoUrl(url)
+    if (!isSocial) {
+      // Direct-file URL on an ARBITRARY host. yt-dlp does its own DNS+HTTP —
+      // safeFetch's connect-time IP gate never sees this fetch — so pre-resolve
+      // the host here and refuse private/reserved answers. Social hosts are
+      // fixed, reputable domains and skip this.
+      if (!(await resolvesOnlyToPublicAddresses(new URL(url).hostname))) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "That address can't be fetched." },
+        })
+      }
+    }
     // Clamp to a sane pixel range: 144p floor (anything smaller is unusable),
     // 8K ceiling. yt-dlp picks the best format under the cap; see
     // videoFormatSelector. Absent stays absent (unchanged "best" behaviour).
@@ -225,8 +263,12 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const state: ActiveDownload = { percent: 0, phase: "downloading" }
     activeDownloads.set(downloadId, state)
 
-    // Start download in background
-    void runDownloadWithProgress(downloadId, url, outputId, baseName, outPath, userId, section, maxHeight)
+    // Start download in background. Direct files carry the 500MB cap; social
+    // fetches pass none (unchanged).
+    void runDownloadWithProgress(
+      downloadId, url, outputId, baseName, outPath, userId, section, maxHeight,
+      isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
+    )
 
     return { downloadId }
   })

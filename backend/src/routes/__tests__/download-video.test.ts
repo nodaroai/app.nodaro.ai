@@ -32,8 +32,21 @@ vi.mock("@/lib/url-validator.js", async () => {
   return {
     safeUrlSchema: z.string().url(),
     isAllowedSocialVideoUrl: (url: string) => url.includes("youtube.com") || url.includes("youtu.be"),
+    isDirectVideoFileUrl: (url: string) => /\.mp4($|[?#])/.test(url),
   }
 })
+
+// The DNS pre-resolve gate for direct-file hosts — mocked so tests never hit
+// real DNS; individual tests flip it to exercise the reject path.
+vi.mock("@/lib/safe-fetch.js", () => ({
+  resolvesOnlyToPublicAddresses: vi.fn().mockResolvedValue(true),
+}))
+
+// The poster-frame fallback (ffmpeg) — mocked; the harness's downloaded "video"
+// is fake bytes a real extraction would choke on.
+vi.mock("@/utils/thumbnail.js", () => ({
+  thumbnailFromLocalVideo: vi.fn().mockResolvedValue(Buffer.from("fake-png")),
+}))
 
 vi.mock("@/lib/dynamic-origins.js", () => ({
   isOriginAllowedDynamic: vi.fn().mockResolvedValue(false),
@@ -45,9 +58,11 @@ vi.mock("@/lib/dynamic-origins.js", () => ({
 
 import { downloadVideoRoutes } from "../download-video.js"
 import { downloadYouTubeVideo } from "../../providers/video/youtube-video.js"
-import { uploadFileWithKeyToR2 } from "../../lib/storage.js"
+import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../../lib/storage.js"
 import { supabase } from "../../lib/supabase.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
+import { resolvesOnlyToPublicAddresses } from "../../lib/safe-fetch.js"
+import { thumbnailFromLocalVideo } from "../../utils/thumbnail.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -233,6 +248,100 @@ describe("POST /v1/download-video — maxHeight", () => {
     const res = await post({ url: YT_URL })
     expect(res.statusCode).toBe(200)
     expect(await maxHeightSeenByProvider()).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests — direct video-file URLs (cdn-style links)
+// ---------------------------------------------------------------------------
+
+const DIRECT_URL = "https://cdn.nodaro.ai/uploads/videos/5b3f3a3b.mp4"
+
+describe("POST /v1/download-video — direct video-file URLs", () => {
+  it("accepts a direct .mp4 URL and passes the 500MB size cap to the provider", async () => {
+    const res = await post({ url: DIRECT_URL })
+    expect(res.statusCode).toBe(200)
+
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    const opts = vi.mocked(downloadYouTubeVideo).mock.calls[0][0]
+    expect(opts.url).toBe(DIRECT_URL)
+    expect(opts.maxFilesizeBytes).toBe(500 * 1024 * 1024)
+
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("social URLs pass NO size cap (behavior unchanged)", async () => {
+    const res = await post({ url: YT_URL })
+    expect(res.statusCode).toBe(200)
+
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(downloadYouTubeVideo).mock.calls[0][0].maxFilesizeBytes).toBeUndefined()
+
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("400 when a direct URL's host resolves to a private/reserved address", async () => {
+    vi.mocked(resolvesOnlyToPublicAddresses).mockResolvedValueOnce(false)
+    const res = await post({ url: DIRECT_URL })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("social URLs skip the DNS pre-resolve (fixed reputable hosts)", async () => {
+    const res = await post({ url: YT_URL })
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    expect(resolvesOnlyToPublicAddresses).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("still 400s a URL that is neither social nor a direct video file", async () => {
+    const res = await post({ url: "https://vimeo.com/12345" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests — poster-frame fallback when yt-dlp wrote no sidecar thumbnail
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/download-video — poster-frame fallback", () => {
+  it("extracts a poster from the downloaded file when no sidecar thumbnail exists", async () => {
+    // The provider mock writes ONLY the video file — no sidecar thumbnail, the
+    // exact shape of a direct-file download (and of any source yt-dlp couldn't
+    // fetch a thumbnail for).
+    const res = await post({ url: DIRECT_URL })
+    expect(res.statusCode).toBe(200)
+
+    await vi.waitFor(() => expect(thumbnailFromLocalVideo).toHaveBeenCalledTimes(1))
+    // Fed the still-on-disk downloaded file…
+    expect(vi.mocked(thumbnailFromLocalVideo).mock.calls[0][0]).toMatch(/yt-video-[0-9a-f-]+\.mp4$/)
+    // …and uploaded as the download's PNG poster.
+    await vi.waitFor(() =>
+      expect(uploadBufferToR2).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        expect.stringMatching(/^thumbnails\/yt-[0-9a-f-]+\.png$/),
+        "image/png",
+      ),
+    )
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("a poster-extraction failure must NOT fail the download (nice-to-have)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      vi.mocked(thumbnailFromLocalVideo).mockRejectedValueOnce(new Error("ffmpeg exploded"))
+      const res = await post({ url: DIRECT_URL })
+      expect(res.statusCode).toBe(200)
+
+      // The download still completes its bookkeeping — video delivered.
+      await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })
 
