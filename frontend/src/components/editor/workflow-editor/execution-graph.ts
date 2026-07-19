@@ -449,6 +449,13 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "suno-lyrics" || type === "suno-style-boost") {
     return data.generatedText as string | undefined;
   }
+  // Telegram Channel Feed emits the fetched posts as text. Without this case it
+  // fell through to `undefined`, and the input resolver drops falsy outputs —
+  // so downstream prompts, {Label} refs, and FieldMappings all came up empty in
+  // every client-side run mode, even though the edge connected fine.
+  if (type === "telegram-channel-feed") {
+    return data.generatedText as string | undefined;
+  }
   if (type === "transcribe") {
     const tResults =
       (data.generatedResults as Array<{ text: string }> | undefined) ?? [];

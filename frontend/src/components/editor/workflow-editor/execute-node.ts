@@ -7502,14 +7502,21 @@ export function executeNode(
     node.type === "linkedin-post" ||
     node.type === "x-post" ||
     node.type === "facebook-post" ||
-    node.type === "telegram-post"
+    node.type === "telegram-post" ||
+    // The unified node covers every connected network; without it here, Run
+    // fell through every branch to the terminal empty resolve — no API call,
+    // no error, node stuck "pending" forever.
+    node.type === "publish-social"
   ) {
     const { updateNodeData } = useWorkflowStore.getState();
     const d = node.data as SocialPostData;
 
     // Telegram needs an explicit target chat — fail BEFORE credits/API with a
     // human message (the backend's mid-publish error is jargon by comparison).
-    if (node.type === "telegram-post" && !(d.chatId || "").trim()) {
+    // Keyed on the PLATFORM, not the node type: `publish-social` reaches
+    // Telegram too, and type-only scoping silently reopened the burned-run bug
+    // PR #218 fixed.
+    if ((node.type === "telegram-post" || d.platform === "telegram") && !(d.chatId || "").trim()) {
       const msg = "Telegram Post: Chat ID is required — e.g. @yourchannel (add the bot to it as admin)";
       updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
       toast.error(msg);

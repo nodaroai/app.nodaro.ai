@@ -122,6 +122,13 @@ const ALLOWED_PATHS = [
   // into `jobs`; no cross-user reads or writes.
   /^src\/routes\/image-collage\.ts$/,
 
+  // Telegram Channel Feed: sync-HTTP job-creation route, same shape as the
+  // group above. Derives `userId = req.userId` (401 if absent), INSERTs the
+  // job with `user_id: userId`, and scopes every subsequent update by BOTH
+  // `id` and `user_id`. Service-role required to insert into `jobs`; no
+  // cross-user reads or writes. Mirrors social-publish.ts (legacy-baselined).
+  /^src\/routes\/telegram-channel\.ts$/,
+
   // Assemble Narrated Video: FFmpeg job-creation route, same shape as
   // Image Collage above. Derives `userId = req.userId` (401 if absent) and
   // INSERTs the job with `user_id: userId`. Service-role required to insert
