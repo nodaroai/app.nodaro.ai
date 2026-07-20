@@ -259,6 +259,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         // AUTO-CAST analysis reference frames (default on).
         { key: "autoCastFromAnalysis", type: "boolean" },
         { key: "plannerMode", type: "string" },
+        { key: "rollingRefs", type: "boolean" },
       ],
     },
     // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at

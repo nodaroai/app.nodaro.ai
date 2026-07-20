@@ -3652,6 +3652,21 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* ROLLING REFS — continuity v4: re-anchor returning entities with
+          their last-seen moment (memory clip/frame refs, role-assigned). */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-rollingRefs"
+          checked={data.rollingRefs ?? false}
+          onChange={(e) => onUpdate({ rollingRefs: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-rollingRefs" className="text-xs">
+          Rolling references (experimental) — re-anchor entities returning after absence with their last-seen shot
+        </label>
+      </div>
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input

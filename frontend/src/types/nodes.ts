@@ -1857,6 +1857,9 @@ export interface GenerateVideoProNodeData {
    *  label-locked identity + image-offloaded sheet (experiment arm);
    *  "auto" (default) picks by shape. */
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
+  /** Rolling last-seen references (experimental): re-anchor entities that
+   *  return after absence with their last-seen moment (clip/frame refs). */
+  rollingRefs?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
