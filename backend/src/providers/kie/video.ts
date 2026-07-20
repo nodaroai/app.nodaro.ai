@@ -112,6 +112,7 @@ export function applySeedance2Params(
   // path (single-node route + orchestrator worker) flows through, so appending
   // the suffix here applies it exactly once.
   const resolved = resolveSeedance2Inputs({
+    prompt: typeof input.prompt === "string" ? input.prompt : undefined,
     firstFrameUrl: typeof input.first_frame_url === "string" ? input.first_frame_url : undefined,
     lastFrameUrl: typeof input.last_frame_url === "string" ? input.last_frame_url : undefined,
     refImageUrls: options?.referenceImageUrls,

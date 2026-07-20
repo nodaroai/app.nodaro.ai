@@ -171,3 +171,25 @@ describe("resolveSeedance2Inputs", () => {
     }
   })
 })
+
+describe("promptBindsFirstFrame suffix suppression (overlap colon-position finding)", () => {
+  it("suppresses the trailing sentence when the prompt already binds the first frame", () => {
+    const r = resolveSeedance2Inputs({
+      prompt: "extend @video_1 as follows:use @image_1 as the first frame, it is the last keyframe of @video_1\nbeats",
+      firstFrameUrl: "https://r2/anchor.jpg",
+      refVideoUrls: ["https://r2/ref.mp4"],
+    })
+    expect(r.promptSuffix).toBe("")
+    expect(r.referenceImageUrls).toEqual(["https://r2/anchor.jpg"]) // image still rides
+  })
+
+  it("keeps the sentence for plain prompts and for first+last frame pairs", () => {
+    const plain = resolveSeedance2Inputs({ prompt: "a cat", firstFrameUrl: "https://r2/a.jpg", refVideoUrls: ["https://r2/v.mp4"] })
+    expect(plain.promptSuffix).toContain("opening (first) frame")
+    const both = resolveSeedance2Inputs({
+      prompt: "use @image_1 as the first frame, it is the last keyframe of @video_1",
+      firstFrameUrl: "https://r2/a.jpg", lastFrameUrl: "https://r2/b.jpg", refVideoUrls: ["https://r2/v.mp4"],
+    })
+    expect(both.promptSuffix).toContain("closing (last) frame") // pair sentence kept — last frame has no in-prompt binding
+  })
+})
