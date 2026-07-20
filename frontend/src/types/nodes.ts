@@ -1863,6 +1863,9 @@ export interface GenerateVideoProNodeData {
   /** Audio context tail (experimental A/B): ride ~8s of the soundtrack-so-far
    *  as an audio reference on every continuation (guards sound drift). */
   audioTail?: boolean
+  /** Overlap anchor (experimental): continuations anchor on the previous
+   *  segment's last keyframe, re-enact the overlap, then continue. */
+  overlapAnchor?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

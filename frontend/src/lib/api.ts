@@ -2717,6 +2717,7 @@ export async function generateVideoPro(body: {
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
   rollingRefs?: boolean
   audioTail?: boolean
+  overlapAnchor?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

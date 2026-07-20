@@ -3683,6 +3683,22 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* OVERLAP ANCHOR — continuity: anchor on the previous segment's last
+          keyframe; the model re-enacts the overlap (supervised warm-up) and
+          the stitch drops the duplicate. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-overlapAnchor"
+          checked={data.overlapAnchor ?? false}
+          onChange={(e) => onUpdate({ overlapAnchor: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-overlapAnchor" className="text-xs">
+          Overlap anchor (experimental) — continue from the previous segment&apos;s last keyframe with an overlapping reference
+        </label>
+      </div>
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input
