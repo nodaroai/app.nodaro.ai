@@ -1857,6 +1857,12 @@ export interface GenerateVideoProNodeData {
    *  label-locked identity + image-offloaded sheet (experiment arm);
    *  "auto" (default) picks by shape. */
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
+  /** Rolling last-seen references (experimental): re-anchor entities that
+   *  return after absence with their last-seen moment (clip/frame refs). */
+  rollingRefs?: boolean
+  /** Audio context tail (experimental A/B): ride ~8s of the soundtrack-so-far
+   *  as an audio reference on every continuation (guards sound drift). */
+  audioTail?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

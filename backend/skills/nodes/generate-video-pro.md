@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-20T08:41:11.353Z
-generated_from: aabad60b9
+generated_at: 2026-07-20T12:04:31.853Z
+generated_from: d88ea3557
 ---
 
 # Generate Video Pro
@@ -32,6 +32,8 @@ generated_from: aabad60b9
 - `contextTailSec?: number`
 - `autoCastFromAnalysis?: boolean`
 - `plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"`
+- `rollingRefs?: boolean`
+- `audioTail?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`

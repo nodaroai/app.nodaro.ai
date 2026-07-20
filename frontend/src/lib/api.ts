@@ -2715,6 +2715,8 @@ export async function generateVideoPro(body: {
   /** AUTO-CAST analysis reference frames (default on). */
   autoCastFromAnalysis?: boolean
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
+  rollingRefs?: boolean
+  audioTail?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

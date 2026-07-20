@@ -1952,6 +1952,8 @@ export function executeNode(
       contextTailSec: typeof gvpData.contextTailSec === "number" ? gvpData.contextTailSec : undefined,
       autoCastFromAnalysis: gvpData.autoCastFromAnalysis === false ? false : undefined,
       plannerMode: gvpData.plannerMode && gvpData.plannerMode !== "auto" ? gvpData.plannerMode : undefined,
+      rollingRefs: gvpData.rollingRefs === true ? true : undefined,
+      audioTail: gvpData.audioTail === true ? true : undefined,
       idempotencyKey,
     };
 
