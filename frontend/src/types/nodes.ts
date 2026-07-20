@@ -1867,6 +1867,9 @@ export interface GenerateVideoProNodeData {
   /** Overlap anchor (experimental): continuations anchor on the previous
    *  segment's last keyframe, re-enact the overlap, then continue. */
   overlapAnchor?: boolean
+  /** Which frame anchors the continuation: last keyframe (re-enact warm-up,
+   *  default) or the very last frame (no re-enactment). */
+  overlapAnchorMode?: "keyframe" | "last-frame"
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

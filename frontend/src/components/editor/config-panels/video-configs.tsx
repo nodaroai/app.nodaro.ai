@@ -3683,20 +3683,29 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
-      {/* OVERLAP ANCHOR — continuity: anchor on the previous segment's last
-          keyframe; the model re-enacts the overlap (supervised warm-up) and
-          the stitch drops the duplicate. */}
-      <div className="flex items-center gap-2 px-1">
-        <input
-          type="checkbox"
-          id="gvp-overlapAnchor"
-          checked={data.overlapAnchor ?? false}
-          onChange={(e) => onUpdate({ overlapAnchor: e.target.checked })}
-          className="rounded border-muted-foreground/40"
-        />
-        <label htmlFor="gvp-overlapAnchor" className="text-xs">
-          Overlap anchor (experimental) — continue from the previous segment&apos;s last keyframe with an overlapping reference
-        </label>
+      {/* OVERLAP ANCHOR — continuity A/B: anchor each continuation on the
+          previous segment's last KEYFRAME (re-enact warm-up) or its very
+          LAST frame; the stitch handles either behavior (mode probe). */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="gvp-overlap-anchor">Overlap anchor (experimental)</Label>
+        <Select
+          value={data.overlapAnchor ? (data.overlapAnchorMode ?? "keyframe") : "off"}
+          onValueChange={(v) => onUpdate(v === "off"
+            ? { overlapAnchor: false }
+            : { overlapAnchor: true, overlapAnchorMode: v as "keyframe" | "last-frame" })}
+        >
+          <SelectTrigger id="gvp-overlap-anchor" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="off">Off</SelectItem>
+            <SelectItem value="keyframe">Last keyframe — re-enact the overlap, then continue</SelectItem>
+            <SelectItem value="last-frame">Last frame — continue from the very end</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Both ride a longer overlapping reference; the anchor frame and its instruction differ. The stitch detects the model&apos;s actual behavior either way.
+        </p>
       </div>
 
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
