@@ -2718,6 +2718,7 @@ export async function generateVideoPro(body: {
   rollingRefs?: boolean
   audioTail?: boolean
   overlapAnchor?: boolean
+  overlapAnchorMode?: "keyframe" | "last-frame"
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

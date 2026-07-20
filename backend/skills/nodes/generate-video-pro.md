@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-20T13:24:51.628Z
-generated_from: 4f35d44b5
+generated_at: 2026-07-20T18:37:32.668Z
+generated_from: ad0dccc35
 ---
 
 # Generate Video Pro
@@ -35,6 +35,7 @@ generated_from: 4f35d44b5
 - `rollingRefs?: boolean`
 - `audioTail?: boolean`
 - `overlapAnchor?: boolean`
+- `overlapAnchorMode?: "keyframe" | "last-frame"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`

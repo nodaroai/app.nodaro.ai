@@ -1955,6 +1955,7 @@ export function executeNode(
       rollingRefs: gvpData.rollingRefs === true ? true : undefined,
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,
+      overlapAnchorMode: gvpData.overlapAnchor === true && gvpData.overlapAnchorMode === "last-frame" ? ("last-frame" as const) : undefined,
       idempotencyKey,
     };
 
