@@ -2716,6 +2716,7 @@ export async function generateVideoPro(body: {
   autoCastFromAnalysis?: boolean
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
   rollingRefs?: boolean
+  audioTail?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

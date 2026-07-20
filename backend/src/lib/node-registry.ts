@@ -260,6 +260,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "autoCastFromAnalysis", type: "boolean" },
         { key: "plannerMode", type: "string" },
         { key: "rollingRefs", type: "boolean" },
+        { key: "audioTail", type: "boolean" },
       ],
     },
     // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at

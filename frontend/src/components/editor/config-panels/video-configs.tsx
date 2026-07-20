@@ -3667,6 +3667,22 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* AUDIO TAIL — A/B lever: ~8s of the soundtrack-so-far rides every
+          continuation as an audio reference (more music context than the
+          2-5s video tail; guards sound drift). */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-audioTail"
+          checked={data.audioTail ?? false}
+          onChange={(e) => onUpdate({ audioTail: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-audioTail" className="text-xs">
+          Audio context tail (experimental) — carry the soundtrack-so-far into each continuation
+        </label>
+      </div>
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input
