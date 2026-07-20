@@ -5913,6 +5913,7 @@ export function executeNode(
             keepLastSeconds: trimMode === "keep-last-seconds" ? d.keepLastSeconds : undefined,
             smartLoopCut: trimMode === "smart-loop-cut",
             smartLoopCutLookback: trimMode === "smart-loop-cut" ? d.smartLoopCutLookback : undefined,
+            losslessKeyframe: trimMode !== "smart-loop-cut" && d.losslessKeyframe === true ? true : undefined,
             trimMode,
             upstreamDuration,
           },

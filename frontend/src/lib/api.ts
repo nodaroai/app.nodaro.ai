@@ -3077,6 +3077,8 @@ export async function trimVideoApi(
     trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
     /** Upstream video duration (seconds) for credit estimator. */
     upstreamDuration?: number
+    /** Lossless keyframe snap: stream-copy cut starting at the nearest keyframe back. */
+    losslessKeyframe?: boolean
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
@@ -3088,6 +3090,7 @@ export async function trimVideoApi(
   if (extras?.keepLastSeconds != null) body.keepLastSeconds = extras.keepLastSeconds
   if (extras?.smartLoopCut) body.smartLoopCut = true
   if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
+  if (extras?.losslessKeyframe) body.losslessKeyframe = true
   if (extras?.trimMode) body.trimMode = extras.trimMode
   if (extras?.upstreamDuration != null && extras.upstreamDuration > 0) {
     body.upstreamDuration = extras.upstreamDuration

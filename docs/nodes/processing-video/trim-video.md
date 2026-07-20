@@ -17,6 +17,7 @@ The Trim Video node extracts or shapes a section of video. Six modes:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| Lossless (snap to keyframe) | Checkbox | Off | Stream-copies the cut instead of re-encoding — zero quality loss and much faster. The start snaps back to the nearest keyframe, so the clip may begin up to a few seconds earlier than requested (never later). Falls back to a precise re-encode for sources that cannot be copied. Not used by Smart loop cut |
 | Trim Mode | Select | time | One of the six modes above |
 | Start Time (s) | Number | 0 | Start position in seconds (`time` mode) |
 | End Time (s) | Number | — | End position in seconds (`time` mode) |

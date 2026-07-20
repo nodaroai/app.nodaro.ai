@@ -601,6 +601,7 @@ exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match sna
 **Optional data fields:**
 - \`currentJobProgress?: number\`
 - \`trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"\`
+- \`losslessKeyframe?: boolean\`
 - \`trimStartFrames?: number\`
 - \`trimEndFrames?: number\`
 - \`trimStartSeconds?: number\`

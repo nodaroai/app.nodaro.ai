@@ -3385,6 +3385,9 @@ export type TrimVideoData = {
    *   - "smart-loop-cut": worker picks trailing frame closest to frame 0 (PSNR)
    */
   trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
+  /** Lossless keyframe snap: start moves BACK to the nearest keyframe and the
+   *  cut is stream-copied (no re-encode, no quality loss, fast). */
+  losslessKeyframe?: boolean
   startTime: number
   endTime: number
   /** Frame-based trim from start. Used when trimMode === "frames". */

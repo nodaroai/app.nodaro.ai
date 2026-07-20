@@ -4298,6 +4298,7 @@ export function buildPayload(
         // Smart loop cut — worker picks the trailing frame closest to frame 0.
         smartLoopCut: trimMode === "smart-loop-cut",
         smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
+        losslessKeyframe: trimMode !== "smart-loop-cut" && data.losslessKeyframe === true ? true : undefined,
         // Pass through trimMode + upstream duration for accurate credit estimation
         // (frame and smart-loop-cut modes need source length to derive output duration).
         trimMode,

@@ -35,6 +35,9 @@ const trimVideoBody = z.object({
   smartLoopCut: z.boolean().optional().default(false),
   smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
   outputSilentVideo: z.boolean().optional().default(false),
+  // LOSSLESS KEYFRAME SNAP: snap the trim start back to the nearest keyframe
+  // and stream-copy (no re-encode). Ignored by smart-loop-cut.
+  losslessKeyframe: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
   // Optional upstream video duration (seconds). Used by both the credit
   // estimator (frames + smart-loop-cut modes need to know input length) and

@@ -166,7 +166,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     videoUrl, startTime, endTime, outputSilentVideo,
     trimStartFrames, trimEndFrames,
     trimStartSeconds, trimEndSeconds, keepFirstSeconds, keepLastSeconds,
-    smartLoopCut: smartLoopCutFlag, smartLoopCutLookback,
+    smartLoopCut: smartLoopCutFlag, smartLoopCutLookback, losslessKeyframe,
   } = job.data as {
     jobId: string
     videoUrl: string
@@ -181,6 +181,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     keepLastSeconds?: number
     smartLoopCut?: boolean
     smartLoopCutLookback?: number
+    losslessKeyframe?: boolean
   }
 
   // Smart loop cut: empirically pick the trailing frame closest to frame 0
@@ -228,6 +229,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     trimEndSeconds,
     keepFirstSeconds,
     keepLastSeconds,
+    losslessKeyframe,
   })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)

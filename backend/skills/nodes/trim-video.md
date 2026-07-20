@@ -1,7 +1,7 @@
 ---
 node_type: trim-video
-generated_at: 2026-05-20T19:56:14.136Z
-generated_from: c86c4b48
+generated_at: 2026-07-20T12:38:04.030Z
+generated_from: 4f35d44b5
 ---
 
 # trim-video
@@ -22,6 +22,7 @@ generated_from: c86c4b48
 **Optional data fields:**
 - `currentJobProgress?: number`
 - `trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"`
+- `losslessKeyframe?: boolean`
 - `trimStartFrames?: number`
 - `trimEndFrames?: number`
 - `trimStartSeconds?: number`

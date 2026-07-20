@@ -687,6 +687,21 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
         </Select>
       </div>
 
+      {mode !== "smart-loop-cut" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="trim-lossless-kf"
+            checked={data.losslessKeyframe ?? false}
+            onChange={(e) => onUpdate({ losslessKeyframe: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="trim-lossless-kf" className="text-xs">
+            Lossless (snap to keyframe) — no re-encode; the start moves back to the nearest keyframe
+          </label>
+        </div>
+      )}
+
       {mode === "time" && (
         <>
           <div>

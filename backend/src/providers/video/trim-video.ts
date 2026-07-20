@@ -24,6 +24,27 @@ interface TrimVideoOptions {
   /** libx264 CRF for the re-encode (default 23). edit-video-pro cuts kept
    *  footage at 18 to minimize generation loss before the splice re-encode. */
   readonly crf?: number
+  /** LOSSLESS KEYFRAME SNAP: snap the start BACK to the nearest keyframe and
+   *  stream-copy the cut (no re-encode, no generation loss, fast). The start
+   *  moves EARLIER by up to one GOP — the window is over-covered, never cut
+   *  into. Non-h264/aac sources still honor the snapped start but re-encode. */
+  readonly losslessKeyframe?: boolean
+}
+
+/** Keyframe presentation times via a packet-level probe (no decode). */
+async function probeKeyframeTimes(filePath: string): Promise<number[]> {
+  const out = await runFfprobe([
+    "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", filePath,
+  ])
+  const times: number[] = []
+  for (const line of out.split("\n")) {
+    const [pts, flags] = line.trim().split(",")
+    if (!pts || !flags || !flags.includes("K")) continue
+    const t = Number(pts)
+    if (Number.isFinite(t)) times.push(t)
+  }
+  return times.sort((a, b) => a - b)
 }
 
 export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath: string }> {
@@ -31,7 +52,7 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
     videoUrl, outputSilentVideo = false,
     trimStartFrames, trimEndFrames,
     trimStartSeconds, trimEndSeconds, keepFirstSeconds, keepLastSeconds,
-    crf,
+    crf, losslessKeyframe,
   } = options
   let { startTime, endTime } = options
   const workDir = await createWorkDir("trim-video")
@@ -78,6 +99,37 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
         if (trimEndSeconds !== undefined && trimEndSeconds > 0) {
           endTime = Math.max(startTime, durationSec - trimEndSeconds)
         }
+      }
+    }
+
+    // LOSSLESS KEYFRAME SNAP: snap start back to the nearest keyframe (a
+    // stream-copy cut is only decodable when it STARTS on one; ends can land
+    // anywhere). Copy only when the codecs survive an mp4 cut losslessly;
+    // anything else still honors the snapped start but re-encodes below.
+    if (losslessKeyframe) {
+      try {
+        const kfs = await probeKeyframeTimes(inputPath)
+        const snapped = kfs.filter((kt) => kt <= startTime + 1e-3).reduce((a, b) => Math.max(a, b), 0)
+        const vcodec = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath])).trim().split(/\r?\n/)[0] ?? ""
+        const acodec = (await runFfprobe(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath])).trim().split(/\r?\n/)[0] ?? ""
+        const copySafe = vcodec === "h264" && (acodec === "" || acodec === "aac" || acodec === "mp3")
+        console.log(`[trimVideo] keyframe snap: requested start ${startTime}s -> ${snapped}s (copySafe=${copySafe})`)
+        startTime = snapped
+        if (copySafe) {
+          const cargs = ["-y", "-ss", String(startTime), "-i", inputPath]
+          if (endTime !== undefined) {
+            cargs.push("-t", String(Math.max(0, endTime - startTime)))
+          }
+          cargs.push("-c:v", "copy")
+          if (outputSilentVideo) cargs.push("-an")
+          else cargs.push("-c:a", "copy")
+          cargs.push("-movflags", "+faststart", outputPath)
+          console.log(`[trimVideo] Running FFmpeg (lossless copy): ffmpeg ${cargs.join(" ")}`)
+          await runFfmpeg(cargs)
+          return { videoPath: outputPath }
+        }
+      } catch (err) {
+        console.warn(`[trimVideo] keyframe snap failed (${err instanceof Error ? err.message : String(err)}) — precise re-encode fallback`)
       }
     }
 
