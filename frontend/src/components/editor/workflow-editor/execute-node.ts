@@ -1950,7 +1950,7 @@ export function executeNode(
       plannerModel: gvpData.plannerModel?.trim() || undefined,
       planOnly: gvpData.planOnly === true ? true : undefined,
       contextTailSec: typeof gvpData.contextTailSec === "number" ? gvpData.contextTailSec : undefined,
-      autoCastFromAnalysis: gvpData.autoCastFromAnalysis === false ? false : undefined,
+      autoCastFromAnalysis: gvpData.autoCastFromAnalysis === true ? true : undefined,
       plannerMode: gvpData.plannerMode && gvpData.plannerMode !== "auto" ? gvpData.plannerMode : undefined,
       rollingRefs: gvpData.rollingRefs === true ? true : undefined,
       audioTail: gvpData.audioTail === true ? true : undefined,

@@ -3643,12 +3643,12 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <input
           type="checkbox"
           id="gvp-autoCast"
-          checked={data.autoCastFromAnalysis ?? true}
+          checked={data.autoCastFromAnalysis ?? false}
           onChange={(e) => onUpdate({ autoCastFromAnalysis: e.target.checked })}
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-autoCast" className="text-xs">
-          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (default on)
+          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (experimental, default off — v1 is text-only)
         </label>
       </div>
 

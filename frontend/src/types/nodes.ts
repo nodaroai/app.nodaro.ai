@@ -1848,7 +1848,8 @@ export interface GenerateVideoProNodeData {
    *  per-join surcharge (billed at the ref rate). */
   contextTailSec?: number
   /** AUTO-CAST: inject analysis-supplied per-slot reference frames as identity
-   *  refs (default on; inert for scripts without cast data). */
+   *  refs. OPT-IN (default off — v1 is text-only; the stamps become v2's
+   *  user-editable cast gallery). */
   autoCastFromAnalysis?: boolean
   /** Planner algorithm: "fidelity" = faithful split (keeps source timing,
    *  rebased per segment); "condense" = compact rewrite (cast sheet +
