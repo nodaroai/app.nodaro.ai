@@ -3594,6 +3594,27 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </p>
       </div>
 
+      {/* Planner style — A/B lever: faithful split (source timing kept,
+          rebased per segment) vs condensed rewrite (cast sheet +
+          timestamp-free beats). Auto picks by input shape. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="gvp-planner-mode">Planner style</Label>
+        <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" })}>
+          <SelectTrigger id="gvp-planner-mode" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto — condense analysis input, split everything else</SelectItem>
+            <SelectItem value="fidelity">Faithful split — keep source wording and timing</SelectItem>
+            <SelectItem value="condense">Condensed — short prompts, no timestamps</SelectItem>
+            <SelectItem value="anchored">Slot-anchored — cast header + slot names throughout</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action.
+        </p>
+      </div>
+
       {/* Context tail — continuation-reference length per join (A/B lever:
           longer = more boundary-motion context for slow moves/tempo, small
           per-join surcharge at the ref rate). */}
