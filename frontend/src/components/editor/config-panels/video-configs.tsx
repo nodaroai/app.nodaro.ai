@@ -3643,12 +3643,12 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <input
           type="checkbox"
           id="gvp-autoCast"
-          checked={data.autoCastFromAnalysis ?? true}
+          checked={data.autoCastFromAnalysis ?? false}
           onChange={(e) => onUpdate({ autoCastFromAnalysis: e.target.checked })}
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-autoCast" className="text-xs">
-          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (default on)
+          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (experimental, default off — v1 is text-only)
         </label>
       </div>
 
@@ -3680,6 +3680,22 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         />
         <label htmlFor="gvp-audioTail" className="text-xs">
           Audio context tail (experimental) — carry the soundtrack-so-far into each continuation
+        </label>
+      </div>
+
+      {/* OVERLAP ANCHOR — continuity: anchor on the previous segment's last
+          keyframe; the model re-enacts the overlap (supervised warm-up) and
+          the stitch drops the duplicate. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-overlapAnchor"
+          checked={data.overlapAnchor ?? false}
+          onChange={(e) => onUpdate({ overlapAnchor: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-overlapAnchor" className="text-xs">
+          Overlap anchor (experimental) — continue from the previous segment&apos;s last keyframe with an overlapping reference
         </label>
       </div>
 

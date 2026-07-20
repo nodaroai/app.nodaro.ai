@@ -3826,10 +3826,11 @@ export function buildPayload(
         plannerModel: typeof data.plannerModel === "string" && data.plannerModel ? data.plannerModel : undefined,
         planOnly: data.planOnly === true ? true : undefined,
         contextTailSec: typeof data.contextTailSec === "number" ? data.contextTailSec : undefined,
-        autoCastFromAnalysis: data.autoCastFromAnalysis === false ? false : undefined,
+        autoCastFromAnalysis: data.autoCastFromAnalysis === true ? true : undefined,
         plannerMode: data.plannerMode === "fidelity" || data.plannerMode === "condense" || data.plannerMode === "anchored" || data.plannerMode === "hybrid" ? data.plannerMode : undefined,
         rollingRefs: data.rollingRefs === true ? true : undefined,
         audioTail: data.audioTail === true ? true : undefined,
+        overlapAnchor: data.overlapAnchor === true ? true : undefined,
         usageLogId,
       })
     }
@@ -4297,6 +4298,7 @@ export function buildPayload(
         // Smart loop cut — worker picks the trailing frame closest to frame 0.
         smartLoopCut: trimMode === "smart-loop-cut",
         smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
+        losslessKeyframe: trimMode !== "smart-loop-cut" && data.losslessKeyframe === true ? true : undefined,
         // Pass through trimMode + upstream duration for accurate credit estimation
         // (frame and smart-loop-cut modes need source length to derive output duration).
         trimMode,

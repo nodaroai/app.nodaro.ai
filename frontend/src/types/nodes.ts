@@ -1848,7 +1848,8 @@ export interface GenerateVideoProNodeData {
    *  per-join surcharge (billed at the ref rate). */
   contextTailSec?: number
   /** AUTO-CAST: inject analysis-supplied per-slot reference frames as identity
-   *  refs (default on; inert for scripts without cast data). */
+   *  refs. OPT-IN (default off — v1 is text-only; the stamps become v2's
+   *  user-editable cast gallery). */
   autoCastFromAnalysis?: boolean
   /** Planner algorithm: "fidelity" = faithful split (keeps source timing,
    *  rebased per segment); "condense" = compact rewrite (cast sheet +
@@ -1863,6 +1864,9 @@ export interface GenerateVideoProNodeData {
   /** Audio context tail (experimental A/B): ride ~8s of the soundtrack-so-far
    *  as an audio reference on every continuation (guards sound drift). */
   audioTail?: boolean
+  /** Overlap anchor (experimental): continuations anchor on the previous
+   *  segment's last keyframe, re-enact the overlap, then continue. */
+  overlapAnchor?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
@@ -3382,6 +3386,9 @@ export type TrimVideoData = {
    *   - "smart-loop-cut": worker picks trailing frame closest to frame 0 (PSNR)
    */
   trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
+  /** Lossless keyframe snap: start moves BACK to the nearest keyframe and the
+   *  cut is stream-copied (no re-encode, no quality loss, fast). */
+  losslessKeyframe?: boolean
   startTime: number
   endTime: number
   /** Frame-based trim from start. Used when trimMode === "frames". */
