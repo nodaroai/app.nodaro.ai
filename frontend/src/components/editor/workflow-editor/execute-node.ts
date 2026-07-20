@@ -1951,6 +1951,7 @@ export function executeNode(
       planOnly: gvpData.planOnly === true ? true : undefined,
       contextTailSec: typeof gvpData.contextTailSec === "number" ? gvpData.contextTailSec : undefined,
       autoCastFromAnalysis: gvpData.autoCastFromAnalysis === false ? false : undefined,
+      plannerMode: gvpData.plannerMode && gvpData.plannerMode !== "auto" ? gvpData.plannerMode : undefined,
       idempotencyKey,
     };
 

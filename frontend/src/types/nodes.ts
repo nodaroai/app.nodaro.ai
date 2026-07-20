@@ -1850,6 +1850,11 @@ export interface GenerateVideoProNodeData {
   /** AUTO-CAST: inject analysis-supplied per-slot reference frames as identity
    *  refs (default on; inert for scripts without cast data). */
   autoCastFromAnalysis?: boolean
+  /** Planner algorithm: "fidelity" = faithful split (keeps source timing,
+   *  rebased per segment); "condense" = compact rewrite (cast sheet +
+   *  timestamp-free beats); "anchored" = fidelity split + slot-definitions
+   *  header with bare-name references; "auto" (default) picks by shape. */
+  plannerMode?: "auto" | "fidelity" | "condense" | "anchored"
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
