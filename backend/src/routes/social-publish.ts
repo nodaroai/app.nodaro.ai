@@ -10,7 +10,7 @@ import {
 } from "../services/social/execute-publish.js"
 import type { PublishRequest } from "../services/social/platforms/index.js"
 import { providerIds } from "../services/social/providers/registry.js"
-import { BadBodyError, RefreshTokenError } from "../services/social/providers/types.js"
+import { BadBodyError, NotPublishedError, RefreshTokenError } from "../services/social/providers/types.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -21,6 +21,17 @@ import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nod
 // routes can't drift.
 const VALID_ACTIONS = SHARED_ACTIONS
 const MEDIA_REQUIRED_ACTIONS = SHARED_MEDIA_REQUIRED
+
+// This sync route must produce response HEADERS before its callers give up:
+// the orchestrator's internal fetch (undici's default headersTimeout) and
+// browsers both cut a headers-less response at ~300s. Slow publishers
+// (Instagram container ingestion can take minutes) clamp their polling and
+// retry budget to this deadline via metadata.publishDeadlineMs, so the route
+// always answers — with a typed retryable failure when the platform was too
+// slow — instead of the socket dying mid-handler and the client seeing an
+// unknown outcome. The scheduled worker holds no HTTP response and sets no
+// deadline, keeping the full budgets.
+const SYNC_PUBLISH_DEADLINE_MS = 250_000
 
 const publishSchema = z.object({
   // Derived from the provider registry — adding a network there updates this
@@ -111,6 +122,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       const extraMetadata: Record<string, unknown> = {}
       if (chatId) extraMetadata.chatId = chatId
       if (parseMode) extraMetadata.parseMode = parseMode
+      extraMetadata.publishDeadlineMs = Date.now() + SYNC_PUBLISH_DEADLINE_MS
 
       // Shared executor — same token-refresh/reconnect/typed-error semantics
       // as the scheduled-publish worker (services/social/execute-publish.ts).
@@ -168,6 +180,12 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       }
       if (err instanceof BadBodyError) {
         return reply.status(400).send({ error: { code: "publish_failed", message } })
+      }
+      if (err instanceof NotPublishedError) {
+        // Nothing was posted and a retry is duplicate-free. 503 + a distinct
+        // code so a client can safely re-issue this one — unlike the 500
+        // below, which it must NOT blind-retry.
+        return reply.status(503).send({ error: { code: "publish_retryable", message } })
       }
       // UnknownOutcomeError (provider call in flight when it failed — the
       // message says the post MAY have gone out) + unexpected errors: 500.

@@ -3,7 +3,7 @@ import { decryptToken, encryptToken } from "./encryption.js"
 import { refreshAccessToken } from "./oauth.js"
 import type { PublishRequest } from "./platforms/index.js"
 import { getProvider } from "./providers/registry.js"
-import { BadBodyError, RefreshTokenError } from "./providers/types.js"
+import { BadBodyError, NotPublishedError, RefreshTokenError } from "./providers/types.js"
 
 /**
  * The ONE publish executor — shared by the synchronous
@@ -18,7 +18,11 @@ import { BadBodyError, RefreshTokenError } from "./providers/types.js"
  *                          Marks `reconnect_needed` for providers whose
  *                          tokens can't refresh (Meta family).        No retry.
  * - BadBodyError         — the platform DEFINITIVELY rejected the
- *                          content (publisher returned success:false). No retry.
+ *                          content (publisher returned success:false, or the
+ *                          publisher threw it). No retry.
+ * - NotPublishedError    — the publisher PROVED nothing was posted and the
+ *                          cause is transient (Instagram's container phase +
+ *                          its 9007 rejection). Definite AND retryable.
  * - UnknownOutcomeError  — the provider call was already in flight when it
  *                          failed (throw/timeout): the platform MAY have
  *                          accepted the post. NEVER blind-retry these — a
@@ -145,6 +149,11 @@ export async function executePublish(input: ExecutePublishInput): Promise<Execut
   try {
     result = await provider.publisher.publish(accessToken, input.request, metadata)
   } catch (err) {
+    // A publisher that already CLASSIFIED its failure knows more than this
+    // catch does — rethrow untouched. Wrapping a proven non-publish as
+    // "MAY have been published" both misinforms the user and suppresses a
+    // retry that is provably duplicate-free.
+    if (err instanceof NotPublishedError || err instanceof BadBodyError) throw err
     const msg = err instanceof Error ? err.message : "Publish failed"
     throw new UnknownOutcomeError(`Publish outcome unknown — the post MAY have been published: ${msg}`, err)
   }
