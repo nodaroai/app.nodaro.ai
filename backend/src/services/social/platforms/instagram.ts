@@ -1,5 +1,6 @@
 import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
 import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared"
+import { BadBodyError, NotPublishedError } from "../providers/types.js"
 
 /**
  * Instagram publishing — the container -> publish flow, shared by BOTH ways of
@@ -36,6 +37,66 @@ export const INSTAGRAM_GRAPH_HOST: InstagramHost = {
   postUrlField: "permalink",
 }
 
+/**
+ * Container readiness.
+ *
+ * Instagram ingests EVERY media container asynchronously — images included.
+ * Calling `media_publish` before ingestion finishes fails with
+ * `OAuthException` code 9007 ("Media ID is not available" / "The media is not
+ * ready for publishing"). Images usually finish in a couple of seconds, which
+ * is exactly why publishing them un-polled looked fine until it didn't.
+ *
+ * So: every container is polled to FINISHED before it is published. The
+ * budget splits by media kind because video ingestion is minutes, not
+ * seconds, and a uniform timeout is either too tight for video or a very
+ * long stall for images.
+ */
+const CONTAINER_POLL_INTERVAL_MS = 2_000
+const CONTAINER_TIMEOUT_IMAGE_MS = 90_000
+const CONTAINER_TIMEOUT_VIDEO_MS = 300_000
+
+/**
+ * Meta can still answer 9007 on `media_publish` for a few seconds AFTER the
+ * container reports FINISHED, so readiness polling alone does not close the
+ * race. Re-publishing the SAME `creation_id` is safe by construction: a
+ * container publishes at most once, so a retry cannot duplicate the post.
+ */
+const PUBLISH_RETRY_ATTEMPTS = 5
+const PUBLISH_RETRY_DELAY_MS = 3_000
+
+/** Graph error code: the container is not ready to publish. */
+const MEDIA_NOT_READY_CODE = 9007
+
+/**
+ * Consecutive status-poll failures tolerated before giving up. A transient
+ * blip (Graph 5xx, a rate limit, a network drop) must not abort a wait that
+ * may be minutes in; a persistent failure (revoked token, dead network) must
+ * not burn the whole budget before surfacing.
+ */
+const MAX_CONSECUTIVE_POLL_FAILURES = 3
+
+function containerTimeoutMs(isVideo: boolean): number {
+  return isVideo ? CONTAINER_TIMEOUT_VIDEO_MS : CONTAINER_TIMEOUT_IMAGE_MS
+}
+
+/**
+ * Callers that must answer an open HTTP request pass an absolute deadline via
+ * `metadata.publishDeadlineMs` (the sync /v1/social/publish route does — its
+ * callers cut a headers-less response at ~300s). Every container wait and
+ * publish-retry sleep clamps to it, so the publisher reports a typed,
+ * retry-safe failure BEFORE the caller's socket dies. The scheduled worker
+ * holds no HTTP response, passes no deadline, and keeps the full budgets.
+ */
+function readDeadlineMs(metadata: Record<string, unknown>): number | undefined {
+  const v = metadata.publishDeadlineMs
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
+}
+
+function clampToDeadline(budgetMs: number, deadlineMs: number | undefined): number {
+  if (deadlineMs === undefined) return budgetMs
+  return Math.max(0, Math.min(budgetMs, deadlineMs - Date.now()))
+}
+
 export function createInstagramPublisher(host: InstagramHost): PlatformPublisher {
   return {
     async publish(accessToken: string, request: PublishRequest, metadata: Record<string, unknown>): Promise<PublishResult> {
@@ -43,6 +104,7 @@ export function createInstagramPublisher(host: InstagramHost): PlatformPublisher
       if (!igUserId) throw new Error("Instagram user ID not found in connection metadata")
 
       const { action, caption, mediaUrl } = request
+      const deadlineMs = readDeadlineMs(metadata)
 
       if (action === "post-image" || action === "post-reel" || action === "post-story") {
         const containerParams: Record<string, unknown> = { access_token: accessToken }
@@ -57,11 +119,16 @@ export function createInstagramPublisher(host: InstagramHost): PlatformPublisher
 
         const containerId = await createContainer(host, igUserId, accessToken, containerParams, "container creation failed")
 
-        if (action === "post-reel" || action === "post-story") {
-          await waitForContainer(host, accessToken, containerId)
-        }
+        // Poll EVERY container, images included — an un-polled image container
+        // is the 9007 bug, not a shortcut.
+        await waitForContainer(
+          host,
+          accessToken,
+          containerId,
+          clampToDeadline(containerTimeoutMs(action !== "post-image"), deadlineMs),
+        )
 
-        const mediaId = await publishContainer(host, igUserId, accessToken, containerId, "publish failed")
+        const mediaId = await publishContainer(host, igUserId, accessToken, containerId, "publish failed", deadlineMs)
         return {
           success: true,
           platformPostId: mediaId,
@@ -84,9 +151,12 @@ export function createInstagramPublisher(host: InstagramHost): PlatformPublisher
           mediaItems.map((item) => createCarouselItemContainer(host, igUserId, accessToken, item)),
         )
 
-        if (isVideoCarousel) {
-          await Promise.all(itemIds.map((id) => waitForContainer(host, accessToken, id)))
-        }
+        // Photo children are polled too — the parent references them by id and
+        // inherits any not-yet-ingested child as a 9007 at publish time.
+        const itemTimeoutMs = containerTimeoutMs(isVideoCarousel)
+        await Promise.all(
+          itemIds.map((id) => waitForContainer(host, accessToken, id, clampToDeadline(itemTimeoutMs, deadlineMs))),
+        )
 
         const parentId = await createContainer(
           host,
@@ -102,9 +172,9 @@ export function createInstagramPublisher(host: InstagramHost): PlatformPublisher
         )
 
         // Meta docs recommend waiting on the parent too, even for photo-only.
-        await waitForContainer(host, accessToken, parentId)
+        await waitForContainer(host, accessToken, parentId, clampToDeadline(itemTimeoutMs, deadlineMs))
 
-        const mediaId = await publishContainer(host, igUserId, accessToken, parentId, "carousel publish failed")
+        const mediaId = await publishContainer(host, igUserId, accessToken, parentId, "carousel publish failed", deadlineMs)
         return {
           success: true,
           platformPostId: mediaId,
@@ -170,6 +240,12 @@ export async function refreshInstagramStandaloneToken(
   }
 }
 
+/**
+ * Container creation is provably pre-publish, so every failure here is typed:
+ * a network-level failure can at worst have created a container that is never
+ * published (it just expires), and a Graph rejection created nothing. Neither
+ * may ever surface as "the post MAY have been published".
+ */
 async function createContainer(
   host: InstagramHost,
   igUserId: string,
@@ -177,14 +253,43 @@ async function createContainer(
   body: Record<string, unknown>,
   errorLabel: string,
 ): Promise<string> {
-  const res = await fetch(`${host.graph}/${igUserId}/media`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`Instagram ${errorLabel}: ${await res.text()}`)
+  let res: Response
+  try {
+    res = await fetch(`${host.graph}/${igUserId}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new NotPublishedError(
+      `Instagram ${errorLabel}: network error (${msg}). The post was NOT published — retrying is safe.`,
+    )
+  }
+  if (!res.ok) {
+    const detail = `Instagram ${errorLabel}: ${await res.text()}`
+    // 5xx is transient (retry-safe); 4xx is Meta definitively rejecting the
+    // container (bad media URL, permissions) — retrying cannot help.
+    if (res.status >= 500) throw new NotPublishedError(detail)
+    throw new BadBodyError(detail)
+  }
   const data = await res.json() as { id: string }
   return data.id
+}
+
+/**
+ * Meta reports 9007 as a Graph error code, but some edges only carry it in the
+ * message text. Match either, so a response-shape change downgrades to a
+ * slower path rather than silently losing the retry.
+ */
+function isMediaNotReady(body: string): boolean {
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: number } }
+    if (parsed.error?.code === MEDIA_NOT_READY_CODE) return true
+  } catch {
+    // Non-JSON error body — fall through to the text match.
+  }
+  return /not ready for publishing|Media ID is not available/i.test(body)
 }
 
 async function publishContainer(
@@ -193,15 +298,38 @@ async function publishContainer(
   accessToken: string,
   containerId: string,
   errorLabel: string,
+  deadlineMs?: number,
 ): Promise<string> {
-  const res = await fetch(`${host.graph}/${igUserId}/media_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ creation_id: containerId, access_token: accessToken }),
-  })
-  if (!res.ok) throw new Error(`Instagram ${errorLabel}: ${await res.text()}`)
-  const data = await res.json() as { id: string }
-  return data.id
+  let lastBody = ""
+  let attemptsMade = 0
+  for (let attempt = 1; attempt <= PUBLISH_RETRY_ATTEMPTS; attempt++) {
+    attemptsMade = attempt
+    // Deliberately NOT wrapped: a fetch() rejection here means the publish
+    // request may have reached Meta, so the outcome is genuinely unknown —
+    // execute-publish's UnknownOutcomeError wrap is the truthful report.
+    const res = await fetch(`${host.graph}/${igUserId}/media_publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creation_id: containerId, access_token: accessToken }),
+    })
+    if (res.ok) return ((await res.json()) as { id: string }).id
+
+    lastBody = await res.text()
+    // Anything other than "not ready yet" is a real rejection — surface it now
+    // instead of burning the retry budget on an error that will not change.
+    if (!isMediaNotReady(lastBody)) throw new Error(`Instagram ${errorLabel}: ${lastBody}`)
+    if (attempt === PUBLISH_RETRY_ATTEMPTS) break
+    // Stop early when the caller's deadline would pass before the next try —
+    // better to answer "not published, retry safe" than to blow the deadline.
+    if (deadlineMs !== undefined && Date.now() + PUBLISH_RETRY_DELAY_MS >= deadlineMs) break
+    await new Promise((r) => setTimeout(r, PUBLISH_RETRY_DELAY_MS))
+  }
+  // Still 9007 after the budget. Meta refused to publish, so nothing was
+  // posted — a definite, retryable failure, NOT an unknown outcome.
+  throw new NotPublishedError(
+    `Instagram ${errorLabel}: media still not ready after ${attemptsMade} attempt(s) ` +
+      `(code ${MEDIA_NOT_READY_CODE}). The post was NOT published — retrying is safe. ${lastBody}`,
+  )
 }
 
 async function createCarouselItemContainer(
@@ -239,21 +367,66 @@ async function fetchInstagramPostUrl(
   }
 }
 
+/**
+ * Block until Meta finishes ingesting `containerId`.
+ *
+ * Every exit is pre-`media_publish`, so no outcome here can have posted
+ * anything — which is why every throw is typed (BadBodyError /
+ * NotPublishedError) rather than a bare Error that `execute-publish.ts` would
+ * report as "the post MAY have been published".
+ */
 async function waitForContainer(
   host: InstagramHost,
   accessToken: string,
   containerId: string,
-  maxWaitMs = 120_000,
+  maxWaitMs: number,
 ): Promise<void> {
-  const start = Date.now()
-  while (Date.now() - start < maxWaitMs) {
-    const res = await fetch(
-      `${host.graph}/${containerId}?fields=status_code&access_token=${accessToken}`,
-    )
-    const data = await res.json() as { status_code: string }
-    if (data.status_code === "FINISHED") return
-    if (data.status_code === "ERROR") throw new Error("Instagram media processing failed")
-    await new Promise((r) => setTimeout(r, 3000))
+  const deadline = Date.now() + maxWaitMs
+  let lastStatus = "UNKNOWN"
+  let consecutiveFailures = 0
+  for (;;) {
+    // A transient poll failure (Graph 5xx, a rate limit, a network drop) must
+    // not abort a wait that may be minutes in — tolerate a short streak and
+    // keep polling. A persistent one (revoked token, dead network) fails fast
+    // instead of burning the rest of the budget.
+    let failure: string | undefined
+    try {
+      const res = await fetch(
+        `${host.graph}/${containerId}?fields=status_code&access_token=${accessToken}`,
+      )
+      if (res.ok) {
+        consecutiveFailures = 0
+        const data = (await res.json()) as { status_code?: string }
+        lastStatus = data.status_code ?? lastStatus
+        if (lastStatus === "FINISHED") return
+        // Terminal states: this container is dead and will never publish. A
+        // fresh attempt would have to re-upload, so no automatic retry.
+        if (lastStatus === "ERROR" || lastStatus === "EXPIRED") {
+          throw new BadBodyError(
+            `Instagram media processing failed (status_code=${lastStatus}) — the post was not published.`,
+          )
+        }
+      } else {
+        failure = `HTTP ${res.status}: ${await res.text()}`
+      }
+    } catch (err) {
+      if (err instanceof BadBodyError) throw err
+      failure = err instanceof Error ? err.message : String(err)
+    }
+    if (failure !== undefined) {
+      consecutiveFailures += 1
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        throw new NotPublishedError(
+          `Instagram container status check failed ${consecutiveFailures} times in a row (${failure}). ` +
+            `The post was NOT published — retrying is safe.`,
+        )
+      }
+    }
+    if (Date.now() >= deadline) break
+    await new Promise((r) => setTimeout(r, CONTAINER_POLL_INTERVAL_MS))
   }
-  throw new Error("Instagram media processing timed out")
+  throw new NotPublishedError(
+    `Instagram media processing did not finish within ${Math.round(maxWaitMs / 1000)}s ` +
+      `(last status_code=${lastStatus}). The post was NOT published — retrying is safe.`,
+  )
 }

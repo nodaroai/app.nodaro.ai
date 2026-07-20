@@ -50,7 +50,7 @@ vi.mock("../../../lib/supabase.js", () => ({
 }))
 
 import { executePublish, NotConnectedError, UnknownOutcomeError } from "../execute-publish.js"
-import { BadBodyError, RefreshTokenError } from "../providers/types.js"
+import { BadBodyError, NotPublishedError, RefreshTokenError } from "../providers/types.js"
 
 const future = new Date(Date.now() + 3600_000).toISOString()
 const past = new Date(Date.now() - 3600_000).toISOString()
@@ -103,6 +103,30 @@ describe("executePublish", () => {
     await expect(
       executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(UnknownOutcomeError)
+  })
+
+  it("rethrows NotPublishedError untouched — a PROVEN non-publish is never 'may have published'", async () => {
+    connectionRows = [conn()]
+    publishMock.mockRejectedValue(
+      new NotPublishedError("Instagram publish failed: media still not ready (code 9007)"),
+    )
+
+    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+      .then(() => null)
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NotPublishedError)
+    expect(err).not.toBeInstanceOf(UnknownOutcomeError)
+    // The exact regression: 9007 used to reach the user as "MAY have been published".
+    expect((err as Error).message).not.toMatch(/MAY have been published/)
+  })
+
+  it("rethrows a publisher-thrown BadBodyError untouched", async () => {
+    connectionRows = [conn()]
+    publishMock.mockRejectedValue(new BadBodyError("Instagram media processing failed (status_code=ERROR)"))
+    await expect(
+      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+    ).rejects.toBeInstanceOf(BadBodyError)
   })
 
   it("maps a definitive platform rejection to BadBodyError", async () => {

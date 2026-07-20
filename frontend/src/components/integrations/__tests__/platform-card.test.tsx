@@ -19,6 +19,13 @@ vi.mock("@/components/ui/dialog", () => ({
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+// Deferred read (call-time, not factory-time) so each describe can flip the
+// edition without re-importing the component.
+let cloudEdition = false
+vi.mock("@/lib/edition", () => ({
+  isCloud: () => cloudEdition,
+}))
+
 const connectSocialCustom = vi.fn(async (_platform: string, _fields: Record<string, string>) => ({
   success: true,
   platform: "bluesky",
@@ -50,6 +57,10 @@ function provider(overrides: Partial<SocialProviderInfo> = {}): SocialProviderIn
 }
 
 describe("PlatformCard (provider-driven)", () => {
+  beforeEach(() => {
+    cloudEdition = false
+  })
+
   it("renders an unavailable provider disabled, with the missing env names", () => {
     render(
       <PlatformCard
@@ -95,6 +106,35 @@ describe("PlatformCard (provider-driven)", () => {
     // identifier/password empty -> validation error -> submit disabled
     const submit = screen.getAllByRole("button", { name: /^Connect$/ }).at(-1)!
     expect((submit as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe("PlatformCard (cloud edition — Coming soon)", () => {
+  beforeEach(() => {
+    cloudEdition = true
+  })
+
+  it("shows Coming soon and hides deployment internals for an unconfigured network", () => {
+    render(
+      <PlatformCard
+        provider={provider({ id: "reddit", label: "Reddit", connectKind: "oauth2", available: false, missingEnv: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"], customFields: undefined })}
+        connections={[]}
+        onConnectionChange={() => {}}
+      />,
+    )
+    // Cloud customers can't set env vars — the setup internals are noise to
+    // them and must not render: not the env names, not "Requires setup".
+    expect(screen.getAllByText(/Coming soon/i).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/REDDIT_CLIENT_ID/)).toBeNull()
+    expect(screen.queryByText(/Requires setup/i)).toBeNull()
+    const btn = screen.getByRole("button", { name: /Coming soon/i })
+    expect((btn as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("leaves available networks untouched on cloud", () => {
+    render(<PlatformCard provider={provider()} connections={[]} onConnectionChange={() => {}} />)
+    expect(screen.queryByText(/Coming soon/i)).toBeNull()
+    expect(screen.getByRole("button", { name: /^Connect$/ })).toBeTruthy()
   })
 })
 

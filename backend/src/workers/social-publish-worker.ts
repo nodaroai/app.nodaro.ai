@@ -24,6 +24,11 @@ import { commitJobCredits, isFinalJobAttempt, refundJobCredits } from "./shared.
  * - UnknownOutcome           → the provider call already started: row error
  *                              "may have published", refund, NO retry — a
  *                              human decides whether to re-schedule
+ * - NotPublished             → the publisher PROVED nothing was posted and the
+ *                              cause is transient (Instagram 9007): refund this
+ *                              attempt and let BullMQ back off. Deliberately
+ *                              NOT in the `definitive` set below — adding it
+ *                              there would re-break the bug it exists to fix.
  * - anything else            → failed BEFORE the provider call: refund this
  *                              attempt, rethrow for BullMQ backoff retry
  */

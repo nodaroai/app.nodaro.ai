@@ -143,7 +143,27 @@ export interface SocialProvider {
  * Typed publish errors (Phase 1 worker retry semantics — declared with the
  * descriptor so provider implementations can adopt them incrementally):
  * RefreshTokenError -> refresh + bounded retry (or mark reconnect_needed),
- * BadBodyError -> permanent content failure, never retried.
+ * BadBodyError -> permanent content failure, never retried,
+ * NotPublishedError -> transient failure the publisher PROVED did not post.
  */
 export class RefreshTokenError extends Error {}
 export class BadBodyError extends Error {}
+
+/**
+ * The publisher established that NOTHING was posted, and the cause is
+ * transient — so a retry is both safe and worth attempting.
+ *
+ * This is the third point on the outcome axis, and the distinction is the
+ * whole reason it exists:
+ * - BadBodyError        — definitely not posted, and never will be. No retry.
+ * - NotPublishedError   — definitely not posted, but a retry may succeed.
+ * - UnknownOutcomeError — MAY have posted. Never blind-retry (duplicate risk).
+ *
+ * Only throw this where the publisher can prove no post exists — e.g.
+ * Instagram's container phase, which runs entirely before `media_publish`,
+ * and its 9007 ("media not ready") rejection, which is the platform refusing
+ * to publish. Collapsing these into UnknownOutcomeError tells the user their
+ * post "may have gone out" when it provably did not, and suppresses a retry
+ * that would have worked.
+ */
+export class NotPublishedError extends Error {}

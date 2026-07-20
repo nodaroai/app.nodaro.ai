@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2, Unlink, Plus, AlertTriangle, RefreshCw, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send, Share2, MessageCircle, Cloud, PenLine, BookOpen, Globe, Users, Pin, Gamepad2, AtSign, Hash } from "lucide-react"
 import { getSocialAuthUrl, disconnectSocial, connectTelegram, connectSocialCustom, type SocialProviderInfo } from "@/lib/api"
 import { toast } from "sonner"
+import { isCloud } from "@/lib/edition"
 import type { SocialConnection } from "@/types/nodes"
 
 // Icons for known networks; anything the registry adds later falls back to a
@@ -82,6 +83,11 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
   const [dialogError, setDialogError] = useState<string | null>(null)
 
   const unavailable = !provider.available
+  // Cloud customers cannot set deployment env vars, so an unconfigured
+  // network is simply "not offered yet" — say Coming soon and keep the
+  // deployment internals (env var names) out of the UI. Self-hosted admins
+  // ARE the deployment owner; for them the env hints are the setup guide.
+  const comingSoon = unavailable && isCloud()
 
   const openFieldsDialog = useCallback(() => {
     const defaults: Record<string, string> = {}
@@ -200,9 +206,9 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       {unavailable && (
         <div
           className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#333] text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
-          title={provider.missingEnv?.length ? `Missing: ${provider.missingEnv.join(", ")}` : undefined}
+          title={!comingSoon && provider.missingEnv?.length ? `Missing: ${provider.missingEnv.join(", ")}` : undefined}
         >
-          Requires setup
+          {comingSoon ? "Coming soon" : "Requires setup"}
         </div>
       )}
       <div className="flex items-center gap-3">
@@ -215,7 +221,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
         </div>
       </div>
 
-      {unavailable && provider.missingEnv && provider.missingEnv.length > 0 && (
+      {unavailable && !comingSoon && provider.missingEnv && provider.missingEnv.length > 0 && (
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Set <code className="font-mono">{provider.missingEnv.join(", ")}</code> on this deployment to enable.
         </p>
@@ -300,7 +306,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       >
         {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
         {unavailable ? (
-          "Requires setup"
+          comingSoon ? "Coming soon" : "Requires setup"
         ) : connections.length > 0 ? (
           <>
             <Plus className="h-4 w-4 mr-2" />

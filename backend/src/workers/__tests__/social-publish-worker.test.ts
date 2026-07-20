@@ -67,7 +67,7 @@ vi.mock("../../lib/config.js", () => ({
 
 import { processScheduledPost } from "../social-publish-worker.js"
 import { UnknownOutcomeError } from "../../services/social/execute-publish.js"
-import { BadBodyError } from "../../services/social/providers/types.js"
+import { BadBodyError, NotPublishedError } from "../../services/social/providers/types.js"
 
 function fakeJob(attemptsMade = 0) {
   return {
@@ -155,6 +155,23 @@ describe("processScheduledPost", () => {
     await expect(processScheduledPost(fakeJob())).rejects.toBeInstanceOf(UnrecoverableError)
     const errUpdate = rowUpdates.find((u) => u.status === "error")
     expect(String(errUpdate?.last_error)).toContain("MAY have been published")
+  })
+
+  it("NotPublished (proven non-publish, e.g. Instagram 9007) -> refund, row queued, BullMQ retries", async () => {
+    // GUARD: NotPublishedError must stay OUT of the worker's `definitive` set.
+    // Its whole point is that the publisher PROVED nothing was posted, so a
+    // blind retry is duplicate-free and worth attempting. Someone "tidying" it
+    // into the definitive list re-breaks the Instagram 9007 fix.
+    scheduledRow = baseRow()
+    const notPublished = new NotPublishedError("Instagram publish failed: media still not ready (code 9007)")
+    executeMock.mockRejectedValue(notPublished)
+
+    // Rethrown AS-IS — not wrapped in UnrecoverableError — so BullMQ backs off
+    // and retries.
+    await expect(processScheduledPost(fakeJob(0))).rejects.toBe(notPublished)
+    expect(rowUpdates.some((u) => u.status === "queued")).toBe(true)
+    expect(rowUpdates.some((u) => u.status === "error")).toBe(false)
+    expect(refundMock).toHaveBeenCalled()
   })
 
   it("generic pre-call failure -> refund attempt, row back to queued, rethrow for backoff", async () => {
