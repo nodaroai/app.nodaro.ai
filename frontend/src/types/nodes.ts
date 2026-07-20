@@ -1853,8 +1853,10 @@ export interface GenerateVideoProNodeData {
   /** Planner algorithm: "fidelity" = faithful split (keeps source timing,
    *  rebased per segment); "condense" = compact rewrite (cast sheet +
    *  timestamp-free beats); "anchored" = fidelity split + slot-definitions
-   *  header with bare-name references; "auto" (default) picks by shape. */
-  plannerMode?: "auto" | "fidelity" | "condense" | "anchored"
+   *  header with bare-name references; "hybrid" = condensed pacing +
+   *  label-locked identity + image-offloaded sheet (experiment arm);
+   *  "auto" (default) picks by shape. */
+  plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

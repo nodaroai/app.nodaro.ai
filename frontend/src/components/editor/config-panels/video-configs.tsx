@@ -3599,7 +3599,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           timestamp-free beats). Auto picks by input shape. */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="gvp-planner-mode">Planner style</Label>
-        <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" })}>
+        <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" | "hybrid" })}>
           <SelectTrigger id="gvp-planner-mode" className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
@@ -3608,10 +3608,11 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectItem value="fidelity">Faithful split — keep source wording and timing</SelectItem>
             <SelectItem value="condense">Condensed — short prompts, no timestamps</SelectItem>
             <SelectItem value="anchored">Slot-anchored — cast header + slot names throughout</SelectItem>
+            <SelectItem value="hybrid">Hybrid — compact beats + label-locked cast (experimental)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action.
+          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action; Hybrid combines compact beats with consistent entity labels and leans on reference images for appearance.
         </p>
       </div>
 
