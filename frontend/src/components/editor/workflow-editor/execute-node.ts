@@ -1953,6 +1953,7 @@ export function executeNode(
       autoCastFromAnalysis: gvpData.autoCastFromAnalysis === true ? true : undefined,
       plannerMode: gvpData.plannerMode && gvpData.plannerMode !== "auto" ? gvpData.plannerMode : undefined,
       rollingRefs: gvpData.rollingRefs === true ? true : undefined,
+      wordCut: gvpData.wordCut === true ? true : undefined,
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,
       overlapAnchorMode: gvpData.overlapAnchor === true && gvpData.overlapAnchorMode === "last-frame" ? ("last-frame" as const) : undefined,

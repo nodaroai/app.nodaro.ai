@@ -260,6 +260,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "autoCastFromAnalysis", type: "boolean" },
         { key: "plannerMode", type: "string" },
         { key: "rollingRefs", type: "boolean" },
+        { key: "wordCut", type: "boolean" },
         { key: "audioTail", type: "boolean" },
         { key: "overlapAnchor", type: "boolean" },
         { key: "overlapAnchorMode", type: "string" },
