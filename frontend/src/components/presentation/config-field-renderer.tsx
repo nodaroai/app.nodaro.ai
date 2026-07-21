@@ -545,7 +545,7 @@ function renderGenerateVideo(
  * Trimmed sibling of renderGenerateVideo above: adds prompt/duration/resolution
  * cases (the trimmed config panel exposes fewer, simpler levers than the full
  * generate-video node) and drops "motion" (no motion-amount field on this
- * node). Provider set is GVP_PROVIDERS (the 3 Seedance-2-family ids only —
+ * node). Provider set is GVP_PROVIDERS (the supported pro SKUs only —
  * never the full VIDEO_GEN_MODELS superset). Aspect ratio + resolution read
  * the node's OWN current provider so options can never silently drift from
  * what the model actually supports (no hardcoded static superset lists).
@@ -641,7 +641,7 @@ const EDIT_VIDEO_PRO_SPAN_HELP_TEXT =
 /**
  * Edit Video Pro — span-replace sibling of Generate Video Pro (Task 14).
  * Mirrors renderGenerateVideoPro's structure: prompt + provider (same
- * GVP_PROVIDERS — the 3 Seedance-2-family ids) + generateAudio. Unlike gvp,
+ * GVP_PROVIDERS — the supported pro SKUs) + generateAudio. Unlike gvp,
  * NO aspectRatio/resolution cases — both are source-derived by design (see
  * EditVideoProNodeData). Adds the two span fields (spanStart/spanEnd) as
  * plain numeric inputs (NumberField, not SliderField — no natural fixed

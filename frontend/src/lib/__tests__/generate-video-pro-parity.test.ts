@@ -9,7 +9,7 @@ import {
 } from "../generate-video-pro-handles"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { GVP_PROVIDERS } from "@/components/editor/config-panels/model-options"
-import { isSeedance2Provider } from "@nodaro/shared"
+import { isSeedance2Provider, GVP_SUPPORTED_PROVIDERS } from "@nodaro/shared"
 
 /**
  * FULL-PARITY GUARD (2026-07-14 directive, after two rounds of missed
@@ -59,8 +59,12 @@ describe("generate-video-pro ⇄ generate-video FULL parity", () => {
     }
   })
 
-  it("sanctioned delta #2: the pro provider set is the Seedance-2 family only", () => {
-    expect(GVP_PROVIDERS.length).toBeGreaterThan(0)
+  it("sanctioned delta #2: the pro provider set is EXACTLY the supported SKUs", () => {
+    // Pinned to the shared support list (2026-07-21 directive: only Seedance 2
+    // and Seedance 2 Fast are offered; mini stays in the capability family but
+    // out of pro selection). GVP_PROVIDERS derives from this list, so the two
+    // can only diverge if the catalog is missing a blessed SKU entirely.
+    expect(GVP_PROVIDERS.map((p) => p.value)).toEqual([...GVP_SUPPORTED_PROVIDERS])
     for (const p of GVP_PROVIDERS) {
       expect(isSeedance2Provider(String(p.value))).toBe(true)
     }

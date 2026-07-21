@@ -264,7 +264,7 @@ export function getHandleConnectionLimit(
   }
 
   // Edit Video Pro — Seedance-2-family only, same provider set as its gvp
-  // sibling (GVP_PROVIDERS = VIDEO_GEN_MODELS filtered by isSeedance2Provider,
+  // sibling (GVP_PROVIDERS = VIDEO_GEN_MODELS filtered by isGvpSupportedProvider,
   // shared verbatim between both config panels). `video` accepts exactly one
   // source clip, like video-retake: Seedance-2 replaces a time-window in a
   // single source video (see edit-video-pro-handles.ts). `imageReferences` is
