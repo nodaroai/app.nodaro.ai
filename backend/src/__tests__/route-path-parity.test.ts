@@ -229,6 +229,13 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // point; only cloud edition serves the route.
   "/v1/generate-video-pro",
 
+  // gvp Stop & keep + Continue (2026-07-21): same plugin-registered runtime
+  // routes as the base path above. The frontend calls landed in a
+  // frontend-only PR, so the path-filtered Backend Tests job never ran this
+  // test and the missing entries surfaced on the next backend-touching PR.
+  "/v1/generate-video-pro/:p/stop",
+  "/v1/generate-video-pro/continue",
+
   // edit-video-pro's route is registered at runtime by the private
   // @nodaroai/cloud-plugins package — same architecture as generate-video-pro
   // above. Not a static file under backend/src/routes/ or backend/src/ee/routes/

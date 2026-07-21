@@ -29,7 +29,14 @@ const CONTENT_REJECTION_PATTERNS = [
   "prohibited",
   "inappropriate",
   "violat", // violation / violates
-  "filtered",
+  // NOT the bare word "filtered": ffmpeg's own diagnostics contain it ("No
+  // filtered frames for output stream"), which mislabeled plain ffmpeg
+  // failures as content rejections in the app-report sweep (2026-07-20
+  // extract-frame reports). Match provider-style phrasings only.
+  "content filtered",
+  "was filtered",
+  "filtered by",
+  "filtered due",
 ]
 
 // Input-shape limits (permanent until the caller changes the input).
@@ -48,9 +55,20 @@ const NON_RETRYABLE_PATTERNS = [...CONTENT_REJECTION_PATTERNS, ...INPUT_LIMIT_PA
  * the safety-filter subset of the non-retryable vocabulary. Used by the
  * app-report rejection sweep; absent/unknown reasons are NOT rejections.
  */
+/**
+ * Local tool output, never a provider verdict: `runFfmpeg` prefixes every
+ * shell failure with "ffmpeg failed:" and appends the raw stderr dump, which
+ * can contain ANY keyword (filter-graph diagnostics, codec banners). Keyword
+ * matching over that blob is meaningless — bail out before it.
+ */
+function isLocalFfmpegError(lower: string): boolean {
+  return lower.startsWith("ffmpeg failed")
+}
+
 export function isContentRejection(errorMessage: string | null | undefined): boolean {
   if (!errorMessage) return false
   const lower = errorMessage.toLowerCase()
+  if (isLocalFfmpegError(lower)) return false
   return CONTENT_REJECTION_PATTERNS.some((p) => lower.includes(p))
 }
 
@@ -62,5 +80,8 @@ export function isContentRejection(errorMessage: string | null | undefined): boo
 export function isRetryableFailure(errorMessage: string | null | undefined): boolean {
   if (!errorMessage) return true
   const lower = errorMessage.toLowerCase()
+  // ffmpeg stderr keywords are not high-confidence permanence signals —
+  // default to retryable, per the bias documented above.
+  if (isLocalFfmpegError(lower)) return true
   return !NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
 }

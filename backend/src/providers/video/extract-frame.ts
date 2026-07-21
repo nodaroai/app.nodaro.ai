@@ -121,7 +121,36 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<{ imag
     }
 
     console.log(`[extractFrame] Running FFmpeg: ffmpeg ${args.join(" ")}`)
-    await runFfmpeg(args)
+    try {
+      await runFfmpeg(args)
+    } catch (primaryErr) {
+      // A seek computed from container metadata can land PAST the actual last
+      // frame (nb_frames/fps/duration lie on some encoders). Zero frames then
+      // reach the filtergraph, ffmpeg initializes the mjpeg encoder from the
+      // raw input stream (limited-range yuv420p) instead of the negotiated
+      // filter output, and the encoder open fails with the baffling "Non
+      // full-range YUV is non-standard" — surfaced to the user as a wall of
+      // ffmpeg build-config text (2026-07-20 app reports).
+      //
+      // Fallback: decode the final second and keep the LAST decodable frame
+      // (`-update 1` overwrites the jpg per frame) — the nearest existing
+      // frame to every past-the-end target. Skipped for mode "first", which
+      // performs no seek: a failure there is a broken input, and answering it
+      // with the LAST frame would be silently wrong.
+      if (mode === "first") throw primaryErr
+      console.warn(`[extractFrame] primary seek failed (mode=${mode}) — falling back to the last decodable frame`)
+      const fallbackArgs = ["-y", "-sseof", "-1", "-i", inputPath, "-update", "1", "-q:v", "2", outputPath]
+      try {
+        await runFfmpeg(fallbackArgs)
+      } catch {
+        // Both attempts down: report something a human can act on instead of
+        // the raw ffmpeg dump (kept in logs above).
+        throw new Error(
+          `extract-frame: no decodable frame at the requested position (mode=${mode}) — ` +
+            `the video is shorter than its metadata claims, or the file is corrupt.`,
+        )
+      }
+    }
 
     console.log(`[extractFrame] Output: ${outputPath}`)
     return { imagePath: outputPath }
