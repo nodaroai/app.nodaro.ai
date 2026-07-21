@@ -79,11 +79,37 @@ where p.app_slug is null
 -- job inserts hardcode their own slug server-side instead of reading one from
 -- the request body.
 alter table public.jobs
-  add column if not exists app_slug text references public.client_apps(slug);
+  add column if not exists app_slug text;
+
+-- The FK is added SEPARATELY and idempotently, not inline above: with
+-- `ADD COLUMN IF NOT EXISTS`, if the column already exists Postgres skips the
+-- WHOLE clause including `REFERENCES`, so a re-run (or a hand-added column)
+-- would leave the column with no constraint while the migration reports
+-- success — and the comment below would then be a lie.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'jobs_app_slug_fkey' and conrelid = 'public.jobs'::regclass
+  ) then
+    alter table public.jobs
+      add constraint jobs_app_slug_fkey
+      foreign key (app_slug) references public.client_apps(slug);
+  end if;
+end $$;
 
 comment on column public.jobs.app_slug is
   'Client app that created this job (client_apps.slug). NULL = native app.nodaro.ai or an un-threaded route. Server-set only, never client-supplied: the FK means a bogus value would fail the insert.';
 
+-- NOT CONCURRENTLY: a plain CREATE INDEX takes a SHARE lock that blocks every
+-- INSERT/UPDATE/DELETE on `jobs` for the duration of the build, and `jobs` is
+-- the busiest table in the system. This is accepted rather than overlooked —
+-- CREATE INDEX CONCURRENTLY cannot run inside a transaction block, and the
+-- migration runner wraps each file in one, so it is not available here. The
+-- index is PARTIAL (`where app_slug is not null`) and every pre-existing row
+-- has NULL app_slug, so at apply time it indexes ZERO rows and the lock is held
+-- only momentarily. If this is ever re-run against a table where the column is
+-- widely populated, build it out of band with CONCURRENTLY instead.
 create index if not exists idx_jobs_app_slug on public.jobs (app_slug)
   where app_slug is not null;
 
@@ -91,8 +117,7 @@ create index if not exists idx_jobs_app_slug on public.jobs (app_slug)
 -- The obvious one — `update jobs set app_slug = w.app_slug from workflows w
 -- where j.workflow_id = w.id` — is an UNBOUNDED full-table UPDATE on the
 -- largest table in the system, rewriting every workflow-bearing row in a single
--- transaction under a migration statement timeout, during launch week. The GTM
--- question this column serves is forward-looking ("which app is generating load
--- from here on"), and historical VCP attribution is already available without
--- it via `usage_logs.action = 'voice-changer-pro'`. If a backfill is ever
--- genuinely wanted, run it OUT of band, batched by created_at.
+-- transaction under a migration statement timeout. The question this column
+-- serves is forward-looking ("which app is generating load from here on"), and
+-- historical per-app data is already derivable via `usage_logs.action`. If a
+-- backfill is ever genuinely wanted, run it OUT of band, batched by created_at.

@@ -1,13 +1,16 @@
 import { supabase } from "./supabase.js"
 
 /**
- * Usage ratio at which a user is considered to have hit the storage wall.
+ * Usage ratio at which a user is considered to have hit the storage warning.
  *
- * MUST match the client meter's amber threshold — `STORAGE_WARN_RATIO` in
- * vcp.nodaro.ai/src/hooks/useStorageStatus.ts:26. The GTM funnel joins the two,
- * so a divergence would silently mean "the meter turned amber" and "the user
- * crossed the threshold" describe different populations, and the monetization
- * numbers would be comparing unlike things.
+ * MUST match the client meter's amber threshold (`STORAGE_WARN_RATIO` in the
+ * VCP client). Reporting joins the two, so a divergence would silently mean
+ * "the meter turned amber" and "the user crossed the threshold" describe
+ * different sets of users.
+ *
+ * Duplicated across repos by necessity — the client cannot import from here.
+ * A drift is not detectable by either side's tests; treat a change to this
+ * value as a two-repo change.
  */
 export const STORAGE_WARN_RATIO = 0.85
 
@@ -17,12 +20,10 @@ export const STORAGE_WARN_RATIO = 0.85
  *
  * WHY HERE AND NOT IN THE CREDIT GUARD: the guard reads the profile BEFORE a job
  * runs, so it only ever sees usage as of the *previous* request. A user at 80%
- * whose export pushes them to 88%, who then sees the amber meter, upgrades, and
- * stops generating, would never be stamped — and that is precisely the
- * population the monetization thesis is about. Stamping from
- * `GET /v1/storage/status` — the exact read the meter polls — makes "the meter
- * turned amber" and "the user crossed" the same population by construction, and
- * keeps a write off the generation hot path entirely.
+ * whose export pushes them to 88% and who then stops generating would never be
+ * stamped at all. Stamping from `GET /v1/storage/status` — the exact read the
+ * meter polls — makes "the meter warned them" and "they crossed" the same set of
+ * users by construction, and keeps a write off the generation hot path entirely.
  *
  * Deliberately best-effort: callers do NOT await this and every failure is
  * swallowed. Attribution telemetry must never be able to fail or delay a real

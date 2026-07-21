@@ -47,7 +47,7 @@ export async function storageStatusRoutes(app: FastifyInstance) {
       )
     }
 
-    // GTM funnel: stamp the first crossing of the storage warning threshold.
+    // Stamp the first crossing of the storage warning threshold.
     // This read is exactly what turns the client meter amber, so stamping here
     // makes "the meter warned them" and "they crossed" the same population by
     // construction. Not awaited and never throws — see storage-warn.ts.

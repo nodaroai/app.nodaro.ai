@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 
 /**
  * POST /v1/profile/attribution — record the marketing channel a user first
@@ -15,20 +16,26 @@ import { sendInternalError } from "../lib/http-errors.js"
  * the server can no longer observe where they came from; naive server-side
  * attribution would report "google.com" for 100% of signups.
  *
- * WHY A ROUTE AND NOT A DIRECT POSTGREST UPDATE: the first-touch-wins invariant
- * has to live somewhere the client cannot skip. `profiles`' UPDATE policy is a
- * denylist (migration 025) covering the credit/role columns, so a new column is
- * client-writable by default and a client could otherwise rewrite its own
- * attribution at will.
+ * WHY A ROUTE AND NOT A DIRECT POSTGREST UPDATE: it is where the write-once
+ * rule, the slug grammar, the rate limit and the browser-session-only gate live.
  *
- * TRUST BOUNDARY: the value is still self-reported by an authenticated user, so
- * it is spoofable one-write-per-account. That is acceptable for a metric that
- * is always cross-checked against an independent source (Cloudflare's referrer
- * report) before a decision is made on it — but it must never be treated as
- * tamper-proof. Rate-limited to blunt scripted abuse.
+ * TRUST BOUNDARY — read this before relying on the data. The value is
+ * SELF-REPORTED: the server cannot observe it (see above), so a user can choose
+ * what they report. Worse, this route is the only *intended* writer, not the
+ * only *possible* one — `profiles`' UPDATE policy is a denylist (migration 025)
+ * covering only the credit/role columns, so the owner can PATCH these columns
+ * directly through PostgREST and bypass every guarantee here. Migration 270's
+ * "KNOWN LIMITATION" block documents why neither available hardening was
+ * shipped. Treat the data as self-reported, never as tamper-proof, and
+ * corroborate it against an independent source before acting on it.
  *
  * `stored: false` is a NORMAL outcome, not an error — clients must not retry on it.
  */
+
+/** 403 message for programmatic callers. See {@link rejectProgrammaticAuth}. */
+const ATTRIBUTION_JWT_ONLY_MSG =
+  "Attribution can only be recorded from a first-party browser session"
+
 const bodySchema = z.object({
   // Same slug grammar the client normalizes to; anything else is a client bug.
   // Anchored and length-bounded — no backtracking, so no ReDoS surface.
@@ -51,6 +58,14 @@ export async function profileAttributionRoutes(app: FastifyInstance) {
           error: { code: "unauthorized", message: "Authentication required" },
         })
       }
+
+      // FIRST-PARTY BROWSER SESSIONS ONLY. The channel is knowable only in the
+      // browser, so a programmatic caller can never legitimately supply it —
+      // and because the write is one-shot, an OAuth app or personal API token
+      // that got here first would PERMANENTLY consume the user's single
+      // attribution slot with a value of its choosing, with no server-side way
+      // to correct the row afterwards.
+      if (rejectProgrammaticAuth(req, reply, ATTRIBUTION_JWT_ONLY_MSG)) return
 
       const parsed = bodySchema.safeParse(req.body)
       if (!parsed.success) {
@@ -80,10 +95,9 @@ export async function profileAttributionRoutes(app: FastifyInstance) {
       }
 
       const stored = Array.isArray(data) && data.length > 0
-      // Observability: during launch week "nobody arrived with a channel" and
-      // "the endpoint has been failing since Tuesday" look identical in the
-      // data, because `direct` is an expected-majority answer. This line is how
-      // you tell them apart.
+      // Observability: "nobody arrived with a channel" and "the endpoint has
+      // been failing for days" look identical in the stored data, since an
+      // absent channel is an expected outcome. This line tells them apart.
       if (stored) {
         req.log.info({ channel: parsed.data.channel }, "attribution stored")
       }
