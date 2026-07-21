@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-20T18:37:32.668Z
-generated_from: ad0dccc35
+generated_at: 2026-07-20T22:48:12.948Z
+generated_from: d86b8f421
 ---
 
 # Generate Video Pro
@@ -33,6 +33,7 @@ generated_from: ad0dccc35
 - `autoCastFromAnalysis?: boolean`
 - `plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"`
 - `rollingRefs?: boolean`
+- `wordCut?: boolean`
 - `audioTail?: boolean`
 - `overlapAnchor?: boolean`
 - `overlapAnchorMode?: "keyframe" | "last-frame"`

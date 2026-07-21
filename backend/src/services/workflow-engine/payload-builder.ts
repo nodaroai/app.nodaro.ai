@@ -3829,6 +3829,7 @@ export function buildPayload(
         autoCastFromAnalysis: data.autoCastFromAnalysis === true ? true : undefined,
         plannerMode: data.plannerMode === "fidelity" || data.plannerMode === "condense" || data.plannerMode === "anchored" || data.plannerMode === "hybrid" ? data.plannerMode : undefined,
         rollingRefs: data.rollingRefs === true ? true : undefined,
+        wordCut: data.wordCut === true ? true : undefined,
         audioTail: data.audioTail === true ? true : undefined,
         overlapAnchor: data.overlapAnchor === true ? true : undefined,
         overlapAnchorMode: data.overlapAnchor === true && data.overlapAnchorMode === "last-frame" ? "last-frame" : undefined,

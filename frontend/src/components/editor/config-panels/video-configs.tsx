@@ -3667,6 +3667,22 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* WORD CUT — boundaries respect the soundtrack: +1s overshoot per
+          segment, lossless end-trim at the nearest inter-word gap so tails
+          never end mid-sung-word. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-wordCut"
+          checked={data.wordCut ?? false}
+          onChange={(e) => onUpdate({ wordCut: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-wordCut" className="text-xs">
+          Clean word cut (experimental) — trim each boundary at an inter-word audio gap so the soundtrack never cuts mid-word
+        </label>
+      </div>
+
       {/* AUDIO TAIL — A/B lever: ~8s of the soundtrack-so-far rides every
           continuation as an audio reference (more music context than the
           2-5s video tail; guards sound drift). */}
