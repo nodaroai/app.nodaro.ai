@@ -62,6 +62,32 @@ function computeSplit(requestedSec: number, capSec: number): SplitResult {
   return { mode: "multi" as const, clampedD: d, n, s, durations }
 }
 
+/**
+ * PREFERRED-POINT SPLIT (user lever, 2026-07-21) — TWIN of the plugin's
+ * `computePreferredSplit` (engine/split.ts); keep in lock-step. Even
+ * segments near a RECOMMENDED length instead of pack-to-cap: n ≈
+ * round(total/preferred), adjusted until the even base sits inside
+ * [minSeg, maxSeg]; durations are base/base+1 with the remainder on the
+ * EARLIEST segments. Can turn a ≤15s request into a MULTI split — that is
+ * the point of the lever (more, shorter generations). The classic
+ * `computeSplit` above stays byte-identical for lever-less runs.
+ */
+function computePreferredSplit(requestedSec: number, preferredSec: number, capSec: number): SplitResult {
+  const d = Math.min(Math.max(Math.round(requestedSec), SPLIT.minSeg), capSec)
+  const pref = Math.min(Math.max(Math.round(preferredSec), SPLIT.minSeg), SPLIT.maxSeg)
+  let n = Math.max(1, Math.round(d / pref))
+  const sOf = (k: number): number => Math.ceil(d + SPLIT.lossSec * (k - 1))
+  while (n > 1 && Math.floor(sOf(n) / n) < SPLIT.minSeg) n--
+  while (Math.ceil(sOf(n) / n) > SPLIT.maxSeg) n++
+  if (n === 1) return { mode: "single" as const, clampedD: d, n: 1, s: d, durations: [d] }
+  const s = sOf(n)
+  const base = Math.floor(s / n)
+  const r = s - base * n
+  const durations = new Array<number>(n).fill(base)
+  for (let i = 0; i < r; i++) durations[i] += 1
+  return { mode: "multi" as const, clampedD: d, n, s, durations }
+}
+
 /** User-selectable context-tail bounds (seconds). Floor = the default 2s
  *  (clears KIE's 1.8s r2v minimum); ceiling 5s keeps the reference short
  *  enough to stay a continuation cue rather than replay material, and keeps
@@ -112,13 +138,21 @@ export async function computeGenerateVideoProPricing(args: {
   /** Continuation-tail length per join (seconds), clamped to
    *  [CONTEXT_TAIL_MIN_SEC, CONTEXT_TAIL_MAX_SEC]; omitted → default 2s. */
   tailSec?: number
+  /** Recommended segment length (seconds), clamped to [4,15] — even segments
+   *  near this point instead of pack-to-cap. Omitted → the classic split,
+   *  byte-identical. Money-authoritative: the plugin plans against THIS
+   *  split's segmentDurations. */
+  preferredSegmentSec?: number
 }): Promise<GenerateVideoProPricing> {
   const { provider, durationSec } = args
   const tailSec = clampContextTailSec(args.tailSec)
   const resolution = clampResolution(provider, args.resolution)
 
   const cap = Number(process.env.GENERATE_VIDEO_PRO_MAX_DURATION || 120)
-  const split = computeSplit(durationSec, cap)
+  const usePreferred = typeof args.preferredSegmentSec === "number" && Number.isFinite(args.preferredSegmentSec)
+  const split = usePreferred
+    ? computePreferredSplit(durationSec, args.preferredSegmentSec as number, cap)
+    : computeSplit(durationSec, cap)
 
   // Per-second transparency fields — always derived from STATIC_CREDIT_COSTS
   // directly (never the DB-aware getter: there is no per-duration DB row for
@@ -163,13 +197,19 @@ export async function computeGenerateVideoProPricing(args: {
     throw new PriceNotConfiguredError("generate-video-pro")
   }
 
-  // First segment billed at the no-ref rate (fresh generation, capped at
-  // maxSeg); every subsequent segment + its tail overlap billed at the
-  // video-ref rate (re-seeds off the previous segment's tail frames).
+  // First segment billed at the no-ref rate; every subsequent segment + its
+  // tail overlap billed at the video-ref rate (re-seeds off the previous
+  // segment's tail frames). The DEFAULT path bills the first segment at the
+  // maxSeg constant (worst-case padding — pinned by the golden tests); the
+  // PREFERRED-split path bills durations[0] instead: segments can be far
+  // shorter than the cap there, the constant would over-pad AND go negative
+  // in the ref term (e.g. 10s @ preferred 4 → s−15 < 0), and the engine's
+  // commitBase settles on durations[0] — reserve and commit stay aligned.
+  const firstSegBillSec = usePreferred ? split.durations[0]! : SPLIT.maxSeg
   const reserveBase =
     feeBase +
-    Math.ceil(noRefPerSec * SPLIT.maxSeg) +
-    Math.ceil(refPerSec * ((split.n - 1) * tailSec + (split.s - SPLIT.maxSeg)))
+    Math.ceil(noRefPerSec * firstSegBillSec) +
+    Math.ceil(refPerSec * ((split.n - 1) * tailSec + (split.s - firstSegBillSec)))
 
   return {
     mode: "multi",

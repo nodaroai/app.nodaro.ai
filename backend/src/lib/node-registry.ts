@@ -261,6 +261,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "plannerMode", type: "string" },
         { key: "rollingRefs", type: "boolean" },
         { key: "wordCut", type: "boolean" },
+        { key: "preferredSegmentSec", type: "number" },
         { key: "audioTail", type: "boolean" },
         { key: "overlapAnchor", type: "boolean" },
         { key: "overlapAnchorMode", type: "string" },

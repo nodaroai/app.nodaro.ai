@@ -3695,6 +3695,36 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* PREFERRED SEGMENT LENGTH — A/B lever: even segments near a
+          recommended point instead of pack-to-cap (~13s = fewer boundaries,
+          longer per-generation vs ~4s = more boundaries, shorter
+          generations). Empty = auto (classic split). Flows into pricing —
+          the reserve is computed on the same split the planner uses. */}
+      <div className="flex items-center gap-2 px-1">
+        <label htmlFor="gvp-preferredSegmentSec" className="text-xs shrink-0">
+          Preferred segment length (s)
+        </label>
+        <Input
+          id="gvp-preferredSegmentSec"
+          type="number"
+          min={4}
+          max={15}
+          step={1}
+          placeholder="auto"
+          value={data.preferredSegmentSec ?? ""}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === "") return onUpdate({ preferredSegmentSec: undefined })
+            const n = Math.round(Number(v))
+            if (Number.isFinite(n)) onUpdate({ preferredSegmentSec: Math.min(15, Math.max(4, n)) })
+          }}
+          className="h-7 w-20 text-xs"
+        />
+        <span className="text-[11px] text-muted-foreground">
+          4–15 — segments cut near this length; empty packs to the 15s cap
+        </span>
+      </div>
+
       {/* AUDIO TAIL — A/B lever: ~8s of the soundtrack-so-far rides every
           continuation as an audio reference (more music context than the
           2-5s video tail; guards sound drift). */}
