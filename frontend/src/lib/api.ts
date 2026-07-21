@@ -2732,6 +2732,43 @@ export async function generateVideoPro(body: {
   })
 }
 
+/**
+ * Gracefully STOP a running generate-video-pro job — keep + deliver the
+ * segments rendered so far as the job's final video, refund the untouched
+ * remainder (the in-flight segment is still billed). A not-yet-started job is
+ * cancelled with a full refund instead. Poll the job as usual: it completes
+ * with `output_data.pro.stopped === true`. (`POST /v1/generate-video-pro/:id/stop`.)
+ */
+export async function stopGenerateVideoPro(jobId: string): Promise<{
+  jobId: string
+  stopping?: boolean
+  success?: boolean
+  cancelled?: number
+}> {
+  return apiJson(`/v1/generate-video-pro/${encodeURIComponent(jobId)}/stop`, {
+    method: "POST",
+    label: "Failed to stop video generation",
+  })
+}
+
+/**
+ * CONTINUE a stopped / failed / completed generate-video-pro run as a NEW job —
+ * reuses the delivered segments and regenerates from `fromSegment` on (1-based;
+ * omitted → the first not-yet-delivered segment), billed only for the
+ * regenerated segments. Returns the new job id to track.
+ * (`POST /v1/generate-video-pro/continue`.)
+ */
+export async function continueGenerateVideoPro(
+  fromJobId: string,
+  fromSegment?: number,
+): Promise<{ jobId: string; continuedFromJobId?: string; fromSegment?: number; segmentCount?: number; deduped?: boolean }> {
+  return apiJson("/v1/generate-video-pro/continue", {
+    body: { fromJobId, ...(fromSegment !== undefined ? { fromSegment } : {}) },
+    workflowId: true,
+    label: "Failed to continue video generation",
+  })
+}
+
 // --- Edit Video Pro (Seedance-2-family span replace) ---
 //
 // Sibling of runVideoRetake: `videoUrl` (the source clip) + spanStart/spanEnd

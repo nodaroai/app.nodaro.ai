@@ -1,10 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { FastForward, Play, Loader2, Trash2, RotateCcw } from "lucide-react"
+import { FastForward, Play, Loader2, Trash2, RotateCcw, Save } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { hasCredits } from "@/lib/edition"
-import { cancelJob } from "@/lib/api"
+import { cancelJob, stopGenerateVideoPro } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { abortNodeRun } from "@/lib/node-run-abort"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
@@ -38,6 +38,12 @@ interface RunNodeButtonProps {
   /** When true, shows "Run from here" label with FastForward icon. */
   runFromHere?: boolean
 }
+
+/** Node types whose engine checkpoints per segment, so a running job can be
+ *  GRACEFULLY stopped — keeping + delivering the segments rendered so far as
+ *  the final result and refunding the rest — rather than only discarded. The
+ *  Stop menu shows an extra "Stop & keep" item for these. */
+const GRACEFUL_STOP_NODE_TYPES = new Set(["generate-video-pro"])
 
 export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }: RunNodeButtonProps) {
   // Narrow subscription: only PRIMITIVES this button renders/derives from — the
@@ -148,6 +154,17 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
   // Discard clears the old job key BEFORE the re-run sets a new one.
   const onRunInstead = () => withConfirm(() => { doDiscard(); onRun(nodeId) })
 
+  // GRACEFUL STOP (segmented engines): keep what's rendered. Unlike Discard,
+  // this does NOT abort/cancel — it asks the server to stop after the current
+  // segment and deliver the partial, then lets the SAME poll land that result
+  // (the node stays "running" until it does). No confirm: it's non-destructive
+  // (keeps work + refunds the rest). Only offered for GRACEFUL_STOP_NODE_TYPES.
+  const canStopAndKeep = GRACEFUL_STOP_NODE_TYPES.has(nodeType ?? "") && !!currentJobId
+  const onStopAndKeep = () => {
+    const old = currentJobId
+    if (old) void stopGenerateVideoPro(old).catch(() => {})
+  }
+
   // A single shared confirm dialog — both actions discard the current run.
   const confirmDialog = (
     <AlertDialog
@@ -210,11 +227,17 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuContent align="start" className="w-52" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={onRunInstead}>
               <RotateCcw className="w-4 h-4 mr-2" />
               Run instead
             </DropdownMenuItem>
+            {canStopAndKeep && (
+              <DropdownMenuItem onClick={onStopAndKeep}>
+                <Save className="w-4 h-4 mr-2" />
+                Stop &amp; keep what&apos;s rendered
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem variant="destructive" onClick={onDiscard}>
               <Trash2 className="w-4 h-4 mr-2" />
               Discard

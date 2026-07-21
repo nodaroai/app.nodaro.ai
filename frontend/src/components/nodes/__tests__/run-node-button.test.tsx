@@ -5,7 +5,11 @@ import { render, screen, fireEvent } from "@testing-library/react"
 
 // cancelJob (phase-aware) + abortNodeRun (streaming SSE abort).
 const cancelJob = vi.fn((..._a: unknown[]) => Promise.resolve({ success: true, cancelled: 1 }))
-vi.mock("@/lib/api", () => ({ cancelJob: (...a: unknown[]) => cancelJob(...a) }))
+const stopGenerateVideoPro = vi.fn((..._a: unknown[]) => Promise.resolve({ jobId: "job-old", stopping: true }))
+vi.mock("@/lib/api", () => ({
+  cancelJob: (...a: unknown[]) => cancelJob(...a),
+  stopGenerateVideoPro: (...a: unknown[]) => stopGenerateVideoPro(...a),
+}))
 
 const abortNodeRun = vi.fn((..._a: unknown[]) => {})
 vi.mock("@/lib/node-run-abort", () => ({ abortNodeRun: (...a: unknown[]) => abortNodeRun(...a) }))
@@ -32,7 +36,7 @@ vi.mock("@nodaro/shared", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: Record<string, unknown>) => <span data-testid="mock-icon" {...p} />
-  return { FastForward: I, Play: I, Loader2: I, Trash2: I, RotateCcw: I }
+  return { FastForward: I, Play: I, Loader2: I, Trash2: I, RotateCcw: I, Save: I }
 })
 
 // Thin shells for the Radix UI primitives. jsdom doesn't implement the pointer
@@ -104,10 +108,10 @@ import { RunNodeButton } from "../run-node-button"
 
 const onRun = vi.fn()
 
-function renderRunning(jobId: string | undefined = "job-old") {
+function renderRunning(jobId: string | undefined = "job-old", type = "generate-image") {
   storeNode = {
     id: "node-1",
-    type: "generate-image",
+    type,
     data: { executionStatus: "running", currentJobId: jobId },
   }
   return render(
@@ -175,5 +179,34 @@ describe("RunNodeButton — discard run", () => {
     renderRunning("job-old")
     fireEvent.click(screen.getByText("Discard"))
     expect(screen.queryByText(/Stopping/)).not.toBeInTheDocument()
+  })
+})
+
+describe("RunNodeButton — graceful Stop & keep (segmented engines)", () => {
+  it("offers 'Stop & keep' for generate-video-pro; clicking calls stopGenerateVideoPro WITHOUT discarding (no cancel, no abort, no revert)", () => {
+    renderRunning("job-old", "generate-video-pro")
+    fireEvent.click(screen.getByText(/stop & keep what's rendered/i))
+
+    expect(stopGenerateVideoPro).toHaveBeenCalledWith("job-old")
+    // Graceful stop keeps the run going until the poll lands the partial — it
+    // must NOT discard/cancel/abort or revert the node.
+    expect(cancelJob).not.toHaveBeenCalled()
+    expect(abortNodeRun).not.toHaveBeenCalled()
+    expect(updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("does NOT offer 'Stop & keep' for a non-segmented node type (generate-image)", () => {
+    renderRunning("job-old", "generate-image")
+    expect(screen.queryByText(/stop & keep/i)).not.toBeInTheDocument()
+    // Discard is still there for every node.
+    expect(screen.getByText("Discard")).toBeInTheDocument()
+  })
+
+  it("hides 'Stop & keep' when there is no current job id to stop", () => {
+    // Build the node directly — passing `undefined` to renderRunning would
+    // trigger its "job-old" default (JS default-param semantics).
+    storeNode = { id: "node-1", type: "generate-video-pro", data: { executionStatus: "running", currentJobId: undefined } }
+    render(<RunNodeButton nodeId="node-1" credits={0} isRunning onRun={onRun} />)
+    expect(screen.queryByText(/stop & keep/i)).not.toBeInTheDocument()
   })
 })
