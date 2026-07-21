@@ -2714,7 +2714,7 @@ export async function generateVideoPro(body: {
   contextTailSec?: number
   /** AUTO-CAST analysis reference frames (default on). */
   autoCastFromAnalysis?: boolean
-  plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus"
+  plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus" | "hybrid-max"
   rollingRefs?: boolean
   wordCut?: boolean
   shotTimestamps?: boolean

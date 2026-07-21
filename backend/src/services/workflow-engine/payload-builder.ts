@@ -3827,7 +3827,7 @@ export function buildPayload(
         planOnly: data.planOnly === true ? true : undefined,
         contextTailSec: typeof data.contextTailSec === "number" ? data.contextTailSec : undefined,
         autoCastFromAnalysis: data.autoCastFromAnalysis === true ? true : undefined,
-        plannerMode: data.plannerMode === "fidelity" || data.plannerMode === "condense" || data.plannerMode === "anchored" || data.plannerMode === "hybrid" || data.plannerMode === "hybrid-plus" ? data.plannerMode : undefined,
+        plannerMode: data.plannerMode === "fidelity" || data.plannerMode === "condense" || data.plannerMode === "anchored" || data.plannerMode === "hybrid" || data.plannerMode === "hybrid-plus" || data.plannerMode === "hybrid-max" ? data.plannerMode : undefined,
         rollingRefs: data.rollingRefs === true ? true : undefined,
         wordCut: data.wordCut === true ? true : undefined,
         shotTimestamps: data.shotTimestamps === true ? true : undefined,

@@ -3611,7 +3611,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           timestamp-free beats). Auto picks by input shape. */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="gvp-planner-mode">Planner style</Label>
-        <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus" })}>
+        <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus" | "hybrid-max" })}>
           <SelectTrigger id="gvp-planner-mode" className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
@@ -3622,14 +3622,15 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectItem value="anchored">Slot-anchored — cast header + slot names throughout</SelectItem>
             <SelectItem value="hybrid">Hybrid — compact beats + label-locked cast (experimental)</SelectItem>
             <SelectItem value="hybrid-plus">Hybrid Plus — hybrid + Elements identity manifest per segment (experimental)</SelectItem>
+            <SelectItem value="hybrid-max">Hybrid Max — Hybrid Plus, no compression, keeps every analysis detail (experimental)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action; Hybrid combines compact beats with consistent entity labels and leans on reference images for appearance; Hybrid Plus adds a structured Elements identity manifest above every continuation.
+          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action; Hybrid combines compact beats with consistent entity labels and leans on reference images for appearance; Hybrid Plus adds a structured Elements identity manifest above every continuation; Hybrid Max is Hybrid Plus with the compression and size cap removed — the planner preserves every detail from the analysis (longer prompts, maximum fidelity).
         </p>
-        {data.plannerMode === "hybrid-plus" && !data.rollingRefs && (
+        {(data.plannerMode === "hybrid-plus" || data.plannerMode === "hybrid-max") && !data.rollingRefs && (
           <p className="text-[11px] font-medium text-amber-500">
-            Hybrid Plus builds its Elements manifest from Rolling references — enable Rolling references below or continuations compose like plain Hybrid.
+            {data.plannerMode === "hybrid-max" ? "Hybrid Max" : "Hybrid Plus"} builds its Elements manifest from Rolling references — enable Rolling references below or continuations compose like plain Hybrid.
           </p>
         )}
       </div>
