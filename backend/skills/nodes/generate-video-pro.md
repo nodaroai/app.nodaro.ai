@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-21T13:04:15.767Z
-generated_from: 7370b4d4f
+generated_at: 2026-07-21T20:35:25.470Z
+generated_from: 22424a3ff
 ---
 
 # Generate Video Pro
@@ -31,7 +31,7 @@ generated_from: 7370b4d4f
 - `planOnly?: boolean`
 - `contextTailSec?: number`
 - `autoCastFromAnalysis?: boolean`
-- `plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus"`
+- `plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus" | "hybrid-max"`
 - `rollingRefs?: boolean`
 - `wordCut?: boolean`
 - `shotTimestamps?: boolean`
