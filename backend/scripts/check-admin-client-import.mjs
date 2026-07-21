@@ -64,6 +64,16 @@ const ALLOWED_PATHS = [
   // delete would fail a legal deletion request.
   /^src\/routes\/meta-callbacks\.ts$/,
 
+  // First-touch marketing attribution: writes exactly ONE column on the
+  // caller's OWN row, scoped `.eq("id", req.userId)`. Service-role is required
+  // to enforce the first-touch-wins invariant server-side — `profiles`' UPDATE
+  // policy is a DENYLIST (check_profiles_update_allowed, migration 025) that
+  // pins only the credit/role columns, so a new column is user-writable by
+  // default and a user-scoped client would let a client rewrite its own
+  // attribution at will, which is the exact thing this route exists to prevent.
+  // Never reads or writes another user's row.
+  /^src\/routes\/profile-attribution\.ts$/,
+
   // Public / share-token / app runtime — cross-user access by design.
   /^src\/routes\/presentation\.ts$/,
   /^src\/routes\/gallery\.ts$/,
