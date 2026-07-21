@@ -151,6 +151,45 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     expect(result.reserveBase).toBe(371)
   })
 
+  it("preferredSegmentSec=6 @ D=45 -> even 6s segments; the reserve follows the levered split (never the default's)", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 45,
+      preferredSegmentSec: 6,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.segmentCount).toBe(8)
+    expect(result.totalRawSec).toBe(48)
+    expect(result.segmentDurations).toEqual([6, 6, 6, 6, 6, 6, 6, 6])
+    // 10 + ceil(10.25×6) + ceil(6.25×((8-1)×2+(48-6))) = 10 + 62 + ceil(6.25×56) = 10+62+350 = 422
+    // (default split for D=45 reserves 388 — shorter segments cost MORE; the
+    // twin split keeps reserve and plan in lock-step)
+    expect(result.reserveBase).toBe(422)
+  })
+
+  it("preferredSegmentSec=4 turns a ≤15s request into a multi split (D=10 -> [6,5])", async () => {
+    const result = await computeGenerateVideoProPricing({
+      provider: "seedance-2",
+      resolution: "720p",
+      durationSec: 10,
+      preferredSegmentSec: 4,
+    })
+    expect(result.mode).toBe("multi")
+    expect(result.segmentDurations).toEqual([6, 5])
+    // 10 + ceil(10.25×6) + ceil(6.25×((2-1)×2+(11-6))) = 10 + 62 + ceil(6.25×7) = 10+62+44 = 116
+    expect(result.reserveBase).toBe(116)
+  })
+
+  it("preferredSegmentSec clamps into [4,15] (3 behaves as 4, 20 as 15)", async () => {
+    const low = await computeGenerateVideoProPricing({ provider: "seedance-2", resolution: "720p", durationSec: 45, preferredSegmentSec: 3 })
+    const four = await computeGenerateVideoProPricing({ provider: "seedance-2", resolution: "720p", durationSec: 45, preferredSegmentSec: 4 })
+    expect(low.segmentDurations).toEqual(four.segmentDurations)
+    const high = await computeGenerateVideoProPricing({ provider: "seedance-2", resolution: "720p", durationSec: 45, preferredSegmentSec: 20 })
+    const fifteen = await computeGenerateVideoProPricing({ provider: "seedance-2", resolution: "720p", durationSec: 45, preferredSegmentSec: 15 })
+    expect(high.segmentDurations).toEqual(fifteen.segmentDurations)
+  })
+
   it("D=60 -> multi, n=5, s=62, durations [14,12,12,12,12], reserveBase 508", async () => {
     const result = await computeGenerateVideoProPricing({
       provider: "seedance-2",

@@ -1864,6 +1864,11 @@ export interface GenerateVideoProNodeData {
   /** Word-boundary end trim: non-final segments generate +1s and are losslessly
    *  trimmed at the nearest inter-word audio gap (tails never end mid-sung-word). */
   wordCut?: boolean
+  /** Recommended segment length in seconds (4-15) — the planner cuts even
+   *  segments near this point instead of packing to the 15s cap. Empty = auto.
+   *  Can turn a short request into a multi-segment run (the point: A/B long
+   *  vs short segments). */
+  preferredSegmentSec?: number
   /** Audio context tail (experimental A/B): ride ~8s of the soundtrack-so-far
    *  as an audio reference on every continuation (guards sound drift). */
   audioTail?: boolean
