@@ -3438,10 +3438,11 @@ export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
 export { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "./model-options"
 
 /**
- * Generate Video Pro — trimmed, Seedance-2-family-only config panel for the
- * multi-segment stitch node (see GenerateVideoProNodeData). Deliberately a
+ * Generate Video Pro — trimmed config panel for the multi-segment stitch
+ * node (see GenerateVideoProNodeData). Deliberately a
  * simplified subset of GenerateVideoConfig above: one prompt field (no
- * negative), a 3-provider Select (no search), a continuous duration range
+ * negative), a supported-SKUs-only provider Select (GVP_PROVIDERS: Seedance 2
+ * + Fast; no search), a continuous duration range
  * (4s..cap, NOT the single-segment catalog list — durations above 15s span
  * multiple stitched segments server-side), the shared AspectRatioSelector,
  * a provider-aware resolution Select, and the audio toggle.
@@ -3451,6 +3452,17 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
   const currentProvider = data.provider || "seedance-2"
   const maxDuration = GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK
   const duration = data.duration ?? 8
+
+  // Fail-safe (Provider Enum Sync step 12b / CLAUDE.md pitfall 5): providers
+  // can be WITHDRAWN from the pro support list (seedance-2-mini, 2026-07-21)
+  // — a workflow saved with one keeps its stale value while the dropdown no
+  // longer offers it; snap to the default supported SKU. (The plugin route
+  // stays tolerant of the old value, so in-flight runs are unaffected.)
+  useEffect(() => {
+    if (data.provider && !GVP_PROVIDERS.some((m) => m.value === data.provider)) {
+      onUpdate({ provider: "seedance-2" })
+    }
+  }, [data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b / CLAUDE.md pitfall 5): mini/fast
   // have no 1080p/4k — snap a stale resolution to the new provider's first
@@ -3760,7 +3772,8 @@ export const EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK = 120
  * Edit Video Pro — span-replace sibling of Generate Video Pro (see
  * EditVideoProNodeData). Deliberately has NO resolution/aspect controls —
  * both are source-derived by design (the replaced span inherits the source
- * clip's own dimensions). Provider select (3 Seedance-2 SKUs), one prompt
+ * clip's own dimensions). Provider select (GVP_PROVIDERS — the supported pro
+ * SKUs only), one prompt
  * field (no negative), the SpanRangeSlider synced with two numeric From/To
  * fields (the slider itself only renders once sourceDurationSec has been
  * probed — see edit-video-pro-node.tsx's onLoadedMetadata stamping), and the
@@ -3772,6 +3785,14 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const spanStart = Math.max(0, data.spanStart ?? 0)
   const spanEnd = data.spanEnd ?? spanStart + 8
   const sourceDuration = data.sourceDurationSec
+
+  // Fail-safe (Provider Enum Sync step 12b): same withdrawn-provider snap as
+  // the gvp panel above — GVP_PROVIDERS is shared between the two siblings.
+  useEffect(() => {
+    if (data.provider && !GVP_PROVIDERS.some((m) => m.value === data.provider)) {
+      onUpdate({ provider: "seedance-2" })
+    }
+  }, [data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">

@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-20T22:48:12.948Z
-generated_from: d86b8f421
+generated_at: 2026-07-21T00:59:06.102Z
+generated_from: c2adc718c
 ---
 
 # Generate Video Pro
@@ -15,7 +15,7 @@ generated_from: d86b8f421
 
 **Required data fields:**
 - `label: string`
-- `provider: "seedance-2" | "seedance-2-fast" | "seedance-2-mini"`
+- `provider: "seedance-2" | "seedance-2-fast"`
 - `duration: number`
 
 **Optional data fields:**

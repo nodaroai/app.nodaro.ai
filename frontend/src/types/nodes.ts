@@ -1823,7 +1823,7 @@ export type GenerateVideoNodeData =
 export interface GenerateVideoProNodeData {
   [key: string]: unknown
   label: string
-  provider: "seedance-2" | "seedance-2-fast" | "seedance-2-mini"
+  provider: "seedance-2" | "seedance-2-fast"
   prompt?: string
   /** Total seconds, 4..cap (cap comes from the node-registry descriptor). */
   duration: number
@@ -1899,7 +1899,7 @@ export interface GenerateVideoProNodeData {
 export interface EditVideoProNodeData {
   [key: string]: unknown
   label: string
-  provider: string // seedance-2 | seedance-2-fast | seedance-2-mini
+  provider: string // seedance-2 | seedance-2-fast (the supported pro SKUs)
   /** "edit" is reserved for v2 — never rendered in the v1 UI. */
   mode: "replace"
   prompt: string

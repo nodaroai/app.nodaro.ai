@@ -1125,6 +1125,22 @@ export function isSeedance2Provider(provider: string | undefined): boolean {
 }
 
 /**
+ * Generate/Edit Video Pro SUPPORT subset — the only SKUs the pro multi-segment
+ * engine currently offers (mini withdrawn from selection, 2026-07-21).
+ * Deliberately distinct from SEEDANCE_2_PROVIDERS: the family set gates
+ * CAPABILITIES (ref limits, i2v params, adaptive aspect) and must keep every
+ * variant; this list gates which SKUs the pro nodes offer in selection. The
+ * pro plugin routes stay tolerant of the full family so previously-saved
+ * workflows keep running — the editor fail-safe snaps stale selections to a
+ * supported SKU instead.
+ */
+export const GVP_SUPPORTED_PROVIDERS = ["seedance-2", "seedance-2-fast"] as const
+
+export function isGvpSupportedProvider(provider: string | undefined): boolean {
+  return !!provider && (GVP_SUPPORTED_PROVIDERS as readonly string[]).includes(provider)
+}
+
+/**
  * Default aspect ratio for a video provider when the node carries no explicit
  * `aspectRatio`. Seedance 2.x defaults to `"adaptive"` (output matches the
  * wired input — fits the unified-inputs model); every other provider keeps the

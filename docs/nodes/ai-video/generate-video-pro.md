@@ -33,7 +33,7 @@ Generate Video Pro exposes **exactly Generate Video's input handles** — same n
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| Provider | Select | `seedance-2` | `seedance-2` (full), `seedance-2-fast`, `seedance-2-mini` — Seedance-2-family only |
+| Provider | Select | `seedance-2` | `seedance-2` (full) or `seedance-2-fast` — the only providers the pro engine currently supports |
 | Prompt | Text | — | Describes the video; also settable via the `prompt` handle |
 | Duration | Number (4–cap) | 8s | Minimum 4s. Maximum is the configured cap (120s by default) — see [Duration cap](#duration-cap) |
 | Aspect Ratio | Select | `adaptive` | 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9 / Adaptive (matches the wired input) |
@@ -57,7 +57,8 @@ Generate Video Pro is scoped to the Seedance 2 family:
 |---|---|---|
 | `seedance-2` | Seedance 2.0 | 480p / 720p / 1080p / 4K |
 | `seedance-2-fast` | Seedance 2.0 Fast | 480p / 720p only |
-| `seedance-2-mini` | Seedance 2.0 Mini | 480p / 720p only |
+
+Other models (including Seedance 2.0 Mini) are not currently supported by the pro engine and are not offered in selection. Workflows saved with a since-withdrawn provider keep running, and the editor snaps their selection to `seedance-2` the next time the panel is opened.
 
 For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards the full reference surface — `startFrame`, `endFrame`, `imageReferences`, `audioReferences`, `assets` (with `@mention` / `{image:N}` token resolution), and the Extend Source (`videoReferences`) — into generation.
 
