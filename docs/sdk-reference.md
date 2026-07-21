@@ -544,6 +544,37 @@ const { cancelled } = await client.jobs.cancel(jobId)
 
 ---
 
+### `client.videoPro`
+
+Run control for the segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-video-pro.md), Cloud edition). Generation is dispatched like any node run; these act on an existing run.
+
+#### `stop(jobId)`
+
+```ts
+stop(jobId: string): Promise<StopVideoProResult>
+```
+
+Gracefully stops a processing run: the in-flight segment is abandoned (still billed), remaining segments are skipped, the completed segments are stitched into the job's final video, and the untouched reserve is refunded. A job that hasn't started is cancelled with a full refund. Keep polling the job — it completes with `output_data.pro.stopped = true`.
+
+```ts
+await client.videoPro.stop(jobId)
+const { data } = await client.jobs.getStatus(jobId) // → completed, partial video
+```
+
+#### `continueRun(jobId, opts?)`
+
+```ts
+continueRun(jobId: string, opts?: { fromSegment?: number }): Promise<ContinueVideoProResult>
+```
+
+Continues a stopped / failed / completed run as a **new job** — segments below `fromSegment` (1-based; default = first not-yet-delivered) are reused, everything from it on is regenerated. Billed only for the regenerated segments plus the flat pro fee. Returns the new `jobId` to poll.
+
+```ts
+const { jobId: childId, fromSegment } = await client.videoPro.continueRun(jobId, { fromSegment: 4 })
+```
+
+---
+
 ### `client.executions`
 
 A "workflow execution" is one orchestrator-driven run of a workflow. It groups
@@ -3238,6 +3269,11 @@ Every type used in a public method signature is re-exported from
 - `JobStatus` — `"pending" | "queued" | "processing" | "completed" | "failed" | "cancelled"`
 - `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
 - `CancelJobResult` — `{ success: true, cancelled: number }`
+
+### Video Pro run control
+
+- `StopVideoProResult` — `{ jobId, stopping? } | { jobId, success?, cancelled? }` (pending jobs forward the generic cancel result)
+- `ContinueVideoProResult` — `{ jobId, continuedFromJobId?, fromSegment?, segmentCount?, deduped? }`
 
 ### Executions
 

@@ -3,6 +3,7 @@ import type { Auth } from "./auth.js"
 import { WorkflowsResource } from "./resources/workflows.js"
 import { ProjectsResource } from "./resources/projects.js"
 import { JobsResource } from "./resources/jobs.js"
+import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
 import { DeveloperAppsResource } from "./resources/developer-apps.js"
@@ -80,6 +81,7 @@ export class NodaroClient {
   readonly workflows: WorkflowsResource
   readonly projects: ProjectsResource
   readonly jobs: JobsResource
+  readonly videoPro: VideoProResource
   readonly executions: ExecutionsResource
   readonly nodes: NodesResource
   readonly developerApps: DeveloperAppsResource
@@ -111,6 +113,7 @@ export class NodaroClient {
     this.workflows = new WorkflowsResource(this)
     this.projects = new ProjectsResource(this)
     this.jobs = new JobsResource(this)
+    this.videoPro = new VideoProResource(this)
     this.executions = new ExecutionsResource(this)
     this.nodes = new NodesResource(this)
     this.developerApps = new DeveloperAppsResource(this)

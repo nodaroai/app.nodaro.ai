@@ -32,6 +32,7 @@ export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, W
 export { WorkflowsResource } from "./resources/workflows.js"
 export { ProjectsResource } from "./resources/projects.js"
 export { JobsResource } from "./resources/jobs.js"
+export { VideoProResource } from "./resources/video-pro.js"
 export { ExecutionsResource } from "./resources/executions.js"
 export { NodesResource } from "./resources/nodes.js"
 export { DeveloperAppsResource } from "./resources/developer-apps.js"
@@ -78,6 +79,7 @@ export type {
 } from "./resources/projects.js"
 
 export type { Job, JobStatus, JobStatusResult, CancelJobResult } from "./resources/jobs.js"
+export type { StopVideoProResult, ContinueVideoProResult } from "./resources/video-pro.js"
 
 export type {
   WorkflowExecution,

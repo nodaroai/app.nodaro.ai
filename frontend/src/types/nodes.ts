@@ -1864,6 +1864,10 @@ export interface GenerateVideoProNodeData {
   /** Word-boundary end trim: non-final segments generate +1s and are losslessly
    *  trimmed at the nearest inter-word audio gap (tails never end mid-sung-word). */
   wordCut?: boolean
+  /** SHOT TIMESTAMPS (A/B lever): force segment-local time ranges into the
+   *  condense/hybrid-family beats (timestamp-free by default). Fidelity/
+   *  anchored keep source timestamps natively — no-op there. */
+  shotTimestamps?: boolean
   /** Recommended segment length in seconds (4-15) — the planner cuts even
    *  segments near this point instead of packing to the 15s cap. Empty = auto.
    *  Can turn a short request into a multi-segment run (the point: A/B long

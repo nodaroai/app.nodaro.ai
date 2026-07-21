@@ -1954,6 +1954,7 @@ export function executeNode(
       plannerMode: gvpData.plannerMode && gvpData.plannerMode !== "auto" ? gvpData.plannerMode : undefined,
       rollingRefs: gvpData.rollingRefs === true ? true : undefined,
       wordCut: gvpData.wordCut === true ? true : undefined,
+      shotTimestamps: gvpData.shotTimestamps === true ? true : undefined,
       preferredSegmentSec: typeof gvpData.preferredSegmentSec === "number" ? gvpData.preferredSegmentSec : undefined,
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,

@@ -649,6 +649,17 @@ Both require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients.
 
+## 13b. Generate Video Pro run control (Cloud edition)
+
+The segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-video-pro.md)) generates one segment at a time and checkpoints between segments, so a run can be stopped gracefully and continued later:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/generate-video-pro/:jobId/stop` | Graceful stop of a **processing** run: the in-flight segment is abandoned (still billed — the provider keeps rendering it), remaining segments are skipped, everything completed is stitched into the job's final video, and the untouched remainder of the reserve is refunded. Responds `{ jobId, stopping: true }`; keep polling the job — it completes with `output_data.pro.stopped = true` and `stoppedAtSegment`. A **pending** job is cancelled with a full refund instead (the generic cancel response is forwarded). |
+| `POST` | `/v1/generate-video-pro/continue` | Body `{ fromJobId, fromSegment? }`. Starts a **new job** that reuses the parent run's plan and delivered segments below `fromSegment` (1-based; default = first not-yet-delivered) and regenerates from there, billed only for the regenerated segments plus the flat pro fee. The parent must be terminal (stopped / failed with ≥1 delivered segment / completed — an explicit `fromSegment` on a completed run re-rolls its tail). Responds `{ jobId, continuedFromJobId, fromSegment, segmentCount }`. Honors the `Idempotency-Key` header. |
+
+Both enforce ownership (404 on a foreign job) and 400 on non-pro jobs. Pricing details and worked examples: the node page's [Stopping and continuing a run](./nodes/ai-video/generate-video-pro.md#stopping-and-continuing-a-run).
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

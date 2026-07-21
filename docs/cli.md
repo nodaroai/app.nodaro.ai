@@ -149,6 +149,10 @@ nodaro executions cancel <id> [--mode cancelled|stopping]
 nodaro jobs get <id> [--json]
 nodaro jobs cancel <id> [--json]
 
+# Generate Video Pro run control (segmented long-video engine, Cloud edition)
+nodaro video-pro stop <jobId> [--json]                     # graceful stop: keep + deliver completed segments, refund the rest
+nodaro video-pro continue <jobId> [--from-segment N] [--watch] [--poll-interval <ms>] [--json]   # new job regenerating from segment N (default: first missing)
+
 # Characters — full lifecycle + studio operations
 nodaro characters list [--project <id>] [--archived] [--limit <n>] [--json]
 nodaro characters get <id>

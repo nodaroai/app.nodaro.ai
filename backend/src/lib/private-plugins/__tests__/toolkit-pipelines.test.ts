@@ -292,7 +292,7 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
   // error_message} shape, or null when the row is missing.
   // -------------------------------------------------------------------------
   describe("jobs.readJob", () => {
-    it("returns the narrow job shape when the row exists", async () => {
+    it("returns the narrow job shape when the row exists (incl. the 2026-07-21 job_type/input_data widening for gvp continue)", async () => {
       routeTables({
         jobs: {
           data: {
@@ -301,6 +301,8 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
             user_id: "user-1",
             output_data: { videoUrl: "https://cdn.example.com/x.mp4" },
             error_message: null,
+            job_type: "generate-video-pro",
+            input_data: { prompt: "a heist" },
           },
           error: null,
         },
@@ -312,6 +314,8 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
         user_id: "user-1",
         output_data: { videoUrl: "https://cdn.example.com/x.mp4" },
         error_message: null,
+        job_type: "generate-video-pro",
+        input_data: { prompt: "a heist" },
       })
       expect(mockFrom).toHaveBeenCalledWith("jobs")
     })
@@ -322,10 +326,10 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
       await expect(tk.jobs.readJob("missing")).resolves.toBeNull()
     })
 
-    it("normalizes a null output_data to null (not undefined)", async () => {
+    it("normalizes null output_data/input_data to null (not undefined)", async () => {
       routeTables({
         jobs: {
-          data: { id: "job-2", status: "failed", user_id: null, output_data: null, error_message: "boom" },
+          data: { id: "job-2", status: "failed", user_id: null, output_data: null, error_message: "boom", job_type: "generate-video", input_data: null },
           error: null,
         },
       })
@@ -336,6 +340,8 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
         user_id: null,
         output_data: null,
         error_message: "boom",
+        job_type: "generate-video",
+        input_data: null,
       })
     })
   })

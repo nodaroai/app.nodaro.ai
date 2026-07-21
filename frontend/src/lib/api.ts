@@ -2717,6 +2717,7 @@ export async function generateVideoPro(body: {
   plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus"
   rollingRefs?: boolean
   wordCut?: boolean
+  shotTimestamps?: boolean
   audioTail?: boolean
   overlapAnchor?: boolean
   overlapAnchorMode?: "keyframe" | "last-frame"

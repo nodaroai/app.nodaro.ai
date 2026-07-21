@@ -3701,6 +3701,23 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </label>
       </div>
 
+      {/* SHOT TIMESTAMPS — A/B lever: inject segment-local time ranges into
+          the beats for the condense/hybrid planner styles (they are
+          timestamp-free by default). Fidelity/Anchored keep the script's own
+          timestamps either way. */}
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gvp-shotTimestamps"
+          checked={data.shotTimestamps ?? false}
+          onChange={(e) => onUpdate({ shotTimestamps: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gvp-shotTimestamps" className="text-xs">
+          Shot timestamps (A/B) — inject rebased per-segment time ranges into Hybrid/Condense beats (off = their timestamp-free default)
+        </label>
+      </div>
+
       {/* PREFERRED SEGMENT LENGTH — A/B lever: even segments near a
           recommended point instead of pack-to-cap (~13s = fewer boundaries,
           longer per-generation vs ~4s = more boundaries, shorter

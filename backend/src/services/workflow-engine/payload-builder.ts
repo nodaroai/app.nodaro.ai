@@ -3830,6 +3830,7 @@ export function buildPayload(
         plannerMode: data.plannerMode === "fidelity" || data.plannerMode === "condense" || data.plannerMode === "anchored" || data.plannerMode === "hybrid" || data.plannerMode === "hybrid-plus" ? data.plannerMode : undefined,
         rollingRefs: data.rollingRefs === true ? true : undefined,
         wordCut: data.wordCut === true ? true : undefined,
+        shotTimestamps: data.shotTimestamps === true ? true : undefined,
         preferredSegmentSec: typeof data.preferredSegmentSec === "number" ? data.preferredSegmentSec : undefined,
         audioTail: data.audioTail === true ? true : undefined,
         overlapAnchor: data.overlapAnchor === true ? true : undefined,
