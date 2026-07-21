@@ -235,6 +235,28 @@ export async function markJobCompleted(
 }
 
 /**
+ * GRACEFUL-STOP request (2026-07-21, gvp stop/continue): stamps
+ * `jobs.stop_requested_at = now()` on an in-flight row. Deliberately NOT a
+ * status flip — the checkpointed engine must still be able to complete the
+ * job with its partial deliverable, and `markJobCompleted`'s live-status CAS
+ * would refuse a cancelled row. Observed by `throwIfJobCancelled`'s throttled
+ * fetch (`lib/job-cancellation.ts`), which throws `JobStopRequestedError`;
+ * checkpointed handlers (generate-video-pro) convert it into a partial
+ * finalize + honest settle. Scoped to in-flight statuses so a terminal row
+ * is never stamped.
+ */
+export async function requestJobStop(jobId: string): Promise<void> {
+  const { error } = await supabase
+    .from("jobs")
+    .update({ stop_requested_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .in("status", ["pending", "queued", "processing"])
+  if (error) {
+    throw new Error(`Failed to request stop for job ${jobId}: ${error.message}`)
+  }
+}
+
+/**
  * Commit credits after successful job completion (cloud edition only).
  * When providerCostUsd is provided, computes actual credits from provider cost,
  * logs any anomaly, and passes actual credits to the RPC (which refunds surplus).

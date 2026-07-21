@@ -42,6 +42,7 @@ import {
   withProgressRamp,
   commitJobCredits,
   uploadVideoMaybeWatermark,
+  requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
 import { videoQueue } from "../queue.js"
@@ -369,6 +370,11 @@ async function clearReconcileSentinel(jobId: string): Promise<void> {
  * job's id/status/user_id/output_data/error_message, or null when the row is
  * absent. `output_data` (and `user_id`/`error_message`) normalize to null when
  * unset so the shape is exactly the contract's.
+ *
+ * `job_type` + `input_data` (2026-07-21, gvp stop/continue): the continue
+ * route validates the parent's type and rebuilds the run payload from its
+ * input — additive-optional in the contract mirror, so a plugin built
+ * against the widened surface runtime-guards their presence.
  */
 async function readJob(jobId: string): Promise<{
   id: string
@@ -376,10 +382,12 @@ async function readJob(jobId: string): Promise<{
   user_id: string | null
   output_data: Record<string, unknown> | null
   error_message: string | null
+  job_type?: string
+  input_data?: Record<string, unknown> | null
 } | null> {
   const { data } = await supabase
     .from("jobs")
-    .select("id,status,user_id,output_data,error_message")
+    .select("id,status,user_id,output_data,error_message,job_type,input_data")
     .eq("id", jobId)
     .maybeSingle()
   if (!data) return null
@@ -389,6 +397,8 @@ async function readJob(jobId: string): Promise<{
     user_id: string | null
     output_data: Record<string, unknown> | null
     error_message: string | null
+    job_type: string
+    input_data: Record<string, unknown> | null
   }
   return {
     id: row.id,
@@ -396,6 +406,8 @@ async function readJob(jobId: string): Promise<{
     user_id: row.user_id ?? null,
     output_data: row.output_data ?? null,
     error_message: row.error_message ?? null,
+    job_type: row.job_type,
+    input_data: row.input_data ?? null,
   }
 }
 
@@ -572,6 +584,7 @@ export function buildToolkit(): PluginToolkit {
       markProviderCallStart: (jobId, kind) =>
         markProviderCallStart(jobId, kind as Parameters<typeof markProviderCallStart>[1]),
       readJob,
+      requestJobStop,
     },
     http: {
       supabase,
@@ -612,6 +625,15 @@ export function buildToolkit(): PluginToolkit {
         }
         const { computeEditVideoProPricing: computePricing } = await import(
           "../../ee/billing/edit-video-pro-credits.js"
+        )
+        return computePricing(args)
+      },
+      computeGenerateVideoProContinuationPricing: async (args) => {
+        if (!hasCredits()) {
+          throw new Error("computeGenerateVideoProContinuationPricing requires a Cloud-edition build")
+        }
+        const { computeGenerateVideoProContinuationPricing: computePricing } = await import(
+          "../../ee/billing/generate-video-pro-credits.js"
         )
         return computePricing(args)
       },

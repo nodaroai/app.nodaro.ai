@@ -3,6 +3,7 @@ import { authCommand } from "./commands/auth.js"
 import { projectsCommand } from "./commands/projects.js"
 import { workflowsCommand } from "./commands/workflows.js"
 import { jobsCommand } from "./commands/jobs.js"
+import { videoProCommand } from "./commands/video-pro.js"
 import { executionsCommand } from "./commands/executions.js"
 import { appsCommand } from "./commands/apps.js"
 import { nodesCommand } from "./commands/nodes.js"
@@ -39,6 +40,7 @@ program.addCommand(workflowsCommand())
 program.addCommand(appsCommand())
 program.addCommand(nodesCommand())
 program.addCommand(jobsCommand())
+program.addCommand(videoProCommand())
 program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())
 program.addCommand(promptCommand())

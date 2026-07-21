@@ -531,6 +531,13 @@ export interface PluginJobsToolkit {
    * Reads a job row by id. Returns the job's id, status, user_id,
    * output_data (jsonb object or null), and error_message, or null if not found.
    * Mirrors a narrow jobs-row read for the pipeline seed lane.
+   *
+   * `job_type` + `input_data` are ADDITIVE-OPTIONAL (2026-07-21, gvp
+   * stop/continue): the app-side select gained them for the continue route
+   * (parent-job validation + payload rebuild). Optional in this mirror so a
+   * plugin built against the new surface still typechecks against an older
+   * app — call sites MUST runtime-guard (`undefined` → the app predates the
+   * widened select → respond 503 "backend update required").
    */
   readJob(jobId: string): Promise<{
     id: string
@@ -538,7 +545,24 @@ export interface PluginJobsToolkit {
     user_id: string | null
     output_data: Record<string, unknown> | null
     error_message: string | null
+    job_type?: string
+    input_data?: Record<string, unknown> | null
   } | null>
+  /**
+   * Mirrors `requestJobStop` (`workers/shared.ts`, 2026-07-21) — stamps
+   * `jobs.stop_requested_at = now()` on the row. The GRACEFUL-STOP signal:
+   * unlike cancel it never flips `status`, so `markJobCompleted`'s live-status
+   * CAS still accepts the partial delivery. Observed by the engine through
+   * the SAME throttled ambient check as cancellation: `throwIfJobCancelled`
+   * throws a `JobStopRequestedError` (identified by `.name ===
+   * "JobStopRequestedError"`; cancellation wins when both flags are set).
+   * The gvp handler converts it into a partial finalize + honest settle —
+   * it must NEVER propagate to the worker layer.
+   *
+   * OPTIONAL (additive-contract convention): absent → the app predates the
+   * stop surface; the stop route responds 503 instead of crashing.
+   */
+  requestJobStop?(jobId: string): Promise<void>
 }
 
 // ============================================================================
@@ -623,6 +647,13 @@ export interface GenerateVideoProPricing {
   tailSec: number
   reserveBase: number // pre-markup
   creditIdentifier?: string // single mode: the plain composite identifier
+  /** CONTINUATION billing floor (2026-07-21, gvp continue): 1-based segment
+   *  the CHILD job starts paying from. Segments below it were delivered and
+   *  billed by the parent job — `commitBase` charges only `feeBase` + the
+   *  ref-rate for segments ≥ this index (each consumes a continuation tail,
+   *  including the first new one, which re-seeds off the parent prefix).
+   *  Absent / 1 → the classic formula, byte-identical. */
+  billFromSegment?: number
 }
 
 /**
@@ -730,6 +761,31 @@ export interface PluginHttpToolkit {
     spanStart: number
     spanEnd: number
   }): Promise<EditVideoProPricing>
+  /**
+   * Mirrors `computeGenerateVideoProContinuationPricing`
+   * (`ee/billing/generate-video-pro-credits.ts`, 2026-07-21) — the CONTINUE
+   * reserve: the parent plan's segment durations are already known, so the
+   * reserve is exact (no worst-case padding): `feeBase` + segments ≥
+   * `fromSegment` at the ref rate (each new segment consumes one continuation
+   * tail — including the first, which re-seeds off the parent prefix);
+   * `fromSegment === 1` degenerates to the fresh-run formula over the same
+   * fixed durations. Returns a `GenerateVideoProPricing` with
+   * `billFromSegment` set so `commitBase` bills only the new segments.
+   *
+   * OPTIONAL (additive-contract convention): absent → the app predates the
+   * continue surface; the continue route responds 503 instead of crashing.
+   */
+  computeGenerateVideoProContinuationPricing?(args: {
+    provider: string
+    resolution: string
+    /** The PARENT plan's per-segment durations (money-authoritative — from
+     *  the parent checkpoint's embedded pricing, never recomputed). */
+    segmentDurations: number[]
+    /** 1-based first segment the child regenerates (and pays for). */
+    fromSegment: number
+    /** Per-join continuation-tail seconds, clamped app-side to [2,5]. */
+    tailSec?: number
+  }): Promise<GenerateVideoProPricing>
   /**
    * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side
    * and sends a sanitized `internal_error` 500 with the curated `clientMessage`

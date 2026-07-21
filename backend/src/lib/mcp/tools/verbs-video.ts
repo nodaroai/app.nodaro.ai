@@ -2353,4 +2353,76 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       })
     },
   )
+
+  // ── stop_video_pro (graceful stop of a segmented pro run) ──
+  server.registerTool(
+    "stop_video_pro",
+    {
+      title: "Stop Video Pro Run",
+      description:
+        "Gracefully stop a RUNNING generate-video-pro job (the segmented long-video engine). " +
+        "The engine abandons the segment currently generating (that segment is still billed — " +
+        "the provider keeps rendering it), skips all remaining segments, stitches everything " +
+        "completed so far into the job's FINAL video, and refunds the untouched remainder of " +
+        "the credit reserve. A job that hasn't started yet is cancelled with a full refund. " +
+        "Poll the job with get_job — it completes with output_data.pro.stopped=true and the " +
+        "partial video as its result. Resume later with continue_video_pro.",
+      inputSchema: {
+        job_id: z.string().describe("The generate-video-pro job id to stop."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const res = await fastify.inject({
+        method: "POST",
+        url: `/v1/generate-video-pro/${encodeURIComponent(args.job_id)}/stop`,
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      return { content: [{ type: "text" as const, text: res.body }] }
+    },
+  )
+
+  // ── continue_video_pro (resume a pro run from a segment) ──
+  server.registerTool(
+    "continue_video_pro",
+    {
+      title: "Continue Video Pro Run",
+      description:
+        "Continue a stopped, failed (with at least one delivered segment), or completed " +
+        "generate-video-pro run as a NEW job. Segments before from_segment are reused from " +
+        "the original run; everything from it on is regenerated (overriding the original's " +
+        "takes). Billed only for the regenerated segments plus the flat pro fee. Omit " +
+        "from_segment to continue from the first not-yet-delivered segment; pass an earlier " +
+        "one to redo from that point (works on fully completed runs too — a tail re-roll). " +
+        "Returns the NEW job_id to poll.",
+      inputSchema: {
+        job_id: z.string().describe("The original generate-video-pro job id."),
+        from_segment: z.number().int().min(1).max(24).optional()
+          .describe("1-based segment to regenerate from. Default: first missing segment."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        fromJobId: args.job_id,
+        ...(args.from_segment !== undefined ? { fromSegment: args.from_segment } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/generate-video-pro/continue",
+        payload,
+        label: "video-pro continue",
+        widgetKind: "video",
+        widgetData: { prompt: `(continue ${args.job_id.slice(0, 8)}…${args.from_segment !== undefined ? ` from segment ${args.from_segment}` : ""})` },
+      })
+    },
+  )
 }

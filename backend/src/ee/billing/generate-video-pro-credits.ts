@@ -25,6 +25,12 @@ export interface GenerateVideoProPricing {
   tailSec: number
   reserveBase: number // pre-markup
   creditIdentifier?: string // single mode only
+  /** CONTINUATION billing floor (2026-07-21): 1-based segment the CHILD job
+   *  starts paying from — segments below it were delivered and billed by the
+   *  parent. Set only by `computeGenerateVideoProContinuationPricing`; the
+   *  plugin's `commitBase` twin bills feeBase + segments ≥ this index (all at
+   *  the ref rate + one continuation tail each). Absent/1 → classic. */
+  billFromSegment?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -222,5 +228,76 @@ export async function computeGenerateVideoProPricing(args: {
     refPerSec,
     tailSec,
     reserveBase,
+  }
+}
+
+/**
+ * CONTINUE reserve (2026-07-21, gvp stop/continue) — money-authoritative for
+ * a child job that resumes a parent run from `fromSegment` (1-based). The
+ * parent plan's durations are KNOWN (embedded in its checkpoint's pricing at
+ * the original reservation), so the reserve is exact — no worst-case padding:
+ *
+ *   fromSegment k > 1:  feeBase + ceil(refPerSec × ((N−k+1)·tailSec + Σ d[k..N]))
+ *   fromSegment k = 1:  the fresh-run formula over the same fixed durations
+ *                       (segment 1 no-ref; every later one ref + tail)
+ *
+ * Every NEW segment — including the first — bills at the ref rate + one
+ * continuation tail: it re-seeds off the previous footage (the parent prefix
+ * for segment k). The returned pricing carries `billFromSegment` so the
+ * plugin's `commitBase` twin settles only the new segments; reserve == commit
+ * when the run completes fully (refund 0), and every partial path refunds
+ * the untouched remainder through the same metered commit.
+ *
+ * TWIN of the plugin engine's continuation-aware `commitBase`
+ * (engine/finalize.ts) — keep in lock-step.
+ */
+export async function computeGenerateVideoProContinuationPricing(args: {
+  provider: string
+  resolution: string
+  /** The PARENT plan's per-segment durations (from its checkpoint's embedded
+   *  pricing — money-authoritative; never recomputed from a split). */
+  segmentDurations: number[]
+  /** 1-based first segment the child regenerates (and pays for). */
+  fromSegment: number
+  tailSec?: number
+}): Promise<GenerateVideoProPricing> {
+  const { provider } = args
+  const tailSec = clampContextTailSec(args.tailSec)
+  const resolution = clampResolution(provider, args.resolution)
+  // Wire-path sanitation: the durations arrive from a checkpoint blob — round
+  // and bound them to the split's own invariants before money math.
+  const durations = args.segmentDurations.map((d) => Math.round(d))
+  const n = durations.length
+  if (n < 1 || durations.some((d) => !Number.isFinite(d) || d < 1 || d > SPLIT.maxSeg)) {
+    throw new Error("continuation pricing: invalid parent segment durations")
+  }
+  const k = Math.round(args.fromSegment)
+  if (!Number.isFinite(k) || k < 1 || k > n) {
+    throw new Error(`continuation pricing: fromSegment ${args.fromSegment} outside 1..${n}`)
+  }
+  const noRefPerSec = perSecRate(provider, resolution, false)
+  const refPerSec = perSecRate(provider, resolution, true)
+  const feeBase = STATIC_CREDIT_COSTS["generate-video-pro"]
+  if (feeBase === undefined) {
+    throw new PriceNotConfiguredError("generate-video-pro")
+  }
+  const total = durations.reduce((a, b) => a + b, 0)
+  const reserveBase = k > 1
+    ? feeBase + Math.ceil(refPerSec * ((n - k + 1) * tailSec + durations.slice(k - 1).reduce((a, b) => a + b, 0)))
+    : feeBase +
+      Math.ceil(noRefPerSec * durations[0]!) +
+      (n > 1 ? Math.ceil(refPerSec * ((n - 1) * tailSec + (total - durations[0]!))) : 0)
+  return {
+    mode: "multi",
+    clampedDurationSec: total,
+    segmentCount: n,
+    totalRawSec: total,
+    segmentDurations: durations,
+    feeBase,
+    noRefPerSec,
+    refPerSec,
+    tailSec,
+    reserveBase,
+    billFromSegment: k,
   }
 }

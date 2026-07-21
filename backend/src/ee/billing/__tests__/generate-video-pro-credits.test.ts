@@ -39,7 +39,7 @@ vi.mock("../../../lib/supabase.js", () => ({
   },
 }))
 
-import { computeGenerateVideoProPricing } from "../generate-video-pro-credits.js"
+import { computeGenerateVideoProPricing, computeGenerateVideoProContinuationPricing } from "../generate-video-pro-credits.js"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, invalidateModelPricingCache } from "../credits.js"
 
 beforeEach(() => {
@@ -283,5 +283,55 @@ describe("missing composite", () => {
         durationSec: 16,
       }),
     ).rejects.toThrow(PriceNotConfiguredError)
+  })
+})
+
+// Continuation reserve (stop/continue, 2026-07-21). TWIN of the plugin
+// engine's continuation-aware commitBase — reserve == commit for a fully
+// completed continuation, so refund is 0 by construction. Durations are the
+// classic D=60 split [14,12,12,12,12] (Σ=62).
+describe("computeGenerateVideoProContinuationPricing — golden table (seedance-2 @ 720p)", () => {
+  const base = {
+    provider: "seedance-2", resolution: "720p",
+    segmentDurations: [14, 12, 12, 12, 12], // parent plan, money-authoritative
+  }
+
+  it("fromSegment=4 (regenerate 4-5): fee + ref×(2 tails + 24s) = 10 + ceil(6.25×28) = 185", async () => {
+    const r = await computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 4 })
+    expect(r.mode).toBe("multi")
+    expect(r.segmentCount).toBe(5)
+    expect(r.segmentDurations).toEqual([14, 12, 12, 12, 12])
+    expect(r.billFromSegment).toBe(4)
+    expect(r.tailSec).toBe(2)
+    expect(r.reserveBase).toBe(185)
+  })
+
+  it("fromSegment=5 (tail re-roll of a completed run): 10 + ceil(6.25×(1×2+12)) = 98", async () => {
+    const r = await computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 5 })
+    expect(r.billFromSegment).toBe(5)
+    expect(r.reserveBase).toBe(98)
+  })
+
+  it("fromSegment=1 degenerates to the fresh-run formula over the SAME fixed durations: 10 + ceil(10.25×14) + ceil(6.25×(4×2+48)) = 504", async () => {
+    const r = await computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 1 })
+    expect(r.billFromSegment).toBe(1)
+    expect(r.reserveBase).toBe(504)
+  })
+
+  it("tailSec lever moves the per-join term: fromSegment=4 @ tail 4 → 10 + ceil(6.25×(2×4+24)) = 210", async () => {
+    const r = await computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 4, tailSec: 4 })
+    expect(r.tailSec).toBe(4)
+    expect(r.reserveBase).toBe(210)
+  })
+
+  it("rejects out-of-range fromSegment and corrupt parent durations (never a silent misprice)", async () => {
+    await expect(computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 0 })).rejects.toThrow(/fromSegment/)
+    await expect(computeGenerateVideoProContinuationPricing({ ...base, fromSegment: 6 })).rejects.toThrow(/fromSegment/)
+    await expect(
+      computeGenerateVideoProContinuationPricing({ ...base, segmentDurations: [99, 12], fromSegment: 1 }),
+    ).rejects.toThrow(/invalid parent segment durations/)
+    await expect(
+      computeGenerateVideoProContinuationPricing({ ...base, segmentDurations: [], fromSegment: 1 }),
+    ).rejects.toThrow(/invalid parent segment durations/)
   })
 })

@@ -7,7 +7,7 @@ vi.mock("../supabase.js", () => ({
   },
 }))
 
-import { runWithJobCancellation, throwIfJobCancelled, JobCancelledError } from "../job-cancellation.js"
+import { runWithJobCancellation, throwIfJobCancelled, JobCancelledError, JobStopRequestedError } from "../job-cancellation.js"
 
 describe("job-cancellation", () => {
   beforeEach(() => mockSingle.mockReset())
@@ -40,6 +40,33 @@ describe("job-cancellation", () => {
       await throwIfJobCancelled()
       await throwIfJobCancelled() // within the throttle window → no second query
       expect(mockSingle).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ── graceful stop (stop_requested_at, 2026-07-21) ──
+
+  it("throws JobStopRequestedError when stop_requested_at is stamped (status still processing), sticky without re-querying", async () => {
+    mockSingle.mockResolvedValue({ data: { status: "processing", stop_requested_at: "2026-07-21T10:00:00Z" }, error: null })
+    await runWithJobCancellation("job-4", async () => {
+      const first = throwIfJobCancelled()
+      await expect(first).rejects.toBeInstanceOf(JobStopRequestedError)
+      await expect(first).rejects.toMatchObject({ name: "JobStopRequestedError" })
+      await expect(throwIfJobCancelled()).rejects.toBeInstanceOf(JobStopRequestedError)
+      expect(mockSingle).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it("cancellation WINS when both flags are set — the row is terminal, a partial delivery would be refused anyway", async () => {
+    mockSingle.mockResolvedValue({ data: { status: "cancelled", stop_requested_at: "2026-07-21T10:00:00Z" }, error: null })
+    await runWithJobCancellation("job-5", async () => {
+      await expect(throwIfJobCancelled()).rejects.toBeInstanceOf(JobCancelledError)
+    })
+  })
+
+  it("a null stop_requested_at never throws", async () => {
+    mockSingle.mockResolvedValue({ data: { status: "processing", stop_requested_at: null }, error: null })
+    await runWithJobCancellation("job-6", async () => {
+      await expect(throwIfJobCancelled()).resolves.toBeUndefined()
     })
   })
 })

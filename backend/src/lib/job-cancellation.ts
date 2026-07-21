@@ -27,6 +27,8 @@ interface JobCancelStore {
   lastCheckMs: number
   /** Sticky once observed cancelled — avoids re-querying after the first hit. */
   cancelled: boolean
+  /** Sticky once a graceful stop was observed (`stop_requested_at` stamped). */
+  stopRequested?: boolean
 }
 
 const storage = new AsyncLocalStorage<JobCancelStore>()
@@ -44,6 +46,25 @@ export class JobCancelledError extends Error {
   }
 }
 
+/**
+ * Thrown when a GRACEFUL STOP was requested (`jobs.stop_requested_at`, set by
+ * the gvp stop route via `requestJobStop`) — distinct from cancellation on
+ * purpose: the row's status stays `processing`, and the checkpointed handler
+ * (generate-video-pro) CATCHES this error to deliver the stitched-so-far
+ * prefix as the job's final result with an honest partial settle. It must
+ * never reach the worker's generic failure path from a handler that supports
+ * stopping; a handler that doesn't support it simply fails+refunds (the flag
+ * is only ever stamped on job types whose routes expose a stop endpoint).
+ * Cancellation WINS when both flags are set (checked first, both here and in
+ * the sticky short-circuit).
+ */
+export class JobStopRequestedError extends Error {
+  constructor(public readonly jobId: string) {
+    super(`Job ${jobId} stop requested`)
+    this.name = "JobStopRequestedError"
+  }
+}
+
 /** Run `fn` inside a cancellation context bound to `jobId`. */
 export function runWithJobCancellation<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
   return storage.run({ jobId, lastCheckMs: 0, cancelled: false }, fn)
@@ -58,6 +79,7 @@ export async function throwIfJobCancelled(): Promise<void> {
   const store = storage.getStore()
   if (!store) return
   if (store.cancelled) throw new JobCancelledError(store.jobId)
+  if (store.stopRequested) throw new JobStopRequestedError(store.jobId)
 
   const now = Date.now()
   if (now - store.lastCheckMs < CANCEL_CHECK_THROTTLE_MS) return
@@ -69,11 +91,17 @@ export async function throwIfJobCancelled(): Promise<void> {
   const { supabase } = await import("./supabase.js")
   const { data } = await supabase
     .from("jobs")
-    .select("status")
+    .select("status,stop_requested_at")
     .eq("id", store.jobId)
     .single()
   if (data?.status === "cancelled") {
     store.cancelled = true
     throw new JobCancelledError(store.jobId)
+  }
+  // Graceful stop (same throttled read — zero extra queries): only ever
+  // stamped by job types whose routes expose a stop endpoint (gvp).
+  if ((data as { stop_requested_at?: string | null } | null)?.stop_requested_at) {
+    store.stopRequested = true
+    throw new JobStopRequestedError(store.jobId)
   }
 }
