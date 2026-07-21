@@ -62,6 +62,9 @@ async function ensureJobRow(row: ScheduledPostRow): Promise<string | null> {
       status: "processing",
       provider: "social-publish",
       job_type: "social-publish",
+      // Not gallery media — see routes/social-publish.ts: is_public defaults
+      // TRUE and the gallery RLS makes completed public rows world-readable.
+      is_public: false,
       input_data: {
         type: "social-publish",
         scheduled: true,

@@ -1,4 +1,5 @@
 import Fastify from "fastify"
+import { requestLogSerializer } from "./lib/log-redaction.js"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
@@ -234,7 +235,11 @@ export function rateLimitKeyGenerator(req: {
 
 export async function buildApp() {
   const app = Fastify({
-    logger: true,
+    // Same defaults as `logger: true`, plus a req serializer that redacts
+    // OAuth secrets (code/state/access_token query values) out of logged
+    // URLs — with the plain default, every /v1/social/callback hit wrote a
+    // live authorization code into the deployment logs (lib/log-redaction.ts).
+    logger: { serializers: { req: requestLogSerializer } },
     bodyLimit: 1_048_576, // 1 MB for JSON endpoints
     // Default is 100 chars per path param. Our HMAC-signed upload-page
     // tokens (`/v1/upload-page/:token`) are ~330 chars (base64url-encoded
