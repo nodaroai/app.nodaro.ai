@@ -1891,6 +1891,21 @@ export interface GenerateVideoProNodeData {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  /** PARTIAL-RESULT markers (from the completed job's output_data.pro, written
+   *  by execute-node's gvp extractor) — a run that was STOPPED, or a
+   *  failure-rescued partial, delivered fewer than its planned segments. Drive
+   *  the "Continue from segment" affordance. A full run sets deliveredSegments
+   *  === segmentCount and no `stopped`, so it is never flagged continuable. */
+  gvpStopped?: boolean
+  gvpStoppedAtSegment?: number
+  gvpDeliveredSegments?: number
+  gvpSegmentCount?: number
+  /** TRANSIENT continue-intent: set by the Continue affordance right before it
+   *  fires the node's Run — execute-node's gvp path then dispatches
+   *  `continueGenerateVideoPro(fromJobId, fromSegment)` instead of a fresh run
+   *  (reusing the full poll/result-landing path) and clears these immediately. */
+  gvpContinueFromJobId?: string
+  gvpContinueFromSegment?: number
 }
 
 /**

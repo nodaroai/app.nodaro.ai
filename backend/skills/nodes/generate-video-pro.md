@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-21T10:10:17.997Z
-generated_from: bc738d9f4
+generated_at: 2026-07-21T13:04:15.767Z
+generated_from: 7370b4d4f
 ---
 
 # Generate Video Pro
@@ -47,6 +47,12 @@ generated_from: bc738d9f4
 - `activeResultIndex?: number`
 - `currentJobId?: string`
 - `currentJobProgress?: number`
+- `gvpStopped?: boolean`
+- `gvpStoppedAtSegment?: number`
+- `gvpDeliveredSegments?: number`
+- `gvpSegmentCount?: number`
+- `gvpContinueFromJobId?: string`
+- `gvpContinueFromSegment?: number`
 
 **Default data:**
 ```json

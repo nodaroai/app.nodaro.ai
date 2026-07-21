@@ -71,6 +71,7 @@ import {
   generateImage,
   createReferenceBoard,
   generateVideoPro,
+  continueGenerateVideoPro,
   runEditVideoPro,
   getJobStatusLean,
   llmChatStream,
@@ -1867,6 +1868,40 @@ export function executeNode(
   // pollJobWithNodeUpdate, mirroring the reference-board case's minimal shape.
   if (node.type === "generate-video-pro") {
     const gvpData = node.data as GenerateVideoProNodeData;
+    // PARTIAL-RESULT extractor: copy the completed job's segment accounting off
+    // output_data.pro onto node data so the "Continue from segment" affordance
+    // knows a run was STOPPED (or failure-rescued) and from where. A full run
+    // sets deliveredSegments === segmentCount and no `stopped`, so it is never
+    // flagged; a single-segment run has no `pro` object, so all fields clear.
+    const gvpProExtractor = (outputData: Record<string, unknown>): Record<string, unknown> => {
+      const pro = (outputData?.pro ?? {}) as {
+        stopped?: boolean; stoppedAtSegment?: number; deliveredSegments?: number; plan?: { segments?: unknown[] }
+      };
+      const segCount = Array.isArray(pro.plan?.segments) ? pro.plan!.segments!.length : undefined;
+      return {
+        gvpStopped: pro.stopped === true ? true : undefined,
+        gvpStoppedAtSegment: typeof pro.stoppedAtSegment === "number" ? pro.stoppedAtSegment : undefined,
+        gvpDeliveredSegments: typeof pro.deliveredSegments === "number" ? pro.deliveredSegments : undefined,
+        gvpSegmentCount: typeof segCount === "number" ? segCount : undefined,
+      };
+    };
+    // CONTINUE mode (set by the node's Continue affordance): resume a
+    // stopped/failed/completed run from a segment as a NEW job — reuse the whole
+    // poll/result-landing path, just swap the create call. The transient intent
+    // is cleared FIRST so a later plain Run can't accidentally re-continue.
+    const continueFromJobId = typeof gvpData.gvpContinueFromJobId === "string" ? gvpData.gvpContinueFromJobId : undefined;
+    if (continueFromJobId) {
+      const fromSegment = typeof gvpData.gvpContinueFromSegment === "number" ? gvpData.gvpContinueFromSegment : undefined;
+      useWorkflowStore.getState().updateNodeData(node.id, { gvpContinueFromJobId: undefined, gvpContinueFromSegment: undefined });
+      return pollJobWithNodeUpdate(
+        node.id,
+        () => continueGenerateVideoPro(continueFromJobId, fromSegment),
+        "generatedVideoUrl",
+        "Video continuation",
+        ctx,
+        gvpProExtractor,
+      );
+    }
     // FULL generate-video prompt assembly (parity by construction — mirrors
     // the t2v block above AND the backend payload-builder's gvp case): user
     // prompt + look/elements cinematography hints + identity-lock clause,
@@ -2072,6 +2107,7 @@ export function executeNode(
       "generatedVideoUrl",
       "Video generation",
       ctx,
+      gvpProExtractor,
     );
   }
 

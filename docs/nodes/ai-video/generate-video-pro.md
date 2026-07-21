@@ -81,6 +81,8 @@ A request above 15 seconds is automatically split into multiple segments (each 4
 
 Because the pro engine generates one segment at a time and checkpoints after each, a running job can be **stopped gracefully** — keeping everything already generated — and later **continued** from any delivered segment.
 
+**On the canvas:** while the node is running, its **Stop** menu offers **"Stop & keep what's rendered"** beside the usual Discard. Once a run has stopped with a partial result (or a failure delivered only some segments), a **"Continue"** control appears in the node's run strip — pick **Resume** (the first not-yet-rendered segment) or redo from an earlier one; it continues as a new run, billed only for the regenerated segments. The rest of this section documents the underlying API for SDK/CLI/MCP callers.
+
 ### Stop (keep the partial)
 
 `POST /v1/generate-video-pro/:jobId/stop` (also: the SDK's `client.videoPro.stop(jobId)`, the CLI's `nodaro video-pro stop <jobId>`, or the `stop_video_pro` MCP tool).

@@ -5,6 +5,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
+import { GvpContinueControl } from "./gvp-continue-control"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { NodeJobProgress } from "./node-job-progress"
@@ -225,9 +226,12 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
         // Standard quick strip (never rawToolbarContent) — never gated behind
-        // !isRunning so Stop/Discard stays visible mid-run.
+        // !isRunning so Stop/Discard stays visible mid-run. The Continue control
+        // self-hides unless the last run was a stopped/partial delivery.
         topToolbarContent={
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"}>
+            <GvpContinueControl nodeId={id} />
+          </NodeQuickStrip>
         }
       >
         {hasVideoResult ? null : (
