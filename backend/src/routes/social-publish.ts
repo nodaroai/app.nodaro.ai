@@ -95,7 +95,13 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       }
     }
 
-    // Create job record
+    // Create job record.
+    // is_public MUST be false: jobs.is_public defaults TRUE for the public
+    // gallery (migration 011), and the gallery RLS lets ANY Supabase REST
+    // caller read completed public rows. A social publish row carries the
+    // caption + media URL in input_data and the platform post id/url in
+    // output_data — not gallery media, never world-readable. Same rule in
+    // the scheduled worker's ensureJobRow; migration 268 flips old rows.
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
       .insert({
@@ -105,6 +111,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         input_data: buildJobInputData(parsed.data, "social-publish"),
         provider: "social-publish",
         job_type: "social-publish",
+        is_public: false,
       })
       .select("id")
       .single()
