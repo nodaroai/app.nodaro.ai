@@ -1857,7 +1857,7 @@ export interface GenerateVideoProNodeData {
    *  header with bare-name references; "hybrid" = condensed pacing +
    *  label-locked identity + image-offloaded sheet (experiment arm);
    *  "auto" (default) picks by shape. */
-  plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid"
+  plannerMode?: "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus"
   /** Rolling last-seen references (experimental): re-anchor entities that
    *  return after absence with their last-seen moment (clip/frame refs). */
   rollingRefs?: boolean
