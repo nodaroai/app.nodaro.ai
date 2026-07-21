@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach } from "vitest"
 
-import { ytProxyArgs, ytProxyOption, parseProxyPool, resolveProxyChain } from "../yt-proxy.js"
+import { ytProxyArgs, ytProxyOption, parseProxyPool, resolveProxyChain, resolveAttemptChain } from "../yt-proxy.js"
 
 const YT_WATCH = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 const YT_SHORT = "https://youtu.be/dQw4w9WgXcQ"
 const YT_SHORTS = "https://www.youtube.com/shorts/GYKjQ-WT-vU"
 const TIKTOK = "https://www.tiktok.com/@user/video/7300000000000000000"
+const INSTAGRAM = "https://www.instagram.com/reels/DYFWlx7xBi0/"
 const PROXY = "http://user:pass@gate.decodo.com:7000"
 
 describe("yt-proxy", () => {
@@ -113,6 +114,59 @@ describe("yt-proxy", () => {
     it("ytProxyArgs uses the main tier (first of the chain)", () => {
       process.env.YTDLP_PROXY_POOL = `${PROXY} | http://u:p@fallback:9`
       expect(ytProxyArgs(YT_WATCH)).toEqual(["--proxy", PROXY])
+    })
+  })
+
+  /**
+   * The DOWNLOAD attempt chain: null = a direct (no-proxy) attempt. Instagram
+   * serves some datacenter IPs a degraded, audio-less format set per-post (the
+   * download "succeeds" but arrives silent), so it gets the pool as FAILOVER —
+   * direct first (free, works for most posts), paid proxy only when needed.
+   * YouTube keeps its pool-first chain (the datacenter IP is hard-blocked, a
+   * direct attempt is a wasted 429).
+   */
+  describe("resolveAttemptChain — direct-first failover for Instagram", () => {
+    const ISP = ["http://u:p@isp1:1", "http://u:p@isp2:2"]
+
+    it("YouTube with a pool: the proxy chain verbatim — no direct attempt", () => {
+      process.env.YTDLP_PROXY_POOL = ISP.join(",")
+      const attempts = resolveAttemptChain(YT_WATCH)
+      expect(attempts).not.toContain(null)
+      expect(new Set(attempts)).toEqual(new Set(ISP))
+    })
+
+    it("YouTube with nothing configured: one direct attempt", () => {
+      expect(resolveAttemptChain(YT_WATCH)).toEqual([null])
+    })
+
+    it("Instagram with a pool: direct FIRST, then every pool proxy", () => {
+      process.env.YTDLP_PROXY_POOL = `${ISP.join(",")} | ${PROXY}`
+      const attempts = resolveAttemptChain(INSTAGRAM)
+      expect(attempts[0]).toBeNull()
+      expect(new Set(attempts.slice(1))).toEqual(new Set([...ISP, PROXY]))
+      // fallback tier still comes after the main tier
+      expect(attempts[attempts.length - 1]).toBe(PROXY)
+    })
+
+    it("Instagram appends the legacy YTDLP_PROXY as the final fallback", () => {
+      process.env.YTDLP_PROXY = PROXY
+      expect(resolveAttemptChain(INSTAGRAM)).toEqual([null, PROXY])
+    })
+
+    it("Instagram with nothing configured: one direct attempt (unchanged behaviour)", () => {
+      expect(resolveAttemptChain(INSTAGRAM)).toEqual([null])
+    })
+
+    it("other social hosts stay a single direct attempt even with a pool set", () => {
+      process.env.YTDLP_PROXY_POOL = ISP.join(",")
+      expect(resolveAttemptChain(TIKTOK)).toEqual([null])
+      expect(resolveAttemptChain("https://x.com/a/status/1")).toEqual([null])
+      expect(resolveAttemptChain("https://www.facebook.com/watch?v=1")).toEqual([null])
+    })
+
+    it("direct video-file urls (arbitrary hosts) stay a single direct attempt", () => {
+      process.env.YTDLP_PROXY_POOL = ISP.join(",")
+      expect(resolveAttemptChain("https://cdn.example.com/clip.mp4")).toEqual([null])
     })
   })
 })
