@@ -62,6 +62,10 @@ export const SOCIAL_VIDEO_HOSTS = [
 /** YouTube-only subset (the extract-youtube-audio route accepts only YouTube). */
 export const YOUTUBE_HOSTS = ["youtube.com", "youtu.be"] as const
 
+/** Instagram-only subset (the download path's proxy-failover chain is
+ *  Instagram-scoped — see yt-proxy's resolveAttemptChain). */
+export const INSTAGRAM_HOSTS = ["instagram.com"] as const
+
 /**
  * Exact registrable-domain match against an allowlist.
  *

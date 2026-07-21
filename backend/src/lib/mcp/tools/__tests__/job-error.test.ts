@@ -57,3 +57,25 @@ describe("isContentRejection", () => {
     expect(isContentRejection("")).toBe(false)
   })
 })
+
+describe("local ffmpeg failures are never content rejections (2026-07-20 sweep false positives)", () => {
+  // The real shape: runFfmpeg prefixes "ffmpeg failed:" and appends raw
+  // stderr, whose filter-graph diagnostics contain the word "filtered".
+  const FFMPEG_WALL =
+    "ffmpeg failed: ffmpeg version n8.1.2 Copyright (c) 2000-2026 the FFmpeg developers\n" +
+    "[vf#0:0] No filtered frames for output stream, trying to initialize anyway.\n" +
+    "[mjpeg] Non full-range YUV is non-standard, set strict_std_compliance to at most unofficial to use it.\n" +
+    "Conversion failed!"
+
+  it("the extract-frame wall is not a rejection and stays retryable", () => {
+    expect(isContentRejection(FFMPEG_WALL)).toBe(false)
+    expect(isRetryableFailure(FFMPEG_WALL)).toBe(true)
+  })
+
+  it('bare "filtered" no longer matches; provider phrasings still do', () => {
+    expect(isContentRejection("No filtered frames for output stream")).toBe(false)
+    expect(isContentRejection("Your image was filtered by the safety system")).toBe(true)
+    expect(isContentRejection("Prompt content filtered")).toBe(true)
+    expect(isContentRejection("Output filtered due to policy")).toBe(true)
+  })
+})

@@ -484,6 +484,123 @@ describe("downloadYouTubeVideo — proxy pool failover", () => {
 })
 
 /**
+ * Silent-download failover: Instagram serves some datacenter IPs a degraded,
+ * audio-less format set per-post — the download SUCCEEDS but the file has no
+ * audio stream, so `requireAudio` used to fail the import terminally even though
+ * the same post fetches fine (with audio) through the ISP/residential pool.
+ * With `requireAudio` set, a definitely-silent download now counts as a FAILED
+ * ATTEMPT: the file is discarded and the next proxy in the attempt chain tries
+ * again. Only the last attempt's silent file still fails with the canonical
+ * no-audio error.
+ */
+describe("downloadYouTubeVideo — silent-download proxy failover (Instagram)", () => {
+  const IG_URL = "https://www.instagram.com/reels/DYFWlx7xBi0/"
+  const IG_PROXY = "http://u:p@isp1:1"
+  let outPath: string
+
+  beforeEach(() => {
+    vi.mocked(spawn).mockReset()
+    process.env.YTDLP_PROXY_POOL = IG_PROXY
+    // A real on-disk file: the provider stats/probes (and between-attempt
+    // cleanup unlinks) the actual download target.
+    outPath = join(mkdtempSync(join(tmpdir(), "ig-failover-")), "x.mp4")
+    writeFileSync(outPath, "fake-video-bytes")
+  })
+  afterEach(() => {
+    delete process.env.YTDLP_PROXY_POOL
+    delete process.env.YTDLP_PROXY
+  })
+
+  const argsOfCall = (call: number) => vi.mocked(spawn).mock.calls[call][1] as string[]
+  const ffprobeJson = (hasAudio: boolean) =>
+    JSON.stringify({
+      streams: [
+        { codec_type: "video", codec_name: "h264" },
+        ...(hasAudio ? [{ codec_type: "audio", codec_name: "aac" }] : []),
+      ],
+    })
+
+  it("a silent direct download retries through the proxy; the proxied (audible) result wins", async () => {
+    vi.mocked(spawn)
+      // attempt 1 (direct): yt-dlp succeeds…
+      .mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+      // …but ffprobe finds NO audio → discard + failover
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(false) }) as never)
+      // attempt 2 (proxy): yt-dlp succeeds — recreate the file the failover discarded
+      .mockImplementationOnce(() => {
+        writeFileSync(outPath, "fake-video-bytes-take-2")
+        return fakeProc({ code: 0 }) as never
+      })
+      // …and this one HAS audio
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(true) }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: IG_URL, outPath, requireAudio: true }),
+    ).resolves.toBeUndefined()
+
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(4)
+    // attempt 1 carried no proxy; attempt 2 carried the pool proxy
+    expect(argsOfCall(0)).not.toContain("--proxy")
+    expect(argsOfCall(2)).toContain(IG_PROXY)
+  })
+
+  it("silent through EVERY attempt: the canonical no-audio error propagates", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(false) }) as never)
+      .mockImplementationOnce(() => {
+        writeFileSync(outPath, "fake-video-bytes-take-2")
+        return fakeProc({ code: 0 }) as never
+      })
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(false) }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: IG_URL, outPath, requireAudio: true }),
+    ).rejects.toThrow(/no audio track/i)
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(4)
+  })
+
+  it("without requireAudio a silent download is a valid result — no failover burn", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(false) }) as never)
+
+    await expect(downloadYouTubeVideo({ url: IG_URL, outPath })).resolves.toBeUndefined()
+    // one yt-dlp + one ffprobe — the proxy attempt never happened
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(2)
+    expect(argsOfCall(0)).not.toContain("--proxy")
+  })
+
+  it("a silent TikTok download still fails immediately — no proxy chain for TikTok", async () => {
+    vi.mocked(spawn)
+      .mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(false) }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: "https://www.tiktok.com/@a/video/1", outPath, requireAudio: true }),
+    ).rejects.toThrow(/no audio track/i)
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(2)
+  })
+
+  it("a FAILED direct Instagram download (not just a silent one) also fails over to the proxy", async () => {
+    vi.mocked(spawn)
+      // attempt 1 (direct): Instagram's anonymous wall
+      .mockImplementationOnce(() =>
+        fakeProc({ stderr: "ERROR: [Instagram] Instagram sent an empty media response", code: 1 }) as never,
+      )
+      // attempt 2 (proxy): succeeds with audio
+      .mockImplementationOnce(() => fakeProc({ code: 0 }) as never)
+      .mockImplementationOnce(() => fakeProc({ stdout: ffprobeJson(true) }) as never)
+
+    await expect(
+      downloadYouTubeVideo({ url: IG_URL, outPath, requireAudio: true }),
+    ).resolves.toBeUndefined()
+    expect(vi.mocked(spawn)).toHaveBeenCalledTimes(3)
+    expect(argsOfCall(1)).toContain(IG_PROXY)
+  })
+})
+
+/**
  * "No audio makes no sense for a voice changer": import callers pass
  * `requireAudio`, so a silent download fails honestly instead of being ingested.
  * A DEFINITE no-audio (`false`) is required — a probe glitch (`null`) never fails

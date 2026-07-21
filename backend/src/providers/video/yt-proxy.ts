@@ -1,14 +1,14 @@
-import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
+import { YOUTUBE_HOSTS, INSTAGRAM_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 
 /**
- * yt-dlp proxy support, scoped to YouTube — now with a tiered POOL + failover.
+ * yt-dlp proxy support — a tiered POOL + failover, scoped per host class.
  *
  * YouTube bot-blocks the datacenter IP (Railway), so YouTube requests route
  * through a residential/ISP proxy (the pinned yt-dlp, base args and format
  * selector are all correct — the ONLY thing that matters is where the request
  * appears to come from).
  *
- * TWO env vars, both optional, both YouTube-ONLY, both no-ops when unset:
+ * TWO env vars, both optional, both no-ops when unset:
  *   - `YTDLP_PROXY_POOL` — a TIERED pool. Tiers are separated by "|"; proxies
  *     within a tier by "," or whitespace. A download tries every proxy in tier
  *     order (exhaust the cheap tier before escalating), and WITHIN a tier the
@@ -19,8 +19,16 @@ import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.
  *   - `YTDLP_PROXY` — the legacy single proxy. Still works alone (unchanged). When
  *     BOTH are set it is appended as the FINAL fallback after the pool.
  *
- * Non-YouTube hosts (TikTok/Instagram/X/Facebook) get NO proxy — they aren't
- * bot-blocked and must not burn paid residential/ISP bandwidth.
+ * Who gets proxied (see `resolveAttemptChain`):
+ *   - YouTube: pool-FIRST — a direct attempt from the datacenter IP is a
+ *     guaranteed 429, so it is never tried.
+ *   - Instagram: direct-first, pool as FAILOVER. Instagram serves some
+ *     datacenter IPs a degraded, audio-less format set per-post (measured
+ *     2026-07-21: the same reel returns DASH audio + full formats through the
+ *     ISP pool and an audio-less set to Railway) — most posts still fetch fine
+ *     directly, so paid bandwidth burns only when the free attempt failed.
+ *   - TikTok/X/Facebook and direct video-file urls: NO proxy — not (yet)
+ *     bot-blocked; must not burn paid residential/ISP bandwidth.
  */
 
 // Round-robin cursor for within-tier rotation. Module-level: approximate load
@@ -43,16 +51,14 @@ export function parseProxyPool(raw: string | undefined): string[][] {
 }
 
 /**
- * The ordered proxy chain to try for `url`: every `YTDLP_PROXY_POOL` tier (in
+ * The configured proxy chain, HOST-UNGATED: every `YTDLP_PROXY_POOL` tier (in
  * order, rotated within-tier for load spread), then the legacy `YTDLP_PROXY` as
- * a final fallback if set. Returns `[]` for non-YouTube hosts or when nothing is
- * configured — i.e. the download runs with no proxy, exactly as before.
+ * a final fallback if set. `[]` when nothing is configured.
  *
  * Advances the round-robin cursor once per call (a harmless side effect — it
  * only changes which in-tier IP is tried first).
  */
-export function resolveProxyChain(url: string): string[] {
-  if (!isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS)) return []
+function configuredProxyChain(): string[] {
   const tiers = parseProxyPool(process.env.YTDLP_PROXY_POOL)
   const cursor = rrCursor++
   const chain: string[] = []
@@ -63,6 +69,39 @@ export function resolveProxyChain(url: string): string[] {
   const legacy = process.env.YTDLP_PROXY?.trim()
   if (legacy && !chain.includes(legacy)) chain.push(legacy)
   return chain
+}
+
+/**
+ * The ordered proxy chain to try for `url` — `configuredProxyChain` gated to
+ * YouTube. Returns `[]` for non-YouTube hosts or when nothing is configured —
+ * i.e. the download runs with no proxy, exactly as before.
+ */
+export function resolveProxyChain(url: string): string[] {
+  if (!isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS)) return []
+  return configuredProxyChain()
+}
+
+/**
+ * The ordered DOWNLOAD ATTEMPTS for `url`: each entry is a proxy url, or `null`
+ * for a direct (no-proxy) attempt.
+ *
+ *   - YouTube: the proxy chain verbatim when configured (never a direct
+ *     attempt — the datacenter IP is hard-blocked, it would be a wasted 429),
+ *     else one direct attempt. Byte-identical to the pre-existing behaviour.
+ *   - Instagram: DIRECT FIRST (free — most posts fetch fine), then the pool as
+ *     failover for the posts Instagram degrades for datacenter IPs (see the
+ *     module header). Nothing configured → one direct attempt, unchanged.
+ *   - Everything else: one direct attempt.
+ */
+export function resolveAttemptChain(url: string): (string | null)[] {
+  if (isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS)) {
+    const chain = configuredProxyChain()
+    return chain.length > 0 ? chain : [null]
+  }
+  if (isAllowedSocialVideoUrl(url, INSTAGRAM_HOSTS)) {
+    return [null, ...configuredProxyChain()]
+  }
+  return [null]
 }
 
 /**
