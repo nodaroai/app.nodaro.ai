@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { checkStorageQuota } from "../utils/file-validation.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { recordStorageWarnCrossing } from "../lib/storage-warn.js"
 
 /**
  * GET /v1/storage/status — the caller's storage picture, for client apps
@@ -45,6 +46,12 @@ export async function storageStatusRoutes(app: FastifyInstance) {
         "Failed to load storage status",
       )
     }
+
+    // GTM funnel: stamp the first crossing of the storage warning threshold.
+    // This read is exactly what turns the client meter amber, so stamping here
+    // makes "the meter warned them" and "they crossed" the same population by
+    // construction. Not awaited and never throws — see storage-warn.ts.
+    void recordStorageWarnCrossing(userId, quota.usedBytes, quota.quotaBytes)
 
     return { usedBytes: quota.usedBytes, limitBytes: quota.quotaBytes }
   })

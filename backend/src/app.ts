@@ -97,6 +97,7 @@ import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
+import { profileAttributionRoutes } from "./routes/profile-attribution.js"
 import { mediaDeleteRoutes } from "./routes/media-delete.js"
 import { mediaImportUrlRoutes } from "./routes/media-import-url.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
@@ -414,6 +415,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)
   await app.register(storageStatusRoutes)
+  await app.register(profileAttributionRoutes)
   await app.register(mediaDeleteRoutes)
   await app.register(mediaImportUrlRoutes)
   await app.register(transcribeRoutes)
