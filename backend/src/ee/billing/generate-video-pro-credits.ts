@@ -100,7 +100,11 @@ function computePreferredSplit(requestedSec: number, preferredSec: number, capSe
  *  the per-join surcharge bounded. The engine cuts EXACTLY what this bills —
  *  transport and formula read the same clamped value. */
 export const CONTEXT_TAIL_MIN_SEC = SEEDANCE_2_CONTINUATION_REF_SEC
-export const CONTEXT_TAIL_MAX_SEC = 5
+// Raised 5→15 (Tal 2026-07-22, testing lever) — the plugin route Zod + handler
+// transport clamp move together to the same [2,15]. Billing stays exact: the
+// engine cuts what this bills. A long tail eats the KIE video-ref budget, so
+// it's a testing knob, not a default (default stays 2s).
+export const CONTEXT_TAIL_MAX_SEC = 15
 export function clampContextTailSec(v: unknown): number {
   const n = typeof v === "number" && Number.isFinite(v) ? v : CONTEXT_TAIL_MIN_SEC
   return Math.min(CONTEXT_TAIL_MAX_SEC, Math.max(CONTEXT_TAIL_MIN_SEC, n))

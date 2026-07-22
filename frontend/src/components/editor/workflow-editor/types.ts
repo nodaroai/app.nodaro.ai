@@ -214,9 +214,9 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
   const fee = getCachedCredits("generate-video-pro") ?? GVP_FEE_FALLBACK
   const noRefPerSec = gvpPerSecRate(provider, resolution, false)
   const refPerSec = gvpPerSecRate(provider, resolution, true)
-  // Context-tail override — same [2,5] clamp as the backend helper so the
+  // Context-tail override — same [2,15] clamp as the backend helper so the
   // strip estimate tracks the real reservation when the user raises the tail.
-  const tailSec = Math.min(5, Math.max(SEEDANCE_2_CONTINUATION_REF_SEC,
+  const tailSec = Math.min(15, Math.max(SEEDANCE_2_CONTINUATION_REF_SEC,
     typeof data.contextTailSec === "number" && Number.isFinite(data.contextTailSec) ? data.contextTailSec : SEEDANCE_2_CONTINUATION_REF_SEC))
   return (
     fee +
