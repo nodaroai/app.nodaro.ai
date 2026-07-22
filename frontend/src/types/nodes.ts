@@ -1830,6 +1830,8 @@ export interface GenerateVideoProNodeData {
   aspectRatio?: string
   resolution?: string
   generateAudio?: boolean
+  /** No background music (0.44.0): keep voices + SFX but suppress the score; the user layers music in later. Only meaningful when generateAudio is on. */
+  noBackgroundMusic?: boolean
   /** Panel-typed negative — composed with the wired `negative` handle via
    *  composeNegative (generate-video parity) and appended to every segment
    *  prompt as an "Avoid:" suffix (Seedance 2 has no native negative). */
@@ -6179,6 +6181,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       aspectRatio: "adaptive",
       resolution: "720p",
       generateAudio: true,
+      noBackgroundMusic: false,
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],
@@ -6210,6 +6213,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         options: getVideoResolutionOptions("seedance-2") ?? [],
       },
       { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
+      { key: "noBackgroundMusic", label: "No background music", type: "toggle" as const },
     ],
   },
   {

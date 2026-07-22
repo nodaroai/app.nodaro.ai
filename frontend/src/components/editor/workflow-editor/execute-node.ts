@@ -1973,6 +1973,7 @@ export function executeNode(
       aspectRatio: gvpData.aspectRatio ?? "adaptive",
       resolution: gvpData.resolution ?? "720p",
       generateAudio: gvpData.generateAudio,
+      noBackgroundMusic: gvpData.noBackgroundMusic,
       startFrameUrl,
       referenceImageUrls,
       // Panel-typed + wired negative composed exactly like generate-video.

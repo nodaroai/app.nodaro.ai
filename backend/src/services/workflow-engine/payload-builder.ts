@@ -3813,6 +3813,7 @@ export function buildPayload(
         aspectRatio: (data.aspectRatio as string | undefined) ?? "adaptive",
         resolution: (data.resolution as string | undefined) ?? "720p",
         generateAudio: data.generateAudio as boolean | undefined,
+        noBackgroundMusic: typeof data.noBackgroundMusic === "boolean" ? data.noBackgroundMusic : undefined,
         startFrameUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || (data.startFrameUrl as string | undefined),
         referenceImageUrls: gvpRefs || (data.referenceImageUrls as string[] | undefined),
         // Typed-handle levers (resolved generically by targetHandle in

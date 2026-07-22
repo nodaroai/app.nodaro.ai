@@ -251,6 +251,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "aspectRatio", type: "select" },
         { key: "resolution", type: "select" },
         { key: "generateAudio", type: "boolean" },
+        { key: "noBackgroundMusic", type: "boolean" },
         // Planner LLM override (shared llm-models registry id); omitted → engine default.
         { key: "plannerModel", type: "select" },
         // PLAN-ONLY: return the full per-segment plan without generating video

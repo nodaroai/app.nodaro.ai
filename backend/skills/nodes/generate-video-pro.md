@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-21T20:35:25.470Z
-generated_from: 22424a3ff
+generated_at: 2026-07-22T11:03:06.109Z
+generated_from: f35e9f9e6
 ---
 
 # Generate Video Pro
@@ -23,6 +23,7 @@ generated_from: 22424a3ff
 - `aspectRatio?: string`
 - `resolution?: string`
 - `generateAudio?: boolean`
+- `noBackgroundMusic?: boolean`
 - `negativePrompt?: string`
 - `selectedStartFrameNodeId?: string | null`
 - `referenceImageOrder?: string[]`
@@ -64,6 +65,7 @@ generated_from: 22424a3ff
   "aspectRatio": "adaptive",
   "resolution": "720p",
   "generateAudio": true,
+  "noBackgroundMusic": false,
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -102,6 +104,7 @@ generated_from: 22424a3ff
     "aspectRatio": "adaptive",
     "resolution": "720p",
     "generateAudio": true,
+    "noBackgroundMusic": false,
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],
