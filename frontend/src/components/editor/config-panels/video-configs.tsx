@@ -3645,7 +3645,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {[2, 3, 4, 5].map((s) => (
+            {Array.from({ length: 14 }, (_, i) => i + 2).map((s) => (
               <SelectItem key={s} value={String(s)}>
                 {s}s{s === 2 ? " (default)" : ""}
               </SelectItem>
@@ -3655,6 +3655,11 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <p className="text-[11px] text-muted-foreground">
           How much of the previous segment each continuation sees. Raise for slow camera moves or music-timed motion; adds a small per-join cost.
         </p>
+        {(data.contextTailSec ?? 2) > 5 && (
+          <p className="text-[11px] font-medium text-amber-500">
+            High values (6–15s) are a testing lever — the tail rides as a reference video and eats the provider's ~15s reference-video budget, so a long tail combined with Rolling references can exceed it and fail the join.
+          </p>
+        )}
       </div>
 
       {/* AUTO-CAST — analysis-supplied per-slot frames as identity refs. */}
