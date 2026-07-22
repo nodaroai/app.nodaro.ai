@@ -3359,6 +3359,10 @@ export function executeNode(
         // Fail-safe narrowing mirrors payload-builder: only the literal
         // "combine" is sent; anything else omits the field (worker → choose).
         selectionMode: d.selectionMode === "combine" ? "combine" : undefined,
+        // Same narrowing, per lever: only a literal true translates, so a stale
+        // truthy value in saved node data can't send anything but a boolean.
+        translateSpeechToEnglish: d.translateSpeechToEnglish === true ? true : undefined,
+        translateOnScreenTextToEnglish: d.translateOnScreenTextToEnglish === true ? true : undefined,
         analysisFocus: d.analysisFocus,
         userId: ctx.userId,
       })

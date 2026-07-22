@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-07-17T13:03:13.681Z
-generated_from: ff2cc494f
+generated_at: 2026-07-22T09:10:14.297Z
+generated_from: 22424a3ff
 ---
 
 # Video Analysis
@@ -23,6 +23,8 @@ generated_from: ff2cc494f
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `selectionMode?: "choose" | "combine"`
+- `translateSpeechToEnglish?: boolean`
+- `translateOnScreenTextToEnglish?: boolean`
 - `analysisFocus?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

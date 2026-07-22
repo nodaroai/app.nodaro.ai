@@ -2959,6 +2959,11 @@ export function buildPayload(
         // best-of-N strategy — fail-safe narrowed: anything but the literal
         // "combine" is omitted (worker defaults to "choose").
         selectionMode: data.selectionMode === "combine" ? "combine" : undefined,
+        // Output language — same fail-safe narrowing, per lever: only a literal
+        // true translates, so a stale truthy value in saved node data can never
+        // silently flip an orchestrated run into English.
+        translateSpeechToEnglish: data.translateSpeechToEnglish === true ? true : undefined,
+        translateOnScreenTextToEnglish: data.translateOnScreenTextToEnglish === true ? true : undefined,
         analysisFocus: data.analysisFocus,
         reservedCreditId: creditId,
         // nodeId echoes the route's payload key (node.id == the canvas node id the

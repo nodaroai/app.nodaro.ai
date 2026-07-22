@@ -2260,7 +2260,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "(one image/video generation per scene). Per scene: `visualResolved` — a " +
         "self-contained, prompt-ready visual description and THE field downstream " +
         "consumers read — plus shot type, camera movement, a mode-tagged audio " +
-        "track (speech quoted verbatim, music/sfx as generation-ready " +
+        "track (speech quoted verbatim in the language actually spoken unless " +
+        "`translate_speech_to_english` is set, music/sfx as generation-ready " +
         "descriptions, or silence), and recurring people/objects/places extracted " +
         "as castable entity slots so they can be re-cast with your own " +
         "characters. Returns a job_id — poll `get_job`; the full analysis JSON " +
@@ -2284,6 +2285,24 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             'Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended).',
+          ),
+        translate_speech_to_english: z
+          .boolean()
+          .optional()
+          .describe(
+            "Translate spoken and sung words to English. Default false: speech is quoted verbatim in the language " +
+              "actually spoken. Independent of `translate_on_screen_text_to_english` — set this alone for English " +
+              "narration over footage whose signage stays in its original script.",
+          ),
+        translate_on_screen_text_to_english: z
+          .boolean()
+          .optional()
+          .describe(
+            "Translate on-screen text (signs, captions, titles) to English. Default false: transcribed verbatim in " +
+              "its original script. Note this text lives in `visual`, the generation prompt — so translating it means " +
+              "a regenerated shot renders the English wording. Brand, product, person, and place names keep their " +
+              "original form under both flags, and the result's `language` always reports the language actually " +
+              "spoken in the footage.",
           ),
         analysis_focus: z
           .string()
@@ -2337,6 +2356,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
         ...(args.llm_model ? { llmModel: args.llm_model } : {}),
         ...(args.selection_mode ? { selectionMode: args.selection_mode } : {}),
+        ...(args.translate_speech_to_english ? { translateSpeechToEnglish: true } : {}),
+        ...(args.translate_on_screen_text_to_english ? { translateOnScreenTextToEnglish: true } : {}),
         ...(args.analysis_focus ? { analysisFocus: args.analysis_focus } : {}),
         mcp_client: session.clientName,
         userId: session.userId,

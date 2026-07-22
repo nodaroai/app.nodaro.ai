@@ -4413,6 +4413,15 @@ export type VideoAnalysisNodeData = {
   // "combine" (judge picks, then a grounded refine pass folds video-verified
   // details from the losing rolls into the winner).
   selectionMode?: "choose" | "combine"
+  // Output language — two INDEPENDENT levers, both omitted/false by default
+  // (the analysis then keeps the footage's language verbatim, exactly as before
+  // the feature existed). They are separate because they change different things
+  // about a recreation: speech is what the regenerated video SAYS, on-screen text
+  // is what it SHOWS — e.g. English narration over a street whose signage stays
+  // in its original script. Proper nouns keep their original form either way, and
+  // `language` still reports the SOURCE language of the footage.
+  translateSpeechToEnglish?: boolean
+  translateOnScreenTextToEnglish?: boolean
   analysisFocus?: string
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"

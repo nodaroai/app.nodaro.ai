@@ -56,6 +56,8 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 |-------|------|---------|-------------|
 | Analysis Quality (`llmModel`) | Select | `pro` | `fast` (economy), `pro` (default — higher fidelity), or the mixed tiers `mixed` / `mixed-fast` — our most advanced analysis, built for maximum completeness and accuracy. See [Credit Cost](#credit-cost) |
 | Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended) |
+| Translate speech (`translateSpeechToEnglish`) | Checkbox | off | On — spoken and sung words come back in English. See [Output language](#output-language) |
+| Translate on-screen text (`translateOnScreenTextToEnglish`) | Checkbox | off | On — signs, captions, and titles come back in English. Independent of the speech checkbox |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
 
 **Quality tiers, no model to pick.** You choose a *tier* — `fast` for an
@@ -71,6 +73,47 @@ additional verification to maximize captured detail — named places, on-screen
 text, brands, concurrent audio — and is guaranteed to return at least the
 standard result's quality. Use `combine` whenever completeness matters; `choose`
 is the faster baseline.
+
+### Output language
+
+**Both checkboxes are off by default — the analysis keeps the video's original
+language.** Speech is quoted word-for-word as spoken, and on-screen text is
+transcribed in its original script. That is what you want when you are recreating
+the video as it is.
+
+There are **two independent checkboxes**, because they change two different
+things about a recreated video — what it *says* and what it *shows*:
+
+| Checkbox | What it translates |
+|---|---|
+| **Speech** | The spoken and sung words (`content` on `speech` audio layers) |
+| **On-screen text** | Signs, captions, and titles transcribed into `visual` |
+
+Ticking them independently is a supported, deliberate use: **English narration
+over a Chinese street whose signage stays Chinese** is speech-on, on-screen-off.
+The reverse — original dialogue, translated signage — is equally valid.
+
+With either box ticked, the shot descriptions (`visual` prose, `camera`, slot
+`description`, `voice`, `label`, music/sfx) are written in English too.
+
+Constant under every combination:
+
+| | Behavior |
+|---|---|
+| Brand, product, person, and place names | **Never translated.** Transliterated if written in a non-Latin script |
+| `language` | Always the language actually **spoken in the footage** — it describes the video, not the translation |
+| `slotId`, `role`, `shotType` | Never translated — they are identifiers, not prose |
+
+Two consequences worth knowing before you tick a box:
+
+- **This changes the recreated video, not just what you read.** `visual` is the
+  text-to-video generation prompt, so translating a sign means a regenerated shot
+  renders that sign in English. That is usually the point — it is how you make an
+  English version of a foreign-language video — but it is a real change to the
+  output, not a display setting. It is also exactly why the two checkboxes are
+  separate.
+- **The original wording is not kept anywhere.** The translation replaces it. Re-run
+  with the box unticked if you need the source-language transcript back.
 
 **Analysis Focus steers attention, never format.** It biases what the model
 attends to; it does **not** change the output JSON shape, the ≤8s scene
@@ -91,7 +134,7 @@ contract. Three top-level keys: `meta`, `slots`, and `scenes[]`.
 | `height` | integer | Frame height in pixels. |
 | `aspectRatio` | string | Snapped to a standard ratio (`16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`) when within 3%, otherwise a reduced `w:h`. |
 | `title` | string, optional | Source title when known (e.g. the YouTube video title). |
-| `language` | string, optional | Dominant spoken language when detected. |
+| `language` | string, optional | Dominant spoken language when detected. Always the language spoken in the footage — unaffected by either [translation checkbox](#output-language). |
 
 ### `slots[]` — castable entity slots
 
@@ -132,7 +175,7 @@ is three entries. An **empty array `[]` means genuine silence** — there is no
 | Field | Type | Description |
 |-------|------|-------------|
 | `mode` | enum | `speech` / `music` / `sfx`. |
-| `content` | string | `speech`: verbatim words; `music` / `sfx`: generation-ready description. |
+| `content` | string | `speech`: the words, verbatim as spoken — or translated when [Translate speech](#output-language) is on; `music` / `sfx`: generation-ready description. |
 | `voice` | string, optional | Speaker / voice descriptor — `speech` layers only. |
 
 **Read `visualResolved`, not `visual`.** `visual` retains `{slot:x}` tokens so

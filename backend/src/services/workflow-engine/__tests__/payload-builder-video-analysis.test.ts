@@ -162,4 +162,57 @@ describe("buildPayload — video-analysis", () => {
     const forged = buildPayload(node({ youtubeUrl: YT, selectionMode: "merge-everything" }), jobId, {}, usageLogId)
     expect(forged.payload.selectionMode).toBeUndefined()
   })
+
+  it("forwards each language lever only for a literal true, and keeps them independent", () => {
+    // The levers must not be coupled anywhere on the path: an English-narration
+    // run over untouched foreign signage is exactly why they are two fields.
+    const speech = buildPayload(node({ youtubeUrl: YT, translateSpeechToEnglish: true }), jobId, {}, usageLogId)
+    expect(speech.payload.translateSpeechToEnglish).toBe(true)
+    expect(speech.payload.translateOnScreenTextToEnglish).toBeUndefined()
+
+    const onScreen = buildPayload(node({ youtubeUrl: YT, translateOnScreenTextToEnglish: true }), jobId, {}, usageLogId)
+    expect(onScreen.payload.translateSpeechToEnglish).toBeUndefined()
+    expect(onScreen.payload.translateOnScreenTextToEnglish).toBe(true)
+
+    const both = buildPayload(
+      node({ youtubeUrl: YT, translateSpeechToEnglish: true, translateOnScreenTextToEnglish: true }),
+      jobId,
+      {},
+      usageLogId,
+    )
+    expect(both.payload.translateSpeechToEnglish).toBe(true)
+    expect(both.payload.translateOnScreenTextToEnglish).toBe(true)
+  })
+
+  it("omits both levers when absent, false, or forged (keep original language)", () => {
+    // Absent → undefined. This is the default path, and both must stay absent
+    // from the payload entirely: the plugin reads "missing" as "keep the
+    // footage's language", which is the historical behavior.
+    const absent = buildPayload(node({ youtubeUrl: YT }), jobId, {}, usageLogId)
+    expect(absent.payload.translateSpeechToEnglish).toBeUndefined()
+    expect(absent.payload.translateOnScreenTextToEnglish).toBeUndefined()
+
+    // Explicit false is the same as absent — never send `false` on the wire.
+    const off = buildPayload(
+      node({ youtubeUrl: YT, translateSpeechToEnglish: false, translateOnScreenTextToEnglish: false }),
+      jobId,
+      {},
+      usageLogId,
+    )
+    expect(off.payload.translateSpeechToEnglish).toBeUndefined()
+    expect(off.payload.translateOnScreenTextToEnglish).toBeUndefined()
+
+    // Truthy-but-not-true values in saved node data must NOT flip a run into
+    // English — a stale string from an older/hand-edited workflow is not consent.
+    for (const forged of ["true", 1, "yes", {}]) {
+      const r = buildPayload(
+        node({ youtubeUrl: YT, translateSpeechToEnglish: forged, translateOnScreenTextToEnglish: forged }),
+        jobId,
+        {},
+        usageLogId,
+      )
+      expect(r.payload.translateSpeechToEnglish).toBeUndefined()
+      expect(r.payload.translateOnScreenTextToEnglish).toBeUndefined()
+    }
+  })
 })
