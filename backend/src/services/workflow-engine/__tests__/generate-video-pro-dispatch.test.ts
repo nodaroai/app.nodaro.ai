@@ -136,7 +136,7 @@ describe("payload-builder: generate-video-pro dispatch", () => {
     expect(result.modelIdentifier).toBe("generate-video-pro")
   })
 
-  it("carries prompt/provider/duration/resolution/aspectRatio/generateAudio from node data", () => {
+  it("carries prompt/provider/duration/resolution/aspectRatio/generateAudio/noBackgroundMusic from node data", () => {
     const n = gvpNode({
       prompt: "a cat dancing under neon lights",
       provider: "seedance-2-mini",
@@ -144,6 +144,7 @@ describe("payload-builder: generate-video-pro dispatch", () => {
       resolution: "480p",
       aspectRatio: "9:16",
       generateAudio: false,
+      noBackgroundMusic: true,
     })
     const result = buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} })
     expect(result.payload.type).toBe("generate-video-pro")
@@ -153,6 +154,7 @@ describe("payload-builder: generate-video-pro dispatch", () => {
     expect(result.payload.resolution).toBe("480p")
     expect(result.payload.aspectRatio).toBe("9:16")
     expect(result.payload.generateAudio).toBe(false)
+    expect(result.payload.noBackgroundMusic).toBe(true)
   })
 
   it("defaults provider to seedance-2, resolution to 720p, aspectRatio to adaptive when unset", () => {

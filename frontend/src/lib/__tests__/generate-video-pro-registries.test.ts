@@ -67,6 +67,7 @@ describe("generate-video-pro registries", () => {
     expect(data.duration).toBe(8)
     expect(data.resolution).toBe("720p")
     expect(data.generateAudio).toBe(true)
+    expect(data.noBackgroundMusic).toBe(false)
   })
 })
 

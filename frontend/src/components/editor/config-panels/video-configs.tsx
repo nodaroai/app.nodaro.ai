@@ -3586,6 +3586,19 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <label htmlFor="gvp-generateAudio" className="text-xs">Generate Audio (default on)</label>
       </div>
 
+      {(data.generateAudio ?? true) && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="gvp-noBackgroundMusic"
+            checked={data.noBackgroundMusic ?? false}
+            onChange={(e) => onUpdate({ noBackgroundMusic: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="gvp-noBackgroundMusic" className="text-xs">No background music (add later)</label>
+        </div>
+      )}
+
       {/* Planner model — the LLM that splits the script into segment prompts. */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="gvp-planner-model">Planner model</Label>

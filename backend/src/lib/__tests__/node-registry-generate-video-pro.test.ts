@@ -32,7 +32,7 @@ describe("generate-video-pro node registry", () => {
     const d = NODE_REGISTRY.find((n) => n.type === "generate-video-pro")
     const keys = d?.inputSchema?.fields.map((f) => f.key) ?? []
     expect(keys).toEqual(
-      expect.arrayContaining(["prompt", "provider", "duration", "aspectRatio", "resolution", "generateAudio"]),
+      expect.arrayContaining(["prompt", "provider", "duration", "aspectRatio", "resolution", "generateAudio", "noBackgroundMusic"]),
     )
   })
 })

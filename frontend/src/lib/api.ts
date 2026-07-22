@@ -2691,6 +2691,7 @@ export async function generateVideoPro(body: {
   aspectRatio?: string
   resolution: string
   generateAudio?: boolean
+  noBackgroundMusic?: boolean
   startFrameUrl?: string
   referenceImageUrls?: string[]
   /** Appended to every segment prompt as an "Avoid:" suffix (Seedance 2 has
