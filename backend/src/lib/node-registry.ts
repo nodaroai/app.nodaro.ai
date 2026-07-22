@@ -143,6 +143,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         // Derived from the shared tier vocabulary — never hand-listed.
         { key: "llmModel", type: "select", options: [...VIDEO_ANALYSIS_TIER_ORDER] },
         { key: "selectionMode", type: "select", options: ["choose", "combine"] },
+        { key: "translateSpeechToEnglish", type: "boolean" },
+        { key: "translateOnScreenTextToEnglish", type: "boolean" },
         { key: "analysisFocus", type: "string" },
       ],
     },

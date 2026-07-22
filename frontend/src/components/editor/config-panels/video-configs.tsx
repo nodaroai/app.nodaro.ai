@@ -4762,6 +4762,41 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
         </p>
       </div>
 
+      {/* Output language — two INDEPENDENT levers. Both off (the default) means
+          the analysis keeps the footage's own language and the request body is
+          byte-for-byte what it was before the feature existed. They are separate
+          because they change different things about a recreation: speech is what
+          the regenerated video SAYS, on-screen text is what it SHOWS. */}
+      <div className="flex flex-col gap-2">
+        <Label>Translate to English</Label>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="video-analysis-translate-speech"
+            checked={data.translateSpeechToEnglish === true}
+            onCheckedChange={(v) => onUpdate({ translateSpeechToEnglish: v === true ? true : undefined })}
+          />
+          <Label htmlFor="video-analysis-translate-speech" className="text-xs cursor-pointer font-normal">
+            Speech — what's said or sung
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="video-analysis-translate-onscreen"
+            checked={data.translateOnScreenTextToEnglish === true}
+            onCheckedChange={(v) => onUpdate({ translateOnScreenTextToEnglish: v === true ? true : undefined })}
+          />
+          <Label htmlFor="video-analysis-translate-onscreen" className="text-xs cursor-pointer font-normal">
+            On-screen text — signs, captions, titles
+          </Label>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Off, the analysis keeps the video's original language word-for-word. Tick them independently — English
+          speech over a street whose signs stay in their own script, for example. Each choice carries into a
+          regenerated video: what it says, and what it shows. Brand, product, and place names keep their original
+          form either way.
+        </p>
+      </div>
+
       {/* YouTube URL (alternative to a wired video source) */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="video-analysis-url">YouTube URL</Label>

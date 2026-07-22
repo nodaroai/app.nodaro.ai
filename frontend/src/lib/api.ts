@@ -3692,6 +3692,8 @@ export async function startVideoAnalysis(params: {
   youtubeUrl?: string
   llmModel?: string
   selectionMode?: "choose" | "combine"
+  translateSpeechToEnglish?: boolean
+  translateOnScreenTextToEnglish?: boolean
   analysisFocus?: string
   userId?: string
 }): Promise<{ jobId: string }> {
@@ -3704,6 +3706,11 @@ export async function startVideoAnalysis(params: {
   // saved to node data but never reached a single-node Run (the combine
   // no-op bug: output always == the judge's raw winner).
   if (params.selectionMode) body.selectionMode = params.selectionMode
+  // Only sent when ON, per lever. Omitted means the plugin's default (keep the
+  // footage's language), so a node with both off produces the exact request body
+  // it did before the feature existed.
+  if (params.translateSpeechToEnglish) body.translateSpeechToEnglish = true
+  if (params.translateOnScreenTextToEnglish) body.translateOnScreenTextToEnglish = true
   if (params.analysisFocus) body.analysisFocus = params.analysisFocus
   if (params.userId) body.userId = params.userId
   return apiJson("/v1/video-analysis", {
