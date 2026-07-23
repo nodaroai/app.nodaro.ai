@@ -1884,6 +1884,12 @@ export interface GenerateVideoProNodeData {
   /** Which frame anchors the continuation: last keyframe (re-enact warm-up,
    *  default) or the very last frame (no re-enactment). */
   overlapAnchorMode?: "keyframe" | "last-frame"
+  /** Smart-cut mode (experimental A/B, last-frame overlap): "legacy-8x8"
+   *  (default) or a pre-roll-aware diagonal cut — keep-next (seam in the
+   *  overlap) / keep-prev (keep prev's original). */
+  smartCutMode?: "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next"
+  /** Ride the audio-resemble channel in the pre-roll cut (gray-band rescue). */
+  smartCutAudio?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

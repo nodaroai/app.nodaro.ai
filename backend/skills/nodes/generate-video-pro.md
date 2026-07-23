@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-07-22T11:03:06.109Z
-generated_from: f35e9f9e6
+generated_at: 2026-07-23T18:40:32.753Z
+generated_from: b958352a4
 ---
 
 # Generate Video Pro
@@ -40,6 +40,8 @@ generated_from: f35e9f9e6
 - `audioTail?: boolean`
 - `overlapAnchor?: boolean`
 - `overlapAnchorMode?: "keyframe" | "last-frame"`
+- `smartCutMode?: "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next"`
+- `smartCutAudio?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
