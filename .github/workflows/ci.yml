@@ -171,12 +171,9 @@ jobs:
       - name: Build shared packages
         id: build-packages
         run: npm run build:packages
-      - name: Verify skill content is up to date (gen-skills drift gate)
-        run: cd backend && npm run gen:skills:check
-        env:
-          SUPABASE_URL: https://stub.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
-          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
+      # gen-skills drift gate moved to Type Check (unfiltered) — its input is
+      # frontend/src/types/nodes.ts, so gating it behind `backend=true` meant
+      # a frontend-only node-field edit skipped the very check it can break.
       - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: backend
@@ -230,7 +227,47 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
+        id: build-packages
         run: npm run build:packages
+      # Cross-tree gates live HERE, not in Backend Tests, because their inputs
+      # are frontend files while their code sits under backend/. The Diff Gate
+      # classifies by file LOCATION, so a frontend-only PR skips Backend Tests
+      # — precisely when these checks are most likely to catch drift. That
+      # already bit us: #292 (frontend-only) added two /v1/generate-video-pro
+      # paths, route-path-parity never ran, and the failure surfaced on #295,
+      # an unrelated backend PR. This job has no path filter, so they always
+      # run. Hosted inside an existing REQUIRED check rather than a new job so
+      # branch protection needs no new check names (same reasoning as the
+      # workspace-package suites in Backend Tests).
+      - name: Verify skill content is up to date (gen-skills drift gate)
+        # Moved from Backend Tests: backend/skills/ is GENERATED FROM
+        # frontend/src/types/nodes.ts, so the one PR shape that can break it
+        # (frontend-only node-field edits) was the one shape that skipped it.
+        if: always() && steps.build-packages.outcome == 'success'
+        run: cd backend && npm run gen:skills:check
+        env:
+          SUPABASE_URL: https://stub.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
+          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
+      - name: Run cross-tree parity tests
+        # DISCOVERED, never hand-listed: any backend test that references a
+        # frontend path joins this gate automatically, so a new cross-tree
+        # test cannot quietly land back inside the Diff Gate's blind spot.
+        # ~16 files / ~1s — the whole backend suite is 715 files.
+        if: always() && steps.build-packages.outcome == 'success'
+        working-directory: backend
+        run: |
+          files=()
+          while IFS= read -r f; do files+=("$f"); done < <(
+            grep -rl -e 'frontend/' -e 'frontend"' -e "frontend'" -e 'frontend`' src --include='*.test.ts' | sort
+          )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
+            exit 1
+          fi
+          echo "Cross-tree tests (${#files[@]} files):"
+          printf '  %s\n' "${files[@]}"
+          npx vitest run "${files[@]}"
       - name: Typecheck frontend
         run: npx tsc --noEmit
         working-directory: frontend
