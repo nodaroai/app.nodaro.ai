@@ -4,7 +4,7 @@ import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanSearch, Film, Braces, Type, Loader2, AlertCircle, Copy } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { NodeJobProgress } from "./node-job-progress"
@@ -19,7 +19,6 @@ import type { VideoAnalysisNodeData } from "@/types/nodes"
 function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoAnalysisNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const result = nodeData.generatedJson
   const scenes = result?.scenes ?? []
@@ -61,7 +60,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={240}
         hideHeader
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
           { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -93,17 +92,23 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && result && scenes.length > 0 && (
             <div className="relative group">
-              <div className="rounded-md border bg-muted/30 text-[10px] max-h-40 overflow-y-auto divide-y divide-border/60">
+              {/* Scene rows WRAP rather than truncate — this preview is the
+                  result, so no line is cut mid-sentence. Overall height is
+                  bounded by the container's max-h + scroll, never by clipping
+                  each row: a long description costs scroll, never content.
+                  `items-baseline` keeps #N and the timecode aligned to the
+                  label's first line when the label wraps. */}
+              <div className="rounded-md border bg-muted/30 text-[10px] max-h-64 overflow-y-auto divide-y divide-border/60">
                 {scenes.slice(0, 12).map((s) => (
                   <div key={s.sceneNumber} className="flex flex-col gap-0.5 px-2 py-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-muted-foreground tabular-nums">#{s.sceneNumber}</span>
-                      <span className="text-muted-foreground/70 tabular-nums">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-medium text-muted-foreground tabular-nums shrink-0">#{s.sceneNumber}</span>
+                      <span className="text-muted-foreground/70 tabular-nums shrink-0">
                         {s.startSec.toFixed(1)}–{s.endSec.toFixed(1)}s
                       </span>
-                      <span className="font-medium truncate">{s.label}</span>
+                      <span className="font-medium min-w-0 break-words">{s.label}</span>
                     </div>
-                    <span className="text-muted-foreground/70 truncate">{s.visualResolved.slice(0, 60)}</span>
+                    <span className="text-muted-foreground/70 break-words">{s.visualResolved}</span>
                   </div>
                 ))}
                 {scenes.length > 12 && (

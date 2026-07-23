@@ -64,6 +64,21 @@ const ALLOWED_PATHS = [
   // delete would fail a legal deletion request.
   /^src\/routes\/meta-callbacks\.ts$/,
 
+  // First-touch attribution: writes two columns on the caller's OWN row, scoped
+  // `.eq("id", req.userId)` and guarded `.is(<col>, null)` so the write is
+  // one-shot. Never reads or writes another user's row.
+  //
+  // Service-role matches the sibling profile routes (me.ts, credits-balance.ts):
+  // `profiles` RLS denies even self-reads by design, so every profile access in
+  // this codebase goes through service-role.
+  //
+  // Note: service-role does NOT make the column tamper-proof — `profiles`'
+  // UPDATE policy is a denylist, so the owner can still PATCH it directly via
+  // PostgREST. See migration 270's "KNOWN LIMITATION" block for why neither
+  // available hardening was shipped. This entry is about the route's tenant
+  // scoping, which is correct.
+  /^src\/routes\/profile-attribution\.ts$/,
+
   // Public / share-token / app runtime — cross-user access by design.
   /^src\/routes\/presentation\.ts$/,
   /^src\/routes\/gallery\.ts$/,

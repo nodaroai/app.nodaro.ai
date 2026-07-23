@@ -27,6 +27,18 @@ vi.mock("@/utils/file-validation.js", () => ({
   checkStorageQuota: vi.fn(),
 }))
 
+// The route fires a fire-and-forget storage-warn stamp. Mocked so this suite
+// does not issue a REAL un-awaited Supabase request per test — one that would
+// otherwise outlive the test that started it and could surface inside an
+// unrelated one — and so the call itself can be asserted.
+const { recordStorageWarnCrossingMock } = vi.hoisted(() => ({
+  recordStorageWarnCrossingMock: vi.fn(async () => {}),
+}))
+vi.mock("@/lib/storage-warn.js", () => ({
+  recordStorageWarnCrossing: recordStorageWarnCrossingMock,
+  STORAGE_WARN_RATIO: 0.85,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -102,6 +114,23 @@ describe("GET /v1/storage/status", () => {
     expect(typeof body.limitBytes).toBe("number")
     // Pure read — checked against the exact quota source /v1/upload uses.
     expect(vi.mocked(checkStorageQuota)).toHaveBeenCalledWith(TEST_USER_ID, 0)
+    // The stamp is fed the SAME numbers the caller is shown, so "the meter
+    // warned them" and "they crossed" can never describe different sets.
+    expect(recordStorageWarnCrossingMock).toHaveBeenCalledWith(
+      TEST_USER_ID,
+      123_456_789,
+      1_073_741_824,
+    )
+  })
+
+  it("does not stamp on the self-hosted path, where there is no limit", async () => {
+    hasCreditsMock.mockReturnValue(false)
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/storage/status?userId=${TEST_USER_ID}`,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(recordStorageWarnCrossingMock).not.toHaveBeenCalled()
   })
 
   it("returns numbers even when the caller is already over quota", async () => {
