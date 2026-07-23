@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -40,7 +40,7 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, getLlmModel } from "@nodaro/shared"
+import { LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, getLlmModel, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
@@ -635,6 +635,36 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "face-swap": [faceSwapProviderControl],
   "remove-background": [removeBgMotionControl],
   "generate-mask": [maskThresholdControl],
+  // ── Video Analysis — the two "how should this run" levers the config panel
+  // exposes: Analysis quality (tier) + best-of-N Result selection. Both are
+  // static enums (not provider-dependent), sourced from the SAME shared lists /
+  // strings the panel renders so the strip and panel can't drift. `llmModel`
+  // holds the TIER string (identical field the panel's quality <Select> writes);
+  // `defaultValue: "pro"` makes an unset node show "Pro" without the strip
+  // writing anything on mount (QuickConfigSelect skips the snap for unset
+  // fields). The optional `analysisFocus` prompt stays reachable via the strip's
+  // Prompt button (NODE_PROMPT_FIELDS); the translate-to-English toggles remain
+  // in the config panel. Registering here also suppresses the fallback Settings
+  // strip button. ──
+  "video-analysis": [
+    {
+      field: "llmModel",
+      ariaLabel: "Analysis quality",
+      icon: Gauge,
+      defaultValue: DEFAULT_VIDEO_ANALYSIS_TIER,
+      options: VIDEO_ANALYSIS_TIER_ORDER.map((t) => ({ value: t, label: VIDEO_ANALYSIS_TIER_LABELS[t] })),
+    },
+    {
+      field: "selectionMode",
+      ariaLabel: "Result selection",
+      icon: Layers,
+      defaultValue: "choose",
+      options: [
+        { value: "choose", label: "Choose", description: "Keep the strongest pass" },
+        { value: "combine", label: "Combine", description: "Fold in every pass — most complete" },
+      ],
+    },
+  ],
   // ── Reference Sheet — top-level `type` + `skin` (flat fields the strip can
   // address). `aspect`/`withText`/`showLabels` live under `flavour` (nested) so
   // they stay in the config panel. Registering entries also suppresses the

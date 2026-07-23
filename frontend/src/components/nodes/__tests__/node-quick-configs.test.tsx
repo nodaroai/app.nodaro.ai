@@ -241,6 +241,56 @@ describe("assemble-narrated-video NODE_QUICK_CONFIGS registration", () => {
   })
 })
 
+// ===========================================================================
+// video-analysis quick-config registration — the two "how should this run"
+// levers surfaced on the bottom strip (Analysis quality tier + best-of-N Result
+// selection). Both are static enums with no provider dependence. Asserted
+// against the SHARED constants (not hardcoded copies) so the strip can't drift
+// from the config panel's <Select>s, which read the same lists.
+// ===========================================================================
+import { VIDEO_ANALYSIS_TIER_ORDER, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
+
+describe("video-analysis NODE_QUICK_CONFIGS registration", () => {
+  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+    typeof c.options === "function" ? c.options(data) : c.options
+
+  it("registers exactly 2 controls: llmModel (tier), selectionMode", () => {
+    const controls = getQuickConfigs("video-analysis")
+    expect(controls).toHaveLength(2)
+    expect(controls.map((c) => c.field)).toEqual(["llmModel", "selectionMode"])
+  })
+
+  it("Analysis quality offers the shared tier list and declares the shared default", () => {
+    const [tierControl] = getQuickConfigs("video-analysis")
+    // defaultValue drives the unset-field label, so an untouched node shows the
+    // tier it actually runs at ("Pro") without the strip writing on mount.
+    expect(tierControl.defaultValue).toBe(DEFAULT_VIDEO_ANALYSIS_TIER)
+    expect(resolve(tierControl).map((o) => o.value)).toEqual([...VIDEO_ANALYSIS_TIER_ORDER])
+  })
+
+  it("Analysis quality writes the TIER string (the field the panel writes), not a raw model id", () => {
+    const [tierControl] = getQuickConfigs("video-analysis")
+    expect(tierControl.field).toBe("llmModel")
+    for (const opt of resolve(tierControl)) {
+      expect(VIDEO_ANALYSIS_TIER_ORDER as readonly string[], `${opt.value} is a tier`).toContain(opt.value)
+    }
+  })
+
+  it("Result selection is Choose/Combine, defaulting to choose", () => {
+    const [, selectionControl] = getQuickConfigs("video-analysis")
+    expect(selectionControl.field).toBe("selectionMode")
+    expect(selectionControl.defaultValue).toBe("choose")
+    expect(resolve(selectionControl).map((o) => o.value)).toEqual(["choose", "combine"])
+  })
+
+  it("neither control is provider-dependent (same options regardless of node data)", () => {
+    for (const c of getQuickConfigs("video-analysis")) {
+      expect(resolve(c, {}), `${c.field} with empty data`).toEqual(resolve(c, { provider: "anything" }))
+      expect(resolve(c).length, `${c.field} always has options`).toBeGreaterThan(0)
+    }
+  })
+})
+
 describe("QuickConfigSelect provider-aware fail-safe", () => {
   it("hides the control AND clears a stale value when the provider has no lever", () => {
     const { queryByTestId } = render(
