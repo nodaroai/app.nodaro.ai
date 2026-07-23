@@ -1995,6 +1995,8 @@ export function executeNode(
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,
       overlapAnchorMode: gvpData.overlapAnchor === true && gvpData.overlapAnchorMode === "last-frame" ? ("last-frame" as const) : undefined,
+      smartCutMode: gvpData.smartCutMode === "preroll-keep-prev" || gvpData.smartCutMode === "preroll-keep-next" ? gvpData.smartCutMode : undefined,
+      smartCutAudio: gvpData.smartCutAudio === true ? true : undefined,
       idempotencyKey,
     };
 

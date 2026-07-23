@@ -3841,6 +3841,8 @@ export function buildPayload(
         audioTail: data.audioTail === true ? true : undefined,
         overlapAnchor: data.overlapAnchor === true ? true : undefined,
         overlapAnchorMode: data.overlapAnchor === true && data.overlapAnchorMode === "last-frame" ? "last-frame" : undefined,
+        smartCutMode: data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next" ? data.smartCutMode : undefined,
+        smartCutAudio: data.smartCutAudio === true ? true : undefined,
         usageLogId,
       })
     }

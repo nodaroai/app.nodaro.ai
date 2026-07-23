@@ -269,6 +269,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioTail", type: "boolean" },
         { key: "overlapAnchor", type: "boolean" },
         { key: "overlapAnchorMode", type: "string" },
+        { key: "smartCutMode", type: "string" },
+        { key: "smartCutAudio", type: "boolean" },
       ],
     },
     // Env-configurable cap (`GENERATE_VIDEO_PRO_MAX_DURATION`, default 120s) — read at

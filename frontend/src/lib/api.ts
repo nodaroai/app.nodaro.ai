@@ -2722,6 +2722,8 @@ export async function generateVideoPro(body: {
   audioTail?: boolean
   overlapAnchor?: boolean
   overlapAnchorMode?: "keyframe" | "last-frame"
+  smartCutMode?: "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next"
+  smartCutAudio?: boolean
   idempotencyKey?: string
 }): Promise<{ jobId: string }> {
   const { idempotencyKey, ...rest } = body

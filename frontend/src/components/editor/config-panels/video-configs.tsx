@@ -3808,6 +3808,46 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </p>
       </div>
 
+      {/* SMART CUT — last-frame-overlap stitch A/B: the model can begin a
+          continuation up to ~24 frames early and re-enact the previous tail;
+          the pre-roll modes detect that replay and cut cleanly. Legacy = the
+          current 8×8 smart cut (unchanged). */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="gvp-smart-cut">Smart cut (experimental)</Label>
+        <Select
+          value={data.smartCutMode ?? "legacy-8x8"}
+          onValueChange={(v) => onUpdate({ smartCutMode: v as "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next" })}
+        >
+          <SelectTrigger id="gvp-smart-cut" className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="legacy-8x8">Legacy — 8×8 smart cut (default)</SelectItem>
+            <SelectItem value="preroll-keep-next">Pre-roll keep-next — hide the seam in the overlap</SelectItem>
+            <SelectItem value="preroll-keep-prev">Pre-roll keep-prev — keep the previous segment&apos;s original frames</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          For last-frame overlap: detect where the continuation re-enacts the previous tail and cut cleanly. Legacy is byte-identical.
+        </p>
+      </div>
+
+      {/* SMART-CUT AUDIO — gray-band rescue; only meaningful under a pre-roll mode. */}
+      {(data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next") && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="gvp-smartCutAudio"
+            checked={data.smartCutAudio ?? false}
+            onChange={(e) => onUpdate({ smartCutAudio: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="gvp-smartCutAudio" className="text-xs">
+            Audio-assisted cut — use voice/SFX resemblance to place the cut (best with No background music)
+          </label>
+        </div>
+      )}
+
       {/* PLAN ONLY — cheap plan iteration without video generation. */}
       <div className="flex items-center gap-2 px-1">
         <input
