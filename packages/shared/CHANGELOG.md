@@ -1,5 +1,16 @@
 # @nodaro/shared
 
+## 1.14.0
+
+### Minor Changes
+
+- 606997d: New `GVP_SUPPORTED_PROVIDERS` + `isGvpSupportedProvider` — the Generate/Edit Video Pro support subset (`seedance-2`, `seedance-2-fast`). Deliberately distinct from the `SEEDANCE_2_PROVIDERS` capability family (mini keeps its capability gating everywhere else); the pro nodes' selection UIs, node definitions, and generated skill docs all derive from this list.
+- 774a2d1: Video-analysis entity slots gain an optional `refImageUrl` — a hosted reference frame from the analyzed footage where the entity is clearly visible. Producers may omit it; consumers use it as an identity reference when recreating the video.
+
+### Patch Changes
+
+- 2f32c1b: Add `publish-social` to `SOCIAL_POST_NODE_TYPES` — the unified Publish-to-Social node's type, so shared-set-driven routing (carousel accumulation, caption, refMap gate) covers it in both the frontend DAG executor and the backend orchestrator.
+
 ## 1.13.1
 
 ### Patch Changes
