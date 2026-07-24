@@ -3,6 +3,9 @@ import {
   windowAnalysisSchema, videoAnalysisResultSchema,
   deriveSlotRefs, rewriteSlotTokens, unwrapUnresolvedTokens,
   renderAnalyzedScene, isOversizedScene, aspectRatioFromDims,
+  entitySlotSchema, analyzedSceneSchema,
+  rewriteSceneBindings, dropUnknownBindings,
+  VIDEO_ANALYSIS_MAX_VARIATIONS, VIDEO_ANALYSIS_VARIATION_SLUGS, VIDEO_ANALYSIS_DEFAULT_VARIATION,
   type EntitySlot,
 } from "../video-analysis.js"
 
@@ -45,6 +48,86 @@ describe("token helpers", () => {
   it("renderAnalyzedScene substitutes descriptions (uncast) and castMap bindings (cast)", () => {
     expect(renderAnalyzedScene({ visual: "{slot:hero} runs" }, [slot])).toBe("tan man, mustache, black tee runs")
     expect(renderAnalyzedScene({ visual: "{slot:hero} runs" }, [slot], { hero: "the person from @image_1" })).toBe("the person from @image_1 runs")
+  })
+})
+
+const dreamVariation = {
+  variationId: "dream",
+  label: "Dream self",
+  description: "tan man, mustache — flowing white robe, barefoot, hair loose (dream sequences)",
+  refImageUrl: "https://cdn.example/frames/hero-dream.jpg",
+}
+
+describe("appearance variations (cast-variations spec §4)", () => {
+  it("entitySlotSchema round-trips variations[] including refImageUrl", () => {
+    const parsed = entitySlotSchema.parse({ ...slot, variations: [dreamVariation] })
+    expect(parsed.variations).toEqual([dreamVariation])
+  })
+  it("absent variations stays absent (no [] materialization)", () => {
+    const parsed = entitySlotSchema.parse(slot)
+    expect("variations" in parsed && parsed.variations !== undefined).toBe(false)
+  })
+  it(`rejects more than VIDEO_ANALYSIS_MAX_VARIATIONS (${4}) — window layer rejects, merge folds`, () => {
+    expect(VIDEO_ANALYSIS_MAX_VARIATIONS).toBe(4)
+    const five = ["dream", "flashback", "disguise", "era", "alt-1"].map((id) => ({ ...dreamVariation, variationId: id }))
+    expect(entitySlotSchema.safeParse({ ...slot, variations: five }).success).toBe(false)
+  })
+  it("rejects the reserved 'default' variationId inside variations[] (D9)", () => {
+    expect(VIDEO_ANALYSIS_DEFAULT_VARIATION).toBe("default")
+    expect(entitySlotSchema.safeParse({ ...slot, variations: [{ ...dreamVariation, variationId: "default" }] }).success).toBe(false)
+  })
+  it("rejects a malformed variationId (slug charset only; vocabulary is doctrine-enforced)", () => {
+    expect(entitySlotSchema.safeParse({ ...slot, variations: [{ ...dreamVariation, variationId: "Dream Look" }] }).success).toBe(false)
+    expect(VIDEO_ANALYSIS_VARIATION_SLUGS).toContain("dream")
+    expect(VIDEO_ANALYSIS_VARIATION_SLUGS).toContain("alt-2")
+  })
+  it("windowAnalysisSchema scenes round-trip slotVariations; absent stays absent", () => {
+    const bound = { ...baseScene, slotVariations: { hero: "dream" } }
+    const parsed = windowAnalysisSchema.parse({ slots: [{ ...slot, variations: [dreamVariation] }], scenes: [bound, baseScene] })
+    expect(parsed.scenes[0].slotVariations).toEqual({ hero: "dream" })
+    expect(parsed.scenes[1].slotVariations).toBeUndefined()
+  })
+  it("analyzedSceneSchema inherits slotVariations from the same base", () => {
+    const parsed = analyzedSceneSchema.parse({
+      ...baseScene, sceneNumber: 1, visualResolved: "a man juggles", slotRefs: ["hero"], slotVariations: { hero: "dream" },
+    })
+    expect(parsed.slotVariations).toEqual({ hero: "dream" })
+  })
+  it("videoAnalysisResultSchema full-document round-trip with both fields", () => {
+    const meta = { durationSec: 10, width: 1920, height: 1080, aspectRatio: "16:9" }
+    const doc = {
+      meta,
+      slots: [{ ...slot, variations: [dreamVariation] }],
+      scenes: [{ ...baseScene, sceneNumber: 1, visualResolved: "a man juggles", slotRefs: ["hero"], slotVariations: { hero: "dream" } }],
+    }
+    expect(videoAnalysisResultSchema.parse(doc)).toEqual(doc)
+  })
+})
+
+describe("binding rewrite helpers (merge consumes — spec §4)", () => {
+  it("rewriteSceneBindings renames slot keys and per-slot variation values", () => {
+    expect(rewriteSceneBindings({ "man-2": "dream", other: "era" }, { "man-2": "hero" }, { hero: { dream: "flashback" } }))
+      .toEqual({ hero: "flashback", other: "era" })
+  })
+  it("rewriteSceneBindings passes undefined through", () => {
+    expect(rewriteSceneBindings(undefined, { a: "b" })).toBeUndefined()
+  })
+  it("dropUnknownBindings drops unknown (slot, variation) pairs and reports them", () => {
+    const valid = new Map([["hero", new Set(["dream"])]])
+    const r = dropUnknownBindings({ hero: "dream", hero2: "dream", other: "ghost" }, valid)
+    expect(r.kept).toEqual({ hero: "dream" })
+    expect(r.dropped).toEqual([{ slotId: "hero2", variationId: "dream" }, { slotId: "other", variationId: "ghost" }])
+  })
+  it("dropUnknownBindings treats 'default' as always valid for a known slot", () => {
+    const valid = new Map([["hero", new Set<string>()]])
+    const r = dropUnknownBindings({ hero: "default" }, valid)
+    expect(r.kept).toEqual({ hero: "default" })
+    expect(r.dropped).toEqual([])
+  })
+  it("dropUnknownBindings returns kept: undefined when nothing survives (no {} materialization)", () => {
+    const r = dropUnknownBindings({ ghost: "dream" }, new Map())
+    expect(r.kept).toBeUndefined()
+    expect(r.dropped).toEqual([{ slotId: "ghost", variationId: "dream" }])
   })
 })
 
