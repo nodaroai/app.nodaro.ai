@@ -56,6 +56,17 @@ const allHandlers: Record<string, HandlerFn> = {
 const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
 Object.assign(allHandlers, createSurroundHandlers(engines.surround))
 Object.assign(allHandlers, privatePluginHandlers)
+// `engines.smartCut` (2026-07-24): the combine-videos boundary matcher —
+// the cut-point algorithms moved private, so `combineVideos` (and the
+// gvp/evp stitches that reach it through the plugin toolkit, which run in
+// THIS process) resolve the matcher via the smart-cut registry. Absent
+// (community/business, or plugin-version lag): the registry stays null and
+// combine degrades to fixed trims.
+if (engines.smartCut) {
+  const { registerSmartCutMatcher } = await import("../providers/video/smart-cut.js")
+  registerSmartCutMatcher((prevPath, nextPath, framesFromPrev, framesFromNext, mode) =>
+    engines.smartCut!.findBoundary(prevPath, nextPath, framesFromPrev, framesFromNext, mode))
+}
 
 export function createVideoWorker() {
   initProviders()

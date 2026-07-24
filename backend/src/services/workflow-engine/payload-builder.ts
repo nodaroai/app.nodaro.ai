@@ -4156,6 +4156,9 @@ export function buildPayload(
         // transitionDuration (pre-split workflows).
         audioCrossfadeDuration: data.audioCrossfadeDuration as number | undefined,
         smartCutEnabled: (data.smartCutEnabled as boolean) ?? false,
+        // Cut-point algorithm; unknown/legacy values degrade to best-pair
+        // (the pre-mode behavior) at the worker's ?? fallback.
+        smartCutMode: data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next" ? data.smartCutMode : undefined,
         smartCutFramesPrev: data.smartCutFramesPrev as number | undefined,
         smartCutFramesNext: data.smartCutFramesNext as number | undefined,
         // Unset trims default to start 1 / end 2 (the user-validated

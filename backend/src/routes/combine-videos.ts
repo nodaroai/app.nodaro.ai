@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { estimateCombineVideosCredits, type CombineVideosEstimatorInput, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isCloud } from "../lib/config.js"
 
 // Zod doesn't accept a readonly string[] directly in z.enum, but the runtime
 // shape is identical. Cast to a non-empty tuple on the type side only.
@@ -32,6 +33,12 @@ const combineVideosBody = z.object({
    *  M frames of the next and cut at the closest pair (replaces the fixed
    *  boundary trims). */
   smartCutEnabled: z.boolean().optional().default(false),
+  /** Cut-point algorithm: "best-pair" (default, the classic global-best
+   *  single-pair match) or a replay-diagonal preroll mode — keep-next cuts
+   *  at the detected replay's start (the overlap plays from the NEXT clip),
+   *  keep-prev at its end (the PREV clip's original frames are kept). All
+   *  modes share the windows below and the fixed-trims fallback. */
+  smartCutMode: z.enum(["best-pair", "preroll-keep-prev", "preroll-keep-next"]).optional().default("best-pair"),
   smartCutFramesPrev: z.number().int().min(1).max(24).optional().default(8),
   smartCutFramesNext: z.number().int().min(1).max(24).optional().default(8),
   /** Defaults 1 start / 2 end — the user-validated recipe for AI
@@ -75,8 +82,18 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutMode, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = parsed.data
     const userId = req.userId
+
+    // Smart cut is a Nodaro Cloud feature — its cut-point algorithms live in
+    // the private plugins package (engines.smartCut), not in this repo.
+    // Community/business get an honest error instead of a silent downgrade;
+    // the fixed trimStartFrames/trimEndFrames stay available everywhere.
+    if (smartCutEnabled && !isCloud()) {
+      return reply.status(400).send({
+        error: { code: "cloud_only_feature", message: "Smart cut is available on Nodaro Cloud — use the fixed trim frame counts instead" },
+      })
+    }
 
     if (!userId) {
       return reply.status(401).send({
@@ -119,6 +136,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       audioCrossfadeCurve,
       audioCrossfadeDuration,
       smartCutEnabled,
+      smartCutMode,
       smartCutFramesPrev,
       smartCutFramesNext,
       trimStartFrames,

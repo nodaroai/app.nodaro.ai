@@ -760,10 +760,11 @@ export function runCombineVideos(
   smartCutEnabled?: boolean,
   smartCutFramesPrev?: number,
   smartCutFramesNext?: number,
+  smartCutMode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next",
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames, upstreamDurations, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext),
+    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames, upstreamDurations, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext, smartCutMode),
     "generatedVideoUrl",
     "Combine videos",
     ctx,

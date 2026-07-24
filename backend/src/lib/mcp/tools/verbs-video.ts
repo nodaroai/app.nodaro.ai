@@ -716,7 +716,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .boolean()
           .optional()
           .describe(
-            "PSNR-match the last frames of each clip against the first frames of the next and cut at the closest pair — seamless for continuation clips (next generated from prev's last frame). Replaces the fixed trim_* frame counts.",
+            "PSNR-match the last frames of each clip against the first frames of the next and cut where the chosen smart_cut_mode decides — seamless for continuation clips (next generated from prev's last frame). Replaces the fixed trim_* frame counts. Nodaro Cloud only (self-hosted editions return cloud_only_feature).",
+          ),
+        smart_cut_mode: z.enum(["best-pair", "preroll-keep-prev", "preroll-keep-next"]).optional()
+          .describe(
+            "Smart-cut cut-point algorithm (default 'best-pair': the classic single most-similar pair). The preroll modes detect the replay DIAGONAL continuation clips carry (the next clip re-enacting the previous clip's last frames) and cut at the replay's start ('preroll-keep-next': the overlap plays from the next clip) or end ('preroll-keep-prev': the previous clip's original frames are kept). Same search windows and fixed-trims fallback in every mode.",
           ),
         smart_cut_frames_prev: z.number().int().min(1).max(24).optional()
           .describe("Smart-cut search window at each clip's END (frames, default 8)"),
@@ -778,6 +782,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         audioCrossfadeCurve: args.audio_crossfade_curve,
         audioCrossfadeDuration: args.audio_crossfade_duration,
         smartCutEnabled: args.smart_cut,
+        smartCutMode: args.smart_cut_mode,
         smartCutFramesPrev: args.smart_cut_frames_prev,
         smartCutFramesNext: args.smart_cut_frames_next,
         mcp_client: session.clientName,

@@ -1,169 +1,31 @@
 /**
- * smart-cut tests — the PSNR boundary matcher for combine-videos.
- *
- * Mocks all I/O (ffmpeg extraction, sharp decode, fps/frame-count probe);
- * verifies the pair-selection algorithm, the trim index math, and the
- * window clamping. The pixel data returned per PNG path is controlled so a
- * specific (prev, next) pair is the unique best match.
+ * smart-cut tests — the matcher REGISTRY only. The boundary-matching
+ * ALGORITHMS moved to the private plugins package (2026-07-24, Tal: "it is
+ * important that the smart algorithm will stay private"); their tests live
+ * there (`src/plugins/smart-cut/__tests__/`). What stays public — and
+ * tested here — is the registration seam `combineVideos` resolves through,
+ * and the degrade contract when no engine is present.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect } from "vitest"
+import { registerSmartCutMatcher, getSmartCutMatcher, type SmartCutMatcher, type SmartCutBoundary } from "../smart-cut.js"
 
-const mocks = vi.hoisted(() => {
-  const runFfmpeg = vi.fn().mockResolvedValue("")
-  const createWorkDir = vi.fn().mockResolvedValue("/tmp/sc")
-  const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
-  const probeFpsAndFrameCount = vi.fn()
-  /** path → fill byte for that frame's fake pixels. Frames with the same
-   *  fill byte are "identical" (PSNR Infinity). */
-  const pixelFillByPath = new Map<string, number>()
-  return { runFfmpeg, createWorkDir, cleanupWorkDir, probeFpsAndFrameCount, pixelFillByPath }
-})
+const boundary: SmartCutBoundary = {
+  trimEndFrames: 0, trimStartFrames: 1, psnr: 30, matched: true,
+  searchedPrevFrames: 8, searchedNextFrames: 8,
+}
 
-vi.mock("../ffmpeg-utils.js", () => ({
-  runFfmpeg: mocks.runFfmpeg,
-  createWorkDir: mocks.createWorkDir,
-  cleanupWorkDir: mocks.cleanupWorkDir,
-}))
-
-vi.mock("../smart-loop-cut.js", () => ({
-  probeFpsAndFrameCount: mocks.probeFpsAndFrameCount,
-}))
-
-vi.mock("sharp", () => ({
-  default: vi.fn((path: string) => ({
-    raw: () => ({
-      toBuffer: () =>
-        Promise.resolve({
-          data: Buffer.alloc(48, mocks.pixelFillByPath.get(path) ?? 0),
-          info: { width: 4, height: 4, channels: 3 },
-        }),
-    }),
-  })),
-}))
-
-import { findSmartCutBoundary, boundaryTrimsFromMatch, SMART_CUT_MIN_PSNR_DB } from "../smart-cut.js"
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.runFfmpeg.mockResolvedValue("")
-  mocks.createWorkDir.mockResolvedValue("/tmp/sc")
-  mocks.pixelFillByPath.clear()
-})
-
-describe("boundaryTrimsFromMatch", () => {
-  it("very last frame ↔ very first frame: keep prev intact, drop next's duplicate", () => {
-    expect(boundaryTrimsFromMatch(0, 0)).toEqual({ trimEndFrames: 0, trimStartFrames: 1 })
+describe("smart-cut matcher registry", () => {
+  it("starts empty — community/business worker boots never register an engine", () => {
+    expect(getSmartCutMatcher()).toBeNull()
   })
 
-  it("match deeper in both windows: drop after the match on prev, through it on next", () => {
-    expect(boundaryTrimsFromMatch(3, 2)).toEqual({ trimEndFrames: 3, trimStartFrames: 3 })
-  })
-})
-
-describe("findSmartCutBoundary", () => {
-  function stubProbes(prevFrames: number, nextFrames: number) {
-    mocks.probeFpsAndFrameCount
-      .mockResolvedValueOnce({ fps: 24, frameCount: prevFrames })
-      .mockResolvedValueOnce({ fps: 24, frameCount: nextFrames })
-  }
-
-  /** Give every extracted frame a distinct fill byte, then make one
-   *  (prev, next) pair identical. Window files are 1-based PNGs. */
-  function paintFrames(windowPrev: number, windowNext: number, matchPrevFile: number, matchNextFile: number) {
-    for (let i = 1; i <= windowPrev; i++) {
-      mocks.pixelFillByPath.set(`/tmp/sc/prev_${String(i).padStart(4, "0")}.png`, 10 + i)
-    }
-    for (let j = 1; j <= windowNext; j++) {
-      mocks.pixelFillByPath.set(`/tmp/sc/next_${String(j).padStart(4, "0")}.png`, 100 + j)
-    }
-    mocks.pixelFillByPath.set(`/tmp/sc/prev_${String(matchPrevFile).padStart(4, "0")}.png`, 200)
-    mocks.pixelFillByPath.set(`/tmp/sc/next_${String(matchNextFile).padStart(4, "0")}.png`, 200)
-  }
-
-  it("picks the most similar pair and maps it to per-clip trims", async () => {
-    stubProbes(120, 120)
-    // Window 4/4. prev_0004 = last frame (offset 0); prev_0003 = offset 1.
-    // Make prev_0003 ↔ next_0002 the identical pair → trimEnd=1, trimStart=2.
-    paintFrames(4, 4, 3, 2)
-
-    const cut = await findSmartCutBoundary("/prev.mp4", "/next.mp4", 4, 4)
-
-    expect(cut.trimEndFrames).toBe(1)
-    expect(cut.trimStartFrames).toBe(2)
-    expect(cut.psnr).toBe(Infinity)
-    expect(cut.matched).toBe(true)
-  })
-
-  it("maps a match DEEP in both windows: prev file order is oldest→newest, offset counts from the END", async () => {
-    // The two sides count from opposite ends — the exact confusion this
-    // test pins down. Window 4/4: prev files prev_0001..0004 where 0004 is
-    // the clip's very LAST frame. Making prev_0001 (the OLDEST in the
-    // window = offset 3 from the end) match next_0003 (index 2 from the
-    // start) must yield trimEnd=3 (drop the 3 frames after the match) and
-    // trimStart=3 (drop frames 0,1 and the matched twin at index 2).
-    stubProbes(120, 120)
-    paintFrames(4, 4, 1, 3)
-
-    const cut = await findSmartCutBoundary("/prev.mp4", "/next.mp4", 4, 4)
-
-    expect(cut.trimEndFrames).toBe(3)
-    expect(cut.trimStartFrames).toBe(3)
-    expect(cut.matched).toBe(true)
-  })
-
-  it("no pair clears the threshold → matched:false, best-effort info still reported", async () => {
-    stubProbes(120, 120)
-    // All fills distinct → every pair differs by large per-byte deltas →
-    // best PSNR ≈ 9dB, far below the threshold.
-    for (let i = 1; i <= 4; i++) mocks.pixelFillByPath.set(`/tmp/sc/prev_${String(i).padStart(4, "0")}.png`, 10 + i)
-    for (let j = 1; j <= 4; j++) mocks.pixelFillByPath.set(`/tmp/sc/next_${String(j).padStart(4, "0")}.png`, 200 + j)
-
-    const cut = await findSmartCutBoundary("/prev.mp4", "/next.mp4", 4, 4)
-
-    expect(cut.matched).toBe(false)
-    expect(cut.psnr).toBeLessThan(SMART_CUT_MIN_PSNR_DB)
-    // Info fields still describe the best pair found.
-    expect(cut.trimEndFrames).toBeGreaterThanOrEqual(0)
-    expect(cut.trimStartFrames).toBeGreaterThanOrEqual(1)
-  })
-
-  it("extracts the tail window of prev and the head window of next (downscaled)", async () => {
-    stubProbes(120, 120)
-    paintFrames(8, 8, 8, 1)
-
-    await findSmartCutBoundary("/prev.mp4", "/next.mp4", 8, 8)
-
-    const prevArgs = mocks.runFfmpeg.mock.calls[0][0] as string[]
-    const prevVf = prevArgs[prevArgs.indexOf("-vf") + 1]
-    // Last 8 of 120 frames → select n >= 112, downscaled for comparison.
-    expect(prevVf).toContain("gte(n\\,112)")
-    expect(prevVf).toContain("scale=192:-2")
-    expect(prevArgs[prevArgs.indexOf("-frames:v") + 1]).toBe("8")
-
-    const nextArgs = mocks.runFfmpeg.mock.calls[1][0] as string[]
-    const nextVf = nextArgs[nextArgs.indexOf("-vf") + 1]
-    expect(nextVf).toContain("lt(n\\,8)")
-    expect(nextArgs[nextArgs.indexOf("-frames:v") + 1]).toBe("8")
-  })
-
-  it("clamps windows so short clips keep at least 2 frames", async () => {
-    stubProbes(10, 6)
-    paintFrames(8, 4, 8, 1)
-
-    await findSmartCutBoundary("/prev.mp4", "/next.mp4", 24, 24)
-
-    const prevArgs = mocks.runFfmpeg.mock.calls[0][0] as string[]
-    // prev: window = 10 - 2 = 8 → select from frame 2
-    expect(prevArgs[prevArgs.indexOf("-frames:v") + 1]).toBe("8")
-    const nextArgs = mocks.runFfmpeg.mock.calls[1][0] as string[]
-    // next: window = 6 - 2 = 4
-    expect(nextArgs[nextArgs.indexOf("-frames:v") + 1]).toBe("4")
-  })
-
-  it("cleans up its work dir even on success", async () => {
-    stubProbes(120, 120)
-    paintFrames(2, 2, 2, 1)
-    await findSmartCutBoundary("/prev.mp4", "/next.mp4", 2, 2)
-    expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/sc")
+  it("register → get roundtrip; last registration wins (mirrors the loader's engine merge)", async () => {
+    const first: SmartCutMatcher = async () => boundary
+    const second: SmartCutMatcher = async () => ({ ...boundary, trimStartFrames: 2 })
+    registerSmartCutMatcher(first)
+    expect(getSmartCutMatcher()).toBe(first)
+    registerSmartCutMatcher(second)
+    expect(getSmartCutMatcher()).toBe(second)
+    await expect(getSmartCutMatcher()!("/p.mp4", "/n.mp4", 8, 8, "best-pair")).resolves.toMatchObject({ trimStartFrames: 2 })
   })
 })

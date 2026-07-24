@@ -304,8 +304,16 @@ const tier1: CharacterizedOperation[] = [
   },
   {
     // Continuation pair (clip-head's tail overlaps clip-tail's start on the
-    // same testsrc2 timeline) → smart-cut PSNR boundary match end-to-end.
-    name: "combine-videos-smartcut",
+    // same testsrc2 timeline) with smart cut REQUESTED — but the boundary
+    // matcher is cloud-private (`engines.smartCut`, 2026-07-24) and never
+    // registers in this repo's own processes, so what THIS repo ships — and
+    // what this op pins — is the PUBLIC DEGRADE path: every boundary keeps
+    // the fixed trims (0/0 here → plain normalized concat, the overlap
+    // plays twice). The matched-cut behavior is characterized in the
+    // private repo alongside the algorithm (smart-cut engine integration
+    // test). Renamed from "combine-videos-smartcut" when the algorithm
+    // moved private.
+    name: "combine-videos-smartcut-degrade",
     tier: 1,
     run: async (f) => {
       const { outputPath } = await combineVideos({
