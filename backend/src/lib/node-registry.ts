@@ -767,7 +767,20 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     capabilities: ["dual-output-handles", "vlm-based"],
   },
 
-  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
+  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos with transitions, audio handling, boundary trims, and PSNR smart cut (best-pair or replay-diagonal preroll modes).", outputType: "video", inputSchema: { fields: [
+    { key: "videoUrls", type: "video-url-array", required: true },
+    { key: "transition", type: "text" },
+    { key: "transitionDuration", type: "number" },
+    { key: "audioMode", type: "select", options: ["keep", "crossfade", "remove"] },
+    { key: "audioCrossfadeCurve", type: "text" },
+    { key: "audioCrossfadeDuration", type: "number" },
+    { key: "smartCutEnabled", type: "boolean" },
+    { key: "smartCutMode", type: "select", options: ["best-pair", "preroll-keep-prev", "preroll-keep-next"] },
+    { key: "smartCutFramesPrev", type: "number" },
+    { key: "smartCutFramesNext", type: "number" },
+    { key: "trimStartFrames", type: "number" },
+    { key: "trimEndFrames", type: "number" },
+  ] } },
   {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",

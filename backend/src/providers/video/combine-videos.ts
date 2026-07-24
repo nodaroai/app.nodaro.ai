@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames } from "./ffmpeg-utils.js"
-import { findSmartCutBoundary } from "./smart-cut.js"
+import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
 interface CombineOptions {
@@ -34,6 +34,12 @@ interface CombineOptions {
     readonly enabled: boolean
     readonly framesFromPrev: number
     readonly framesFromNext: number
+    /** Cut-point ALGORITHM (default "best-pair" — the classic single-pair
+     *  argmax, byte-identical to pre-mode behavior). The preroll modes
+     *  detect the replay DIAGONAL continuation clips carry and cut at the
+     *  run's start (keep-next) or end (keep-prev) — see smart-cut.ts. Same
+     *  windows, same matched:false → fixed-trims fallback in every mode. */
+    readonly mode?: SmartCutMode
     /** Per-boundary override (length = clips − 1). When present, boundary k
      *  runs the PSNR matcher ONLY if `boundaryMask[k]` is true; a false entry
      *  is an INTENTIONAL hard cut (e.g. a camera-angle change between two
@@ -324,6 +330,17 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     const endTrims = normalizedPaths.map((_, i) => (i === normalizedPaths.length - 1 ? 0 : trimEndFrames))
     let smartCuts: Array<{ boundary: number; prevClipEndTrimFrames: number; nextClipStartTrimFrames: number; psnrDb: number | null; matched: boolean; searchedPrevFrames: number | null; searchedNextFrames: number | null }> | undefined
     if (smartCut?.enabled && normalizedPaths.length >= 2) {
+      // The cut-point algorithms are cloud IP — the matcher registers from
+      // the private plugin's `engines.smartCut` at worker boot. No matcher
+      // (community/business, or a plugin-version lag on cloud): every
+      // boundary degrades to the fixed-trims fallback below, reported with
+      // the same shape an errored search uses. The route already rejects
+      // smartCutEnabled outside cloud, so this path is the resilience net,
+      // not the edition gate.
+      const matcher = getSmartCutMatcher()
+      if (!matcher) {
+        console.warn("[combineVideos] smart cut requested but no matcher engine is registered (cloud plugin absent or outdated) — keeping fixed trims at every boundary")
+      }
       smartCuts = []
       for (let k = 0; k < normalizedPaths.length - 1; k++) {
         // Intentional hard cut (mask entry false): a camera-angle change to a
@@ -339,10 +356,20 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
           })
           continue
         }
+        if (!matcher) {
+          smartCuts.push({
+            boundary: k,
+            prevClipEndTrimFrames: endTrims[k]!,
+            nextClipStartTrimFrames: startTrims[k + 1]!,
+            psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null,
+          })
+          continue
+        }
         try {
-          const cut = await findSmartCutBoundary(
+          const cut = await matcher(
             normalizedPaths[k], normalizedPaths[k + 1],
             smartCut.framesFromPrev, smartCut.framesFromNext,
+            smartCut.mode ?? "best-pair",
           )
           if (cut.matched) {
             // Genuine match — the matcher's cut replaces the fixed trims.

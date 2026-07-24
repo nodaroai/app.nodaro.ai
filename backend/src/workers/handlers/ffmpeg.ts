@@ -44,7 +44,7 @@ import { isKineticCaptionStyle } from "@nodaro/shared"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
-  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = job.data as {
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutMode, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
     /** Validated upstream against `COMBINE_TRANSITION_IDS` at the route's
@@ -57,6 +57,8 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
      *  transitionDuration (pre-split workflows). */
     audioCrossfadeDuration?: number
     smartCutEnabled?: boolean
+    /** Cut-point algorithm — validated at the route's Zod boundary. */
+    smartCutMode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next"
     smartCutFramesPrev?: number
     smartCutFramesNext?: number
     trimStartFrames?: number
@@ -69,7 +71,7 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
     audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, audioCrossfadeDuration,
     trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0,
     smartCut: smartCutEnabled
-      ? { enabled: true, framesFromPrev: smartCutFramesPrev ?? 8, framesFromNext: smartCutFramesNext ?? 8 }
+      ? { enabled: true, framesFromPrev: smartCutFramesPrev ?? 8, framesFromNext: smartCutFramesNext ?? 8, mode: smartCutMode ?? "best-pair" }
       : undefined,
   })
   await setJobProgress(job, ctx.jobId, 80)

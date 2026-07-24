@@ -257,11 +257,15 @@ export interface PluginFfmpegToolkit {
      *  can never flip the majority vote and letterbox the kept footage. */
     targetWidth?: number
     targetHeight?: number
-    /** PSNR boundary matcher (core `providers/video/smart-cut.ts`) — built
-     *  for tail-chained continuation clips whose boundary frames are
+    /** PSNR boundary matcher — resolved via the smart-cut registry
+     *  (`providers/video/smart-cut.ts`), which the private plugin's
+     *  `engines.smartCut` fills at worker boot (the algorithms moved
+     *  private 2026-07-24; gvp/evp stitches run in the video worker, so
+     *  the engine is present whenever a plugin stitch runs). Built for
+     *  tail-chained continuation clips whose boundary frames are
      *  near-twins; unmatched boundaries keep the fixed trims. Additive-
      *  optional so plugin versions on either side of this member interop. */
-    smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[] }
+    smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[]; mode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next" }
   }): Promise<string>
   /**
    * New core helper added alongside this contract member
@@ -974,6 +978,33 @@ export interface PluginToolkit {
  */
 export interface PluginEngines {
   surround?: PluginSurroundEngine
+  smartCut?: PluginSmartCutEngine
+}
+
+/**
+ * Combine-videos boundary matcher (2026-07-24 — the smart-cut cut-point
+ * algorithms moved private; Tal: "it is important that the smart algorithm
+ * will stay private"). `combineVideos` calls this per boundary with its
+ * LOCAL normalized clip paths; the returned trims are DROP COUNTS the
+ * caller applies via its own frame-trim plan. Absent engine
+ * (community/business, or a plugin-version lag on cloud) → the app degrades
+ * every boundary to its fixed-trims fallback.
+ */
+export interface PluginSmartCutEngine {
+  findBoundary(
+    prevPath: string,
+    nextPath: string,
+    framesFromPrev: number,
+    framesFromNext: number,
+    mode: "best-pair" | "preroll-keep-prev" | "preroll-keep-next",
+  ): Promise<{
+    trimEndFrames: number
+    trimStartFrames: number
+    psnr: number
+    matched: boolean
+    searchedPrevFrames: number
+    searchedNextFrames: number
+  }>
 }
 
 /** Mirrors the public surface of `services/surround/index.ts` (moved to the private repo's `src/plugins/surround/`). */

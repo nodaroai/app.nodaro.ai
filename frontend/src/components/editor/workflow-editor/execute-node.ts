@@ -5671,6 +5671,7 @@ export function executeNode(
       combineData.smartCutEnabled,
       combineData.smartCutFramesPrev,
       combineData.smartCutFramesNext,
+      combineData.smartCutMode,
     );
   }
 

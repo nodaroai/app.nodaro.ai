@@ -18,6 +18,7 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "./combine-transition-picker"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
+import { isCloud } from "@/lib/edition"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import type {
@@ -151,6 +152,11 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         )}
       </div>
 
+      {/* SMART CUT is Cloud-only: the cut-point algorithms live in the
+          private plugins package. Community/business builds hide the whole
+          section (the backend route also rejects it) — the exact frame
+          trims below stay available in every edition. */}
+      {isCloud() && (
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <Label htmlFor="smart-cut">Smart cut</Label>
@@ -164,15 +170,37 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           onCheckedChange={(v) => onUpdate({ smartCutEnabled: v })}
         />
       </div>
+      )}
 
-      {data.smartCutEnabled && (
+      {isCloud() && data.smartCutEnabled && (
         <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
           <p className="text-[11px] text-muted-foreground">
-            Finds the most similar pair of frames near each boundary (searching the
-            windows below), ends the previous clip on it and starts the next right
-            after it — the duplicated frame plays once. Boundaries where no genuine
-            match is found fall back to the fixed trims below.
+            Searches the windows below at every boundary and cuts where the chosen
+            method decides — the duplicated moment plays once. Boundaries where no
+            genuine match is found fall back to the fixed trims below.
           </p>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="smart-cut-mode" className="text-[11px] text-muted-foreground">
+              Method
+            </Label>
+            <Select
+              value={data.smartCutMode ?? "best-pair"}
+              onValueChange={(v) => onUpdate({ smartCutMode: v as CombineVideosData["smartCutMode"] })}
+            >
+              <SelectTrigger id="smart-cut-mode" aria-label="Smart cut method" className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="best-pair">Best pair — cut at the single most similar frame pair (default)</SelectItem>
+                <SelectItem value="preroll-keep-next">Pre-roll keep-next — detect the replayed overlap, keep the next clip&apos;s copy</SelectItem>
+                <SelectItem value="preroll-keep-prev">Pre-roll keep-prev — detect the replayed overlap, keep the previous clip&apos;s frames</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              The pre-roll methods suit continuation chains where the next clip re-enacts
+              the previous clip&apos;s last frames before diverging.
+            </p>
+          </div>
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
               Search window: end of previous clip — {data.smartCutFramesPrev ?? 8} frames

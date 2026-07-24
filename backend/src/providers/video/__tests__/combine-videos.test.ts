@@ -80,9 +80,12 @@ vi.mock("node:fs", () => ({
 
 const smartCutMocks = vi.hoisted(() => ({
   findSmartCutBoundary: vi.fn(),
+  /** false simulates community/business (or plugin-version lag): the
+   *  registry has no matcher and combine degrades to fixed trims. */
+  matcherRegistered: true,
 }))
 vi.mock("../smart-cut.js", () => ({
-  findSmartCutBoundary: smartCutMocks.findSmartCutBoundary,
+  getSmartCutMatcher: () => (smartCutMocks.matcherRegistered ? smartCutMocks.findSmartCutBoundary : null),
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -108,7 +111,7 @@ interface CombineCallOpts {
   audioMode?: "keep" | "crossfade" | "remove"
   audioCrossfadeCurve?: string
   audioCrossfadeDuration?: number
-  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[] }
+  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[]; mode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next" }
   trimStartFrames?: number
   trimEndFrames?: number
   targetWidth?: number
@@ -178,6 +181,7 @@ beforeEach(() => {
   mocks.fsWriteFile.mockResolvedValue(undefined)
   smartCutMocks.findSmartCutBoundary.mockReset()
   smartCutMocks.findSmartCutBoundary.mockResolvedValue({ trimEndFrames: 0, trimStartFrames: 1, psnr: 30, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 })
+  smartCutMocks.matcherRegistered = true
 })
 
 // ===========================================================================
@@ -397,7 +401,7 @@ describe("combineVideos — smart cut", () => {
     }))
 
     expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledWith(
-      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8,
+      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8, "best-pair",
     )
     // Fixed trims (1/2) are ignored — the boundary comes from the matcher.
     expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
@@ -406,6 +410,45 @@ describe("combineVideos — smart cut", () => {
     expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
       2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 5, 0,
     )
+  })
+
+  it("passes the requested cut-point mode through to the matcher (preroll-keep-next)", async () => {
+    stubResolutionProbes(2)
+    smartCutMocks.findSmartCutBoundary.mockResolvedValueOnce({ trimEndFrames: 4, trimStartFrames: 1, psnr: 31.0, matched: true, searchedPrevFrames: 12, searchedNextFrames: 12 })
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      smartCut: { enabled: true, framesFromPrev: 12, framesFromNext: 12, mode: "preroll-keep-next" },
+    }))
+
+    expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledWith(
+      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 12, 12, "preroll-keep-next",
+    )
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(
+      2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 1, 0,
+    )
+  })
+
+  it("NO matcher registered (community / plugin lag): every boundary keeps the fixed trims, reported as unmatched", async () => {
+    smartCutMocks.matcherRegistered = false
+    stubResolutionProbes(2)
+
+    const result = await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut",
+      trimStartFrames: 1,
+      trimEndFrames: 2,
+      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8, mode: "preroll-keep-next" },
+    }))
+
+    expect(smartCutMocks.findSmartCutBoundary).not.toHaveBeenCalled()
+    // Fixed trims applied (inner boundary only): clip 0 end 2, clip 1 start 1.
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2)
+    expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(2, "/tmp/work/normalized_1.mp4", "/tmp/work/trimmed_1.mp4", 1, 0)
+    expect(result.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 2, nextClipStartTrimFrames: 1, psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null },
+    ])
   })
 
   it("3 clips: the middle clip combines boundary-0 start trim with boundary-1 end trim", async () => {
@@ -501,7 +544,7 @@ describe("combineVideos — smart cut", () => {
     // Matcher ran for boundary 0 ONLY — boundary 1 (masked) never calls it.
     expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledTimes(1)
     expect(smartCutMocks.findSmartCutBoundary).toHaveBeenCalledWith(
-      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8,
+      "/tmp/work/normalized_0.mp4", "/tmp/work/normalized_1.mp4", 8, 8, "best-pair",
     )
     // clip 0: outer start 0, boundary-0 matched end 2.
     expect(mocks.trimEdgeFrames).toHaveBeenNthCalledWith(1, "/tmp/work/normalized_0.mp4", "/tmp/work/trimmed_0.mp4", 0, 2)

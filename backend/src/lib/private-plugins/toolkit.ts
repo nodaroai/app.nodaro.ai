@@ -216,7 +216,7 @@ async function combineVideosToUrl(options: {
   trimEndFrames?: number
   targetWidth?: number
   targetHeight?: number
-  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[] }
+  smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[]; mode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next" }
 }): Promise<string> {
   const { outputPath: localPath } = await combineVideosCore({
     videoUrls: options.videoUrls,

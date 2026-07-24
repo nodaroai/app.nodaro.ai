@@ -3477,6 +3477,18 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
 
   const resolutionOptions = getVideoResolutionOptions(currentProvider)
 
+  // Fail-safe (CLAUDE.md pitfall 5 pattern): the preroll smart-cut modes model
+  // the LAST-FRAME transport's pixel replay diagonal — under a KEYFRAME overlap
+  // anchor the re-enactment is semantic (no pixel twins), so the engine gates
+  // them off and warns. Snap a stale preroll value back to legacy so the panel
+  // never shows a mode the run won't actually use.
+  const keyframeAnchored = data.overlapAnchor === true && (data.overlapAnchorMode ?? "keyframe") === "keyframe"
+  useEffect(() => {
+    if (keyframeAnchored && (data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next")) {
+      onUpdate({ smartCutMode: "legacy-8x8" })
+    }
+  }, [keyframeAnchored]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -3823,12 +3835,14 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="legacy-8x8">Legacy — 8×8 smart cut (default)</SelectItem>
-            <SelectItem value="preroll-keep-next">Pre-roll keep-next — hide the seam in the overlap</SelectItem>
-            <SelectItem value="preroll-keep-prev">Pre-roll keep-prev — keep the previous segment&apos;s original frames</SelectItem>
+            <SelectItem value="preroll-keep-next" disabled={keyframeAnchored}>Pre-roll keep-next — hide the seam in the overlap</SelectItem>
+            <SelectItem value="preroll-keep-prev" disabled={keyframeAnchored}>Pre-roll keep-prev — keep the previous segment&apos;s original frames</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          For last-frame overlap: detect where the continuation re-enacts the previous tail and cut cleanly. Legacy is byte-identical.
+          {keyframeAnchored
+            ? "Pre-roll modes need a last-frame boundary — switch Overlap anchor to Last frame (or Off) to enable them; keyframe re-enactments have no pixel replay to detect."
+            : "For last-frame overlap: detect where the continuation re-enacts the previous tail and cut cleanly. Legacy is byte-identical."}
         </p>
       </div>
 

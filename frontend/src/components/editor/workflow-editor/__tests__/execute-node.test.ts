@@ -2300,6 +2300,7 @@ describe("combine-videos", () => {
       undefined, // smartCutEnabled — off by default
       undefined, // smartCutFramesPrev
       undefined, // smartCutFramesNext
+      undefined, // smartCutMode — best-pair by default (only sent when set)
     )
   })
 })

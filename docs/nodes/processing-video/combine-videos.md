@@ -15,7 +15,8 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Audio Mode | Select | crossfade | How to handle audio during transitions |
 | Crossfade Duration | Number | 0.5 | AUDIO-only crossfade length (0-5s, shown when Audio = Crossfade). Never affects the video. Falls back to Transition Duration on older workflows. |
 | Crossfade Curve | Select | linear | Audio fade curve (shown when Audio = Crossfade) |
-| Smart Cut | Toggle | off | PSNR-match boundary frames and cut at the closest pair (replaces the fixed trims) |
+| Smart Cut | Toggle | off | **Nodaro Cloud only.** PSNR-match boundary frames and cut where the chosen method decides (replaces the fixed trims) |
+| Smart Cut: method | Select | best-pair | Cut-point algorithm: `best-pair` (the single most similar frame pair), `preroll-keep-next` or `preroll-keep-prev` (replay-diagonal detection — see below). Shown when Smart Cut is on |
 | Smart Cut: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown when Smart Cut is on) |
 | Smart Cut: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
 | Trim Start Frames | Number | 1 | Frames trimmed from the start of EACH clip except the first (0-120). Default 1 drops the duplicated boundary frame AI continuation clips carry. With Smart Cut on, used as the fallback for boundaries without a match |
@@ -72,9 +73,15 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 
 ### Smart Cut
 
-For continuation clips (each generated from the previous clip's last frame), the seam usually stutters because the models re-render a near-identical moment on both sides. **Smart Cut** finds it automatically: it searches the last *N* frames of each clip and the first *M* frames of the next (PSNR similarity), ends the first clip **on** the most similar frame and starts the next **right after** its match — of the two near-identical twins, the *previous* clip's original frame is kept and the *next* clip's re-rendered copy is dropped, so the shared moment plays exactly once and motion continues through the cut.
+> **Nodaro Cloud only.** Smart Cut's boundary-matching algorithms run from Nodaro's cloud engine; self-hosted Community and Business editions offer the exact frame trims (`Trim Start/End Frames`) instead, and the API returns `cloud_only_feature` if `smartCutEnabled` is requested there.
 
-**Match threshold + fallback:** a pair only counts as a genuine match above **24dB** PSNR (measured: continuation twins ≥ ~28dB, unrelated clips ≤ ~15dB). Boundaries with a match use the matcher's cut; boundaries **without** one (clips that don't actually continue each other, or a failed search) fall back to the fixed **Trim Start/End** values — which stay visible below the Smart Cut controls as the per-boundary defaults.
+For continuation clips (each generated from the previous clip's last frame), the seam usually stutters because the models re-render a near-identical moment on both sides. **Smart Cut** searches the last *N* frames of each clip and the first *M* frames of the next (PSNR similarity at 24dB) and places the cut with the chosen **method** — all three share the same windows and the same fixed-trims fallback; only the algorithm that picks the cut point differs:
+
+- **Best pair** (default): cut at the single most similar frame pair — the first clip ends **on** the best match, the next starts **right after** its twin, so the shared moment plays exactly once. Byte-identical to the node's pre-method behavior.
+- **Pre-roll keep-next**: some continuation models restart *before* the boundary frame and **re-enact the previous clip's last frames** before diverging (a replay). This method detects the replay as a *diagonal run* of matching pairs and cuts where the replay **starts** — the whole overlap plays from the *next* clip's copy, moving the seam away from the fragile replay-to-new-content zone.
+- **Pre-roll keep-prev**: detects the same replay but cuts where it **ends** — the *previous* clip's original (often sharper) frames are kept and the next clip drops its whole re-enactment.
+
+**Match threshold + fallback:** a pair only counts as a genuine match above **24dB** PSNR (measured: continuation twins ≥ ~28dB, unrelated clips ≤ ~15dB); the pre-roll methods additionally require a contiguous run of at least 2 matching pairs (an isolated pair is noise, not a replay — a lone anchor twin at the exact boundary still drops the single duplicate). Boundaries with a match use the method's cut; boundaries **without** one (clips that don't actually continue each other, or a failed search) fall back to the fixed **Trim Start/End** values — which stay visible below the Smart Cut controls as the per-boundary defaults.
 
 **Every junction is searched independently** — with 3 clips there are 2 boundaries, each with its own result. The applied values are reported in the job's `output_data.smartCuts`:
 

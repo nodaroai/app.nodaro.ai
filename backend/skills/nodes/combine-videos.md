@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-07-12T19:11:12.232Z
-generated_from: a9716a88e
+generated_at: 2026-07-24T07:06:30.276Z
+generated_from: a19c35ca3
 ---
 
 # Combine Videos
@@ -25,6 +25,7 @@ generated_from: a9716a88e
 - `audioCrossfadeCurve?: string`
 - `audioCrossfadeDuration?: number`
 - `smartCutEnabled?: boolean`
+- `smartCutMode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next"`
 - `smartCutFramesPrev?: number`
 - `smartCutFramesNext?: number`
 - `trimStartFrames?: number`
@@ -68,6 +69,7 @@ generated_from: a9716a88e
 - `audio_crossfade_curve`
 - `audio_crossfade_duration`
 - `smart_cut`
+- `smart_cut_mode`
 - `smart_cut_frames_prev`
 - `smart_cut_frames_next`
 <!-- AUTO-GEN:END mcp-call -->
