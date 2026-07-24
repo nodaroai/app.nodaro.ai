@@ -25,6 +25,34 @@ export type VideoAnalysisEntitySource = (typeof VIDEO_ANALYSIS_ENTITY_SOURCES)[n
 /** Matches {slot:<id>} tokens. Distinct from NODE_REF_PATTERN / {image:N} grammars. */
 export const SLOT_TOKEN_RE = /\{slot:([a-z0-9-]+)\}/g
 
+/**
+ * Appearance variations (cast-variations spec, 2026-07-24): a slot's canonical
+ * `description` IS its default look; `variations` enumerates NON-default looks
+ * only (dream vs reality, flashback, disguise…). `"default"` is a reserved
+ * variationId — used in scene bindings / ledger keys / routing for unbound
+ * scenes, never inside `variations[]`. The closed slug vocabulary is
+ * doctrine-enforced (the schema pins only the id charset, like `role`);
+ * `alt-1`/`alt-2` are the escape hatches.
+ */
+export const VIDEO_ANALYSIS_VARIATION_SLUGS = ["dream", "flashback", "disguise", "costume", "transformation", "era", "alt-1", "alt-2"] as const
+/** Max NON-default looks per slot. The window layer REJECTS past the cap (schema-forced retry); the cross-window merge FOLDS at the cap. */
+export const VIDEO_ANALYSIS_MAX_VARIATIONS = 4
+export const VIDEO_ANALYSIS_DEFAULT_VARIATION = "default"
+
+export const slotVariationSchema = z.object({
+  variationId: z.string().min(1).regex(/^[a-z0-9-]+$/)
+    .refine((id) => id !== VIDEO_ANALYSIS_DEFAULT_VARIATION, { message: `"${VIDEO_ANALYSIS_DEFAULT_VARIATION}" is reserved for the slot's canonical look` }),
+  label: z.string().min(1),
+  /** Full STANDALONE casting-sheet look restating the slot's invariant identity
+   *  core (face, build, age) — the manifest substitutes it wholesale, so a
+   *  wardrobe-only delta would silently delete identity from the prompt. */
+  description: z.string().min(1),
+  /** Per-variation identity reference (auto-cast frame or user sheet). In the
+   *  schema from day one: every strip-mode round-trip must carry it. */
+  refImageUrl: z.string().url().optional(),
+})
+export type SlotVariation = z.infer<typeof slotVariationSchema>
+
 export const entitySlotSchema = z.object({
   slotId: z.string().min(1).regex(/^[a-z0-9-]+$/),
   label: z.string().min(1),
@@ -35,6 +63,8 @@ export const entitySlotSchema = z.object({
    *  where this entity is clearly visible. Optional/additive: producers may
    *  omit it; consumers use it as an identity reference for recreation. */
   refImageUrl: z.string().url().optional(),
+  /** NON-default looks only; present only when at least one exists. */
+  variations: z.array(slotVariationSchema).max(VIDEO_ANALYSIS_MAX_VARIATIONS).optional(),
 })
 export type EntitySlot = z.infer<typeof entitySlotSchema>
 
@@ -61,6 +91,11 @@ const windowSceneBase = z.object({
   transitionOut: z.enum(["cut", "fade", "wipe", "whip"]).optional(),
   // Array of concurrent layers (music + speech + sfx together); [] = silence.
   audio: z.array(audioLayerSchema),
+  /** slotId → variationId for slots wearing a NON-default look in this scene
+   *  (only slots referenced in the scene; absent key ⇒ the default look).
+   *  Rides windowSceneBase so BOTH the window layer and analyzedSceneSchema
+   *  inherit it — the out-of-band binding channel (no in-text markers, D6). */
+  slotVariations: z.record(z.string(), z.string()).optional(),
 })
 // .strip() (default) drops model-emitted oversized/slotRefs — validator-computed only.
 const windowSceneSchema = windowSceneBase.refine((s) => s.endSec > s.startSec, { message: "endSec must be > startSec" })
@@ -115,6 +150,46 @@ export function unwrapUnresolvedTokens(text: string, validIds: Set<string>): { t
     return id
   })
   return { text: out, unresolved }
+}
+
+/**
+ * Rewrite a scene's `slotVariations` after cross-window slot/variation
+ * unification: slot keys map through `slotRenames`, then each variation value
+ * maps through `variationRenames[<new slotId>]`. Absent renames pass through.
+ */
+export function rewriteSceneBindings(
+  sv: Record<string, string> | undefined,
+  slotRenames: Record<string, string>,
+  variationRenames?: Record<string, Record<string, string>>,
+): Record<string, string> | undefined {
+  if (!sv) return undefined
+  const out: Record<string, string> = {}
+  for (const [slotId, variationId] of Object.entries(sv)) {
+    const newSlot = slotRenames[slotId] ?? slotId
+    out[newSlot] = variationRenames?.[newSlot]?.[variationId] ?? variationId
+  }
+  return out
+}
+
+/**
+ * Drop bindings whose (slotId, variationId) no longer exists after a merge —
+ * the unwrap-rule mirror: never persist a dangling binding, and report what
+ * was dropped so the caller can warn. `"default"` is always valid for a known
+ * slot. `kept` is undefined when nothing survives (no `{}` materialization).
+ */
+export function dropUnknownBindings(
+  sv: Record<string, string> | undefined,
+  validBySlot: Map<string, Set<string>>,
+): { kept?: Record<string, string>; dropped: Array<{ slotId: string; variationId: string }> } {
+  if (!sv) return { dropped: [] }
+  const kept: Record<string, string> = {}
+  const dropped: Array<{ slotId: string; variationId: string }> = []
+  for (const [slotId, variationId] of Object.entries(sv)) {
+    const valid = validBySlot.get(slotId)
+    if (valid && (variationId === VIDEO_ANALYSIS_DEFAULT_VARIATION || valid.has(variationId))) kept[slotId] = variationId
+    else dropped.push({ slotId, variationId })
+  }
+  return { kept: Object.keys(kept).length > 0 ? kept : undefined, dropped }
 }
 
 /** Substitute {slot:x}: castMap binding wins, else the slot's description, else literal id. */

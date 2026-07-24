@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -60,6 +59,18 @@ const KINETIC_STYLE_FONT_DEFAULT = 64
 const STATIC_STYLE_FONT_DEFAULT = 32
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
+  // Fail-safe (CLAUDE.md pitfall-5 pattern): the manual trim fields are
+  // HIDDEN under the smart methods (Tal, 2026-07-24 — manual and smart are
+  // ALTERNATIVE boundary-cut methods, not layers), so custom manual values
+  // lingering from older workflows would invisibly steer the
+  // unmatched-boundary fallback. Clear them — the backend's documented
+  // defaults (start 1 / end 2) are the fallback under smart methods.
+  useEffect(() => {
+    if (data.smartCutEnabled && (data.trimStartFrames !== undefined || data.trimEndFrames !== undefined)) {
+      onUpdate({ trimStartFrames: undefined, trimEndFrames: undefined })
+    }
+  }, [data.smartCutEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="flex flex-col gap-3">
       <ConnectedMediaList
@@ -152,55 +163,56 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         )}
       </div>
 
-      {/* SMART CUT is Cloud-only: the cut-point algorithms live in the
-          private plugins package. Community/business builds hide the whole
-          section (the backend route also rejects it) — the exact frame
-          trims below stay available in every edition. */}
+      {/* BOUNDARY CUT METHOD (Tal, 2026-07-24): ONE selector so Manual and
+          the smart algorithms read as ALTERNATIVES, not layers. Manual =
+          exact frame trims (available in every edition). The smart methods
+          are Cloud-only (the algorithms live in the private plugins
+          package; the backend route rejects them elsewhere) and HIDE the
+          manual fields — unmatched boundaries fall back to the DEFAULT
+          trims (start 1 / end 2), never to hidden custom values (the
+          fail-safe effect above clears any that linger). */}
       {isCloud() && (
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <Label htmlFor="smart-cut">Smart cut</Label>
-          <span className="text-[11px] text-muted-foreground">
-            Match boundary frames automatically
-          </span>
-        </div>
-        <Switch
-          id="smart-cut"
-          checked={!!data.smartCutEnabled}
-          onCheckedChange={(v) => onUpdate({ smartCutEnabled: v })}
-        />
-      </div>
-      )}
-
-      {isCloud() && data.smartCutEnabled && (
-        <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="boundary-cut-method">Boundary cut</Label>
+          <Select
+            value={data.smartCutEnabled ? (data.smartCutMode ?? "best-pair") : "manual"}
+            onValueChange={(v) =>
+              v === "manual"
+                ? onUpdate({ smartCutEnabled: false })
+                : onUpdate({
+                    smartCutEnabled: true,
+                    smartCutMode: v as CombineVideosData["smartCutMode"],
+                    trimStartFrames: undefined,
+                    trimEndFrames: undefined,
+                  })
+            }
+          >
+            <SelectTrigger id="boundary-cut-method" aria-label="Boundary cut method" className="h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">Manual — trim an exact number of frames at each boundary</SelectItem>
+              <SelectItem value="best-pair">Smart: best pair — cut at the single most similar frame pair</SelectItem>
+              <SelectItem value="preroll-keep-next">Smart: pre-roll keep-next — detect the replayed overlap, keep the next clip&apos;s copy</SelectItem>
+              <SelectItem value="preroll-keep-prev">Smart: pre-roll keep-prev — detect the replayed overlap, keep the previous clip&apos;s frames</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-[11px] text-muted-foreground">
-            Searches the windows below at every boundary and cuts where the chosen
-            method decides — the duplicated moment plays once. Boundaries where no
-            genuine match is found fall back to the fixed trims below.
+            {data.smartCutEnabled
+              ? "Searches the windows below at every boundary and cuts where the method decides — the duplicated moment plays once. Boundaries with no genuine match fall back to the default trims (1 start / 2 end)."
+              : "Drops a fixed number of frames on each side of every boundary; the first clip's start and the last clip's end are never touched."}
           </p>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="smart-cut-mode" className="text-[11px] text-muted-foreground">
-              Method
-            </Label>
-            <Select
-              value={data.smartCutMode ?? "best-pair"}
-              onValueChange={(v) => onUpdate({ smartCutMode: v as CombineVideosData["smartCutMode"] })}
-            >
-              <SelectTrigger id="smart-cut-mode" aria-label="Smart cut method" className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="best-pair">Best pair — cut at the single most similar frame pair (default)</SelectItem>
-                <SelectItem value="preroll-keep-next">Pre-roll keep-next — detect the replayed overlap, keep the next clip&apos;s copy</SelectItem>
-                <SelectItem value="preroll-keep-prev">Pre-roll keep-prev — detect the replayed overlap, keep the previous clip&apos;s frames</SelectItem>
-              </SelectContent>
-            </Select>
+          {(data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next") && data.smartCutEnabled && (
             <p className="text-[11px] text-muted-foreground">
               The pre-roll methods suit continuation chains where the next clip re-enacts
               the previous clip&apos;s last frames before diverging.
             </p>
-          </div>
+          )}
+        </div>
+      )}
+
+      {isCloud() && data.smartCutEnabled && (
+        <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
               Search window: end of previous clip — {data.smartCutFramesPrev ?? 8} frames
@@ -238,41 +250,46 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         </div>
       )}
 
-      <div>
-        <Label htmlFor="trim-end-frames">
-          Trim each clip end (frames, except last) — {data.trimEndFrames ?? 2}
-          {data.smartCutEnabled ? " (fallback when no match)" : ""}
-        </Label>
-        <Input
-          id="trim-end-frames"
-          type="number"
-          min={0}
-          max={120}
-          step={1}
-          value={data.trimEndFrames ?? 2}
-          onChange={(e) =>
-            onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
-          }
-        />
-      </div>
+      {/* Manual trim fields — ONLY for the Manual method (or non-cloud
+          builds, where Manual is the only method). Hidden under the smart
+          methods per the boundary-cut-method design above. */}
+      {(!isCloud() || !data.smartCutEnabled) && (
+        <>
+          <div>
+            <Label htmlFor="trim-end-frames">
+              Trim each clip end (frames, except last) — {data.trimEndFrames ?? 2}
+            </Label>
+            <Input
+              id="trim-end-frames"
+              type="number"
+              min={0}
+              max={120}
+              step={1}
+              value={data.trimEndFrames ?? 2}
+              onChange={(e) =>
+                onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+              }
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="trim-start-frames">
-          Trim each clip start (frames, except first) — {data.trimStartFrames ?? 1}
-          {data.smartCutEnabled ? " (fallback when no match)" : ""}
-        </Label>
-        <Input
-          id="trim-start-frames"
-          type="number"
-          min={0}
-          max={120}
-          step={1}
-          value={data.trimStartFrames ?? 1}
-          onChange={(e) =>
-            onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
-          }
-        />
-      </div>
+          <div>
+            <Label htmlFor="trim-start-frames">
+              Trim each clip start (frames, except first) — {data.trimStartFrames ?? 1}
+            </Label>
+            <Input
+              id="trim-start-frames"
+              type="number"
+              min={0}
+              max={120}
+              step={1}
+              value={data.trimStartFrames ?? 1}
+              onChange={(e) =>
+                onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+              }
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
