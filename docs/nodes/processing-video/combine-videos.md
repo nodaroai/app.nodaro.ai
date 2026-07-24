@@ -15,12 +15,11 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 | Audio Mode | Select | crossfade | How to handle audio during transitions |
 | Crossfade Duration | Number | 0.5 | AUDIO-only crossfade length (0-5s, shown when Audio = Crossfade). Never affects the video. Falls back to Transition Duration on older workflows. |
 | Crossfade Curve | Select | linear | Audio fade curve (shown when Audio = Crossfade) |
-| Smart Cut | Toggle | off | **Nodaro Cloud only.** PSNR-match boundary frames and cut where the chosen method decides (replaces the fixed trims) |
-| Smart Cut: method | Select | best-pair | Cut-point algorithm: `best-pair` (the single most similar frame pair), `preroll-keep-next` or `preroll-keep-prev` (replay-diagonal detection — see below). Shown when Smart Cut is on |
-| Smart Cut: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown when Smart Cut is on) |
-| Smart Cut: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
-| Trim Start Frames | Number | 1 | Frames trimmed from the start of EACH clip except the first (0-120). Default 1 drops the duplicated boundary frame AI continuation clips carry. With Smart Cut on, used as the fallback for boundaries without a match |
-| Trim End Frames | Number | 2 | Frames trimmed from the end of EACH clip except the last (0-120). Default 2 drops boundary generation artifacts. With Smart Cut on, used as the fallback for boundaries without a match |
+| Boundary Cut | Select | manual | How each clip-to-clip boundary is cut. **Manual** trims an exact number of frames (fields below). The **Smart** methods (**Nodaro Cloud only**) find the cut automatically: `best-pair` (the single most similar frame pair), `preroll-keep-next` or `preroll-keep-prev` (replay-diagonal detection — see below). Manual and Smart are alternatives, not layers |
+| Smart: prev window | Number | 8 | Frames searched at the END of each clip (1-24, shown for Smart methods) |
+| Smart: next window | Number | 8 | Frames searched at the START of the following clip (1-24) |
+| Trim Start Frames | Number | 1 | **Manual method only.** Frames trimmed from the start of EACH clip except the first (0-120). Default 1 drops the duplicated boundary frame AI continuation clips carry |
+| Trim End Frames | Number | 2 | **Manual method only.** Frames trimmed from the end of EACH clip except the last (0-120). Default 2 drops boundary generation artifacts |
 | Clip Ordering | Drag list | — | Reorder connected video clips |
 
 ### Transition Options
@@ -81,7 +80,7 @@ For continuation clips (each generated from the previous clip's last frame), the
 - **Pre-roll keep-next**: some continuation models restart *before* the boundary frame and **re-enact the previous clip's last frames** before diverging (a replay). This method detects the replay as a *diagonal run* of matching pairs and cuts where the replay **starts** — the whole overlap plays from the *next* clip's copy, moving the seam away from the fragile replay-to-new-content zone.
 - **Pre-roll keep-prev**: detects the same replay but cuts where it **ends** — the *previous* clip's original (often sharper) frames are kept and the next clip drops its whole re-enactment.
 
-**Match threshold + fallback:** a pair only counts as a genuine match above **24dB** PSNR (measured: continuation twins ≥ ~28dB, unrelated clips ≤ ~15dB); the pre-roll methods additionally require a contiguous run of at least 2 matching pairs (an isolated pair is noise, not a replay — a lone anchor twin at the exact boundary still drops the single duplicate). Boundaries with a match use the method's cut; boundaries **without** one (clips that don't actually continue each other, or a failed search) fall back to the fixed **Trim Start/End** values — which stay visible below the Smart Cut controls as the per-boundary defaults.
+**Match threshold + fallback:** a pair only counts as a genuine match above **24dB** PSNR (measured: continuation twins ≥ ~28dB, unrelated clips ≤ ~15dB); the pre-roll methods additionally require a contiguous run of at least 2 matching pairs (an isolated pair is noise, not a replay — a lone anchor twin at the exact boundary still drops the single duplicate). Boundaries with a match use the method's cut; boundaries **without** one (clips that don't actually continue each other, or a failed search) fall back to the **default trims** (start 1 / end 2). Custom trim values belong to the Manual method only — switching to a Smart method resets them, so nothing hidden steers the fallback.
 
 **Every junction is searched independently** — with 3 clips there are 2 boundaries, each with its own result. The applied values are reported in the job's `output_data.smartCuts`:
 
