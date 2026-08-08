@@ -1,5 +1,84 @@
 # @nodaro/shared
 
+## 2.2.0
+
+### Minor Changes
+
+- fae3b40: New `GVP_ANCHOR_CHOICES` + `resolveGvpAnchorWire` (with the `GvpAnchorChoice` / `GvpAnchorWireMode` types) — the Generate Video Pro keyframes anchor lever. Translates the node's product vocabulary (`auto` / `start-end` / `start-only` / `reference`) into the engine's chain mode (`upfront` / `progressive` / `none`), with `auto` and any unknown value resolving to `undefined` so the field stays off the wire and the engine default stays in charge. One resolver shared by every send path, so callers cannot disagree about which mode a run requested.
+- 3a71fc5: GVP_SUPPORTED_PROVIDERS gains `minimax-h3` — the Generate Video Pro engine's first non-Seedance SKU (full transport analog: shared Seedance-2 input resolver, 9/3/3 reference caps, per-second 4–15s durations, native audio, fixed 2K output).
+- 89ea2c0: Generate Video Pro provider selection is now DERIVED from catalog capability instead of a hand-kept list: `GVP_SUPPORTED_PROVIDERS` is every catalogued video model that does `i2v`, carries the `reference-image` feature, declares segment durations, and has a working dispatch path — 10 SKUs, up from 3.
+
+  New exports:
+
+  - `GVP_EXTEND_PROVIDERS` / `supportsExtendRender()` — the subset whose transport supports the `extend` render method (a continuation tail sent as a reference video), derived from a new `"video-reference"` catalog feature. Resolves to exactly the family the previous hardcoded gate admitted, so the swap is behaviour-neutral.
+  - `GVP_END_FRAME_PROVIDERS` / `supportsEndAnchor()` — derived from the `"end-frame"` feature; the keyframes engine's end-anchor gate, replacing a provider-family name check that omitted `minimax-h3`.
+  - `segmentDurationsFor()`, `minSegmentSecFor()`, `maxSegmentSecFor()`, `hasContiguousSegmentDurations()`, `maxSegmentsFor()` — catalog readers for per-provider segment bounds, replacing the hardcoded `{minSeg: 4, maxSeg: 15}` that was only ever correct for the Seedance 2 family.
+  - `VIDEO_PROVIDERS_WITHOUT_DISPATCH` — catalogued, priced models with no working dispatch path (`kling-3-omni`). Capability alone is not sufficient to offer a model; this keeps a model that passes every capability check from being advertised when it would fail at the router.
+  - `GVP_DEFAULT_PROVIDER` — the SKU stale selections snap back to.
+
+  `MODEL_CATALOG` gains the `"video-reference"` feature on the Seedance 2 family and `minimax-h3`.
+
+- e264214: A wired location reference now defaults to the role `location`, not `background`.
+
+  `DEFAULT_LABEL_BY_SOURCE["wired-location"]` was `"background"`, which `roleToPhrase` renders as `"the background from reference image B"`. Image models read that phrasing as _paste this behind the subject_, so a character + location pair came back as a composite rather than a photograph — an indoor-lit subject over the location, with no shared light and no ground contact.
+
+  Measured on gpt-image-2 (2K, 16:9, one character + one location, 4 draws per arm, only the role word varying): with `background` all four draws were cut-outs — no cast shadow at the subject's feet and the action the prompt asked for ignored. With `location` the subject rendered inside the scene, full-length, with ground contact, a cast shadow, and one sun lighting subject and location alike.
+
+  `"location"` is added to `REFERENCE_ROLE_PRESETS["wired-location"]` (second, mirroring `wired-character`'s `ref-only`/`person` order). `"background"` remains a curated pick for the genuine backdrop case — it is simply no longer what every location silently gets.
+
+  Existing references are unaffected: `resolveDefaultRole` prefers an explicitly stored role, so only new or defaulted references change. `normalizeRoleSlug` is data-driven from the preset list, so the new role needs no extra wiring.
+
+- d086c0f: MiniMax Hailuo 3 (`minimax-h3`) gains KIE's new resolution lever: `768P | 2K` (default 2K) on all three endpoints (text/image/reference-to-video).
+
+  `@nodaro/shared`: the catalog entry declares `resolutions: ["2K", "768P"]` (first entry = UI default; uppercase = the exact KIE wire enum) and its `VIDEO_VARIABLE_PRICING` axis becomes `duration+resolution`. New exports: `MINIMAX_H3_DEFAULT_RESOLUTION` and `normalizeMinimaxH3Resolution` — the single collapse rule shared by billing and provider forwarding (only a case-insensitive `768p` selects the cheaper tier; anything else renders AND bills as 2K, matching KIE's omitted-param behavior). `buildVideoCreditModelIdentifier` appends `:768p` for a verified 768P selection; bare duration composites stay the 2K rate, byte-identical to the pre-lever identifiers, so existing workflows and admin price overrides keep their ids. KIE rates: 36.5 cr/s @2K (unchanged), 22.5 cr/s @768P; reference-video input seconds bill at the selected tier's rate.
+
+  `@nodaro/prompts`: doctrine tip and prompt-wizard capability lines updated from "fixed 2K" to the two-tier output.
+
+- 7162e62: Add MiniMax Hailuo 3 (`minimax-h3`) — a Seedance-2-class multimodal video model.
+
+  `@nodaro/shared`: `minimax-h3` joins the model catalog and every video provider registry (t2v + i2v arrays, reference limits 9 images / 3 videos / 3 audio, always-on `audio_driven` capability, adaptive default aspect, per-second duration tiers 4–15s, the reference-audio lip-sync surface, and the 7000-char prompt cap). New exports: `MINIMAX_H3_PROVIDERS`, `isMinimaxH3Provider`, and `PRICING_DEFAULT_DURATION_SEC` (prices a duration-less request at the model's own default duration — 6s for minimax-h3 — instead of the global 5s fallback, which `buildVideoCreditModelIdentifier` now consults). The model has a FIXED 2K output: no `resolutions` entry, and its credit identifier is duration-only (`minimax-h3:8s`) with no resolution or `-ref` dimension.
+
+  `@nodaro/prompts`: new provider prompt doctrine for `minimax-h3` (modes, ordinal reference conventions, always-on audio, per-second pricing guidance) and prompt-wizard capability lines for text-to-video and image-to-video. The existing `resolveSeedance2Inputs` resolver is reused by the new provider unchanged — same caps, same frames-fold-into-references semantics.
+
+- 49f1aa4: Add `seedance-2-5` (Seedance 2.5) as a video model alongside the Seedance 2.0 family — text-to-video, image-to-video, first+last frame, multimodal references, and the reference-audio lip-sync surface.
+
+  It joins `SEEDANCE_2_PROVIDERS`, so it inherits the family's capability gating (adaptive aspect, the shared input resolver, per-second `resolution × video-ref` pricing) and derives into `GVP_SUPPORTED_PROVIDERS` / `GVP_EXTEND_PROVIDERS` / `GVP_END_FRAME_PROVIDERS` and the Edit Video Pro subset automatically.
+
+  Where 2.5 differs from the 2.0 SKUs, the difference is carried by per-provider data rather than by branching on the family set:
+
+  - **4–30s** in a single generation (2.0 caps at 15s), with one seeded price tier per second so no duration rounds up to a coarser rung.
+  - **480p / 720p only** — no 1080p or 4K tier.
+  - Reference caps of **30 images / 10 videos / 10 audio** (`SEEDANCE_2_5_REF_LIMITS`) vs the family's 9/3/3, and reference audio up to 30s per clip.
+  - Prompt limit of 30000 chars, which raises `PROMPT_HARD_CEILING` from 20000 to 30000 so the route can't reject a prompt the model accepts.
+
+  The resolution ceiling and duration ceiling were established by a live capability probe against KIE, not from the published schema: `1080p`/`4k`/`2k` are rejected identically to a nonsense value, and 31s+ is rejected, so ByteDance's native 4K and 180s ultra-long modes are not reachable through the KIE proxy.
+
+  Two new mechanisms ship with it, both additive:
+
+  - `PRICING_DEFAULT_RESOLUTION` — the resolution twin of `PRICING_DEFAULT_DURATION_SEC`. When a request omits `resolution`, the credit identifier now prices the model's real provider-side default instead of falling back to the cheapest tier. Only `seedance-2-5` is registered, so no existing model is repriced.
+  - `FRAME_MODE_ADAPTIVE_ONLY_ASPECT` — models that accept only `adaptive` aspect once a start frame is wired. Seedance 2.5 hard-rejects any explicit ratio in frame mode (undocumented; probe-verified), so the payload builder coerces it. Lossless: with a start frame, `adaptive` is that frame's own aspect.
+
+- 0cd2a29: Suno V5_5 custom duration + replace-section field additions.
+
+  `@nodaro/prompts`: `AssembleSunoResult` gains an optional `duration` (seconds), passed through verbatim from `data.duration` — the provider client is the single send-gate (KIE honors it only when `customMode` is true and the model is `V5_5`), so the assembler stays a faithful field carrier for the FE run, the orchestrator, and the editor preview alike.
+
+  `@nodaro/shared`: `NODE_MAPPABLE_FIELDS["suno-replace-section"]` gains `fullLyrics` (the complete post-edit lyric sheet the current KIE spec lists as required) and `negativeTags`, so both fields can be wired from upstream text producers.
+
+- 5d66f2a: Add `video-audit` pricing for the new AI Audit node: `VIDEO_AUDIT_BUCKET_CREDITS` (both credit families — `video-audit` and `video-audit:auto`), the `buildVideoAuditCreditId` / `videoAuditCreditsForBucket` / `bucketSecondsFromAuditCreditId` helpers, and model-catalog rows (`AI Audit` / `AI Audit (with analysis run)`).
+- 18d9cde: video-analysis bucket reprice — hybrid smart plan + measured judge/refine terms
+
+  Every `VIDEO_ANALYSIS_BUCKET_CREDITS` row rises. `smart` is now a hybrid plan (one native 6fps skeleton pass plus 2 fast + 2 pro donor rolls, always refined — `selectionMode` no longer applies to it), and every multi-roll tier now carries its own explicit judge/refine terms instead of an implicit share of a single-pass budget, trued up from a staging measurement. This is the full, Tal-approved honest reprice, including the economy tiers (`fast` 33 -> 185 credits @180s ends a below-cost combine exposure that existed at the old price).
+
+- c19c3ad: Video-analysis mixed family reprice: `mixed`/`mixed-fast` now run the cross-scene continuity review (previously smart-only) and the bucket table rises a flat +40 credits per bucket (268/289/724/1169 @60/180/360/600s).
+
+### Patch Changes
+
+- 270545c: `isOversizedScene` no longer flags a scene that sits exactly on the 8s cap.
+
+  Scene length is derived by subtracting two decimal timecodes, which does not land on the cap exactly — a real job produced a `12.67 → 20.67` scene whose computed length is `8.000000000000002`, so an in-spec scene was marked `oversized: true` and carried that defect marker into every downstream consumer (the merge layer sets it at `pipeline/merge.ts`, and the recast planner reads it).
+
+  The comparison now allows a 1µs tolerance. That is orders of magnitude below any boundary precision the analyzer can resolve, so it cannot mask a genuinely oversized scene — the smallest real overshoot is still ~10000x larger than the tolerance.
+
 ## 2.1.1
 
 ### Patch Changes
