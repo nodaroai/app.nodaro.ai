@@ -1,5 +1,5 @@
-import { Heart, Play, Sparkles, Coins } from "lucide-react"
-import { hasCredits } from "@/lib/edition"
+import { Heart, Play, Sparkles } from "lucide-react"
+import { CreditCost } from "@/components/ui/credit-cost"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useNavigate } from "react-router-dom"
@@ -102,12 +102,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Credits + runs */}
         <div className="flex items-center gap-3 text-xs text-white/70">
-          {hasCredits() && (
-          <span className="flex items-center gap-1">
-            <Coins className="h-3 w-3" />
-            {app.estimatedCredits} CR
-          </span>
-          )}
+          <CreditCost credits={app.estimatedCredits} icon="sm" />
           <span className="flex items-center gap-1">
             <Play className="h-3 w-3" />
             {formatCount(app.totalRunCount)}

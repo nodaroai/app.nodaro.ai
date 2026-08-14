@@ -20,6 +20,18 @@ name: Community E2E
 #
 # Deliberately secret-free (compose defaults only), so it also runs on fork PRs
 # from the public mirror.
+#
+# SECOND LANE (#648): after the keyless contracts pass, internal pushes and
+# manual dispatches ALSO walk the bring-your-own-key SUCCESS path — the
+# configuration most self-hosters actually run (their own KIE_API_KEY in .env,
+# the quickstart's documented happy path). The app container is restarted with
+# a key and the probe submits one REAL Z-Image generation (cheapest model,
+# under a cent of provider spend per run), follows it to `completed`, and
+# asserts the media landed in the install's own MinIO. This lane needs the
+# COMMUNITY_E2E_KIE_KEY secret (a low-budget kie.ai key); when the secret is
+# absent — every fork, and this repo until someone configures it — the lane
+# no-ops and the job stays green on the keyless contracts alone. It never runs
+# on pull_request, so PR runs stay fully secret-free and spend nothing.
 
 on:
   pull_request:
@@ -106,6 +118,43 @@ jobs:
 
       - name: Run the community contract probe
         run: node tools/community-smoke.mjs http://localhost:3000 --strict-keyless
+
+      # ── BYO-key success lane (#648) ──────────────────────────────────────
+      # Gate first: internal pushes/dispatches only (never pull_request — PR
+      # runs must stay secret-free), and only when the low-budget key secret
+      # exists. The secret is referenced ONLY in the gate and the keyed boot
+      # below — job-wide env would leak it into the KEYLESS boot above via
+      # compose's ${KIE_API_KEY:-} passthrough and fail --strict-keyless.
+      - name: BYO-key lane gate
+        id: keyed_gate
+        if: github.event_name != 'pull_request' && github.repository == 'nodaroai/app.nodaro.ai-internal'
+        env:
+          KIE_API_KEY: ${{ secrets.COMMUNITY_E2E_KIE_KEY }}
+        run: |
+          if [ -n "$KIE_API_KEY" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::COMMUNITY_E2E_KIE_KEY is not configured — BYO-key lane skipped"
+          fi
+
+      # Recreates ONLY the app container, now with a provider key — the same
+      # "add the key to .env and restart" move the quickstart tells users to
+      # make, against the same DB/Redis/MinIO the keyless lane just exercised.
+      - name: Restart the app with a provider key
+        if: steps.keyed_gate.outputs.run == 'true'
+        env:
+          NODARO_IMAGE: nodaro-community:ci
+          KIE_API_KEY: ${{ secrets.COMMUNITY_E2E_KIE_KEY }}
+        run: |
+          docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 180 --no-build nodaro
+
+      # One real generation: submit → completed → media fetchable from the
+      # install's own storage. This is what backs the quickstart's "hit Run
+      # and Z-Image answers in seconds".
+      - name: Run the BYO-key success probe
+        if: steps.keyed_gate.outputs.run == 'true'
+        run: node tools/community-smoke.mjs http://localhost:3000 --keyed
 
       # Without this a failure is a red X and nothing else — the stack is gone
       # by the time anyone looks.

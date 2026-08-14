@@ -51,6 +51,7 @@ const nodaroInfo: ProviderInfo = {
     "motion-transfer",
     "video-upscale",
     "lip-sync",
+    "speech-to-video",
     "text-to-speech",
   ],
   supportedModels: {
@@ -66,6 +67,9 @@ const nodaroInfo: ProviderInfo = {
     "motion-transfer": [...MOTION_TRANSFER_PROVIDERS],
     "video-upscale": [...VIDEO_UPSCALE_PROVIDERS],
     "lip-sync": [...LIP_SYNC_PROVIDERS],
+    // Single-model node (Wan S2V) — the cloud's /v1/speech-to-video route
+    // takes no provider field, so the routing id is the node's own name.
+    "speech-to-video": ["speech-to-video"],
     "music-generation": [],
     // Speech is the node a keyless install hits first. The cloud serves every
     // TTS model the route accepts (it holds the ElevenLabs key), so claim the

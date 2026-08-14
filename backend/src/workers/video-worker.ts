@@ -266,14 +266,16 @@ export function createVideoWorker() {
 
         const message = err instanceof Error ? err.message : "Unknown error"
 
-        // For KieError, log the internal details for debugging
+        // For KieError, log the internal details for debugging. Everything on
+        // ONE line: Railway log filters match single lines, so an id-filtered
+        // search must surface the actual error, not a bare "failed:" prefix
+        // with the details stranded on unmatched follow-up lines.
         let internalDetails: string | undefined
         if (err instanceof KieError) {
           internalDetails = err.internalDetails
-          console.error(`[worker] Job ${jobId} failed (KIE.ai):`)
-          console.error(`  User message: ${message}`)
-          console.error(`  Internal details: ${internalDetails}`)
-          console.error(`  Context: ${err.context}`)
+          console.error(
+            `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context} | user message: ${message}`,
+          )
         } else {
           console.error(`[worker] Job ${jobId} failed:`, message)
         }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import type { TtsProvider } from "@nodaro/shared"
 import { config } from "../lib/config.js"
 import { registerVoiceLookup } from "../providers/kie/audio.js"
+import { describeLimitedVoices } from "../providers/provider-keys.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -208,14 +209,23 @@ function getSharedCacheKey(params: Record<string, string | undefined>): string {
 export async function voicesRoutes(app: FastifyInstance) {
   app.get("/v1/voices", async (_req, reply) => {
     const voices = await getVoices()
+    // Keyless: the static list still serves generation (TTS runs through the
+    // connection or a later-added key), but say WHY it is limited instead of
+    // pretending — the silent fallback read as "the picker is just poor"
+    // (#647). no-store so adding the key doesn't leave the notice cached.
+    if (!config.ELEVENLABS_API_KEY) {
+      reply.header("Cache-Control", "no-store")
+      return reply.send({ voices, keyMissing: true, hint: describeLimitedVoices() })
+    }
     reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
     return reply.send({ voices })
   })
 
   app.get("/v1/voices/library", async (req, reply) => {
-    // No API key — return empty gracefully
+    // No API key — empty, but SAY so (#647): the bare empty tab read as a
+    // broken search rather than a missing key.
     if (!config.ELEVENLABS_API_KEY) {
-      return reply.send({ voices: [], hasMore: false })
+      return reply.send({ voices: [], hasMore: false, keyMissing: true, hint: describeLimitedVoices() })
     }
 
     const query = req.query as Record<string, string | undefined>

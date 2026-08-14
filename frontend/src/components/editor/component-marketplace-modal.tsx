@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { CreditCost } from "@/components/ui/credit-cost"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
@@ -568,7 +569,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
                     <span>{comp.totalRunCount ?? 0} runs</span>
-                    {hasCredits() && <span>{comp.estimatedCredits ?? 0} CR/run</span>}
+                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix="CR/run" />
                     {(comp.favoriteCount ?? 0) > 0 && <span>{comp.favoriteCount} favs</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">

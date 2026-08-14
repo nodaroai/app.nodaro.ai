@@ -5631,13 +5631,20 @@ export interface ElevenLabsVoice {
   category: string
 }
 
-export async function getVoices(): Promise<ElevenLabsVoice[]> {
+export interface VoicesResponse {
+  voices: ElevenLabsVoice[]
+  /** True when the server has no ELEVENLABS_API_KEY — the list is the static
+   *  built-in set (no previews, no personal voices) and `hint` says so. */
+  keyMissing?: boolean
+  hint?: string
+}
+
+export async function getVoices(): Promise<VoicesResponse> {
   const res = await fetch(`${API_BASE_URL}/v1/voices`)
   if (!res.ok) {
     throw new Error("Failed to fetch voices")
   }
-  const body = await res.json()
-  return body.voices
+  return (await res.json()) as VoicesResponse
 }
 
 // ---------------------------------------------------------------------------

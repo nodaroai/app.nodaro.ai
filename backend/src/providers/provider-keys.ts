@@ -51,6 +51,21 @@ export class MissingProviderKeyError extends Error {
   }
 }
 
+/**
+ * Why /v1/voices (and the library tab) is limited without a key. Deliberately
+ * NOT the MissingProviderKeyError sentence: text-to-speech itself IS covered
+ * by the nodaro.ai connection, and the static premade list still works for
+ * generation — only previews and the personal voice library need the key, so
+ * "not covered by the connection" would be false here. Same render envelope
+ * as the shared message: short, names the key, points at Install health.
+ */
+export function describeLimitedVoices(): string {
+  return (
+    "Showing a limited built-in voice list — previews and your voice library need " +
+    "ELEVENLABS_API_KEY. Add it in Install health → Provider keys."
+  )
+}
+
 /** Throw the shared message when `value` is empty. */
 export function requireProviderKey(
   value: string | undefined,

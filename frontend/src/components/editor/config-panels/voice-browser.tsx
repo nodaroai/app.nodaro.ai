@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { hasCredits } from "@/lib/edition"
 import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square, SlidersHorizontal, Info } from "lucide-react"
 import {
   Dialog,
@@ -193,7 +194,11 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   }, [librarySearch])
 
   // -- Data sources --
-  const { data: allPremade = [] } = useVoices()
+  const { data: voicesData } = useVoices()
+  const allPremade = voicesData?.voices ?? []
+  // Server says the list is the static keyless fallback — show its own hint
+  // instead of letting the picker just look impoverished (#647).
+  const voicesKeyHint = voicesData?.keyMissing ? voicesData.hint : undefined
 
   const libraryGenderParam = libraryGender === "All" ? undefined : libraryGender.toLowerCase()
   const {
@@ -329,6 +334,12 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
             </button>
           ))}
         </div>
+
+        {voicesKeyHint && (
+          <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
+            {voicesKeyHint}
+          </p>
+        )}
 
         {tab === "my-voices" && showCustomVoices && (
           <MyVoicesTab
@@ -853,7 +864,7 @@ function MyVoicesTab({
               {createMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
               ) : null}
-              {`Clone Voice (${getCachedCredits("voice-clone") ?? 5} CR)`}
+              {`Clone Voice${hasCredits() ? ` (${getCachedCredits("voice-clone") ?? 5} CR)` : ""}`}
             </Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelRecording}>
               Cancel

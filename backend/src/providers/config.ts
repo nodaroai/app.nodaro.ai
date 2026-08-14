@@ -51,6 +51,7 @@ const KIE_ONLY_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
   "motion-transfer",
   "video-upscale",
   "lip-sync",
+  "speech-to-video",
   "text-to-speech",
 ])
 
@@ -74,6 +75,7 @@ const NODARO_CONNECT_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
   "motion-transfer",
   "video-upscale",
   "lip-sync",
+  "speech-to-video",
 ])
 
 // ─── Public API ───────────────────────────────────────────────────

@@ -90,6 +90,7 @@ export {
   videoUpscale,
   lipSync,
   lipSyncVideo,
+  speechToVideo,
   generateMusic,
   textToSpeech,
 } from "./router.js"

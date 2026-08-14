@@ -38,6 +38,7 @@ const kieInfo: ProviderInfo = {
     "motion-transfer",
     "video-upscale",
     "lip-sync",
+    "speech-to-video",
     "music-generation",
     "text-to-speech",
     "audio-isolation",
@@ -55,6 +56,9 @@ const kieInfo: ProviderInfo = {
     "motion-transfer": Object.keys(KIE_MOTION_TRANSFER_MODELS),
     "video-upscale": Object.keys(KIE_VIDEO_UPSCALE_MODELS),
     "lip-sync": Object.keys(KIE_LIP_SYNC_MODELS),
+    // Single-model node: the routing id matches the credit identifier; the
+    // provider resolves the actual KIE model (wan-s2v) internally.
+    "speech-to-video": ["speech-to-video"],
     "music-generation": Object.keys(KIE_MUSIC_MODELS),
     "text-to-speech": Object.keys(KIE_TTS_MODELS),
     "sound-effect": Object.keys(KIE_SOUND_EFFECT_MODELS),

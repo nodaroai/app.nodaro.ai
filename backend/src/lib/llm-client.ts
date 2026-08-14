@@ -201,20 +201,33 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
       // naming Opus 5. `callKieMessagesCollapsed` is a genuine second lane
       // (KIE's streaming wire works even while its non-streaming one 500s), so
       // an Anthropic wobble degrades instead of hard-failing.
-      return withFallback(() => callAnthropicDirect(model, req), kieFallback(model, req))
+      return withFallback(
+        { modelId: model.id, primary: "direct-anthropic", fallback: "kie" },
+        () => callAnthropicDirect(model, req),
+        kieFallback(model, req),
+      )
     }
     try {
       return await callKie(model, req)
-    } catch {
+    } catch (err) {
       // KIE proxy failure — the direct SDK is the reliability backstop.
+      warnLaneFallback({ modelId: model.id, primary: "kie", fallback: "direct-anthropic" }, err)
       return callAnthropicDirect(model, req)
     }
   }
 
   if (geminiDirectAvailable(model)) {
     return model.preferDirect
-      ? withFallback(() => callGeminiDirect(model, req, deriveParams(model, req)), kieFallback(model, req))
-      : withFallback(() => callKie(model, req), () => callGeminiDirect(model, req, deriveParams(model, req)))
+      ? withFallback(
+          { modelId: model.id, primary: "direct-gemini", fallback: "kie" },
+          () => callGeminiDirect(model, req, deriveParams(model, req)),
+          kieFallback(model, req),
+        )
+      : withFallback(
+          { modelId: model.id, primary: "kie", fallback: "direct-gemini" },
+          () => callKie(model, req),
+          () => callGeminiDirect(model, req, deriveParams(model, req)),
+        )
   }
 
   if (config.KIE_API_KEY) {
@@ -283,16 +296,41 @@ function kieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmRes
   return config.KIE_API_KEY ? () => callKie(model, req) : undefined
 }
 
-/** Run `primary`, falling back to `secondary` on failure. With no secondary the
- *  original error propagates untouched. */
+/** Which lane failed and which one is about to serve — for the fallback warn. */
+interface LaneFallbackCtx {
+  modelId: string
+  primary: string
+  fallback: string
+}
+
+/**
+ * One greppable line per silently-recovered lane failure. Without it a chronic
+ * primary-lane outage is invisible: every unpinned call quietly serves from the
+ * other lane (at that lane's cost profile) and only lane-PINNED calls ever
+ * surface the error — which is exactly how the 2026-08-14 direct-Gemini
+ * `403 PERMISSION_DENIED` blip was diagnosable only through a pinned
+ * video-analysis job. Warn, not error: the request is about to succeed.
+ */
+function warnLaneFallback(ctx: LaneFallbackCtx, err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err)
+  const head = msg.length > 300 ? `${msg.slice(0, 300)}…` : msg
+  console.warn(
+    `[llm-lane-fallback] ${ctx.modelId}: ${ctx.primary} lane failed, serving from ${ctx.fallback} — ${head}`,
+  )
+}
+
+/** Run `primary`, falling back to `secondary` on failure (warn-logged). With no
+ *  secondary the original error propagates untouched. */
 async function withFallback(
+  ctx: LaneFallbackCtx,
   primary: () => Promise<LlmResponse>,
   secondary: (() => Promise<LlmResponse>) | undefined,
 ): Promise<LlmResponse> {
   if (!secondary) return primary()
   try {
     return await primary()
-  } catch {
+  } catch (err) {
+    warnLaneFallback(ctx, err)
     return secondary()
   }
 }
@@ -329,6 +367,7 @@ export async function llmStream(
       return await streamKie(model, req, wrapped, signal)
     } catch (err) {
       if (emitted) throw err
+      warnLaneFallback({ modelId: model.id, primary: "kie", fallback: "direct-anthropic" }, err)
       return streamAnthropicDirect(model, req, onToken, signal)
     }
   }
@@ -338,8 +377,13 @@ export async function llmStream(
       streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
     const kie = config.KIE_API_KEY ? (cb: (chunk: string) => void) => streamKie(model, req, cb, signal) : undefined
     return model.preferDirect
-      ? streamWithFallback(direct, kie, onToken)
-      : streamWithFallback(kie ?? direct, kie ? direct : undefined, onToken)
+      ? streamWithFallback({ modelId: model.id, primary: "direct-gemini", fallback: "kie" }, direct, kie, onToken)
+      : streamWithFallback(
+          { modelId: model.id, primary: kie ? "kie" : "direct-gemini", fallback: "direct-gemini" },
+          kie ?? direct,
+          kie ? direct : undefined,
+          onToken,
+        )
   }
 
   if (config.KIE_API_KEY) {
@@ -356,6 +400,7 @@ export async function llmStream(
  * surfaces. Only a failure before the first token is recoverable.
  */
 async function streamWithFallback(
+  ctx: LaneFallbackCtx,
   primary: (onToken: (chunk: string) => void) => Promise<LlmResponse>,
   secondary: ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined,
   onToken: (chunk: string) => void,
@@ -366,6 +411,7 @@ async function streamWithFallback(
     return await primary((chunk) => { emitted = true; onToken(chunk) })
   } catch (err) {
     if (emitted) throw err
+    warnLaneFallback(ctx, err)
     return secondary(onToken)
   }
 }

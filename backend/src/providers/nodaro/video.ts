@@ -18,6 +18,8 @@ import type {
   VideoUpscaleProvider,
   MotionTransferProvider,
   VideoToVideoProvider,
+  SpeechToVideoProvider,
+  SpeechToVideoOptions,
   ProviderOptions,
   ProviderResult,
   ReconcileOpts,
@@ -113,7 +115,8 @@ export class NodaroCloudVideoProvider
     LipSyncProvider,
     VideoUpscaleProvider,
     MotionTransferProvider,
-    VideoToVideoProvider
+    VideoToVideoProvider,
+    SpeechToVideoProvider
 {
   // NOTE: reconcileOpts.onTaskCreated is deliberately NOT called in either
   // method — see the rationale in ./image.ts (provider_kind is model-keyed;
@@ -211,6 +214,35 @@ export class NodaroCloudVideoProvider
       ...(options?.seed !== undefined ? { seed: options.seed } : {}),
     }
     const jobId = await createCloudJob("/v1/lip-sync", body)
+    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+  }
+
+  async speechToVideo(
+    imageUrl: string,
+    audioUrl: string,
+    prompt: string,
+    resolution?: string,
+    options?: SpeechToVideoOptions,
+    _reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult> {
+    const [cloudImage, cloudAudio] = await Promise.all([
+      ensureCloudReachableMediaUrl(imageUrl),
+      ensureCloudReachableMediaUrl(audioUrl),
+    ])
+    const body: Record<string, unknown> = {
+      imageUrl: cloudImage,
+      audioUrl: cloudAudio,
+      prompt,
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(options?.negativePrompt !== undefined ? { negativePrompt: options.negativePrompt } : {}),
+      ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+      ...(options?.numFrames !== undefined ? { numFrames: options.numFrames } : {}),
+      ...(options?.fps !== undefined ? { fps: options.fps } : {}),
+      ...(options?.inferenceSteps !== undefined ? { inferenceSteps: options.inferenceSteps } : {}),
+      ...(options?.guidanceScale !== undefined ? { guidanceScale: options.guidanceScale } : {}),
+      ...(options?.shift !== undefined ? { shift: options.shift } : {}),
+    }
+    const jobId = await createCloudJob("/v1/speech-to-video", body)
     return extractVideoResult(await waitForCloudJob(jobId), jobId)
   }
 

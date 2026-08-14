@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react"
-import { hasCredits } from "@/lib/edition"
+import { CreditCost } from "@/components/ui/credit-cost"
 import { useNavigate, Link, useSearchParams } from "react-router-dom"
 import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
@@ -109,7 +109,7 @@ function TemplatesCarousel() {
             </div>
             <div className="p-2">
               <p className="text-xs font-medium text-foreground truncate">{t.name}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t.nodeCount} nodes{hasCredits() ? ` · ${t.estimatedCredits} CR` : ""}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t.nodeCount} nodes<CreditCost credits={t.estimatedCredits} prefix=" · " /></p>
             </div>
           </button>
         ))}

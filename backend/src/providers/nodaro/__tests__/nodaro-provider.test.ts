@@ -318,8 +318,12 @@ describe("registration + chain extension when connected", () => {
       "motion-transfer",
       "video-upscale",
       "lip-sync",
+      // #644: the last node hardwired to a vendor — routes through the
+      // capability walk now, so the connection can serve it too.
+      "speech-to-video",
       "text-to-speech",
     ])
+    expect(providerRegistry.supportsModel("nodaro", "speech-to-video", "speech-to-video")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "image-generation", "nano-banana")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "image-to-video", "kling-3.0")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "text-to-video", "kling")).toBe(true)
