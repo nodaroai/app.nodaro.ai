@@ -40,6 +40,7 @@ export type ProviderCapability =
   | "motion-transfer" // image + video -> motion-applied video
   | "video-upscale" // video -> upscaled video
   | "lip-sync" // image + audio -> talking video
+  | "speech-to-video" // image + speech audio -> speaking-performance video (Wan S2V)
   | "music-generation" // text -> music
   | "text-to-speech" // text -> speech audio
   | "sound-effect" // text -> sound effect audio
@@ -222,6 +223,28 @@ export interface LipSyncProvider {
     opts: VideoLipSyncOptions,
     model?: string,
     audioDurationSec?: number,
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult>
+}
+
+/** Per-model speech-to-video levers (Wan S2V generation params). */
+export interface SpeechToVideoOptions {
+  negativePrompt?: string
+  seed?: number
+  numFrames?: number
+  fps?: number
+  inferenceSteps?: number
+  guidanceScale?: number
+  shift?: number
+}
+
+export interface SpeechToVideoProvider {
+  speechToVideo(
+    imageUrl: string,
+    audioUrl: string,
+    prompt: string,
+    resolution?: string,
+    options?: SpeechToVideoOptions,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }

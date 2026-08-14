@@ -81,6 +81,7 @@ vi.mock("@/providers/index.js", () => ({
   lipSyncVideo: mocks.mockLipSyncVideo,
   motionTransfer: mocks.mockMotionTransfer,
   videoUpscale: mocks.mockVideoUpscale,
+  speechToVideo: mocks.mockSpeechToVideo,
 }))
 
 vi.mock("../../../providers/fal/lip-sync.js", () => ({

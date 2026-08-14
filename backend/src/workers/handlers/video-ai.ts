@@ -8,6 +8,7 @@ import {
   lipSyncVideo,
   motionTransfer,
   videoUpscale,
+  speechToVideo,
 } from "../../providers/index.js"
 import { KIE_LIP_SYNC_MODELS } from "../../providers/kie/models.js"
 import type { ProgressCallback } from "../../providers/provider.interface.js"
@@ -853,14 +854,16 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
   }
   console.log(`[worker] speech-to-video ${ctx.jobId} (resolution: ${resolution ?? "480p"})`)
 
-  const { KieVideoProvider } = await import("../../providers/kie/video.js")
-  const kieVideo = new KieVideoProvider()
+  // Through the capability router, not a direct KieVideoProvider construction
+  // (#644): a local KIE key still wins the chain walk exactly as before, a
+  // keyless CONNECTED install now reaches the cloud, and a keyless
+  // unconnected one gets the router's actionable missing-key message.
   const s2vOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => kieVideo.speechToVideo(imageUrl, audioUrl, prompt, resolution, {
+    () => speechToVideo(imageUrl, audioUrl, prompt, resolution, {
       negativePrompt,
       seed,
       numFrames,
@@ -880,15 +883,12 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
-    // speech-to-video routes through KIE; result has no providerUsed/displayCost
-    // but finalize merges undefined cleanly. Hardcode provider="kie" via extraOutputData
-    // if the schema needs it (it doesn't — markJobCompleted accepts null/undefined).
-    result: { ...result, providerUsed: "kie" },
+    result,
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job, ctx) {

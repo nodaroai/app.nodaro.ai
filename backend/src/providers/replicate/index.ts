@@ -35,6 +35,7 @@ const replicateInfo: ProviderInfo = {
     "motion-transfer": [],
     "video-upscale": [],
     "lip-sync": [],
+    "speech-to-video": [],
     "music-generation": [],
     "text-to-speech": [],
     "sound-effect": ["replicate-mmaudio"],

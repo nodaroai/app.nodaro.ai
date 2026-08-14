@@ -29,6 +29,8 @@ import type {
   LipSyncProvider,
   LipSyncOptions,
   VideoLipSyncOptions,
+  SpeechToVideoProvider,
+  SpeechToVideoOptions,
   MusicGenerationProvider,
   TextToSpeechProvider,
   TextToSpeechOptions,
@@ -369,6 +371,33 @@ export async function lipSync(
     async (instance) => {
       const p = resolveModule<LipSyncProvider>(instance, "video")
       return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec, reconcileOpts, options)
+    }
+  )
+}
+
+/**
+ * Speech-to-video (Wan S2V): image + speech audio -> speaking-performance
+ * video. Single-model capability — the routing id is the node's own name and
+ * each provider resolves its real model internally. Walking the chain (rather
+ * than constructing KieVideoProvider directly, the pre-#644 shape) is what
+ * lets a keyless connected install reach the cloud, and what gives a keyless
+ * UNconnected install the router's actionable missing-key message.
+ */
+export async function speechToVideo(
+  imageUrl: string,
+  audioUrl: string,
+  prompt: string,
+  resolution?: string,
+  options?: SpeechToVideoOptions,
+  reconcileOpts?: ReconcileOpts,
+): Promise<RouteResult> {
+  return routeAndExecute(
+    "speech-to-video",
+    "speech-to-video",
+    "speechToVideo",
+    async (instance) => {
+      const p = resolveModule<SpeechToVideoProvider>(instance, "video")
+      return p.speechToVideo(imageUrl, audioUrl, prompt, resolution, options, reconcileOpts)
     }
   )
 }

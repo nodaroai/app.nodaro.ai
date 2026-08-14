@@ -15,6 +15,7 @@ import type {
   LipSyncProvider,
   LipSyncOptions,
   VideoLipSyncOptions,
+  SpeechToVideoProvider,
   ProviderResult,
   ProviderOptions,
   ReconcileOpts,
@@ -811,7 +812,8 @@ export class KieVideoProvider
     VideoToVideoProvider,
     MotionTransferProvider,
     VideoUpscaleProvider,
-    LipSyncProvider
+    LipSyncProvider,
+    SpeechToVideoProvider
 {
   async imageToVideo(
     imageUrl: string | undefined,
