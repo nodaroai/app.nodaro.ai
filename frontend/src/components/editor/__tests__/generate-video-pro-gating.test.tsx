@@ -59,17 +59,37 @@ describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => 
     expect(CLOUD_ONLY_NODE_TYPES.has("video-analysis")).toBe(true)
   })
 
-  // Source-text guard (mirrors node-toolbar.test.tsx's file-parsing approach,
-  // used there because these modules render JSX icons at module scope): proves
-  // neither surface reverted to a local hand-copied `Set` — both must import
-  // the shared module, not just happen to agree with it today.
-  it("add-node-popup.tsx imports CLOUD_ONLY_NODE_TYPES from the shared module (no local re-declaration)", () => {
-    expect(ADD_NODE_POPUP_SRC).toMatch(/import\s*\{\s*CLOUD_ONLY_NODE_TYPES\s*\}\s*from\s*["']@\/lib\/cloud-only-nodes["']/)
-    expect(ADD_NODE_POPUP_SRC).not.toMatch(/const\s+CLOUD_ONLY_NODE_TYPES\s*=\s*new Set/)
+  // Source-text guard: the catalogue and its edition filter now live in one
+  // module (#635), so what needs proving is that neither surface has grown a
+  // private copy of either. A hand-rolled Set here is precisely how the two
+  // lists drifted in the first place.
+  it("declares CLOUD_ONLY_NODE_TYPES only in the shared module", () => {
+    const surfaces = [
+      ["add-node-popup.tsx", ADD_NODE_POPUP_SRC],
+      ["node-toolbar.tsx", NODE_TOOLBAR_SRC],
+    ] as const
+    for (const [name, src] of surfaces) {
+      expect(src, name).not.toMatch(/const\s+CLOUD_ONLY_NODE_TYPES\s*=\s*new Set/)
+    }
   })
 
-  it("node-toolbar.tsx imports CLOUD_ONLY_NODE_TYPES from the shared module (no local re-declaration)", () => {
-    expect(NODE_TOOLBAR_SRC).toMatch(/import\s*\{\s*CLOUD_ONLY_NODE_TYPES\s*\}\s*from\s*["']@\/lib\/cloud-only-nodes["']/)
-    expect(NODE_TOOLBAR_SRC).not.toMatch(/const\s+CLOUD_ONLY_NODE_TYPES\s*=\s*new Set/)
+  it("routes both surfaces through the shared node-options module", () => {
+    const NODE_OPTIONS_SRC = readFileSync(
+      path.resolve(process.cwd(), "src/lib/node-options.tsx"),
+      "utf8",
+    )
+    // The edition gate lives there now, once.
+    expect(NODE_OPTIONS_SRC).toMatch(
+      /import \{ CLOUD_ONLY_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
+    )
+    expect(NODE_OPTIONS_SRC).toMatch(/hasCredits\(\)/)
+
+    const surfaces = [
+      ["add-node-popup.tsx", ADD_NODE_POPUP_SRC],
+      ["node-toolbar.tsx", NODE_TOOLBAR_SRC],
+    ] as const
+    for (const [name, src] of surfaces) {
+      expect(src, name).toMatch(/from ["']@\/lib\/node-options["']/)
+    }
   })
 })

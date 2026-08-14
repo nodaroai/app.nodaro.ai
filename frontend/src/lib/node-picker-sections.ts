@@ -172,3 +172,47 @@ export function sectionsForTab(
     controls: creativeControlSections(pool, tab),
   }
 }
+
+/** A collapsible sidebar section: one picker tab, its families inside. */
+export interface SidebarSection {
+  /** Tab key — the persistence key for open/closed state. */
+  readonly id: string
+  /** Header text, e.g. "Image". */
+  readonly label: string
+  readonly families: readonly PickerSection[]
+  /** Nodes across all families, shown beside the header. */
+  readonly count: number
+}
+
+const SIDEBAR_TAB_ORDER = [
+  "image", "video", "audio", "models", "assets", "automate", "publish", "controls",
+] as const
+
+/** The sidebar's whole tree: tab sections, each holding its families.
+ *
+ *  The tab is the section rather than a prefix on every header, which is what
+ *  gives the family names their context back — "Create" under "Image" reads
+ *  correctly, where a bare "Create" under an "AI" category did not, and
+ *  Image's Create can no longer collide with Video's. Empty families and empty
+ *  sections drop out, so an edition with fewer nodes simply shows less. */
+export function sidebarSections(pool: readonly NodeOption[]): SidebarSection[] {
+  const byType = indexPool(pool)
+  const out: SidebarSection[] = []
+  for (const tab of SIDEBAR_TAB_ORDER) {
+    const families: PickerSection[] = []
+    for (const family of NODE_FAMILIES) {
+      if (family.tab !== tab) continue
+      const options = pick(byType, family.types)
+      if (options.length)
+        families.push({ id: family.id, label: family.label, options, control: tab === "controls" })
+    }
+    if (!families.length) continue
+    out.push({
+      id: tab,
+      label: TAB_PREFIX[tab] ?? tab,
+      families,
+      count: families.reduce((n, f) => n + f.options.length, 0),
+    })
+  }
+  return out
+}

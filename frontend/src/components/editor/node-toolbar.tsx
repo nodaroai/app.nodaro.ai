@@ -1,336 +1,94 @@
 "use client"
 
-import { useState, useEffect, useCallback, Suspense } from "react"
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
-  Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
-  Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
-  Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
-  Volume2, VolumeX, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, Funnel, ListFilter, ListTree, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask, Paintbrush, Gem, LayoutGrid, ScanSearch, SearchCheck,
+  Plus,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
-import { cn } from "@/lib/utils"
-import { hasCredits } from "@/lib/edition"
-import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
-import { familyLabel } from "@/lib/node-families"
-import { clusterByGroup } from "@/lib/cluster-by-group"
-import { categoryRank } from "@/lib/node-category-order"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
 import type { ComponentSelection } from "./component-marketplace-modal"
 import type { SceneNodeType } from "@/types/nodes"
 import { useAuth } from "@/hooks/use-auth"
 
-interface NodeOption {
-  readonly type: SceneNodeType
-  readonly label: string
-  readonly icon: React.ReactNode
-  readonly category: string
-  readonly group?: string
-  readonly adminOnly?: boolean
-  readonly keywords?: readonly string[]
-}
+// The catalogue and its edition filter are shared with the add-node popup.
+// They used to be duplicated here and drifted — see #635. `getNodeOptions`
+// is re-exported because the gating tests exercise this surface by name.
+import { getNodeOptions } from "@/lib/node-options"
+import { sidebarSections } from "@/lib/node-picker-sections"
+import { SidebarSection } from "./node-toolbar/sidebar-section"
+import { readOpenSections, persistOpenSections } from "@/lib/sidebar-sections-open"
+export { getNodeOptions }
 
-const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
-  // Input
-  { type: "text-prompt", label: "Text", icon: <Type className="h-4 w-4" />, category: "Input", keywords: ["prompt", "text prompt"] },
-  { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
-  { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
-  { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
-  // Hidden — uncomment to restore in the Add Node UI:
-  // { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
-  { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
-  { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
-  // Triggers
-  { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Triggers" },
-  { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Triggers" },
-  { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
-  { type: "telegram-channel-feed", label: "Telegram Channel Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
-  // Data
-  { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Data" },
-  { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },
-  // Hidden — uncomment to restore in the Add Node UI:
-  // { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },
-  { type: "extract-field", label: "Extract Field", icon: <Braces className="h-4 w-4" />, category: "Data" },
-  { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Data" },
-  { type: "deduplicate", label: "Remove Duplicates", icon: <CopyMinus className="h-4 w-4" />, category: "Data" },
-  { type: "merge-lists", label: "Merge Lists", icon: <GitMerge className="h-4 w-4" />, category: "Data" },
-  { type: "sort-list", label: "Sort List", icon: <ArrowUpDown className="h-4 w-4" />, category: "Data" },
-  { type: "selector", label: "Selector", icon: <ListTree className="h-4 w-4" />, category: "Data" },
-  // Parameter
-  { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
-  { type: "style-guide", label: "Style Guide", icon: <PaintBucket className="h-4 w-4" />, category: "Parameter" },
-  { type: "provider", label: "Provider", icon: <Server className="h-4 w-4" />, category: "Parameter" },
-  { type: "scene-count", label: "Scene Count", icon: <Hash className="h-4 w-4" />, category: "Parameter" },
-  { type: "duration", label: "Duration", icon: <Clock className="h-4 w-4" />, category: "Parameter" },
-  { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
-  { type: "motion", label: "Motion", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Parameter" },
-  { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"] },
-  { type: "transition", label: "Transition", icon: <GitBranch className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"] },
-  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"] },
-  { type: "lens", label: "Lens", icon: <Aperture className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"] },
-  { type: "camera-format", label: "Camera / Film Stock", icon: <Film className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"] },
-  { type: "lighting", label: "Lighting", icon: <Lightbulb className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"] },
-  { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
-  { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
-  { type: "action-fx", label: "Action FX", icon: <Zap className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"] },
-  { type: "character-fx", label: "Character FX", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["character", "fx", "effect", "expression", "emotion", "gesture", "blink", "wink", "laugh", "cry", "smile", "frown", "shiver", "tremble", "gasp", "reaction"] },
-  { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
-  { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
-  { type: "loop-subject", label: "Loop Subject", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["loop", "loopable", "seamless", "tunnel", "kaleidoscope", "fractal", "aurora", "particle", "vj", "background", "perfect loop", "veo loop"] },
-  { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },
-  { type: "mood", label: "Mood", icon: <Smile className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"] },
-  { type: "photographer", label: "Photographer / Artist Style", icon: <Camera className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["photographer", "artist", "style", "tim walker", "deakins", "lubezki", "fashion", "editorial", "cinematographer", "illustrator", "painter", "ghibli", "rutkowski", "leibovitz", "cartier-bresson"] },
-  { type: "aesthetic", label: "Aesthetic / Microtrend", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"] },
-  { type: "era", label: "Era / Period", icon: <Hourglass className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"] },
-  { type: "pose", label: "Pose", icon: <PersonStanding className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"] },
-  { type: "styling", label: "Styling", icon: <Gem className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["beauty", "makeup", "glamour", "smoky eye", "lipstick", "eyewear", "sunglasses", "aviators", "headwear", "hat", "beanie", "fedora", "jewelry", "necklace", "earrings", "nails", "manicure", "face paint", "fabric", "silk", "leather", "denim", "velvet", "satin", "lace"] },
-  { type: "material", label: "Material", icon: <Layers className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"] },
-  { type: "animal", label: "Animal", icon: <PawPrint className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"] },
-  { type: "vehicle", label: "Vehicle", icon: <Car className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"] },
-  { type: "weapon", label: "Weapon", icon: <Swords className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"] },
-  { type: "furniture", label: "Furniture", icon: <Armchair className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["furniture", "chair", "sofa", "couch", "table", "desk", "bed", "lamp", "cabinet", "shelf", "wardrobe", "stool"] },
-  { type: "photo-genre", label: "Photo Genre", icon: <Camera className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["photo", "genre", "intent", "paparazzi", "editorial", "vogue", "lookbook", "selfie", "mirror selfie", "gym selfie", "headshot", "mugshot", "passport", "yearbook", "wedding", "movie poster", "album cover", "advertising", "documentary", "snapshot", "noir"] },
-  { type: "backdrop", label: "Backdrop", icon: <LayoutDashboard className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["backdrop", "background", "studio", "seamless", "wall", "gradient", "muslin", "velvet", "halo", "bokeh", "vignette", "white seamless", "black seamless", "brick wall", "concrete"] },
-  { type: "held-prop", label: "Held Prop", icon: <HandMetal className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["prop", "hand", "holding", "phone", "cigarette", "coffee", "wine", "microphone", "book", "umbrella", "bouquet", "guitar", "katana", "drink", "smoking", "instrument", "bag"] },
-  { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
-  { type: "exposure-settings", label: "Exposure Settings", icon: <Aperture className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["exposure", "aperture", "f-stop", "shutter", "iso", "depth of field", "bokeh", "grain", "long exposure", "freeze"] },
-  { type: "render-quality", label: "Render Quality", icon: <Cpu className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"] },
-  { type: "composition-effects", label: "Composition Effects", icon: <Wand2 className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"] },
-  { type: "post-process-effects", label: "Post-Process Effects", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"] },
-  // Sound
-  { type: "music-genre", label: "Music Genre", icon: <Music className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["music", "genre"] },
-  { type: "music-mood", label: "Music Mood", icon: <Activity className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["music", "mood"] },
-  { type: "instrumentation", label: "Instrumentation", icon: <Piano className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["instruments"] },
-  { type: "voice-character", label: "Voice Character", icon: <User className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["voice", "character"] },
-  { type: "voice-delivery", label: "Voice Delivery", icon: <MessageCircle className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["voice", "delivery"] },
-  // AI — Script & Text
-  { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  { type: "llm-chat", label: "Generate Text", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  // AI — Image
-  { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "modify-image", label: "Modify Image", icon: <Layers className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "upscale-image", label: "Upscale Image", icon: <ZoomIn className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "remove-background", label: "Remove Background", icon: <Eraser className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "generate-mask", label: "Generate Mask", icon: <VenetianMask className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "paint-mask", label: "Paint Mask", icon: <Paintbrush className="h-4 w-4" />, category: "Processing", group: "Image", keywords: ["mask", "paint", "brush", "inpaint", "matte", "hand", "draw"] },
-  { type: "reference-sheet", label: "Reference Sheet", icon: <LayoutGrid className="h-4 w-4" />, category: "AI", group: "Image", keywords: ["sheet", "reference", "turnaround", "character sheet", "model sheet"] },
-  { type: "reference-board", label: "Reference Board", icon: <LayoutGrid className="h-4 w-4" />, category: "AI", group: "Image", keywords: ["board", "reference", "palette", "hero", "panels", "reference board"] },
-  { type: "image-to-text", label: "Describe Image", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "describe-to-picker", label: "Describe to Picker", icon: <ScanFace className="h-4 w-4" />, category: "AI", group: "Image" },
-  // AI — Video
-  { type: "generate-video", label: "Generate Video", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"] },
-  { type: "generate-video-pro", label: "Generate Video Pro", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["long-form", "long video", "multi-segment", "stitch", "extended duration", "seedance", "pro"] },
-  { type: "edit-video-pro", label: "Edit Video Pro", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["retake", "replace span", "edit clip", "seedance", "pro", "reshoot"] },
-  { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "switchx", label: "Relight & Switch", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["relight", "relighting", "relit", "lighting", "switch", "swap background", "replace background", "change background", "scene swap", "restyle", "recolor", "composite", "compositing", "green screen", "chroma key", "rotoscope", "matte", "alpha", "color match", "harmonize", "vfx", "video to video", "beeble"] },
-  { type: "generative-pipeline", label: "Story → Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"] },
-  { type: "ai-avatar", label: "AI Avatar", icon: <UserRound className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "cinematic-avatar", label: "Cinematic Avatar", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["heygen", "cinematic", "avatar", "generative", "prompt", "looks"] },
-  { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "extend-video", label: "Extend Video", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "video-retake", label: "Retake Video", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["retake", "replace audio", "replace video", "ltx", "ltx-2.3"] },
-  { type: "face-swap", label: "Face Swap", icon: <ScanFace className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "video-sfx", label: "Video SFX", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["sfx", "foley", "sound effects", "mmaudio", "audio", "sound"] },
-  // AI — Audio & Speech
-  { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "audio-isolation", label: "Voice Extractor", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "audio-separation", label: "Audio Separation", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "text-to-dialogue", label: "Text to Dialogue", icon: <Users className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "voice-changer", label: "Voice Changer", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "voice-changer-pro", label: "Voice Changer Pro", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "dubbing", label: "Dubbing", icon: <Languages className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "voice-remix", label: "Voice Remix", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "voice-design", label: "Voice Design", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "forced-alignment", label: "Forced Alignment", icon: <AlignLeft className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  // AI — Suno Music
-  { type: "suno-voice", label: "Suno Voice", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-generate", label: "Suno Create Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-extend", label: "Suno Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-separate", label: "Suno Separate", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-music-video", label: "Music Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-mashup", label: "Suno Mashup", icon: <Merge className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-replace-section", label: "Suno Replace Section", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-style-boost", label: "Suno Style Boost", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-add-instrumental", label: "Suno Add Instrumental", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-add-vocals", label: "Suno Add Vocals", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-convert-wav", label: "Suno Convert WAV", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-upload-extend", label: "Suno Upload Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  // AI — Quality
-  { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality", adminOnly: true },
-  { type: "image-critic", label: "Image Critic", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Quality" },
-  // Processing — Image
-  { type: "image-collage", label: "Image Collage", icon: <LayoutGrid className="h-4 w-4" />, category: "Processing", group: "Image", keywords: ["collage", "grid", "montage", "mosaic", "combine images", "contact sheet", "tile"] },
-  // Processing — Video
-  { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "assemble-narrated-video", label: "Assemble Narrated Video", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video", keywords: ["narration", "voiceover", "narrated", "audio-led", "montage", "assemble"] },
-  { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "social-media-format", label: "Social Media Format", icon: <Share2 className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "extract-frame", label: "Extract Frame", icon: <Frame className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "video-upscale", label: "Upscale Video", icon: <ArrowUpFromLine className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "speed-ramp", label: "Adjust Speed", icon: <Gauge className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "loop-video", label: "Loop Video", icon: <Repeat className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "fade-video", label: "Fade In/Out", icon: <SunDim className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "transcode-video", label: "Transcode Video", icon: <RefreshCw className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "manual-edit", label: "Manual Edit", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "video-analysis", label: "Video Analysis", icon: <ScanSearch className="h-4 w-4" />, category: "Processing", group: "Video", keywords: ["analyze video", "scene breakdown", "shot list", "understand video", "describe video", "storyboard from video"] },
-  { type: "video-audit", label: "AI Audit", icon: <SearchCheck className="h-4 w-4" />, category: "Processing", group: "Video", keywords: ["audit", "ai audit", "verify analysis", "check analysis", "fact check video", "qa analysis", "review scene breakdown", "correct analysis"] },
-  // Processing — Audio
-  { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "trim-audio", label: "Trim Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "split-media", label: "Split into Chunks", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio", keywords: ["extract audio", "rip audio", "audio from video", "demux", "detach audio", "mp3", "split video audio"] },
-  { type: "remove-audio", label: "Remove Audio", icon: <VolumeX className="h-4 w-4" />, category: "Processing", group: "Audio", keywords: ["remove audio", "mute", "strip audio", "silent video", "no sound", "detach audio", "split video audio"] },
-  { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "combine-audio", label: "Combine Audio", icon: <ListMusic className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "audio-fx", label: "Audio FX", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  // Processing — Text
-  { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
-  // Processing — Video Production
-  { type: "video-composer", label: "Compose Video", icon: <Sparkles className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "after-effects", label: "After Effects", icon: <Wand2 className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "lottie-overlay", label: "Lottie Overlay", icon: <Layers className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "3d-title", label: "3D Title", icon: <Box className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "motion-graphics", label: "Motion Graphics", icon: <Shapes className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "composite", label: "Composite", icon: <Layers className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  // Assets
-  { type: "character", label: "Character Asset", icon: <UserPlus className="h-4 w-4" />, category: "Assets" },
-  { type: "face", label: "Create Face", icon: <SmilePlus className="h-4 w-4" />, category: "Assets" },
-  { type: "object", label: "Object/Props Asset", icon: <Package className="h-4 w-4" />, category: "Assets" },
-  { type: "creature", label: "Animal/Creature Asset", icon: <PawPrint className="h-4 w-4" />, category: "Assets" },
-  { type: "location", label: "Location Asset", icon: <MapPin className="h-4 w-4" />, category: "Assets" },
-  // Scene (Phase 1B.2 pipeline-managed SceneNode — replaces legacy scene)
-  { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["scene", "shot list", "storyboard", "camera", "pipeline"] },
-  // Output
-  { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
-  { type: "webhook-output", label: "Webhook Output", icon: <Webhook className="h-4 w-4" />, category: "Output" },
-  // Output — Social Media
-  { type: "instagram-post", label: "Instagram Post", icon: <Instagram className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "tiktok-post", label: "TikTok Post", icon: <Video className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "youtube-upload", label: "YouTube Upload", icon: <Youtube className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "linkedin-post", label: "LinkedIn Post", icon: <Linkedin className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "x-post", label: "X Post", icon: <Twitter className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "facebook-post", label: "Facebook Post", icon: <Facebook className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "telegram-post", label: "Telegram Post", icon: <Send className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "publish-social", label: "Publish to Social", icon: <Share2 className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  // Workflow
-  { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
-  { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
-  { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
-  { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Workflow" },
-  { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Workflow" },
-  { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Workflow" },
-  { type: "group", label: "Group", icon: <Box className="h-4 w-4" />, category: "Workflow", keywords: ["group", "container", "wrap"] },
-  { type: "collect", label: "Collect", icon: <Layers className="h-4 w-4" />, category: "Workflow", keywords: ["collect", "gather", "bucket", "by-type", "split-by-type"] },
-  { type: "reduce", label: "Reduce", icon: <Funnel className="h-4 w-4" />, category: "Workflow", keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "vote", "count"] },
-  { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Workflow" },
-  { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
-  { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
-]
 
-/** Returns NODE_OPTIONS filtered for the current edition. Cloud-only nodes
- *  (`CLOUD_ONLY_NODE_TYPES`) are excluded when `hasCredits()` is false.
- *  Exported so gating tests can exercise this list directly (mirrors
- *  add-node-popup.tsx's exported `getNodeOptions`). */
-export function getNodeOptions(): ReadonlyArray<NodeOption> {
-  return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits())
-}
 
-// Category-specific hover colors for icons
-const CATEGORY_ICON_HOVER: Record<string, string> = {
-  Input: "group-hover:text-[#007AFF]",
-  Triggers: "group-hover:text-[#F97316]",
-  Data: "group-hover:text-[#14B8A6]",
-  Parameter: "group-hover:text-[#6366F1]",
-  Pickers: "group-hover:text-[#6366F1]",
-  Sound: "group-hover:text-[#a78bfa]",
-  AI: "group-hover:text-[#ff0073]",
-  Processing: "group-hover:text-[#475569]",
-  Assets: "group-hover:text-[#EC4899]",
-  Output: "group-hover:text-[#22C55E]",
-  Workflow: "group-hover:text-[#F59E0B]",
-  Component: "group-hover:text-[#A855F7]",
-}
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   const { isAdmin } = useAuth()
-  // Show every node type in the sidebar (Parameter pickers included). Only
-  // admin-only nodes stay gated, matching the add-node popup's pool.
-  // Cloud-only nodes (e.g. voice-changer-pro) are filtered out when !hasCredits().
-  const visibleNodes = getNodeOptions().filter((n) => !n.adminOnly || isAdmin)
-  const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
-    .sort((a, b) => categoryRank(a) - categoryRank(b))
+  // Every node type, Parameter pickers included — the same pool the popup
+  // browses. Only admin-only nodes stay gated; Cloud-only ones are already
+  // filtered out of getNodeOptions() when !hasCredits().
+  const visibleNodes = useMemo(
+    () => getNodeOptions().filter((n) => !n.adminOnly || isAdmin),
+    [isAdmin],
+  )
+  const sections = useMemo(() => sidebarSections(visibleNodes), [visibleNodes])
+
+  const [open, setOpen] = useState<Set<string>>(readOpenSections)
+  const apply = useCallback((next: Set<string>) => {
+    persistOpenSections(next)
+    setOpen(next)
+  }, [])
+  // Functional update so two toggles in one tick cannot drop the first.
+  const toggle = useCallback((id: string) => {
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      persistOpenSections(next)
+      return next
+    })
+  }, [])
+
   return (
     <>
       {/* Unified My Library - quick access to all assets */}
-      <div className="flex flex-col gap-1 pb-3 mb-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
-        <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B] mb-1">
+      <div className="mb-3 flex flex-col gap-1 border-b border-[var(--npk-border)] pb-3">
+        <span className="mb-1 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)]">
           Library
         </span>
         <Suspense fallback={null}><UnifiedAssetLibraryButton /></Suspense>
       </div>
-      {categories.map((cat) => {
-        const catNodes = clusterByGroup(visibleNodes.filter((n) => n.category === cat))
-        return (
-          <div key={cat} className="flex flex-col gap-0.5 mb-4">
-            <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#ff0073] mb-1.5">
-              {cat}
-            </span>
-            {catNodes.map((node, index) => {
-              const prevGroup = index > 0 ? catNodes[index - 1].group : undefined
-              const showGroupHeader = node.group && node.group !== prevGroup
-              return (
-                <div key={node.type}>
-                  {showGroupHeader && (
-                    <>
-                      {index > 0 && <div className="border-t border-muted-foreground/10 mx-1 mt-1.5 mb-0.5" />}
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-2.5 pt-2 pb-1">
-                        {familyLabel(node.group)}
-                      </div>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className={cn(
-                      "group flex items-center gap-2.5 px-2.5 py-2 rounded-lg",
-                      "hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D]",
-                      "cursor-pointer transition-colors touch-manipulation",
-                      "text-left w-full"
-                    )}
-                    onClick={() => onAdd(node.type)}
-                  >
-                    <span className={cn(
-                      "text-[#64748B] dark:text-[#94A3B8] transition-colors",
-                      CATEGORY_ICON_HOVER[node.category] || "group-hover:text-[#ff0073]",
-                      "dark:group-hover:text-[#ff0073]"
-                    )}>
-                      {node.icon}
-                    </span>
-                    <span className="text-[#1E293B] dark:text-[#E2E8F0] text-sm">
-                      {node.label}
-                    </span>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )
-      })}
+
+      <div className="mb-2 flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => apply(new Set(sections.map((s) => s.id)))}
+          className="flex-1 rounded-md border border-[var(--npk-border)] px-2 py-1.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] transition-colors hover:bg-[var(--npk-hover)] hover:text-[var(--npk-t1)]"
+        >
+          Expand all
+        </button>
+        <button
+          type="button"
+          onClick={() => apply(new Set())}
+          className="flex-1 rounded-md border border-[var(--npk-border)] px-2 py-1.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] transition-colors hover:bg-[var(--npk-hover)] hover:text-[var(--npk-t1)]"
+        >
+          Collapse all
+        </button>
+      </div>
+
+      {sections.map((section) => (
+        <SidebarSection
+          key={section.id}
+          section={section}
+          open={open.has(section.id)}
+          onToggle={toggle}
+          onAdd={onAdd}
+        />
+      ))}
     </>
   )
 }
@@ -397,8 +155,8 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
     <>
       {/* Desktop: static sidebar panel - hidden by default, shown when visible prop is true */}
       {visible && (
-        <div className="absolute top-4 left-16 z-10 hidden md:flex flex-col gap-2 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border border-[#E2E8F0] dark:border-[#2D2D2D] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in slide-in-from-left-2 duration-200">
-          <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#ff0073] mb-1">
+        <div className="absolute top-4 left-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in slide-in-from-left-2 duration-200">
+          <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] dark:text-[var(--npk-accent)] mb-1">
             Add Node
           </span>
           <NodeList onAdd={handleAddNode} />
@@ -423,19 +181,19 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border-t border-[#E2E8F0] dark:border-[#2D2D2D] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
+          <div className="absolute bottom-0 left-0 right-0 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border-t border-[var(--npk-border)] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <span className="text-sm font-semibold text-[#1E293B] dark:text-[#E2E8F0]">Add Node</span>
+              <span className="text-sm font-semibold text-[var(--npk-t1)]">Add Node</span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-white"
+                className="h-8 w-8 p-0 text-[var(--npk-dim)] hover:text-[var(--npk-t1)] dark:text-[var(--npk-dim)] dark:hover:text-white"
                 onClick={() => setSheetOpen(false)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="h-px bg-[#E2E8F0] dark:bg-[#2D2D2D]" />
+            <div className="h-px bg-[var(--npk-border)]" />
             <div className="px-4 py-4 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
               <NodeList onAdd={handleAddNode} />
             </div>

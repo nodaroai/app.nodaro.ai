@@ -140,9 +140,9 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 5 | `frontend/src/types/nodes.ts` | Data type + `SceneNodeData` union + `SceneNodeType` union + `NODE_DEFINITIONS` |
 | 6 | `frontend/src/components/nodes/<node>-node.tsx` | Node component |
 | 7 | `frontend/src/components/nodes/index.ts` | `nodeTypes` map |
-| 8 | `frontend/src/components/editor/add-node-popup.tsx` | `NODE_OPTIONS` (popup/context menu) |
+| 8 | `frontend/src/lib/node-options.tsx` | `NODE_OPTIONS` — the catalogue BOTH the popup and the sidebar render. One entry adds the node to both surfaces; neither keeps a copy any more (they used to, and drifted — #635). |
 | 8b | `frontend/src/lib/node-families.ts` | Add the type to the owning family's `types` array, and set the matching family id as `group:` on the `NODE_OPTIONS` entry. ⚠️ **This is the picker's single source of truth** — tabs, family headers, the All tab's `TAB · FAMILY` sections and the search "own vs from other tabs" split all derive from it. `frontend/src/lib/__tests__/node-families.test.ts` hard-fails if a creatable node has no family or if `group` and the registry disagree. Nodes shown on a tab they do not own (e.g. Text beside the uploads on every media tab) go in `TAB_SUPERSET`, which changes display only — never the node's `group`. |
-| 9 | `frontend/src/components/editor/node-toolbar.tsx` | Sidebar node list ⚠️ **SEPARATE from popup** |
+| 9 | ~~`frontend/src/components/editor/node-toolbar.tsx`~~ | **Nothing to do** — the sidebar imports the step-8 catalogue. Kept as a numbered row so the steps below don't shift. |
 | 10 | `frontend/src/components/editor/editor-toolbar.tsx` | Reset/clear `switch` case |
 | 11 | `frontend/src/components/editor/config-panels/<cat>-configs.tsx` | Config component. If it exposes provider-aware dropdowns (resolution, quality, aspect ratio, voice, etc.), MUST include the fail-safe `useEffect([currentProvider])` from Provider Enum Sync step 12b — snap stale values to the first valid option, clear when the provider has no such lever. |
 | 12 | `frontend/src/components/editor/config-panels/index.ts` | Export |
@@ -156,7 +156,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 19 | `backend/src/lib/node-registry.ts` | `NODE_REGISTRY` entry — descriptor (label, category, outputType, optional creditCost/inputSchema/providers/capabilities) for `GET /v1/nodes` discovery API |
 | 20 | `backend/skills/` (generated — do NOT hand-edit) | Run `cd backend && npm run gen:skills` to regenerate node skill docs + the `workflow-editor.md` catalog from `NODE_DEFINITIONS`. `gen:skills:check` CI hard-fails on drift; the script needs `INTERNAL_ORCHESTRATOR_SECRET` (≥32 chars, NOT in `.env`) passed inline. |
 
-**Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
+**Step 8 covers both add-node surfaces.** The popup and the sidebar render one shared catalogue, so a single entry reaches both — but step 8b is still separate: a node in `NODE_OPTIONS` with no family renders under no header, and the guard test fails the build for it.
 
 **Bottom run strip:** `BaseNode` frames `topToolbarContent` in the shared zoom-scaled pill (`NodeRunStripShell`) so container/zoom/click-isolation never drift — pass a bare `<RunNodeButton .../>` (use `runFromHere` for pass-through list/text/data nodes) or `<NodeQuickStrip .../>` (auto-shows per-type dropdowns from `NODE_QUICK_CONFIGS`). Don't hand-roll a pill, re-apply zoom scaling, or gate the strip behind `!isRunning` (hides Stop/Discard mid-run). Only bespoke self-framing toolbars with their own compact pill (generate-image/video, llm-chat, video-retake, video-sfx) use `rawToolbarContent` to skip the shell. Provider-dependent quick-config dropdowns MUST use provider-aware `options: (data) => ...` returning `[]` when the provider lacks that lever (registry self-hides + clears the stale value) — never a static superset (Zod-reject trap).
 
