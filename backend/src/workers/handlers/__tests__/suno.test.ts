@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
+  // Cloud-replay seams (#643): default NOT connected so every local-path test
+  // below behaves exactly as before; the cloud describe flips it per-test.
+  const mockIsNodaroConnected = vi.fn().mockResolvedValue(false)
+  const mockRunJobOnCloud = vi.fn()
   const mockSunoGenerate = vi.fn()
   const mockSunoCover = vi.fn()
   const mockSunoExtend = vi.fn()
@@ -32,11 +36,14 @@ const mocks = vi.hoisted(() => {
     mockMarkJobCompleted,
     mockGenerateAndUploadThumbnail, mockIsSocialUrl, mockDownloadAudioToR2,
     mockFrom, mockUpdate, mockEq,
+    mockIsNodaroConnected, mockRunJobOnCloud,
   }
 })
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2 }))
+vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.mockIsNodaroConnected }))
+vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ runJobOnCloud: mocks.mockRunJobOnCloud }))
 vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoGenerate: mocks.mockSunoGenerate,
   sunoCover: mocks.mockSunoCover,
@@ -64,6 +71,7 @@ vi.mock("../../shared.js", () => ({
 }))
 
 import { sunoHandlers } from "../suno.js"
+import { config } from "@/lib/config.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -462,5 +470,134 @@ describe("shared suno handler behavior", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+})
+
+describe("bespoke operations replay on the connected cloud when this install has no KIE key (#643)", () => {
+  // The .env trap: a developer backend/.env carries a real KIE key, which would
+  // silently route every one of these tests down the LOCAL branch. Pin the
+  // config rather than inherit ambient env, and restore it after.
+  const originalKieKey = config.KIE_API_KEY
+
+  beforeEach(() => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+  })
+
+  afterEach(() => {
+    config.KIE_API_KEY = originalKieKey
+    mocks.mockIsNodaroConnected.mockResolvedValue(false)
+  })
+
+  it("suno-lyrics: cloud text passes straight through — no media, no R2", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+      lyrics: [{ text: "la la", title: "Song" }],
+      sunoTaskId: "cloud-task-9",
+    })
+    await sunoHandlers["suno-lyrics"]!(makeJob("suno-lyrics", { prompt: "a love song" }) as never, makeCtx() as never)
+
+    expect(mocks.mockRunJobOnCloud).toHaveBeenCalledWith(
+      "suno-lyrics",
+      expect.objectContaining({ prompt: "a love song" }),
+      expect.any(Function),
+    )
+    expect(mocks.mockSunoLyrics).not.toHaveBeenCalled()
+    expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { lyrics: [{ text: "la la", title: "Song" }], sunoTaskId: "cloud-task-9" },
+    }))
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("suno-separate: cloud stems are re-hosted into THIS instance's R2 under stem keys", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+      separateType: "separate_vocal",
+      vocalUrl: "https://cloud.example.com/v.mp3",
+      instrumentalUrl: "https://cloud.example.com/i.mp3",
+      audioUrl: "https://cloud.example.com/v.mp3",
+      sunoTaskId: "cloud-task-9",
+    })
+    await sunoHandlers["suno-separate"]!(
+      makeJob("suno-separate", { taskId: "t-1", audioId: "a-1", separateType: "separate_vocal" }) as never,
+      makeCtx() as never,
+    )
+
+    expect(mocks.mockSunoSeparate).not.toHaveBeenCalled()
+    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/v.mp3", "job-1-vocal", "audio", "user-1")
+    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/i.mp3", "job-1-instrumental", "audio", "user-1")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({
+        separateType: "separate_vocal",
+        sunoTaskId: "cloud-task-9",
+        vocalUrl: "https://r2.example.com/audio/job-1.mp3",
+        audioUrl: "https://r2.example.com/audio/job-1.mp3",
+      }),
+    }))
+  })
+
+  it("suno-music-video: cloud video is re-hosted and the thumbnail regenerated locally", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+      videoUrl: "https://cloud.example.com/mv.mp4",
+      thumbnailUrl: "https://cloud.example.com/mv.jpg",
+      sunoTaskId: "cloud-task-9",
+    })
+    await sunoHandlers["suno-music-video"]!(
+      makeJob("suno-music-video", { taskId: "t-1", audioId: "a-1" }) as never,
+      makeCtx() as never,
+    )
+
+    expect(mocks.mockSunoMusicVideo).not.toHaveBeenCalled()
+    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/mv.mp4", "job-1", "video", "user-1")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: {
+        videoUrl: "https://r2.example.com/audio/job-1.mp3",
+        thumbnailUrl: "https://r2.example.com/thumbs/job-1.jpg",
+        sunoTaskId: "cloud-task-9",
+      },
+    }))
+  })
+
+  it("suno-convert-wav: cloud wav is re-hosted into THIS instance's R2", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+      audioUrl: "https://cloud.example.com/track.wav",
+      sunoTaskId: "cloud-task-9",
+    })
+    await sunoHandlers["suno-convert-wav"]!(
+      makeJob("suno-convert-wav", { taskId: "t-1", audioId: "a-1" }) as never,
+      makeCtx() as never,
+    )
+
+    expect(mocks.mockSunoConvertWav).not.toHaveBeenCalled()
+    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/track.wav", "job-1", "audio", "user-1")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3", sunoTaskId: "cloud-task-9" },
+    }))
+  })
+
+  it("a keyed install never calls the cloud — a local key always wins", async () => {
+    config.KIE_API_KEY = "local-key"
+    await sunoHandlers["suno-convert-wav"]!(
+      makeJob("suno-convert-wav", { taskId: "t-1", audioId: "a-1" }) as never,
+      makeCtx() as never,
+    )
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockSunoConvertWav).toHaveBeenCalled()
+  })
+
+  it("an empty cloud result fails loudly instead of completing empty", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValue({})
+    await expect(
+      sunoHandlers["suno-lyrics"]!(makeJob("suno-lyrics", { prompt: "p" }) as never, makeCtx() as never),
+    ).rejects.toThrow("no lyrics")
+    await expect(
+      sunoHandlers["suno-separate"]!(makeJob("suno-separate", { taskId: "t", audioId: "a" }) as never, makeCtx() as never),
+    ).rejects.toThrow("no stems")
+    await expect(
+      sunoHandlers["suno-music-video"]!(makeJob("suno-music-video", { taskId: "t", audioId: "a" }) as never, makeCtx() as never),
+    ).rejects.toThrow("no music video")
+    await expect(
+      sunoHandlers["suno-convert-wav"]!(makeJob("suno-convert-wav", { taskId: "t", audioId: "a" }) as never, makeCtx() as never),
+    ).rejects.toThrow("no WAV")
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 })

@@ -44,16 +44,16 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "suno-add-instrumental": "/v1/suno/add-instrumental",
   "suno-add-vocals": "/v1/suno/add-vocals",
   "suno-upload-extend": "/v1/suno/upload-extend",
+  // The four bespoke operations (#643). They don't share the multi-track
+  // finalizer — lyrics is text, separate is stems, music-video is a video,
+  // convert-wav is a wav — so each has its own result adapter in
+  // workers/handlers/suno.ts feeding the SAME local persistence a KIE result
+  // would. The replay itself stays generic; only the result handling differs.
+  "suno-lyrics": "/v1/suno/lyrics",
+  "suno-separate": "/v1/suno/separate",
+  "suno-music-video": "/v1/suno/music-video",
+  "suno-convert-wav": "/v1/suno/convert-wav",
 }
-
-/**
- * Deliberately NOT mapped yet: suno-lyrics, suno-separate, suno-music-video
- * and suno-convert-wav. Those four don't share the multi-track finalizer — they
- * return text, stems, a video and a wav respectively, each with its own
- * persistence — so replaying them needs a per-operation result adapter, not the
- * shared one. Mapping them here without wiring the handlers would advertise a
- * path nothing takes.
- */
 
 
 /**
@@ -73,6 +73,15 @@ const PAYLOAD_ADAPTERS: Readonly<
   "generate-script": ({ advanced, ...rest }) => ({
     ...rest,
     ...(advanced && typeof advanced === "object" ? (advanced as Record<string, unknown>) : {}),
+  }),
+  // The route's field is `type`; the enqueue renames it `separateType` so the
+  // worker payload reads unambiguously. Replayed verbatim, the cloud's Zod
+  // would silently drop `separateType` and DEFAULT the operation to
+  // separate_vocal — a user's split_stem request would come back as a vocal
+  // split with no error anywhere.
+  "suno-separate": ({ separateType, ...rest }) => ({
+    ...rest,
+    ...(typeof separateType === "string" ? { type: separateType } : {}),
   }),
 }
 

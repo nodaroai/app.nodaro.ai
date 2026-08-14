@@ -71,9 +71,12 @@ describe("runJobOnCloud", () => {
     expect(canRunOnCloud("suno-generate")).toBe(true)
     expect(canRunOnCloud("generate-image")).toBe(false)
     expect(cloudRouteForJobType("suno-cover")).toBe("/v1/suno/cover")
-    // Unwired operations must NOT be claimed — see the note in the map.
-    expect(canRunOnCloud("suno-lyrics")).toBe(false)
-    expect(canRunOnCloud("suno-convert-wav")).toBe(false)
+    // The four bespoke operations are wired since #643 — each has its own
+    // result adapter in workers/handlers/suno.ts.
+    expect(canRunOnCloud("suno-lyrics")).toBe(true)
+    expect(canRunOnCloud("suno-separate")).toBe(true)
+    expect(canRunOnCloud("suno-music-video")).toBe(true)
+    expect(canRunOnCloud("suno-convert-wav")).toBe(true)
   })
 })
 
@@ -237,5 +240,26 @@ describe("payload adapters — for job types whose enqueued shape isn't the rout
     createCloudJob.mockClear()
     await runJobOnCloud("generate-script", { prompt: "y", advanced: "nonsense" })
     expect(createCloudJob).toHaveBeenCalledWith("/v1/generate-script", { prompt: "y" })
+  })
+
+  it("renames suno-separate's `separateType` back to the route's `type` (#643)", async () => {
+    // The enqueue calls the route's `type` field `separateType`. Replayed
+    // verbatim, the cloud's Zod would silently drop it and DEFAULT the
+    // operation to separate_vocal — a split_stem request would come back as a
+    // vocal split with no error anywhere.
+    await runJobOnCloud("suno-separate", {
+      taskId: "task-1",
+      audioId: "audio-1",
+      separateType: "split_stem",
+    })
+    expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/separate", {
+      taskId: "task-1",
+      audioId: "audio-1",
+      type: "split_stem",
+    })
+    createCloudJob.mockClear()
+    // Absent stays absent — the cloud's default matches the worker's.
+    await runJobOnCloud("suno-separate", { taskId: "t", audioId: "a" })
+    expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/separate", { taskId: "t", audioId: "a" })
   })
 })
