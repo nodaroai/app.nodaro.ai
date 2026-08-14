@@ -193,7 +193,11 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   }, [librarySearch])
 
   // -- Data sources --
-  const { data: allPremade = [] } = useVoices()
+  const { data: voicesData } = useVoices()
+  const allPremade = voicesData?.voices ?? []
+  // Server says the list is the static keyless fallback — show its own hint
+  // instead of letting the picker just look impoverished (#647).
+  const voicesKeyHint = voicesData?.keyMissing ? voicesData.hint : undefined
 
   const libraryGenderParam = libraryGender === "All" ? undefined : libraryGender.toLowerCase()
   const {
@@ -329,6 +333,12 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
             </button>
           ))}
         </div>
+
+        {voicesKeyHint && (
+          <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
+            {voicesKeyHint}
+          </p>
+        )}
 
         {tab === "my-voices" && showCustomVoices && (
           <MyVoicesTab

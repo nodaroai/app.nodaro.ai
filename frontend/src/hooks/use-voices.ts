@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, keepPreviousData } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
-import { getVoices, searchVoiceLibrary, type ElevenLabsVoice, type VoiceLibraryParams } from "@/lib/api"
+import { getVoices, searchVoiceLibrary, type ElevenLabsVoice, type VoiceLibraryParams, type VoicesResponse } from "@/lib/api"
 import { TTS_VOICES } from "@/lib/tts-voices"
 
 const STALE_TIME = 6 * 60 * 60 * 1000 // 6 hours
@@ -30,12 +30,12 @@ const PLACEHOLDER_VOICES: ElevenLabsVoice[] = TTS_VOICES.map((v) => ({
 }))
 
 export function useVoices() {
-  return useQuery({
+  return useQuery<VoicesResponse>({
     queryKey: queryKeys.voices.list(),
     queryFn: getVoices,
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
-    placeholderData: PLACEHOLDER_VOICES,
+    placeholderData: { voices: PLACEHOLDER_VOICES },
   })
 }
 

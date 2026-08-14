@@ -65,7 +65,7 @@ const PREMADE = Array.from({ length: 5 }, (_, i) => ({
   category: "premade",
 }))
 
-const mockGetVoices = vi.fn(async () => PREMADE)
+const mockGetVoices = vi.fn(async () => ({ voices: PREMADE }))
 const mockSearchVoiceLibrary = vi.fn(
   async (params: { page?: number; page_size?: number; search?: string }) => {
     const page = params.page ?? 0

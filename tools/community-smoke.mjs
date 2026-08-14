@@ -274,6 +274,24 @@ await check("a keyless generation fails honestly instead of hanging or crashing"
   return `job failed with: "${last.error_message}"`
 })
 
+await check("the voice list says why it is limited without a key", async () => {
+  if (ctx.keys.elevenlabs) {
+    return skip("the voice list says why it is limited without a key", "install has an ElevenLabs key")
+  }
+  const { status, json } = await api("/v1/voices", { token: ctx.token })
+  assert(status === 200, `expected 200, got ${status}`)
+  // The static list must SURVIVE — TTS still runs through the connection (or a
+  // later-added key); what changed in #647 is that the response admits why the
+  // list is limited instead of pretending it is the real catalog.
+  assert(
+    Array.isArray(json?.voices) && json.voices.length > 0,
+    "keyless install must still offer the built-in voice list",
+  )
+  assert(json?.keyMissing === true, "keyless voices response does not admit the key is missing")
+  assertActionable(json?.hint, "voices keyless hint")
+  return `${json.voices.length} built-in voices + an actionable hint`
+})
+
 await check("a keyless LLM route refuses cleanly", async () => {
   if (!ctx.keyless) {
     return skip("a keyless LLM route refuses cleanly", "install has a provider")

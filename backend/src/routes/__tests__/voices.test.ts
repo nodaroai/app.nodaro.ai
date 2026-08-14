@@ -106,13 +106,29 @@ describe("GET /v1/voices", () => {
     expect(fetchUrl()).toContain("page_size=100")
   })
 
-  it("falls back to the static catalog (no fetch) when the API key is absent", async () => {
+  it("falls back to the static catalog (no fetch) when the API key is absent — and SAYS so (#647)", async () => {
     cfgState.key = ""
     const res = await app.inject({ method: "GET", url: "/v1/voices" })
     expect(res.statusCode).toBe(200)
-    const body = res.json() as { voices: unknown[] }
-    expect(body.voices.length).toBeGreaterThan(0) // static FALLBACK_VOICES
+    const body = res.json() as { voices: unknown[]; keyMissing?: boolean; hint?: string }
+    expect(body.voices.length).toBeGreaterThan(0) // static FALLBACK_VOICES — still usable for TTS via the connection
     expect(fetchMock).not.toHaveBeenCalled()
+    // The honest half: the response admits the list is the keyless fallback,
+    // with the shared phrasing (names the key, points at Install health).
+    expect(body.keyMissing).toBe(true)
+    expect(body.hint).toContain("ELEVENLABS_API_KEY")
+    expect(body.hint).toContain("Install health")
+    expect(body.hint!.length).toBeLessThanOrEqual(200)
+    // A cached "key missing" notice must not survive the key being added.
+    expect(res.headers["cache-control"]).toBe("no-store")
+  })
+
+  it("does NOT carry the keyless marker when a key is configured", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ voices: [] }))
+    const res = await app.inject({ method: "GET", url: "/v1/voices" })
+    const body = res.json() as { keyMissing?: boolean; hint?: string }
+    expect(body.keyMissing).toBeUndefined()
+    expect(body.hint).toBeUndefined()
   })
 })
 
@@ -197,11 +213,15 @@ describe("GET /v1/voices/library", () => {
     expect(body.hasMore).toBe(false)
   })
 
-  it("returns an empty page gracefully when the API key is absent (no fetch)", async () => {
+  it("returns an empty page when the API key is absent — and SAYS so (#647)", async () => {
     cfgState.key = ""
     const res = await app.inject({ method: "GET", url: "/v1/voices/library" })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ voices: [], hasMore: false })
+    const body = res.json() as { voices: unknown[]; hasMore: boolean; keyMissing?: boolean; hint?: string }
+    expect(body.voices).toEqual([])
+    expect(body.hasMore).toBe(false)
+    expect(body.keyMissing).toBe(true)
+    expect(body.hint).toContain("ELEVENLABS_API_KEY")
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
