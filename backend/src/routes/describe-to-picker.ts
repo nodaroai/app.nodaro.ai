@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
 import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
@@ -161,6 +162,10 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
     "/v1/describe-to-picker",
     { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", req.body)) },
     async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same
+      // code, so forward the body and pass its answer straight back.
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/describe-to-picker")) return
+
       const parsed = describeToPickerBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })

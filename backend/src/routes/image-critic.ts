@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { LLM_ROUTE_DEFAULTS, IMAGE_CRITIC_MODES, ImageCriticResultSchema, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveLlmCreditId, type ImageCriticMode, type ImageCriticResult } from "@nodaro/shared"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
@@ -106,6 +107,10 @@ export async function imageCriticRoutes(app: FastifyInstance) {
       preHandler: creditGuard((req) => resolveLlmCreditId("image-critic", req.body)),
     },
     async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same
+      // code, so forward the body and pass its answer straight back.
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/image-critic")) return
+
       const parsed = imageCriticBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({

@@ -1,4 +1,9 @@
 import { dirname } from "node:path"
+import { safeFetch } from "../../lib/safe-fetch.js"
+import { config } from "../../lib/config.js"
+import { isNodaroConnected } from "../../lib/nodaro-connect.js"
+import { requireProviderKey } from "../../providers/provider-keys.js"
+import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
 import { promises as fs } from "node:fs"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -40,6 +45,31 @@ import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/pe
 // task), there is no `makeOnTaskCreated`/reconcile wiring for TTS jobs going
 // forward — the reconcile cron only ever picks up rows with a persisted
 // `provider_call_started_at`, which this path never sets.
+
+/**
+ * Speech through the connected cloud, returned as bytes so the caller's
+ * storage path is untouched.
+ *
+ * The cloud answers with a URL on ITS storage; downloading here means the
+ * finished audio lives on this instance like any local result — same R2 key,
+ * same gallery row, same cleanup — and nothing downstream learns where it was
+ * generated.
+ */
+async function generateSpeechViaCloud(
+  text: string,
+  voice: string | undefined,
+  provider: string,
+  options: TextToSpeechOptions,
+): Promise<Buffer> {
+  const { NodaroCloudAudioProvider } = await import("../../providers/nodaro/audio.js")
+  const result = await new NodaroCloudAudioProvider().textToSpeech(text, voice, provider, options)
+  const res = await safeFetch(result.url)
+  if (!res.ok) {
+    throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
+  }
+  return Buffer.from(await res.arrayBuffer())
+}
+
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
   const { text, voice, provider: rawProvider, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
     jobId: string
@@ -66,13 +96,40 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // Strip [audio tags] from text when NOT using v3 — v2 models speak them as literal text
   const processedText = provider === "elevenlabs-v3" ? text : stripAudioTags(text)
 
-  const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
-    ...(hasOptions ? ttsOptions : {}),
-    allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
-  })
+  // Three ways out, in this order — the order IS the contract:
+  //   1. local key      -> direct ElevenLabs (keyed installs are byte-identical)
+  //   2. no key, connected -> the cloud (TTS never reaches the capability
+  //      router, so declaring the capability alone could not rescue it; the
+  //      founder hit exactly this on 2026-08-14)
+  //   3. no key, not connected -> the SHARED missing-key error
+  //
+  // Step 3 is not a formality. Without it the unconnected install falls into
+  // the cloud path and surfaces `nodaro.ai is not connected` — which tells a
+  // self-hoster to check a connection they never set up, instead of telling
+  // them to add the key they actually meant to use. That is the exact bug
+  // family this whole effort exists to remove, so the keyless-unconnected
+  // install must reach `requireProviderKey` and no further.
+  let audioBuffer: Buffer
+  if (config.ELEVENLABS_API_KEY) {
+    audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
+      ...(hasOptions ? ttsOptions : {}),
+      allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
+    })
+  } else if (await isNodaroConnected().catch(() => false)) {
+    audioBuffer = await generateSpeechViaCloud(
+      processedText,
+      voice,
+      provider,
+      hasOptions ? ttsOptions : {},
+    )
+  } else {
+    // Throws MissingProviderKeyError — the one phrasing every provider uses.
+    requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
+    throw new Error("unreachable: requireProviderKey throws on an empty key")
+  }
   await setJobProgress(job, ctx.jobId, 50)
 
-  // POST-PROVIDER: ElevenLabs already delivered the audio (we were billed) —
+  // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
   const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)

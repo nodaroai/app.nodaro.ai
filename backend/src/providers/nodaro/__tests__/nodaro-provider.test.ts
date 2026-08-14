@@ -318,6 +318,7 @@ describe("registration + chain extension when connected", () => {
       "motion-transfer",
       "video-upscale",
       "lip-sync",
+      "text-to-speech",
     ])
     expect(providerRegistry.supportsModel("nodaro", "image-generation", "nano-banana")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "image-to-video", "kling-3.0")).toBe(true)
@@ -326,10 +327,13 @@ describe("registration + chain extension when connected", () => {
     expect(providerRegistry.supportsModel("nodaro", "lip-sync", "kling-avatar")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "image-editing", "nano-banana-edit")).toBe(true)
     expect(providerRegistry.supportsModel("nodaro", "video-upscale", "topaz")).toBe(true)
-    // Still NOT claimed: audio and LLM go through direct handlers that bypass
-    // the registry, so declaring them here would be a lie until those are
-    // routed (see the hardening backlog).
-    expect(providerRegistry.supportsModel("nodaro", "text-to-speech", "elevenlabs-v3")).toBe(false)
+    // Speech joined the set once the handler learned to use it — declaring a
+    // capability the worker never routes to would be a lie, so the two land
+    // together.
+    expect(providerRegistry.supportsModel("nodaro", "text-to-speech", "elevenlabs-v3")).toBe(true)
+    // Still NOT claimed: music and the LLM lane call their vendors directly
+    // and no handler routes them yet.
+    expect(providerRegistry.supportsModel("nodaro", "music-generation", "suno")).toBe(false)
   })
 
   it("appends nodaro at the END of every connect capability, never in front", async () => {

@@ -22,6 +22,7 @@ import type { ProviderInfo } from "../provider.interface.js"
 import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { NodaroCloudImageProvider } from "./image.js"
 import { NodaroCloudVideoProvider } from "./video.js"
+import { NodaroCloudAudioProvider } from "./audio.js"
 import {
   KIE_IMAGE_MODELS,
   KIE_VIDEO_MODELS,
@@ -32,6 +33,7 @@ import {
   LIP_SYNC_PROVIDERS,
   MOTION_TRANSFER_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
+  TTS_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
 } from "@nodaro/shared"
 
@@ -49,6 +51,7 @@ const nodaroInfo: ProviderInfo = {
     "motion-transfer",
     "video-upscale",
     "lip-sync",
+    "text-to-speech",
   ],
   supportedModels: {
     "image-generation": Object.keys(KIE_IMAGE_MODELS),
@@ -64,7 +67,11 @@ const nodaroInfo: ProviderInfo = {
     "video-upscale": [...VIDEO_UPSCALE_PROVIDERS],
     "lip-sync": [...LIP_SYNC_PROVIDERS],
     "music-generation": [],
-    "text-to-speech": [],
+    // Speech is the node a keyless install hits first. The cloud serves every
+    // TTS model the route accepts (it holds the ElevenLabs key), so claim the
+    // route's own enum — see the image-editing note above for why not a
+    // hand-kept list.
+    "text-to-speech": [...TTS_PROVIDERS],
     "sound-effect": [],
     "audio-isolation": [],
     "audio-separation": [],
@@ -78,6 +85,7 @@ export function registerNodaroCloudProvider(): void {
   providerRegistry.register(nodaroInfo, {
     image: new NodaroCloudImageProvider(),
     video: new NodaroCloudVideoProvider(),
+    audio: new NodaroCloudAudioProvider(),
   })
 }
 

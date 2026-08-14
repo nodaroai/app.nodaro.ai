@@ -1,4 +1,5 @@
 import { variantJobId } from "@nodaro/shared"
+import { config } from "../../lib/config.js"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -31,6 +32,55 @@ import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
  * Returns null when no tracks survived the upload filter — caller throws with
  * the operation label.
  */
+
+/**
+ * Suno through the connected cloud, shaped back into a SunoTaskResult.
+ *
+ * The cloud finishes the job on ITS storage and answers with the same
+ * `output_data` this instance would have produced (`sunoTracks[]` with
+ * `audioUrl`s). Handing those tracks to the normal finalizer re-downloads them
+ * into this instance's R2 under its own keys, so a cloud-run Suno job is
+ * indistinguishable downstream from a local one.
+ *
+ * Only used when the install has no KIE key of its own — a keyed install never
+ * reaches this and behaves exactly as before.
+ */
+async function runSunoOnCloud(
+  jobType: string,
+  payload: Record<string, unknown>,
+  onProgress?: (p: number) => Promise<void>,
+): Promise<SunoTaskResult> {
+  const { runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+  const output = await runJobOnCloud(jobType, payload, onProgress)
+  const tracks = Array.isArray(output.sunoTracks)
+    ? (output.sunoTracks as Array<Record<string, unknown>>)
+    : typeof output.audioUrl === "string"
+      // Single-track operations (convert-wav, separate stems) report only the
+      // primary URL; synthesize the one-element list the finalizer expects.
+      ? [{ audioUrl: output.audioUrl, id: output.sunoTrackId, title: output.sunoTitle }]
+      : []
+  return {
+    taskId: typeof output.sunoTaskId === "string" ? output.sunoTaskId : "cloud",
+    // title / duration / imageUrl are OPTIONAL on SunoTrack. Defaulting them to
+    // "" and 0 would turn "unknown" into "empty" and "zero seconds" — a real
+    // track would render as 0:00. Absent stays absent.
+    tracks: tracks.map((t) => ({
+      id: typeof t.id === "string" ? t.id : "",
+      audioUrl: typeof t.audioUrl === "string" ? t.audioUrl : "",
+      ...(typeof t.title === "string" ? { title: t.title } : {}),
+      ...(typeof t.duration === "number" ? { duration: t.duration } : {}),
+      ...(typeof t.imageUrl === "string" ? { imageUrl: t.imageUrl } : {}),
+    })),
+  }
+}
+
+/** True when this install has no KIE key and a live nodaro.ai connection. */
+async function shouldRunSunoOnCloud(): Promise<boolean> {
+  if (config.KIE_API_KEY) return false
+  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
+  return isNodaroConnected().catch(() => false)
+}
+
 async function uploadAllSunoTracks(
   result: SunoTaskResult,
   jobId: string,
@@ -87,6 +137,30 @@ async function finalizeSunoJob(
   console.log(`[worker] Job ${ctx.jobId} completed: ${outputData.audioUrl as string} (${outputData.trackCount as number} tracks)`)
 }
 
+
+/**
+ * One line per Suno handler: run it on the cloud when this install has no KIE
+ * key, and report whether it did.
+ *
+ * A helper rather than eight copies of the same branch — every operation here
+ * shares the same finalizer, so the only thing that varies is the job type and
+ * the empty-result label. A local KIE key always wins; keyed installs never
+ * reach this.
+ */
+async function maybeRunSunoOnCloud(
+  job: Job,
+  ctx: JobContext,
+  jobType: string,
+  emptyTracksLabel: string,
+): Promise<boolean> {
+  if (!(await shouldRunSunoOnCloud())) return false
+  const result = await runSunoOnCloud(jobType, job.data as Record<string, unknown>, (p) =>
+    setJobProgress(job, ctx.jobId, Math.min(45, Math.round(p * 0.45))),
+  )
+  await finalizeSunoJob(job, ctx, result, emptyTracksLabel)
+  return true
+}
+
 const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx) {
   const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel } = job.data as {
     jobId: string; prompt: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
@@ -95,6 +169,8 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${duration != null ? `, duration: ${duration}s` : ""}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-generate", "Suno returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -112,6 +188,12 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  // BEFORE the social-URL download below: the cloud's own handler performs the
+  // same download, and the local copy's URL is on a private host it could not
+  // fetch anyway — downloading here first would cost bandwidth for a file we
+  // then never send.
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-cover", "Suno cover returned no tracks")) return
+
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl
   if (isSocialUrl(uploadUrl)) {
@@ -135,6 +217,8 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-extend", "Suno extend returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -250,6 +334,8 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     negativeStyle?: string; vocalGender?: string
   }
   console.log(`[worker] suno-mashup ${ctx.jobId} (model: ${model ?? "V5"})`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-mashup", "Suno mashup returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -266,6 +352,8 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
     fullLyrics?: string; negativeTags?: string
   }
   console.log(`[worker] suno-replace-section ${ctx.jobId} (audioId: ${audioId}, ${infillStartS}s-${infillEndS}s)`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-replace-section", "Suno replace-section returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -281,6 +369,8 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
   console.log(`[worker] suno-add-instrumental ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-add-instrumental", "Suno add-instrumental returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -296,6 +386,8 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
   console.log(`[worker] suno-add-vocals ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-add-vocals", "Suno add-vocals returned no tracks")) return
+
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -335,6 +427,12 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     negativeStyle?: string; vocalGender?: string
   }
   console.log(`[worker] suno-upload-extend ${ctx.jobId} (model: ${model ?? "V5"}, continueAt: ${continueAt}s)`)
+  // BEFORE the social-URL download below: the cloud's own handler performs the
+  // same download, and the local copy's URL is on a private host it could not
+  // fetch anyway — downloading here first would cost bandwidth for a file we
+  // then never send.
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-upload-extend", "Suno upload-extend returned no tracks")) return
+
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl
   if (isSocialUrl(uploadUrl)) {

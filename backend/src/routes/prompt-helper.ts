@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -114,6 +115,10 @@ export async function promptHelperRoutes(app: FastifyInstance) {
       preHandler: creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body)),
     },
     async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same
+      // code, so forward the body and pass its answer straight back.
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/prompt-helper/wizard")) return
+
       const parsed = wizardBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({

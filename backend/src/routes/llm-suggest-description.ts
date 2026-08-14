@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { config } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -92,6 +93,10 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
     "/v1/llm-suggest-description",
     { preHandler: creditGuard(() => CREDIT_IDENTIFIER) },
     async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same
+      // code, so forward the body and pass its answer straight back.
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-suggest-description")) return
+
       if (!req.userId) {
         return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
       }

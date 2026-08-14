@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockGenerateMusic = vi.fn()
@@ -30,6 +30,16 @@ const mocks = vi.hoisted(() => {
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumb.png")
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockFsReadFile = vi.fn().mockResolvedValue(Buffer.from("source-audio"))
+  const mockIsNodaroConnected = vi.fn().mockResolvedValue(false)
+  const mockCloudTextToSpeech = vi.fn().mockResolvedValue({ url: "https://cloud.nodaro.ai/a.mp3", cost: null })
+  const mockNodaroCloudAudioProvider = vi.fn().mockImplementation(function () {
+    return { textToSpeech: mockCloudTextToSpeech }
+  })
+  const mockSafeFetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => new Uint8Array(Buffer.from("cloud-audio")).buffer,
+  })
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
@@ -72,6 +82,10 @@ const mocks = vi.hoisted(() => {
     mockFrom,
     mockUpdate,
     mockEq,
+    mockIsNodaroConnected,
+    mockCloudTextToSpeech,
+    mockNodaroCloudAudioProvider,
+    mockSafeFetch,
   }
 })
 
@@ -108,7 +122,23 @@ vi.mock("../../shared.js", async (importOriginal) => {
   }
 })
 
+vi.mock("../../../lib/nodaro-connect.js", () => ({
+  isNodaroConnected: mocks.mockIsNodaroConnected,
+}))
+vi.mock("../../../providers/nodaro/audio.js", () => ({
+  NodaroCloudAudioProvider: mocks.mockNodaroCloudAudioProvider,
+}))
+vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
+
 import { audioAIHandlers } from "../audio-ai.js"
+// The REAL config object (not a module mock — the handler's siblings read other
+// fields off it). TTS branches on ELEVENLABS_API_KEY, and `config.ts` does
+// `import "dotenv/config"`, so without pinning it here the branch taken depends
+// on whether the machine happens to have a `backend/.env`. That is exactly how
+// these tests passed locally and failed in CI: a developer .env sent every run
+// down the direct-ElevenLabs path, so the cloud branch was never executed
+// anywhere until CI ran it with no key at all.
+import { config } from "../../../lib/config.js"
 // Real classifier — this is the EXACT predicate refundJobCredits uses to decide
 // skip-vs-refund. Asserting on it proves the refund decision without re-mocking
 // the credit pipeline.
@@ -140,6 +170,74 @@ beforeEach(() => {
   mocks.mockDirectVoiceChanger.mockResolvedValue(Buffer.from("revoiced-audio"))
   mocks.mockMergeVideoAudio.mockResolvedValue("/tmp/merged/out.mp4")
   mocks.mockFsReadFile.mockResolvedValue(Buffer.from("source-audio"))
+  // Pin the TTS branch. Ambient `backend/.env` must not decide which path the
+  // suite exercises — see the note on the config import above.
+  config.ELEVENLABS_API_KEY = "el_test"
+  mocks.mockIsNodaroConnected.mockResolvedValue(false)
+  mocks.mockCloudTextToSpeech.mockResolvedValue({ url: "https://cloud.nodaro.ai/a.mp3", cost: null })
+  mocks.mockSafeFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => new Uint8Array(Buffer.from("cloud-audio")).buffer,
+  })
+})
+
+// `config` is a shared module singleton. Vitest isolates modules per file
+// today, so a leaked mutation cannot reach another file — but that is a
+// default nobody here chose, and an ambient value silently deciding a branch
+// is precisely the bug this suite just caught. Restore it explicitly.
+const originalElevenLabsKey = config.ELEVENLABS_API_KEY
+afterEach(() => {
+  config.ELEVENLABS_API_KEY = originalElevenLabsKey
+})
+
+/**
+ * The keyless branch, which decides what a self-hoster sees.
+ *
+ * Order is the contract: local key wins, then the connection, then the SHARED
+ * missing-key error. The last one is the reason this block exists — without it
+ * an unconnected keyless install falls into the cloud path and reports
+ * "nodaro.ai is not connected", telling the user to check a connection they
+ * never set up instead of to add the key they meant to use.
+ */
+describe("text-to-speech provider selection (keyless self-host)", () => {
+  const handler = audioAIHandlers["text-to-speech"]
+
+  it("a local key wins — the connection is never consulted", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+    await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalled()
+    expect(mocks.mockCloudTextToSpeech).not.toHaveBeenCalled()
+  })
+
+  it("no key + connected — generates on the cloud and stores the bytes locally", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+    await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never, makeCtx())
+
+    expect(mocks.mockCloudTextToSpeech).toHaveBeenCalled()
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+    // The audio must land under the instance's own R2 key, so nothing
+    // downstream learns it was generated elsewhere.
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      Buffer.from("cloud-audio"), "audio/job-1.mp3", "audio/mpeg", "user-1",
+    )
+  })
+
+  it("no key + NOT connected — the shared missing-key error, not 'nodaro.ai is not connected'", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(false)
+
+    await expect(
+      handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never, makeCtx()),
+    ).rejects.toMatchObject({ code: "provider_key_missing" })
+
+    expect(mocks.mockCloudTextToSpeech).not.toHaveBeenCalled()
+  })
 })
 
 describe("text-to-speech handler", () => {
