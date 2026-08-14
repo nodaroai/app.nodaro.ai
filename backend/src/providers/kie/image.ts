@@ -12,7 +12,7 @@ import type {
   ReconcileOpts,
 } from "../provider.interface.js"
 import sharp from "sharp"
-import { createSanitizedError, runKieTask } from "./client.js"
+import { KieError, createSanitizedError, runKieTask } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -38,6 +38,39 @@ const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "ideogram-remix", "ideogram-v3", // up to 500 chars
   "qwen", "qwen-edit",                          // up to 500 chars
 ])
+
+/** Ideogram character-edit is a CHARACTER model — it expects a person/face as
+ *  the edit subject. Used as a generic masked i2i (mask over an object or
+ *  background, character reference auto-filled from the source image below),
+ *  Ideogram's backend can die with a terminal `[500] internal error`, and
+ *  KIE's "please try again later" is wrong advice: the failure reproduces on
+ *  identical payloads (incident 2026-08-14, jobs 4a3a6023/7f5fb8b2 — same
+ *  edit, 4 minutes apart, same 500). Swap in an actionable message instead. */
+const IDEOGRAM_EDIT_INTERNAL_500_MESSAGE =
+  "The character-edit model couldn't process this edit — it works best when the edit targets a person or face. For object or background edits, try the Flux Fill model instead. Retrying the same request is likely to fail again."
+
+/** Returns the error to (re)throw for a failed ideogram-edit task: the
+ *  internal-500 class gets the actionable message above (classification flags
+ *  preserved so reconcile still fail-fasts + refunds); everything else —
+ *  content-policy, validation, transient/timeout — passes through untouched. */
+function withIdeogramEditHint(provider: string, err: unknown): unknown {
+  if (
+    provider === "ideogram-edit" &&
+    err instanceof KieError &&
+    err.isUpstreamFailure &&
+    !err.contentPolicy &&
+    /\[500\]|internal error/i.test(err.internalDetails)
+  ) {
+    return new KieError(
+      IDEOGRAM_EDIT_INTERNAL_500_MESSAGE,
+      err.internalDetails,
+      err.context,
+      err.isUpstreamFailure,
+      err.contentPolicy,
+    )
+  }
+  return err
+}
 
 // GPT Image text-to-image endpoints SILENTLY IGNORE a supplied reference image —
 // they generate purely from the prompt, which destroys character/entity identity
@@ -279,9 +312,12 @@ export class KieImageProvider
 
     // Flux Kontext uses a special endpoint (not standard createTask)
     const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
-    const result = isKontext
-      ? await runFluxKontextTask(modelConfig.model, input, reconcileOpts)
-      : await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+    const result = await (isKontext
+      ? runFluxKontextTask(modelConfig.model, input, reconcileOpts)
+      : runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+    ).catch((err) => {
+      throw withIdeogramEditHint(provider, err)
+    })
 
     const allUrls = result.resultJson.resultUrls ?? []
     const imageUrl = allUrls[0]

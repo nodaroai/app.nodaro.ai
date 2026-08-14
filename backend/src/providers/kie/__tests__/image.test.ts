@@ -6,10 +6,15 @@ const mocks = vi.hoisted(() => {
   return { mockRunKieTask, mockCreateSanitizedError }
 })
 
-vi.mock("../client.js", () => ({
-  runKieTask: mocks.mockRunKieTask,
-  createSanitizedError: mocks.mockCreateSanitizedError,
-}))
+vi.mock("../client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../client.js")>()
+  return {
+    // Real class so `err instanceof KieError` checks in image.ts stay honest.
+    KieError: actual.KieError,
+    runKieTask: mocks.mockRunKieTask,
+    createSanitizedError: mocks.mockCreateSanitizedError,
+  }
+})
 
 vi.mock("../models.js", () => ({
   KIE_IMAGE_MODELS: {
@@ -27,9 +32,11 @@ vi.mock("../models.js", () => ({
     "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
     "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
     "nano-banana-edit": { model: "google/nano-banana-edit", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
+    "ideogram-edit": { model: "ideogram/character-edit", cost: 0.09, inputType: "image-to-image", imageParam: "image_url", extraParams: { rendering_speed: "BALANCED", style: "AUTO" } },
   },
 }))
 
+import { KieError } from "../client.js"
 import { KieImageProvider } from "../image.js"
 
 let provider: KieImageProvider
@@ -170,5 +177,71 @@ describe("KieImageProvider.editImage", () => {
   it("throws when no URL in result", async () => {
     mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: { resultUrls: [] } })
     await expect(provider.editImage("https://input.png")).rejects.toThrow()
+  })
+})
+
+describe("ideogram-edit upstream internal-500 hint", () => {
+  // Incident 2026-08-14 (jobs 4a3a6023 / 7f5fb8b2): ideogram/character-edit
+  // used as a generic masked i2i died twice with a terminal KIE
+  // `[500] internal error, please try again later.` on identical payloads.
+  // The generic "Please try again" message is wrong advice for a
+  // deterministic failure — generateImage swaps in an actionable hint while
+  // preserving the upstream-failure classification the reconcile path keys on.
+  const upstream500 = () =>
+    new KieError(
+      "Generation failed. Please try again or contact support if the issue persists.",
+      "task failed: [500] internal error, please try again later.",
+      "Generation",
+      true,
+      false,
+    )
+
+  it("swaps in the Flux Fill hint and preserves classification flags", async () => {
+    mocks.mockRunKieTask.mockRejectedValueOnce(upstream500())
+    await expect(
+      provider.generateImage("Replace on iPad", undefined, "ideogram-edit"),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Flux Fill"),
+      internalDetails: "task failed: [500] internal error, please try again later.",
+      isUpstreamFailure: true,
+      contentPolicy: false,
+    })
+  })
+
+  it("leaves content-policy failures untouched (they carry a specific reason)", async () => {
+    const policyErr = new KieError(
+      "Content policy violation: blocked by the provider's safety filter.",
+      "task failed: [500] flagged by moderation",
+      "Generation",
+      true,
+      true,
+    )
+    mocks.mockRunKieTask.mockRejectedValueOnce(policyErr)
+    await expect(
+      provider.generateImage("edit", undefined, "ideogram-edit"),
+    ).rejects.toBe(policyErr)
+  })
+
+  it("leaves non-500 upstream failures untouched", async () => {
+    const validationErr = new KieError(
+      "Invalid input parameters. Please check your settings and try again.",
+      "task failed: [400] mask dimensions mismatch",
+      "Generation",
+      true,
+      false,
+    )
+    mocks.mockRunKieTask.mockRejectedValueOnce(validationErr)
+    await expect(
+      provider.generateImage("edit", undefined, "ideogram-edit"),
+    ).rejects.toBe(validationErr)
+  })
+
+  it("does not hint for other providers on the same internal-500", async () => {
+    mocks.mockRunKieTask.mockRejectedValueOnce(upstream500())
+    await expect(
+      provider.generateImage("a cat", undefined, "nano-banana"),
+    ).rejects.toMatchObject({
+      message: "Generation failed. Please try again or contact support if the issue persists.",
+    })
   })
 })
