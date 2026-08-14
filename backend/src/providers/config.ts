@@ -51,6 +51,7 @@ const KIE_ONLY_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
   "motion-transfer",
   "video-upscale",
   "lip-sync",
+  "text-to-speech",
 ])
 
 /**

@@ -1791,10 +1791,17 @@ html, body {
   --npk-shadow: 0 18px 48px rgba(20, 20, 30, 0.14);
   --npk-scroll: rgba(128, 128, 136, 0.35);
   --npk-scroll-hover: rgba(128, 128, 136, 0.55);
-  /* Status hues. Same value in both themes unless overridden below. */
+  /* Status hues. Same value in both themes unless overridden below.
+     Alpha variants are their own tokens on purpose: Tailwind cannot apply an
+     opacity modifier to a var(), so `bg-[var(--x)]/20` compiles to nothing. */
   --npk-match: #4ade80;
+  --npk-match-dim: rgba(74, 222, 128, 0.8);
   --npk-badge-text: #475569;
   --npk-chip-fallback: #a78bfa;
+  --npk-chip-fallback-bg: rgba(167, 139, 250, 0.2);
+  --npk-chip-fallback-border: rgba(167, 139, 250, 0.3);
+  /* Sidebar panel / mobile sheet sit over the canvas at 95%. */
+  --npk-surface-veil: rgba(255, 255, 255, 0.95);
 }
 
 .dark {
@@ -1820,8 +1827,12 @@ html, body {
   --npk-focus-glow: 0 0 0 3px rgba(240, 36, 111, 0.16);
   --npk-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   --npk-match: #4ade80;
+  --npk-match-dim: rgba(74, 222, 128, 0.8);
   --npk-badge-text: #cbd5e1;
   --npk-chip-fallback: #a78bfa;
+  --npk-chip-fallback-bg: rgba(167, 139, 250, 0.2);
+  --npk-chip-fallback-border: rgba(167, 139, 250, 0.3);
+  --npk-surface-veil: rgba(20, 21, 24, 0.95);
 }
 
 /* Thin scrollbar for the picker list, both themes. */

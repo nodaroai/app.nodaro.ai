@@ -259,38 +259,48 @@ describe("NODE_DEFINITIONS category distribution", () => {
 // ---------------------------------------------------------------------------
 // add-node-popup ↔ node-toolbar parity (the two separate NODE_OPTIONS lists).
 //
-// Per CLAUDE.md New Node Registration steps 8 & 9, the canvas popup and the
-// sidebar toolbar maintain SEPARATE lists; a node missing from either won't
-// appear in that UI. These modules contain JSX icons (can't import without a
-// render context), so extract the `type: "..."` keys from source text and
-// assert the two lists cover the same node types. This caught `styling`
-// (popup-only). Counts confirm `type: "..."` appears only in NODE_OPTIONS, so
-// the regex is precise.
+// The popup and the sidebar used to maintain SEPARATE NODE_OPTIONS arrays and
+// this section compared them for drift. They now share one list from
+// @/lib/node-options (#635), so the assertions below prove the single source
+// rather than reconciling two.
 // ---------------------------------------------------------------------------
 
-function nodeOptionTypes(relPath: string): Set<string> {
-  const abs = fileURLToPath(new URL(relPath, import.meta.url))
-  const src = readFileSync(abs, "utf8")
-  return new Set([...src.matchAll(/type:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!))
-}
-
 describe("add-node-popup ↔ node-toolbar parity", () => {
-  const popup = nodeOptionTypes("../add-node-popup.tsx")
-  const toolbar = nodeOptionTypes("../node-toolbar.tsx")
+  // The two surfaces used to keep private NODE_OPTIONS copies and this suite
+  // compared them for drift (#635). They now import one list from
+  // @/lib/node-options, so the interesting assertion is no longer "the two
+  // agree" — it is "there is only one list left to agree with".
+  const SRC = (rel: string) =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8")
 
-  it("every node type in the popup is also in the sidebar toolbar", () => {
-    const missingFromToolbar = [...popup].filter((t) => !toolbar.has(t)).sort()
-    expect(
-      missingFromToolbar,
-      `present in add-node-popup but MISSING from node-toolbar (sidebar): ${missingFromToolbar.join(", ")}`,
-    ).toEqual([])
+  const SURFACES = ["../add-node-popup.tsx", "../node-toolbar.tsx"] as const
+
+  it("declares the catalogue exactly once, in the shared module", () => {
+    expect(SRC("../../../lib/node-options.tsx")).toMatch(/export const NODE_OPTIONS/)
+    for (const surface of SURFACES) {
+      expect(
+        SRC(surface),
+        surface + " re-declares NODE_OPTIONS — import @/lib/node-options instead",
+      ).not.toMatch(/^(export )?const NODE_OPTIONS/m)
+    }
   })
 
-  it("every node type in the sidebar toolbar is also in the popup", () => {
-    const missingFromPopup = [...toolbar].filter((t) => !popup.has(t)).sort()
-    expect(
-      missingFromPopup,
-      `present in node-toolbar but MISSING from add-node-popup: ${missingFromPopup.join(", ")}`,
-    ).toEqual([])
+  it("has both surfaces import it from that module", () => {
+    for (const surface of SURFACES) {
+      expect(SRC(surface), surface).toMatch(
+        /import \{[^}]*getNodeOptions[^}]*\} from "@\/lib\/node-options"/,
+      )
+    }
+  })
+
+  it("resolves to one and the same array at runtime", async () => {
+    const shared = await import("@/lib/node-options")
+    const popupModule = await import("../add-node-popup")
+    const toolbarModule = await import("../node-toolbar")
+    // Reference identity, not deep equality: two equal-but-separate arrays are
+    // exactly the bug this replaces.
+    expect(popupModule.NODE_OPTIONS).toBe(shared.NODE_OPTIONS)
+    expect(popupModule.getNodeOptions).toBe(shared.getNodeOptions)
+    expect(toolbarModule.getNodeOptions).toBe(shared.getNodeOptions)
   })
 })

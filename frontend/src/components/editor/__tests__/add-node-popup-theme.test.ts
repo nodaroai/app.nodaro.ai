@@ -11,30 +11,37 @@ import { join } from "node:path"
 
 const PICKER_DIR = join(__dirname, "..", "add-node-popup")
 const POPUP = join(__dirname, "..", "add-node-popup.tsx")
+const SIDEBAR_DIR = join(__dirname, "..", "node-toolbar")
+const TOOLBAR = join(__dirname, "..", "node-toolbar.tsx")
 const CSS = join(__dirname, "..", "..", "..", "globals.css")
 
-const HEX = /#[0-9a-fA-F]{3,8}\b/g
+/** Only colours that actually reach CSS: a Tailwind arbitrary value or a
+ *  quoted literal. A bare `#635` in a comment is an issue reference. */
+const HEX = /\[#[0-9a-fA-F]{3,8}\]|["']#[0-9a-fA-F]{3,8}/g
 const RAW_RGB = /\brgba?\(\s*\d/g
 
-/** The whole picker surface — the popup shell (header, search field, footer,
- *  edge-drop tiers) as well as the sub-components. Scanning only the folder
- *  would leave the shell free to break in light mode. */
+const dirFiles = (dir: string) =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
+    .map((f) => join(dir, f))
+
+/** Both add-node surfaces, shells included — the popup and the sidebar. They
+ *  share one catalogue and one token set, so they are held to one standard;
+ *  scanning only the sub-component folders would leave either shell free to
+ *  break in light mode. */
 function pickerFiles(): string[] {
-  return [
-    POPUP,
-    ...readdirSync(PICKER_DIR)
-      .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
-      .map((f) => join(PICKER_DIR, f)),
-  ]
+  return [POPUP, TOOLBAR, ...dirFiles(PICKER_DIR), ...dirFiles(SIDEBAR_DIR)]
 }
 
 describe("picker components are theme-token only", () => {
-  it("covers the popup shell as well as the sub-components", () => {
+  it("covers both add-node surfaces, shells included", () => {
     const names = pickerFiles().map((p) => p.split(/[\\/]/).pop())
     expect(names).toContain("add-node-popup.tsx")
     expect(names).toContain("picker-tab-bar.tsx")
     expect(names).toContain("picker-section-list.tsx")
     expect(names).toContain("picker-search-results.tsx")
+    expect(names).toContain("node-toolbar.tsx")
+    expect(names).toContain("sidebar-section.tsx")
   })
 
   it("contains no hardcoded hex colours", () => {
@@ -88,5 +95,23 @@ describe("picker components are theme-token only", () => {
     // deliberately shared may exist in light only, so assert the direction
     // that matters: dark must not introduce a token light never defines.
     expect([...dark].filter((t) => !light.has(t))).toEqual([])
+  })
+
+  it("never applies a Tailwind opacity modifier to a CSS variable", () => {
+    // `bg-[var(--x)]/50` compiles to NOTHING — Tailwind cannot compute the
+    // alpha of a variable at build time, so the utility is dropped silently.
+    // Worse, a bare companion utility survives: `ring-2 ring-[var(--x)]/50`
+    // loses its colour and falls back to currentColor, which is how the search
+    // field ended up with a black focus ring. Bake the alpha into its own token.
+    const offenders: string[] = []
+    for (const file of pickerFiles()) {
+      const source = readFileSync(file, "utf8")
+      for (const m of source.matchAll(/\[var\(--[a-z0-9-]+\)\]\/[0-9]+/g))
+        offenders.push(`${file.split(/[\\/]/).pop()}: ${m[0]}`)
+    }
+    expect(
+      offenders,
+      "define a token with the alpha baked in instead of using /NN",
+    ).toEqual([])
   })
 })

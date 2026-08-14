@@ -1,0 +1,120 @@
+name: Community E2E
+
+# Boots the ACTUAL community edition — the published image, the published
+# compose file, six containers, real Postgres + GoTrue + PostgREST + MinIO +
+# Redis — and runs a real path through it: sign up, create a workflow, submit a
+# generation, watch the job land.
+#
+# Why this exists: cloud is the only configuration we run every day, and
+# community is defined by SUBTRACTION (no provider keys, no credits, no admin,
+# no publicly-reachable media host). Every other job in CI tests the code;
+# `backend-boot-smoke` proves the process starts. Neither can see a job that
+# enqueues and then sits `pending` forever, a raw vendor 401 rendered into a
+# node card, or discovery advertising a node this edition cannot run — the bugs
+# that actually reached self-hosters. Those only appear when the whole stack is
+# up with nothing configured, which is exactly what this job stands up.
+#
+# It runs against ZERO provider keys ON PURPOSE. The keyless install is the
+# first thing every new self-hoster has, and the state we shipped the most bugs
+# into.
+#
+# Deliberately secret-free (compose defaults only), so it also runs on fork PRs
+# from the public mirror.
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.community.yml"
+      - "frontend/Caddyfile"
+      - "backend/**"
+      - "frontend/**"
+      - "packages/**"
+      - "supabase/migrations/**"
+      - "tools/community-smoke.mjs"
+      - ".github/workflows/community-e2e.yml"
+  push:
+    branches: [dev, main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.community.yml"
+      - "frontend/Caddyfile"
+      - "backend/**"
+      - "frontend/**"
+      - "packages/**"
+      - "supabase/migrations/**"
+      - "tools/community-smoke.mjs"
+      - ".github/workflows/community-e2e.yml"
+  workflow_dispatch: {}
+
+# One run per ref — the stack is heavy and a superseded run tells us nothing.
+concurrency:
+  group: community-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Community Edition E2E
+    # Pull requests run everywhere — including forks on the public mirror, which
+    # is the point of keeping this job secret-free. Pushes only run on internal:
+    # the mirror's main/dev are fast-forwards of commits this job already
+    # cleared here, so building the image again there is ~20 minutes of runner
+    # for zero added signal.
+    if: github.event_name != 'push' || github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    # The first run on a cold buildx cache compiles the whole image (frontend +
+    # backend + pinned ffmpeg); cached runs are far quicker. Sized for the cold
+    # case so a cache miss is not read as a hang.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Single-arch and loaded into the local daemon — this is a test artifact,
+      # not a release. The multi-arch push-by-digest build lives in
+      # community-image.yml and runs only on the public mirror.
+      - name: Build the community image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: nodaro-community:ci
+          build-args: |
+            VITE_API_URL=http://localhost:3000
+            VITE_EDITION=community
+            VITE_SUPABASE_URL=http://localhost:3000/supabase
+            VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU0Nzg0MDAwLCJleHAiOjIwNzAxNDQwMDB9.Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo
+          cache-from: type=gha,scope=community-e2e
+          cache-to: type=gha,mode=max,scope=community-e2e
+
+      # The published compose file verbatim, so this tests the file users
+      # actually run. --no-build pins it to the image built above; every other
+      # value is the committed default, which is what a fresh install gets.
+      - name: Boot the community stack
+        env:
+          NODARO_IMAGE: nodaro-community:ci
+        run: |
+          docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 420 --no-build
+
+      - name: Run the community contract probe
+        run: node tools/community-smoke.mjs http://localhost:3000 --strict-keyless
+
+      # Without this a failure is a red X and nothing else — the stack is gone
+      # by the time anyone looks.
+      - name: Dump stack logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.community.yml ps
+          docker compose -f docker-compose.community.yml logs --no-color --tail 400
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.community.yml down -v

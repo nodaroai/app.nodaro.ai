@@ -25,6 +25,7 @@ import {
   creativeControlSections,
   popularSection,
   sectionsForTab,
+  sidebarSections,
   tabSections,
 } from "@/lib/node-picker-sections"
 
@@ -214,5 +215,48 @@ describe("search reaches a node by a space-broken prefix", () => {
   it("surfaces it from a tab that does not own it, under the cross-tab block", () => {
     const { own, other } = searchNodeOptionsSectioned(NODE_OPTIONS, "remove backg", "video")
     expect([...own, ...other].map((o) => o.type)).toContain("remove-background")
+  })
+})
+
+describe("sidebar sections", () => {
+  it("mirrors the picker tabs one for one", () => {
+    const ids = sidebarSections(NODE_OPTIONS).map((s) => s.id)
+    expect(ids).toEqual(["image", "video", "audio", "models", "assets", "automate", "publish", "controls"])
+  })
+
+  it("never shows the same header twice inside one section", () => {
+    // This is the bug the sidebar had while it grouped by category: Image's
+    // "Create" and Video's "Create" landed under one AI heading as two
+    // identical rows, and a bare "Create" told the user nothing. Making the
+    // tab the section fixes both — and this guard keeps it fixed.
+    const clashes: string[] = []
+    for (const section of sidebarSections(NODE_OPTIONS)) {
+      const seen = new Set<string>()
+      for (const family of section.families) {
+        if (seen.has(family.label)) clashes.push(`${section.label} › ${family.label}`)
+        seen.add(family.label)
+      }
+    }
+    expect(clashes, "two identical headers in one section").toEqual([])
+  })
+
+  it("covers every node exactly once across all sections", () => {
+    const seen = sidebarSections(NODE_OPTIONS).flatMap((s) =>
+      s.families.flatMap((f) => f.options.map((o) => o.type)),
+    )
+    expect(new Set(seen).size).toBe(seen.length)
+    expect(new Set(seen)).toEqual(new Set(ALL_TYPES))
+  })
+
+  it("counts what the section actually contains", () => {
+    for (const section of sidebarSections(NODE_OPTIONS))
+      expect(section.count).toBe(
+        section.families.reduce((n, f) => n + f.options.length, 0),
+      )
+  })
+
+  it("drops a section whose nodes are all gated out", () => {
+    const noModels = NODE_OPTIONS.filter((o) => o.category !== "Parameter")
+    expect(sidebarSections(noModels).map((s) => s.id)).not.toContain("models")
   })
 })

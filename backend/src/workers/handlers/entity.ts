@@ -1,4 +1,5 @@
 import type { Job } from "bullmq"
+import { config } from "../../lib/config.js"
 import { generateImage, imageToVideo, videoToVideo } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
@@ -305,6 +306,20 @@ function makeEntityImageHandler(
   }
 }
 
+
+/**
+ * True when nothing local can serve an LLM call and the cloud can.
+ *
+ * The LLM lane tries KIE, then Anthropic, then Gemini (lib/llm-client.ts), so
+ * "keyless" here means none of the three — a install with any one of them
+ * keeps its own path untouched.
+ */
+async function shouldRunLlmOnCloud(): Promise<boolean> {
+  if (config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY) return false
+  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
+  return isNodaroConnected().catch(() => false)
+}
+
 const handleGenerateScript: HandlerFn = async function handleGenerateScript(job, ctx) {
   const { prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced } = job.data as {
     jobId: string
@@ -319,7 +334,15 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
   }
   console.log(`[worker] generate-script ${ctx.jobId} (model: ${llmModel ?? provider ?? "default"})`)
 
-  const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced)
+  // A keyless install with a live connection runs the LLM on the cloud rather
+  // than failing — the LLM lane never reaches the capability router, so the
+  // handler is where this decision belongs. Any local LLM key still wins.
+  const script = (await shouldRunLlmOnCloud())
+    ? ((await (await import("../../providers/nodaro/run-on-cloud.js")).runJobOnCloud(
+        "generate-script",
+        job.data as Record<string, unknown>,
+      )).script as Awaited<ReturnType<typeof generateScript>>)
+    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced)
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
