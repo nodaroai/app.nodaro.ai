@@ -48,6 +48,19 @@ http://localhost:3000/setup shows live green/red status for the database
 provider keys — no login needed. On a fresh stack everything should be
 green except provider keys.
 
+For a deeper check than the screen can show, run the contract probe against
+your own install from a clone of the repo:
+
+```bash
+node tools/community-smoke.mjs http://localhost:3000
+```
+
+It signs up a throwaway account, creates a workflow, submits a generation and
+follows the job to its end state, then reports which contracts held. Checks
+that do not apply to your install (you already added a provider key, for
+example) are reported as skipped rather than failed. The same script runs in
+our CI against a keyless stack on every change.
+
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need

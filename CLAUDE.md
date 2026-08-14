@@ -59,6 +59,20 @@
 - Credit-related code must be gated behind `hasCredits()`
 - Admin-related code must be gated behind `hasAdmin()`
 
+**The edition boundary is guarded by a real boot, not by convention.** Cloud is
+the configuration we run daily; community is defined by SUBTRACTION (no provider
+keys, no credits, no admin, no publicly-reachable media host) and used to be
+exercised by nobody until a self-hoster hit it. Two CI jobs cover it:
+`backend-boot-smoke` (both editions start, ee routes register/404 correctly) and
+**`community-e2e`** (`.github/workflows/community-e2e.yml`), which builds the
+community image, boots the published `docker-compose.community.yml` with ZERO
+provider keys, and runs `tools/community-smoke.mjs` — a real path (sign up →
+create workflow → submit a generation → follow the job to its end state) that
+asserts the keyless install fails HONESTLY rather than hanging, 500ing, or
+leaking a raw vendor error. Add a contract to that probe when you add an
+edition-gated behavior; it is also runnable against any install
+(`node tools/community-smoke.mjs <baseUrl>`).
+
 ### `ee/` directory + dual-license boundary
 
 Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is governed by the Nodaro Enterprise License (separate from the root SUL). The npm SDK packages under `packages/client/` and `packages/shared/` are Apache 2.0. See `LICENSE.md` at the repo root for the dual-license overview.
