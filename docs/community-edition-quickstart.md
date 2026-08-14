@@ -61,6 +61,17 @@ that do not apply to your install (you already added a provider key, for
 example) are reported as skipped rather than failed. The same script runs in
 our CI against a keyless stack on every change.
 
+Added a provider key already? Opt in to the success-path check too:
+
+```bash
+node tools/community-smoke.mjs http://localhost:3000 --keyed
+```
+
+`--keyed` submits one real generation on the cheapest model (Z-Image,
+typically under a cent of provider spend), follows it to completion, and
+verifies the media actually lands in your install's own storage. Without the
+flag the probe never spends anything.
+
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need

@@ -20,7 +20,7 @@
  *                                   sits `pending` forever
  *
  * Usage:
- *   node tools/community-smoke.mjs [baseUrl] [--strict-keyless]
+ *   node tools/community-smoke.mjs [baseUrl] [--strict-keyless] [--keyed]
  *
  *   baseUrl           defaults to $NODARO_BASE_URL, then http://localhost:3000
  *   --strict-keyless  fail (instead of skip) when the install under test has a
@@ -28,6 +28,15 @@
  *                     founder pointing the script at their own configured
  *                     install does not, and gets the edition checks that still
  *                     apply.
+ *   --keyed           ALSO walk the bring-your-own-key SUCCESS path (#648) —
+ *                     the configuration most self-hosters actually run: submit
+ *                     one real generation on the cheapest model, follow it to
+ *                     `completed`, and assert the media landed in the
+ *                     install's own storage rather than on a transient vendor
+ *                     URL. Opt-in BECAUSE it spends real provider budget (one
+ *                     Z-Image image, typically under a cent); without the flag
+ *                     the probe never spends anything. Mutually exclusive with
+ *                     --strict-keyless.
  *
  * Exits non-zero on the first failing contract, after running every check.
  */
@@ -38,6 +47,11 @@ import { fileURLToPath } from "node:url"
 
 const args = process.argv.slice(2)
 const STRICT_KEYLESS = args.includes("--strict-keyless")
+const KEYED = args.includes("--keyed")
+if (STRICT_KEYLESS && KEYED) {
+  console.error("--strict-keyless asserts the keyless shape; --keyed needs a key. Pick one.")
+  process.exit(2)
+}
 const BASE = (args.find((a) => !a.startsWith("--")) ?? process.env.NODARO_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "")
 
 // Job wait budget. A keyless job fails as soon as the worker resolves a
@@ -45,6 +59,11 @@ const BASE = (args.find((a) => !a.startsWith("--")) ?? process.env.NODARO_BASE_U
 // cold worker start on a CI runner. Raising it hides a strand; lowering it
 // turns a slow runner into a false alarm.
 const JOB_TIMEOUT_MS = Number(process.env.SMOKE_JOB_TIMEOUT_MS ?? 120_000)
+
+// The keyed SUCCESS-path budget. The quickstart's promise is "Z-Image answers
+// in seconds"; 180s absorbs a cold worker plus the storage re-host without
+// letting "slow" pass for "working".
+const KEYED_JOB_TIMEOUT_MS = Number(process.env.SMOKE_KEYED_TIMEOUT_MS ?? 180_000)
 
 const results = []
 let aborted = null
@@ -104,7 +123,7 @@ async function api(path, { method = "GET", token, body, headers = {} } = {}) {
 // Shared state across checks
 // ---------------------------------------------------------------------------
 
-const ctx = { token: null, keyless: false, connected: false }
+const ctx = { token: null, keyless: false, connected: false, keys: {} }
 
 /**
  * Vendor noise that must never reach a self-hoster. A raw provider rejection,
@@ -152,6 +171,7 @@ await check(
     }
     ctx.connected = checks.providers?.nodaroCloud === true
     ctx.keyless = checks.providers?.ok !== true
+    ctx.keys = checks.providers?.keys ?? {}
     if (!ctx.keyless || ctx.connected) {
       const how = ctx.connected ? "connected to nodaro.ai" : "has a provider key"
       assert(!STRICT_KEYLESS, `--strict-keyless was passed but this install ${how}`)
@@ -273,6 +293,73 @@ await check("a keyless LLM route refuses cleanly", async () => {
     `unexpected error code ${JSON.stringify(code)}: ${text.slice(0, 300)}`,
   )
   return `${status} ${code}`
+})
+
+/**
+ * Transient generation-vendor hosts that must never appear in a PERSISTED
+ * result URL — workers re-host every result into the install's own storage
+ * (MinIO/R2). A vendor URL surviving into `output_data` means the re-host
+ * silently failed: the link renders today and 404s when the vendor expires it.
+ */
+const TRANSIENT_VENDOR_HOSTS = /(\bkie\.ai|replicate\.delivery|replicate\.com|fal\.media|fal\.ai)/i
+
+await check("a keyed generation completes and its media lands in the install's own storage", async () => {
+  const name = "a keyed generation completes and its media lands in the install's own storage"
+  if (!KEYED) {
+    return skip(name, "pass --keyed to run it — submits ONE real generation on the cheapest model (real provider spend)")
+  }
+  // BYO key means a LOCAL media key. A nodaro.ai connection alone is the
+  // connect lane — different plumbing, asserted elsewhere.
+  const model = ctx.keys.kie ? "z-image" : ctx.keys.replicate ? "flux-2-klein" : null
+  assert(model, "--keyed needs a local media key on the install under test (KIE_API_KEY or REPLICATE_API_TOKEN; a cloud connection alone is not the BYO-key lane)")
+
+  const submitted = await api("/v1/generate-image", {
+    method: "POST",
+    token: ctx.token,
+    body: { prompt: "community smoke test: a single red apple on a wooden table, soft studio light", provider: model },
+  })
+  assert(submitted.status < 300, `submit failed (${submitted.status}): ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId ?? submitted.json?.id
+  assert(jobId, `no jobId in response: ${JSON.stringify(submitted.json).slice(0, 200)}`)
+
+  const started = Date.now()
+  const deadline = started + KEYED_JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = json?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  assert(last?.status !== "failed", `job ${jobId} FAILED with a key configured: "${last?.error_message}"`)
+  assert(
+    last?.status === "completed",
+    `job ${jobId} is "${last?.status}" after ${KEYED_JOB_TIMEOUT_MS / 1000}s — the quickstart promises seconds`,
+  )
+
+  const imageUrl = last?.output_data?.imageUrl
+  assert(
+    typeof imageUrl === "string" && imageUrl.length > 0,
+    `completed job has no output_data.imageUrl: ${JSON.stringify(last?.output_data).slice(0, 200)}`,
+  )
+  const vendor = imageUrl.match(TRANSIENT_VENDOR_HOSTS)
+  assert(!vendor, `result URL still points at the vendor (${vendor?.[0]}) — never re-hosted into the install's storage: ${imageUrl}`)
+
+  const media = await fetch(imageUrl)
+  assert(media.ok, `media URL answered ${media.status} — stored but not reachable: ${imageUrl}`)
+  const contentType = media.headers.get("content-type") ?? ""
+  const bytes = (await media.arrayBuffer()).byteLength
+  assert(contentType.startsWith("image/"), `media content-type is "${contentType}", not an image: ${imageUrl}`)
+  assert(bytes > 1024, `media is ${bytes} bytes — too small to be a real image: ${imageUrl}`)
+
+  // Community has no credit system — a keyed run must not have charged any.
+  // (The status route doesn't return `credits`; the full job route does.)
+  const full = await api(`/v1/jobs/${jobId}`, { token: ctx.token })
+  const credits = (full.json?.data ?? full.json)?.credits
+  assert(!(typeof credits === "number" && credits > 0), `community job carries a credit charge (${credits})`)
+
+  const own = imageUrl.startsWith(`${BASE}/`) ? " — this install's own origin" : ""
+  return `${model} completed in ${Math.round((Date.now() - started) / 1000)}s, ${bytes}B ${contentType} from ${new URL(imageUrl).origin}${own}, no credits charged`
 })
 
 await check("billing routes are absent on an edition with no billing", async () => {
