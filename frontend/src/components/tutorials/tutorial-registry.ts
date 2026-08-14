@@ -141,6 +141,26 @@ const REGISTRY: Record<string, TutorialDefinition> = {
     Body: lazy(() => import("./bodies/autopilot-body")),
   },
 
+  "get-started-with-image-editing": {
+    title: "Get started with image editing",
+    summary:
+      "One image is generated once, and nine independent edits each read that same original. Nothing stacks, so nothing degrades.",
+    minutes: 4,
+    // A price is the wrong headline: all nine edits are already generated and
+    // reading them costs nothing. What is worth counting is how many there are.
+    chip: "9 edits",
+    note: {
+      eyebrow: "This is a fan-out, not a chain",
+      body: "Every edit reads the original directly. Change one and the other eight are unaffected — that is the whole idea.",
+    },
+    steps: [
+      { n: 1, title: "The original", sub: "Generated once, then scored" },
+      { n: 2, title: "Nine edits, one source", sub: "Each reads the same image" },
+      { n: 3, title: "Follow any result", sub: "Click a tile to see what made it" },
+    ],
+    Body: lazy(() => import("./bodies/image-editing-body")),
+  },
+
   "underwater-giants": {
     title: "Underwater Giants",
     summary:
