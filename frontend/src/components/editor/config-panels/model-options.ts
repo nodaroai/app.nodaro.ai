@@ -253,6 +253,7 @@ export function formatCreditBadge(value: string, credits: number): string | unde
   if (!hasCredits()) return undefined
   const range = MODEL_CREDIT_RANGES[value]
   if (range) return `${range.min}-${range.max} CR`
+  // credit-gated: unreachable without credits — the guard above returns first.
   if (credits > 0) return `${credits} CR`
   return undefined
 }
@@ -263,7 +264,12 @@ export function formatCreditBadge(value: string, credits: number): string | unde
  *  bucket (÷15) so it tracks the DB pricing with no hardcoded rates. Pass the
  *  resolved credits for the provider's `:15s` identifier. */
 export function formatPerSecondCreditBadge(credits15s: number): string | undefined {
+  // Same edition rule as formatCreditBadge above: no credit system, no price.
+  // Community happened to hide this badge only because the model-cost fetch
+  // returns nothing there — an accident, not a guarantee (#645).
+  if (!hasCredits()) return undefined
   if (!(credits15s > 0)) return undefined
+  // credit-gated: unreachable without credits — the guard above returns first.
   return `~${Math.max(1, Math.round(credits15s / 15))} CR/s`
 }
 

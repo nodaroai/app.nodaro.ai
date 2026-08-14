@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react"
-import { hasCredits } from "@/lib/edition"
+import { CreditCost, CreditGate } from "@/components/ui/credit-cost"
 import { optimizedImageUrl } from "@/lib/image"
 import { Trash2, Copy, Info, Pencil, Check, X } from "lucide-react"
 import {
@@ -227,12 +227,12 @@ export function RunSlotItem({
                   </TooltipTrigger>
                   <TooltipContent side="right" className="w-48 p-2.5">
                     <div className="space-y-1 text-xs">
-                      {hasCredits() && (
-                      <div className="flex justify-between">
-                        <span className="opacity-70">Credits used</span>
-                        <span className="font-medium">{slot.creditsUsed} CR</span>
-                      </div>
-                      )}
+                      <CreditGate>
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Credits used</span>
+                          <CreditCost credits={slot.creditsUsed} className="font-medium" />
+                        </div>
+                      </CreditGate>
                       <div className="flex justify-between">
                         <span className="opacity-70">Status</span>
                         <span className="font-medium capitalize">{slot.executionStatus}</span>

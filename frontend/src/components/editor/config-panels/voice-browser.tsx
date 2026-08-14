@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { hasCredits } from "@/lib/edition"
 import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square, SlidersHorizontal, Info } from "lucide-react"
 import {
   Dialog,
@@ -863,7 +864,7 @@ function MyVoicesTab({
               {createMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
               ) : null}
-              {`Clone Voice (${getCachedCredits("voice-clone") ?? 5} CR)`}
+              {`Clone Voice${hasCredits() ? ` (${getCachedCredits("voice-clone") ?? 5} CR)` : ""}`}
             </Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelRecording}>
               Cancel

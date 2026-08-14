@@ -1,4 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+
+// The credit-badge formatters self-gate on the edition (#645) — with no mock,
+// the test env's community default would make every formatter return
+// undefined and the rate assertions below would test nothing. Pin credits ON;
+// the gate itself gets its own explicit case.
+const editionMock = vi.hoisted(() => ({ hasCredits: vi.fn(() => true) }))
+vi.mock("@/lib/edition", () => editionMock)
+
 import {
   IMAGE_GEN_MODELS,
   IMAGE_I2I_MODELS,
@@ -151,6 +159,11 @@ describe("formatPerSecondCreditBadge", () => {
     expect(formatPerSecondCreditBadge(5)).toBe("~1 CR/s") // 5/15 rounds to 0 → clamped to 1
     expect(formatPerSecondCreditBadge(0)).toBeUndefined()
     expect(formatPerSecondCreditBadge(-1)).toBeUndefined()
+  })
+
+  it("renders nothing on an edition without a credit system (#645)", () => {
+    editionMock.hasCredits.mockReturnValueOnce(false)
+    expect(formatPerSecondCreditBadge(30)).toBeUndefined()
   })
 })
 

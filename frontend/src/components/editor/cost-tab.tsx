@@ -52,6 +52,9 @@ function formatNodeType(type: string): string {
 }
 
 function formatCredits(credits: number): string {
+  // The Cost tab only mounts behind the hasCredits() tab gate in
+  // workflow-editor-main.tsx — community never reaches this file.
+  // credit-gated: mount-gated by the Cost tab trigger
   return `${credits} CR`
 }
 
@@ -258,7 +261,8 @@ export function CostTab({ className = "" }: CostTabProps) {
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
                       {showDollars
                         ? formatDollars(item.runs > 0 ? item.total_cost_usd / item.runs : 0)
-                        : `${item.avg_credits_per_run} CR`}
+                        : // credit-gated: Cost tab mounts behind the hasCredits() tab gate.
+                          `${item.avg_credits_per_run} CR`}
                     </td>
                     <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-medium">
                       {showDollars ? formatDollars(item.total_cost_usd) : formatCredits(item.total_credits)}

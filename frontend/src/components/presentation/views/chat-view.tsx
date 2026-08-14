@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronUp, Download, Loader2, Music, RotateCcw, Square } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
+import { CreditCost, CreditGate } from "@/components/ui/credit-cost"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
@@ -310,7 +311,11 @@ function ChatMessage({
             </div>
           ))}
           {!hasInput && (
-            <span className="text-xs text-muted-foreground">{slot.creditsUsed ? `${slot.creditsUsed} cr` : "—"}</span>
+            <CreditGate>
+              <span className="text-xs text-muted-foreground">
+                {slot.creditsUsed ? <CreditCost credits={slot.creditsUsed} suffix="cr" /> : "—"}
+              </span>
+            </CreditGate>
           )}
         </div>
 

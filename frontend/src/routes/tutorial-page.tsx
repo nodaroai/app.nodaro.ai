@@ -125,12 +125,12 @@ export default function TutorialPage() {
   const credits = startCostModel
     ? (startCost ?? 0)
     : (template.estimatedCredits ?? 0)
-  const costChip = startCostModel ? `${credits} CR to start` : `${credits} CR`
+  const costChip = hasCredits() ? (startCostModel ? `${credits} CR to start` : `${credits} CR`) : null
 
   const chips = [
     `${steps.length} steps`,
     `~${minutes} min`,
-    ...(chip ? [chip] : hasCredits() && credits > 0 ? [costChip] : []),
+    ...(chip ? [chip] : costChip && credits > 0 ? [costChip] : []),
   ]
 
   return (

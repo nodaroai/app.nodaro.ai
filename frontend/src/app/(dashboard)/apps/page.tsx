@@ -57,6 +57,7 @@ import { PreviewVideo } from "@/components/ui/preview-video"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
+import { CreditCost } from "@/components/ui/credit-cost"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
@@ -735,10 +736,13 @@ function MyAppCard({
         <span>{app.runCount ?? app.totalRunCount ?? 0} runs</span>
         {app.monetizationEnabled && hasCredits() ? (
           <span className="text-xs text-muted-foreground">
-            Base: {app.baseEstimatedCredits ?? 0} CR | Total: {app.estimatedCredits ?? 0} CR
+            Base: <CreditCost credits={app.baseEstimatedCredits ?? 0} /> | Total:{" "}
+            <CreditCost credits={app.estimatedCredits ?? 0} />
           </span>
         ) : (
-          <span>{app.estimatedCredits ?? 0} CR/run</span>
+          // Pre-#645 this else branch rendered the figure UNGATED — the one
+          // leak the per-site pass missed. The component self-gates.
+          <CreditCost credits={app.estimatedCredits ?? 0} suffix="CR/run" />
         )}
         {app.favoriteCount > 0 && <span>{app.favoriteCount} favorites</span>}
       </div>
