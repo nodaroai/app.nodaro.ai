@@ -4,6 +4,7 @@ import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { s3, isStorageConfigured } from "../lib/storage.js"
+import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../lib/system-account.js"
 
 /**
  * GET /v1/setup/status — self-host install health screen backend.
@@ -168,11 +169,15 @@ export async function setupStatusRoutes(app: FastifyInstance) {
     // the frontend lands on /setup and leads with "create your account"
     // instead of a sign-in form (founder feedback 2026-08-13). Booleans
     // only, same public-surface stance as the rest of this route.
+    // Server-owned accounts (the tutorial-seed owner, minted on first boot)
+    // must not count — a pristine install would otherwise report its login
+    // as already created (2026-08-16, community stack).
     let hasUsers = false
     try {
       const { count } = await supabase
         .from("profiles")
         .select("id", { count: "exact", head: true })
+        .not("email", "like", SYSTEM_ACCOUNT_EMAIL_PATTERN)
       hasUsers = (count ?? 0) > 0
     } catch {
       // Unreachable DB already surfaces via the database check.

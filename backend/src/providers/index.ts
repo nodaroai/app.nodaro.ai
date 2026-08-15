@@ -16,7 +16,7 @@
 import { config } from "../lib/config.js"
 import { registerKieProviders } from "./kie/index.js"
 import { registerReplicateProviders } from "./replicate/index.js"
-import { registerNodaroCloudProviderIfConnected } from "./nodaro/index.js"
+import { registerNodaroCloudProviderWithRetry } from "./nodaro/index.js"
 
 let initialized = false
 let nodaroRegistration: Promise<void> = Promise.resolve()
@@ -45,15 +45,23 @@ export function initProviders(): void {
 
   // Nodaro Cloud (community cloud-connect): registered ONLY when the instance
   // holds a cloud token — an async DB read, so it is kicked off here
-  // fire-and-forget to keep this boot path synchronous. Until it settles (one
-  // Supabase read, typically well before the first job is consumed) routing
-  // behaves as "not connected"; a check failure only means the cloud fallback
-  // stays unregistered — local providers are unaffected.
-  nodaroRegistration = registerNodaroCloudProviderIfConnected()
-    .then(() => undefined)
+  // fire-and-forget to keep this boot path synchronous. On the community
+  // stack that read goes through the container's own Caddy, which start.sh
+  // starts AFTER the workers, so the first attempt fails by construction;
+  // the retry keeps trying for ~1 minute while the store is unreachable and
+  // stops the moment it reads a definitive answer. providersReady() settles
+  // after the FIRST attempt (retries continue detached) so no boot sequence
+  // waits on the window. A store that never answers only means the cloud
+  // fallback stays unregistered — local providers are unaffected.
+  let firstAttemptDone: () => void = () => {}
+  nodaroRegistration = new Promise<void>((resolve) => {
+    firstAttemptDone = resolve
+  })
+  void registerNodaroCloudProviderWithRetry({ onAttempt: () => firstAttemptDone() })
     .catch((err) => {
       console.error("[providers] Nodaro Cloud provider registration failed:", err)
     })
+    .finally(() => firstAttemptDone())
 
   initialized = true
   console.log("[providers] All providers registered")

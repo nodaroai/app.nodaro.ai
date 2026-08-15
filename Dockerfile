@@ -101,7 +101,10 @@ WORKDIR /app/backend
 # top-level tsconfig.json is the noEmit typecheck config — see
 # backend/scripts/lib/gen-skills/ which is part of typecheck scope but
 # not part of the production build.
-RUN npx tsc -p tsconfig.build.json
+# tsc emits JS only; copy-build-assets.mjs ships the runtime-read assets
+# (tutorial-seed templates) into dist/ and FAILS the build if any are
+# missing — without it every install boots with zero tutorials.
+RUN npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
 
 # ── Stage 4: Build frontend (vite) ────────────────────────────────────
 # Vite resolves @nodaro/shared via the same workspace symlink. The

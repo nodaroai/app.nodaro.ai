@@ -6,7 +6,7 @@ import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, Che
 import { useTheme } from "next-themes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
-import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
+import { INK, NODE_COLORS, adjustColor, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import type { StickyNoteData } from "@/types/nodes"
 
 type StickyFontSize = StickyNoteData["fontSize"]
@@ -55,6 +55,10 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
 
   const color = nodeData.color ?? "#0f172a"
   const effectiveColor = getEffectiveColor(color, isDark)
+  // Ink follows the surface, not the theme — a colour with no light-mode
+  // counterpart (the seeded demo's #2d2d44, imports, agents) keeps its dark
+  // surface in light mode, and theme-picked slate ink vanished on it.
+  const ink = INK[readableInk(effectiveColor, isDark)]
   const currentSize: StickyFontSize = FONT_SIZE_PX[nodeData.fontSize as StickyFontSize]
     ? (nodeData.fontSize as StickyFontSize)
     : "base"
@@ -260,12 +264,16 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          className="nopan w-full flex-1 bg-transparent text-slate-800 dark:text-white/80 placeholder:text-slate-400 dark:placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
+          className="sticky-note-textarea nopan w-full flex-1 bg-transparent resize-none outline-none border-none p-3 leading-relaxed"
           style={{
             fontSize,
             fontWeight,
             fontStyle,
             textAlign,
+            color: ink.text,
+            caretColor: ink.text,
+            // Placeholder colour cannot be set inline; globals.css reads it.
+            ["--sticky-placeholder" as string]: ink.placeholder,
           }}
           placeholder="Write a note..."
           value={nodeData.text ?? ""}

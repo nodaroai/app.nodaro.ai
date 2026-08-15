@@ -120,6 +120,14 @@ async function routeAndExecute(
 ): Promise<RouteResult> {
   let decision = await buildRoutingDecision(capability, model)
 
+  // A keyless community install has NO registered providers, so an empty
+  // chain is its resting state — and exactly the state where a cloud
+  // connection registered late (or missed at boot) is the only thing that
+  // could serve the job. Try the heal here too, not only after a walked chain
+  // came back null; otherwise the throw below fires first.
+  if (decision.providerChain.length === 0 && (await selfHealNodaroRegistration())) {
+    decision = await buildRoutingDecision(capability, model)
+  }
   if (decision.providerChain.length === 0) {
     throw new Error(
       `No provider available for ${capability} (model: ${model}) ` +

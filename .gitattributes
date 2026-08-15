@@ -17,3 +17,8 @@ Dockerfile text eol=lf
 docker/** text eol=lf
 frontend/Caddyfile text eol=lf
 docker-compose*.yml text eol=lf
+# Node scripts the image runs verbatim (migrations, build-asset copy). Node
+# itself tolerates CRLF, but vitest's transform of a shebang'd .mjs does not
+# (build-assets.test.ts imports copy-build-assets.mjs and fails on a CRLF
+# checkout, 2026-08-16, Windows) — CI never sees it because it checks out LF.
+backend/scripts/*.mjs text eol=lf

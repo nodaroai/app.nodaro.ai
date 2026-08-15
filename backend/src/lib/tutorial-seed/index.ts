@@ -21,6 +21,8 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { supabase } from "../supabase.js"
 import { isCloud } from "../config.js"
+import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"
+import { TUTORIAL_SYSTEM_EMAIL } from "../system-account.js"
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
 
@@ -37,7 +39,9 @@ const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
  * Never loginable: created with the service role, no usable password, and
  * nothing in the flow ever authenticates as it.
  */
-const SYSTEM_EMAIL = "tutorials@system.nodaro.local"
+// The identity lives in lib/system-account.ts so first-run logic (the setup
+// screen's hasUsers) can exclude it without knowing about this seeder.
+const SYSTEM_EMAIL = TUTORIAL_SYSTEM_EMAIL
 const SYSTEM_NAME = "Nodaro"
 
 interface TutorialTemplateDoc {
@@ -70,7 +74,24 @@ function fingerprint(doc: TutorialTemplateDoc): string {
 }
 
 async function loadDocs(): Promise<TutorialTemplateDoc[]> {
-  const files = (await readdir(TEMPLATES_DIR)).filter((f) => f.endsWith(".json"))
+  let entries: string[]
+  try {
+    entries = await readdir(TEMPLATES_DIR)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+      // tsc emits JS only — the templates reach dist/ via
+      // scripts/copy-build-assets.mjs, which every build entry point runs.
+      // A missing directory means a build path skipped it; say so instead of
+      // surfacing a bare ENOENT that reads like a filesystem hiccup.
+      throw new Error(
+        `templates directory missing at ${TEMPLATES_DIR} — the build did not run ` +
+          `scripts/copy-build-assets.mjs (npm run build does; a raw tsc invocation must add it). ` +
+          `No tutorials will be seeded until it does.`,
+      )
+    }
+    throw err
+  }
+  const files = entries.filter((f) => f.endsWith(".json"))
   const docs: TutorialTemplateDoc[] = []
   for (const file of files) {
     docs.push(JSON.parse(await readFile(join(TEMPLATES_DIR, file), "utf8")) as TutorialTemplateDoc)
@@ -211,36 +232,49 @@ async function seedOne(
 /**
  * Idempotent, self-healing, and a no-op on Cloud. Never throws into boot: a
  * seeding failure must not take the server down, it just means no tutorials.
+ *
+ * Fired at API init (server.ts), which on the community stack is BEFORE the
+ * container's own Caddy — the proxy every Supabase call here goes through —
+ * is listening; the first call failed on every boot ("AuthRetryableFetchError:
+ * fetch failed" from ensureSystemUser, 2026-08-16). The whole run is
+ * idempotent, so a transport failure at any step retries the run on the
+ * boot-retry schedule; an application error still skips at once.
  */
-export async function seedTutorialTemplates(): Promise<void> {
+export async function seedTutorialTemplates(retry: TransportRetryOptions = {}): Promise<void> {
   if (isCloud()) return
 
   try {
-    const docs = await loadDocs()
-    if (docs.length === 0) return
-
-    const userId = await ensureSystemUser()
-    if (!userId) {
-      console.warn("[tutorial-seed] could not resolve the system account — skipping")
-      return
-    }
-    const projectId = await ensureSystemProject(userId)
-
-    const counts = { created: 0, updated: 0, unchanged: 0 }
-    for (const doc of docs) {
-      try {
-        counts[await seedOne(doc, userId, projectId)] += 1
-      } catch (err) {
-        // One bad tutorial must not deny the others.
-        console.warn(`[tutorial-seed] ${doc.slug} failed:`, err)
-      }
-    }
-    if (counts.created || counts.updated) {
-      console.log(
-        `[tutorial-seed] ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`,
-      )
-    }
+    await withTransportRetry("tutorial-seed", runSeed, retry)
   } catch (err) {
     console.warn("[tutorial-seed] skipped:", err)
+  }
+}
+
+async function runSeed(): Promise<void> {
+  const docs = await loadDocs()
+  if (docs.length === 0) return
+
+  const userId = await ensureSystemUser()
+  if (!userId) {
+    console.warn("[tutorial-seed] could not resolve the system account — skipping")
+    return
+  }
+  const projectId = await ensureSystemProject(userId)
+
+  const counts = { created: 0, updated: 0, unchanged: 0 }
+  for (const doc of docs) {
+    try {
+      counts[await seedOne(doc, userId, projectId)] += 1
+    } catch (err) {
+      // A dead proxy mid-run is not "one bad tutorial" — let the run retry.
+      if (isTransportError(err)) throw err
+      // One bad tutorial must not deny the others.
+      console.warn(`[tutorial-seed] ${doc.slug} failed:`, err)
+    }
+  }
+  if (counts.created || counts.updated) {
+    console.log(
+      `[tutorial-seed] ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`,
+    )
   }
 }

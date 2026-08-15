@@ -19,7 +19,11 @@
 
 import { providerRegistry } from "../registry.js"
 import type { ProviderInfo } from "../provider.interface.js"
-import { isNodaroConnected } from "../../lib/nodaro-connect.js"
+import {
+  isNodaroConnected,
+  readNodaroConnectionState,
+  type NodaroConnectionState,
+} from "../../lib/nodaro-connect.js"
 import { NodaroCloudImageProvider } from "./image.js"
 import { NodaroCloudVideoProvider } from "./video.js"
 import { NodaroCloudAudioProvider } from "./audio.js"
@@ -105,4 +109,64 @@ export async function registerNodaroCloudProviderIfConnected(): Promise<boolean>
   if (!(await isNodaroConnected())) return false
   registerNodaroCloudProvider()
   return true
+}
+
+/**
+ * Boot-time registration that survives the community stack's boot order.
+ *
+ * The worker reads the connection through the container's OWN Caddy
+ * (SUPABASE_URL = localhost:3000/supabase), and start.sh brings Caddy up only
+ * after the API answers /health — so the first read at worker init fails
+ * deterministically ("fetch failed"; 2026-08-16 timeline: read at +7s, Caddy
+ * serving at +8.3s). A single fire-and-forget attempt left the provider
+ * unregistered on EVERY community boot, and only the router's one-shot
+ * self-heal on the first job hid it.
+ *
+ * Retries while the store is `unavailable`, stops on a definitive
+ * `not-connected`, registers on `connected`. `onAttempt` fires after every
+ * attempt — providersReady() hangs off the FIRST one so boot never waits for
+ * the whole window. Idempotent: a no-op once the provider is registered (the
+ * self-heal may have won the race).
+ */
+export const NODARO_REGISTRATION_RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, 30_000]
+
+export interface RegisterWithRetryOptions {
+  delaysMs?: readonly number[]
+  sleep?: (ms: number) => Promise<void>
+  onAttempt?: (state: NodaroConnectionState, attempt: number) => void
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+export async function registerNodaroCloudProviderWithRetry({
+  delaysMs = NODARO_REGISTRATION_RETRY_DELAYS_MS,
+  sleep = defaultSleep,
+  onAttempt,
+}: RegisterWithRetryOptions = {}): Promise<boolean> {
+  if (providerRegistry.getProvider(NODARO_PROVIDER_ID)) return true
+
+  let lastReason = ""
+  for (let attempt = 0; ; attempt++) {
+    const result = await readNodaroConnectionState()
+    onAttempt?.(result, attempt)
+
+    if (result.state === "connected") {
+      if (!providerRegistry.getProvider(NODARO_PROVIDER_ID)) registerNodaroCloudProvider()
+      console.log(`[providers] nodaro.ai cloud connection registered (attempt ${attempt + 1})`)
+      return true
+    }
+    if (result.state === "not-connected") return false
+
+    lastReason = result.reason
+    if (attempt >= delaysMs.length) break
+    await sleep(delaysMs[attempt])
+    // Something else (the router self-heal) may have registered it meanwhile.
+    if (providerRegistry.getProvider(NODARO_PROVIDER_ID)) return true
+  }
+
+  console.warn(
+    `[providers] could not read the nodaro.ai connection after ${delaysMs.length + 1} attempts (${lastReason}) — ` +
+      `if this install is connected, routing will self-heal on the first job`,
+  )
+  return false
 }

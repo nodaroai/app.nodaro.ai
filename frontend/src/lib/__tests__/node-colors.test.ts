@@ -4,6 +4,7 @@ import {
   LIGHT_COLORS_MAP,
   adjustColor,
   getEffectiveColor,
+  readableInk,
 } from "@/lib/node-colors"
 
 describe("NODE_COLORS", () => {
@@ -65,5 +66,45 @@ describe("getEffectiveColor", () => {
 
   it("returns the color as-is in light mode when no mapping exists", () => {
     expect(getEffectiveColor("#unknown", false)).toBe("#unknown")
+  })
+})
+
+// The ink (text) colour must follow the surface it sits on, not the theme.
+// A tinted node keeps its background when the palette has no light-mode
+// counterpart (imports, agents and older seeds carry arbitrary hexes), so a
+// theme-fixed "dark text in light mode" rule paints slate-800 on navy — the
+// Welcome Demo's sticky notes were unreadable in light mode exactly this way.
+describe("readableInk", () => {
+  it("picks light ink on a dark surface regardless of theme", () => {
+    expect(readableInk("#2d2d44", false)).toBe("light")
+    expect(readableInk("#2d2d44", true)).toBe("light")
+    expect(readableInk("#0f172a", true)).toBe("light")
+  })
+
+  it("picks dark ink on a light surface regardless of theme", () => {
+    expect(readableInk("#f1f5f9", false)).toBe("dark")
+    expect(readableInk("#f1f5f9", true)).toBe("dark")
+    expect(readableInk("#ffffff", true)).toBe("dark")
+  })
+
+  it("composites an alpha tint over the theme canvas before deciding", () => {
+    // 25% brand pink over the dark canvas is still a dark surface...
+    expect(readableInk("#ff007340", true)).toBe("light")
+    // ...and over the light canvas it is still a light surface.
+    expect(readableInk("#ff007340", false)).toBe("dark")
+  })
+
+  it("agrees with the effective (theme-mapped) palette in both themes", () => {
+    for (const color of NODE_COLORS) {
+      // In light mode the palette maps to a pastel: dark ink.
+      expect(readableInk(getEffectiveColor(color, false), false)).toBe("dark")
+      // In dark mode the palette is a dark tint: light ink.
+      expect(readableInk(getEffectiveColor(color, true), true)).toBe("light")
+    }
+  })
+
+  it("falls back to the theme's default ink for unparseable input", () => {
+    expect(readableInk("not-a-colour", false)).toBe("dark")
+    expect(readableInk("not-a-colour", true)).toBe("light")
   })
 })

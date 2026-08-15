@@ -8,6 +8,7 @@ import {
   isNodaroConnected,
   nodaroCloudBase,
   nodaroCloudFetch,
+  readNodaroConnectionState,
   saveNodaroConnection,
 } from "../lib/nodaro-connect.js"
 
@@ -33,31 +34,84 @@ function callbackUrl(): string {
   return `${instanceBase()}/v1/nodaro-connect/callback`
 }
 
+/**
+ * Every failure of /start must be something a self-hoster can act on: the
+ * setup screen renders it inline and the integrations card toasts it. Two
+ * rules — say WHO refused (nodaro.ai, not "this server": the cloud's own
+ * refusal wording reads as a local misconfiguration when relayed verbatim),
+ * and never leak transport detail (a probe in tools/community-smoke.mjs
+ * fails on raw error codes / stack fragments in these messages).
+ */
+const CLOUD_HOST = () => new URL(nodaroCloudBase()).host
+
+function cloudRefusal(status: number, body: { error?: { code?: string; message?: string } } | null) {
+  if (body?.error?.code === "community_connect_disabled") {
+    return {
+      status: 503,
+      code: "cloud_connect_unavailable",
+      message:
+        "nodaro.ai is not accepting connections from self-hosted instances right now. " +
+        "Use your own provider keys, or try again later.",
+    }
+  }
+  const detail = body?.error?.message?.trim()
+  return {
+    status: 502,
+    code: "cloud_registration_failed",
+    message: `nodaro.ai rejected this instance's registration${detail ? `: ${detail}` : ""}. Use your own provider keys, or try again later.`,
+  }
+}
+
 export async function nodaroConnectRoutes(app: FastifyInstance) {
   app.post("/v1/nodaro-connect/start", async (req, reply) => {
     try {
+      // "Nothing stored" and "the store is unreachable" must not both read as
+      // "register again": on a transient read failure that would mint a
+      // duplicate DCR client on the cloud and overwrite the stored one.
+      const stored = await readNodaroConnectionState()
+      if (stored.state === "unavailable") {
+        return reply.status(503).send({
+          error: {
+            code: "settings_unavailable",
+            message:
+              "This install could not read its own settings just now, so the nodaro.ai connection cannot start. " +
+              "Check Install health and try again in a moment.",
+          },
+        })
+      }
+
       let conn = await getNodaroConnection()
       if (!conn) {
         // One-time self-registration against the cloud DCR.
-        const res = await fetch(`${nodaroCloudBase()}/v1/oauth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_name: `Nodaro instance (${new URL(instanceBase()).host})`,
-            redirect_uris: [callbackUrl()],
-            client_uri: instanceBase(),
-            software_id: "nodaro-community",
-            scope: INSTANCE_SCOPES,
-          }),
-        })
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-          return reply.status(502).send({
+        let res: Response
+        try {
+          res = await fetch(`${nodaroCloudBase()}/v1/oauth/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_name: `Nodaro instance (${new URL(instanceBase()).host})`,
+              redirect_uris: [callbackUrl()],
+              client_uri: instanceBase(),
+              software_id: "nodaro-community",
+              scope: INSTANCE_SCOPES,
+            }),
+          })
+        } catch (err) {
+          req.log.warn({ err }, "[nodaro-connect] cloud registration unreachable")
+          return reply.status(503).send({
             error: {
-              code: "cloud_registration_failed",
-              message: body?.error?.message ?? `Cloud registration failed (${res.status})`,
+              code: "cloud_unreachable",
+              message:
+                `Could not reach nodaro.ai (${CLOUD_HOST()}) from this install. ` +
+                "Check its outbound network access or NODARO_CLOUD_URL, or use your own provider keys.",
             },
           })
+        }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
+          const refusal = cloudRefusal(res.status, body)
+          req.log.warn({ status: res.status, body }, "[nodaro-connect] cloud registration refused")
+          return reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
         }
         const reg = (await res.json()) as { client_id: string; client_secret: string }
         conn = { clientId: reg.client_id, clientSecret: reg.client_secret }

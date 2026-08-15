@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { Position, type NodeProps, NodeResizeControl, NodeToolbar, useUpdateNodeInternals } from "@xyflow/react"
 import { isDataProducer } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
@@ -23,7 +23,7 @@ import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
-import { NODE_COLORS, getEffectiveColor } from "@/lib/node-colors"
+import { INK, NODE_COLORS, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
 import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
@@ -131,6 +131,14 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   // it, and the card renders transparent so the canvas shows through.
   const color = nodeData.color
   const effectiveColor = color ? getEffectiveColor(color, isDark) : undefined
+  // Tinted card: ink follows the surface, not the theme (globals.css owns
+  // the untinted defaults). Same rule as the sticky note — see node-colors.
+  const inkVars = effectiveColor
+    ? (() => {
+        const ink = INK[readableInk(effectiveColor, isDark)]
+        return { "--tp-ink": ink.text, "--tp-ink-placeholder": ink.placeholder } as CSSProperties
+      })()
+    : undefined
   // Read visual width/height from the React Flow node-level properties so
   // `updateNodeWithData(... { width, height } ...)` from the zoom drag
   // resizes the outer wrapper live (BaseNode line 252-261 pattern). Fall
@@ -580,6 +588,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         <div
           ref={textWrapperRef}
           className={`text-prompt-tag-textarea w-full flex-1 min-h-0 nopan ${isFocused ? "nodrag" : ""}`}
+          style={inkVars}
           onMouseDown={(e) => {
             // Scrollbar interactions pass through untouched.
             const target = e.target as HTMLElement | null
@@ -772,7 +781,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               ["--prompt-lh" as string]: `${lineHeight}px`,
             }}
           >
-            <div className="text-prompt-tag-textarea w-full flex-1 min-h-0 nopan nodrag">
+            <div className="text-prompt-tag-textarea w-full flex-1 min-h-0 nopan nodrag" style={inkVars}>
               <ScrollArea className="h-full w-full">
                 {outputTarget === "lyrics" ? (
                   <TagTextarea

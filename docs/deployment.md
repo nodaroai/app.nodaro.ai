@@ -612,6 +612,21 @@ object), gallery, workflows, apps, saved components, characters, locations,
 objects, pipelines, models, and more. Authentication is via OAuth
 (Dynamic Client Registration for supported clients).
 
+## 11. Cloud-connect for self-hosted instances
+
+Two sides, two variables — see
+[Connect your instance to Nodaro Cloud](./community-cloud-connect.md) for
+the flow itself.
+
+| Where | Variable | Meaning |
+|---|---|---|
+| Your instance (community / business) | `NODARO_CLOUD_URL` | Cloud host the **Connect nodaro.ai** button registers with. Default `https://app.nodaro.ai`. Set to `https://next.nodaro.ai` for a staging soak. |
+| The cloud (a `cloud`-edition deployment) | `COMMUNITY_CONNECT_ENABLED` | Master switch for accepting self-hosted registrations (`software_id: nodaro-community` at `/v1/oauth/register`) and for the account's **Connected Instances** page. Default `false`. Enabled on `app.nodaro.ai` since 2026-08-16. Requires migration 312 (`developer_apps.kind = community_instance`). Read at boot — redeploy after changing. |
+
+When the cloud has it off, the instance's `POST /v1/nodaro-connect/start`
+answers `503 cloud_connect_unavailable` and the setup screen says so in
+place, pointing at your own provider keys instead.
+
 ## See also
 
 - [Community Edition Quickstart](./community-edition-quickstart.md) —

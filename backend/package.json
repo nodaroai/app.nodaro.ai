@@ -8,7 +8,7 @@
     "predev": "npm -w @nodaro/shared run build",
     "dev": "tsx watch src/server.ts",
     "prebuild": "npm -w @nodaro/shared run build",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs",
     "start": "node dist/server.js",
     "worker": "tsx watch src/worker.ts",
     "render-worker": "tsx watch src/render-worker.ts",

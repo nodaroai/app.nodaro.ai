@@ -1271,19 +1271,31 @@ html, body {
 .text-prompt-tag-textarea {
   height: 100%;
   min-height: 0;
+  /* Ink defaults per theme. A TINTED node overrides these two variables
+     inline from `readableInk()` (node-colors.ts) so the text follows the
+     surface it sits on — a colour with no light-mode counterpart keeps a
+     dark surface in light mode, where the theme default (slate) vanishes. */
+  --tp-ink: rgba(30, 41, 59, 0.8);
+  --tp-ink-placeholder: rgba(30, 41, 59, 0.25);
+}
+.dark .text-prompt-tag-textarea {
+  --tp-ink: rgba(255, 255, 255, 0.8);
+  --tp-ink-placeholder: rgba(255, 255, 255, 0.25);
 }
 /* No height: 100% on inner divs — the textarea autosizes via the shadcn
    `field-sizing-content` default, and the wrapping Radix ScrollArea owns
    scrolling. Forcing 100% would clip the autosize and break the scroll. */
 .text-prompt-tag-textarea .tag-textarea-backdrop {
-  color: rgba(30, 41, 59, 0.8);
-}
-.dark .text-prompt-tag-textarea .tag-textarea-backdrop {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--tp-ink);
 }
 .text-prompt-tag-textarea .tag-textarea-input {
   min-height: 0 !important;
-  caret-color: rgba(30, 41, 59, 0.8) !important;
+  caret-color: var(--tp-ink) !important;
+}
+/* Sticky notes set the same pair inline (see sticky-note-node.tsx); the
+   placeholder is the one colour an inline style cannot reach. */
+.sticky-note-textarea::placeholder {
+  color: var(--sticky-placeholder, rgb(148, 163, 184));
 }
 /* Fullscreen prompt modal overrides the textarea + backdrop font-size /
    line-height via CSS variables set as inline style on
@@ -1301,14 +1313,8 @@ html, body {
 .text-prompt-card .tag-textarea-backdrop {
   cursor: default !important;
 }
-.dark .text-prompt-tag-textarea .tag-textarea-input {
-  caret-color: rgba(255, 255, 255, 0.8) !important;
-}
 .text-prompt-tag-textarea .tag-textarea-input::placeholder {
-  color: rgba(30, 41, 59, 0.25) !important;
-}
-.dark .text-prompt-tag-textarea .tag-textarea-input::placeholder {
-  color: rgba(255, 255, 255, 0.25) !important;
+  color: var(--tp-ink-placeholder) !important;
 }
 /* Native textarea scrollbar is fully hidden — the wrapping Radix ScrollArea
    in text-prompt-node.tsx renders the visible scrollbar. */

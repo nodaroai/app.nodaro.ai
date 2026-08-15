@@ -110,9 +110,15 @@ jobs:
       # The published compose file verbatim, so this tests the file users
       # actually run. --no-build pins it to the image built above; every other
       # value is the committed default, which is what a fresh install gets.
+      # NODARO_CLOUD_URL points at an address that refuses instantly inside the
+      # container. The probe's connect-start contract must exercise the
+      # ERROR branch here: with the default (app.nodaro.ai) and
+      # COMMUNITY_CONNECT_ENABLED now on in production, every CI run would
+      # otherwise mint a real DCR client on the production cloud.
       - name: Boot the community stack
         env:
           NODARO_IMAGE: nodaro-community:ci
+          NODARO_CLOUD_URL: http://127.0.0.1:9
         run: |
           docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 420 --no-build
 
@@ -145,6 +151,10 @@ jobs:
         if: steps.keyed_gate.outputs.run == 'true'
         env:
           NODARO_IMAGE: nodaro-community:ci
+          # Same unreachable cloud as the keyless boot — a compose recreate
+          # re-reads every ${VAR}, so leaving this out would silently point
+          # the keyed lane back at production.
+          NODARO_CLOUD_URL: http://127.0.0.1:9
           KIE_API_KEY: ${{ secrets.COMMUNITY_E2E_KIE_KEY }}
         run: |
           docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 180 --no-build nodaro

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { StickyNoteNode } from "../sticky-note-node"
+import { INK } from "@/lib/node-colors"
 
 vi.mock("@xyflow/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@xyflow/react")>()
@@ -65,6 +66,22 @@ describe("StickyNoteNode", () => {
     // The background color is on the parent container div
     const container = textarea.parentElement
     expect(container).toHaveStyle({ backgroundColor: "#ff6633" })
+  })
+
+  // No ThemeProvider in tests -> resolvedTheme is undefined -> light mode.
+  // The Welcome Demo seeds `#2d2d44`, which has no light-mode palette
+  // counterpart, so the surface stays navy in light mode. The ink must
+  // follow the surface, not the theme, or the note is slate-on-navy.
+  it("keeps the note readable in light mode on a dark non-palette surface", () => {
+    renderNode({ data: { label: "Note", text: "hello", color: "#2d2d44" } })
+    const textarea = screen.getByRole("textbox")
+    expect(textarea).toHaveStyle({ color: INK.light.text })
+    expect(textarea.parentElement).toHaveStyle({ backgroundColor: "#2d2d44" })
+  })
+
+  it("uses dark ink on a light surface", () => {
+    renderNode({ data: { label: "Note", text: "hello", color: "#f1f5f9" } })
+    expect(screen.getByRole("textbox")).toHaveStyle({ color: INK.dark.text })
   })
 
   it("shows toolbar when selected", () => {
