@@ -50,6 +50,18 @@ import type { ConnectedReference } from "@nodaro/shared"
  * the body `{image:N}` tokens through `REF_BINDING[kind]` — so the five arrows
  * are the ONLY emission sites for the binding surface string.
  */
+/**
+ * The identity-reference binding sentence shared by the flat-image-list
+ * resolvers (gemini-omni, veo i2v): names the ordinal span as identities and
+ * says the two things a multimodal model needs to hear — match exactly, and
+ * these are not frames. One spelling; both resolvers ride it.
+ */
+export function identityRefsSentence(firstOrdinal: number, lastOrdinal: number): string {
+  return firstOrdinal === lastOrdinal
+    ? `${REF_BINDING.ordinal(firstOrdinal)} is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.`
+    : `${REF_BINDING.ordinal(firstOrdinal)} through ${REF_BINDING.ordinal(lastOrdinal)} are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
+}
+
 export const REF_BINDING = {
   image: (label: string, n: number) => `the ${label} from @image_${n}`,
   video: (label: string, n: number) => `the ${label} from @video_${n}`,

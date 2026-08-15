@@ -193,3 +193,51 @@ describe("promptBindsFirstFrame suffix suppression (overlap colon-position findi
     expect(both.promptSuffix).toContain("closing (last) frame") // pair sentence kept — last frame has no in-prompt binding
   })
 })
+
+// ---------------------------------------------------------------------------
+// Per-provider limits (2026-08-15): Seedance 2.5 carries the same three input
+// kinds with much wider caps (30 / 10 / 10). The resolver takes the limits as
+// an argument — defaulting to the 2.0 caps so every existing caller is
+// byte-identical — and the adapter passes the provider's own.
+// ---------------------------------------------------------------------------
+
+describe("resolveSeedance2Inputs — per-provider limits", () => {
+  const WIDE = { images: 30, videos: 10, audio: 10 }
+  const refs = (n: number) => Array.from({ length: n }, (_, i) => `https://r2/ref-${i + 1}.png`)
+
+  it("keeps 12 reference images + both frames under the 2.5 caps (the 2.0 default would drop 5)", () => {
+    const r = resolveSeedance2Inputs({
+      firstFrameUrl: "https://r2/first.png",
+      lastFrameUrl: "https://r2/last.png",
+      refImageUrls: refs(12),
+      limits: WIDE,
+    })
+    expect(r.mode).toBe("reference")
+    expect(r.referenceImageUrls).toHaveLength(14)
+    expect(r.droppedRefImages).toBe(0)
+    // Frames still ride LAST, ordinals bound to their true positions.
+    expect(r.promptSuffix).toContain("@image_13")
+    expect(r.promptSuffix).toContain("@image_14")
+  })
+
+  it("videos and audio slice to the provided caps", () => {
+    const r = resolveSeedance2Inputs({
+      refImageUrls: refs(1),
+      refVideoUrls: Array.from({ length: 12 }, (_, i) => `https://r2/v${i}.mp4`),
+      refAudioUrls: Array.from({ length: 12 }, (_, i) => `https://r2/a${i}.mp3`),
+      limits: WIDE,
+    })
+    expect(r.referenceVideoUrls).toHaveLength(10)
+    expect(r.referenceAudioUrls).toHaveLength(10)
+  })
+
+  it("omitting limits keeps the 2.0 caps byte-identical (9-slot drop-trailing)", () => {
+    const r = resolveSeedance2Inputs({
+      firstFrameUrl: "https://r2/first.png",
+      lastFrameUrl: "https://r2/last.png",
+      refImageUrls: refs(12),
+    })
+    expect(r.referenceImageUrls).toHaveLength(9)
+    expect(r.droppedRefImages).toBe(5)
+  })
+})

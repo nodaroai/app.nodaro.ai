@@ -1,7 +1,7 @@
 import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
 
 import { promptBindsFirstFrame } from "./seedance-2-inputs.js"
-import { REF_BINDING } from "./video-reference-resolver.js"
+import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js"
 
 /**
  * Gemini Omni Video i2v input resolution — the sibling of
@@ -68,10 +68,6 @@ export function resolveGeminiOmniI2vInputs(args: GeminiOmniI2vInputsArgs): Gemin
   // at its own (working) position — same field-finding rule as seedance-2: a
   // duplicate directive at the end dilutes the one that works.
   const frameSentence = promptBindsFirstFrame(args.prompt) ? "" : REF_BINDING.frame(1, "opening")
-  const identitySentence =
-    kept.length === 1
-      ? `${REF_BINDING.ordinal(2)} is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.`
-      : `${REF_BINDING.ordinal(2)} through ${REF_BINDING.ordinal(kept.length + 1)} are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
-  const promptSuffix = [frameSentence, identitySentence].filter(Boolean).join(" ")
+  const promptSuffix = [frameSentence, identityRefsSentence(2, kept.length + 1)].filter(Boolean).join(" ")
   return { imageUrls, promptSuffix, droppedRefImages }
 }
