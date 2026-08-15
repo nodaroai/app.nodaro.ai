@@ -1,0 +1,780 @@
+{
+  "slug": "get-started-with-image-editing",
+  "name": "Get started with image editing",
+  "description": "One image, nine independent edits. Every edit reads the same original, so nothing stacks and nothing degrades.",
+  "markdownDescription": null,
+  "category": "image-generation",
+  "outputTypes": [
+    "image"
+  ],
+  "tags": [
+    "getting-started",
+    "image",
+    "editing",
+    "pickers"
+  ],
+  "complexity": "advanced",
+  "previewMediaUrl": "https://cdn.nodaro.ai/images/301ac181-e093-4205-a09e-40773f190589.png",
+  "previewMediaType": "image",
+  "tutorialCategorySlug": "getting-started",
+  "tutorialSortOrder": 3,
+  "settings": {
+    "viewport": {
+      "x": 470.56852647907783,
+      "y": -178.80883634999077,
+      "zoom": 0.25879952632040626
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  },
+  "nodes": [
+    {
+      "id": "node_1",
+      "data": {
+        "label": "Base Image 4K",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "A strikingly beautiful young woman standing in a bright empty artist's loft,\nmedium three-quarter shot from the chest up, body angled slightly left, calm\nconfident expression, looking just off-camera. Symmetrical features, high\ncheekbones, clear natural skin with visible texture, expressive eyes, soft\nfull lips, chestnut hair loosely pulled up with a few strands falling free.\nEditorial beauty, natural and believable, minimal makeup.\nShe wears a plain mustard-yellow linen jacket over a white cotton t-shirt, a\nthin silver chain necklace, and small round glasses. One hand rests at her\nside holding a closed hardback book.\nBehind her, a large multi-pane window on the left, a bare white brick wall, a\nsingle wooden stool, and an empty wooden easel. Overcast midday daylight, soft\nand even, no harsh shadows. Neutral color grade, natural skin tones. 50mm lens,\nf/4, sharp focus front to back. Generous headroom and open space to her right.\nClean, uncluttered composition. Photorealistic, fine detail in the fabric weave\nand individual hair strands.",
+        "provider": "gpt-image-2",
+        "resolution": "4K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "text, watermark, logo, signature, extreme close-up, dramatic lighting, harsh\nshadows, heavy color grade, motion blur, bokeh, cluttered background, multiple\npeople, cropped head, distorted hands, airbrushed plastic skin, over-smoothed\nface, heavy makeup, duplicate limbs",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/d6aa80dd-7b2d-495b-a260-5871ff57370e.png",
+            "jobId": "d6aa80dd-7b2d-495b-a260-5871ff57370e",
+            "width": 2048,
+            "height": 1152,
+            "timestamp": "2026-08-14T11:05:16.687Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/d6aa80dd-7b2d-495b-a260-5871ff57370e.png"
+      },
+      "type": "generate-image",
+      "width": 1551.1100917431193,
+      "height": 872.4994266055046,
+      "dragging": false,
+      "measured": {
+        "width": 1551,
+        "height": 872
+      },
+      "position": {
+        "x": -1773.9332457509845,
+        "y": 2123.994365248145
+      },
+      "resizing": false,
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_4",
+      "data": {
+        "mode": "realism",
+        "label": "Image Critic",
+        "score": 0.88,
+        "prompt": "",
+        "details": {
+          "issues": [
+            {
+              "category": "skin texture",
+              "severity": "warning",
+              "description": "Add visible pore detail and micro-texture variation to reduce the plastic/smooth AI sheen on the face."
+            },
+            {
+              "category": "eyes",
+              "severity": "warning",
+              "description": "Increase iris texture complexity and add more natural specular highlights to eliminate the slightly glassy, frozen appearance."
+            },
+            {
+              "category": "optics",
+              "severity": "info",
+              "description": "Introduce realistic lens distortion and refraction artifacts in the glasses to match true optical physics."
+            }
+          ]
+        },
+        "approved": true,
+        "feedback": "Reduce the slight AI smoothness on the skin — pores and micro-texture are underdeveloped compared to a real photograph. Sharpen the lens distortion on the glasses frames to match the optical refraction a real lens would produce. Add subtle corneal reflections and more iris detail to avoid the faintly frozen-eye quality.",
+        "threshold": 0.7,
+        "fieldMappings": {}
+      },
+      "type": "image-critic",
+      "width": 412,
+      "height": 314,
+      "dragging": false,
+      "measured": {
+        "width": 412,
+        "height": 314
+      },
+      "position": {
+        "x": 1353.1859189691424,
+        "y": 37.920101298929296
+      },
+      "resizing": false,
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_6",
+      "data": {
+        "label": "Modify Image- Jacket → Navy",
+        "prompt": "Change the mustard-yellow jacket to deep navy wool. Keep everything else identical.",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/dc42d26c-ffb0-4f03-98c9-a82b297a721e.png",
+            "jobId": "dc42d26c-ffb0-4f03-98c9-a82b297a721e",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T11:28:35.331Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/dc42d26c-ffb0-4f03-98c9-a82b297a721e.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1357.2531682040822,
+        "y": 592.360025190257
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_7",
+      "data": {
+        "label": "Modify Image-Lighting picker",
+        "prompt": "",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/d86d18a1-6bd1-470c-9121-20c50c2ca05a.png",
+            "jobId": "d86d18a1-6bd1-470c-9121-20c50c2ca05a",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T11:33:17.554Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/d86d18a1-6bd1-470c-9121-20c50c2ca05a.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "dragging": false,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1350.6827386114549,
+        "y": 1124.39924510174
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_8",
+      "data": {
+        "label": "Lighting",
+        "timeOfDay": "golden-hour",
+        "displayMode": "both"
+      },
+      "type": "lighting",
+      "dragging": false,
+      "measured": {
+        "width": 200,
+        "height": 281
+      },
+      "position": {
+        "x": 882.539575665805,
+        "y": 1154.3035746283947
+      },
+      "selected": false
+    },
+    {
+      "id": "node_9",
+      "data": {
+        "label": "Modify Image-Color/Look picker",
+        "prompt": "",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/4772368e-2960-498e-b6eb-287c2bb7da06.png",
+            "jobId": "4772368e-2960-498e-b6eb-287c2bb7da06",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T11:37:23.611Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/4772368e-2960-498e-b6eb-287c2bb7da06.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "dragging": false,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1354.5087855940467,
+        "y": 1662.8331830459833
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_10",
+      "data": {
+        "label": "Color / Look",
+        "colorLook": "teal-orange",
+        "displayMode": "both"
+      },
+      "type": "color-look",
+      "dragging": false,
+      "measured": {
+        "width": 200,
+        "height": 273
+      },
+      "position": {
+        "x": 895.3634102471962,
+        "y": 1706.8380974803629
+      },
+      "selected": false
+    },
+    {
+      "id": "node_11",
+      "data": {
+        "label": "Modify Image-Style picker",
+        "prompt": "",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/60a6b3ad-3280-4d8a-84f9-15024aaf9d19.png",
+            "jobId": "60a6b3ad-3280-4d8a-84f9-15024aaf9d19",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T11:44:43.584Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/60a6b3ad-3280-4d8a-84f9-15024aaf9d19.png"
+      },
+      "type": "modify-image",
+      "width": 757.9410443976794,
+      "height": 426.56849448457916,
+      "dragging": false,
+      "measured": {
+        "width": 758,
+        "height": 427
+      },
+      "position": {
+        "x": 1352.0647843921115,
+        "y": 2231.46224812667
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_13",
+      "data": {
+        "label": "Style",
+        "style": "anime",
+        "displayMode": "both"
+      },
+      "type": "style",
+      "width": 375,
+      "dragging": false,
+      "measured": {
+        "width": 375,
+        "height": 343
+      },
+      "position": {
+        "x": 776.3789020928273,
+        "y": 2202.310703436015
+      },
+      "resizing": false,
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_14",
+      "data": {
+        "label": "Style",
+        "style": "oil-painting",
+        "displayMode": "both"
+      },
+      "type": "style",
+      "dragging": false,
+      "measured": {
+        "width": 212,
+        "height": 294
+      },
+      "position": {
+        "x": 906.7431902429188,
+        "y": 2659.7051154168234
+      },
+      "selected": false
+    },
+    {
+      "id": "node_15",
+      "data": {
+        "label": "Modify Image-Era picker",
+        "prompt": "",
+        "provider": "nano-banana",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/2a5542c0-6480-4651-a190-56b8cc9f795c.png",
+            "jobId": "2a5542c0-6480-4651-a190-56b8cc9f795c",
+            "width": 320,
+            "height": 178,
+            "timestamp": "2026-08-14T11:50:10.018Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/2a5542c0-6480-4651-a190-56b8cc9f795c.png"
+      },
+      "type": "modify-image",
+      "width": 661.5730337078652,
+      "height": 368,
+      "dragging": false,
+      "measured": {
+        "width": 662,
+        "height": 368
+      },
+      "position": {
+        "x": 1356.2048509931426,
+        "y": 3046.3281335433367
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_16",
+      "data": {
+        "era": "atomic-age-50s",
+        "label": "Era",
+        "displayMode": "both"
+      },
+      "type": "era",
+      "dragging": false,
+      "measured": {
+        "width": 220,
+        "height": 291
+      },
+      "position": {
+        "x": 901.6393190619028,
+        "y": 3141.1803421253335
+      },
+      "selected": false
+    },
+    {
+      "id": "node_19",
+      "data": {
+        "label": "Modify Image- Cyberpunk",
+        "prompt": "",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/46facaee-5ca9-470a-a343-0deed2f6aad2.png",
+            "jobId": "46facaee-5ca9-470a-a343-0deed2f6aad2",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T11:55:17.244Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/46facaee-5ca9-470a-a343-0deed2f6aad2.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368.1956406166932,
+      "dragging": false,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1363.0250303635562,
+        "y": 3719.0333239439738
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_20",
+      "data": {
+        "label": "Style",
+        "style": "cyberpunk",
+        "displayMode": "picks"
+      },
+      "type": "style",
+      "dragging": false,
+      "measured": {
+        "width": 200,
+        "height": 175
+      },
+      "position": {
+        "x": 911.6360597882577,
+        "y": 3795.292170048874
+      },
+      "selected": false
+    },
+    {
+      "id": "node_21",
+      "data": {
+        "label": "Modify Image",
+        "prompt": "",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/5339e83c-b0a5-422f-ab39-12dc99990b86.png",
+            "jobId": "5339e83c-b0a5-422f-ab39-12dc99990b86",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-14T12:01:43.616Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/5339e83c-b0a5-422f-ab39-12dc99990b86.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368.1956406166932,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1347.0053027481797,
+        "y": 4243.850413679413
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_22",
+      "data": {
+        "lens": "portrait-85mm",
+        "label": "Lens",
+        "displayMode": "picks"
+      },
+      "type": "lens",
+      "dragging": false,
+      "measured": {
+        "width": 217,
+        "height": 184
+      },
+      "position": {
+        "x": 982.3712469352129,
+        "y": 4297.871313567899
+      },
+      "selected": false
+    },
+    {
+      "id": "node_28",
+      "data": {
+        "label": "Remove Background",
+        "fieldMappings": {},
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/13629e37-dbc9-4546-81c5-f20e40f862b8.png",
+            "jobId": "13629e37-dbc9-4546-81c5-f20e40f862b8",
+            "width": 320,
+            "height": 180,
+            "timestamp": "2026-08-14T14:13:17.358Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/13629e37-dbc9-4546-81c5-f20e40f862b8.png"
+      },
+      "type": "remove-background",
+      "width": 654.2222222222222,
+      "height": 368,
+      "dragging": false,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1330.7445905799432,
+        "y": 4895.834703757205
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_29",
+      "data": {
+        "label": "Modify Image-Background → Tokyo Night",
+        "prompt": "Place the subject on a rain-wet Tokyo street at night, neon reflecting on the pavement. Match the lighting on her face and jacket to the new environment.",
+        "provider": "gpt-image-2-i2i",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/b86843b1-232f-4362-ae58-7ea261042fff.png",
+            "jobId": "b86843b1-232f-4362-ae58-7ea261042fff",
+            "width": 320,
+            "height": 180,
+            "timestamp": "2026-08-14T14:16:07.831Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/b86843b1-232f-4362-ae58-7ea261042fff.png"
+      },
+      "type": "modify-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "position": {
+        "x": 1349.7885337335797,
+        "y": 5454.044553917453
+      },
+      "selected": false,
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_31",
+      "data": {
+        "gap": 24,
+        "label": "Image Collage",
+        "layout": "smart",
+        "resolution": "4K",
+        "aspectRatio": "4:3",
+        "fieldMappings": {},
+        "backgroundColor": "#ffffff",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/301ac181-e093-4205-a09e-40773f190589.png",
+            "jobId": "301ac181-e093-4205-a09e-40773f190589",
+            "timestamp": "2026-08-14T14:18:19.654Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/301ac181-e093-4205-a09e-40773f190589.png"
+      },
+      "type": "image-collage",
+      "width": 772.1967213114755,
+      "height": 368,
+      "dragging": false,
+      "measured": {
+        "width": 772,
+        "height": 368
+      },
+      "position": {
+        "x": 2754.8185429674327,
+        "y": 3030.6390592819507
+      },
+      "selected": false,
+      "className": "rf-resized"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1786706658881",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_4",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786706799085",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_6",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786707025731",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_7",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786707081263",
+      "type": "default",
+      "source": "node_8",
+      "target": "node_7",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786707222034",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_9",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786707325024",
+      "type": "default",
+      "source": "node_10",
+      "target": "node_9",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786707471442",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_11",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786707720983",
+      "type": "default",
+      "source": "node_13",
+      "target": "node_11",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786707762222",
+      "type": "default",
+      "source": "node_14",
+      "target": "node_11",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786707911075",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_15",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786708028342",
+      "type": "default",
+      "source": "node_16",
+      "target": "node_15",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786708266525",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_19",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786708296136",
+      "type": "default",
+      "source": "node_20",
+      "target": "node_19",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786708726537",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_21",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786708805460",
+      "type": "default",
+      "source": "node_22",
+      "target": "node_21",
+      "sourceHandle": "out",
+      "targetHandle": "cinematography"
+    },
+    {
+      "id": "edge_1786716773795",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_28",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786716823390",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_29",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_1786717056916",
+      "type": "default",
+      "source": "node_21",
+      "target": "node_31",
+      "sourceHandle": "image",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_1786717062099",
+      "type": "default",
+      "source": "node_29",
+      "target": "node_31",
+      "sourceHandle": "image",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_1786717068549",
+      "type": "default",
+      "source": "node_19",
+      "target": "node_31",
+      "sourceHandle": "image",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_1786717073156",
+      "type": "default",
+      "source": "node_15",
+      "target": "node_31",
+      "sourceHandle": "image",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_1786717083134",
+      "type": "default",
+      "source": "node_11",
+      "target": "node_31",
+      "sourceHandle": "image",
+      "targetHandle": "in"
+    }
+  ]
+}

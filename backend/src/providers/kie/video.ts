@@ -21,7 +21,7 @@ import type {
   ReconcileOpts,
 } from "../provider.interface.js"
 import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
-import { resolveSeedance2Inputs } from "@nodaro/prompts"
+import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
   runKieTask,
@@ -1005,9 +1005,39 @@ export class KieVideoProvider
     // Gemini Omni Video — multimodal input + native audio. imageToVideo has no
     // top-level aspectRatio param (unlike textToVideo); read from options only.
     if (provider === "gemini-omni-video") {
-      const imageUrls = [effectiveImageUrl, ...(options?.referenceImageUrls ?? [])].filter(
-        (u): u is string => !!u,
-      )
+      // With a start frame, the list is OURS to describe and budget
+      // (resolveGeminiOmniI2vInputs): image 1 is bound as the opening frame
+      // and the rest as identity references — a multimodal model treats an
+      // unbound image list as loose context, which rendered a different cast
+      // per keyframes part with the refs attached (recast, 2026-08-14) — and
+      // trailing refs drop to fit KIE's 7-input quota instead of tripping
+      // runGeminiOmni's hard reject (that reject stays as the backstop for
+      // the caller-assembled textToVideo list).
+      if (effectiveImageUrl) {
+        const resolved = resolveGeminiOmniI2vInputs({
+          prompt: effectivePrompt,
+          firstFrameUrl: effectiveImageUrl,
+          refImageUrls: options?.referenceImageUrls,
+          videoConnected: (options?.referenceVideoUrls ?? []).length > 0,
+        })
+        if (resolved.droppedRefImages > 0) {
+          console.log(
+            `[KIE.ai] Gemini Omni: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the 7-input quota`,
+          )
+        }
+        const basePrompt = effectivePrompt ?? "smooth cinematic motion"
+        return runGeminiOmni(
+          modelConfig,
+          resolved.promptSuffix ? `${basePrompt}\n\n${resolved.promptSuffix}` : basePrompt,
+          duration,
+          options?.aspectRatio,
+          resolved.imageUrls,
+          options,
+          reconcileOpts,
+          "Gemini Omni",
+        )
+      }
+      const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
       return runGeminiOmni(
         modelConfig,
         effectivePrompt ?? "smooth cinematic motion",
