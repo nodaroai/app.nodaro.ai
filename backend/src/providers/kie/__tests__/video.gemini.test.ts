@@ -199,7 +199,7 @@ describe("KieVideoProvider — gemini-omni-video aspect_ratio", () => {
 // ---------------------------------------------------------------------------
 
 describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
-  it("I2V: image_urls has start + ref, sends string duration, passes resolution", async () => {
+  it("I2V: image_urls has start + ref, and the prompt BINDS the roles — frame vs identity", async () => {
     await provider.imageToVideo(
       "https://x/start.png",
       "a prompt",
@@ -212,10 +212,29 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
     const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
 
-    expect(Array.isArray(capturedInput.image_urls)).toBe(true)
-    expect((capturedInput.image_urls as string[]).length).toBe(2)
+    expect(capturedInput.image_urls).toEqual(["https://x/start.png", "https://x/r.png"])
     expect(capturedInput.duration).toBe("8")
     expect(capturedInput.resolution).toBe("1080p")
+    // The binding is what makes the list mean something to a multimodal model:
+    // without it the refs are loose context and the cast drifts (2026-08-14).
+    expect(capturedInput.prompt).toBe(
+      "a prompt\n\nUse @image_1 as the opening (first) frame of the video. " +
+        "@image_2 is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.",
+    )
+  })
+
+  it("I2V without references stays byte-identical: single image, prompt untouched", async () => {
+    await provider.imageToVideo(
+      "https://x/start.png",
+      "a prompt",
+      "gemini-omni-video",
+      8,
+      undefined,
+      { resolution: "1080p" },
+    )
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.image_urls).toEqual(["https://x/start.png"])
+    expect(capturedInput.prompt).toBe("a prompt")
   })
 
   it("V2V: sends video_list and omits duration when referenceVideoUrls present", async () => {
@@ -242,57 +261,67 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(capturedInput.duration).toBeUndefined()
   })
 
-  it("Quota: throws and does NOT call runKieTask when images + 2*videos > 7", async () => {
-    await expect(
-      provider.imageToVideo(
-        "https://x/start.png",
-        "a prompt",
-        "gemini-omni-video",
-        8,
-        undefined,
-        {
-          resolution: "1080p",
-          // start image (1) + 5 refs = 6 images, 1 video = 2 units → total 8 > 7
-          referenceImageUrls: [
-            "https://x/r1.png",
-            "https://x/r2.png",
-            "https://x/r3.png",
-            "https://x/r4.png",
-            "https://x/r5.png",
-          ],
-          referenceVideoUrls: ["https://x/v.mp4"],
-        },
-      ),
-    ).rejects.toThrow()
+  it("Quota: a video eats two slots — trailing refs drop to fit, start frame and video kept", async () => {
+    await provider.imageToVideo(
+      "https://x/start.png",
+      "a prompt",
+      "gemini-omni-video",
+      8,
+      undefined,
+      {
+        resolution: "1080p",
+        // start (1) + 5 refs = 6 images + 1 video (2 units) = 8 > 7 → one ref drops
+        referenceImageUrls: [
+          "https://x/r1.png",
+          "https://x/r2.png",
+          "https://x/r3.png",
+          "https://x/r4.png",
+          "https://x/r5.png",
+        ],
+        referenceVideoUrls: ["https://x/v.mp4"],
+      },
+    )
 
-    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+    expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.image_urls).toEqual([
+      "https://x/start.png",
+      "https://x/r1.png",
+      "https://x/r2.png",
+      "https://x/r3.png",
+      "https://x/r4.png",
+    ])
+    expect(capturedInput.video_list).toBeDefined()
   })
 
-  it("Quota: throws and does NOT call runKieTask on image-only overflow (8 images, no video)", async () => {
-    await expect(
-      provider.imageToVideo(
-        "https://x/start.png",
-        "a prompt",
-        "gemini-omni-video",
-        8,
-        undefined,
-        {
-          resolution: "1080p",
-          // start image (1) + 7 refs = 8 images total → 8 > 7 with no video
-          referenceImageUrls: [
-            "https://x/r1.png",
-            "https://x/r2.png",
-            "https://x/r3.png",
-            "https://x/r4.png",
-            "https://x/r5.png",
-            "https://x/r6.png",
-            "https://x/r7.png",
-          ],
-        },
-      ),
-    ).rejects.toThrow()
+  it("Quota: image-only overflow drops TRAILING refs to fit 7 — the render is never rejected for our own merge", async () => {
+    await provider.imageToVideo(
+      "https://x/start.png",
+      "a prompt",
+      "gemini-omni-video",
+      8,
+      undefined,
+      {
+        resolution: "1080p",
+        // start (1) + 7 refs = 8 images total → the last ref drops
+        referenceImageUrls: [
+          "https://x/r1.png",
+          "https://x/r2.png",
+          "https://x/r3.png",
+          "https://x/r4.png",
+          "https://x/r5.png",
+          "https://x/r6.png",
+          "https://x/r7.png",
+        ],
+      },
+    )
 
-    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+    expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect((capturedInput.image_urls as string[]).length).toBe(7)
+    expect((capturedInput.image_urls as string[])[0]).toBe("https://x/start.png")
+    // The binding names exactly the kept span, not the asked-for one.
+    expect(capturedInput.prompt).toContain("@image_2 through @image_7")
   })
 
   // ---------------------------------------------------------------------------
