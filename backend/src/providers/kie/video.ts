@@ -20,8 +20,8 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
-import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs } from "@nodaro/prompts"
+import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
   runKieTask,
@@ -114,6 +114,15 @@ export function applySeedance2Params(
   // emit the frame prompt suffix. video.ts is the single chokepoint every run
   // path (single-node route + orchestrator worker) flows through, so appending
   // the suffix here applies it exactly once.
+  //
+  // Limits are the PROVIDER's own (2026-08-15): Seedance 2.5 takes the same
+  // three input kinds at 30/10/10 where 2.0 stops at 9/3/3 — without this the
+  // 2.5 caps were silently squeezed to 2.0's. Spread over the 2.0 defaults so
+  // a map entry with partial fields can never yield an undefined cap.
+  const limits = {
+    ...SEEDANCE_2_REF_LIMITS,
+    ...(provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}) : {}),
+  }
   const resolved = resolveSeedance2Inputs({
     prompt: typeof input.prompt === "string" ? input.prompt : undefined,
     firstFrameUrl: typeof input.first_frame_url === "string" ? input.first_frame_url : undefined,
@@ -121,6 +130,7 @@ export function applySeedance2Params(
     refImageUrls: options?.referenceImageUrls,
     refVideoUrls: options?.referenceVideoUrls,
     refAudioUrls: options?.referenceAudioUrls,
+    limits,
   })
 
   if (resolved.firstFrameUrl) input.first_frame_url = resolved.firstFrameUrl
@@ -930,8 +940,38 @@ export class KieVideoProvider
     // VEO 3.1 uses a special API endpoint
     if (isVeoProvider(provider)) {
       let imageUrls: string[]
+      let veoGenerationType = options?.generationType
+      let veoPrompt = effectivePrompt ?? "smooth cinematic motion"
       if (options?.generationType === "REFERENCE_2_VIDEO" && options?.referenceImageUrls?.length) {
+        // Caller-driven reference mode (the t2v-style explicit path): the
+        // list is the caller's own — no anchor prepend, no binding.
         imageUrls = options.referenceImageUrls.slice(0, 3)
+      } else if (imageUrl && options?.referenceImageUrls?.length) {
+        // ANCHORED CALL WITH IDENTITY REFS (2026-08-15): VEO's single ≤3
+        // imageUrls array makes frames and reference ingredients mutually
+        // exclusive, so the resolver flips the call to REFERENCE_2_VIDEO
+        // with the anchor in seat 1, prose-bound as the opening frame —
+        // requested rather than pixel-guaranteed, the same accepted trade
+        // as seedance-2's reference mode. References win the seats: an end
+        // anchor is surrendered (logged) rather than spending a third of
+        // the identity budget on a closing guess. Pre-change these refs
+        // were silently dropped — the last keyframes model rendering
+        // identity-blind.
+        const resolved = resolveVeoI2vInputs({
+          prompt: effectivePrompt,
+          firstFrameUrl: imageUrl,
+          ...(endFrameUrl ? { endFrameUrl } : {}),
+          refImageUrls: options.referenceImageUrls,
+        })
+        imageUrls = resolved.imageUrls
+        veoGenerationType = resolved.generationType
+        if (resolved.promptSuffix) veoPrompt = `${veoPrompt}\n\n${resolved.promptSuffix}`
+        if (resolved.droppedEndFrame) {
+          console.log(`[KIE.ai] VEO ${provider}: end frame surrendered to reference mode (refs win the seats)`)
+        }
+        if (resolved.droppedRefImages > 0) {
+          console.log(`[KIE.ai] VEO ${provider}: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the 3-ingredient cap`)
+        }
       } else {
         imageUrls = endFrameUrl
           ? [imageUrl!, endFrameUrl]
@@ -942,12 +982,12 @@ export class KieVideoProvider
         : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
-        effectivePrompt ?? "smooth cinematic motion",
+        veoPrompt,
         imageUrls,
         {
           aspectRatio: options?.aspectRatio,
           seed: options?.seed,
-          generationType: options?.generationType,
+          generationType: veoGenerationType,
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,
@@ -1088,7 +1128,23 @@ export class KieVideoProvider
       const merged = effectiveImageUrl
         ? [effectiveImageUrl, ...refs]
         : [...refs]
-      input[imageParamName] = merged.slice(0, modelConfig.maxRefImages)
+      const capped = merged.slice(0, modelConfig.maxRefImages)
+      input[imageParamName] = capped
+      // HAPPYHORSE REF2V BINDING (2026-08-15): its schema has no first-frame
+      // param — the start anchor is just media-array entry 1 — and its docs
+      // define prompt addressing as "[Image 1]"…"[Image 9]" in array order.
+      // An unbound list is loose context (the gemini-omni lesson), so name
+      // the roles in the model's OWN convention. Only when a start frame
+      // leads the array and something rides behind it; a bare list (refs
+      // without an anchor) is the caller's to describe.
+      if (provider === "happyhorse-ref2v" && effectiveImageUrl && capped.length > 1) {
+        const identityPart = capped.length === 2
+          ? "[Image 2] is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame."
+          : `[Image 2] through [Image ${capped.length}] are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
+        const binding = `[Image 1] is the exact opening (first) frame of the video. ${identityPart}`
+        const base = typeof input.prompt === "string" ? input.prompt : ""
+        input.prompt = base ? `${base}\n\n${binding}` : binding
+      }
     }
 
     // Override duration if provided

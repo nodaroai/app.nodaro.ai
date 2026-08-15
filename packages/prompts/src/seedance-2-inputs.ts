@@ -12,6 +12,12 @@ export interface Seedance2InputsArgs {
   refImageUrls?: readonly string[]
   refVideoUrls?: readonly string[]
   refAudioUrls?: readonly string[]
+  /** Per-provider input caps (2026-08-15). The Seedance 2.x GENERATIONS share
+   *  this resolver's whole mode logic but not their caps — 2.5 takes the same
+   *  three kinds at 30/10/10 where 2.0 stops at 9/3/3. Defaults to the 2.0
+   *  caps so every existing caller is byte-identical; the adapter passes the
+   *  provider's own entry from VIDEO_REF_LIMITS_BY_PROVIDER. */
+  limits?: { images: number; videos: number; audio: number }
 }
 
 export interface Seedance2InputsResult {
@@ -54,11 +60,12 @@ export function promptBindsFirstFrame(prompt: string | undefined): boolean {
 }
 
 export function resolveSeedance2Inputs(args: Seedance2InputsArgs): Seedance2InputsResult {
+  const limits = args.limits ?? SEEDANCE_2_REF_LIMITS
   const firstFrameUrl = clean(args.firstFrameUrl)
   const lastFrameUrl = clean(args.lastFrameUrl)
   const refImages = cleanList(args.refImageUrls)
-  const refVideos = cleanList(args.refVideoUrls).slice(0, SEEDANCE_2_REF_LIMITS.videos)
-  const refAudios = cleanList(args.refAudioUrls).slice(0, SEEDANCE_2_REF_LIMITS.audio)
+  const refVideos = cleanList(args.refVideoUrls).slice(0, limits.videos)
+  const refAudios = cleanList(args.refAudioUrls).slice(0, limits.audio)
 
   const hasAnyReference = refImages.length > 0 || refVideos.length > 0 || refAudios.length > 0
 
@@ -81,7 +88,7 @@ export function resolveSeedance2Inputs(args: Seedance2InputsArgs): Seedance2Inpu
   // if the 9-image cap is exceeded. Frames are appended AFTER the kept user
   // images so existing user @Image ordinals are preserved.
   const frameCount = (firstFrameUrl ? 1 : 0) + (lastFrameUrl ? 1 : 0)
-  const userImageSlots = Math.max(0, SEEDANCE_2_REF_LIMITS.images - frameCount)
+  const userImageSlots = Math.max(0, limits.images - frameCount)
   const keptUserImages = refImages.slice(0, userImageSlots)
   const droppedRefImages = refImages.length - keptUserImages.length
 

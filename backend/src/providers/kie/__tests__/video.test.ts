@@ -540,3 +540,77 @@ describe("KieVideoProvider.lipSyncVideo", () => {
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// VEO i2v identity references (2026-08-15): frames and reference ingredients
+// share ONE ≤3 imageUrls array whose meaning flips with generationType — so
+// an anchored call carrying referenceImageUrls flips to REFERENCE_2_VIDEO
+// with the anchor in seat 1, prose-bound as the opening frame. Pre-change
+// the refs were silently dropped: the last recast model whose keyframes
+// calls rendered identity-blind.
+// ---------------------------------------------------------------------------
+
+describe("imageToVideo — veo3 identity references", () => {
+  it("refs flip the call to REFERENCE_2_VIDEO: [anchor, ...refs] capped at 3, binding in the prompt", async () => {
+    await provider.imageToVideo("https://img/start.png", "cinematic", "veo3", 8, undefined, {
+      referenceImageUrls: ["https://r2/r1.png", "https://r2/r2.png", "https://r2/r3.png"],
+    })
+    const [, prompt, imageUrls, opts] = mocks.mockRunVeoTask.mock.calls[0]!
+    expect(imageUrls).toEqual(["https://img/start.png", "https://r2/r1.png", "https://r2/r2.png"])
+    expect((opts as { generationType?: string }).generationType).toBe("REFERENCE_2_VIDEO")
+    expect(prompt).toContain("Use @image_1 as the opening (first) frame")
+    expect(prompt).toContain("@image_2 through @image_3 are identity references")
+  })
+
+  it("no refs ⇒ byte-identical plain frame mode: frames kept, no generationType, prompt untouched", async () => {
+    await provider.imageToVideo("https://img/start.png", "cinematic", "veo3", 8, "https://img/end.png", {})
+    const [, prompt, imageUrls, opts] = mocks.mockRunVeoTask.mock.calls[0]!
+    expect(imageUrls).toEqual(["https://img/start.png", "https://img/end.png"])
+    expect((opts as { generationType?: string }).generationType).toBeUndefined()
+    expect(prompt).toBe("cinematic")
+  })
+
+  it("refs + end anchor: the end frame is surrendered to reference mode — refs win the seats", async () => {
+    await provider.imageToVideo("https://img/start.png", "cinematic", "veo3", 8, "https://img/end.png", {
+      referenceImageUrls: ["https://r2/r1.png"],
+    })
+    const [, , imageUrls] = mocks.mockRunVeoTask.mock.calls[0]!
+    expect(imageUrls).toEqual(["https://img/start.png", "https://r2/r1.png"])
+  })
+
+  it("an EXPLICIT caller REFERENCE_2_VIDEO keeps its refs-only list — no anchor prepend, no suffix", async () => {
+    await provider.imageToVideo(undefined, "cinematic", "veo3", 8, undefined, {
+      generationType: "REFERENCE_2_VIDEO",
+      referenceImageUrls: ["https://r2/r1.png", "https://r2/r2.png"],
+    })
+    const [, prompt, imageUrls, opts] = mocks.mockRunVeoTask.mock.calls[0]!
+    expect(imageUrls).toEqual(["https://r2/r1.png", "https://r2/r2.png"])
+    expect((opts as { generationType?: string }).generationType).toBe("REFERENCE_2_VIDEO")
+    expect(prompt).toBe("cinematic")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HappyHorse Ref2V binding (2026-08-15): its docs define prompt addressing as
+// "[Image 1]"…"[Image 9]" in media-array order. The merge put the start frame
+// + identity refs in the array but the prompt never said which was which —
+// the same unbound-list gap gemini-omni had.
+// ---------------------------------------------------------------------------
+
+describe("imageToVideo — happyhorse-ref2v identity binding", () => {
+  it("binds [Image 1] as the opening frame and the rest as identities, in the model's own addressing", async () => {
+    await provider.imageToVideo("https://img/start.png", "cinematic", "happyhorse-ref2v", 8, undefined, {
+      referenceImageUrls: ["https://r2/r1.png", "https://r2/r2.png"],
+    })
+    const input = mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+    expect(input.reference_image).toEqual(["https://img/start.png", "https://r2/r1.png", "https://r2/r2.png"])
+    expect(input.prompt).toContain("[Image 1] is the exact opening (first) frame")
+    expect(input.prompt).toContain("[Image 2] through [Image 3] are identity references")
+  })
+
+  it("a single image (no refs) keeps the prompt untouched", async () => {
+    await provider.imageToVideo("https://img/start.png", "cinematic", "happyhorse-ref2v", 8, undefined, {})
+    const input = mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+    expect(input.prompt).toBe("cinematic")
+  })
+})

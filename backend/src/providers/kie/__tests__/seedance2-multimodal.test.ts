@@ -401,3 +401,33 @@ describe("Seedance 2 #6 — reference reorder then frame appends after the reord
     expect(input.prompt).toContain("Use @image_3 as the opening (first) frame")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Per-provider caps (2026-08-15): Seedance 2.5 takes the same three input
+// kinds at 30/10/10; the adapter passes the provider's own limits so a 2.5
+// run stops being silently squeezed into 2.0's 9-image cap.
+// ---------------------------------------------------------------------------
+
+describe("applySeedance2Params — Seedance 2.5 wider caps", () => {
+  const refs = (n: number) => Array.from({ length: n }, (_, i) => `https://r2/ref-${i + 1}.png`)
+
+  it("seedance-2-5 keeps 12 reference images + both frames (2.0 would drop 5)", () => {
+    const input: Record<string, unknown> = {
+      prompt: "p",
+      first_frame_url: "https://r2/first.png",
+      last_frame_url: "https://r2/last.png",
+    }
+    applySeedance2Params(input, { referenceImageUrls: refs(12) } as never, "seedance-2-5")
+    expect((input.reference_image_urls as string[]).length).toBe(14)
+  })
+
+  it("seedance-2 (2.0) stays on the 9-cap, byte-identical", () => {
+    const input: Record<string, unknown> = {
+      prompt: "p",
+      first_frame_url: "https://r2/first.png",
+      last_frame_url: "https://r2/last.png",
+    }
+    applySeedance2Params(input, { referenceImageUrls: refs(12) } as never, "seedance-2")
+    expect((input.reference_image_urls as string[]).length).toBe(9)
+  })
+})

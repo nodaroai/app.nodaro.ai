@@ -13,7 +13,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
 import { resolveVideoReferenceCore, resolveReferenceTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -60,9 +60,12 @@ export const generateVideoBody = z.object({
   videoSize: z.enum(["standard", "high"]).optional(),
   seed: z.number().int().min(-1).max(2147483647).optional(),
   cameraFixed: z.boolean().optional(),
-  referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),
-  referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.videos).optional(),
-  referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
+  // The wire ceiling is the WIDEST provider's caps (Seedance 2.5: 30/10/10,
+  // 2026-08-15) — per-provider enforcement lives in the input resolvers,
+  // which drop trailing entries to the actual provider's own limits.
+  referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
+  referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
+  referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
   // Structured references (parity with generate-image). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
@@ -377,12 +380,14 @@ export async function validateSeedance2AudioPreHandler(
   const urls = body.referenceAudioUrls
   if (!Array.isArray(urls) || urls.length === 0) return
 
-  // Probe in parallel, bounded to the route's accepted ref count — this runs
-  // BEFORE the Zod `.max(SEEDANCE_2_REF_LIMITS.audio)` check, so never ffprobe an
-  // unbounded list. A probe failure is best-effort: map it to NaN (which
-  // findSeedance2AudioOverLimit ignores) so a blip can't block a valid request.
+  // Probe in parallel, bounded to the PROVIDER's accepted audio count (2.5
+  // takes 10 where 2.0 takes 3) — this runs BEFORE the Zod ceiling check, so
+  // never ffprobe an unbounded list. A probe failure is best-effort: map it
+  // to NaN (which findSeedance2AudioOverLimit ignores) so a blip can't block
+  // a valid request.
+  const audioCap = { ...SEEDANCE_2_REF_LIMITS, ...(provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}) : {}) }.audio
   const candidates = urls
-    .slice(0, SEEDANCE_2_REF_LIMITS.audio)
+    .slice(0, audioCap)
     .filter((u): u is string => typeof u === "string" && u.length > 0)
   const settled = await Promise.allSettled(candidates.map((u) => probeMediaDuration(u)))
   const durations = settled.map((r, i) => {
