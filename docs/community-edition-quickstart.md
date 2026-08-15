@@ -75,7 +75,18 @@ flag the probe never spends anything.
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need
-one AI provider key. Create a file named `.env` next to the compose file:
+a model provider — either of these, and both can run side by side:
+
+**Connect nodaro.ai (no keys to manage).** On http://localhost:3000/setup,
+step 2 → **Connect nodaro.ai**. Your browser opens the nodaro.ai consent
+screen; sign in or create a free account there (1,500 free credits, no
+card), approve, and you land back on your install connected. Restart the
+app container once (`docker compose -f docker-compose.community.yml
+restart nodaro`) and hit Run. Details and the two-accounts model:
+[Connect your instance to Nodaro Cloud](./community-cloud-connect.md).
+
+**Or bring your own key.** Create a file named `.env` next to the compose
+file:
 
 ```bash
 KIE_API_KEY=...            # kie.ai — broadest model coverage

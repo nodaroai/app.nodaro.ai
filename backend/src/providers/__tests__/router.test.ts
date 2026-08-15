@@ -197,6 +197,45 @@ describe("routeAndExecute (via generateImage)", () => {
     )
   })
 
+  // A keyless community install has NO registered providers, so an empty
+  // chain is its normal state — and exactly the state in which the cloud
+  // connection (registered late, or after a boot-time read failure) is the
+  // only thing that could serve the job. The self-heal must run before the
+  // empty-chain throw, not only after a walked chain came back null.
+  it("an empty chain first tries the cloud self-heal and re-routes through it", async () => {
+    const nodaroModule = await import("../nodaro/index.js")
+    const selfHeal = vi.mocked(nodaroModule.registerNodaroCloudProviderIfConnected)
+    // Earlier tests in this file reach the heal too; start from a clean history
+    // so "registered after the heal" below keys off THIS test's call.
+    selfHeal.mockClear()
+    selfHeal.mockResolvedValueOnce(true)
+    // The self-heal is rate-limited per process; sit outside any window an
+    // earlier test in this file may have opened.
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Number.MAX_SAFE_INTEGER / 2)
+
+    const nodaroGen = vi.fn().mockResolvedValue({ imageUrl: "https://cdn/img.png", cost: null })
+    configMocks.buildRoutingDecision
+      .mockResolvedValueOnce(decision({ chain: [], active: "kie" }))
+      .mockResolvedValueOnce(decision({ chain: ["nodaro"], active: "kie" }))
+    // Unregistered before the heal (so the heal is attempted), present after.
+    registryMocks.getProvider.mockImplementation((id) =>
+      id === "nodaro" && selfHeal.mock.calls.length > 0
+        ? makeProviderInstance({ image: { generateImage: nodaroGen } })
+        : null,
+    )
+    registryMocks.supportsModel.mockReturnValue(true)
+
+    try {
+      const result = await generateImage("a dog", "z-image")
+      expect(selfHeal).toHaveBeenCalledOnce()
+      expect(configMocks.buildRoutingDecision).toHaveBeenCalledTimes(2)
+      expect(result.providerUsed).toBe("nodaro")
+      expect(nodaroGen).toHaveBeenCalledOnce()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it("throws when no provider in the chain supports the model", async () => {
     configMocks.buildRoutingDecision.mockResolvedValue(
       decision({ chain: ["kie", "replicate"] }),

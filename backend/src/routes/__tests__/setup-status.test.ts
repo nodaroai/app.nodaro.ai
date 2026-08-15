@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockConfig, mockSelect, mockS3Send, mockPing, mockConnect, mockDisconnect } = vi.hoisted(() => ({
+const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect } = vi.hoisted(() => ({
   mockConfig: {
     EDITION: "community",
     REDIS_URL: "redis://localhost:6379",
@@ -23,6 +23,8 @@ const { mockConfig, mockSelect, mockS3Send, mockPing, mockConnect, mockDisconnec
     FAL_KEY: "",
   },
   mockSelect: vi.fn(),
+  // The hasUsers head-count: select(..., {count, head}).not(...) -> {count}
+  mockCount: vi.fn(),
   mockS3Send: vi.fn(),
   mockPing: vi.fn(),
   mockConnect: vi.fn(),
@@ -40,7 +42,11 @@ vi.mock("@/lib/config.js", () => ({
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
-    from: vi.fn(() => ({ select: vi.fn(() => ({ limit: mockSelect })) })),
+    from: vi.fn(() => ({
+      select: vi.fn((_cols: string, opts?: { head?: boolean }) =>
+        opts?.head ? { not: mockCount } : { limit: mockSelect },
+      ),
+    })),
   },
 }))
 
@@ -63,6 +69,7 @@ vi.mock("ioredis", () => ({
 }))
 
 import { setupStatusRoutes } from "../setup-status.js"
+import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../../lib/system-account.js"
 
 let app: FastifyInstance
 
@@ -70,6 +77,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   // Healthy defaults; individual tests break specific probes.
   mockSelect.mockResolvedValue({ data: [], error: null })
+  mockCount.mockResolvedValue({ count: 0, error: null })
   mockConnect.mockResolvedValue(undefined)
   mockPing.mockResolvedValue("PONG")
   mockS3Send.mockResolvedValue({})
@@ -170,5 +178,26 @@ describe("GET /v1/setup/status", () => {
     expect(body.checks.providers.ok).toBe(true)
     expect(body.checks.providers.keys.kie).toBe(true)
     expect(JSON.stringify(body)).not.toContain("kie-secret-value")
+  })
+
+  // hasUsers drives the guided setup's step 1 ("create your server login").
+  // The tutorial seed creates a SERVER-OWNED account on first boot; the moment
+  // that seed actually ran on the community stack (2026-08-16) a pristine
+  // install reported hasUsers=true and told a brand-new self-hoster their
+  // login was already DONE. Server-owned accounts must never count.
+  it("hasUsers is false on a pristine install", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().hasUsers).toBe(false)
+  })
+
+  it("hasUsers excludes the server-owned system accounts by their email domain", async () => {
+    await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(mockCount).toHaveBeenCalledWith("email", "like", SYSTEM_ACCOUNT_EMAIL_PATTERN)
+  })
+
+  it("hasUsers is true once a human account exists", async () => {
+    mockCount.mockResolvedValue({ count: 1, error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().hasUsers).toBe(true)
   })
 })

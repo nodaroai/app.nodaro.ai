@@ -475,8 +475,8 @@ jobs:
         run: npm ci
       - name: Build shared packages
         run: npm run build:packages
-      - name: Build backend (mirrors production tsc -p tsconfig.build.json)
-        run: npx tsc -p tsconfig.build.json
+      - name: Build backend (mirrors the Dockerfile — tsc + runtime asset copy)
+        run: npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
         working-directory: backend
       - name: Boot backend and probe /health
         # NODE_ENV=production only on the actual boot — mirrors prod runtime

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getAuthHeaders } from "@/lib/api"
+import { CONNECT_START_NETWORK_MESSAGE, interpretConnectStart } from "@/lib/cloud-connect-start"
 import { Link } from "react-router-dom"
 
 /**
@@ -310,6 +311,7 @@ export default function SetupPage() {
   const [envHelpOpen, setEnvHelpOpen] = useState(false)
   const [envWrite, setEnvWrite] = useState<"idle" | "done" | "nocompose" | "error">("idle")
   const [connectPending, setConnectPending] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
   const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
@@ -435,11 +437,15 @@ export default function SetupPage() {
 
   // One-click cloud connect: call the start endpoint directly and jump to
   // the nodaro.ai consent — no stop at /integrations (founder: the extra hop
-  // read as "it sent me back to the editor", 2026-08-15). Falls back to the
-  // integrations card if anything is off; unauthenticated -> login first.
+  // read as "it sent me back to the editor", 2026-08-15). When the instance
+  // cannot hand back a consent URL the reason is shown HERE, under the
+  // button, and "use my own keys" becomes the way forward — never a silent
+  // navigation (2026-08-16: production had the feature switched off and the
+  // page hopped to /integrations with no message). Unauthenticated -> login.
   const startCloudConnect = async () => {
     if (connectPending) return
     setConnectPending(true)
+    setConnectError(null)
     try {
       const headers = await getAuthHeaders()
       if (!headers.Authorization) {
@@ -450,15 +456,18 @@ export default function SetupPage() {
         method: "POST",
         headers,
       })
-      const json = (await res.json().catch(() => null)) as { authorizeUrl?: string } | null
-      if (res.ok && json?.authorizeUrl) {
+      const json: unknown = await res.json().catch(() => null)
+      const outcome = interpretConnectStart(res.status, json)
+      if (outcome.kind === "redirect") {
         localStorage.setItem("nodaro_connect_from", "setup")
-        window.location.href = json.authorizeUrl
+        window.location.href = outcome.url
         return
       }
-      window.location.href = "/integrations"
+      setConnectError(outcome.message)
     } catch {
-      window.location.href = "/integrations"
+      setConnectError(CONNECT_START_NETWORK_MESSAGE)
+    } finally {
+      setConnectPending(false)
     }
   }
 
@@ -810,20 +819,37 @@ export default function SetupPage() {
                           onClick={() => setTab("health")}
                           style={{
                             border: "none",
-                            background: "transparent",
+                            background: connectError ? INK : "transparent",
                             cursor: "pointer",
                             fontFamily: MONO,
                             fontSize: 11.5,
                             letterSpacing: ".08em",
-                            color: INK,
-                            textDecoration: "underline",
+                            color: connectError ? "#fff" : INK,
+                            textDecoration: connectError ? "none" : "underline",
                             textUnderlineOffset: 4,
                             whiteSpace: "nowrap",
-                            padding: 0,
+                            padding: connectError ? "9px 14px" : 0,
+                            borderRadius: connectError ? 9 : 0,
                           }}
                         >
                           USE MY OWN KEYS &rarr;
                         </button>
+                      )}
+                      {st.accent && connectError && (
+                        <p
+                          role="alert"
+                          data-testid="cloud-connect-error"
+                          style={{
+                            margin: 0,
+                            maxWidth: 300,
+                            fontSize: 12.5,
+                            lineHeight: 1.45,
+                            color: "#b60a43",
+                            textAlign: "right",
+                          }}
+                        >
+                          {connectError}
+                        </p>
                       )}
                     </span>
                   ) : (
@@ -1065,6 +1091,15 @@ export default function SetupPage() {
                       <>One account, every model &mdash; OAuth sign-in, runs alongside your keys.</>
                     )}
                   </span>
+                  {!connected && connectError && (
+                    <span
+                      role="alert"
+                      data-testid="cloud-connect-error"
+                      style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43", marginTop: 6 }}
+                    >
+                      {connectError} The keys below work without it.
+                    </span>
+                  )}
                 </div>
                 {connected ? (
                   <a

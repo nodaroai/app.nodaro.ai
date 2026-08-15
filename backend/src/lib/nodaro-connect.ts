@@ -30,6 +30,44 @@ export interface NodaroConnection {
   connectedAt?: string
 }
 
+/**
+ * The connection store, read without collapsing "could not read" into "not
+ * connected". Boot-time provider registration must RETRY on `unavailable`
+ * (the worker's first read races the container's own proxy on the community
+ * stack) and STOP on `not-connected`; treating both as null is what left the
+ * cloud provider unregistered on every boot.
+ */
+export type NodaroConnectionState =
+  | { state: "connected"; connection: NodaroConnection }
+  | { state: "not-connected" }
+  | { state: "unavailable"; reason: string }
+
+export async function readNodaroConnectionState(): Promise<NodaroConnectionState> {
+  try {
+    const { data, error } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", NODARO_CONNECT_SETTINGS_KEY)
+      .maybeSingle()
+    if (error) return { state: "unavailable", reason: error.message }
+    if (!data?.value) return { state: "not-connected" }
+    const value = typeof data.value === "string" ? safeParse(data.value) : data.value
+    if (!value || typeof value !== "object") return { state: "not-connected" }
+    const conn = value as NodaroConnection
+    if (!conn.clientId || !conn.clientSecret || !conn.accessToken) return { state: "not-connected" }
+    return { state: "connected", connection: conn }
+  } catch (err) {
+    return { state: "unavailable", reason: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * The stored registration/connection, or null. Null covers BOTH "nothing
+ * stored" and "store unreachable" — callers that must tell those apart use
+ * readNodaroConnectionState(). Unlike that reader, this returns a
+ * registration that has not finished the OAuth flow yet (no accessToken),
+ * which the connect routes need to resume it.
+ */
 export async function getNodaroConnection(): Promise<NodaroConnection | null> {
   const { data, error } = await supabase
     .from("app_settings")

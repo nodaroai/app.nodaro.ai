@@ -1,8 +1,11 @@
 # Connect your self-hosted instance to Nodaro Cloud
 
-> **Rollout-gated.** The cloud side of this feature is enabled by the
-> `COMMUNITY_CONNECT_ENABLED` flag on Nodaro Cloud — availability may lag
-> this document.
+> **Cloud-side switch.** Nodaro Cloud accepts self-hosted registrations
+> only while its `COMMUNITY_CONNECT_ENABLED` flag is on — live on
+> `app.nodaro.ai` since 2026-08-16. If it is ever off, your instance's
+> **Connect nodaro.ai** button says so in place
+> (`cloud_connect_unavailable`) and your own provider keys keep working;
+> nothing about your install is broken.
 
 Self-hosted community instances can connect to Nodaro Cloud and use it as a
 **provider in your provider list** — the same way you'd connect ElevenLabs
@@ -21,17 +24,29 @@ locally; the Nodaro connection adds:
 
 ## How to connect
 
-1. In your instance: **Integrations → Nodaro Cloud → Connect**.
+1. In your instance: **/setup → step 2 → Connect nodaro.ai** (or
+   **Integrations → Nodaro Cloud → Connect**). Two accounts are involved and
+   only two: your **server login** (lives in your own database) and your
+   **nodaro.ai account** (created or signed into on the consent screen).
 2. Your browser opens the Nodaro Cloud consent screen — sign in (or sign
    up) and approve. The instance registers itself with its own OAuth
    credential; the requested scopes are exactly what generation needs
    (`assets:write workflows:execute jobs:read credits:read`).
 3. You land back on your instance with the connection active. The card
-   shows your live cloud balance. Generation through the Nodaro provider
-   takes effect after the next instance restart.
+   shows your live cloud balance. The connection is **per instance**, not
+   per user — whoever clicks Connect binds the whole install to their
+   nodaro.ai account.
+4. Generation through the Nodaro provider is picked up on the next start
+   of the app container (`docker compose … restart nodaro`); until then
+   the first job that finds no provider re-checks the connection on its
+   own, so a Run right after connecting also works.
 
 The instance's credential is stored server-side only — it never reaches
 your browser.
+
+If the button reports that nodaro.ai is not accepting connections or cannot
+be reached, that is the cloud side or your network — your own provider keys
+(`KIE_API_KEY`, `REPLICATE_API_TOKEN`, …) work independently of it.
 
 ## Managing connected instances (cloud side)
 

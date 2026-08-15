@@ -380,6 +380,62 @@ await check("a keyed generation completes and its media lands in the install's o
   return `${model} completed in ${Math.round((Date.now() - started) / 1000)}s, ${bytes}B ${contentType} from ${new URL(imageUrl).origin}${own}, no credits charged`
 })
 
+await check("starting the nodaro.ai connection is honest either way", async () => {
+  // The guided setup's headline CTA. Two acceptable answers: a consent URL on
+  // the cloud host, or an error the user can act on. What shipped before was
+  // a third thing — the cloud's refusal relayed as "not enabled on THIS
+  // server", and a setup screen that hopped to /integrations with no message.
+  //
+  // Side effect to know about: on an install whose cloud accepts the call,
+  // this creates (once, idempotently reused after) the instance's DCR
+  // registration — the same thing clicking the button does. CI points
+  // NODARO_CLOUD_URL at an unreachable address so it exercises the error
+  // branch and never registers anything with the real cloud.
+  const { status, json } = await api("/v1/nodaro-connect/start", { method: "POST", token: ctx.token })
+  if (status === 200) {
+    const url = json?.authorizeUrl
+    assert(typeof url === "string" && /^https?:\/\//.test(url), `200 without an authorizeUrl: ${JSON.stringify(json).slice(0, 200)}`)
+    assert(/\/oauth\/authorize\?/.test(url), `authorizeUrl is not a consent URL: ${url}`)
+    return `consent URL on ${new URL(url).host}`
+  }
+  assert(status >= 400 && status < 600, `unexpected status ${status}`)
+  const code = json?.error?.code
+  const message = json?.error?.message
+  assert(typeof code === "string" && code.length > 0, `error without a code: ${JSON.stringify(json).slice(0, 200)}`)
+  assertActionable(message, "connect-start error")
+  assert(!/this server/i.test(message), `error blames the local server for a cloud-side condition — "${message}"`)
+  return `${status} ${code} — "${message}"`
+})
+
+await check("a fresh install seeds its tutorials", async () => {
+  // The seeder runs fire-and-forget at boot (server.ts) and needs a system
+  // account + project + category before rows land, so allow it a moment.
+  // Zero tutorials after that means the templates never reached the image —
+  // tsc emits JS only, and the seeder swallows the ENOENT, so nothing else
+  // in CI notices (every install shipped "No tutorials yet" this way).
+  const deadline = Date.now() + Number(process.env.SMOKE_TUTORIAL_TIMEOUT_MS ?? 30_000)
+  let flows = null
+  let lastStatus = null
+  while (Date.now() < deadline) {
+    const { status, json } = await api("/v1/tutorials")
+    lastStatus = status
+    if (status === 200) {
+      // { categories: [{ flows: [...] }] } — the seeded workflow_templates
+      // (listed_in=['tutorial']) grouped under their tutorial category.
+      assert(Array.isArray(json?.categories), `unexpected /v1/tutorials shape: ${JSON.stringify(json).slice(0, 200)}`)
+      flows = json.categories.flatMap((c) => (Array.isArray(c?.flows) ? c.flows : []))
+      if (flows.length > 0) break
+    }
+    await new Promise((r) => setTimeout(r, 2_000))
+  }
+  assert(lastStatus === 200, `GET /v1/tutorials answered ${lastStatus}`)
+  assert(
+    flows && flows.length > 0,
+    "no tutorial workflows after boot — the seeded templates are missing from the image (see backend/scripts/copy-build-assets.mjs)",
+  )
+  return `${flows.length} tutorial workflow(s) seeded`
+})
+
 await check("billing routes are absent on an edition with no billing", async () => {
   const probes = ["/v1/credits/balance", "/v1/billing/subscription", "/v1/admin/users"]
   const answered = []
