@@ -132,7 +132,27 @@ export async function saveNodaroConnection(conn: NodaroConnection): Promise<void
   if (error) throw new Error(`Failed to save Nodaro connection: ${error.message}`)
 }
 
+/**
+ * Disconnect: drop the tokens, KEEP the instance's DCR client
+ * (`clientId`/`clientSecret`). Registration is per instance, not per session
+ * — the next Connect must reuse it, not mint another one on the cloud. It
+ * used to delete the whole record, so every disconnect/reconnect cycle
+ * registered a fresh client and each of those counted against the cloud's
+ * open-registration cap; five in a day locked the install out (#708).
+ *
+ * `readNodaroConnectionState` already reads "client but no accessToken" as
+ * not-connected, and every proxy checks `accessToken`, so nothing downstream
+ * mistakes the kept client for a live connection.
+ */
 export async function clearNodaroConnection(): Promise<void> {
+  const conn = await getNodaroConnection()
+  if (!conn) return
+  const { accessToken: _t, connectedAt: _c, ...client } = conn
+  await saveNodaroConnection(client)
+}
+
+/** Forget the instance's DCR client too — only for a full reset (tests, a wipe). */
+export async function forgetNodaroClient(): Promise<void> {
   await supabase.from("app_settings").delete().eq("key", NODARO_CONNECT_SETTINGS_KEY)
 }
 

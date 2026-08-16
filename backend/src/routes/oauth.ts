@@ -152,9 +152,14 @@ export async function oauthRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "invalid_request", message: "code_challenge_method must be S256" } })
     }
 
-    // Dynamic_mcp clients (RFC 7591 DCR): claim the row for this user on first
-    // consent. Idempotent — re-consenting a second time is a no-op.
-    if (dApp.kind === "dynamic_mcp" && dApp.owner_user_id == null) {
+    // DCR-registered clients (RFC 7591) — MCP clients AND community
+    // instances: claim the row for this user on first consent. Idempotent —
+    // re-consenting a second time is a no-op. `owner_user_id` is also what
+    // oauth-register.ts reads as "this registration was consumed"; community
+    // instances were never claimed, so every connection they ever made
+    // counted as open forever and five Connect clicks in a day locked an
+    // install out (#708).
+    if ((dApp.kind === "dynamic_mcp" || dApp.kind === "community_instance") && dApp.owner_user_id == null) {
       await supabase
         .from("developer_apps")
         .update({ owner_user_id: req.userId })

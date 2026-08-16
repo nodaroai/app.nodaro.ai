@@ -45,6 +45,19 @@ function callbackUrl(): string {
 const CLOUD_HOST = () => new URL(nodaroCloudBase()).host
 
 function cloudRefusal(status: number, body: { error?: { code?: string; message?: string } } | null) {
+  // Too many unfinished connection attempts from this address (the cloud's
+  // 24 h open-registration cap). The old relay said "complete the flow on an
+  // existing one" — which the install cannot do on the user's behalf. Say
+  // what to do instead.
+  if (body?.error?.code === "too_many_open_registrations") {
+    return {
+      status: 429,
+      code: "cloud_connect_rate_limited",
+      message:
+        "Too many unfinished nodaro.ai connection attempts from this address in the last 24 hours. " +
+        "Try again later, or paste your own provider key on Install health in the meantime.",
+    }
+  }
   if (body?.error?.code === "community_connect_disabled") {
     return {
       status: 503,

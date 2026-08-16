@@ -11,6 +11,9 @@ vi.mock("../../lib/supabase.js", () => {
   countChain.is = vi.fn(() => countChain)
   countChain.gte = vi.fn(() => countChain)
   countChain.overlaps = vi.fn(() => Promise.resolve({ count: mockState.openCount, error: null }))
+  // The community-instance cap query ends at .gte() (no redirect-uri overlap):
+  // awaiting the chain must resolve like the overlaps() branch does.
+  countChain.then = (resolve: (v: unknown) => unknown) => resolve({ count: mockState.openCount, error: null })
 
   const insertChain = {
     select: vi.fn(() => ({
@@ -278,6 +281,55 @@ describe("community cloud-connect DCR branch", () => {
       "jobs:read",
       "credits:read",
     ])
+  })
+
+  it("counts open registrations per CALLER (hashed address), not per name — every default install shares the same name (#708)", async () => {
+    ;(config as Record<string, unknown>).COMMUNITY_CONNECT_ENABLED = true
+    const app = await makeApp()
+    mockState.openCount = 0
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/oauth/register",
+      payload: {
+        client_name: "Nodaro instance (localhost:3000)",
+        redirect_uris: ["http://localhost:3000/v1/nodaro-connect/callback"],
+        client_uri: "http://localhost:3000",
+        software_id: "nodaro-community",
+        scope: "assets:write workflows:execute jobs:read credits:read",
+      },
+      headers: { "x-forwarded-for": "10.0.1.7" },
+    })
+    expect(res.statusCode).toBe(201)
+    // The row remembers who registered (hashed), and the cap query keyed on it.
+    const { createHash } = await import("node:crypto")
+    const expectedHash = createHash("sha256").update("10.0.1.7").digest("hex")
+    expect(mockState.lastInsert?.registered_ip_hash).toBe(expectedHash)
+    // The cap query keyed on the caller hash — never on the (shared) name.
+    // The chain mock is shared across the file, so look at the calls this
+    // registration made: the last "kind" call and everything after it.
+    const { supabase } = await import("../../lib/supabase.js")
+    const chain = (supabase.from as unknown as { mock: { results: Array<{ value: { select: () => Record<string, unknown> } }> } }).mock.results.at(-1)!.value.select() as Record<string, unknown>
+    const eqCalls = (chain.eq as ReturnType<typeof vi.fn>).mock.calls as unknown[][]
+    const start = eqCalls.map((c) => c[0]).lastIndexOf("kind")
+    const mine = eqCalls.slice(start)
+    expect(mine).toEqual([["kind", "community_instance"], ["registered_ip_hash", expectedHash]])
+  })
+
+  it("429s a caller with 10 unfinished registrations in the window, with a sentence the user can act on", async () => {
+    ;(config as Record<string, unknown>).COMMUNITY_CONNECT_ENABLED = true
+    const app = await makeApp()
+    mockState.openCount = 10
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/oauth/register",
+      payload: communityPayload,
+      headers: { "x-forwarded-for": "10.0.1.8" },
+    })
+    mockState.openCount = 0
+    expect(res.statusCode).toBe(429)
+    const body = JSON.parse(res.body)
+    expect(body.error.code).toBe("too_many_open_registrations")
+    expect(body.error.message).toMatch(/from this address in the last 24 hours/)
   })
 
   it("plain MCP registrations still get kind=dynamic_mcp", async () => {

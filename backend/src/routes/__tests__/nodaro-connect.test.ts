@@ -131,6 +131,23 @@ describe("POST /v1/nodaro-connect/start", () => {
     expect(body.error!.message).toContain("redirect_uris must be https")
   })
 
+  it("turns the cloud's open-registration cap into a sentence the user can act on (#708)", async () => {
+    mockReadState.mockResolvedValue({ state: "not-connected" })
+    mockGetConnection.mockResolvedValue(null)
+    mockFetch.mockResolvedValue(cloudResponse(429, { error: { code: "too_many_open_registrations", message: "10 connection attempts from this address in the last 24 hours were never completed." } }))
+
+    const { status, body } = await start()
+
+    expect(status).toBe(429)
+    expect(body.error?.code).toBe("cloud_connect_rate_limited")
+    expectActionable(body.error!.message)
+    expect(body.error!.message).toMatch(/last 24 hours/)
+    expect(body.error!.message).toMatch(/provider key/)
+    // and never the cloud's "complete the flow on an existing one", which the
+    // install cannot do on the user's behalf
+    expect(body.error!.message).not.toMatch(/existing one/)
+  })
+
   it("says nodaro.ai is unreachable when the registration call cannot connect", async () => {
     mockReadState.mockResolvedValue({ state: "not-connected" })
     mockGetConnection.mockResolvedValue(null)

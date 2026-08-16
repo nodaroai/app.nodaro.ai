@@ -28,6 +28,7 @@ vi.mock("../supabase.js", () => ({
 }))
 
 import {
+  clearNodaroConnection,
   getNodaroConnection,
   getNodaroCredential,
   isNodaroConnected,
@@ -135,5 +136,42 @@ describe("getNodaroConnection / isNodaroConnected keep their null-on-failure con
     maybeSingleMock.mockResolvedValue({ data: { value: conn }, error: null })
     expect(await getNodaroConnection()).toEqual(conn)
     expect(await isNodaroConnected()).toBe(true)
+  })
+})
+
+describe("clearNodaroConnection keeps the instance's DCR client (#708)", () => {
+  it("drops the tokens but writes the clientId/clientSecret back — the next Connect reuses the registration", async () => {
+    const stored = { clientId: "ndr_dcr_1", clientSecret: "s3cr3t", accessToken: "ndr_app_tok", connectedAt: "2026-08-16T16:05:41Z" }
+    maybeSingleMock.mockResolvedValue({ data: { value: stored }, error: null })
+    const { supabase } = await import("../supabase.js")
+    const upsert = vi.fn().mockResolvedValue({ error: null })
+    const del = vi.fn()
+    vi.mocked(supabase.from).mockImplementation((() => ({
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock }) }),
+      upsert,
+      delete: del,
+    })) as never)
+
+    await clearNodaroConnection()
+
+    expect(del).not.toHaveBeenCalled()
+    expect(upsert).toHaveBeenCalledTimes(1)
+    const row = upsert.mock.calls[0]![0] as { key: string; value: Record<string, unknown> }
+    expect(row.value).toEqual({ clientId: "ndr_dcr_1", clientSecret: "s3cr3t" })
+    expect(row.value).not.toHaveProperty("accessToken")
+    expect(row.value).not.toHaveProperty("connectedAt")
+  })
+
+  it("is a no-op when nothing is stored", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    const { supabase } = await import("../supabase.js")
+    const upsert = vi.fn()
+    vi.mocked(supabase.from).mockImplementation((() => ({
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock }) }),
+      upsert,
+      delete: vi.fn(),
+    })) as never)
+    await clearNodaroConnection()
+    expect(upsert).not.toHaveBeenCalled()
   })
 })
