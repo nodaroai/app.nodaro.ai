@@ -103,6 +103,62 @@ R2_BUCKET_NAME=nodaro-assets
 R2_PUBLIC_URL=https://pub-….r2.dev    # or your custom domain
 ```
 
+#### Every backend variable — reference
+
+Everything `backend/src/lib/config.ts` reads. **Required** means the API
+refuses to boot without it (the community compose sets or generates all
+three). Everything else has a working default. A guard test
+(`backend/src/lib/__tests__/config-docs.test.ts`) fails CI if a variable is
+added to `config.ts` without a row here.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SUPABASE_URL` | **required** | Supabase project URL (bundled: `http://rest:3000` behind the compose network) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **required** | Service-role JWT the backend uses (bundled: generated on first boot) |
+| `INTERNAL_ORCHESTRATOR_SECRET` | **required**, ≥ 32 chars | Shared secret between the orchestrator and the API (bundled: generated on first boot) |
+| `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue |
+| `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
+| `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
+| `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
+| `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
+| `NODE_ENV` | `development` | `production` in every image |
+| `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
+| `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
+| `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |
+| `KIE_API_KEY` | `""` | KIE.ai — broadest media/LLM coverage (or paste it on Install health) |
+| `REPLICATE_API_TOKEN` | `""` | Replicate — Flux 2 family, LoRA training |
+| `ANTHROPIC_API_KEY` | `""` | Direct Anthropic lane for Claude LLM nodes |
+| `GEMINI_API_KEY` | `""` | Direct Google lane for Gemini models — see "Gemini routing" |
+| `ELEVENLABS_API_KEY` | `""` | Speech, voices, dubbing |
+| `FAL_KEY` | `""` | fal.ai-hosted models |
+| `HEYGEN_API_KEY` | `""` | AI Avatar / Cinematic Avatar (or run them on the nodaro.ai connection) |
+| `BEEBLE_API_KEY` | `""` | Relight & Switch |
+| `APIFY_API_TOKEN` | `""` | Web Scrape |
+| `NODARO_API_KEY` | `""` | The nodaro.ai connection by key instead of OAuth (§11) |
+| `NODARO_CLOUD_URL` | `https://app.nodaro.ai` | Where the connection talks to; CI points it at an unreachable host |
+| `NODARO_ENCRYPTION_KEY` | `""` (compose: generated) | 64-char hex; encrypts pasted provider keys and social connections at rest |
+| `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
+| `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
+| `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO | Object storage — see 2d |
+| `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
+| `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
+| `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
+| `ORCHESTRATOR_CONCURRENCY` | `20` | BullMQ concurrency of the orchestrator (I/O-bound) |
+| `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
+| `REMOTION_CONCURRENCY` | Remotion default (50 % of cores) | Browser tabs per render |
+| `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node |
+| `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
+| `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
+| `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
+| `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
+| `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
+| `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
+| `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated |
+| `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch (§10) |
+| `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
+| `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
+| `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
+
 ### 2b. Generate internal secrets
 
 **On the community compose stack both are generated on first boot** and
