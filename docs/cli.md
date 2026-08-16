@@ -128,11 +128,36 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
+# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
+#   table shows id, kind, family, modes, credit tiers, featured ★ and the doctrine ✓ flag; --json for the full sheets
+
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list [--json]                            # all picker node types + option counts
 nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
 #   --full adds each option's description + the prompt fragment it injects
 #   --category filters a single-dim picker; --field picks one dimension of a multi-dim picker (person/styling/framing)
+nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--model <id>] [--effort <level>] [--json]
+#   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
+#   --target limits to a comma-separated list of picker node types (default: all analyzable)
+
+# Shots — Cine share → remix records
+nodaro shots get <id> [--json]                          # public shots resolve for anyone holding the id
+nodaro shots create [--file shot.json] [--visibility private|public] [--json]
+nodaro shots update <id> [--file fields.json] [--visibility private|public] [--json]
+nodaro shots delete <id>
+
+# Recast — regenerate an analyzed video with your own cast + authored-script import (Cloud edition)
+nodaro recast skill                                     # print the authoring guide for writing a script (markdown, free)
+nodaro recast validate --file script.json [--json]      # free validation; exit code 1 while invalid
+nodaro recast import --file script.json --rights-attested [--json]
+#   imports a VALIDATED authored script as a completed analysis (free); --rights-attested asserts
+#   the script is your own work — authored recasts render Faithful, exactly as written
+nodaro recast estimate --analysis-job <id> [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
+nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
+#   BUYS THE PLAN (credits) — run `estimate` first; returns the run id
+nodaro recast start <recastId> [--segment-sec <n>] [--json]   # render a planned run (idempotent)
+nodaro recast status <recastId> [--json]                # poll status + any pending interactive step
 
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
 nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>]   # interactive Q&A; node picker if --node-type omitted

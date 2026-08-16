@@ -15,6 +15,9 @@ import { audioCommand } from "./commands/audio.js"
 import { presetsCommand } from "./commands/presets.js"
 import { communityCommand } from "./commands/community.js"
 import { pickerCatalogsCommand } from "./commands/picker-catalogs.js"
+import { modelsCommand } from "./commands/models.js"
+import { shotsCommand } from "./commands/shots.js"
+import { recastCommand } from "./commands/recast.js"
 import { registerLocationsCommands } from "./commands/locations.js"
 import { registerObjectsCommands } from "./commands/objects.js"
 
@@ -50,6 +53,9 @@ program.addCommand(audioCommand())
 program.addCommand(presetsCommand())
 program.addCommand(communityCommand())
 program.addCommand(pickerCatalogsCommand())
+program.addCommand(modelsCommand())
+program.addCommand(shotsCommand())
+program.addCommand(recastCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 

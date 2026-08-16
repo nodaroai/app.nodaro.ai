@@ -78,7 +78,7 @@ Generate the orchestrator secret in one line:
 
 ```bash
 echo "INTERNAL_ORCHESTRATOR_SECRET=$(openssl rand -hex 32)" >> .env
-echo "SOCIAL_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
+echo "NODARO_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
 The full list of supported variables is in `.env.example`. The

@@ -3,8 +3,9 @@
 // Empty state of the AI Avatar node (catalog source): "START WITH AN AVATAR" —
 // a row of featured looks to pick from right on the card, a search box that
 // filters the whole catalog in place (the same search the settings panel
-// runs), a link to browse the full catalog with filters in the settings
-// panel, and the alternative of animating your own portrait instead. Also
+// runs), a "Browse all N ›" that opens the full catalog in the Avatar Picker
+// modal (people, facets, detail column), and the alternative of animating
+// your own portrait instead. Also
 // serves as the in-place "Change avatar" view once an avatar is set (the
 // current one is ring-highlighted and ✕ goes back).
 
@@ -17,6 +18,7 @@ import {
   useHeygenAvatars,
   keylessCatalogHint,
   avatarSupportsV,
+  avatarStatusLabel,
   filterAvatars,
 } from "@/components/heygen/heygen-catalog"
 import { pickFeaturedAvatars, splitLookName } from "./catalog-helpers"
@@ -33,8 +35,9 @@ interface AvatarQuickPickProps {
   /** The look currently stored on the node (highlighted), if any. */
   readonly currentAvatarId?: string
   readonly onPick: (avatar: HeygenAvatar) => void
-  /** Open the settings panel (full catalog with search + filters). */
-  readonly onBrowseAll: () => void
+  /** Open the full catalog (the Avatar Picker modal), optionally with the
+   *  card's current search text carried over. */
+  readonly onBrowseAll: (query?: string) => void
   /** Switch the node to image-source mode. */
   readonly onUseImage: () => void
   /** Present when this view was opened from "Change avatar" — ✕ returns. */
@@ -51,23 +54,31 @@ interface LookTileProps {
   readonly onPick: (avatar: HeygenAvatar) => void
 }
 
-/** One look: portrait (fills the tile), Avatar-V badge, person / scene lines. */
+/** One look: portrait (fills the tile), Avatar-V badge, person / scene lines.
+ *  The account's own look that HeyGen is still building (or failed) shows its
+ *  status and cannot be picked. */
 function LookTile({ avatar, selected, onPick }: LookTileProps) {
   const { person, scene } = splitLookName(avatar.name)
+  const statusLabel = avatarStatusLabel(avatar)
+  const named = statusLabel
+    ? `${avatar.name} — ${statusLabel === "Failed" ? "HeyGen could not build this look" : "HeyGen is still building this look"}`
+    : avatar.name
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label={avatar.name}
-      title={avatar.name}
+      aria-disabled={statusLabel ? true : undefined}
+      aria-label={named}
+      title={named}
       className={cn(
-        "nodrag nopan group/tile flex flex-col min-w-0 min-h-0 rounded-lg border p-1 text-left transition-colors cursor-pointer",
+        "nodrag nopan group/tile flex flex-col min-w-0 min-h-0 rounded-lg border p-1 text-left transition-colors",
+        statusLabel ? "cursor-not-allowed opacity-50" : "cursor-pointer",
         selected
           ? "border-[#ff0073] ring-1 ring-[#ff0073]/50 bg-[#ff0073]/5"
           : "border-border/60 hover:border-[#ff0073]/60 hover:bg-muted/40",
       )}
-      onClick={(e) => { stop(e); onPick(avatar) }}
+      onClick={(e) => { stop(e); if (!statusLabel) onPick(avatar) }}
     >
       <div className="relative flex-1 min-h-0 overflow-hidden rounded-md bg-muted/40">
         <CachedImage
@@ -84,6 +95,18 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
             className="absolute top-1 left-1 grid place-items-center w-4 h-4 rounded bg-violet-600/90 text-white"
           >
             <Zap className="size-2.5" aria-hidden />
+          </span>
+        )}
+        {statusLabel && (
+          <span
+            aria-hidden
+            data-testid="avatar-status-badge"
+            className={cn(
+              "absolute bottom-1 left-1 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white",
+              statusLabel === "Failed" ? "bg-red-600/90" : "bg-amber-500/90",
+            )}
+          >
+            {statusLabel}
           </span>
         )}
       </div>
@@ -120,7 +143,7 @@ export function AvatarQuickPick({
   )
   const shown = searching ? matches.slice(0, SEARCH_RESULT_CAP) : featured
 
-  const handleBrowse = useCallback((e: MouseEvent) => { stop(e); onBrowseAll() }, [onBrowseAll])
+  const handleBrowse = useCallback((e: MouseEvent) => { stop(e); onBrowseAll(query.trim() || undefined) }, [onBrowseAll, query])
   const handleUseImage = useCallback((e: MouseEvent) => { stop(e); onUseImage() }, [onUseImage])
   const handleCancel = useCallback((e: MouseEvent) => { stop(e); onCancel?.() }, [onCancel])
   const handleQuery = useCallback((e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value), [])

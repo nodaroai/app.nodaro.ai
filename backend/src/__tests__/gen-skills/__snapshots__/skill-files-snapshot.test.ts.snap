@@ -229,7 +229,10 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`seed\`
 - \`structured\`
 - \`connected_references\`
-- \`reference_order\`",
+- \`reference_order\`
+- \`reference_image_urls\`
+- \`reference_video_urls\`
+- \`reference_audio_urls\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
 **Credit cost:** 20

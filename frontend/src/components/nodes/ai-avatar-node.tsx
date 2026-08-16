@@ -291,6 +291,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 data={nodeData}
                 failed={status === "failed"}
                 failureMessage={nodeData.errorMessage}
+                costCredits={credits}
               />
             )}
 

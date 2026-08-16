@@ -19,7 +19,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 
 **Inputs:**
 - `image` — source image from an upstream node (required).
-- `mask` — *optional* inpainting mask (white = edit, black = preserve). Forwarded to providers that support masks. An interactive Mask Painter is available when the **Ideogram Edit** provider is selected.
+- `mask` — *optional* inpainting mask (white = edit, black = preserve). Forwarded to providers that support masks. Wire one from a [Generate Mask](./generate-mask.md) or [Paint Mask](./paint-mask.md) node, or paint in place: an interactive Mask Painter is available when the **Ideogram Edit** provider is selected.
 
 **Outputs:**
 - `out` — the modified image URL.

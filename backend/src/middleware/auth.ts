@@ -151,6 +151,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // HeyGen catalog: read-only avatar/voice data; published apps render pickers
   // for anonymous viewers, so these MUST be public (auth would 401 them).
   { method: "GET", path: "/v1/heygen/avatars" },
+  { method: "GET", path: "/v1/heygen/avatars/private" },
   { method: "GET", path: "/v1/heygen/voices" },
   { path: "/v1/webhooks", prefix: true },
   { method: "POST", path: "/v1/telegram/webhook/", prefix: true },

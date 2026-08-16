@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-08-15T21:55:06.458Z
-generated_from: 150c80ac9
+generated_at: 2026-08-16T20:54:10.329Z
+generated_from: 094810fbf
 ---
 
 # Generate Video
@@ -101,6 +101,9 @@ generated_from: 150c80ac9
 - `structured`
 - `connected_references`
 - `reference_order`
+- `reference_image_urls`
+- `reference_video_urls`
+- `reference_audio_urls`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

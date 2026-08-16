@@ -18,9 +18,11 @@
 // hand-written `useQuery({ queryKey: ["heygen-avatars"] … })` would drift on
 // the polling rules and silently split the cache.
 
+import { useMemo } from "react"
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import {
   getHeygenAvatarCatalog,
+  getHeygenPrivateAvatars,
   getHeygenVoiceCatalog,
   type HeygenAvatar,
   type HeygenCatalogPage,
@@ -30,13 +32,39 @@ import {
 import type { AiAvatarData } from "@/types/nodes"
 
 export const HEYGEN_AVATARS_QUERY_KEY = ["heygen-avatars"] as const
+export const HEYGEN_PRIVATE_AVATARS_QUERY_KEY = ["heygen-avatars-private"] as const
 export const HEYGEN_VOICES_QUERY_KEY = ["heygen-voices"] as const
+
+/** One request of a WARM list — the whole ≈7,000-look catalog would be one
+ *  ≈4 MB answer; a chunk paints in a fraction of the time and the rest streams
+ *  behind it (see catalogQueryOptions). */
+export const CATALOG_CHUNK_SIZE = 1500
+
+/** How many chunks one queryFn run pulls before handing back to the poll
+ *  loop — bounds a single fetch cycle without stalling the stream. */
+const CHUNKS_PER_RUN = 8
+
+/**
+ * Consecutive answers that REPLACED our list (a generation we did not hold)
+ * before it was whole. One is normal — the server refreshed while we were
+ * away. Two in a row means the servers behind the load balancer disagree
+ * (replicas mid-convergence): chunking can never finish against a moving
+ * target, so from then on the run asks for the WHOLE list in one answer,
+ * which is complete whichever replica serves it.
+ */
+const MAX_GENERATION_FLIPS = 2
+
+/** The account's own looks: a small list people expect to be fresh. */
+const PRIVATE_POLL_MS = 2 * 60 * 1000
 
 /** The catalogs change rarely; the server caches them for an hour anyway. */
 const CATALOG_STALE_TIME_MS = 5 * 60 * 1000
 
 /** While the server is still filling, ask again this often. */
 const FILLING_POLL_MS = 2_000
+
+/** Between chunks of a warm list — effectively "next tick". */
+const CHUNK_POLL_MS = 50
 
 /**
  * An EMPTY catalog is a state that changes under the user — a self-host that
@@ -49,23 +77,37 @@ const EMPTY_POLL_MS = 15_000
 /** What the query cache holds for a catalog: everything received so far. */
 export interface HeygenCatalogState<T> {
   readonly items: T[]
+  /** The server's list is whole (we may still be behind it — see `total`). */
   readonly complete: boolean
+  /** How far the server's list goes; > items.length while chunks stream in. */
+  readonly total: number
   /** The server generation these items belong to ("" from a server that
    *  predates deltas — then every poll brings the whole list). */
   readonly generation: string
+  /** Consecutive generation replacements while still behind (see
+   *  MAX_GENERATION_FLIPS); 0 once caught up. */
+  readonly flips: number
+}
+
+/** Fewer items than the server has → keep pulling. */
+export function isBehind(state: HeygenCatalogState<unknown>): boolean {
+  return state.items.length < state.total
 }
 
 /**
  * Polling rule shared by both catalogs:
  *   still filling with pages in hand → every 2 s (the rest is streaming in);
+ *   the server is whole but we hold a chunk of it → straight away;
  *   nothing yet (empty, or a fill that has not produced a page) → every 15 s;
- *   whole and non-empty → stop.
+ *   whole and caught up → stop.
  */
 export function catalogRefetchInterval(state: HeygenCatalogState<unknown> | undefined): number | false {
   if (!state) return false
-  if (state.items.length === 0) return EMPTY_POLL_MS
-  return state.complete ? false : FILLING_POLL_MS
+  if (state.items.length === 0) return state.complete ? EMPTY_POLL_MS : FILLING_POLL_MS
+  if (!state.complete) return FILLING_POLL_MS
+  return isBehind(state) ? CHUNK_POLL_MS : false
 }
+
 
 function refetchRule(query: { state: { data?: HeygenCatalogState<unknown> } }): number | false {
   return catalogRefetchInterval(query.state.data)
@@ -87,10 +129,16 @@ export function mergeCatalogPage<T>(
     prev.generation !== "" &&
     page.generation === prev.generation &&
     page.offset === prev.items.length
+  const replaced = !appends && !!prev && prev.generation !== "" && page.generation !== prev.generation
+  const items = appends ? [...prev.items, ...page.items] : page.items
+  const total = Math.max(page.total, items.length)
+  const caughtUp = items.length >= total
   return {
-    items: appends ? [...prev.items, ...page.items] : page.items,
+    items,
     complete: page.complete,
+    total,
     generation: page.generation,
+    flips: caughtUp ? 0 : replaced ? prev.flips + 1 : appends ? prev.flips : 0,
   }
 }
 
@@ -102,16 +150,49 @@ function sinceOf<T>(prev: HeygenCatalogState<T> | undefined): HeygenCatalogSince
 function catalogQueryOptions<T>(
   client: QueryClient,
   queryKey: readonly [string],
-  fetchPage: (since?: HeygenCatalogSince) => Promise<HeygenCatalogPage<T>>,
+  fetchPage: (since?: HeygenCatalogSince, limit?: number, signal?: AbortSignal) => Promise<HeygenCatalogPage<T>>,
 ) {
   return {
     queryKey,
-    queryFn: async (): Promise<HeygenCatalogState<T>> => {
+    // One run pulls up to CHUNKS_PER_RUN chunks, publishing each into the
+    // cache as it lands so the pickers paint the first ≈1,500 looks while the
+    // rest streams in. A server that is still filling answers with what it
+    // has (the poll loop takes over at 2 s); a whole list arrives chunk by
+    // chunk with no wait between them. The loop stops as soon as an answer
+    // REPLACES the list (a generation we did not hold — see
+    // MAX_GENERATION_FLIPS), and once the last picker unmounts (`signal`).
+    queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<HeygenCatalogState<T>> => {
       const prev = client.getQueryData<HeygenCatalogState<T>>(queryKey)
-      return mergeCatalogPage(prev, await fetchPage(sinceOf(prev)))
+      if ((prev?.flips ?? 0) >= MAX_GENERATION_FLIPS) {
+        // Replicas disagree: one whole answer is complete whoever serves it.
+        return mergeCatalogPage(prev, await fetchPage(undefined, undefined, signal))
+      }
+      const flipsBefore = prev?.flips ?? 0
+      let state = mergeCatalogPage(prev, await fetchPage(sinceOf(prev), CATALOG_CHUNK_SIZE, signal))
+      for (
+        let i = 1;
+        i < CHUNKS_PER_RUN && state.complete && isBehind(state) && state.flips === flipsBefore && !signal?.aborted;
+        i++
+      ) {
+        // Progressive paint between chunks; the final return sets it again.
+        client.setQueryData(queryKey, state)
+        state = mergeCatalogPage(state, await fetchPage(sinceOf(state), CATALOG_CHUNK_SIZE, signal))
+      }
+      return state
     },
     staleTime: CATALOG_STALE_TIME_MS,
     refetchInterval: refetchRule,
+  }
+}
+
+/** The account's own looks — small, whole, refreshed every couple of minutes
+ *  while any picker is mounted; a keyless install (or an older server) yields []. */
+export function heygenPrivateAvatarsQueryOptions() {
+  return {
+    queryKey: HEYGEN_PRIVATE_AVATARS_QUERY_KEY,
+    queryFn: getHeygenPrivateAvatars,
+    staleTime: 60 * 1000,
+    refetchInterval: PRIVATE_POLL_MS,
   }
 }
 
@@ -132,7 +213,8 @@ export interface HeygenCatalogQuery<T> {
    *  "no avatars"). */
   readonly isLoading: boolean
   readonly isError: boolean
-  /** False while the server is still streaming pages in. */
+  /** False while the server is still streaming pages in, or while we are
+   *  still pulling chunks of a whole list. */
   readonly complete: boolean
 }
 
@@ -144,19 +226,44 @@ function shape<T>(q: {
   isError: boolean
 }): HeygenCatalogQuery<T> {
   const items = q.data?.items ?? EMPTY
-  const complete = q.data?.complete ?? false
+  const complete = !!q.data && q.data.complete && !isBehind(q.data)
   return {
     data: items,
-    isLoading: q.isLoading || (!!q.data && items.length === 0 && !complete),
+    isLoading: q.isLoading || (!!q.data && items.length === 0 && !q.data.complete),
     isError: q.isError,
     complete,
   }
 }
 
-/** The HeyGen avatar catalog (photo-avatar looks). `[]` on a keyless install. */
+/**
+ * The account's own looks first, then the presets — one list, no duplicates
+ * (a look present in both keeps its private row: an older server still puts
+ * private looks in the main list, and the private list is the fresher one).
+ * Pure, so the merge is unit-tested.
+ */
+export function mergeOwnAndPresetAvatars(own: readonly HeygenAvatar[], presets: HeygenAvatar[]): HeygenAvatar[] {
+  if (own.length === 0) return presets
+  const ownIds = new Set(own.map((a) => a.avatarId))
+  return [...own, ...presets.filter((a) => !ownIds.has(a.avatarId))]
+}
+
+/**
+ * The HeyGen avatar catalog: the account's own looks (fresh, small) followed
+ * by HeyGen's presets (big, streamed). `[]` on a keyless install.
+ */
 export function useHeygenAvatars(): HeygenCatalogQuery<HeygenAvatar> {
   const client = useQueryClient()
-  return shape(useQuery(heygenAvatarsQueryOptions(client)))
+  const presets = shape(useQuery(heygenAvatarsQueryOptions(client)))
+  const own = useQuery(heygenPrivateAvatarsQueryOptions())
+  const ownItems = own.data ?? EMPTY
+  const data = useMemo(() => mergeOwnAndPresetAvatars(ownItems, presets.data), [ownItems, presets.data])
+  return {
+    data,
+    // The private list is optional garnish: it never gates loading or errors.
+    isLoading: presets.isLoading,
+    isError: presets.isError,
+    complete: presets.complete,
+  }
 }
 
 /** The HeyGen voice catalog. `[]` on a keyless install. */
@@ -171,24 +278,64 @@ export function avatarSupportsV(avatar: HeygenAvatar): boolean {
   return avatar.supportedEngines?.includes("avatar_v") ?? false
 }
 
+/** A look HeyGen can render today. The account's own looks show up while
+ *  HeyGen is still building them (`status: "processing"`) or after it gave up
+ *  (`"failed"`) — visible so the user sees them coming, but not pickable. */
+export function avatarIsUsable(avatar: HeygenAvatar): boolean {
+  return avatar.status === undefined
+}
+
+/** The tile badge for a look that is not (yet) usable; null when it is. */
+export function avatarStatusLabel(avatar: HeygenAvatar): "Processing…" | "Failed" | null {
+  if (avatar.status === "processing") return "Processing…"
+  if (avatar.status === "failed") return "Failed"
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Catalog filtering — ONE implementation for the settings-panel picker, the
 // published-app card and the on-node search, so "search" means the same thing
 // everywhere (name substring, case-insensitive).
 // ---------------------------------------------------------------------------
 
-/** Derive the sorted list of unique genders present in the catalog. */
+/** HeyGen's gender strings are not clean ("Female", "Woman", "male", "Man",
+ *  "Unspecified", "unknown", ""): fold them onto three values so every
+ *  picker surface shows the same facet and a filter matches every spelling. */
+export function normalizeGender(raw: string | undefined): "female" | "male" | "unknown" {
+  const g = (raw ?? "").trim().toLowerCase()
+  if (g === "female" || g === "woman" || g === "f") return "female"
+  if (g === "male" || g === "man" || g === "m") return "male"
+  return "unknown"
+}
+
+/** Derive the sorted list of (folded) genders present in the catalog. */
 export function deriveGenders(avatars: readonly HeygenAvatar[]): string[] {
   const seen = new Set<string>()
-  for (const a of avatars) {
-    if (a.gender) seen.add(a.gender.toLowerCase())
-  }
+  for (const a of avatars) seen.add(normalizeGender(a.gender))
   return Array.from(seen).sort()
 }
 
-/** Return `true` when `groupId` distinguishes stock vs. custom avatars. */
+/** True when the catalog says which looks are the account's own. Servers
+ *  that predate the public/private split send no `ownership` at all. */
+export function catalogHasOwnership(avatars: readonly HeygenAvatar[]): boolean {
+  return avatars.some((a) => a.ownership !== undefined)
+}
+
+/**
+ * Is this look the account's own (custom) rather than a HeyGen preset?
+ * Prefers the server's `ownership`; without it (older server) falls back to
+ * the historical `groupId` heuristic — which is wrong for the real catalog
+ * (every preset carries a group_id too), which is why `ownership` exists.
+ */
+export function isCustomAvatar(a: HeygenAvatar, ownershipKnown: boolean): boolean {
+  return ownershipKnown ? a.ownership === "private" : a.groupId != null && a.groupId !== ""
+}
+
+/** Return `true` when the catalog has both presets and the account's own
+ *  looks — i.e. a Stock / Custom filter would split it. */
 export function hasGroupSegmentation(avatars: readonly HeygenAvatar[]): boolean {
-  return avatars.some((a) => a.groupId != null && a.groupId !== "")
+  const known = catalogHasOwnership(avatars)
+  return avatars.some((a) => isCustomAvatar(a, known))
 }
 
 /** Filter the avatar list by the active search + gender + segment + Avatar-V controls. */
@@ -200,11 +347,12 @@ export function filterAvatars(
   onlyAvatarV = false,
 ): HeygenAvatar[] {
   const q = query.trim().toLowerCase()
+  const known = catalogHasOwnership(avatars)
   return avatars.filter((a) => {
     if (q && !a.name.toLowerCase().includes(q)) return false
-    if (gender !== "all" && a.gender.toLowerCase() !== gender) return false
-    if (segment === "stock" && a.groupId) return false
-    if (segment === "custom" && !a.groupId) return false
+    if (gender !== "all" && normalizeGender(a.gender) !== gender) return false
+    if (segment === "stock" && isCustomAvatar(a, known)) return false
+    if (segment === "custom" && !isCustomAvatar(a, known)) return false
     if (onlyAvatarV && !avatarSupportsV(a)) return false
     return true
   })

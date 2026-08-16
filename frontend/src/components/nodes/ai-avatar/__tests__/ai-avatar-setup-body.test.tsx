@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, cleanup } from "@testing-library/react"
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react"
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
 
@@ -154,12 +154,27 @@ describe("AiAvatarSetupBody — empty, catalog source", () => {
     expect(updateNodeData).toHaveBeenCalledWith("N1", expect.objectContaining({ voiceId: "brian" }))
   })
 
-  it("Browse all opens the settings panel; Use an image instead flips the source", () => {
+  it("Browse all opens the Avatar Picker modal (not the settings panel); Use an image instead flips the source", () => {
     renderBody(data())
     fireEvent.click(screen.getByText("Browse all 7 ›"))
-    expect(selectNode).toHaveBeenCalledWith("N1")
+    expect(selectNode).not.toHaveBeenCalled()
+    expect(screen.getByTestId("avatar-picker-modal")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Choose an avatar" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
     fireEvent.click(screen.getByRole("button", { name: /Use an image instead/ }))
     expect(updateNodeData).toHaveBeenCalledWith("N1", { avatarSource: "image" })
+  })
+
+  it("picking in the modal writes the same patch as a card tile and closes it", async () => {
+    renderBody(data())
+    fireEvent.click(screen.getByText("Browse all 7 ›"))
+    const modal = screen.getByTestId("avatar-picker-modal")
+    // person cards; pick Marieke, then her look chip, then Use this avatar
+    fireEvent.click(within(modal).getByRole("radio", { name: /^Marieke,/ }))
+    expect(within(modal).getByTestId("avatar-picker-detail-name")).toHaveTextContent("Marieke — Desk")
+    fireEvent.click(within(modal).getByRole("button", { name: "Use this avatar" }))
+    expect(updateNodeData).toHaveBeenCalledWith("N1", expect.objectContaining({ avatarId: "marieke1", avatarName: "Marieke Desk 1" }))
+    await waitFor(() => expect(screen.queryByTestId("avatar-picker-modal")).toBeNull())
   })
 
   it("a keyless install sees the honest empty-catalog copy and no Browse all", () => {
@@ -190,13 +205,40 @@ describe("AiAvatarSetupBody — empty, catalog source", () => {
     expect(updateNodeData).toHaveBeenCalledWith("N1", expect.objectContaining({ avatarId: "cora-l1" }))
   })
 
+  it("the account's own look that HeyGen is still building is never featured; in search results it is labelled, unpickable, and says why", () => {
+    avatarsFixture = [
+      look("Me Building", "mine-b", { ownership: "private", status: "processing" }),
+      look("Me Broken", "mine-f", { ownership: "private", status: "failed" }),
+      ...CATALOG,
+    ]
+    renderBody(data())
+    // featured row: still the five presets, none of the unusable own looks
+    expect(screen.getAllByRole("radio").map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Cora Office 4", "Marieke Desk 1", "Signe Studio 1", "Margot Outdoor 1", "Livia Home 1",
+    ])
+    fireEvent.change(screen.getByLabelText("Search avatars"), { target: { value: "me b" } })
+    const tiles = screen.getAllByRole("radio")
+    expect(tiles.map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Me Building — HeyGen is still building this look",
+      "Me Broken — HeyGen could not build this look",
+    ])
+    expect(tiles[0]).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getAllByTestId("avatar-status-badge").map((b) => b.textContent)).toEqual(["Processing…", "Failed"])
+    fireEvent.click(tiles[0])
+    fireEvent.click(tiles[1])
+    expect(updateNodeData).not.toHaveBeenCalled()
+  })
+
   it("no match → says so and points at Browse all; clearing (✕ / Escape) restores the featured row", () => {
     renderBody(data())
     const box = screen.getByLabelText("Search avatars") as HTMLInputElement
     fireEvent.change(box, { target: { value: "zzz" } })
     expect(screen.getByTestId("ai-avatar-search-empty")).toHaveTextContent("No avatars match “zzz”")
     fireEvent.click(screen.getByRole("button", { name: "Browse all with filters ›" }))
-    expect(selectNode).toHaveBeenCalledWith("N1")
+    // opens the modal with the card's search text carried over
+    expect(selectNode).not.toHaveBeenCalled()
+    expect((within(screen.getByTestId("avatar-picker-modal")).getByLabelText("Search avatars") as HTMLInputElement).value).toBe("zzz")
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }))
     expect(box.value).toBe("")
     expect(screen.getAllByRole("radio")).toHaveLength(5)

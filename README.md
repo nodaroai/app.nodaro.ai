@@ -84,8 +84,11 @@ can click through real nodes before configuring anything.
 
 Nothing leaves your machine, and nothing phones home.
 
-**To generate for real**, add one AI provider key to a `.env` file next to the
-compose file and restart:
+**To generate for real**, either connect your nodaro.ai account from `/setup`
+(runs on cloud credits, no provider accounts needed) or paste an AI provider
+key on the `/setup` screen — it's stored encrypted and live immediately, no
+restart. The same keys also work as env vars in a `.env` next to the compose
+file:
 
 ```bash
 KIE_API_KEY=...          # kie.ai — broadest model coverage
@@ -93,8 +96,8 @@ KIE_API_KEY=...          # kie.ai — broadest model coverage
 REPLICATE_API_TOKEN=...  # replicate.com
 ```
 
-You pay providers directly. The Community Edition has no credit system, no
-fees, and no watermarks.
+With your own keys you pay providers directly. The Community Edition has no
+credit system, no fees, and no watermarks.
 
 **Stuck?** `http://localhost:3000/setup` is a live health screen — database,
 Redis, storage and provider keys, green or red, with the exact variable to fix.

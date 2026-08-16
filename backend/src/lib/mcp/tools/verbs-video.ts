@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isMinimaxH3Provider, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -144,6 +144,31 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           ),
         reference_order: z.array(z.string()).max(14).optional()
           .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
+        reference_image_urls: z
+          .union([z.array(z.string()), z.string()])
+          .optional()
+          .describe(
+            "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
+            "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, veo3/veo3.1 3, ...). " +
+            "Dropped on models with no reference path. Accepts an array; a lone URL or " +
+            "JSON-stringified array is coerced.",
+          ),
+        reference_video_urls: z
+          .union([z.array(z.string()), z.string()])
+          .optional()
+          .describe(
+            "Reference videos for style/motion transfer, capped at the model's own limit " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3). Dropped on models without " +
+            "video-reference support.",
+          ),
+        reference_audio_urls: z
+          .union([z.array(z.string()), z.string()])
+          .optional()
+          .describe(
+            "Reference audio for soundtrack-driven motion, capped at the model's own limit " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3). Dropped on models without " +
+            "audio-reference support.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -258,6 +283,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         effective.prompt as string,
         effective.structured as Parameters<typeof buildCompositePrompt>[1],
       )
+      // Flat identity/reference arrays, capped at the resolved model's own
+      // limits from the shared table (same source the route enforces). Models
+      // absent from the table have no reference path — args dropped, matching
+      // route behavior.
+      const t2vRefLimits = VIDEO_REF_LIMITS_BY_PROVIDER[model] ?? {}
+      const t2vRefImages = t2vRefLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", t2vRefLimits.images) : []
+      const t2vRefVideos = t2vRefLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", t2vRefLimits.videos) : []
+      const t2vRefAudio = t2vRefLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", t2vRefLimits.audio) : []
       const payload = {
         prompt: compositePrompt,
         provider: model,
@@ -274,6 +307,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         seed: effective.seed as number | undefined,
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
+        ...(t2vRefImages.length ? { referenceImageUrls: t2vRefImages } : {}),
+        ...(t2vRefVideos.length ? { referenceVideoUrls: t2vRefVideos } : {}),
+        ...(t2vRefAudio.length ? { referenceAudioUrls: t2vRefAudio } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -307,18 +343,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
         "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
         "Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
-        "**Seedance 2 modes** (auto-selected from the inputs you provide):\n" +
+        "**Reference modes** (auto-selected from the inputs you provide):\n" +
         "  • `'frames'` (default) — start/end-frame mode: provide `image_url` as " +
         "the first frame and optionally `end_frame_url` as the last frame.\n" +
-        "  • `'references'` — reference-media mode: provide up to 9 reference images " +
-        "via `reference_image_urls`, up to 3 reference videos via `reference_video_urls` " +
-        "(style/motion transfer), and/or up to 3 audio clips via `reference_audio_urls` " +
-        "(soundtrack-driven motion). `image_url` / `end_frame_url` are ignored in " +
-        "this mode. Reference videos/audio cannot be combined with `end_frame_url`.\n" +
+        "  • `'references'` — reference-media mode: provide reference images " +
+        "via `reference_image_urls`, reference videos via `reference_video_urls` " +
+        "(style/motion transfer), and/or audio clips via `reference_audio_urls` " +
+        "(soundtrack-driven motion). Every model takes refs at its OWN caps — " +
+        "seedance-2-5 30/10/10, seedance-2 family + minimax-h3 9/3/3, " +
+        "gemini-omni-video 7 images (first image = opening frame, the rest are " +
+        "identity refs), kling-3-omni/grok-i2v 7, veo3/veo3.1 3 images. " +
+        "`image_url` / `end_frame_url` are ignored in this mode. Reference " +
+        "videos/audio cannot be combined with `end_frame_url`.\n" +
         "  • Reference order = priority: put the identity-critical image FIRST " +
         "and refer by ordinal in the prompt (@Image 1, Video 2). Identity = ONE " +
         "headshot + ONE full-body image — multi-view character sheets cause ID " +
-        "drift and twin duplicates. 4-5 assets total beats maxing the 9/3/3 caps.\n" +
+        "drift and twin duplicates. 4-5 assets total beats maxing the caps.\n" +
         "  • Edit/extend phrasing: name clips directly ('Extend Video 1 backward', " +
         "'Remove X from Video 1') — saying 'reference Video 1' flips the model " +
         "into reference mode and breaks the edit. Track completion: 'Video 1 + " +
@@ -391,24 +431,28 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Seedance 2 only: reference images (URLs or Nodaro asset IDs) used in " +
-            "'references' mode. Max 9. Resolved server-side. Silently ignored on other providers. " +
+            "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
+            "limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, gemini-omni-video / " +
+            "kling-3-omni / grok-i2v 7, happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
+            "silently dropped on models with no reference path. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         reference_video_urls: z
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Seedance 2 only: reference videos for style/motion transfer (URLs or " +
-            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode. " +
+            "Reference videos for style/motion transfer (URLs or Nodaro asset IDs). " +
+            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, gemini-omni-video 1; " +
+            "dropped on models without video-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         reference_audio_urls: z
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
-            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode. " +
+            "Reference audio for soundtrack-driven motion (URLs or Nodaro asset IDs). " +
+            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3; dropped on models " +
+            "without audio-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         loop_trim: z.object({
@@ -502,13 +546,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "image",
             })
           : undefined)
-      // Multimodal refs (Seedance 2 family + MiniMax Hailuo 3 — identical
-      // 9/3/3 caps) — resolve per-item URL/asset_id, then gate by provider.
-      // Other providers silently drop these args.
-      const isMultimodalRef = isSeedance2Provider(model) || isMinimaxH3Provider(model)
-      const refImageUrls = isMultimodalRef ? await resolveRefArray(args.reference_image_urls, session.userId, "image", SEEDANCE_2_REF_LIMITS.images) : []
-      const refVideoUrls = isMultimodalRef ? await resolveRefArray(args.reference_video_urls, session.userId, "video", SEEDANCE_2_REF_LIMITS.videos) : []
-      const refAudioUrls = isMultimodalRef ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", SEEDANCE_2_REF_LIMITS.audio) : []
+      // Multimodal / identity refs — capped per model from the shared table
+      // (the same source the routes and resolvers enforce), so every offered
+      // model carries refs at its own caps: Seedance 2.5 30/10/10, the 2.0
+      // family + Hailuo 3 9/3/3, gemini-omni 7 images, VEO 3.x 3 images, etc.
+      // Models absent from the table have no reference-forwarding path —
+      // their args are dropped here, matching route behavior.
+      const refLimits = VIDEO_REF_LIMITS_BY_PROVIDER[model] ?? {}
+      const refImageUrls = refLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", refLimits.images) : []
+      const refVideoUrls = refLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", refLimits.videos) : []
+      const refAudioUrls = refLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", refLimits.audio) : []
 
       // KIE forbids combining multimodal-ref mode with start+end frame mode.
       // Fail fast with a clear MCP error rather than letting the route 400.

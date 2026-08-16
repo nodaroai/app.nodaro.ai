@@ -23,6 +23,7 @@ import {
   useHeygenAvatars,
   keylessCatalogHint,
   avatarSupportsV,
+  avatarStatusLabel,
   deriveGenders,
   hasGroupSegmentation,
   filterAvatars,
@@ -81,6 +82,11 @@ const AvatarTile = memo(function AvatarTile({
 }: AvatarTileProps) {
   const { ref, mounted } = useLazyMount("400px")
   const isVCapable = avatarSupportsV(avatar)
+  // The account's own look that HeyGen is still building (or gave up on):
+  // shown, labelled, not pickable.
+  const statusLabel = avatarStatusLabel(avatar)
+  const blocked = disabled || statusLabel !== null
+  const statusReason = statusLabel === "Failed" ? "HeyGen could not build this look" : "HeyGen is still building this look"
 
   return (
     // The div wrapper acts as the IntersectionObserver root for lazy mount.
@@ -90,15 +96,18 @@ const AvatarTile = memo(function AvatarTile({
       type="button"
       role={multiple ? "checkbox" : "radio"}
       aria-checked={selected}
-      aria-disabled={disabled || undefined}
-      aria-label={avatar.name}
+      aria-disabled={blocked || undefined}
+      // The status is part of the NAME so assistive tech hears why the tile
+      // cannot be picked (aria-label wins over inner text and title).
+      aria-label={statusLabel ? `${avatar.name} — ${statusReason}` : avatar.name}
+      title={statusLabel ? `${avatar.name} — ${statusReason}` : undefined}
       onClick={() => {
-        if (disabled) return
+        if (blocked) return
         onSelect(avatar)
       }}
       className={cn(
         "relative group flex flex-col w-full overflow-hidden rounded-lg border text-left transition-colors",
-        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer",
+        blocked ? "cursor-not-allowed opacity-40" : "cursor-pointer",
         selected
           ? "border-[#ff0073] ring-1 ring-[#ff0073]/60 bg-[#ff0073]/5"
           : "border-gray-200 dark:border-[#2D2D2D] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
@@ -139,6 +148,20 @@ const AvatarTile = memo(function AvatarTile({
           aria-hidden
           className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full bg-[#ff0073] border-2 border-white dark:border-[#1E1E1E] shadow-sm"
         />
+      )}
+
+      {/* Lifecycle badge — the account's own looks only */}
+      {statusLabel && (
+        <span
+          aria-hidden
+          data-testid="avatar-status-badge"
+          className={cn(
+            "absolute bottom-[38px] left-1.5 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white shadow-sm",
+            statusLabel === "Failed" ? "bg-red-600/90" : "bg-amber-500/90",
+          )}
+        >
+          {statusLabel}
+        </span>
       )}
 
       {/* Avatar V eligibility badge — only shown when the catalog confirms V support */}

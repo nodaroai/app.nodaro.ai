@@ -53,6 +53,16 @@ export interface NodeDescriptor {
   providers?: string[]
   /** Capability flags such as "supports-reference-image" or "supports-end-frame". */
   capabilities?: string[]
+  /** Hard duration ceiling in seconds (e.g. Generate Video Pro's env-configured cap). */
+  maxDurationSec?: number
+  /** Providers whose segment-duration menu is sparse (off-menu values snap to the nearest entry). */
+  sparseProviders?: string[]
+  /** Per-provider resolution tiers, e.g. `{ "minimax-h3": ["2K", "768P"] }`. */
+  providerResolutions?: Record<string, string[]>
+  /** Per-provider map of display resolution → the literal wire value the API expects. */
+  providerResolutionWire?: Record<string, Record<string, string>>
+  /** Generate Video Pro: the deployed engine accepts the `soundtrack` input (original-audio replay). */
+  soundtrack?: boolean
 }
 
 /**

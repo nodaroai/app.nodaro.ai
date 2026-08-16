@@ -8,8 +8,21 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mock the catalog module so tests never hit the network.
 // Each test can override these with vi.mocked(...).mockResolvedValueOnce(...).
 vi.mock("@/providers/heygen/catalog.js", () => ({
-  snapshotAvatars: vi.fn().mockResolvedValue({ items: [], complete: true }),
-  snapshotVoices: vi.fn().mockResolvedValue({ items: [], complete: true }),
+  snapshotAvatars: vi.fn().mockResolvedValue({ items: [], offset: 0, total: 0, complete: true, generation: "g1" }),
+  snapshotPrivateAvatars: vi.fn().mockResolvedValue([]),
+  snapshotVoices: vi.fn().mockResolvedValue({ items: [], offset: 0, total: 0, complete: true, generation: "g1" }),
+  refreshHeygenCatalog: vi.fn().mockResolvedValue({ avatars: "started", privateAvatars: "started", voices: "started" }),
+}))
+
+// The manual-refresh gate: signed in, first-party, admin where the edition
+// has admins (same shape as the provider-key routes' tests).
+const gate = vi.hoisted(() => ({ isAdmin: vi.fn(async () => false), edition: { hasAdmin: false } }))
+vi.mock("@/lib/admin-check.js", () => ({ checkIsAdmin: gate.isAdmin }))
+vi.mock("@/lib/config.js", () => ({
+  config: { EDITION: "community", HEYGEN_API_KEY: undefined },
+  hasAdmin: () => gate.edition.hasAdmin,
+  isCloud: () => false,
+  isCommunity: () => !gate.edition.hasAdmin,
 }))
 
 // The connection relay: a keyless CONNECTED install lists what the cloud can
@@ -24,7 +37,7 @@ vi.mock("@/lib/nodaro-connect.js", () => ({ nodaroCloudBase: () => "https://clou
 // ---------------------------------------------------------------------------
 
 import { heygenCatalogRoutes, _resetCloudHeygenCatalogForTests } from "../heygen-catalog.js"
-import { snapshotAvatars, snapshotVoices } from "../../providers/heygen/catalog.js"
+import { refreshHeygenCatalog, snapshotAvatars, snapshotPrivateAvatars, snapshotVoices } from "../../providers/heygen/catalog.js"
 
 /** A whole-list answer from the catalog module (generation "g1"). */
 const whole = <T,>(items: T[]) => ({ items, offset: 0, total: items.length, complete: true, generation: "g1" })
@@ -37,14 +50,27 @@ const partial = <T,>(items: T[], offset = 0) => ({ items, offset, total: offset 
 
 let app: FastifyInstance
 
+/** What the auth hook would leave on the request for the refresh route. */
+let caller: { userId?: string; apiToken?: boolean; appAuthorization?: boolean } = {}
+
 beforeEach(async () => {
   vi.clearAllMocks()
   cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
+  gate.isAdmin.mockReset().mockResolvedValue(false)
+  gate.edition.hasAdmin = false
+  caller = {}
   _resetCloudHeygenCatalogForTests()
 
   app = Fastify({ logger: false })
 
-  // No auth hook — routes are public and require no userId.
+  // The catalog routes are public (no userId needed); the refresh route reads
+  // whatever the auth hook left — stand in for it here.
+  app.addHook("preHandler", async (req) => {
+    const r = req as typeof req & { userId?: string; apiToken?: unknown; appAuthorization?: unknown }
+    r.userId = caller.userId
+    if (caller.apiToken) r.apiToken = { id: "tok" } as never
+    if (caller.appAuthorization) r.appAuthorization = { appId: "app", scopes: [] } as never
+  })
   await app.register(async (instance) => {
     await heygenCatalogRoutes(instance)
   })
@@ -250,7 +276,7 @@ describe("progressive catalog answers", () => {
   it("passes the client's ?offset=&generation= to the catalog and relays a DELTA (no-store — client-specific)", async () => {
     vi.mocked(snapshotAvatars).mockResolvedValueOnce(partial([mockAvatars[1]], 1))
     const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars?offset=1&generation=g1" })
-    expect(snapshotAvatars).toHaveBeenCalledWith({ offset: 1, generation: "g1" })
+    expect(snapshotAvatars).toHaveBeenCalledWith({ offset: 1, generation: "g1" }, undefined)
     expect(res.json()).toEqual({ avatars: [mockAvatars[1]], offset: 1, total: 2, complete: false, generation: "g1" })
     expect(res.headers["cache-control"]).toBe("no-store")
   })
@@ -264,10 +290,42 @@ describe("progressive catalog answers", () => {
   it("ignores a malformed offset/generation pair (asks the catalog for everything)", async () => {
     vi.mocked(snapshotAvatars).mockResolvedValueOnce(whole(mockAvatars))
     await app.inject({ method: "GET", url: "/v1/heygen/avatars?offset=-3&generation=g1" })
-    expect(snapshotAvatars).toHaveBeenCalledWith(undefined)
+    expect(snapshotAvatars).toHaveBeenCalledWith(undefined, undefined)
     vi.mocked(snapshotAvatars).mockResolvedValueOnce(whole(mockAvatars))
     await app.inject({ method: "GET", url: "/v1/heygen/avatars?offset=5" })
-    expect(snapshotAvatars).toHaveBeenLastCalledWith(undefined)
+    expect(snapshotAvatars).toHaveBeenLastCalledWith(undefined, undefined)
+  })
+})
+
+describe("limit — chunked answers on the wire", () => {
+  it("passes ?limit= to the catalog and never long-caches a chunk (the client is behind: items < total)", async () => {
+    vi.mocked(snapshotAvatars).mockResolvedValueOnce({ items: [mockAvatars[0]], offset: 0, total: 2, complete: true, generation: "g1" })
+    const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars?limit=1" })
+    expect(snapshotAvatars).toHaveBeenCalledWith(undefined, 1)
+    expect(res.json()).toEqual({ avatars: [mockAvatars[0]], offset: 0, total: 2, complete: true, generation: "g1" })
+    expect(res.headers["cache-control"]).toBe("no-store")
+  })
+  it("ignores an out-of-range limit", async () => {
+    vi.mocked(snapshotAvatars).mockResolvedValueOnce(whole(mockAvatars))
+    await app.inject({ method: "GET", url: "/v1/heygen/avatars?limit=0" })
+    expect(snapshotAvatars).toHaveBeenLastCalledWith(undefined, undefined)
+    vi.mocked(snapshotAvatars).mockResolvedValueOnce(whole(mockAvatars))
+    await app.inject({ method: "GET", url: "/v1/heygen/avatars?limit=99999" })
+    expect(snapshotAvatars).toHaveBeenLastCalledWith(undefined, undefined)
+  })
+})
+
+describe("GET /v1/heygen/avatars/private — the account's own looks", () => {
+  it("returns the private list whole, never long-cached", async () => {
+    vi.mocked(snapshotPrivateAvatars).mockResolvedValueOnce([{ ...mockAvatars[1], ownership: "private" }] as never)
+    const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars/private" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ avatars: [{ ...mockAvatars[1], ownership: "private" }] })
+    expect(res.headers["cache-control"]).toBe("no-store")
+  })
+  it("is empty (200) on a keyless install", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars/private" })
+    expect(res.json()).toEqual({ avatars: [] })
   })
 })
 
@@ -359,11 +417,74 @@ describe("catalog through the nodaro.ai connection", () => {
     expect(res.headers["cache-control"]).toMatch(/public/)
   })
 
+  it("relays the private list from the cloud too, on its own short cache", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ avatars: [{ avatarId: "mine", name: "Mine", ownership: "private" }] }), { status: 200 }))
+    const first = await app.inject({ method: "GET", url: "/v1/heygen/avatars/private" })
+    expect(first.json()).toEqual({ avatars: [{ avatarId: "mine", name: "Mine", ownership: "private" }] })
+    expect(fetchMock).toHaveBeenLastCalledWith("https://cloud.test/v1/heygen/avatars/private", expect.anything())
+    await app.inject({ method: "GET", url: "/v1/heygen/avatars/private" })
+    expect(fetchMock).toHaveBeenCalledTimes(1) // cached (2 min) — pickers poll it
+    expect(snapshotPrivateAvatars).not.toHaveBeenCalled()
+  })
+
   it("keeps the local catalog when the install has its own HeyGen key", async () => {
     cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
     vi.mocked(snapshotAvatars).mockResolvedValueOnce(whole(mockAvatars) as never)
     const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
     expect(res.json().avatars).toHaveLength(mockAvatars.length)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/heygen/catalog/refresh — the operator's manual refresh", () => {
+  it("requires a signed-in user", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })
+    expect(res.statusCode).toBe(401)
+    expect(refreshHeygenCatalog).not.toHaveBeenCalled()
+  })
+
+  it("refuses programmatic tokens (an app or API token must not spend ≈140 HeyGen calls)", async () => {
+    caller = { userId: "user-1", apiToken: true }
+    expect((await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })).statusCode).toBe(403)
+    caller = { userId: "user-1", appAuthorization: true }
+    expect((await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })).statusCode).toBe(403)
+    expect(refreshHeygenCatalog).not.toHaveBeenCalled()
+  })
+
+  it("on community any signed-in user may refresh; the fills start in the background", async () => {
+    caller = { userId: "user-1" }
+    const res = await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ mode: "local", avatars: "started", privateAvatars: "started", voices: "started" })
+    expect(refreshHeygenCatalog).toHaveBeenCalledTimes(1)
+  })
+
+  it("where the edition has admins, only an admin may refresh", async () => {
+    gate.edition.hasAdmin = true
+    caller = { userId: "user-1" }
+    expect((await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })).statusCode).toBe(403)
+    gate.isAdmin.mockResolvedValue(true)
+    expect((await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })).statusCode).toBe(200)
+    expect(refreshHeygenCatalog).toHaveBeenCalledTimes(1)
+  })
+
+  it("on a connected install forgets the relayed copies instead (the catalog lives on nodaro.ai)", async () => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(true)
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ avatars: mockAvatars, offset: 0, total: 2, complete: true, generation: "cloud-1" }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    try {
+      await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+      await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+      expect(fetchMock).toHaveBeenCalledTimes(1) // cached
+      caller = { userId: "user-1" }
+      const res = await app.inject({ method: "POST", url: "/v1/heygen/catalog/refresh" })
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toMatchObject({ mode: "connection", avatars: "relay-reset" })
+      expect(refreshHeygenCatalog).not.toHaveBeenCalled()
+      await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+      expect(fetchMock).toHaveBeenCalledTimes(2) // pulled again
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

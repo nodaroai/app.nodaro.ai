@@ -187,7 +187,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       let query = supabase
         .from("transactions")
         .select(
-          "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at",
+          "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url",
         )
         .eq("user_id", session.userId)
         .order("created_at", { ascending: false })

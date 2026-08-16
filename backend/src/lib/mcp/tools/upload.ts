@@ -53,6 +53,7 @@ const SUPPORTED_AUDIO_MIME = [
   "audio/webm",
   "audio/ogg",
   "audio/flac",
+  "audio/x-flac",
   "audio/aac",
   "audio/x-m4a",
 ] as const
@@ -78,6 +79,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "audio/webm": "webm",
   "audio/ogg": "ogg",
   "audio/flac": "flac",
+  "audio/x-flac": "flac",
   "audio/aac": "aac",
   "audio/x-m4a": "m4a",
   "video/mp4": "mp4",

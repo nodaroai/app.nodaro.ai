@@ -263,14 +263,19 @@ try {
 | `client.workflows` | List, get, create, update, delete, run |
 | `client.projects` | Workspace organization |
 | `client.jobs` | Job status (+ lean `getStatus` for poll loops) and cancellation |
+| `client.videoPro` | Generate Video Pro run control: graceful stop + continue |
+| `client.recast` | Recast runs + authored-script import (validate / import / estimate / gates) — Cloud |
 | `client.executions` | Workflow execution status, list, cancel |
 | `client.nodes` | Node discovery + direct `run` / `runAndWait` / `runMany` |
+| `client.models` | Model catalog: capability sheets, credit pricing, prompt tips, `doctrineCovered` |
 | `client.apps` | Published apps: inputs, run, runs history |
 | `client.characters` | Character Studio: CRUD, portraits, assets, motion, LoRA |
 | `client.locations` | Location Studio: CRUD, assets, atmosphere motion |
 | `client.objects` | Object Studio: CRUD, assets, motion |
 | `client.creatures` | Creature Studio: CRUD, assets, motion |
 | `client.voices` | Voice catalog + clones (from URL or file), voice changer, multi-speaker recast + the interactive `analyze`/stems/`exportMix` flow, design, remix, dubbing |
+| `client.media` | Social-video import, trim, collage, save-to-storage, metadata probe |
+| `client.audio` | Audio primitives: separate, isolate, FX, mix, volume, combine |
 | `client.pipelines` | Showrunner pipelines: stages, approvals, chat, branch |
 | `client.reduce` | Fan-in reducer (pick-best, concat, vote, merge…) |
 | `client.promptHelper` | Prompt enhancement / wizard |
@@ -278,8 +283,11 @@ try {
 | `client.uploads` | Signed upload URLs for image / video / audio |
 | `client.library` | Generated-media library |
 | `client.presets` | Node presets (factory + user) |
-| `client.pickerCatalogs` | Parameter-picker catalog discovery |
+| `client.pickerCatalogs` | Parameter-picker catalog discovery + text→pickers AI Fill (`analyzeText`) |
+| `client.shots` | Cine share → remix records (create, read, visibility, delete) |
 | `client.community` | Shared characters/locations/objects: browse, clone, favorites |
+| `client.templates` | Workflow templates: browse + clone |
+| `client.tutorials` | Guided tutorial catalog |
 | `client.developerApps` | Manage your own OAuth apps |
 | `client.oauth` | Code exchange, revoke, app-info |
 

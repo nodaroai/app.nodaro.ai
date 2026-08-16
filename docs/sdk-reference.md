@@ -12,8 +12,11 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.workflows`](#clientworkflows)
   - [`client.projects`](#clientprojects)
   - [`client.jobs`](#clientjobs)
+  - [`client.videoPro`](#clientvideopro)
+  - [`client.recast`](#clientrecast)
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
+  - [`client.models`](#clientmodels)
   - [`client.characters`](#clientcharacters)
   - [`client.locations`](#clientlocations)
   - [`client.objects`](#clientobjects)
@@ -29,8 +32,10 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.audio`](#clientaudio)
   - [`client.credits`](#clientcredits)
   - [`client.uploads`](#clientuploads)
+  - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
+  - [`client.shots`](#clientshots)
   - [`client.community`](#clientcommunity)
   - [`client.templates`](#clienttemplates)
   - [`client.tutorials`](#clienttutorials)
@@ -62,12 +67,14 @@ const client = createClient({
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 20 resource objects: `workflows`, `projects`, `jobs`,
-`executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
-`reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`, `voices`,
-`credits`, `uploads`, `presets`, `pickerCatalogs`, `community`. It also exposes
-a low-level `request<T>(method, path, options)` method for endpoints not yet
-wrapped by a resource.
+The instance exposes 30 resource objects: `workflows`, `projects`, `jobs`,
+`videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
+`creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
+`oauth`, `voices`, `media`, `audio`, `credits`, `uploads`, `library`,
+`presets`, `pickerCatalogs`, `models`, `shots`, `recast`, `community`,
+`templates`, `tutorials`. It also exposes a low-level
+`request<T>(method, path, options)` method for endpoints not yet wrapped by a
+resource.
 
 ### `class NodaroClient`
 
@@ -100,8 +107,7 @@ Returns `UserIdentity`:
 | `email` | `string` | The user's email. |
 | `displayName` | `string \| null` | Human-readable display name (from `profiles.full_name`); `null` if unset. |
 | `avatarUrl` | `string \| null` | Avatar URL; `null` if unset. |
-| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). Display should prefer `effectiveTier`. |
-| `effectiveTier` | `string` | Entitlement tier actually enforced. `"payg"` = pay-as-you-go: no subscription, but purchased credits — all models unlocked, no watermark, no daily cap; redeemable via the API/SDK/CLI/MCP surfaces. |
+| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). |
 | `isAdmin` | `boolean` | Whether the user holds an admin role. **Descriptive only** — use it to decide whether to render admin UI instead of capability-probing an admin endpoint; every admin API stays enforced server-side regardless. |
 
 ---
@@ -613,6 +619,66 @@ const { jobId: childId, fromSegment } = await client.videoPro.continueRun(jobId,
 
 ---
 
+### `client.recast`
+
+Recast runs + the authored-script import lane ("movie as JSON"). **Cloud
+edition only** — these routes 404 on self-hosted installs. Full REST contract:
+[API integration §13c–13d](./api-integration.md#13c-recast-cloud-edition);
+authoring guide: [Recast authoring](./mcp/recast-authoring.md).
+
+#### `authoringSkill()`
+
+```ts
+authoringSkill(): Promise<string>
+```
+
+`GET /v1/video-analysis/authoring-skill` → the generated authoring guide
+(markdown): the script document contract, enum vocabularies, bounds, audio
+rules, and a validated worked example. Free.
+
+#### `validateScript(script)`
+
+```ts
+validateScript(script: Record<string, unknown>): Promise<RecastScriptValidation>
+```
+
+`POST /v1/video-analysis/import/validate` → `{ valid, errors, warnings }`.
+Each error carries `path`, `message`, and usually a `hint` written for an LLM
+repair loop — fix and re-validate until `valid: true`. Free, persists nothing.
+
+#### `importScript(script, { rightsAttested: true })`
+
+```ts
+importScript(script: Record<string, unknown>, opts: { rightsAttested: true }): Promise<RecastScriptImportResult>
+```
+
+`POST /v1/video-analysis/import` → `{ jobId, created, warnings, json }`.
+Stores the validated document as a completed analysis job; `json` is the
+document **with server-derived fields** — always prefer it over your input.
+Idempotent (`created: false` on an identical re-import). `rightsAttested:
+true` is required (403 otherwise): authored recasts render **Faithful —
+exactly as written**, so only import work you own. Free.
+
+#### Run lane
+
+```ts
+estimate(input: EstimateRecastInput): Promise<RecastEstimate>        // quote credits, free
+create(input: CreateRecastInput): Promise<{ recastId: string }>      // buys the plan
+get(recastId: string): Promise<RecastRunSnapshot>                    // poll status + pending interactive step
+start(recastId: string, opts?): Promise<{ gvpJobId?: string }>       // render a planned run (idempotent)
+resolveGate(recastId: string, input: ResolveRecastGateInput): Promise<Record<string, unknown>>
+```
+
+`create` requires `workflowId` (an existing workflow you own) and
+`analysisJobId`; quote with `estimate` first — creating buys the plan. On
+interactive runs the platform advances every non-gate step server-side; poll
+`get()` and answer pending gates (`cast` / `sheet` / `anchors` / `music`) with
+`resolveGate` — the pick itself is free. Gates only open for gate kinds the
+run's `create` declared in `clientCapabilities` (e.g. `["sheet-gate"]`);
+undeclared kinds are decided automatically.
+
+---
+
 ### `client.executions`
 
 A "workflow execution" is one orchestrator-driven run of a workflow. It groups
@@ -926,6 +992,31 @@ const results = await client.nodes.runMany("generate-image", [
 for (const { jobId, output } of results) {
   console.log(jobId, output.imageUrl)
 }
+```
+
+---
+
+### `client.models`
+
+#### `list(options?)`
+
+```ts
+list(opts?: { kind?: "image" | "video" | "audio"; mode?: string; family?: string; featuredOnly?: boolean }): Promise<ModelsListResult>
+```
+
+`GET /v1/models` → the model catalog grouped by kind and vendor family:
+capability sheets (`modes`, `features`, `aspectRatios`, `resolutions`,
+`durations`), per-variant credit `pricing`, compact `promptTips`, and the
+`doctrineCovered` truth flag — `true` only when a sourced per-family prompt
+doctrine exists for the model, so "vendor doctrine" badges can never
+overclaim. The same projection the MCP `list_models` tool serves, so the two
+surfaces cannot drift. Public endpoint; cached 5 minutes.
+
+```ts
+const catalog = await client.models.list({ kind: "video", mode: "i2v" })
+for (const section of catalog.sections)
+  for (const family of section.families)
+    for (const m of family.models) console.log(m.id, m.doctrineCovered)
 ```
 
 ---
@@ -2083,7 +2174,7 @@ run(input: ReduceInput): Promise<ReduceResult>
 
 | Strategy | Config shape |
 |----------|--------------|
-| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url" }` |
+| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model (economy/standard/premium credit tiers apply) |
 | `concat` | `{ separator?: string }` (default `"\n\n"`) |
 | `first-non-empty` | `{}` |
 | `count` | `{}` |
@@ -3052,6 +3143,7 @@ Throws `UnauthorizedError` (401) when signed out.
 | `dailyLimit` | `number \| null` | Daily spending cap (`null` = no cap). |
 | `monthlyAllocation` | `number` | Credits allocated per billing cycle. |
 | `tier` | `string` | Subscription tier (e.g. `"free"`, `"pro"`). |
+| `effectiveTier` | `string` | Entitlement tier actually enforced. `"payg"` = pay-as-you-go: no subscription, but purchased credits — all models unlocked, no watermark, no daily cap. |
 | `features` | `Record<string, unknown>` | Feature flags for the tier. |
 | `periodEnd` | `string \| null` | ISO-8601 end of the billing period. |
 | `appCreditsAllowance` | `number` | Credits earned for app usage (free tier only). |
@@ -3121,6 +3213,19 @@ const result = await client.uploads.upload(file)
 console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
 console.log(result.assetId)    // reference back to the storage row
 ```
+
+### `client.library`
+
+#### `list(params?)`
+
+```ts
+list(params?: ListLibraryParams): Promise<ListLibraryResult>
+```
+
+`GET /v1/library` → the user's stored media with a storage summary. Filter by
+`type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`.
+
+---
 
 ### `client.presets`
 
@@ -3249,6 +3354,24 @@ const { pickerJson, gaps } = await client.pickerCatalogs.analyzeText({
   text: "Neon-soaked Tokyo alley at night, rain, handheld tracking shot, moody synthwave",
 })
 console.log(pickerJson["setting"], pickerJson["camera-motion"], gaps)
+```
+
+---
+
+### `client.shots`
+
+Cine shots — the Share → Remix record behind `/s/:id` share links. A shot
+stores builder state (picker `selectionState`, prompts, target `models`,
+`@`-mention `entityRefs`, `resultUrls`) under an unguessable 12-char id that
+doubles as the share capability. Rows default to **private**; sharing is an
+explicit visibility toggle. `resultUrls` must be plain public http(s) URLs —
+signed URLs are rejected so a token can never leak into a share record.
+
+```ts
+create(input?: CreateShotInput): Promise<{ id: string }>   // POST /v1/shots
+get(id: string): Promise<{ shot: Shot }>                   // GET  /v1/shots/:id — public shots readable by anyone with the id; private = owner only (404 otherwise)
+update(id: string, input: UpdateShotInput): Promise<{ shot: Shot }>  // PATCH — owner only, any subset (e.g. { visibility: "public" })
+delete(id: string): Promise<void>                          // DELETE — owner only
 ```
 
 ---

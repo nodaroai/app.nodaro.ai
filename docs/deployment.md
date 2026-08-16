@@ -53,12 +53,17 @@ cd nodaro
 cp .env.example .env
 ```
 
-Open `.env` and set the required values:
+**On the community compose stack, `.env` is optional** — the compose file
+bundles Supabase, MinIO and Redis with working defaults, so the two-command
+install in the [Community Edition quickstart](./community-edition-quickstart.md)
+needs nothing configured at all. Set values here only to point at your OWN
+managed services (an external Supabase project, S3-compatible storage, …):
 
 ```bash
 EDITION=community
 PUBLIC_URL=http://localhost:3000
 
+# Only when using a managed Supabase project instead of the bundled stack:
 SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 SUPABASE_ANON_KEY=eyJ...
@@ -100,16 +105,20 @@ R2_PUBLIC_URL=https://pub-….r2.dev    # or your custom domain
 
 ### 2b. Generate internal secrets
 
-Both required, both 32 bytes hex:
+**On the community compose stack both are generated on first boot** and
+persist in the `app-data` volume — skip this step. On a managed deployment
+(Railway, your own orchestration), set both, 32 bytes hex each:
 
 ```bash
 echo "INTERNAL_ORCHESTRATOR_SECRET=$(openssl rand -hex 32)" >> .env
-echo "SOCIAL_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
+echo "NODARO_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
 `INTERNAL_ORCHESTRATOR_SECRET` authenticates the orchestrator process to
-the API server within a Nodaro container. `SOCIAL_ENCRYPTION_KEY` is
-AES-256-GCM key material used to encrypt social-OAuth tokens at rest.
+the API server within a Nodaro container. `NODARO_ENCRYPTION_KEY` is
+AES-256-GCM key material used to encrypt stored credentials at rest —
+social-OAuth tokens and in-app provider keys (§12). `SOCIAL_ENCRYPTION_KEY`
+is the older name for the same variable and still works (see §8).
 
 ### 2b-2. Social network apps (optional, per network)
 
@@ -207,9 +216,11 @@ public URL.
 docker compose -f docker-compose.community.yml up
 ```
 
-First boot takes 5–10 minutes (Node deps, Remotion bundling, frontend
-build). Subsequent boots are seconds. You'll see logs from Redis and
-the `nodaro` service interleaving.
+The app image is **pulled prebuilt** (`ghcr.io/nodaroai/nodaro-community`),
+so first boot downloads ~2.4 GB rather than compiling for 5–10 minutes;
+subsequent boots are seconds. (Set `NODARO_IMAGE` or use
+`docker compose build` to build from source instead.) You'll see logs from
+Redis and the `nodaro` service interleaving.
 
 When you see:
 
@@ -334,19 +345,22 @@ build time):
 
 ## 6. Updating
 
-Pull, rebuild, restart:
+Pull the newer image and restart:
 
 ```bash
 git pull
-docker compose -f docker-compose.community.yml down
-docker compose -f docker-compose.community.yml build
-docker compose -f docker-compose.community.yml up
+docker compose -f docker-compose.community.yml pull
+docker compose -f docker-compose.community.yml up -d
 ```
 
-If new files appear under `supabase/migrations/`, apply them in
-filename order **before** restarting (same flow as §2c). The backend
-won't crash on a missing migration, but specific routes will 500 until
-their schema lands.
+(Building from source instead? Swap `pull` for `build`.)
+
+On the bundled stack, migrations apply **automatically on boot**
+(`RUN_MIGRATIONS_ON_BOOT`, §2c) — there is nothing to run by hand. Only
+when pointing at your own managed Supabase project with boot migrations
+disabled do new files under `supabase/migrations/` need applying in
+filename order before restarting; the backend won't crash on a missing
+migration, but specific routes will 500 until their schema lands.
 
 We aim to keep migrations forward-compatible (new tables, additive
 columns) — if anything changes destructively, it'll be called out in
@@ -383,6 +397,18 @@ point.
 
 **Redis HA**: BullMQ supports Redis cluster mode out of the box. Set
 `REDIS_URL` to a cluster endpoint or a Sentinel URL.
+
+**Shared caches on Redis (multi-instance API)**: besides the queues,
+the API keeps small shared snapshots in Redis so N API containers do
+not each redo the same slow provider work — today the HeyGen avatar /
+voice catalogs (`heygen:catalog:v1:*`, ≈4 MB, published once a fill
+completes and adopted by every instance at boot; one instance per
+environment refreshes it under a lock every
+`HEYGEN_CATALOG_REFRESH_HOURS`, default 24; the others notice a newer
+snapshot within about half a minute and adopt it). Everything there is a
+cache: with Redis unreachable each instance falls back to its own
+memory, and a flushed key is simply refilled from the provider on the
+next boot.
 
 **Object storage**: configure bucket-level lifecycle rules on R2/S3 to
 expire old assets (e.g. 90 days). Nodaro never deletes assets itself —

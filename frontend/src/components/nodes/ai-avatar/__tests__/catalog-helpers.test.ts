@@ -40,6 +40,13 @@ describe("pickFeaturedAvatars", () => {
       "Cora Office 4", "Brian Desk 1", "Cora Livingroom 1",
     ])
   })
+  it("never features the account's own look that HeyGen is still building (or failed) — the row is for picking", () => {
+    const building = { ...look("Me Building", "m1"), status: "processing" as const }
+    const broken = { ...look("Me Broken", "m2"), status: "failed" as const }
+    const ready = look("Me Ready", "m3")
+    expect(pickFeaturedAvatars([building, broken, ready, look("Cora Office 4", "c1")], 3).map((a) => a.avatarId)).toEqual(["m3", "c1"])
+  })
+
   it("never duplicates and copes with an empty catalog", () => {
     expect(pickFeaturedAvatars([], 5)).toEqual([])
     const catalog = [look("Cora Office 4"), look("Cora Livingroom 1")]
