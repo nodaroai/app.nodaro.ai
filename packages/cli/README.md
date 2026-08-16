@@ -107,9 +107,24 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
+# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
+
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list                                     # all picker node types + option counts
 nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids
+nodaro pickers analyze "<text>" [--target setting,mood]  # AI Fill: pick values from a description (credit-billed)
+
+# Shots — Cine share → remix records
+nodaro shots get <id> | create [--file shot.json] | update <id> --visibility public | delete <id>
+
+# Recast — regenerate an analyzed video with your own cast + authored-script import (Cloud)
+nodaro recast skill                                     # the authoring guide (markdown, free)
+nodaro recast validate --file script.json               # free; exit 1 while invalid
+nodaro recast import --file script.json --rights-attested
+nodaro recast estimate --analysis-job <id>              # quote credits before creating
+nodaro recast create --workflow <id> --analysis-job <id>   # BUYS THE PLAN
+nodaro recast start <recastId> && nodaro recast status <recastId>
 
 nodaro executions get <id>
 nodaro executions get <id> --watch
@@ -143,7 +158,19 @@ nodaro audio fx --audio <url> --preset hall --mix 35 --watch
 nodaro audio mix --audio <url> --audio <url> --volumes 100,60 --watch
 nodaro audio adjust-volume --audio <url> --normalize --watch
 nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
+
+# Also available (full syntax in the CLI reference):
+#   video-pro   — stop / continue Generate Video Pro runs
+#   characters  — Character Studio CRUD, portraits, assets, motion
+#   locations / objects — Location & Object Studio CRUD + motion
+#   prompt      — the prompt wizard (analyze / generate / wizard)
+#   presets     — node presets (factory + your own)
+#   community   — shared characters/locations/objects: browse, clone, favorites
 ```
+
+The authoritative per-flag reference for every command group is the
+[CLI reference](https://nodaroai.github.io/app.nodaro.ai/cli.html) — this README
+shows the shape, not every option.
 
 ### Three ways to run something
 

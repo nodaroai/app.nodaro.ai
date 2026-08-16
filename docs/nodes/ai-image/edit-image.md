@@ -32,7 +32,7 @@ Edit Image takes an existing image as input and applies a transformation operati
 
 ## Inpainting Mask
 
-Edit Image's backend forwards an attached mask to the provider as the `mask_url` parameter for workflow use -- wire the `mask` output of a [Generate Mask](./generate-mask.md) node into this node's `mask` input, and the mask will be passed through at execution time.
+Edit Image's backend forwards an attached mask to the provider as the `mask_url` parameter for workflow use -- wire the `mask` output of a [Generate Mask](./generate-mask.md) or hand-painted [Paint Mask](./paint-mask.md) node into this node's `mask` input, and the mask will be passed through at execution time.
 
 The interactive **Mask Painter** UI (Paint Mask / Edit Mask buttons, brush/eraser/lasso tools, overlay/mask/source view toggle) currently lives in the **Modify Image** node when the **Ideogram Edit** provider is selected. White areas of the mask are re-rendered by the model; black areas are preserved untouched from the source image. Once a mask is saved on a Modify Image node, re-opening the painter pre-seeds the canvas with the existing mask so further edits build on prior work rather than starting blank.
 

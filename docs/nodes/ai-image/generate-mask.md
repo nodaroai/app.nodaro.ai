@@ -5,7 +5,7 @@
 
 Generate Mask takes an input image plus a short text description and returns a black-and-white PNG mask isolating the described subject. White pixels mark the selected subject -- the region to edit; black pixels mark the background. This **white = edit** polarity matches the [Generate Image](./generate-image.md#inpainting--refine) inpaint convention, so this node's `mask` output can feed a Generate Image mask handle (or seed its Mask Painter) directly. The node also passes the original image through unchanged on a second output handle, so you can wire image + mask into a downstream inpainting node (Generate Image, Edit Image, Image to Image) without re-routing the source image.
 
-There is no provider selection -- the node uses Grounded SAM (`schananas/grounded_sam`) on Replicate, pinned to a specific model version so results are reproducible. The mask returned by this node can also be refined by hand in any consumer that accepts a `mask` input: click "Edit Mask" in the downstream config panel to open the Mask Painter pre-seeded with this output.
+There is no provider selection -- the node uses Grounded SAM (`schananas/grounded_sam`) on Replicate, pinned to a specific model version so results are reproducible. The mask returned by this node can also be refined by hand two ways: click "Edit Mask" in a downstream config panel to open the Mask Painter pre-seeded with this output, or wire it into a [Paint Mask](./paint-mask.md) node — a first-class canvas node that holds a hand-painted `mask` value and passes it to any mask-accepting consumer.
 
 ## Configuration
 

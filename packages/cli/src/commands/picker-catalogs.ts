@@ -40,6 +40,45 @@ export function pickerCatalogsCommand(): Command {
     })
 
   cmd
+    .command("analyze <text>")
+    .description("AI Fill: choose picker values from a free-text description (credit-billed LLM call)")
+    .option("--target <types>", "comma-separated picker node types to fill (default: all analyzable)")
+    .option("--instructions <text>", "extra guidance for the analyzer")
+    .option("--model <id>", "LLM model override")
+    .option("--effort <level>", "reasoning effort override")
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  $ nodaro pickers analyze "rainy neon alley at night, low tracking shot"
+  $ nodaro pickers analyze "sunlit kitchen, warm morning" --target setting,mood`,
+    )
+    .action(
+      async (
+        text: string,
+        opts: { target?: string; instructions?: string; model?: string; effort?: string } & GlobalOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.pickerCatalogs.analyzeText({
+            text,
+            targetPickers: opts.target?.split(",").map((t) => t.trim()).filter(Boolean),
+            instructions: opts.instructions,
+            origin: "cli",
+            llmModel: opts.model,
+            reasoningEffort: opts.effort,
+          })
+          if (opts.json) emit(result, opts)
+          else detail(result.pickerJson)
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
     .command("get <nodeType>")
     .description("show one picker's catalog of valid values")
     .option("--full", "include description + the prompt fragment each id injects")

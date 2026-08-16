@@ -56,6 +56,25 @@ export { PresetsResource } from "./resources/node-presets.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
+export {
+  ShotsResource,
+  type Shot,
+  type ShotMode,
+  type ShotEntityRef,
+  type CreateShotInput,
+  type UpdateShotInput,
+} from "./resources/shots.js"
+export {
+  RecastResource,
+  type RecastScriptValidation,
+  type RecastScriptValidationError,
+  type RecastScriptImportResult,
+  type CreateRecastInput,
+  type EstimateRecastInput,
+  type RecastEstimate,
+  type RecastRunSnapshot,
+  type ResolveRecastGateInput,
+} from "./resources/recast.js"
 export type {
   PickerOption,
   PickerDimension,

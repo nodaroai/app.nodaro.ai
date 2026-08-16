@@ -609,11 +609,39 @@ node type the server has registered without hard-coding a list.
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
 `outputType`, `creditCost` (static credit cost when known), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
-provider slugs), `capabilities` (feature flags the node exposes). The
-exact shape grows over time — treat unknown fields as forward-compatible.
+provider slugs), `capabilities` (feature flags the node exposes). Nodes
+with per-model constraints carry additional discovery fields —
+`maxDurationSec` (hard duration ceiling), `sparseProviders` (models whose
+segment-duration menu is sparse; off-menu values snap to the nearest
+entry), `providerResolutions` (per-model resolution tiers, e.g.
+`{ "minimax-h3": ["2K", "768P"] }`), `providerResolutionWire` (display
+resolution → the literal wire value the API expects — send `"768P"`, not
+`"768p"`, to reach minimax-h3's cheap tier), and `soundtrack` (Generate
+Video Pro: the deployed engine accepts the original-audio `soundtrack`
+input). The exact shape grows over time — treat unknown fields as
+forward-compatible.
 
 Neither endpoint requires authentication; they expose only static
 registry metadata. No scopes required.
+
+### Model catalog
+
+`GET /v1/models` — the REST twin of the MCP `list_models` tool, for plain
+SDK/HTTP clients. Public (model availability is not a secret), cached 5
+minutes (`Cache-Control: public, max-age=300`). Returns
+`{ sections, recommendations, totalModels }`: models grouped by kind
+(`image` / `video` / `audio`) and vendor family, each with capability
+sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
+per-variant credit `pricing`, compact `promptTips`, and the
+`doctrineCovered` truth flag (`true` only when a sourced per-family prompt
+doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
+
+| Query param | Values | Purpose |
+|---|---|---|
+| `kind` | `image` / `video` / `audio` | Filter to one media kind. |
+| `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. |
+| `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
+| `featuredOnly` | boolean | Featured models only. |
 
 ### Seedance 2 video capabilities
 
@@ -739,6 +767,31 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
 
+### Text → pickers (AI Fill)
+
+`POST /v1/text-to-picker` fills pickers from a free-text scene/shot
+description — the "AI Fill" behind Nodaro Cine. Authenticated,
+credit-billed (an LLM call; same credit id as describe-to-picker).
+
+Body: `{ text, targetPickers?, instructions?, origin?, llmModel?,
+reasoningEffort? }` — omit `targetPickers` to analyze ALL analyzable
+pickers (the server fans out per family and merges). Returns
+`{ jobId, pickerJson, gaps? }`: `pickerJson` is
+`pickerType → dimension → chosen catalog id(s)` (the same shape as
+describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists
+attributes the text described that no catalog id represents well (surface
+as "we couldn't infer X"). SDK: `client.pickerCatalogs.analyzeText(...)`;
+CLI: `nodaro pickers analyze "<text>"`.
+
+### Direct uploads
+
+`POST /v1/upload` (multipart: `file` + `type` of `image` / `video` /
+`audio`) stores a file on the instance's media host and returns its URL.
+Accepted audio formats include MP3, WAV, M4A/AAC, OGG, WebM and FLAC
+(`audio/flac` / `audio/x-flac`); size caps are enforced per media type
+(50 MB for audio). The SDK wraps this as `client.uploads`; MCP clients use
+`prepare_audio_upload` / `request_audio_upload` and friends.
+
 ## 12. Credits (Cloud edition)
 
 Two endpoints surface the caller's credit balance and transaction
@@ -747,7 +800,7 @@ not registered and return 404.
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier }`. `total = subscription + topup`. |
+| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
 `Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
@@ -755,6 +808,13 @@ not registered and return 404.
 
 Both routes use the same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT).
+
+Top-up credits are **valid for 12 months** from purchase (subscription
+credits reset each billing cycle); spending draws subscription credits
+first. The `/v1/billing/*` routes (checkout, load sessions, auto-recharge,
+purchase history with receipt links, Stripe portal) are **first-party-only**:
+they reject API and OAuth-app tokens and are used from a logged-in Nodaro
+session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
 
 ## 13. Job batch polling
 
@@ -784,6 +844,26 @@ Both enforce ownership (404 on a foreign job) and 400 on non-pro jobs. Pricing d
 ## 13c. Recast (Cloud edition)
 
 `POST /v1/recast` (regenerate an analyzed source video with your own cast — the engine behind [recast.nodaro.ai](https://recast.nodaro.ai)) **requires `workflowId`**: the uuid of an existing workflow you own, which the recast run attaches to. Omitting it is a `400 workflow_id_required`; an unknown or foreign id is a `404 workflow_not_found`.
+
+The full run lane (all Cloud-only; SDK: `client.recast`, MCP: the
+`start_recast` / `get_recast_status` / `resolve_recast_gate` verbs):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/recast/estimate` | Quote the run in credits (`{ totalCredits, breakdown }`) before buying. Free. Body mirrors create: `analysisJobId`, `fidelity`, `resolution`, `segmentSec`, `renderMethod`, `interactive?`, `provider?`. |
+| `POST` | `/v1/recast` | Create the run — **buys the plan**. Returns `{ recastId }`. |
+| `GET` | `/v1/recast/:id` | Poll the run: `{ status, interactive? }` — `interactive.next` names the pending step or gate on interactive runs. |
+| `POST` | `/v1/recast/:id/start` | Start rendering a `planned` run (idempotent; the plan's quote covered it). Returns `{ gvpJobId? }`. |
+| `POST` | `/v1/recast/:id/select` | Answer a pending pick — body `{ gate: "cast" \| "sheet" \| "anchors" \| "music", picks? / anchorPicks? / musicPick?, segment? / section?, finishAuto? }`. The pick itself is free. |
+
+Interactive runs are **server-driven**: a platform cron advances every
+non-gate step, so a client only polls `GET /v1/recast/:id` and answers
+gates via `/select`. Gates only open for gate kinds the run's create
+declared in `clientCapabilities` (e.g. `"clientCapabilities":
+["sheet-gate"]`) — a client that doesn't declare a capability never sees
+that gate; the platform decides it automatically instead. Pass
+`finishAuto: true` on `/select` to hand this and every remaining gate to
+the automatic critic.
 
 ## 13d. Authored script import (Cloud edition)
 

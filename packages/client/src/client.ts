@@ -25,6 +25,8 @@ import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { ModelsResource } from "./resources/models.js"
+import { ShotsResource } from "./resources/shots.js"
+import { RecastResource } from "./resources/recast.js"
 import { CommunityResource } from "./resources/community.js"
 import { TemplatesResource } from "./resources/templates.js"
 import { TutorialsResource } from "./resources/tutorials.js"
@@ -159,6 +161,8 @@ export class NodaroClient {
   readonly presets: PresetsResource
   readonly pickerCatalogs: PickerCatalogsResource
   readonly models: ModelsResource
+  readonly shots: ShotsResource
+  readonly recast: RecastResource
   readonly community: CommunityResource
   readonly templates: TemplatesResource
   readonly tutorials: TutorialsResource
@@ -198,6 +202,8 @@ export class NodaroClient {
     this.presets = new PresetsResource(this)
     this.pickerCatalogs = new PickerCatalogsResource(this)
     this.models = new ModelsResource(this)
+    this.shots = new ShotsResource(this)
+    this.recast = new RecastResource(this)
     this.community = new CommunityResource(this)
     this.templates = new TemplatesResource(this)
     this.tutorials = new TutorialsResource(this)

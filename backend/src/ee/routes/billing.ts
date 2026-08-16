@@ -89,12 +89,15 @@ export async function billingRoutes(app: FastifyInstance) {
     return reply.send({ data, effectiveTier })
   })
 
-  // Get transaction history for a user
+  // Get transaction history for a user. JWT-only like every other billing
+  // surface — purchase history + Stripe receipt URLs are settings-grade data
+  // an OAuth-app or API token has no business reading.
   app.get("/v1/billing/transactions", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
     }
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
 
     const { data, error } = await supabase
       .from("transactions")

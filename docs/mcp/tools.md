@@ -488,12 +488,12 @@ prompt with no questions round-trip.
 | `continue_video_pro` | Continue a stopped / failed / completed `generate-video-pro` run as a NEW job — delivered segments below `from_segment` (1-based; default = first missing) are reused, the rest regenerate; billed only for the regenerated part. Accepts `job_id`, `from_segment?`. Returns the new job id. |
 | `video_analysis` | Scene-by-scene analysis of a video for AI re-creation — ≤8s scenes with prompt-ready `visualResolved` descriptions, layered audio, and castable entity slots. Exactly one source: `video_asset_id` / `video_url` / `youtube_url` (max 10 minutes, no live streams). See [`video_analysis`](#video_analysis) below. |
 | `video_audit` | Re-watch a video against its analysis and fix what's wrong — a fix-and-disclose pass: corrections are applied under guards and every one is reported, nothing is silently rewritten. Pass `analysis` from a prior `video_analysis`/`video_audit` call to re-verify it, or omit it to auto-run a fast analysis first. See [`video_audit`](#video_audit) below. |
-| `get_recast_authoring_skill` | The authoring guide for writing a movie as JSON — the preferred lane for end-to-end "make me a video of X" requests. Generated from the platform's own planner doctrine. Ungated. See [Recast authoring](./recast-authoring.md). |
-| `validate_recast_script` | FREE validation of an authored script; returns `{ valid, errors (path+hint), warnings }` for the repair loop. Ungated, never charges. |
-| `import_recast_script` | Turn a validated script into a real recast project (visible at recast.nodaro.ai). Free. Requires `rights_attested: true`, which must reflect the **user's own** confirmation of ownership — authored recasts render Faithful, exactly as written. `workflows:write`. |
-| `start_recast` | Quote (no `confirm`) then render (`confirm: true` after the user accepts the credits) an imported recast; called again it advances a planned or interactive run. Pass `interactive: true` to choose the cast at pick-1-of-3 gates (priced surcharge — it rides the quote). `workflows:execute`. |
-| `resolve_recast_gate` | Record the user's pick at an interactive gate (cast / identity sheet / scene stills / music) and advance the run — the pick is free, pure state. `picks` serves the two pick-1-of-3 gates: bare it answers the CAST gate; with `gate: "sheet"` it answers the identity-sheet gate (person slots only, opens after the cast pick — the face panel is identical across the 3 sheets, so the pick chooses body & wardrobe). `finish_auto: true` resolves every remaining gate with the critic's top candidate. `workflows:execute`. |
-| `get_recast_status` | Progress of a recast run — planning / planned / generating (segments, live preview) / completed (result URL) — plus the recast.nodaro.ai deep link. `workflows:read`. |
+| `get_recast_authoring_skill` | (Cloud only) The authoring guide for writing a movie as JSON — the preferred lane for end-to-end "make me a video of X" requests. Generated from the platform's own planner doctrine. Ungated. See [Recast authoring](./recast-authoring.md). |
+| `validate_recast_script` | (Cloud only) FREE validation of an authored script; returns `{ valid, errors (path+hint), warnings }` for the repair loop. Ungated, never charges. |
+| `import_recast_script` | (Cloud only) Turn a validated script into a real recast project (visible at recast.nodaro.ai). Free. Requires `rights_attested: true`, which must reflect the **user's own** confirmation of ownership — authored recasts render Faithful, exactly as written. `workflows:write`. |
+| `start_recast` | (Cloud only) Quote (no `confirm`) then render (`confirm: true` after the user accepts the credits) an imported recast; called again it advances a planned or interactive run. Pass `interactive: true` to choose the cast at pick-1-of-3 gates (priced surcharge — it rides the quote). `workflows:execute`. |
+| `resolve_recast_gate` | (Cloud only) Record the user's pick at an interactive gate (cast / identity sheet / scene stills / music) and advance the run — the pick is free, pure state. `picks` serves the two pick-1-of-3 gates: bare it answers the CAST gate; with `gate: "sheet"` it answers the identity-sheet gate (person slots only, opens after the cast pick — the face panel is identical across the 3 sheets, so the pick chooses body & wardrobe). `finish_auto: true` resolves every remaining gate with the critic's top candidate. `workflows:execute`. |
+| `get_recast_status` | (Cloud only) Progress of a recast run — planning / planned / generating (segments, live preview) / completed (result URL) — plus the recast.nodaro.ai deep link. `workflows:read`. |
 
 **Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The other variants are resolution-capped: `seedance-2-fast`, `seedance-2-mini` and `seedance-2-5` are **480p / 720p only** (no 1080p, no 4K). **`seedance-2-5`** trades that ceiling for length — up to **30s in one call** vs 15s — and accepts 30 image / 10 video / 10 audio references. Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
 
@@ -1137,7 +1137,10 @@ with per-model capability sheets (aspect ratios, resolutions, qualities,
 durations, features, per-variant credit pricing) and a `recommendations`
 array. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
-before calling `generate_video` / `animate_image`.
+before calling `generate_video` / `animate_image` — and every model
+carries `doctrineCovered`: `true` only when a sourced per-family prompt
+doctrine exists for it. Gate "vendor doctrine · real rewrite" badges on
+that flag and show a generic label otherwise — never overclaim.
 
 **Input:** `kind` (`image`/`video`/`audio`), `mode`, `family`, `featuredOnly`
 
@@ -1147,10 +1150,12 @@ before calling `generate_video` / `animate_image`.
 
 **Scope:** `credits:read` (cloud edition only)
 
-Returns your current credit balance split by pool (`subscription_credits`
-vs `topup_credits`), plus `tier` and `effectiveTier` — `"payg"` means
-pay-as-you-go: no subscription, but purchased credits (all models
-unlocked, no watermark, no daily cap).
+Returns your current credit balance split by pool (`subscription` vs
+`topup`, with `total = subscription + topup`), plus `tier` and
+`effectiveTier` — `"payg"` means pay-as-you-go: no subscription, but
+purchased credits (all models unlocked, no watermark, no daily cap).
+Top-up credits are valid for 12 months from purchase; subscription
+credits reset each billing cycle and are spent first.
 
 **Input:** none
 
@@ -1160,8 +1165,11 @@ unlocked, no watermark, no daily cap).
 
 **Scope:** `credits:read` (cloud edition only)
 
-Lists recent credit transactions (deductions and top-ups) with amounts,
-model identifiers, and timestamps.
+Lists recent **purchase-ledger** rows (subscriptions, top-ups, refunds):
+`type`, `amount_usd`, `credits_granted`, `tier`, `created_at`, and
+`receipt_url` (the Stripe receipt link, when present). Note this is the
+purchase history — per-generation credit *spend* is a different ledger,
+served by REST `GET /v1/credits/transactions`, not by this tool.
 
 **Input:** `limit`, `cursor`
 
@@ -1406,9 +1414,15 @@ product. Passing `url` without `brief` returns a deferred-capability message
 
 **Scope:** `workflows:execute`
 
-Summarize or reduce a list of text items using an LLM. Useful for
-post-processing arrays of generated captions or descriptions into a single
-coherent output.
+Fold a list of candidates into one result — the engine behind the
+canvas **Choose Best** node. Six strategies: `pick-best-llm` (an LLM
+judge picks the best candidate against your `criteria` — works on texts
+or images via `inputKind: "text" | "image-url"`, with an optional
+`llmModel` judge override; economy/standard/premium credit tiers apply),
+`concat`, `first-non-empty`, `count`, `vote`, and `merge-json`. Pass the
+candidates as `inputs` (up to 1000 strings — text fragments or URLs),
+the strategy as `strategyId`, and its config as `strategyConfig`. The
+judged winner comes back with its reasoning.
 
 ---
 

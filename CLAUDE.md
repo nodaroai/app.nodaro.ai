@@ -109,7 +109,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
 | 6 | `backend/src/providers/kie/index.ts` or `replicate/index.ts` | `supportedModels` array |
 | 7 | `backend/src/ee/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composites like `"gpt-image:high"`) |
-| 8 | `frontend/src/lib/pricing-data.ts` | `MODEL_REFERENCE` |
+| 8 | `packages/shared/src/model-catalog.ts` | `MODEL_CATALOG` entry — capability sheet (modes, aspectRatios, resolutions, durations, features) + pricing rows. Powers `/v1/models`, MCP `list_models`, `normalizeModelInput`, and `VIDEO_PROVIDERS_REQUIRING_IMAGE`. (The old `MODEL_REFERENCE` in `pricing-data.ts` no longer exists.) |
 | 8b | `packages/shared/src/prompt-wizard-categories.ts` | `PROVIDER_CAPABILITIES` entry |
 | 9 | `supabase/migrations/NNN_*.sql` | `INSERT INTO model_pricing ... ON CONFLICT DO NOTHING` — base id + every composite (see pitfall 3) |
 | 10 | `backend/src/ee/billing/stripe-config.ts` | If pricing tiers/credit allocations change |

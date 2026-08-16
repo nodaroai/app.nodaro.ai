@@ -13,7 +13,7 @@ The Sticky Note node provides a free-form text annotation that can be placed any
 | Text Color | hex string | `"#ffffff"` | Text color. |
 | Width | number (px) | `840` | Note width in pixels. |
 | Height | number (px) | `540` | Note height in pixels. |
-| Font Size | enum | `"base"` | Text size. Options: `sm`, `base`, `lg`, `xl`. |
+| Font Size | enum | `"base"` | Text size, cycled from the note's toolbar. Options: `sm` (**Small**, 12px), `base` (**Paragraph**, 14px), `lg` (**Heading**, 18px), `xl` (**Display**, 26px) — four visibly distinct sizes. |
 | Bold | boolean | `false` | Whether the text is bold. |
 | Italic | boolean | `false` | Whether the text is italic. |
 | Alignment | enum | `"left"` | Text alignment. Options: `left`, `center`, `right`. |

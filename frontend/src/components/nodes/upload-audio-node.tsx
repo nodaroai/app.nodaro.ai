@@ -196,7 +196,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                 <>
                   <input
                     type="file"
-                    accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/webm"
+                    accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/webm,audio/flac,audio/x-flac,.flac"
                     onChange={handleFileSelect}
                     className="hidden"
                     ref={fileInputRef}

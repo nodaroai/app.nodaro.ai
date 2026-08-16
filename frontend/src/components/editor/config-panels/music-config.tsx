@@ -196,7 +196,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
               <div className="ml-6 flex flex-col gap-1">
                 <Input
                   type="file"
-                  accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,.mp3,.wav,.m4a,.aac"
+                  accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/x-flac,.mp3,.wav,.m4a,.aac,.flac"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (file) handleFileUpload(file)
