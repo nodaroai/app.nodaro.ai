@@ -17,12 +17,16 @@
 //     callers can pre-fill defaultVoiceId and preferredOrientation.
 
 import { memo, useCallback, useMemo, useRef, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
 import { Search, User, AlertCircle, Zap } from "lucide-react"
+import type { HeygenAvatar } from "@/lib/api"
 import {
-  getHeygenAvatars,
-  type HeygenAvatar,
-} from "@/lib/api"
+  useHeygenAvatars,
+  keylessCatalogHint,
+  avatarSupportsV,
+  deriveGenders,
+  hasGroupSegmentation,
+  filterAvatars,
+} from "./heygen-catalog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -64,11 +68,9 @@ interface AvatarTileProps {
   readonly disabled?: boolean
 }
 
-/** Returns true when the avatar's `supportedEngines` list includes "avatar_v"
- *  (HeyGen's canonical engine ID — note underscore, not hyphen). */
-export function avatarSupportsV(avatar: HeygenAvatar): boolean {
-  return avatar.supportedEngines?.includes("avatar_v") ?? false
-}
+// `avatarSupportsV` lives in heygen-catalog.ts (shared with the on-node quick
+// pick); re-exported here so existing imports keep working.
+export { avatarSupportsV }
 
 const AvatarTile = memo(function AvatarTile({
   avatar,
@@ -160,41 +162,11 @@ const AvatarTile = memo(function AvatarTile({
 })
 
 // ---------------------------------------------------------------------------
-// Pure helpers — extracted so tests can cover them without mounting the grid
+// Pure helpers — live in heygen-catalog.ts (shared with the on-node search so
+// "search" means the same thing on the card and in this panel); re-exported
+// here so existing imports keep working.
 // ---------------------------------------------------------------------------
-
-/** Derive the sorted list of unique genders present in the catalog. */
-export function deriveGenders(avatars: readonly HeygenAvatar[]): string[] {
-  const seen = new Set<string>()
-  for (const a of avatars) {
-    if (a.gender) seen.add(a.gender.toLowerCase())
-  }
-  return Array.from(seen).sort()
-}
-
-/** Return `true` when `groupId` distinguishes stock vs. custom avatars. */
-export function hasGroupSegmentation(avatars: readonly HeygenAvatar[]): boolean {
-  return avatars.some((a) => a.groupId != null && a.groupId !== "")
-}
-
-/** Filter the avatar list by the active search + gender + segment + Avatar-V controls. */
-export function filterAvatars(
-  avatars: readonly HeygenAvatar[],
-  query: string,
-  gender: string,
-  segment: "all" | "stock" | "custom",
-  onlyAvatarV = false,
-): HeygenAvatar[] {
-  const q = query.trim().toLowerCase()
-  return avatars.filter((a) => {
-    if (q && !a.name.toLowerCase().includes(q)) return false
-    if (gender !== "all" && a.gender.toLowerCase() !== gender) return false
-    if (segment === "stock" && a.groupId) return false
-    if (segment === "custom" && !a.groupId) return false
-    if (onlyAvatarV && !avatarSupportsV(a)) return false
-    return true
-  })
-}
+export { deriveGenders, hasGroupSegmentation, filterAvatars }
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -227,16 +199,11 @@ export const AvatarPicker = memo(function AvatarPicker({
   onToggle,
   max = 3,
 }: AvatarPickerProps) {
-  const { data: avatars = [], isLoading, isError } = useQuery({
-    queryKey: ["heygen-avatars"],
-    queryFn: getHeygenAvatars,
-    staleTime: 5 * 60 * 1000, // avatars change rarely
-    // An EMPTY list is a state that changes under the user — a self-host that
-    // pastes its HeyGen key or connects nodaro.ai (the catalog then arrives
-    // through the connection) should see the pickers fill without a reload.
-    // Cheap: the server caches the catalog for an hour.
-    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? false : 15_000),
-  })
+  // Query definition (key, staleTime, polling while the server is still
+  // filling) is shared with every other catalog consumer — see
+  // heygen-catalog.ts. `complete` is false while pages are still arriving;
+  // the grid renders what is there and the count says "loading more".
+  const { data: avatars, isLoading, isError, complete } = useHeygenAvatars()
 
   const [query, setQuery] = useState("")
   const [gender, setGender] = useState("all")
@@ -341,7 +308,7 @@ export const AvatarPicker = memo(function AvatarPicker({
         <User className="size-10 text-muted-foreground/40" />
         <p className="text-sm font-medium text-muted-foreground">No HeyGen avatars</p>
         <p className="text-xs text-muted-foreground/70">
-          Add a HeyGen key or connect nodaro.ai under Integrations &rarr; Model providers to browse avatars.
+          {keylessCatalogHint("avatars")}
         </p>
       </div>
     )
@@ -471,7 +438,7 @@ export const AvatarPicker = memo(function AvatarPicker({
         )}
       </div>
 
-      {/* Item count + (multi) selection cap */}
+      {/* Item count + (multi) selection cap + "still arriving" while the server fills */}
       {filtered.length > 0 && (
         <p className="text-[10px] text-muted-foreground text-right px-0.5">
           {multiple && (
@@ -480,6 +447,11 @@ export const AvatarPicker = memo(function AvatarPicker({
             </span>
           )}
           {filtered.length} avatar{filtered.length !== 1 ? "s" : ""}
+          {!complete && (
+            <span className="ml-1.5 text-muted-foreground/70" data-testid="avatar-picker-loading-more">
+              · loading more…
+            </span>
+          )}
         </p>
       )}
     </div>

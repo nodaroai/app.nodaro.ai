@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlignLeft,
   AudioLines,
@@ -37,6 +37,9 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { PromptEditor } from "@/lib/picker-ui"
 import { isPromptEditorPortalInteraction } from "@/lib/picker-ui"
+// Direct import (not via the picker-ui seam): app-local helper that exists in
+// both lanes — the rich package doesn't export it.
+import { escapePromptEditorFocusTrap } from "@/lib/prompt-editor-portal"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import { SnippetMenuButton } from "@/components/editor/config-panels/snippet-menu-button"
 import {
@@ -248,6 +251,15 @@ export function PromptQuickEditModal() {
     : undefined
   const imageCredits = useModelCredits(imageCreditsId, 1)
   const videoCredits = useModelCredits(videoCreditsId, 25)
+
+  // While the modal is open, keep its Radix focus trap from yanking focus out
+  // of body-portaled prompt-editor menus — without this, text inputs inside
+  // them (e.g. the image reference chip's "Custom…" label field) can never
+  // hold focus and typing lands in the prompt editor instead.
+  useEffect(() => {
+    if (!nodeId) return
+    return escapePromptEditorFocusTrap()
+  }, [nodeId])
 
   if (!nodeId || !node || !nodeType || !fields) return null
 

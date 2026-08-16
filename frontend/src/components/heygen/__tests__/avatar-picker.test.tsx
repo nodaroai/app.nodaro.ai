@@ -14,9 +14,14 @@ import {
 // Mock @/lib/api — hoisted before the SUT import
 // ---------------------------------------------------------------------------
 const mockGetHeygenAvatars = vi.fn()
+// The picker reads the catalog through heygen-catalog.ts, which calls the
+// progressive fetcher (`{ items, complete }`). The mock keeps returning arrays
+// and wraps them as a whole answer.
 vi.mock("@/lib/api", () => ({
+  getHeygenAvatarCatalog: async (...args: unknown[]) => ({ items: await mockGetHeygenAvatars(...args), complete: true }),
   getHeygenAvatars: (...args: unknown[]) => mockGetHeygenAvatars(...args),
   // VoicePicker is not used here but the module must export consistently.
+  getHeygenVoiceCatalog: vi.fn(),
   getHeygenVoices: vi.fn(),
 }))
 

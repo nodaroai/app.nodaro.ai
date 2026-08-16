@@ -1,11 +1,14 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SunoField, isSunoFieldWired } from "@/components/editor/config-panels/suno-field"
 import { SunoFieldAiButton, isSunoAiField } from "./suno-field-ai-button"
 import { isPromptEditorPortalInteraction } from "@/lib/picker-ui"
+// Direct import (not via the picker-ui seam): app-local helper that exists in
+// both lanes — the rich package doesn't export it.
+import { escapePromptEditorFocusTrap } from "@/lib/prompt-editor-portal"
 import { usePromptEditorRefs } from "./inline-node-prompt/use-prompt-editor-refs"
 import {
   SUNO_FIELD_EDIT_META,
@@ -51,6 +54,13 @@ export function SunoFieldEditModal({
     (patch: Partial<SunoGenerateData>) => updateNodeData(nodeId, patch),
     [nodeId, updateNodeData],
   )
+
+  // While the dialog is open, keep its Radix focus trap from yanking focus out
+  // of body-portaled prompt-editor menus (same escape as the quick-edit modal).
+  useEffect(() => {
+    if (!field) return
+    return escapePromptEditorFocusTrap()
+  }, [field])
 
   const meta = field ? SUNO_FIELD_EDIT_META[field] : null
   // Wired via the SHARED predicate (edge into the field's handle OR a legacy

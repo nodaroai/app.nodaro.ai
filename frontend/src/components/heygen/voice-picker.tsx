@@ -22,15 +22,12 @@ import {
   useMemo,
   useRef,
   useState,
-  useEffect,
 } from "react"
-import { useQuery } from "@tanstack/react-query"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Search, Play, Pause, AlertCircle, Volume2 } from "lucide-react"
-import {
-  getHeygenVoices,
-  type HeygenVoice,
-} from "@/lib/api"
+import type { HeygenVoice } from "@/lib/api"
+import { useHeygenVoices, keylessCatalogHint } from "./heygen-catalog"
+import { useVoicePreview } from "./use-voice-preview"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -40,11 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import {
-  setActivePlayer,
-  releaseActivePlayer,
-  type ActivePlayerHandle,
-} from "@/components/audio-player/active-player"
 
 // ---------------------------------------------------------------------------
 // Pure helpers — extracted so tests can cover the filter logic without RTL
@@ -99,49 +91,16 @@ const VoiceRow = memo(function VoiceRow({
   selected,
   onSelect,
 }: VoiceRowProps) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-
-  // Stable handle for the active-player singleton. Created once per mount.
-  const playerHandleRef = useRef<ActivePlayerHandle | null>(null)
-  if (!playerHandleRef.current) {
-    playerHandleRef.current = {
-      pause: () => {
-        audioRef.current?.pause()
-        setIsPlaying(false)
-      },
-    }
-  }
-
-  // Release the singleton slot on unmount so it doesn't hold a stale ref.
-  useEffect(() => {
-    const handle = playerHandleRef.current
-    return () => {
-      if (handle) releaseActivePlayer(handle)
-    }
-  }, [])
+  // Preview playback goes through the shared hook (active-player singleton —
+  // one clip at a time), the same one the on-node voice row uses.
+  const { isPlaying, toggle } = useVoicePreview(voice.previewAudio)
 
   const handlePlayPause = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation() // don't trigger row selection
-      if (!voice.previewAudio) return
-
-      if (isPlaying) {
-        audioRef.current?.pause()
-        setIsPlaying(false)
-      } else {
-        // Register with the singleton — pauses whatever was playing.
-        setActivePlayer(playerHandleRef.current!)
-        if (!audioRef.current) {
-          audioRef.current = new Audio(voice.previewAudio)
-          audioRef.current.onended = () => setIsPlaying(false)
-          audioRef.current.onpause = () => setIsPlaying(false)
-        }
-        audioRef.current.play().catch(() => setIsPlaying(false))
-        setIsPlaying(true)
-      }
+      toggle()
     },
-    [isPlaying, voice.previewAudio],
+    [toggle],
   )
 
   return (
@@ -240,14 +199,11 @@ export const VoicePicker = memo(function VoicePicker({
   onSelect,
   className,
 }: VoicePickerProps) {
-  const { data: voices = [], isLoading, isError } = useQuery({
-    queryKey: ["heygen-voices"],
-    queryFn: getHeygenVoices,
-    staleTime: 5 * 60 * 1000,
-    // See avatar-picker: an empty list self-heals once a key is pasted or the
-    // install connects to nodaro.ai.
-    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? false : 15_000),
-  })
+  // Query definition shared with every other catalog consumer — see
+  // heygen-catalog.ts (polls while the server is still filling; an empty
+  // list self-heals once a key lands). `complete` is false while pages are
+  // still arriving; the list renders what is there.
+  const { data: voices, isLoading, isError, complete } = useHeygenVoices()
 
   const [query, setQuery] = useState("")
   const [language, setLanguage] = useState("all")
@@ -315,7 +271,7 @@ export const VoicePicker = memo(function VoicePicker({
         <Volume2 className="size-10 text-muted-foreground/40" />
         <p className="text-sm font-medium text-muted-foreground">No HeyGen voices</p>
         <p className="text-xs text-muted-foreground/70">
-          Add a HeyGen key or connect nodaro.ai under Integrations &rarr; Model providers to browse voices.
+          {keylessCatalogHint("voices")}
         </p>
       </div>
     )
@@ -374,9 +330,14 @@ export const VoicePicker = memo(function VoicePicker({
         </Select>
       </div>
 
-      {/* Item count */}
+      {/* Item count + "still arriving" while the server fills */}
       <p className="text-[10px] text-muted-foreground px-0.5">
         {filtered.length.toLocaleString()} voice{filtered.length !== 1 ? "s" : ""}
+        {!complete && (
+          <span className="ml-1.5 text-muted-foreground/70" data-testid="voice-picker-loading-more">
+            · loading more…
+          </span>
+        )}
       </p>
 
       {/* Virtualized list */}

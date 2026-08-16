@@ -21,6 +21,7 @@ import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { watchProviderCredentials } from "./providers/index.js"
+import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { ensureStorageBucket } from "./lib/storage.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
@@ -80,6 +81,12 @@ async function main() {
   // The API process reads keys too (LLM lanes, setup status) and is where
   // the pastes happen; load the store now and keep it fresh on the TTL.
   watchProviderCredentials()
+
+  // HeyGen catalogs (≈7,000 avatar looks over ≈140 pages, ≈2,500 voices in
+  // one slow call): start both fills now, in the background, so the first
+  // picker opened after a deploy usually finds them done. Fire-and-forget;
+  // no-op without a key.
+  warmHeygenCatalog()
 
   // Start schedule cron for workflow triggers
   startScheduleCron()

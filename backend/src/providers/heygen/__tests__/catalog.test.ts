@@ -378,3 +378,281 @@ describe("listVoices — unconfigured key", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Progressive snapshots — nobody waits for the whole paginated fill
+// ---------------------------------------------------------------------------
+
+describe("snapshotAvatars — progressive fill", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  /** A page of one photo_avatar look; `next` sets the cursor to the next page. */
+  function page(id: string, next?: string) {
+    return {
+      code: 0,
+      message: "success",
+      data: [{ id, avatar_type: "photo_avatar", name: id, gender: "Female", preview_image_url: `https://cdn.example.com/${id}.jpg` }],
+      ...(next ? { next_token: next, has_more: true } : {}),
+    }
+  }
+
+  /** A fetch that hands back a page only when the test releases it. */
+  function gate() {
+    let release!: () => void
+    const opened = new Promise<void>((r) => { release = r })
+    return { opened, release }
+  }
+
+  beforeEach(async () => {
+    vi.resetModules()
+    vi.doMock("@/lib/config.js", () => ({
+      config: { HEYGEN_API_KEY: "test-heygen-key", NODE_ENV: "test" },
+    }))
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it("answers with the first page (complete:false) while later pages are still loading, then the whole list", async () => {
+    const page2 = gate()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(page("look-1", "cursor-2")))
+      .mockImplementationOnce(async () => { await page2.opened; return makeResponse(page("look-2")) })
+
+    const { snapshotAvatars } = await import("../catalog.js")
+
+    const first = await snapshotAvatars()
+    expect(first.complete).toBe(false)
+    expect(first.items.map((a) => a.avatarId)).toEqual(["look-1"])
+
+    // Still filling — a second caller gets the same partial answer at once (no new fetch).
+    const again = await snapshotAvatars()
+    expect(again).toEqual(first)
+    expect(fetchMock.mock.calls.filter((c) => (c[0] as string).includes("/v3/avatars/looks"))).toHaveLength(2)
+
+    page2.release()
+    await new Promise((r) => setTimeout(r, 0))
+    const done = await snapshotAvatars()
+    expect(done.complete).toBe(true)
+    expect(done.items.map((a) => a.avatarId)).toEqual(["look-1", "look-2"])
+  })
+
+  it("serves a stale complete list immediately and refreshes it in the background", async () => {
+    vi.useFakeTimers()
+    fetchMock.mockResolvedValueOnce(makeResponse(page("old-look")))
+    const { snapshotAvatars } = await import("../catalog.js")
+    expect((await snapshotAvatars()).items.map((a) => a.avatarId)).toEqual(["old-look"])
+
+    // Past the TTL: the old list comes back at once (complete), and a refresh starts.
+    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
+    const refreshGate = gate()
+    fetchMock.mockImplementationOnce(async () => { await refreshGate.opened; return makeResponse(page("new-look")) })
+    const stale = await snapshotAvatars()
+    expect(stale.complete).toBe(true)
+    expect(stale.items.map((a) => a.avatarId)).toEqual(["old-look"])
+    expect(fetchMock.mock.calls.filter((c) => (c[0] as string).includes("/v3/avatars/looks"))).toHaveLength(2)
+
+    refreshGate.release()
+    await vi.advanceTimersByTimeAsync(0)
+    const fresh = await snapshotAvatars()
+    expect(fresh.items.map((a) => a.avatarId)).toEqual(["new-look"])
+    expect(fresh.complete).toBe(true)
+  })
+
+  it("keeps the pages it has when a later page fails, and RESUMES from that cursor after the back-off", async () => {
+    vi.useFakeTimers()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(page("look-1", "cursor-2")))
+      .mockRejectedValueOnce(new Error("HeyGen 502"))
+    const { snapshotAvatars } = await import("../catalog.js")
+
+    const first = await snapshotAvatars()
+    expect(first.items.map((a) => a.avatarId)).toEqual(["look-1"])
+    expect(first.complete).toBe(false)
+    await vi.advanceTimersByTimeAsync(0) // let the failing page settle
+
+    // Inside the back-off: still the same partial answer, and no retry yet.
+    const during = await snapshotAvatars()
+    expect(during).toMatchObject({ items: first.items, complete: false })
+    expect(fetchMock.mock.calls.filter((c) => (c[0] as string).includes("/v3/avatars/looks"))).toHaveLength(2)
+
+    // After the back-off the next request resumes from cursor-2 — not from page one.
+    vi.setSystemTime(Date.now() + 11_000)
+    fetchMock.mockResolvedValueOnce(makeResponse(page("look-2")))
+    await snapshotAvatars()
+    await vi.advanceTimersByTimeAsync(0)
+    const calls = fetchMock.mock.calls.filter((c) => (c[0] as string).includes("/v3/avatars/looks"))
+    expect(calls).toHaveLength(3)
+    expect(calls[2][0] as string).toContain("token=cursor-2")
+    const done = await snapshotAvatars()
+    expect(done.complete).toBe(true)
+    expect(done.items.map((a) => a.avatarId)).toEqual(["look-1", "look-2"])
+  })
+
+  it("a fill that fails before its first page answers empty + complete:false and never hangs the caller", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("HeyGen down"))
+    const { snapshotAvatars } = await import("../catalog.js")
+    const res = await snapshotAvatars()
+    expect(res).toMatchObject({ items: [], complete: false })
+  })
+
+  it("is complete + empty on an unconfigured install (nothing to wait for)", async () => {
+    vi.doMock("@/lib/config.js", () => ({ config: { HEYGEN_API_KEY: "", NODE_ENV: "test" } }))
+    const { snapshotAvatars, snapshotVoices } = await import("../catalog.js")
+    expect(await snapshotAvatars()).toMatchObject({ items: [], complete: true })
+    expect(await snapshotVoices()).toMatchObject({ items: [], complete: true })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("listAvatars (the full-list API) still waits for every page", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(page("look-1", "cursor-2")))
+      .mockResolvedValueOnce(makeResponse(page("look-2")))
+    const { listAvatars, snapshotAvatars } = await import("../catalog.js")
+    const all = await listAvatars()
+    expect(all.map((a) => a.avatarId)).toEqual(["look-1", "look-2"])
+    expect(await snapshotAvatars()).toMatchObject({ items: all, complete: true, offset: 0, total: 2 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Delta answers — a client that holds part of a generation gets only the rest
+// ---------------------------------------------------------------------------
+
+describe("snapshotAvatars — offset / generation deltas", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  function page(id: string, next?: string) {
+    return {
+      code: 0,
+      message: "success",
+      data: [{ id, avatar_type: "photo_avatar", name: id, gender: "Female", preview_image_url: `https://cdn.example.com/${id}.jpg` }],
+      ...(next ? { next_token: next, has_more: true } : {}),
+    }
+  }
+  function gate() {
+    let release!: () => void
+    const opened = new Promise<void>((r) => { release = r })
+    return { opened, release }
+  }
+
+  beforeEach(async () => {
+    vi.resetModules()
+    vi.doMock("@/lib/config.js", () => ({ config: { HEYGEN_API_KEY: "test-heygen-key", NODE_ENV: "test" } }))
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it("answers only the items after the caller's offset when the generation matches, and everything otherwise", async () => {
+    const page2 = gate()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(page("look-1", "cursor-2")))
+      .mockImplementationOnce(async () => { await page2.opened; return makeResponse(page("look-2")) })
+    const { snapshotAvatars } = await import("../catalog.js")
+
+    const first = await snapshotAvatars()
+    expect(first).toMatchObject({ offset: 0, total: 1, complete: false })
+    expect(first.generation).toEqual(expect.any(String))
+    expect(first.generation).not.toBe("none")
+
+    page2.release()
+    await new Promise((r) => setTimeout(r, 0))
+
+    // Same generation, holding 1 → just the tail.
+    const tail = await snapshotAvatars({ offset: 1, generation: first.generation })
+    expect(tail).toEqual({ items: [expect.objectContaining({ avatarId: "look-2" })], offset: 1, total: 2, complete: true, generation: first.generation })
+    // Caught up → an empty delta, still complete.
+    expect(await snapshotAvatars({ offset: 2, generation: first.generation })).toMatchObject({ items: [], offset: 2, total: 2, complete: true })
+    // Wrong generation (another server, an older fill) → the whole list from zero.
+    const whole = await snapshotAvatars({ offset: 1, generation: "stale-gen" })
+    expect(whole).toMatchObject({ offset: 0, total: 2 })
+    expect(whole.items.map((a) => a.avatarId)).toEqual(["look-1", "look-2"])
+    // An offset past what is known → from zero as well (never a negative slice).
+    expect(await snapshotAvatars({ offset: 99, generation: first.generation })).toMatchObject({ offset: 0, total: 2 })
+  })
+
+  it("a background refresh gets a NEW generation, so a client holding the old list is re-sent from zero", async () => {
+    vi.useFakeTimers()
+    fetchMock.mockResolvedValueOnce(makeResponse(page("old-look")))
+    const { snapshotAvatars } = await import("../catalog.js")
+    const g1 = (await snapshotAvatars()).generation
+
+    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
+    fetchMock.mockResolvedValueOnce(makeResponse(page("new-look")))
+    await snapshotAvatars() // serves stale g1, kicks the refresh
+    await vi.advanceTimersByTimeAsync(0)
+    const fresh = await snapshotAvatars({ offset: 1, generation: g1 })
+    expect(fresh.generation).not.toBe(g1)
+    expect(fresh).toMatchObject({ offset: 0, total: 1, complete: true })
+    expect(fresh.items.map((a) => a.avatarId)).toEqual(["new-look"])
+  })
+
+  it("warmHeygenCatalog starts both fills in the background without waiting, and is a no-op without a key", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      makeResponse((url as string).includes("/v3/avatars/looks") ? page("look-1") : voicesApiResponse),
+    )
+    const { warmHeygenCatalog, snapshotAvatars, snapshotVoices } = await import("../catalog.js")
+    warmHeygenCatalog()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(fetchMock.mock.calls.some((c) => (c[0] as string).includes("/v3/avatars/looks"))).toBe(true)
+    expect(fetchMock.mock.calls.some((c) => (c[0] as string).includes("/v2/voices"))).toBe(true)
+    expect((await snapshotAvatars()).complete).toBe(true)
+    expect((await snapshotVoices()).total).toBe(3)
+
+    vi.resetModules()
+    vi.doMock("@/lib/config.js", () => ({ config: { HEYGEN_API_KEY: "", NODE_ENV: "test" } }))
+    fetchMock.mockClear()
+    const keyless = await import("../catalog.js")
+    keyless.warmHeygenCatalog()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("the safety cap is far above HeyGen's real ≈460 pages (the old 50 silently cut the catalog to 1,000 looks)", async () => {
+    // 60 pages, each with a cursor → the old cap would have stopped at 50.
+    let served = 0
+    fetchMock.mockImplementation(async () => {
+      served++
+      return makeResponse(page(`look-${served}`, served < 60 ? `cursor-${served + 1}` : undefined))
+    })
+    const { listAvatars } = await import("../catalog.js")
+    const all = await listAvatars()
+    expect(all).toHaveLength(60)
+  })
+})
+
+describe("fetch shape — what we ask HeyGen for", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  beforeEach(async () => {
+    vi.resetModules()
+    vi.doMock("@/lib/config.js", () => ({ config: { HEYGEN_API_KEY: "test-heygen-key", NODE_ENV: "test" } }))
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("asks /v3/avatars/looks for photo avatars only, 50 per page, and threads the cursor", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse({ code: 0, message: "ok", data: [], next_token: "c2", has_more: true }))
+      .mockResolvedValueOnce(makeResponse({ code: 0, message: "ok", data: [] }))
+    const { listAvatars } = await import("../catalog.js")
+    await listAvatars()
+    const urls = fetchMock.mock.calls.map((c) => new URL(String(c[0])))
+    expect(urls).toHaveLength(2)
+    for (const u of urls) {
+      expect(u.pathname).toBe("/v3/avatars/looks")
+      expect(u.searchParams.get("avatar_type")).toBe("photo_avatar")
+      expect(u.searchParams.get("limit")).toBe("50") // HeyGen's documented maximum; the default is 20
+    }
+    expect(urls[0].searchParams.get("token")).toBeNull()
+    expect(urls[1].searchParams.get("token")).toBe("c2")
+  })
+})

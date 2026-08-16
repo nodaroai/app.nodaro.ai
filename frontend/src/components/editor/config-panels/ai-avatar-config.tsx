@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { AlertTriangle, Upload, Loader2, X } from "lucide-react"
 import { AvatarPicker } from "@/components/heygen/avatar-picker"
 import { VoicePicker } from "@/components/heygen/voice-picker"
+import { avatarSelectionPatch, voiceSelectionPatch } from "@/components/heygen/heygen-catalog"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { optimizedImageUrl } from "@/lib/image"
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
@@ -86,31 +87,16 @@ export function AiAvatarConfig({
   }, [engine, avatarSource])
 
   // ── Avatar selection ─────────────────────────────────────────────────────
+  // The picked look → node-data mapping (avatarSupportsV for the engine
+  // warning, default-voice pre-fill, orientation → aspect) is shared with the
+  // on-node quick pick so both surfaces write identical fields.
   function handleAvatarSelect(a: HeygenAvatar) {
-    // FIX 4 — store whether this avatar supports Avatar V so the engine
-    // section can show an inline warning when the combo is unsupported.
-    // `supportedEngines` uses underscore ("avatar_v") per HeyGen's API.
-    const supportsV =
-      a.supportedEngines != null
-        ? a.supportedEngines.includes("avatar_v")
-        : undefined // catalog didn't provide engine metadata — don't warn
-    onUpdate({
-      avatarId:         a.avatarId,
-      avatarName:       a.name,
-      avatarPreviewUrl: a.previewImageUrl,
-      avatarGroupId:    a.groupId ?? undefined,
-      avatarSupportsV:  supportsV,
-      // Pre-fill voice from avatar's default only if the user hasn't already
-      // picked a voice (so re-selecting the same avatar doesn't clobber their
-      // voice choice).
-      voiceId:     data.voiceId ?? a.defaultVoiceId ?? undefined,
-      aspectRatio: a.preferredOrientation === "portrait" ? "9:16" : "16:9",
-    })
+    onUpdate(avatarSelectionPatch(a, data.voiceId))
   }
 
-  // ── Voice selection ───────────────────────────────────────────────────────
+  // ── Voice selection (shared patch with the on-node voice popover) ─────────
   function handleVoiceSelect(v: HeygenVoice) {
-    onUpdate({ voiceId: v.voiceId, voiceName: v.name })
+    onUpdate(voiceSelectionPatch(v))
   }
 
   // ── Image-source upload ─────────────────────────────────────────────────────
