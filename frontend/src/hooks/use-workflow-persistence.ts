@@ -62,6 +62,9 @@ interface NodeExecutionState {
     splitResults?: string[]
     combinedText?: string
     listResults?: string[]
+    /** Fan-in (reduce / Choose Best) aggregated value + strategy meta. */
+    result?: string
+    reduceMeta?: Record<string, unknown>
   }
   error?: string
 }
@@ -461,6 +464,12 @@ function applyCompletedExecutionResults(
     if (state.output.alignment) newData.generatedAlignment = state.output.alignment
     if (state.output.combinedText) newData.generatedText = state.output.combinedText
     if (state.output.splitResults) newData.generatedSplitResults = state.output.splitResults
+    // Choose Best (reduce): winner + the judge's reasoning, same fields the
+    // single-node Run writes (execute-node.ts) — mirrors syncNodeStatesToStore.
+    if (nodeType === "reduce" && typeof state.output.result === "string") {
+      newData.result = state.output.result
+      if (state.output.reduceMeta) newData.lastMeta = state.output.reduceMeta
+    }
 
     // Handle fan-out list results — create a generatedResult entry for each URL
     const listResultUrls = (state.output.listResults ?? []).filter(

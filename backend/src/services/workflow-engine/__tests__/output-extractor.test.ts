@@ -687,6 +687,18 @@ describe("buildNodeOutputFromJobData", () => {
     expect(result.result).toBe("joined output")
   })
 
+  it("carries the reduce strategy meta beside result (the AI judge's reasoning / winner)", () => {
+    // An orchestrated Choose Best must paint the same reasoning + winner
+    // highlight the single-node Run gets from the route response `meta`.
+    const meta = { selectedIndex: 1, reasoning: "sharper, better lit", summary: "Chose #2 of 3" }
+    const result = buildNodeOutputFromJobData({ output: "https://x/b.png", meta }, "reduce")
+    expect(result.result).toBe("https://x/b.png")
+    expect(result.reduceMeta).toEqual(meta)
+    // Only an object rides along; only for reduce.
+    expect(buildNodeOutputFromJobData({ output: "a", meta: "nope" }, "reduce").reduceMeta).toBeUndefined()
+    expect(buildNodeOutputFromJobData({ output: "a", meta }, "ai-writer").reduceMeta).toBeUndefined()
+  })
+
   it("does not map output->result for non-reduce node types", () => {
     // Defensive: `output` is a generic key name. The mapping must only fire
     // for nodeType === "reduce" so we don't accidentally pick it up if any

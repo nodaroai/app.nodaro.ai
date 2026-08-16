@@ -1401,6 +1401,11 @@ export function buildNodeOutputFromJobData(
   if (nodeType === "reduce" && !output.result && typeof outputData.output === "string") {
     output.result = outputData.output
   }
+  // The strategy's `meta` rides along so an orchestrated run paints the same
+  // reasoning / winner highlight the single-node Run gets from the response.
+  if (nodeType === "reduce" && outputData.meta && typeof outputData.meta === "object" && !Array.isArray(outputData.meta)) {
+    output.reduceMeta = outputData.meta as Record<string, unknown>
+  }
 
   // Normalize suno-lyrics: worker stores { lyrics: [{text, title}, ...] }
   if (!output.text && outputData.lyrics) {

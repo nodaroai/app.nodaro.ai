@@ -469,6 +469,30 @@ describe("streamBackendExecution — failed run settles orphaned nodes", () => {
     expect(revertedToIdle).toBeUndefined()
     expect(mockToastSuccess).toHaveBeenCalledWith("Backend execution completed")
   })
+
+  it("paints a Choose Best (reduce) winner + reasoning from the orchestrator's `result` / `reduceMeta`", async () => {
+    // Regression: an Execute / Run-from-here run of Choose Best completed on
+    // the backend ("Backend execution completed") while the node kept saying
+    // "Run to see the result" — syncNodeStatesToStore never copied
+    // `output.result` into node data; only the single-node Run (execute-node)
+    // wrote `result`. Cloud and community alike (2026-08-16).
+    mockNodes = [
+      { id: "best", type: "reduce", data: { label: "Choose Best", executionStatus: "running", strategyId: "pick-best-llm" } },
+    ]
+    const meta = { selectedIndex: 1, reasoning: "sharper and better lit", summary: "Chose #2 of 2" }
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+
+    streamBackendExecution("exec-reduce", makeCtx(), vi.fn(), vi.fn())
+    const cb = lastSseCallbacks()
+    cb.onNodeStatesChanged?.({
+      best: { status: "completed", jobId: "job-9", output: { result: "https://cdn.example.com/b.png", reduceMeta: meta } },
+    } as Record<string, unknown>)
+
+    const best = mockNodes.find((n) => n.id === "best")!.data as Record<string, unknown>
+    expect(best.executionStatus).toBe("completed")
+    expect(best.result).toBe("https://cdn.example.com/b.png")
+    expect(best.lastMeta).toEqual(meta)
+  })
 })
 
 // ---------------------------------------------------------------------------
