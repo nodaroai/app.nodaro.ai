@@ -12,11 +12,18 @@ vi.mock("@/providers/heygen/catalog.js", () => ({
   listVoices: vi.fn().mockResolvedValue([]),
 }))
 
+// The connection relay: a keyless CONNECTED install lists what the cloud can
+// render (its avatar jobs run there). Default: keyed / not connected → the
+// local catalog functions answer as before.
+const cloudMocks = vi.hoisted(() => ({ shouldRunOnCloud: vi.fn(async () => false) }))
+vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: cloudMocks.shouldRunOnCloud }))
+vi.mock("@/lib/nodaro-connect.js", () => ({ nodaroCloudBase: () => "https://cloud.test" }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { heygenCatalogRoutes } from "../heygen-catalog.js"
+import { heygenCatalogRoutes, _resetCloudHeygenCatalogForTests } from "../heygen-catalog.js"
 import { listAvatars, listVoices } from "../../providers/heygen/catalog.js"
 
 // ---------------------------------------------------------------------------
@@ -27,6 +34,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
+  _resetCloudHeygenCatalogForTests()
 
   app = Fastify({ logger: false })
 
@@ -189,5 +198,61 @@ describe("GET /v1/heygen/voices", () => {
     const res = await app.inject({ method: "GET", url: "/v1/heygen/voices" })
 
     expect(res.headers["cache-control"]).toMatch(/public/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The nodaro.ai connection — a keyless connected install lists the cloud's catalog
+// ---------------------------------------------------------------------------
+
+describe("catalog through the nodaro.ai connection", () => {
+  const fetchMock = vi.fn()
+  beforeEach(() => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(true)
+    fetchMock.mockReset()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("relays the cloud's public avatar and voice lists instead of the local (empty) catalog", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      new Response(
+        JSON.stringify(url.endsWith("/avatars") ? { avatars: [mockAvatars[0]] } : { voices: [{ voiceId: "v-1", name: "Voice" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    )
+    const avatars = await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+    expect(avatars.statusCode).toBe(200)
+    expect(avatars.json().avatars).toEqual([mockAvatars[0]])
+    const voices = await app.inject({ method: "GET", url: "/v1/heygen/voices" })
+    expect(voices.json().voices).toEqual([{ voiceId: "v-1", name: "Voice" }])
+    expect(fetchMock).toHaveBeenCalledWith("https://cloud.test/v1/heygen/avatars", expect.anything())
+    expect(fetchMock).toHaveBeenCalledWith("https://cloud.test/v1/heygen/voices", expect.anything())
+    expect(listAvatars).not.toHaveBeenCalled()
+    expect(listVoices).not.toHaveBeenCalled()
+  })
+
+  it("caches the relayed list — pickers poll, the cloud must not be hit per request", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ avatars: [mockAvatars[1]] }), { status: 200 }))
+    await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+    await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("degrades to an empty list (200) when the cloud cannot be reached — never a 500 on a picker", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"))
+    const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().avatars).toEqual([])
+  })
+
+  it("keeps the local catalog when the install has its own HeyGen key", async () => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
+    vi.mocked(listAvatars).mockResolvedValueOnce(mockAvatars as never)
+    const res = await app.inject({ method: "GET", url: "/v1/heygen/avatars" })
+    expect(res.json().avatars).toHaveLength(mockAvatars.length)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

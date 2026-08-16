@@ -24,8 +24,14 @@ import {
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { config } from "../../lib/config.js"
+import { shouldRunOnCloud } from "../../providers/nodaro/run-on-cloud.js"
+import { relayVideoJobToCloud } from "./cloud-video-relay.js"
 
 export const handleCinematicAvatar: HandlerFn = async function handleCinematicAvatar(job, ctx) {
+  // No HeyGen key of its own + a live nodaro.ai connection: run it there.
+  if (await shouldRunOnCloud(config.HEYGEN_API_KEY)) return relayVideoJobToCloud(job, ctx, "cinematic-avatar")
+
   const {
     prompt,
     avatarLooks,

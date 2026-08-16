@@ -10,17 +10,32 @@ import {
 /**
  * The invariant these tests protect: on a keyless install, EVERY provider
  * client entry point fails with one recognisable message that names the env
- * var and says the nodaro.ai connection doesn't cover the node — instead of a
- * raw upstream 401. The founder's soak found three different shapes for the
+ * var and says whether connecting nodaro.ai is an answer (derived from
+ * PROVIDER_KEY_META, never a hand-kept list) — instead of a raw upstream
+ * 401. The founder's soak found three different shapes for the
  * same cause; a new call site must not be able to add a fourth.
  */
 describe("provider key guards", () => {
-  it("names the env var and the connection gap", () => {
+  it("names the env var, says the connection is an answer where it is, and points at Install health", () => {
+    // Replicate IS covered by the connection — the sentence must offer it,
+    // not send a keyless install shopping for a key it does not need (the
+    // old wording claimed 'not covered' for every key).
     const err = new MissingProviderKeyError("REPLICATE_API_TOKEN")
     expect(err.message).toContain("REPLICATE_API_TOKEN")
-    expect(err.message).toContain("nodaro.ai connection")
+    expect(err.message).toContain("connect nodaro.ai")
+    expect(err.message).not.toContain("not covered")
     expect(err.message).toContain("Install health")
     expect(err.code).toBe("provider_key_missing")
+  })
+
+  it("derives 'covered' from PROVIDER_KEY_META for every key — no hand-kept coverage list in the sentence", async () => {
+    const { PROVIDER_KEY_META, PROVIDER_KEY_ENV, PROVIDER_KEY_IDS } = await import("../../lib/provider-keys-runtime.js")
+    for (const id of PROVIDER_KEY_IDS) {
+      if (id === "nodaro") continue // never a MissingProviderKeyError key
+      const msg = new MissingProviderKeyError(PROVIDER_KEY_ENV[id] as never).message
+      if (PROVIDER_KEY_META[id].cloudCovered) expect(msg, id).toContain("connect nodaro.ai")
+      else expect(msg, id).toContain("not covered by the nodaro.ai connection")
+    }
   })
 
   it("stays short enough for a node card and a toast", () => {
@@ -39,7 +54,7 @@ describe("provider key guards", () => {
 
   it("prefixes the operation label when one is given", () => {
     expect(new MissingProviderKeyError("KIE_API_KEY", "Face Swap").message).toMatch(
-      /^Face Swap: needs your own KIE_API_KEY/,
+      /^Face Swap: needs KIE_API_KEY/,
     )
   })
 
@@ -125,7 +140,7 @@ describe("the shared Replicate singleton is guarded at the boundary", () => {
     // chain its own copy of provider-keys.js, so the thrown class is a
     // different object than the one this file imported statically.
     expect(() => replicate.predictions).toThrow(/REPLICATE_API_TOKEN/)
-    expect(() => replicate.run).toThrow(/nodaro\.ai connection/)
+    expect(() => replicate.run).toThrow(/connect nodaro\.ai/)
     try {
       void replicate.run
       throw new Error("expected the guarded singleton to throw")

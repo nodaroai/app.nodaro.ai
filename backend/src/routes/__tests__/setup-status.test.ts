@@ -253,9 +253,12 @@ describe("GET /v1/setup/status", () => {
     expect(Object.keys(providers.keys)).toEqual([
       "nodaro", "kie", "replicate", "anthropic", "gemini", "elevenlabs", "fal", "heygen", "beeble", "apify",
     ])
-    expect(providers.meta.heygen).toMatchObject({ name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: false })
+    // HeyGen is covered by the connection (its jobs replay on the cloud) and
+    // sits apart as a node-specific key; nodaro.ai itself is the connection.
+    expect(providers.meta.heygen).toMatchObject({ name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: true, scope: "node" })
     expect(providers.meta.heygen.powers).toMatch(/avatar/i)
-    expect(providers.meta.kie.cloudCovered).toBe(true)
+    expect(providers.meta.kie).toMatchObject({ cloudCovered: true, scope: "core" })
+    expect(providers.meta.nodaro.cloudCovered).toBe(false)
   })
 
   it("reports where each set key comes from — env, app (pasted on /setup) or oauth — never a value", async () => {

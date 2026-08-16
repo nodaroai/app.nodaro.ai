@@ -30,6 +30,9 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { config } from "../../lib/config.js"
+import { shouldRunOnCloud } from "../../providers/nodaro/run-on-cloud.js"
+import { relayVideoJobToCloud } from "./cloud-video-relay.js"
 import { downloadFile, capVideoToFrames, createWorkDir, cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { uploadFileWithKeyToR2 } from "../../lib/storage.js"
 import { join } from "node:path"
@@ -101,6 +104,9 @@ async function trimSwitchXSource(
 }
 
 export const handleBeebleSwitchX: HandlerFn = async function handleBeebleSwitchX(job, ctx) {
+  // No Beeble key of its own + a live nodaro.ai connection: run it there.
+  if (await shouldRunOnCloud(config.BEEBLE_API_KEY)) return relayVideoJobToCloud(job, ctx, "switchx")
+
   const {
     videoUrl,
     referenceImageUrl,

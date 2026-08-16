@@ -53,6 +53,17 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "suno-separate": "/v1/suno/separate",
   "suno-music-video": "/v1/suno/music-video",
   "suno-convert-wav": "/v1/suno/convert-wav",
+  // The vendor-direct video nodes (HeyGen, Beeble). Their handlers call the
+  // vendor client straight from the worker, so the capability router never
+  // sees them; without a local key the connection is the only way they run.
+  // Enqueue sites read 2026-08-16: each payload is the validated route body
+  // plus jobId / usageLogId (/ userId on switchx), which the strip below
+  // removes. Media fields re-host through URL_FIELD (`imageUrl`, `audioUrl`,
+  // `videoUrl`, `referenceImageUrl`, `maskUrl`) and, for cinematic-avatar's
+  // `references[]`, the object-array branch of rehostIfUrlField.
+  "ai-avatar": "/v1/ai-avatar",
+  "cinematic-avatar": "/v1/cinematic-avatar",
+  "switchx": "/v1/switchx",
 }
 
 
@@ -114,7 +125,24 @@ const INSTANCE_ONLY_FIELDS = new Set([
  *  from mangling a prompt that happens to contain a URL. */
 const URL_FIELD = /url$|urls$|urllist$/i
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v)
+
+/** Re-host the URL-named fields of one object (one level — a reference list
+ *  item, not a whole nested document). */
+async function rehostObjectUrlFields(obj: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return Object.fromEntries(
+    await Promise.all(Object.entries(obj).map(async ([k, v]) => [k, await rehostIfUrlField(k, v)])),
+  )
+}
+
 async function rehostIfUrlField(key: string, value: unknown): Promise<unknown> {
+  // A list of objects (cinematic-avatar's `references: [{ type, url }]`)
+  // carries its media one level down; the list's own name says nothing
+  // about URLs, so look inside regardless of the key.
+  if (Array.isArray(value) && value.length > 0 && value.every(isPlainObject)) {
+    return Promise.all(value.map((v) => rehostObjectUrlFields(v)))
+  }
   if (!URL_FIELD.test(key)) return value
   if (typeof value === "string") return ensureCloudReachableMediaUrl(value)
   if (Array.isArray(value)) {
@@ -132,6 +160,20 @@ export function cloudRouteForJobType(jobType: string): string | undefined {
 /** True when this job type can be replayed against the cloud. */
 export function canRunOnCloud(jobType: string): boolean {
   return jobType in CLOUD_ROUTE_BY_JOB_TYPE
+}
+
+/**
+ * The one rule for "should this run on the connection instead of the vendor":
+ * the install has no key of its own for that vendor AND a live nodaro.ai
+ * connection. A keyed install never reaches the cloud path and behaves
+ * exactly as before; an unconnected keyless install fails the honest way
+ * (the vendor client's own "add <KEY>" message). Reads the connection each
+ * call — a connect-after-boot must count, and the read is a cached credential.
+ */
+export async function shouldRunOnCloud(localKey: string | null | undefined): Promise<boolean> {
+  if (typeof localKey === "string" && localKey.trim().length > 0) return false
+  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
+  return isNodaroConnected().catch(() => false)
 }
 
 /**

@@ -27,15 +27,19 @@ const ROOT = "backend/src"
 const EXTS = new Set([".ts"])
 const SKIP_DIRS = new Set(["node_modules", "dist", "__tests__", "__characterization__"])
 
-const KEYS = [
-  "NODARO_API_KEY",
-  "KIE_API_KEY",
-  "REPLICATE_API_TOKEN",
-  "ANTHROPIC_API_KEY",
-  "GEMINI_API_KEY",
-  "ELEVENLABS_API_KEY",
-  "FAL_KEY",
-]
+// The keys are READ from the runtime module, not listed here — a provider
+// added to PROVIDER_KEY_ENV is linted from that moment (a hand-kept copy
+// missed HEYGEN/BEEBLE/APIFY for a day and let a frozen Apify client through).
+const RUNTIME_FILE = "backend/src/lib/provider-keys-runtime.ts"
+function readProviderKeyEnvVars() {
+  const src = readFileSync(RUNTIME_FILE, "utf8")
+  const block = src.match(/PROVIDER_KEY_ENV[^=]*=\s*\{([\s\S]*?)\}/)
+  if (!block) throw new Error(`${RUNTIME_FILE}: PROVIDER_KEY_ENV block not found`)
+  const keys = [...block[1].matchAll(/"([A-Z][A-Z0-9_]+)"/g)].map((m) => m[1])
+  if (keys.length === 0) throw new Error(`${RUNTIME_FILE}: no env var names in PROVIDER_KEY_ENV`)
+  return keys
+}
+const KEYS = readProviderKeyEnvVars()
 const KEY_ALT = KEYS.join("|")
 
 // `new Something({ ...config.X_KEY... })` on one line — an SDK taking the key
@@ -48,6 +52,7 @@ const MODULE_CAPTURE = new RegExp(`^(?:export\\s+)?(?:const|let|var)\\s+\\w+\\s*
 /** Files that memoise per key on purpose (reviewed). */
 const ALLOWLIST = new Set([
   "backend/src/lib/gemini/client.ts", // memoised per key; rebuilt when it changes
+  "backend/src/providers/apify/client.ts", // memoised per key; rebuilt when it changes
 ])
 
 function listFiles(dir) {

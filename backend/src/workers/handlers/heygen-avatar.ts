@@ -26,8 +26,15 @@ import {
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { capAudioForAvatar } from "./heygen-avatar-audio-cap.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { config } from "../../lib/config.js"
+import { shouldRunOnCloud } from "../../providers/nodaro/run-on-cloud.js"
+import { relayVideoJobToCloud } from "./cloud-video-relay.js"
 
 export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx) {
+  // No HeyGen key of its own + a live nodaro.ai connection: the connection
+  // runs it (billed to the connected account) and the result lands locally.
+  if (await shouldRunOnCloud(config.HEYGEN_API_KEY)) return relayVideoJobToCloud(job, ctx, "ai-avatar")
+
   const {
     avatarSource,
     engine,

@@ -16,8 +16,12 @@ vi.mock("../client.js", () => ({
   ensureCloudReachableMediaUrl: (u: string) => ensureCloudReachableMediaUrl(u),
   NodaroCloudError: class NodaroCloudError extends Error {},
 }))
+const isNodaroConnected = vi.fn(async () => false)
+vi.mock("../../../lib/nodaro-connect.js", () => ({
+  isNodaroConnected: () => isNodaroConnected(),
+}))
 
-const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType } = await import("../run-on-cloud.js")
+const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType, shouldRunOnCloud } = await import("../run-on-cloud.js")
 
 describe("runJobOnCloud", () => {
   beforeEach(() => {
@@ -107,6 +111,74 @@ describe("the route map matches the routes the cloud actually serves", () => {
   })
 })
 
+describe("the vendor-direct video nodes are mapped to the routes the cloud serves", () => {
+  it("ai-avatar / cinematic-avatar / switchx point at real routes", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { fileURLToPath } = await import("node:url")
+    const { dirname, resolve } = await import("node:path")
+    const here = dirname(fileURLToPath(import.meta.url))
+    for (const [jobType, file] of [
+      ["ai-avatar", "ai-avatar.ts"],
+      ["cinematic-avatar", "cinematic-avatar.ts"],
+      ["switchx", "switchx.ts"],
+    ] as const) {
+      const path = cloudRouteForJobType(jobType)
+      expect(path, `${jobType} must be mapped`).toBeTruthy()
+      const routes = readFileSync(resolve(here, "../../../routes", file), "utf8")
+      expect(routes, `${jobType} -> ${path} is not a real route`).toContain(`"${path}"`)
+    }
+  })
+
+  it("...and each is wired to the relay by its handler (mapped-but-unwired advertises a path nothing takes)", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { fileURLToPath } = await import("node:url")
+    const { dirname, resolve } = await import("node:path")
+    const here = dirname(fileURLToPath(import.meta.url))
+    for (const [jobType, file] of [
+      ["ai-avatar", "heygen-avatar.ts"],
+      ["cinematic-avatar", "heygen-cinematic.ts"],
+      ["switchx", "beeble-switchx.ts"],
+    ] as const) {
+      const handler = readFileSync(resolve(here, "../../../workers/handlers", file), "utf8")
+      expect(handler, `${file} does not relay ${jobType}`).toContain(`relayVideoJobToCloud(job, ctx, "${jobType}")`)
+    }
+  })
+})
+
+describe("shouldRunOnCloud — the one rule for the connection fallthrough", () => {
+  // Braces on purpose: a beforeEach that RETURNS the mock hands vitest a
+  // "cleanup function" it then calls after the test — with whatever
+  // implementation the test left behind.
+  beforeEach(() => {
+    isNodaroConnected.mockReset().mockResolvedValue(true)
+  })
+
+  it("is false whenever the install has its own key — a keyed install never touches the cloud path", async () => {
+    await expect(shouldRunOnCloud("hg_live_key")).resolves.toBe(false)
+    expect(isNodaroConnected).not.toHaveBeenCalled()
+  })
+
+  it("is true with no key and a live connection; blank keys count as no key", async () => {
+    await expect(shouldRunOnCloud("")).resolves.toBe(true)
+    await expect(shouldRunOnCloud("   ")).resolves.toBe(true)
+    await expect(shouldRunOnCloud(undefined)).resolves.toBe(true)
+  })
+
+  it("is false with no key and no connection — the vendor client's own honest error then applies", async () => {
+    isNodaroConnected.mockResolvedValue(false)
+    await expect(shouldRunOnCloud(undefined)).resolves.toBe(false)
+  })
+
+  it("treats a connection read that throws as not connected", async () => {
+    // Reject at CALL time (a pre-built rejected promise trips the unhandled-
+    // rejection detector before shouldRunOnCloud can attach its catch).
+    isNodaroConnected.mockImplementation(async () => {
+      throw new Error("db down")
+    })
+    await expect(shouldRunOnCloud(undefined)).resolves.toBe(false)
+  })
+})
+
 describe("nothing about OUR billing state travels to the cloud", () => {
   beforeEach(() => {
     createCloudJob.mockReset().mockResolvedValue("cloud-job-1")
@@ -186,6 +258,25 @@ describe("media in a replayed payload gets re-hosted", () => {
     })
     expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/mashup", {
       uploadUrlList: ["https://cloud/up/audio/a.mp3", "https://public.example/b.mp3"],
+    })
+  })
+
+  it("re-hosts media one level down in a list of objects (cinematic-avatar's references[])", async () => {
+    await runJobOnCloud("cinematic-avatar", {
+      prompt: "x",
+      avatarLooks: ["look-1"],
+      references: [
+        { type: "image", url: "http://localhost:3000/storage/img/ref.png" },
+        { type: "audio", url: "https://public.example/voice.mp3" },
+      ],
+    })
+    expect(createCloudJob).toHaveBeenCalledWith("/v1/cinematic-avatar", {
+      prompt: "x",
+      avatarLooks: ["look-1"],
+      references: [
+        { type: "image", url: "https://cloud/up/img/ref.png" },
+        { type: "audio", url: "https://public.example/voice.mp3" },
+      ],
     })
   })
 

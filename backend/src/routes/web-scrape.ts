@@ -12,6 +12,21 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { config } from "../lib/config.js"
+import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
+import { callCloudRoute } from "../providers/nodaro/client.js"
+
+/**
+ * No Apify token of its own + a live nodaro.ai connection: the connection
+ * runs the scrape (billed to the connected account) and this route relays
+ * the result — the same shape the local scraper returns, minus the cloud
+ * job id (this install has its own job row). RSS never needs Apify and is
+ * always fetched locally.
+ */
+async function scrapeViaConnection(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { jobId: _cloudJobId, ...result } = await callCloudRoute("/v1/web-scrape", body)
+  return result
+}
 
 const contentCrawlerBody = z.object({
   actor: z.literal("content-crawler"),
@@ -90,7 +105,9 @@ export async function webScrapeRoutes(app: FastifyInstance) {
       // of magnitude.
       const result = parsed.data.actor === "rss"
         ? { json: await fetchRssItems({ url: parsed.data.url, resultsLimit: parsed.data.resultsLimit }) }
-        : await runScraper(parsed.data)
+        : (await shouldRunOnCloud(config.APIFY_API_TOKEN))
+          ? await scrapeViaConnection(parsed.data as Record<string, unknown>)
+          : await runScraper(parsed.data)
 
       await supabase.from("jobs").update({
         status: "completed",

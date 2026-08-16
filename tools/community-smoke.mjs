@@ -400,6 +400,22 @@ await check("a keyed generation completes and its media lands in the install's o
   return `${model} completed in ${Math.round((Date.now() - started) / 1000)}s, ${bytes}B ${contentType} from ${new URL(imageUrl).origin}${own}, no credits charged${viaApp ? " — key pasted through /setup, no restart" : ""}`
 })
 
+await check("a connected install lists HeyGen avatars through the connection — no HeyGen key needed", async () => {
+  const name = "a connected install lists HeyGen avatars through the connection — no HeyGen key needed"
+  // The vendor-direct nodes run on the connection when their own key is
+  // empty (providers/nodaro/run-on-cloud.ts); the avatar PICKER must then
+  // list what the cloud can render, or the node cannot even be configured.
+  // Only assertable where a live connection exists — CI's keyless lane
+  // points the cloud URL at an unreachable address on purpose.
+  if (!ctx.connected) return skip(name, "install is not connected to nodaro.ai")
+  if (ctx.keys.heygen) return skip(name, "install has its own HeyGen key — the local catalog answers")
+  const res = await api("/v1/heygen/avatars")
+  assert(res.status === 200, `GET /v1/heygen/avatars answered ${res.status}`)
+  const avatars = Array.isArray(res.json?.avatars) ? res.json.avatars : []
+  assert(avatars.length > 0, "connected + keyless, yet the avatar list is empty — the catalog relay is not serving the cloud's list")
+  return `${avatars.length} avatars via the connection`
+})
+
 await check("starting the nodaro.ai connection is honest either way", async () => {
   // The guided setup's headline CTA. Two acceptable answers: a consent URL on
   // the cloud host, or an error the user can act on. What shipped before was

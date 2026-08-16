@@ -50,15 +50,19 @@ export function sanitizeApifyError(err: unknown, context: string): ApifyError {
   return new ApifyError(sanitized, raw, context)
 }
 
-let client: ApifyClient | null = null
+// Memoised PER KEY (reviewed in tools/check-provider-key-captures.mjs): the
+// token is live (env, then the key pasted on /setup), so a client built once
+// would keep a stale token after a paste or a removal. Same key → same
+// client; a different key → a fresh one.
+let built: { token: string; client: ApifyClient } | null = null
 
 export function getApifyClient(): ApifyClient {
-  if (client) return client
-  requireProviderKey(config.APIFY_API_TOKEN, "APIFY_API_TOKEN")
-  client = new ApifyClient({ token: config.APIFY_API_TOKEN })
-  return client
+  const token = config.APIFY_API_TOKEN
+  requireProviderKey(token, "APIFY_API_TOKEN")
+  if (!built || built.token !== token) built = { token, client: new ApifyClient({ token }) }
+  return built.client
 }
 
 export function resetApifyClientForTests(): void {
-  client = null
+  built = null
 }

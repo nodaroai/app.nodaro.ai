@@ -128,8 +128,9 @@ describe("client — getElevenLabsApiKey", () => {
       hasAdmin: () => true,
     }))
     const mod = await import("../client.js")
+    // ElevenLabs IS covered by the connection — the shared sentence offers it.
     expect(() => mod.getElevenLabsApiKey()).toThrow(
-      /ELEVENLABS_API_KEY.*nodaro\.ai connection/s,
+      /ELEVENLABS_API_KEY.*connect nodaro\.ai/s,
     )
     vi.doUnmock("@/lib/config.js")
   })

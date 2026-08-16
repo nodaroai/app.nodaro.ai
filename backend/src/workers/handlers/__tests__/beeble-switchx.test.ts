@@ -69,6 +69,17 @@ vi.mock("@/workers/shared.js", async (importOriginal) => {
   }
 })
 
+
+// The connection branch: decided by shouldRunOnCloud (no local key + live
+// nodaro.ai connection) and executed by relayVideoJobToCloud. Default here:
+// a keyed install (local path); the cloud test flips it.
+const cloudMocks = vi.hoisted(() => ({
+  shouldRunOnCloud: vi.fn(async () => false),
+  relayVideoJobToCloud: vi.fn(async () => undefined),
+}))
+vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: cloudMocks.shouldRunOnCloud }))
+vi.mock("../cloud-video-relay.js", () => ({ relayVideoJobToCloud: cloudMocks.relayVideoJobToCloud }))
+
 import { handleBeebleSwitchX } from "../beeble-switchx.js"
 
 const ctx = { jobId: "job1", jobUserId: "user1", shouldWatermark: true } as Parameters<
@@ -87,6 +98,7 @@ const validData = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
   mocks.withSwitchXSlot.mockImplementation(async (fn: () => Promise<unknown>) => fn())
   mocks.makeOnTaskCreated.mockReturnValue(mocks.onTaskCreated)
   mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.nodaro.ai/videos/job1.mp4")
@@ -95,6 +107,18 @@ beforeEach(() => {
   mocks.capVideoToFrames.mockImplementation(async (_in: string, out: string) => out)
   mocks.createWorkDir.mockResolvedValue("/tmp/switchx-trim-test")
   mocks.uploadFileWithKeyToR2.mockResolvedValue("https://r2.nodaro.ai/videos/job1-switchx-src.mp4")
+})
+
+describe("handleBeebleSwitchX — on the nodaro.ai connection", () => {
+  it("relays the job to the connection and never calls Beeble when the install has no key and is connected", async () => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(true)
+    const job = makeJob(validData)
+    await handleBeebleSwitchX(job, ctx)
+    expect(cloudMocks.relayVideoJobToCloud).toHaveBeenCalledWith(job, ctx, "switchx")
+    expect(mocks.startSwitchXGeneration).not.toHaveBeenCalled()
+    expect(mocks.withSwitchXSlot).not.toHaveBeenCalled()
+    expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
+  })
 })
 
 describe("handleBeebleSwitchX", () => {
