@@ -334,9 +334,9 @@ const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .e
 # GEMINI_API_KEY=          # aistudio.google.com \u2014 LLM + video analysis
 # ELEVENLABS_API_KEY=      # elevenlabs.io \u2014 speech + voice
 # FAL_KEY=                 # fal.ai
-# HEYGEN_API_KEY=          # heygen.com \u2014 AI Avatar + Cinematic Avatar nodes (not covered by Connect)
-# BEEBLE_API_KEY=          # beeble.ai \u2014 Relight & Switch node (not covered by Connect)
-# APIFY_API_TOKEN=         # apify.com \u2014 Web Scrape node (not covered by Connect)
+# HEYGEN_API_KEY=          # heygen.com \u2014 AI Avatar + Cinematic Avatar nodes (or connect nodaro.ai)
+# BEEBLE_API_KEY=          # beeble.ai \u2014 Relight & Switch node (or connect nodaro.ai)
+# APIFY_API_TOKEN=         # apify.com \u2014 Web Scrape node (or connect nodaro.ai)
 `
 
 export default function SetupPage() {
@@ -1081,8 +1081,9 @@ export default function SetupPage() {
                   <span style={{ fontSize: 14.5, color: MUTED }}>
                     {connected ? (
                       <>
-                        This install generates through your nodaro.ai account &mdash; image, video, speech and LLM models
-                        without the keys they would need.
+                        This install generates through your nodaro.ai account &mdash; image, video, speech, LLM,
+                        avatars, relight and web scrape without the keys they would need; paste a key only to call
+                        that vendor directly.
                         {coverage.uncoveredMissing.length > 0 && (
                           <>
                             {" "}Still needs its own key:{" "}

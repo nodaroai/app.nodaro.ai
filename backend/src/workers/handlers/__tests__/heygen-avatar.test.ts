@@ -50,6 +50,16 @@ vi.mock("../../../lib/job-finalize.js", () => ({
   finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia,
 }))
 
+// The connection branch: decided by shouldRunOnCloud (no local key + live
+// nodaro.ai connection) and executed by relayVideoJobToCloud. Default here:
+// a keyed install (local path); the cloud test flips it.
+const cloudMocks = vi.hoisted(() => ({
+  shouldRunOnCloud: vi.fn(async () => false),
+  relayVideoJobToCloud: vi.fn(async () => undefined),
+}))
+vi.mock("../../../providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: cloudMocks.shouldRunOnCloud }))
+vi.mock("../cloud-video-relay.js", () => ({ relayVideoJobToCloud: cloudMocks.relayVideoJobToCloud }))
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
@@ -105,11 +115,35 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
   mocks.mockGenerateAvatarVideo.mockResolvedValue(AVATAR_RESULT)
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/ai-avatar-job-1.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/ai-avatar-job-1.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockCapAudioForAvatar.mockImplementation(async (audioUrl: string) => ({ audioUrl }))
+})
+
+// ---------------------------------------------------------------------------
+// The nodaro.ai connection — a keyless connected install never calls HeyGen
+// ---------------------------------------------------------------------------
+
+describe("handleAiAvatar — on the nodaro.ai connection", () => {
+  it("relays the job to the connection and never calls HeyGen when the install has no key and is connected", async () => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(true)
+    const job = makeJob()
+    const ctx = makeCtx()
+    await handleAiAvatar(job as never, ctx as never)
+    expect(cloudMocks.relayVideoJobToCloud).toHaveBeenCalledWith(job, ctx, "ai-avatar")
+    expect(mocks.mockGenerateAvatarVideo).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled() // the relay finalizes
+  })
+
+  it("keeps the local HeyGen path when the install has its own key", async () => {
+    cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
+    await handleAiAvatar(makeJob() as never, makeCtx() as never)
+    expect(cloudMocks.relayVideoJobToCloud).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledOnce()
+  })
 })
 
 // ---------------------------------------------------------------------------

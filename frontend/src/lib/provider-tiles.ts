@@ -38,9 +38,9 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   gemini: { name: "Google Gemini", env: "GEMINI_API_KEY", cloudCovered: true, scope: "core" },
   elevenlabs: { name: "ElevenLabs", env: "ELEVENLABS_API_KEY", cloudCovered: true, scope: "core" },
   fal: { name: "fal.ai", env: "FAL_KEY", cloudCovered: true, scope: "core" },
-  heygen: { name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: false, scope: "node" },
-  beeble: { name: "Beeble", env: "BEEBLE_API_KEY", cloudCovered: false, scope: "node" },
-  apify: { name: "Apify", env: "APIFY_API_TOKEN", cloudCovered: false, scope: "node" },
+  heygen: { name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: true, scope: "node" },
+  beeble: { name: "Beeble", env: "BEEBLE_API_KEY", cloudCovered: true, scope: "node" },
+  apify: { name: "Apify", env: "APIFY_API_TOKEN", cloudCovered: true, scope: "node" },
 }
 
 export type TileState = "set" | "set (env)" | "set (app)" | "connected" | "key set (env)" | "key set (app)" | "missing"

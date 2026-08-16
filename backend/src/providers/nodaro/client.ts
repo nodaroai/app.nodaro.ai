@@ -12,6 +12,7 @@
  * message, so the instance user sees the real reason a run failed.
  */
 
+import { Agent } from "undici"
 import { nodaroCloudFetch, getNodaroConnection, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
 import type { ProgressCallback } from "../provider.interface.js"
@@ -83,6 +84,49 @@ function cloudError(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * A synchronous cloud route answers only when the work is done — for a
+ * web-scrape site crawl that can be ~10 minutes with no headers on the wire.
+ * undici's default headersTimeout (300 s) would drop the socket at five
+ * minutes while the cloud finishes and bills the connected account, so long
+ * calls go through a dispatcher whose deadlines cover the route's own budget
+ * (the cloud's web-scrape route allows 600 s).
+ */
+const LONG_CALL_TIMEOUT_MS = 620_000
+let longCallAgent: Agent | null = null
+function longCallDispatcher(): Agent {
+  if (!longCallAgent) {
+    longCallAgent = new Agent({ headersTimeout: LONG_CALL_TIMEOUT_MS, bodyTimeout: LONG_CALL_TIMEOUT_MS })
+  }
+  return longCallAgent
+}
+
+/**
+ * A synchronous cloud route — one that answers with the result in the
+ * response body rather than a job to poll (web-scrape). Returns the parsed
+ * JSON; throws NodaroCloudError with the cloud's own message on refusal.
+ */
+export async function callCloudRoute(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await nodaroCloudFetch(path, {
+    method: "POST",
+    body: JSON.stringify(body),
+    // Node's global fetch is undici's — `dispatcher` is honoured though the DOM
+    // RequestInit type does not name it.
+    ...({ dispatcher: longCallDispatcher() } as unknown as RequestInit),
+  })
+  if (!res.ok) {
+    throw cloudError(res.status, await readCloudErrorBody(res), `POST ${path}`)
+  }
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  if (!json || typeof json !== "object") {
+    throw new NodaroCloudError(`nodaro.ai: POST ${path} succeeded but returned no body`, res.status)
+  }
+  return json
 }
 
 /**

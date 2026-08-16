@@ -204,10 +204,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       FAL_KEY: ${FAL_KEY:-}
-      # The three the nodaro.ai connection does not stand in for (their nodes
-      # call the vendor directly): AI Avatar / Cinematic Avatar (HeyGen),
-      # Relight & Switch (Beeble), Web Scrape (Apify). Every key here can also
-      # be pasted on /setup instead — the env value wins when both exist.
+      # Keys for the vendor-direct nodes — AI Avatar / Cinematic Avatar
+      # (HeyGen), Relight & Switch (Beeble), Web Scrape (Apify). Optional even
+      # when you use those nodes: a connected install runs them through
+      # nodaro.ai (billed to the connected account) when the key is empty.
+      # Every key here can also be pasted on /setup — the env value wins.
       HEYGEN_API_KEY: ${HEYGEN_API_KEY:-}
       BEEBLE_API_KEY: ${BEEBLE_API_KEY:-}
       APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}

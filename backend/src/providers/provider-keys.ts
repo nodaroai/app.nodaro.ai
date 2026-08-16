@@ -11,6 +11,15 @@
  * site inherits it without being told.
  */
 
+import { PROVIDER_KEY_META, providerIdFor } from "../lib/provider-keys-runtime.js"
+
+/** Whether connecting nodaro.ai stands in for this key — from the one
+ *  runtime table (PROVIDER_KEY_META), never a hand-kept list here. */
+function connectionCovers(keyName: string): boolean {
+  const id = providerIdFor(keyName)
+  return id !== null && PROVIDER_KEY_META[id].cloudCovered
+}
+
 /** Providers a self-host can configure with a key of their own. */
 export type ProviderKeyName =
   | "REPLICATE_API_TOKEN"
@@ -41,11 +50,15 @@ export class MissingProviderKeyError extends Error {
     // Short on purpose: this string is rendered inside a node card (which
     // truncates) and a corner toast (which overflows). The founder's first
     // version ran ~230 chars and was unreadable in both. Everything a user
-    // needs is here — which key, and that the connection isn't the answer;
-    // the how-to lives in Install health, which the sentence points at.
+    // needs is here — which key, whether connecting nodaro.ai is an answer
+    // (it is for every key the connection covers — say so, do not send a
+    // keyless install shopping for a key it does not need), and where the
+    // how-to lives (Install health).
+    const head = `${label ? `${label}: n` : "N"}eeds ${keyName}`
     super(
-      `${label ? `${label}: n` : "N"}eeds your own ${keyName} \u2014 not covered by the nodaro.ai connection. ` +
-        `Add it in Install health \u2192 Provider keys.`,
+      connectionCovers(keyName)
+        ? `${head} \u2014 or connect nodaro.ai, which covers it. Either one: Install health \u2192 Provider keys.`
+        : `${head} (your own) \u2014 not covered by the nodaro.ai connection. Add it in Install health \u2192 Provider keys.`,
     )
     this.name = "MissingProviderKeyError"
   }

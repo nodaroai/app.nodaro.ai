@@ -60,12 +60,13 @@ export interface ProviderKeyMeta {
   /** What stops working without it — the honest tile subtitle. */
   readonly powers: string
   /**
-   * Whether connecting nodaro.ai stands in for this key. The connection
-   * routes image / video / speech / LLM work through the cloud; HeyGen
-   * avatars, Beeble relight and Apify are NOT routed through it (their
-   * handlers call the vendor directly — a follow-up PR), so those keys are
-   * still needed when connected. The setup banner ("one click clears the N
-   * it covers") and the "own key needed" note derive from this flag.
+   * Whether connecting nodaro.ai stands in for this key. The capability
+   * router sends image / video / speech / LLM work through the cloud; the
+   * vendor-direct nodes (HeyGen avatars, Beeble relight, Apify web scrape)
+   * reach it through the job replay in providers/nodaro/run-on-cloud.ts and
+   * the catalog relay in routes/heygen-catalog.ts. Only nodaro.ai itself is
+   * not "covered" (it IS the connection). The setup banner ("one click
+   * clears the N it covers") and the "own key needed" note derive from this.
    */
   readonly cloudCovered: boolean
   /**
@@ -86,9 +87,9 @@ export const PROVIDER_KEY_META: Readonly<Record<ProviderKeyId, ProviderKeyMeta>>
   gemini: { name: "Google Gemini", whereToGet: "aistudio.google.com", powers: "Gemini LLM + video analysis lane", cloudCovered: true, scope: "core" },
   elevenlabs: { name: "ElevenLabs", whereToGet: "elevenlabs.io", powers: "speech, voices, dubbing", cloudCovered: true, scope: "core" },
   fal: { name: "fal.ai", whereToGet: "fal.ai", powers: "fal-hosted models", cloudCovered: true, scope: "core" },
-  heygen: { name: "HeyGen", whereToGet: "heygen.com", powers: "AI Avatar + Cinematic Avatar nodes", cloudCovered: false, scope: "node" },
-  beeble: { name: "Beeble", whereToGet: "beeble.ai", powers: "Relight & Switch node (SwitchX)", cloudCovered: false, scope: "node" },
-  apify: { name: "Apify", whereToGet: "apify.com", powers: "Web Scrape node (Google search, site crawl, Instagram/TikTok)", cloudCovered: false, scope: "node" },
+  heygen: { name: "HeyGen", whereToGet: "heygen.com", powers: "AI Avatar + Cinematic Avatar nodes", cloudCovered: true, scope: "node" },
+  beeble: { name: "Beeble", whereToGet: "beeble.ai", powers: "Relight & Switch node (SwitchX)", cloudCovered: true, scope: "node" },
+  apify: { name: "Apify", whereToGet: "apify.com", powers: "Web Scrape node (Google search, site crawl, Instagram/TikTok)", cloudCovered: true, scope: "node" },
 }
 
 export type ProviderKeySource = "env" | "app"

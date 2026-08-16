@@ -22,11 +22,15 @@ locally; the Nodaro connection adds:
 - **Nodaro-exclusive capabilities** — cloud-only models run through the
   connection and bill only that usage.
 
-**What the connection does not cover (yet):** nodes whose handlers call the
-vendor directly — HeyGen (AI Avatar, Cinematic Avatar), Beeble (Relight &
-Switch) and Apify (Web Scrape). Those still need their own key on
-`/setup` even when connected; the tiles say so, and the Install-health banner
-counts only what connecting actually clears.
+**The vendor-direct nodes are covered too.** AI Avatar / Cinematic Avatar
+(HeyGen), Relight & Switch (Beeble) and Web Scrape (Apify) do not go through
+the model router — their handlers call the vendor. On a connected install with
+no key for that vendor, the worker replays the job on your nodaro.ai account's
+identical route, brings the finished media back into your own storage, and
+finalizes it as a local job (`providers/nodaro/run-on-cloud.ts`); the HeyGen
+avatar/voice pickers list the cloud's catalog the same way. Billed to the
+connected account like any other cloud model. Paste your own key for any of
+them and that vendor is called directly instead — local keys win.
 
 ## How to connect
 

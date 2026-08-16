@@ -43,14 +43,15 @@ describe("provider id <-> env var mapping", () => {
 
   it("says which providers the nodaro.ai connection stands in for", () => {
     // The connection routes image / video / speech / LLM work through the
-    // cloud, so those tiles are cleared by connecting. HeyGen avatars, Beeble
-    // relight and Apify are NOT routed through it today — those keys are
-    // still needed even when connected. The setup screen's banner and the
-    // "own key needed" note derive from this, not from a hand-written count.
+    // cloud, and — since the vendor-direct nodes replay their jobs on it
+    // (providers/nodaro/run-on-cloud.ts) — HeyGen, Beeble and Apify too.
+    // Every key but nodaro.ai itself is cleared by connecting. The setup
+    // screen's banner and the "own key needed" note derive from this, not
+    // from a hand-written count.
     const covered = PROVIDER_KEY_IDS.filter((id) => PROVIDER_KEY_META[id].cloudCovered)
-    expect(covered).toEqual(["kie", "replicate", "anthropic", "gemini", "elevenlabs", "fal"])
+    expect(covered).toEqual(["kie", "replicate", "anthropic", "gemini", "elevenlabs", "fal", "heygen", "beeble", "apify"])
     expect(PROVIDER_KEY_META.nodaro.cloudCovered).toBe(false) // it IS the connection
-    expect(PROVIDER_KEY_META.heygen.cloudCovered).toBe(false)
+    expect(PROVIDER_KEY_META.heygen.cloudCovered).toBe(true)
     expect(PROVIDER_KEY_META.heygen.name).toBe("HeyGen")
     expect(PROVIDER_KEY_META.heygen.powers).toMatch(/avatar/i)
   })

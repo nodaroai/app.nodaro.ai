@@ -136,7 +136,7 @@ export function ModelProvidersCard() {
                   {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
                 </>
               ) : (
-                <>Connected via nodaro.ai — every provider is covered.</>
+                <>Connected via nodaro.ai — every provider below is covered; paste a key only to call that vendor directly.</>
               )
             ) : coverage.coveredMissing > 0 ? (
               <>
