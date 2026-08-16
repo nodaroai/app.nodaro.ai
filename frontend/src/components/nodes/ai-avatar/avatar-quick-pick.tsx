@@ -3,8 +3,9 @@
 // Empty state of the AI Avatar node (catalog source): "START WITH AN AVATAR" —
 // a row of featured looks to pick from right on the card, a search box that
 // filters the whole catalog in place (the same search the settings panel
-// runs), a link to browse the full catalog with filters in the settings
-// panel, and the alternative of animating your own portrait instead. Also
+// runs), a "Browse all N ›" that opens the full catalog in the Avatar Picker
+// modal (people, facets, detail column), and the alternative of animating
+// your own portrait instead. Also
 // serves as the in-place "Change avatar" view once an avatar is set (the
 // current one is ring-highlighted and ✕ goes back).
 
@@ -34,8 +35,9 @@ interface AvatarQuickPickProps {
   /** The look currently stored on the node (highlighted), if any. */
   readonly currentAvatarId?: string
   readonly onPick: (avatar: HeygenAvatar) => void
-  /** Open the settings panel (full catalog with search + filters). */
-  readonly onBrowseAll: () => void
+  /** Open the full catalog (the Avatar Picker modal), optionally with the
+   *  card's current search text carried over. */
+  readonly onBrowseAll: (query?: string) => void
   /** Switch the node to image-source mode. */
   readonly onUseImage: () => void
   /** Present when this view was opened from "Change avatar" — ✕ returns. */
@@ -141,7 +143,7 @@ export function AvatarQuickPick({
   )
   const shown = searching ? matches.slice(0, SEARCH_RESULT_CAP) : featured
 
-  const handleBrowse = useCallback((e: MouseEvent) => { stop(e); onBrowseAll() }, [onBrowseAll])
+  const handleBrowse = useCallback((e: MouseEvent) => { stop(e); onBrowseAll(query.trim() || undefined) }, [onBrowseAll, query])
   const handleUseImage = useCallback((e: MouseEvent) => { stop(e); onUseImage() }, [onUseImage])
   const handleCancel = useCallback((e: MouseEvent) => { stop(e); onCancel?.() }, [onCancel])
   const handleQuery = useCallback((e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value), [])

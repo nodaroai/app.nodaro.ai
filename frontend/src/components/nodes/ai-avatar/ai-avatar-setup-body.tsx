@@ -18,7 +18,9 @@ import { useCallback, useState } from "react"
 import type { HeygenAvatar } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { hasCredits } from "@/lib/edition"
 import { avatarSelectionPatch } from "@/components/heygen/heygen-catalog"
+import { AvatarPickerModal } from "@/components/heygen/avatar-picker-modal/avatar-picker-modal"
 import { AvatarQuickPick } from "./avatar-quick-pick"
 import { ImageSourceEmpty } from "./image-source-empty"
 import { ConfiguredView } from "./configured-view"
@@ -33,9 +35,12 @@ interface AiAvatarSetupBodyProps {
    *  carries the error (the retry is the strip's Run). */
   readonly failureMessage?: string
   readonly failed?: boolean
+  /** The node's run cost in credits (what the strip shows) — the avatar
+   *  picker's DETAILS lists it. */
+  readonly costCredits?: number
 }
 
-export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage }: AiAvatarSetupBodyProps) {
+export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage, costCredits }: AiAvatarSetupBodyProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const wiring = useAiAvatarWiring(nodeId)
@@ -43,6 +48,9 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
   // "Change avatar" shows the quick pick over a configured card. Local UI
   // state on purpose: it is a transient view, not part of the workflow.
   const [browsing, setBrowsing] = useState(false)
+  // "Browse all N ›" opens the Avatar Picker modal, seeded with the card's
+  // search text when there is one.
+  const [picker, setPicker] = useState<{ open: boolean; query?: string }>({ open: false })
 
   const source = data.avatarSource ?? "avatar"
   const hasAvatar = !!data.avatarId
@@ -60,6 +68,7 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
     },
     [onUpdate, data.voiceId],
   )
+  const openPicker = useCallback((query?: string) => setPicker({ open: true, query }), [])
 
   const readiness = computeAiAvatarReadiness(data, wiring)
   const engineLabel = aiAvatarEngineLabel(data)
@@ -75,7 +84,7 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
           <AvatarQuickPick
             currentAvatarId={hasAvatar ? data.avatarId : undefined}
             onPick={pickAvatar}
-            onBrowseAll={openSettings}
+            onBrowseAll={openPicker}
             onUseImage={() => { setBrowsing(false); onUpdate({ avatarSource: "image" }) }}
             onCancel={hasAvatar && browsing ? () => setBrowsing(false) : undefined}
           />
@@ -101,6 +110,21 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
         engineLabel={engineLabel}
         failure={failed ? { message: failureMessage } : undefined}
       />
+      {/* Mounted only while open: every AI Avatar node on the canvas renders
+          this body, and a closed modal must not subscribe each of them to the
+          7,000-look catalog. */}
+      {picker.open && (
+        <AvatarPickerModal
+          open
+          onOpenChange={(open) => setPicker((p) => ({ ...p, open }))}
+          value={hasAvatar ? data.avatarId : undefined}
+          initialQuery={picker.query}
+          onSelect={pickAvatar}
+          // Credits are a Cloud thing: off-cloud the hook hands back its
+          // fallback, which must never be shown as a price.
+          costLabel={hasCredits() && costCredits !== undefined && costCredits > 0 ? `from ${costCredits} CR` : undefined}
+        />
+      )}
     </div>
   )
 }

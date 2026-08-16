@@ -298,12 +298,20 @@ export function avatarStatusLabel(avatar: HeygenAvatar): "Processing…" | "Fail
 // everywhere (name substring, case-insensitive).
 // ---------------------------------------------------------------------------
 
-/** Derive the sorted list of unique genders present in the catalog. */
+/** HeyGen's gender strings are not clean ("Female", "Woman", "male", "Man",
+ *  "Unspecified", "unknown", ""): fold them onto three values so every
+ *  picker surface shows the same facet and a filter matches every spelling. */
+export function normalizeGender(raw: string | undefined): "female" | "male" | "unknown" {
+  const g = (raw ?? "").trim().toLowerCase()
+  if (g === "female" || g === "woman" || g === "f") return "female"
+  if (g === "male" || g === "man" || g === "m") return "male"
+  return "unknown"
+}
+
+/** Derive the sorted list of (folded) genders present in the catalog. */
 export function deriveGenders(avatars: readonly HeygenAvatar[]): string[] {
   const seen = new Set<string>()
-  for (const a of avatars) {
-    if (a.gender) seen.add(a.gender.toLowerCase())
-  }
+  for (const a of avatars) seen.add(normalizeGender(a.gender))
   return Array.from(seen).sort()
 }
 
@@ -342,7 +350,7 @@ export function filterAvatars(
   const known = catalogHasOwnership(avatars)
   return avatars.filter((a) => {
     if (q && !a.name.toLowerCase().includes(q)) return false
-    if (gender !== "all" && a.gender.toLowerCase() !== gender) return false
+    if (gender !== "all" && normalizeGender(a.gender) !== gender) return false
     if (segment === "stock" && isCustomAvatar(a, known)) return false
     if (segment === "custom" && !isCustomAvatar(a, known)) return false
     if (onlyAvatarV && !avatarSupportsV(a)) return false

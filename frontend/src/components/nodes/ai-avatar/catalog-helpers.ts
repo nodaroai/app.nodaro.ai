@@ -17,9 +17,26 @@ export function splitLookName(name: string): { person: string; scene: string } {
 }
 
 /**
+ * Which PERSON a look belongs to. HeyGen's `group_id` is its avatar group —
+ * one presenter with many looks — and every look in the live catalog carries
+ * one (measured 2026-08-16: 7,041 looks, 607 groups; 53 groups have
+ * descriptive look names such as "Charismatic Professional 3" that a
+ * first-name split would scatter into fake people, and "Theo" is three
+ * distinct groups). Servers that predate `groupId` fall back to the first
+ * name. Shared by the featured row and the Choose-an-avatar window so both
+ * mean the same thing by "one per person".
+ */
+export function personKeyOf(look: HeygenAvatar): string {
+  if (look.groupId) return `g:${look.groupId}`
+  const { person } = splitLookName(look.name)
+  return `n:${person.toLowerCase() || look.avatarId}`
+}
+
+/**
  * The looks shown as the on-node quick pick. The raw catalog opens with a
  * dozen looks of the same person (Cora Office 4, Cora Livingroom 1, …), which
- * makes a poor first row — take ONE look per person in catalog order, and only
+ * makes a poor first row — take ONE look per person (`personKeyOf`) in
+ * catalog order, and only
  * when the catalog has fewer persons than `n`, top up with further distinct
  * looks. Deterministic (no shuffling), so the row is stable across renders.
  * A look HeyGen is still building (or failed) is never featured — the row is
@@ -34,8 +51,7 @@ export function pickFeaturedAvatars(
   const featured: HeygenAvatar[] = []
   for (const a of avatars) {
     if (featured.length >= n) break
-    const { person } = splitLookName(a.name)
-    const key = person.toLowerCase()
+    const key = personKeyOf(a)
     if (seenPersons.has(key)) continue
     seenPersons.add(key)
     featured.push(a)
