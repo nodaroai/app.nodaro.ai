@@ -244,6 +244,9 @@ export const VoicePicker = memo(function VoicePicker({
     queryKey: ["heygen-voices"],
     queryFn: getHeygenVoices,
     staleTime: 5 * 60 * 1000,
+    // See avatar-picker: an empty list self-heals once a key is pasted or the
+    // install connects to nodaro.ai.
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? false : 15_000),
   })
 
   const [query, setQuery] = useState("")
@@ -312,7 +315,7 @@ export const VoicePicker = memo(function VoicePicker({
         <Volume2 className="size-10 text-muted-foreground/40" />
         <p className="text-sm font-medium text-muted-foreground">No HeyGen voices</p>
         <p className="text-xs text-muted-foreground/70">
-          Configure the HeyGen API key in Settings to browse available voices.
+          Add a HeyGen key or connect nodaro.ai under Integrations &rarr; Model providers to browse voices.
         </p>
       </div>
     )

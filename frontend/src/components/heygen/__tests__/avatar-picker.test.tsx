@@ -259,7 +259,7 @@ describe("AvatarPicker component", () => {
     await waitFor(() => {
       expect(screen.getByTestId("avatar-picker-empty")).toBeInTheDocument()
     })
-    expect(screen.getByText(/Configure the HeyGen API key/i)).toBeInTheDocument()
+    expect(screen.getByText(/Add a HeyGen key or connect nodaro.ai/i)).toBeInTheDocument()
   })
 
   it("clicking a tile calls onSelect with the full avatar object", async () => {

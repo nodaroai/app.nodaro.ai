@@ -303,10 +303,16 @@ export interface PluginProvidersToolkit {
    * resume. A `KieError` with `isUpstreamFailure` set (`isUpstreamKieFailure`,
    * same module) maps to `"failed"`; any other rejection (still generating,
    * network blip, single-attempt timeout) maps to `"processing"`.
+   *
+   * `contentPolicy: true` rides the failed state when the KieError carries
+   * the content-screen flag — the plugin resume then goes rewrite-first
+   * instead of resubmitting the rejected bytes (plugins ≥ 0.146.0; older
+   * plugins ignore the extra field). Emitted only when true.
    */
   getVideoTaskStatus(taskId: string): Promise<{
     state: "processing" | "succeeded" | "failed"
     videoUrl?: string
+    contentPolicy?: boolean
   }>
   /**
    * Mirrors `downloadYouTubeVideo` (`providers/video/youtube-video.ts`),

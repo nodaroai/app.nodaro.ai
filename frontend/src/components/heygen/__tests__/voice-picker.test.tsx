@@ -203,7 +203,7 @@ describe("VoicePicker component", () => {
     await waitFor(() => {
       expect(screen.getByTestId("voice-picker-empty")).toBeInTheDocument()
     })
-    expect(screen.getByText(/Configure the HeyGen API key/i)).toBeInTheDocument()
+    expect(screen.getByText(/Add a HeyGen key or connect nodaro.ai/i)).toBeInTheDocument()
   })
 
   it("clicking a row calls onSelect with the full voice object", async () => {

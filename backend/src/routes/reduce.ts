@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { REDUCE_STRATEGY_IDS, LLM_MODEL_IDS, buildLlmCreditIdentifier, type ReduceStrategyId } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS, LLM_MODEL_IDS, buildLlmCreditIdentifier, getStrategy, type ReduceStrategyId } from "@nodaro/shared"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
+import { isLlmProviderUnavailable } from "../lib/llm-client.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -40,6 +42,12 @@ const reduceBody = z.object({
  * Reads the raw body so the creditGuard preHandler (pre-Zod) and the
  * reservation (post-Zod) resolve the SAME id.
  */
+/** The strategy this raw (pre-Zod) body asks for, when it is a known one. */
+function requestedStrategy(body: unknown): ReduceStrategyId | null {
+  const id = (body as { strategyId?: unknown } | undefined)?.strategyId
+  return typeof id === "string" && (REDUCE_STRATEGY_IDS as readonly string[]).includes(id) ? (id as ReduceStrategyId) : null
+}
+
 function reduceCreditIdentifier(body: unknown): string {
   const b = body as { strategyId?: unknown; strategyConfig?: { llmModel?: unknown } } | undefined
   const strategyId = String(b?.strategyId ?? "concat")
@@ -58,6 +66,13 @@ export async function reduceRoutes(app: FastifyInstance) {
       preHandler: creditGuard((req) => reduceCreditIdentifier(req.body), { dedup: false }),
     },
     async (req, reply) => {
+      // The AI judge is an LLM call: on a keyless install with a live
+      // nodaro.ai connection the cloud runs it (same code, same body, same
+      // answer). Every other strategy is local logic and never leaves this
+      // server — decided by the strategy's own usesLlm flag, not its name.
+      const requested = requestedStrategy(req.body)
+      if (requested && getStrategy(requested).usesLlm && (await maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce"))) return
+
       const parsed = reduceBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
@@ -125,6 +140,14 @@ export async function reduceRoutes(app: FastifyInstance) {
         if (err instanceof EmptyInputError) {
           return reply.status(400).send({
             error: { code: "no_valid_inputs", message },
+          })
+        }
+        // No LLM to judge with is configuration, not a crash — the same 503
+        // every other LLM route answers, so the UI and the orchestrator read
+        // one shape.
+        if (isLlmProviderUnavailable(err)) {
+          return reply.status(503).send({
+            error: { code: "provider_unavailable", message },
           })
         }
         return reply.status(500).send({
