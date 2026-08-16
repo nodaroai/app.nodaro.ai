@@ -11,6 +11,7 @@ import type { Scope } from "../lib/scopes.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -929,13 +930,17 @@ export async function workflowRoutes(app: FastifyInstance) {
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
     if (!params) return
 
-    const { error } = await supabase
+    // Owner-scoped: a foreign id matches nothing. Say so (404) — the same
+    // answer GET/PATCH give — instead of a `success` that deleted nothing.
+    const { data, error } = await supabase
       .from("workflows")
       .delete()
       .eq("id", params.id)
       .eq("user_id", userId)
+      .select("id")
 
     if (error) return sendInternalError(reply, req, error, "Failed to delete workflow")
+    if (deletedNothing(data)) return sendNotFound(reply, "Workflow not found")
     return { success: true }
   })
 

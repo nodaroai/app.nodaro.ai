@@ -30,6 +30,7 @@ import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFie
 import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 // ---------------------------------------------------------------------------
 // Rate limiter (in-memory, per token hash)
@@ -350,15 +351,17 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("api_tokens")
       .delete()
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
+      .select("id")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to delete token")
     }
+    if (deletedNothing(data)) return sendNotFound(reply, "Token not found")
 
     return { success: true }
   })

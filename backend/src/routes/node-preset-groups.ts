@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 // Preset groups are read-only over the API; writes are editor-only (first-party JWT).
 const PRESETS_READ_ONLY_MSG = "Node presets are read-only over the API. Create and edit presets in the editor."
@@ -119,8 +120,9 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
     if (!userId) return unauthorized(reply)
     if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
-    const { error } = await supabase.from("node_preset_groups").delete().eq("id", id).eq("user_id", userId)
+    const { data, error } = await supabase.from("node_preset_groups").delete().eq("id", id).eq("user_id", userId).select("id")
     if (error) return sendInternalError(reply, req, error, "Failed to delete preset group")
+    if (deletedNothing(data)) return sendNotFound(reply, "Preset group not found")
     return reply.send({ data: { success: true } })
   })
 }

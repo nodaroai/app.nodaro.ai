@@ -347,11 +347,12 @@ describe("POST /v1/faces", () => {
 // ---------------------------------------------------------------------------
 
 describe("DELETE /v1/faces/:id", () => {
-  function deleteChain(result: { error: unknown }) {
+  // .delete().eq().eq().select("id") — the route reads the deleted rows back
+  // and answers 404 when the owner scope matched nothing (#699).
+  function deleteChain(result: { data?: unknown[] | null; error: unknown }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
-      then: (resolve: (value: { error: unknown }) => unknown) =>
-        Promise.resolve(result).then(resolve),
+      select: vi.fn().mockResolvedValue({ data: result.data ?? (result.error ? null : [{ id: TEST_FACE_ID }]), error: result.error }),
     }
     const mockDelete = vi.fn().mockReturnValue(chain)
     return { mockDelete, chain }
@@ -380,6 +381,18 @@ describe("DELETE /v1/faces/:id", () => {
     expect(res.json().success).toBe(true)
     expect(chain.eq).toHaveBeenCalledWith("id", TEST_FACE_ID)
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("returns 404 when the scoped delete matched nothing (someone else's face)", async () => {
+    const { mockDelete } = deleteChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/faces/${TEST_FACE_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
   })
 
   it("returns 500 on DB error", async () => {

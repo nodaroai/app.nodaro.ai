@@ -905,7 +905,9 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 
   it("returns 200 on success", async () => {
-    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+    // .delete().eq().eq().select("id") — PostgREST returns the deleted rows.
+    const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: TEST_WORKFLOW_ID }], error: null })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
@@ -920,8 +922,28 @@ describe("DELETE /v1/workflows/:id", () => {
     expect(res.json().success).toBe(true)
   })
 
+  it("returns 404 when the scoped delete matched nothing (someone else's workflow, or already gone)", async () => {
+    // Release check 31 (#699): a foreign id used to answer 200 { success: true }
+    // while deleting nothing — GET/PATCH say 404 for the same id, DELETE must too.
+    const mockSelect = vi.fn().mockResolvedValue({ data: [], error: null })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
   it("returns 500 on DB error", async () => {
-    const mockEq2 = vi.fn().mockResolvedValue({ error: { message: "FK constraint" } })
+    const mockSelect = vi.fn().mockResolvedValue({ data: null, error: { message: "FK constraint" } })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
@@ -993,12 +1015,13 @@ describe("cross-tenant denial", () => {
   })
 
   it("DELETE /v1/workflows/:id — delete is user-scoped (foreign rows untouched)", async () => {
-    // supabase delete().eq().eq() returns { error: null } whether or not
-    // rows matched — no way to distinguish "deleted" from "no-match" at the
-    // query level. The critical security property is that .eq("user_id",
-    // CALLER) is applied, which excludes other users' rows from the delete
-    // set. We assert the scope; the victim's row is then provably untouched.
-    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+    // The critical security property is that .eq("user_id", CALLER) is
+    // applied, which excludes other users' rows from the delete set. We assert
+    // the scope; the victim's row is then provably untouched. Since #699 the
+    // route also reads the deleted rows back (.select) and answers 404 when
+    // the scope matched nothing — asserted in the DELETE describe above.
+    const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: TEST_WORKFLOW_ID }], error: null })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)

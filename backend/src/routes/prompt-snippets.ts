@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 // Snippets are read-only over the API (SDK/CLI/MCP expose reads only); writes
 // are editor-only (first-party JWT). Mirrors the node-presets posture.
@@ -180,8 +181,9 @@ export async function promptSnippetRoutes(app: FastifyInstance) {
     if (!userId) return unauthorized(reply)
     if (rejectProgrammaticAuth(req, reply, SNIPPETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
-    const { error } = await supabase.from("prompt_snippets").delete().eq("id", id).eq("user_id", userId)
+    const { data, error } = await supabase.from("prompt_snippets").delete().eq("id", id).eq("user_id", userId).select("id")
     if (error) return sendInternalError(reply, req, error, "Failed to delete snippet")
+    if (deletedNothing(data)) return sendNotFound(reply, "Snippet not found")
     return reply.send({ data: { success: true } })
   })
 }
