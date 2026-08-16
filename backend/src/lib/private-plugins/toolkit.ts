@@ -262,16 +262,28 @@ async function pluginGenerateMusic(
  * with `isUpstreamFailure` set (`isUpstreamKieFailure`, same module) maps to
  * `"failed"`; any other rejection (still generating, network blip, or the
  * single-attempt timeout) maps to `"processing"`.
+ *
+ * `contentPolicy` rides the failed state when the KieError carries the flag
+ * (same stamp `isContentPolicyError` duck-types on live throws) — the gvp
+ * chain's resume then rewrites the checkpointed prompt before its one
+ * remaining attempt instead of resubmitting the identical bytes the
+ * deterministic screen just rejected (2026-08-16, run 499deba8: a deploy
+ * restart mid-segment turned a rewritable rejection into a doomed identical
+ * resubmit). Emitted only when true — plugins predating the field see the
+ * exact wire shape they always did.
  */
 async function getVideoTaskStatus(
   taskId: string,
-): Promise<{ state: "processing" | "succeeded" | "failed"; videoUrl?: string }> {
+): Promise<{ state: "processing" | "succeeded" | "failed"; videoUrl?: string; contentPolicy?: boolean }> {
   try {
     const { resultJson } = await pollKieTask(taskId, 1)
     const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
     return { state: "succeeded", videoUrl }
   } catch (err) {
-    if (isUpstreamKieFailure(err)) return { state: "failed" }
+    if (isUpstreamKieFailure(err)) {
+      const contentPolicy = !!err && typeof err === "object" && (err as { contentPolicy?: unknown }).contentPolicy === true
+      return contentPolicy ? { state: "failed", contentPolicy: true } : { state: "failed" }
+    }
     return { state: "processing" }
   }
 }
