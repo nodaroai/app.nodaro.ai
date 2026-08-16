@@ -21,6 +21,23 @@ import { LlmModelSelect } from "./llm-model-select"
  * the registry adds a new strategy or field, this switch is the local point
  * of change — the dispatching `ReduceConfig` stays untouched.
  */
+/**
+ * "The candidates are" — what the AI judge is handed. ONE list for the side
+ * panel and the node's head-row chip (reduce-node.tsx), so the two cannot
+ * drift. Values are the registry's `inputKind` enum. The description matters:
+ * with image candidates left on Texts the judge compares the URL strings,
+ * not the pictures — a meaningless pick that looks like a real one.
+ */
+export const REDUCE_INPUT_KIND_OPTIONS = [
+  { value: "text", label: "Texts", description: "The AI reads each candidate as text" },
+  { value: "image-url", label: "Images", description: "The AI looks at each candidate picture" },
+] as const
+
+export type ReduceInputKind = (typeof REDUCE_INPUT_KIND_OPTIONS)[number]["value"]
+
+export const reduceInputKindLabel = (kind: string): string =>
+  REDUCE_INPUT_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? REDUCE_INPUT_KIND_OPTIONS[0].label
+
 type Props = {
   readonly strategyId: string
   readonly config: Record<string, unknown>
@@ -63,10 +80,19 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="text">Texts</SelectItem>
-                <SelectItem value="image-url">Images</SelectItem>
+                {REDUCE_INPUT_KIND_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    <span className="flex flex-col gap-0.5">
+                      <span>{o.label}</span>
+                      <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-[10px] text-muted-foreground">
+              Also on the node, next to the model. Pick Images when the candidates are pictures — on Texts the AI would only compare their links.
+            </p>
           </div>
         </div>
       )
