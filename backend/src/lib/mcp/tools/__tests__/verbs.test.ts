@@ -1206,6 +1206,7 @@ describe("video_analysis verb", () => {
       video_url: "https://a/clip.mp4",
       llm_model: "pro",
       selection_mode: "combine",
+      music_video: true,
       analysis_focus: "focus on the product shots",
     })
     expect(result.isError).toBeUndefined()
@@ -1215,9 +1216,24 @@ describe("video_analysis verb", () => {
     expect(received.body?.llmModel).toBe("pro")
     // Best-of-N strategy forwards snake→camel (audit gap: was untested).
     expect(received.body?.selectionMode).toBe("combine")
+    // Music-video lyric mode forwards snake→camel (plugin ≥0.144.0 consumes it;
+    // older plugins strip the unknown key — same posture as `variations`).
+    expect(received.body?.musicVideo).toBe(true)
     expect(received.body?.analysisFocus).toBe("focus on the product shots")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
+  })
+
+  it("omits musicVideo entirely when music_video is absent or false", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va-mv" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {
+      video_url: "https://a/clip.mp4",
+      music_video: false,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body ? "musicVideo" in received.body : false).toBe(false)
   })
 
   it("forwards youtube_url as youtubeUrl", async () => {

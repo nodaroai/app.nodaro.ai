@@ -2306,6 +2306,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             'Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended).',
           ),
+        music_video: z
+          .boolean()
+          .optional()
+          .describe(
+            "Declare the clip a MUSIC VIDEO: the song IS the piece, so ALL sung lyrics are transcribed " +
+              "verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). " +
+              "Default false: soundtrack vocals nobody on screen performs are folded into the `music` " +
+              "layer's description, and `speech` carries only words uttered inside the story world.",
+          ),
         translate_speech_to_english: z
           .boolean()
           .optional()
@@ -2376,6 +2385,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
         ...(args.llm_model ? { llmModel: args.llm_model } : {}),
         ...(args.selection_mode ? { selectionMode: args.selection_mode } : {}),
+        ...(args.music_video ? { musicVideo: true } : {}),
         ...(args.translate_speech_to_english ? { translateSpeechToEnglish: true } : {}),
         ...(args.translate_on_screen_text_to_english ? { translateOnScreenTextToEnglish: true } : {}),
         ...(args.analysis_focus ? { analysisFocus: args.analysis_focus } : {}),
