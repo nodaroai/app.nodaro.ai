@@ -38,8 +38,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Deliberately NOT host-published. Only the app talks to it, and it does
+    # so as redis:6379 on the compose network. Publishing it used to make the
+    # very first `docker compose up` die with "Bind for 0.0.0.0:6379 failed:
+    # port is already allocated" on any machine that already runs a Redis
+    # (most developer laptops) — and on a VPS it exposed an unauthenticated
+    # Redis to the network (Docker's published ports bypass ufw/firewalld).
+    # Need a shell into it? `docker compose exec redis redis-cli`.
     volumes:
       - redis-data:/data
     healthcheck:
@@ -112,11 +117,14 @@ services:
       MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-nodaro-minio}
       MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-nodaro-minio-secret}
     ports:
-      # Web console (optional): http://localhost:9001. The S3 API itself is
-      # NOT host-published — the app reaches it as minio:9000 on the compose
-      # network, and the browser reads media through Caddy's /storage/* proxy
-      # (see R2_PUBLIC_URL below), so one origin serves app + media.
-      - "9001:9001"
+      # Web console (optional): http://localhost:9001, loopback only — it is
+      # a troubleshooting aid for the person at the keyboard, not a service.
+      # Change the host port here if 9001 is taken (the app never uses it).
+      # The S3 API itself is NOT host-published — the app reaches it as
+      # minio:9000 on the compose network, and the browser reads media
+      # through Caddy's /storage/* proxy (see R2_PUBLIC_URL below), so one
+      # origin serves app + media.
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
     healthcheck:

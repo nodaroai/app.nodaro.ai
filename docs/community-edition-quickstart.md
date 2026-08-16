@@ -161,6 +161,12 @@ Every bundled service can be swapped for a managed one in `.env`:
 - **Migrations failed on boot**: the app container logs name the exact
   file; the API refuses to start against a half-migrated schema. Re-run
   `docker compose up` after fixing — applied files are tracked and skipped.
+- **`port is already allocated` on `docker compose up`**: the stack publishes
+  exactly two host ports — **3000** (the app) and **9001** (the MinIO console,
+  loopback only). Redis and the database are internal to the compose network
+  and never bind a host port. If 3000 or 9001 is taken, change the host side
+  of that mapping in `docker-compose.community.yml` (`"3001:3000"`) and, for
+  the app port, set `PUBLIC_URL` to match.
 - **Storage errors on upload**: open the MinIO console at
   http://localhost:9001 (default credentials are in the compose file).
 - **CORS errors in browser**: set `CORS_ORIGIN=http://localhost:3000` in `.env`.
