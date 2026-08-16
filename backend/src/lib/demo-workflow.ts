@@ -58,12 +58,16 @@ const RUN_NOTE_TEXT_CLOUD = [
   "Your account starts with free credits. Edit the Scene Idea, hit Run on Scene Image, then keep going down the chain.",
 ].join("\n")
 
+// The first thing a self-hoster reads after signing up. Both levers it names
+// exist today: Connect nodaro.ai (OAuth, no key, #668) and pasting a key on
+// Install health (stored encrypted, live without a restart, #671). It used to
+// send people to edit .env and restart the container (#706).
 const RUN_NOTE_TEXT_SELF_HOST = [
   "Run your first generation",
   "",
-  "Generating needs one provider API key. Add KIE_API_KEY (kie.ai) or REPLICATE_API_TOKEN (replicate.com) to your .env and restart.",
+  "Generating needs a model provider. Easiest: open /setup and click Connect nodaro.ai (one click, no key, free credits to start). Or paste your own KIE.ai / Replicate key there — it takes effect immediately, no restart. Your own keys always win.",
   "",
-  "Open /setup to see what is configured on this install: database, Redis, storage, and provider keys at a glance.",
+  "/setup also shows what this install has: database, Redis, storage, and every provider at a glance.",
 ].join("\n")
 
 export interface DemoWorkflowContent {

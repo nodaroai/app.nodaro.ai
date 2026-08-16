@@ -24,7 +24,12 @@ jobs:
     # To activate: complete the operational prerequisites at the bottom of
     # this file, then set CLA_BOT_ENABLED=true under repo Settings > Variables.
     # CLA is for EXTERNAL contributors PRing to the PUBLIC repo — run there only.
-    if: github.repository == 'nodaroai/app.nodaro.ai' && vars.CLA_BOT_ENABLED == 'true'
+    # `issue_comment` fires for comments on plain issues too — the action then
+    # errors ("Could not resolve to a PullRequest with the number of N") on
+    # every issue comment (release check 5, 2026-08-16). Only PR comments count.
+    if: >-
+      github.repository == 'nodaroai/app.nodaro.ai' && vars.CLA_BOT_ENABLED == 'true' &&
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
     runs-on: ubuntu-latest
     steps:
       - name: CLA Assistant

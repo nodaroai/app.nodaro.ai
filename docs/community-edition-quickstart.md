@@ -75,7 +75,10 @@ flag the probe never spends anything.
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need
-a model provider. Three ways, and they run side by side:
+a model provider — until you have one, the dashboard shows a dismissible
+*"This install can't generate yet"* callout with both buttons (Connect
+nodaro.ai · Paste a key); it disappears on its own once a provider exists.
+Three ways, and they run side by side:
 
 **Paste a key in the app (no files, no restart).** Two places show the same
 tiles: http://localhost:3000/setup → **Install health** (setup time, works
