@@ -572,6 +572,37 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Frontend runtime config — /config.js, read by the browser before the app
+# boots (frontend/index.html → src/lib/runtime-config.ts). One published
+# image then serves any PUBLIC_URL / port / anon key without a rebuild
+# (release check 13, #700). Only values that are actually set are emitted; an
+# absent key falls back to the value inlined at build time, which is what
+# keeps the cloud (where both agree) byte-identical.
+#   apiUrl          <- PUBLIC_URL
+#   supabaseUrl     <- FRONTEND_SUPABASE_URL if set; else, when the backend's
+#                      SUPABASE_URL is this container's own Caddy proxy (the
+#                      bundled community stack), PUBLIC_URL/supabase; else
+#                      nothing (a managed project URL is baked correctly).
+#   supabaseAnonKey <- SUPABASE_ANON_KEY
+# ALWAYS written — a missing file would fall through try_files to index.html
+# served as JavaScript.
+FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"
+if [ -z "$FRONTEND_SUPABASE_URL_EFFECTIVE" ] && [ -n "$PUBLIC_URL" ]; then
+  case "$SUPABASE_URL" in
+    http://localhost:3000/supabase*|http://127.0.0.1:3000/supabase*) FRONTEND_SUPABASE_URL_EFFECTIVE="${PUBLIC_URL%/}/supabase" ;;
+  esac
+fi
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+  node -e '
+    const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
+    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY) }
+    for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
+    require("fs").writeFileSync("/app/frontend/dist/config.js", "window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
+    console.log("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")
+  '; then
+  echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
+fi
+
 # Start Caddy (reverse proxy). Backgrounded — start.sh remains PID 1 so it
 # owns signal forwarding; Caddy still receives a clean TERM through the trap.
 if [ -z "$TERMINATING" ]; then

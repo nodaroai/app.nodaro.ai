@@ -13,8 +13,9 @@ The first boot downloads the prebuilt app image (~2.4 GB, so a few minutes on
 a typical connection) plus the bundled services — a download rather than a
 compile, and it does not pin your CPU. After that, boots take seconds.
 
-Building from source instead (needed if you change the code, `PUBLIC_URL`,
-or the Supabase keys — the frontend inlines those at build time):
+Building from source instead (needed only if you change the code —
+`PUBLIC_URL`, another port or a domain, and the Supabase keys are read at
+runtime, so the published image serves them after a plain restart):
 
 ```bash
 docker compose -f docker-compose.community.yml build
@@ -131,9 +132,8 @@ For anything reachable by other people:
 
 1. Mint fresh auth keys — `node tools/generate-selfhost-keys.mjs >> .env`
    (JWT secret + anon + service keys must always come from the same run).
-   Changing the anon key requires rebuilding the app image
-   (`docker compose -f docker-compose.community.yml build`) because Vite
-   inlines it into the frontend.
+   A changed anon key needs only a restart — the container hands it to the
+   browser at runtime (`/config.js`), no rebuild.
 2. Set `POSTGRES_PASSWORD` and a matching `DATABASE_URL`, and fresh MinIO
    credentials (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`). Note the
    Postgres role passwords are aligned at the database's FIRST init — if

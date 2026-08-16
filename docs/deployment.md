@@ -392,6 +392,14 @@ docker compose -f docker-compose.community.yml build --no-cache nodaro
 docker compose -f docker-compose.community.yml up
 ```
 
+Three frontend values are **not** frozen at build time: the API origin, the
+browser-facing Supabase URL and the anon key. At boot the container writes
+them from its env into `/config.js` (`PUBLIC_URL`, `FRONTEND_SUPABASE_URL`
+— defaulting to `PUBLIC_URL/supabase` on the bundled stack — and
+`SUPABASE_ANON_KEY`), and the browser reads that file before the app
+starts. So the published image serves any port or domain after a restart;
+the `VITE_*` build args are only the fallbacks when a runtime value is unset.
+
 Other build-time frontend env vars (all `VITE_*`, all inlined by Vite at
 build time):
 
@@ -521,10 +529,11 @@ than 32 chars.
 
 **Frontend renders, but the editor stays blank or "Loading…" forever.**
 Open the browser console. If you see CORS errors, set `CORS_ORIGIN` to
-your real public URL and restart. If you see Supabase auth errors,
-double-check `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` were set
-**at Docker build time** (Vite inlines them into the bundle — runtime
-env vars don't help).
+your real public URL and restart. If you see Supabase auth errors, open
+`/config.js` on your install: it must name the Supabase URL your browser can
+reach (on the bundled stack `PUBLIC_URL/supabase`) and the anon key. It is
+written at boot from `PUBLIC_URL` / `FRONTEND_SUPABASE_URL` /
+`SUPABASE_ANON_KEY` — fix those and restart.
 
 **Migration failure: "relation … does not exist".** A migration ran
 out of order. Apply migrations from `supabase/migrations/` in filename
