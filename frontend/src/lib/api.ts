@@ -5679,31 +5679,81 @@ export interface HeygenVoice {
 }
 
 /**
- * Fetches the list of HeyGen photo-avatar looks.
- * Public endpoint — no auth required.
- * Returns [] when HEYGEN_API_KEY is not configured on the server.
+ * What the client already holds of a catalog generation — the server answers
+ * with only the items AFTER `offset` when the generation still matches.
  */
-export async function getHeygenAvatars(): Promise<HeygenAvatar[]> {
-  const res = await fetch(`${API_BASE_URL}/v1/heygen/avatars`)
-  if (!res.ok) {
-    throw new Error("Failed to fetch HeyGen avatars")
-  }
-  const body = await res.json()
-  return body.avatars
+export interface HeygenCatalogSince {
+  offset: number
+  generation: string
 }
 
 /**
- * Fetches the list of HeyGen voices.
- * Public endpoint — no auth required.
- * Returns [] when HEYGEN_API_KEY is not configured on the server.
+ * One answer from a HeyGen catalog route. The server fills its catalog
+ * progressively (HeyGen pages it — ≈140 pages for the ≈7,000 photo avatars;
+ * a cold fill takes minutes), so an answer may be PARTIAL: `complete:false`
+ * means "here is what has arrived so far — ask again". Answers are DELTAS:
+ * `items` starts at `offset` within `generation`; a client sends back its
+ * `{ offset, generation }` and appends what it gets (see heygen-catalog.ts).
+ * A generation change (server refresh / restart) comes back at offset 0.
  */
-export async function getHeygenVoices(): Promise<HeygenVoice[]> {
-  const res = await fetch(`${API_BASE_URL}/v1/heygen/voices`)
+export interface HeygenCatalogPage<T> {
+  items: T[]
+  offset: number
+  total: number
+  complete: boolean
+  generation: string
+}
+
+async function fetchHeygenCatalog<T>(
+  path: string,
+  field: "avatars" | "voices",
+  since?: HeygenCatalogSince,
+): Promise<HeygenCatalogPage<T>> {
+  const qs = since ? `?offset=${since.offset}&generation=${encodeURIComponent(since.generation)}` : ""
+  const res = await fetch(`${API_BASE_URL}${path}${qs}`)
   if (!res.ok) {
-    throw new Error("Failed to fetch HeyGen voices")
+    throw new Error(`Failed to fetch HeyGen ${field}`)
   }
-  const body = await res.json()
-  return body.voices
+  const body = (await res.json()) as Record<string, unknown>
+  const raw = body[field]
+  const items = Array.isArray(raw) ? (raw as T[]) : []
+  const offset = typeof body.offset === "number" && body.offset >= 0 ? body.offset : 0
+  return {
+    items,
+    offset,
+    total: typeof body.total === "number" ? body.total : offset + items.length,
+    // A server that predates progressive answers sends whole lists only.
+    complete: body.complete !== false,
+    generation: typeof body.generation === "string" ? body.generation : "",
+  }
+}
+
+/**
+ * Fetches the HeyGen photo-avatar looks known to the server right now (from
+ * `since.offset` on when the generation matches). Public endpoint — no auth
+ * required. `items` is [] when HEYGEN_API_KEY is not configured on the server
+ * (with `complete:true` — nothing more will come).
+ */
+export function getHeygenAvatarCatalog(since?: HeygenCatalogSince): Promise<HeygenCatalogPage<HeygenAvatar>> {
+  return fetchHeygenCatalog<HeygenAvatar>("/v1/heygen/avatars", "avatars", since)
+}
+
+/**
+ * Fetches the HeyGen voices known to the server right now.
+ * Public endpoint — no auth required. See `getHeygenAvatarCatalog`.
+ */
+export function getHeygenVoiceCatalog(since?: HeygenCatalogSince): Promise<HeygenCatalogPage<HeygenVoice>> {
+  return fetchHeygenCatalog<HeygenVoice>("/v1/heygen/voices", "voices", since)
+}
+
+/** The avatar looks in one array — whatever the server has right now. */
+export async function getHeygenAvatars(): Promise<HeygenAvatar[]> {
+  return (await getHeygenAvatarCatalog()).items
+}
+
+/** The voices in one array — whatever the server has right now. */
+export async function getHeygenVoices(): Promise<HeygenVoice[]> {
+  return (await getHeygenVoiceCatalog()).items
 }
 
 // Voice Library (shared/community voices)

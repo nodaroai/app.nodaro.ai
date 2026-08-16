@@ -22,6 +22,21 @@ Two speech modes:
 | **Script + Voice** (`speechMode: text`) | A text script (up to 5,000 characters) and a voice ID picked from the in-node voice picker | HeyGen TTS, driven by the chosen voice and optional voice speed |
 | **Wired Audio** (`speechMode: audio`) | An audio file wired to the `audio` input handle | Exactly as recorded — no TTS. Audio inputs are capped at 10 minutes (600s); longer audio is automatically trimmed to 600s (you'll see a notice on the result) |
 
+## On the canvas
+
+The node card itself walks you through the setup — you rarely need the settings panel for a first run. It has three looks:
+
+| State | What the card shows |
+|-------|---------------------|
+| **Empty** (no avatar yet) | **Start with an avatar** — a row of featured looks (one per presenter) you can pick right on the card, a **search box** that filters the whole catalog in place (the same search as the settings panel; results scroll, five per row), a **Browse all N ›** link that opens the full catalog with gender / type / Avatar-V filters in the settings panel, and **Use an image instead** to animate your own portrait. In image mode the same spot becomes **Start with an image** — an upload zone (or wire an image into the Image input / paste a URL in settings) plus **Choose an avatar** to go back to the catalog. |
+| **Configured** (avatar or image set, no video yet) | Left: the portrait with an engine badge (`AVATAR IV` / `AVATAR V`, or `SOURCE IMAGE`), the look's name and gender, and **Change avatar** (reopens the featured row with the current look highlighted; ✕ keeps it) or **Replace image**. Right: the **voice** strip (name, language · gender, a preview play button — click the voice to open the full voice picker right there, with search, language / gender filters and previews) and the **script**, editable in place with a live `chars · ~duration` estimate. When the Script input is wired, the card shows the incoming text read-only and says which node it comes from. In Wired Audio mode the right side shows the audio connection status instead of voice + script. |
+| **Generated** (a video exists) | The video result with the usual hover controls (versions, fullscreen, download, copy URL, NodarCut, settings). Every *action* lives in the bottom strip: **Run** makes another version (it lands on top of the earlier ones — the versions badge counts them), and **New run** hides the results and brings the setup card back so you can start fresh (pick another look, change the voice or the text) — nothing runs; a second click on New run restores the results exactly as they were. Starting a run (from the strip) always returns to the result view. |
+| **Failed** | Nothing earlier to show: the configured card stays editable and its status bar turns red with the error — retry with the strip's **Run**. An earlier version on show: it stays, a red banner over the video names the failure, and **New run** / **Run** in the strip work as above. Earlier versions are never touched by a retry. |
+
+A **status bar** at the bottom of the card always says whether the node can run and what is still missing — `Ready to run · avatar, voice and script are set` vs `Needs a voice before it can run` — plus the engine and resolution that will render (`HeyGen Avatar IV · 720p`, or `Image animation · 720p` in image mode). The rules are the same ones the Run button enforces: text mode needs a script (typed or wired) **and** a voice; audio mode needs wired audio; avatar mode needs an avatar; image mode needs an image (uploaded, pasted or wired). A wired input counts as satisfied even before it has produced anything.
+
+Picking a look on the card writes exactly what the settings-panel picker writes (avatar id, name, preview, Avatar V support, the look's default voice when you have not chosen one, and the aspect ratio that matches its orientation). On an install without a HeyGen key, the featured row shows the same "Add a HeyGen key or connect nodaro.ai…" notice as the pickers; a workflow authored elsewhere still shows its configured avatar and voice from the node's own data.
+
 ## Selecting an Avatar and Voice
 
 The config panel includes two rich pickers:
@@ -30,6 +45,8 @@ The config panel includes two rich pickers:
 - **Voice picker** (text mode only) — searchable list of all available HeyGen voices with language and accent filters. Click the preview icon to hear a sample before selecting.
 
 Both pickers return empty when HeyGen is not configured for the deployment; an "HeyGen API not configured" notice appears in that case.
+
+**The catalogs load progressively.** HeyGen serves its ≈7,000 photo-avatar looks in ≈140 pages (plus ≈2,500 voices in one slow call), and a cold server cache takes about a minute and a half to fill — you never wait for that. The server starts filling at boot, answers with the pages it already has, the pickers (and the on-node quick pick) render them at once, and the counter reads `N avatars · loading more…` until the list is whole. Pick as soon as you see what you want; the rest keeps arriving behind it — and only the *new* pages cross the wire on each poll (the browser asks for what it does not have yet), so a big catalog never re-downloads. Once filled, the catalog is served from memory (and refreshed in the background when it goes stale), so later opens are instant.
 
 ## Configuration
 

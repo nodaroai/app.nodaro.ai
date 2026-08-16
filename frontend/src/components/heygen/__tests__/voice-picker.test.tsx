@@ -12,9 +12,14 @@ import {
 // ---------------------------------------------------------------------------
 // Mock @/lib/api
 // ---------------------------------------------------------------------------
+// The picker reads the catalog through heygen-catalog.ts, which calls the
+// progressive fetcher (`{ items, complete }`). The mock keeps returning arrays
+// and wraps them as a whole answer.
 const mockGetHeygenVoices = vi.fn()
 vi.mock("@/lib/api", () => ({
+  getHeygenAvatarCatalog: vi.fn(),
   getHeygenAvatars: vi.fn(),
+  getHeygenVoiceCatalog: async (...args: unknown[]) => ({ items: await mockGetHeygenVoices(...args), complete: true }),
   getHeygenVoices: (...args: unknown[]) => mockGetHeygenVoices(...args),
 }))
 

@@ -20,6 +20,8 @@ import type { AiAvatarData } from "@/types/nodes"
 import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { AiAvatarSetupBody } from "./ai-avatar/ai-avatar-setup-body"
+import { AiAvatarNewRunToggle } from "./ai-avatar/new-run-toggle"
 
 const ACCEPTS_SCRIPT = (t: string) => isValidAiAvatarConnection("script", t, isVisualPickerType)
 const ACCEPTS_AUDIO  = (t: string) => isValidAiAvatarConnection("audio",  t, isVisualPickerType)
@@ -53,6 +55,15 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
+  // The strip's "New run" hides the results and brings the setup card back
+  // (start fresh: pick another look, change the text…); a second click
+  // restores the results. Nothing runs either way — the run is the strip's
+  // Run. Any run that starts drops back to the result view (spinner, then
+  // the new version on top of the earlier ones).
+  const [setupMode, setSetupMode] = useState(false)
+  useEffect(() => {
+    if (status === "running") setSetupMode(false)
+  }, [status])
 
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
@@ -147,7 +158,15 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         topToolbarContent={
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"}>
+            {activeUrl && (
+              <AiAvatarNewRunToggle
+                active={setupMode}
+                onToggle={() => setSetupMode((v) => !v)}
+                disabled={status === "running"}
+              />
+            )}
+          </NodeQuickStrip>
         }
         handles={[
           { id: "image",  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 88px)", left: "-29px" }, external: true },
@@ -156,8 +175,8 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
           { id: "video",  type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
       >
-        {/* Video result view */}
-        {status !== "running" && activeUrl ? (
+        {/* Video result view (unless the setup card was brought back over it) */}
+        {status !== "running" && activeUrl && !setupMode ? (
           <div className="relative w-full h-full group/video">
             <video
               ref={videoRef}
@@ -176,19 +195,33 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               playsInline
             />
 
-            {/* Non-fatal notice (e.g. audio trimmed to the 600s cap). Amber,
-                distinct from the red failed-state error — the clip is valid. */}
-            {warningMessage && (
+            {/* A LATER run failed while an earlier version is on show: say so
+                over the video (the toast alone was easy to miss). The retry is
+                the strip's Run; earlier versions stay. */}
+            {status === "failed" ? (
+              <div
+                className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 pl-2 pr-1.5 py-1 bg-red-600/90 backdrop-blur-sm text-white text-[10px] rounded-md shadow-sm"
+                role="alert"
+                data-testid="ai-avatar-failed-banner"
+              >
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span className="leading-snug line-clamp-2 flex-1 min-w-0" title={nodeData.errorMessage || undefined}>
+                  {nodeData.errorMessage?.trim() ? `Last run failed · ${nodeData.errorMessage.trim()}` : "Last run failed"}
+                </span>
+              </div>
+            ) : warningMessage ? (
+              /* Non-fatal notice (e.g. audio trimmed to the 600s cap). Amber,
+                 distinct from the red failed-state error — the clip is valid. */
               <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[10px] rounded-md shadow-sm">
                 <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
                 <span className="leading-snug line-clamp-3">{warningMessage}</span>
               </div>
-            )}
+            ) : null}
 
             {/* Version badge */}
             {results.length > 1 && (
               <button type="button"
-                className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity"
+                className={`absolute ${status === "failed" ? "top-11" : "top-2"} left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity`}
                 onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
                 title="Show versions">
                 <LayoutGrid className="w-3 h-3" />
@@ -198,7 +231,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Delete */}
             {results.length > 0 && (
-              <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+              <div className={`absolute ${status === "failed" ? "top-11" : "top-2"} right-2 opacity-0 group-hover/video:opacity-100 transition-opacity`}>
                 <button type="button" aria-label="Remove result"
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
@@ -248,47 +281,23 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-2 h-full">
-            {/* Placeholder body — avatar/voice pickers added in Phase 6 */}
-            {status !== "running" && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 py-4 text-muted-foreground/60">
-                {avatarSource === "image" && nodeData.imageUrl ? (
-                  <CachedImage
-                    src={nodeData.imageUrl}
-                    alt="Source image"
-                    className="max-h-24 w-auto rounded-lg object-contain"
-                    thumbnail
-                    thumbnailWidth={256}
-                  />
-                ) : avatarSource === "image" ? (
-                  <ImageIcon className="w-8 h-8" />
-                ) : (
-                  <UserRound className="w-8 h-8" />
-                )}
-                <span className="text-[10px] text-center">
-                  {avatarSource === "image"
-                    ? speechMode === "text"
-                      ? "Wire/upload an image + voice + script"
-                      : "Wire/upload an image + wire audio"
-                    : speechMode === "text"
-                      ? "Configure avatar + voice + script"
-                      : "Configure avatar + wire audio"}
-                </span>
-              </div>
+            {/* Idle interior: avatar quick pick / image upload → configured
+                look + voice + script → readiness bar (see ai-avatar/). After a
+                FAILED run with nothing earlier to show, the same card stays
+                editable and its status bar turns red with the error + Run again. */}
+            {status !== "running" && (
+              <AiAvatarSetupBody
+                nodeId={id}
+                data={nodeData}
+                failed={status === "failed"}
+                failureMessage={nodeData.errorMessage}
+              />
             )}
 
             {status === "running" && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
                 <NodeJobProgress progress={nodeData.currentJobProgress} />
-              </div>
-            )}
-
-            {status === "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
-                <AlertCircle className="w-6 h-6" />
-                {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
-                )}
               </div>
             )}
           </div>
