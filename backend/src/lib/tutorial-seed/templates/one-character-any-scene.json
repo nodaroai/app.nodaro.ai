@@ -1,0 +1,423 @@
+{
+  "slug": "one-character-any-scene",
+  "name": "One Character, Any Scene — Without Masks or Training",
+  "description": "Two source images — one generated, one uploaded — and five one-line prompts that mix them: face from one, body from the other; swap the order; keep the stage, change the star; move her off the runway into the studio; borrow the jacket and the setting. No masks, no inpainting, no LoRA — just {image:1:person}, {image:2:face}, {image:2:settings} in the prompt.",
+  "markdownDescription": "# One Character, Any Scene — Without Masks or Training\n\nFive results from **two source images** and five short prompts. Nothing else: no masks, no inpainting, no LoRA, no character training.\n\n## The two sources\n1. **The star** — a generated image (GPT Image 2, 2K, 16:9): a supermodel on the runway.\n2. **The reference** — an uploaded photo: her face, her jacket, her studio.\n\nBoth feed the **References** input of every result node. In the prompt you address them by position — `{image:1}` is the first reference, `{image:2}` the second — and you name the *part* you want with a role word after the colon: `person`, `face`, `background`, `settings`, `jacket`.\n\n## The five combinations\n| Result | Prompt | What it shows |\n|---|---|---|\n| Face from one. Body from the other. | `{image:1:person} with {image:2:face}` | Compose one identity from two people |\n| Swap the order. Swap the result. | `{image:2:person} with {image:1:face}` | Position is meaning — reverse it and the roles flip |\n| Keep the stage. Change the star. | `{image:1:background} with {image:2:person}` | Take only the setting from a reference |\n| Off the runway, into the studio | `{image:1:person} in {image:2:settings}` | Move a character into another scene |\n| Her jacket. Her studio. Your model. | `{image:1:person} wearing {image:2:jacket} at {image:2:settings}` | Borrow one garment + the place, keep the person |\n\n## Make it yours\nSwap the uploaded reference for your own photo (or the star for your own character), keep the prompts, run all five. Works with GPT Image 2 and Nano Banana Pro — both are used here.\n\n## Tips\n- Say what you want to take from each reference — a role word (`face`, `jacket`, `background`) beats a long description.\n- Order matters: `{image:1}` / `{image:2}` follow the order the references were connected — check the References list on the node before rewriting a prompt.\n- One thing per role; the model resolves the rest.\n",
+  "category": "image-generation",
+  "outputTypes": [
+    "image"
+  ],
+  "tags": [
+    "character-consistency",
+    "multi-reference",
+    "image-references",
+    "gpt-image-2",
+    "nano-banana-pro",
+    "no-masks",
+    "scene-transfer",
+    "outfit-swap",
+    "tutorial"
+  ],
+  "complexity": "intermediate",
+  "previewMediaUrl": "https://cdn.nodaro.ai/images/a1b1f9cd-ab79-483d-ad10-3c6e226339fd.png",
+  "previewMediaType": "image",
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 3,
+  "nodes": [
+    {
+      "id": "node_1",
+      "data": {
+        "label": "THE STAR. ONE PROMPT, ONE RUNWAY.",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "A stunning supermodel walks confidently down a high-fashion runway, with elegant posture, graceful natural movement, and a captivating presence. Her long hair moves subtly with each step, her expression poised and self-assured, and her refined runway walk commands the attention of the audience.",
+        "provider": "gpt-image-2",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/063f5328-685f-47db-ab43-c556e3409e30.png",
+            "jobId": "063f5328-685f-47db-ab43-c556e3409e30",
+            "width": 320,
+            "height": 180,
+            "timestamp": "2026-08-14T14:51:57.345Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/063f5328-685f-47db-ab43-c556e3409e30.png"
+      },
+      "type": "generate-image",
+      "width": 654.2222222222222,
+      "height": 590,
+      "measured": {
+        "width": 654,
+        "height": 590
+      },
+      "parentId": "frame-sources",
+      "position": {
+        "x": 70,
+        "y": 190
+      }
+    },
+    {
+      "id": "node_9",
+      "data": {
+        "label": "Face from one. Body from the other.",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "{image:1:person} with {image:2:face} ",
+        "provider": "gpt-image-2",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/4a0f0cfa-fe18-406b-974a-d7e25ea4ac5a.png",
+            "jobId": "4a0f0cfa-fe18-406b-974a-d7e25ea4ac5a",
+            "width": 2048,
+            "height": 1158,
+            "timestamp": "2026-08-16T12:55:30.730Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/4a0f0cfa-fe18-406b-974a-d7e25ea4ac5a.png"
+      },
+      "type": "generate-image",
+      "width": 650.8324697754749,
+      "height": 494,
+      "measured": {
+        "width": 651,
+        "height": 494
+      },
+      "parentId": "frame-scenes",
+      "position": {
+        "x": 174,
+        "y": 190
+      }
+    },
+    {
+      "id": "node_11",
+      "data": {
+        "label": "SWAP THE ORDER. SWAP THE RESULT.",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "{image:2:person} with {image:1:face} ",
+        "provider": "gpt-image-2",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/a1b1f9cd-ab79-483d-ad10-3c6e226339fd.png",
+            "jobId": "a1b1f9cd-ab79-483d-ad10-3c6e226339fd",
+            "width": 2048,
+            "height": 1152,
+            "timestamp": "2026-08-16T12:57:44.291Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/a1b1f9cd-ab79-483d-ad10-3c6e226339fd.png"
+      },
+      "type": "generate-image",
+      "width": 654.2222222222222,
+      "height": 494,
+      "measured": {
+        "width": 654,
+        "height": 494
+      },
+      "parentId": "frame-scenes",
+      "position": {
+        "x": 160,
+        "y": 864
+      }
+    },
+    {
+      "id": "node_12",
+      "data": {
+        "url": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76.png",
+        "label": "THE REFERENCE. HER FACE, HER JACKET, HER STUDIO.",
+        "r2Url": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76.png",
+        "assetId": "28dfce42-90c0-4fc1-a10e-d5dd95e83f70",
+        "fileSize": 2159499,
+        "filename": "58f02584-68e8-4e38-be57-4917181b65bc.png",
+        "metadata": {
+          "width": 1672,
+          "format": "png",
+          "height": 941
+        },
+        "mimeType": "image/png",
+        "externalUrl": "",
+        "thumbnailUrl": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76_thumb.png",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76.png",
+            "jobId": "upload-1786884802425",
+            "width": 1672,
+            "height": 941,
+            "timestamp": "2026-08-16T12:53:22.425Z",
+            "thumbnailUrl": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76_thumb.png"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/uploads/images/7372d6d1-b4cb-46de-8213-d7894c52fc76.png"
+      },
+      "type": "upload-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "measured": {
+        "width": 654,
+        "height": 368
+      },
+      "parentId": "frame-sources",
+      "position": {
+        "x": 70,
+        "y": 1120
+      }
+    },
+    {
+      "id": "node_14",
+      "data": {
+        "label": "KEEP THE STAGE. CHANGE THE STAR",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "{image:1:background} with {image:2:person} ",
+        "provider": "nano-banana-pro",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/7331a042-829d-4c42-85f3-850b6abbdd34.png",
+            "jobId": "7331a042-829d-4c42-85f3-850b6abbdd34",
+            "width": 2048,
+            "height": 1143,
+            "timestamp": "2026-08-16T13:06:39.748Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/7331a042-829d-4c42-85f3-850b6abbdd34.png"
+      },
+      "type": "generate-image",
+      "width": 659.3735783027122,
+      "height": 494,
+      "measured": {
+        "width": 659,
+        "height": 494
+      },
+      "parentId": "frame-scenes",
+      "position": {
+        "x": 165,
+        "y": 1463
+      }
+    },
+    {
+      "id": "node_15",
+      "data": {
+        "label": "OFF THE RUNWAY, INTO THE STUDIO",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "{image:1:person} in {image:2:settings} ",
+        "provider": "nano-banana-pro",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/527f0c25-7cb7-4e1c-ac0c-e200dc479c55.png",
+            "jobId": "527f0c25-7cb7-4e1c-ac0c-e200dc479c55",
+            "width": 2048,
+            "height": 1143,
+            "timestamp": "2026-08-16T14:02:18.808Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/527f0c25-7cb7-4e1c-ac0c-e200dc479c55.png"
+      },
+      "type": "generate-image",
+      "width": 765.071579452376,
+      "height": 552.9906324775711,
+      "measured": {
+        "width": 765,
+        "height": 553
+      },
+      "parentId": "frame-scenes",
+      "position": {
+        "x": 170,
+        "y": 2082
+      }
+    },
+    {
+      "id": "node_16",
+      "data": {
+        "label": "HER JACKET. HER STUDIO. YOUR MODEL",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "{image:1:person} Wearing {image:2:jacket}  on top ,at{image:2:settings} ",
+        "provider": "gpt-image-2",
+        "resolution": "2K",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/512330ca-3d8f-40fa-9859-49ebcdf77650.png",
+            "jobId": "512330ca-3d8f-40fa-9859-49ebcdf77650",
+            "width": 2048,
+            "height": 1158,
+            "timestamp": "2026-08-16T14:09:01.816Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/512330ca-3d8f-40fa-9859-49ebcdf77650.png"
+      },
+      "type": "generate-image",
+      "width": 757.4913790130479,
+      "height": 554.3081137192917,
+      "measured": {
+        "width": 757,
+        "height": 554
+      },
+      "parentId": "frame-scenes",
+      "position": {
+        "x": 170,
+        "y": 2735
+      }
+    },
+    {
+      "id": "frame-sources",
+      "data": {
+        "color": "#22D3EE40",
+        "label": "2 sources"
+      },
+      "type": "group",
+      "width": 1189,
+      "height": 1588,
+      "measured": {
+        "width": 1189,
+        "height": 1588
+      },
+      "position": {
+        "x": 353,
+        "y": 1106
+      }
+    },
+    {
+      "id": "frame-scenes",
+      "data": {
+        "color": "#ff007340",
+        "label": "5 combinations"
+      },
+      "type": "group",
+      "width": 1321,
+      "height": 3389,
+      "measured": {
+        "width": 1321,
+        "height": 3389
+      },
+      "position": {
+        "x": 1753,
+        "y": 222
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1786884105103",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_9",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786884510632",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_11",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786884821402",
+      "type": "default",
+      "source": "node_12",
+      "target": "node_9",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786884844799",
+      "type": "default",
+      "source": "node_12",
+      "target": "node_11",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786885336073",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_14",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786885338842",
+      "type": "default",
+      "source": "node_12",
+      "target": "node_14",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786885692662",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_15",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786885695390",
+      "type": "default",
+      "source": "node_12",
+      "target": "node_15",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786888975042",
+      "type": "default",
+      "source": "node_1",
+      "target": "node_16",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786888977426",
+      "type": "default",
+      "source": "node_12",
+      "target": "node_16",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 320,
+      "y": 300,
+      "zoom": 0.14
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}
