@@ -18,6 +18,10 @@ const cloudMocks = vi.hoisted(() => ({
   maybeProxyLlmRouteToCloud: vi.fn<(req: unknown, reply: { status: (c: number) => { send: (b: unknown) => unknown } }, path: string) => Promise<boolean>>(async () => false),
 }))
 vi.mock("../../lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: cloudMocks.maybeProxyLlmRouteToCloud }))
+// Re-hosting for the image-candidate hooks — never a real upload here.
+vi.mock("../../providers/nodaro/client.js", () => ({
+  ensureCloudReachableMediaUrl: vi.fn(async (u: string | undefined) => u),
+}))
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
@@ -107,8 +111,46 @@ describe("POST /v1/reduce — the AI judge on the nodaro.ai connection", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({ jobId: "cloud-job", output: "B" })
-    expect(cloudMocks.maybeProxyLlmRouteToCloud).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/v1/reduce")
+    // The 4th argument labels the mirrored local row exactly like the route's
+    // own insert (`buildJobInputData(..., "reduce")`); text candidates need
+    // no hooks (5th argument undefined).
+    expect(cloudMocks.maybeProxyLlmRouteToCloud).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/v1/reduce", "reduce", undefined)
     expect(dispatchStrategy).not.toHaveBeenCalled()
+  })
+
+  it("hands the proxy hooks for IMAGE candidates: re-host each for the judge, answer with the caller's original url", async () => {
+    // Regression: `http://localhost:3002/storage/...` candidates went to the
+    // cloud as-is; the judge fetched nothing and said "both candidates are
+    // empty" (or failed with "fetch failed"). The proxy's by-name media walk
+    // cannot see that `inputs` are pictures — the route must say so.
+    const { reduceProxyHooks } = await import("../reduce.js")
+    const { ensureCloudReachableMediaUrl } = await import("../../providers/nodaro/client.js")
+    vi.mocked(ensureCloudReachableMediaUrl).mockImplementation(async (u: string | undefined) =>
+      u && u.startsWith("http://localhost") ? u.replace("http://localhost:3002/storage", "https://cloud.example/up") : u,
+    )
+    const body = {
+      strategyId: "pick-best-llm",
+      strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
+      inputs: ["http://localhost:3002/storage/a.png", "", "https://public.example/c.png"],
+    }
+    const hooks = reduceProxyHooks(body)!
+    expect(hooks).toBeDefined()
+
+    // prepareBody: every candidate re-hosted in place, order kept, empties kept
+    // (the strategy's selectedIndex is an ORIGINAL index).
+    const prepared = (await hooks.prepareBody!({ ...body })) as { inputs: string[] }
+    expect(prepared.inputs).toEqual(["https://cloud.example/up/a.png", "", "https://public.example/c.png"])
+
+    // mapAnswer: the winner is the caller's own url, by selectedIndex.
+    expect(hooks.mapAnswer!({ output: "https://cloud.example/up/a.png", meta: { selectedIndex: 0 } }))
+      .toEqual({ output: "http://localhost:3002/storage/a.png", meta: { selectedIndex: 0 } })
+    // No usable index → the answer passes through untouched.
+    const noIdx = { output: "x", meta: { reasoning: "?" } }
+    expect(hooks.mapAnswer!(noIdx)).toBe(noIdx)
+
+    // Text candidates: no hooks at all — nothing is re-hosted, nothing mapped.
+    expect(reduceProxyHooks({ ...body, strategyConfig: { criteria: "x", inputKind: "text" } })).toBeUndefined()
+    expect(reduceProxyHooks({ strategyId: "concat", inputs: ["a"] })).toBeUndefined()
   })
 
   it("never forwards a local strategy (concat) — no LLM in it, nothing for the cloud to add", async () => {

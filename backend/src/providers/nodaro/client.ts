@@ -15,6 +15,7 @@
 import { Agent } from "undici"
 import { nodaroCloudFetch, getNodaroConnection, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
+import { r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
 import type { ProgressCallback } from "../provider.interface.js"
 
 /** Poll every 2s for the first few attempts, then 4s (spec: 2-4s interval). */
@@ -350,6 +351,48 @@ function uploadNameFor(mime: string): string {
   return kind === "video" ? "clip.mp4" : kind === "audio" ? "audio.mp3" : "frame.png"
 }
 
+const tooLarge = (bytes: number): NodaroCloudError =>
+  new NodaroCloudError(
+    `nodaro.ai: media is too large to send to the cloud (${Math.round(bytes / 1_000_000)} MB; limit ${MAX_REHOST_BYTES / 1_000_000} MB)`,
+  )
+
+/**
+ * The bytes of one of OUR media urls, for the re-host upload.
+ *
+ * Through the storage client first: this code runs INSIDE the app container,
+ * where the install's public origin often does not resolve (a remapped host
+ * port, a domain behind a proxy, split-horizon DNS) — `fetch("http://
+ * localhost:3002/storage/…")` from within died with ECONNREFUSED on a
+ * healthy install (2026-08-16), while `R2_ENDPOINT` (`http://minio:9000`)
+ * always answers in there. The plain fetch of the public url stays as the
+ * fallback for media served under PUBLIC_URL by something other than the
+ * bucket (deliberately not safe-fetch: our storage is on a private host by
+ * design). Bounded either way — a multi-GB clip would otherwise be read fully
+ * into memory and take the process down before the cloud ever refused it.
+ */
+async function readOwnMedia(url: string): Promise<{ buffer: Buffer; mime: string }> {
+  const key = r2KeyFromOurUrl(url)
+  if (key) {
+    const obj = await readR2Object(key, { maxBytes: MAX_REHOST_BYTES })
+    if (obj) {
+      if (obj.size !== null && obj.size > MAX_REHOST_BYTES) throw tooLarge(obj.size)
+      return { buffer: obj.body, mime: obj.contentType?.split(";")[0] ?? "application/octet-stream" }
+    }
+  }
+
+  const local = await fetch(url)
+  if (!local.ok) {
+    throw new NodaroCloudError(
+      `nodaro.ai: failed to read local media for cloud upload (${local.status})`,
+    )
+  }
+  const declared = Number(local.headers.get("content-length") ?? "0")
+  if (declared > MAX_REHOST_BYTES) throw tooLarge(declared)
+  const buffer = Buffer.from(await local.arrayBuffer())
+  if (buffer.length > MAX_REHOST_BYTES) throw tooLarge(buffer.length)
+  return { buffer, mime: local.headers.get("content-type")?.split(";")[0] ?? "application/octet-stream" }
+}
+
 /**
  * Pass public URLs through untouched; re-host instance-local ones.
  *
@@ -363,7 +406,7 @@ export async function ensureCloudReachableMediaUrl(url: string | undefined): Pro
 export async function ensureCloudReachableMediaUrl(url: string | undefined): Promise<string | undefined> {
   if (!url || !isCloudUnreachableUrl(url)) return url
 
-  // Only our own storage gets the plain-fetch treatment (see instanceMediaOrigins).
+  // Only our own storage is read and re-hosted (see instanceMediaOrigins).
   if (!isOurMediaUrl(url)) {
     throw new NodaroCloudError(
       "nodaro.ai: that media lives on a host the cloud can't reach and this " +
@@ -371,36 +414,14 @@ export async function ensureCloudReachableMediaUrl(url: string | undefined): Pro
     )
   }
 
-  // Plain fetch on purpose: our storage often sits on a private host, which
-  // the safe-fetch guard would reject by design.
-  const local = await fetch(url)
-  if (!local.ok) {
-    throw new NodaroCloudError(
-      `nodaro.ai: failed to read local media for cloud upload (${local.status})`,
-    )
-  }
-  // Bound the buffer: a multi-GB clip would otherwise be read fully into
-  // memory and take the worker down before the cloud ever refused it.
-  const declared = Number(local.headers.get("content-length") ?? "0")
-  if (declared > MAX_REHOST_BYTES) {
-    throw new NodaroCloudError(
-      `nodaro.ai: media is too large to send to the cloud (${Math.round(declared / 1_000_000)} MB; limit ${MAX_REHOST_BYTES / 1_000_000} MB)`,
-    )
-  }
-  const buffer = Buffer.from(await local.arrayBuffer())
-  if (buffer.length > MAX_REHOST_BYTES) {
-    throw new NodaroCloudError(
-      `nodaro.ai: media is too large to send to the cloud (${Math.round(buffer.length / 1_000_000)} MB; limit ${MAX_REHOST_BYTES / 1_000_000} MB)`,
-    )
-  }
-  const mime = local.headers.get("content-type")?.split(";")[0] ?? "application/octet-stream"
+  const { buffer, mime } = await readOwnMedia(url)
 
   const conn = await getNodaroConnection()
   if (!conn?.accessToken) {
     throw new NodaroCloudError("nodaro.ai is not connected")
   }
   const form = new FormData()
-  form.append("file", new Blob([buffer], { type: mime }), uploadNameFor(mime))
+  form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), uploadNameFor(mime))
   const res = await fetch(`${nodaroCloudBase()}/v1/upload`, {
     method: "POST",
     headers: { Authorization: `Bearer ${conn.accessToken}` },

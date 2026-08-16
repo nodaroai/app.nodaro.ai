@@ -69,6 +69,6 @@ describe("LLM routes on a connected keyless install", () => {
     const src = readFileSync(resolve(ROUTES_DIR, "reduce.ts"), "utf8")
     // The decision reads the strategy's own usesLlm flag, not its name.
     expect(src).toMatch(/getStrategy\([^)]*\)\.usesLlm/)
-    expect(src).toContain('maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce")')
+    expect(src).toContain('maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce", "reduce", reduceProxyHooks(req.body))')
   })
 })

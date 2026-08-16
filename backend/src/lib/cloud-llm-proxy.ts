@@ -12,12 +12,34 @@
  * (`/v1/characters/:id/llm-caption` and friends) read and write rows in THIS
  * database — the id means nothing on the cloud — so they are deliberately not
  * proxied; see the note at the bottom of this file.
+ *
+ * "Same body" has one carve-out, and "same response" one addition — both
+ * because a job lives in exactly one database:
+ *
+ * - The body may name rows of THIS instance: `workflowId` (the orchestrator
+ *   attributes a node's job to its workflow), `nodeId`, `userId`. Forwarded
+ *   verbatim, the cloud's own `insertJob(... workflow_id ...)` hits a foreign
+ *   key for a workflow it has never seen and the whole call dies as a 500 —
+ *   how Choose Best inside a workflow failed on a connected install
+ *   (2026-08-16), while the very same node run standalone worked. Those keys
+ *   are stripped before forwarding and kept here, on the mirror row below.
+ * - The cloud answers with ITS `jobId`. Everything downstream — the
+ *   orchestrator's `pollJobToCompletion`, `GET /v1/jobs/:id`, the SDK, the
+ *   execution history — resolves a jobId in THIS database, so a foreign id
+ *   surfaces as "Job … not found". The proxy therefore mirrors the finished
+ *   cloud job as a local `completed` row (same model as the vendor-direct
+ *   relay in workers/handlers/cloud-video-relay.ts: `viaNodaroCloud: true`)
+ *   and rewrites the response's `jobId` to it. The row's `output_data` IS the
+ *   cloud response, so `buildNodeOutputFromJobData` reads the poll path and
+ *   the sync path identically.
  */
 
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { config } from "./config.js"
 import { getNodaroConnection, nodaroCloudBase } from "./nodaro-connect.js"
-import { ensureCloudReachableMediaUrl } from "../providers/nodaro/client.js"
+import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
+import { insertJob } from "./insert-job.js"
+import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request-helpers.js"
 
 /**
  * True when nothing local can serve an LLM call and the cloud can.
@@ -29,6 +51,24 @@ export async function shouldProxyLlmToCloud(): Promise<boolean> {
   if (config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY) return false
   const conn = await getNodaroConnection().catch(() => null)
   return Boolean(conn?.accessToken)
+}
+
+/**
+ * Body keys that name rows or identities of THIS instance. `workflowId` is a
+ * foreign key into the local `workflows` table (the cloud's insert fails on
+ * it), `nodeId` names a node inside that workflow, `userId` is the
+ * orchestrator's identity channel — the cloud attributes to the connection.
+ * Read by the same `request-helpers` accessors the routes use, so the two
+ * cannot drift apart. `forcePrivate` is a preference, not an id — it travels.
+ */
+export const INSTANCE_LOCAL_BODY_KEYS = ["workflowId", "nodeId", "userId"] as const
+
+/** The forwarded body: everything except the instance-local keys. */
+export function stripInstanceLocalKeys(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body
+  const rest = { ...(body as Record<string, unknown>) }
+  for (const key of INSTANCE_LOCAL_BODY_KEYS) delete rest[key]
+  return rest
 }
 
 /** Field names whose values are media URLs — matched on the NAME so a prompt
@@ -72,18 +112,98 @@ async function rehostBodyMedia(body: unknown, depth = 0): Promise<unknown> {
 }
 
 /**
+ * Route-owned adjustments around the forward. The proxy knows bodies and
+ * answers only by shape; a route knows what its fields MEAN.
+ *
+ * `prepareBody` runs only when the call is actually forwarded, after the
+ * instance-local keys are stripped and before the by-name media walk — the
+ * place for media the walk cannot recognise (reduce's `inputs` are pictures
+ * only when `strategyConfig.inputKind` says so; the cloud cannot fetch a
+ * private host, so unrehosted they judge nothing). `mapAnswer` runs on a
+ * finished 2xx JSON answer before it is mirrored and sent — e.g. to hand
+ * back the caller's ORIGINAL url for the winner rather than the cloud copy.
+ */
+export interface CloudProxyHooks {
+  prepareBody?: (body: unknown) => Promise<unknown> | unknown
+  mapAnswer?: (answer: Record<string, unknown>) => Record<string, unknown>
+}
+
+/**
+ * A finished cloud job, mirrored as a local `completed` row so its id resolves
+ * in THIS database. Returns the response body to send: the cloud's, with
+ * `jobId` rewritten to the local row. When the row cannot be written the
+ * answer still reaches the caller — minus the `jobId`, which would otherwise
+ * point at nothing here (the orchestrator then takes its no-job path).
+ * Anything that is not a 2xx JSON object carrying a string `jobId` passes
+ * through untouched.
+ */
+async function mirrorCloudJob(
+  req: FastifyRequest,
+  res: Response,
+  text: string,
+  jobType: string,
+  mapAnswer?: CloudProxyHooks["mapAnswer"],
+): Promise<string> {
+  if (!res.ok) return text
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return text
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return text
+  const { jobId: cloudJobId, ...rawAnswer } = parsed as Record<string, unknown>
+  if (typeof cloudJobId !== "string" || !cloudJobId) return text
+  const answer = mapAnswer ? mapAnswer(rawAnswer) : rawAnswer
+
+  const userId = req.userId
+  const now = new Date().toISOString()
+  const { data: job, error } = userId
+    ? await insertJob(req, {
+        user_id: userId,
+        // Local attribution — the very keys the cloud must not see.
+        workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
+        status: "completed",
+        provider: "nodaro",
+        started_at: now,
+        completed_at: now,
+        // Bounded on purpose: the cloud holds the real job (and the routes
+        // themselves keep e.g. reduce's 1000 inputs out of input_data).
+        input_data: { type: jobType, viaNodaroCloud: true, cloudJobId },
+        output_data: { ...answer, viaNodaroCloud: true, cloudJobId },
+      })
+    : { data: null, error: { message: "no local user on the request" } }
+
+  if (error || !job) {
+    req.log.error({ err: error, cloudJobId, jobType }, "[cloud-llm-proxy] could not mirror the cloud job locally")
+    return JSON.stringify({ ...answer, viaNodaroCloud: true, cloudJobId })
+  }
+  return JSON.stringify({ ...answer, jobId: job.id, viaNodaroCloud: true, cloudJobId })
+}
+
+/**
  * Forward this request to the cloud and mirror the response. Returns true when
  * it handled the request (the caller must then return immediately), false when
  * the caller should run its own local path.
  *
  * The cloud's status and body are passed through verbatim: a 402 for an empty
  * wallet, a 400 for a bad body and a 200 for the answer all reach the user
- * unchanged, so nothing has to be re-mapped or re-worded here.
+ * unchanged, so nothing has to be re-mapped or re-worded here. The one
+ * rewrite is the `jobId` of a finished job (see `mirrorCloudJob`).
+ *
+ * `jobType` labels the mirrored row (`input_data.type`) the way the route's
+ * own insert would — pass the same string the route gives
+ * `buildJobInputData`. `hooks` are the route's own adjustments (see
+ * `CloudProxyHooks`).
  */
 export async function maybeProxyLlmRouteToCloud(
   req: FastifyRequest,
   reply: FastifyReply,
   cloudPath: string,
+  jobType: string,
+  hooks: CloudProxyHooks = {},
 ): Promise<boolean> {
   if (!(await shouldProxyLlmToCloud())) return false
 
@@ -91,7 +211,9 @@ export async function maybeProxyLlmRouteToCloud(
   if (!conn?.accessToken) return false
 
   try {
-    const body = await rehostBodyMedia(req.body)
+    const stripped = stripInstanceLocalKeys(req.body)
+    const prepared = hooks.prepareBody ? await hooks.prepareBody(stripped) : stripped
+    const body = await rehostBodyMedia(prepared)
     // Stop the upstream call when the client goes away, exactly as the local
     // routes do — otherwise the cloud keeps generating, and billing, for an
     // answer nobody will read.
@@ -106,7 +228,7 @@ export async function maybeProxyLlmRouteToCloud(
       body: JSON.stringify(body ?? {}),
       signal: abort.signal,
     })
-    const text = await res.text()
+    const text = await mirrorCloudJob(req, res, await res.text(), jobType, hooks.mapAnswer)
     void reply
       .status(res.status)
       .header("content-type", res.headers.get("content-type") ?? "application/json")
@@ -114,6 +236,14 @@ export async function maybeProxyLlmRouteToCloud(
     return true
   } catch (err) {
     req.log.error({ err, cloudPath }, "[cloud-llm-proxy] forward failed")
+    // Media that could not be handed to the cloud (too large, on a host this
+    // install does not own, unreadable) is the user's to fix and the client
+    // says exactly what — pass that sentence on instead of blaming the
+    // connection.
+    if (err instanceof NodaroCloudError) {
+      void reply.status(502).send({ error: { code: "cloud_media_unavailable", message: err.message } })
+      return true
+    }
     void reply.status(502).send({
       error: {
         code: "cloud_unreachable",
@@ -142,7 +272,7 @@ export async function maybeProxyLlmStreamToCloud(
   if (!conn?.accessToken) return false
 
   try {
-    const body = await rehostBodyMedia(req.body)
+    const body = await rehostBodyMedia(stripInstanceLocalKeys(req.body))
     // Same abort contract as the local streaming routes: a closed tab must
     // stop the upstream generation, not just stop us reading it.
     const abort = new AbortController()

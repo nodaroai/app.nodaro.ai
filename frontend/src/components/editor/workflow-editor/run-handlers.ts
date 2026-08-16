@@ -1166,6 +1166,10 @@ interface NodeExecutionState {
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
     text?: string;
+    /** Fan-in (reduce / Choose Best) aggregated value. Mirrors backend NodeOutput. */
+    result?: string;
+    /** Reduce strategy meta beside `result` (selectedIndex / reasoning / summary). */
+    reduceMeta?: Record<string, unknown>;
     script?: unknown;
     generatedVoiceId?: string;
     alignment?: unknown;
@@ -1280,6 +1284,15 @@ function syncNodeStatesToStore(
         }
         if (state.output.splitResults)
           updates.splitResults = state.output.splitResults;
+        // Choose Best (reduce): the orchestrator reports the winner as
+        // `result` (+ the strategy's meta). Without this copy an Execute /
+        // Run-from-here run completed on the backend while the node kept
+        // saying "Run to see the result" — only the single-node Run (which
+        // writes `result` itself in execute-node.ts) ever painted it.
+        if (nodeType === "reduce" && typeof state.output.result === "string") {
+          updates.result = state.output.result;
+          if (state.output.reduceMeta) updates.lastMeta = state.output.reduceMeta;
+        }
         if (state.output.plan) {
           const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
           if (mapping) {

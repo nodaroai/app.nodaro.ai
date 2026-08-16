@@ -48,7 +48,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/scene-graph/generate")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/scene-graph/generate", "scene-graph-ai")) return
 
       req.raw.setTimeout(60000)
       reply.raw.setTimeout(60000)

@@ -23,6 +23,11 @@ export interface NodeOutput {
   text?: string
   /** Single aggregated output value (used by fan-in nodes like reduce). */
   result?: string
+  /** Reduce strategy metadata beside `result` — the AI judge's
+   *  `selectedIndex` / `reasoning` / `summary` (concat etc. carry `summary`
+   *  only). The canvas node shows the reasoning and highlights the winner from
+   *  it, exactly as the single-node Run does from the route response. */
+  reduceMeta?: Record<string, unknown>
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */

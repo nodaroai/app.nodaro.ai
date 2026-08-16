@@ -49,7 +49,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/3d-title/generate")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/3d-title/generate", "3d-title")) return
 
       req.raw.setTimeout(60000)
       reply.raw.setTimeout(60000)

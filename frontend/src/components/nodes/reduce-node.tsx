@@ -18,6 +18,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { REDUCE_STRATEGIES, LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import { REDUCE_INPUT_KIND_OPTIONS, reduceInputKindLabel } from "@/components/editor/config-panels/reduce-strategy-forms"
 import type { ReduceNodeData } from "@/types/nodes"
 
 /**
@@ -27,8 +28,9 @@ import type { ReduceNodeData } from "@/types/nodes"
  * AI judge picks a winner, or they are joined / counted / voted / merged.
  *
  * Body layout (design: "Choose Best Node - New Design"):
- *   head row   MODE chip (strategy) · AI Model chip (judge, AI mode only)
- *              · "N arrived · Texts/Images" count
+ *   head row   MODE chip (strategy) · AI Model chip · Texts/Images chip
+ *              (what the judge is handed — both AI mode only)
+ *              · "N arrived" count
  *   body       the mode's one headline setting (Judge by / Separator / …)
  *              read-only on the node — edited in the side panel — then the
  *              CANDIDATES grid (thumbnails for image URLs, clamped text
@@ -154,8 +156,9 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, { strategyConfig: { ...strategyConfig, [field]: value } })
   }
 
+  // The kind is now its own chip (AI mode) — the count no longer repeats it.
   const countLabel = arrived
-    ? `${arrived} arrived · ${inputKind === "image-url" ? "Images" : "Texts"}`
+    ? isAI ? `${arrived} arrived` : `${arrived} arrived · ${reduceInputKindLabel(inputKind)}`
     : null
   const chosenLabel =
     selectedIndex !== undefined && arrived ? `Chose #${selectedIndex + 1} of ${arrived}` : null
@@ -216,6 +219,27 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                       <span className="flex flex-col gap-0.5">
                         <span>{m.displayName}</span>
                         <span className="text-[10px] leading-tight text-muted-foreground/70">{m.desc}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {isAI && (
+              // What the judge is handed. Lived only in the side panel, so a
+              // node fed two images stayed on the default "Texts" and the AI
+              // compared their links — a pick that looked real and wasn't.
+              // Same list as the panel (REDUCE_INPUT_KIND_OPTIONS).
+              <Select value={inputKind} onValueChange={(v) => setSettingField("inputKind", v)}>
+                <SelectTrigger className={chipTriggerClass} aria-label="The candidates are" title="The candidates are">
+                  <SelectValue>{reduceInputKindLabel(inputKind)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent className="node-menu-surface">
+                  {REDUCE_INPUT_KIND_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">
+                      <span className="flex flex-col gap-0.5">
+                        <span>{o.label}</span>
+                        <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
                       </span>
                     </SelectItem>
                   ))}

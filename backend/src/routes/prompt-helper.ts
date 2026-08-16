@@ -117,7 +117,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/prompt-helper/wizard")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/prompt-helper/wizard", "prompt-wizard")) return
 
       const parsed = wizardBody.safeParse(req.body)
       if (!parsed.success) {

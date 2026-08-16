@@ -35,7 +35,7 @@ Sends the candidates to an AI judge with your criteria. The judge replies with t
 **Config:**
 - **AI Model** — the judge. The same model selector every LLM node has (Economy / Standard / Premium tiers, with descriptions). Default: the Standard-tier default for this feature. Stored as `strategyConfig.llmModel`; the API / MCP / SDK take the same field (any id from the LLM model registry; an unknown id is a 400 before any credits reserve).
 - **Judge by** — describe what a winner looks like. Example: "The most eye-catching cover for a dark editorial Instagram feed — one clear focal point, readable as a thumbnail."
-- **The candidates are** — Texts (default) or Images (the judge sees the images via URL).
+- **The candidates are** — Texts (default) or Images. Set it on the node (the chip next to the model) or in the side panel — same field (`strategyConfig.inputKind`). **Pick Images when the candidates are pictures**: on Texts the judge is handed the image *links* as text and compares those, which reads like a real pick and is not one.
 
 **Pricing** follows the chosen judge model's tier, exactly like every other LLM node (`buildLlmCreditIdentifier` over the feature id `reduce:pick-best-llm`):
 

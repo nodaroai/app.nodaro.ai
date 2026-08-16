@@ -170,9 +170,32 @@ describe("ReduceNode", () => {
     })
   })
 
-  it("shows the arrived count with the candidate kind", () => {
+  it("renders the Texts/Images chip ONLY in AI mode and writes strategyConfig.inputKind", () => {
+    // Regression: the kind lived only in the side panel — a node fed two
+    // images stayed on the default Texts and the AI compared their links.
+    renderNode({ data: { label: "Choose Best", strategyId: "concat", strategyConfig: {} } })
+    expect(selectWithOption("image-url")).toBeUndefined()
+
+    cleanup()
+    renderNode({ data: { label: "Choose Best", strategyId: "pick-best-llm", strategyConfig: { criteria: "best", inputKind: "text" } } })
+    const kind = selectWithOption("image-url")
+    expect(kind).toBeDefined()
+    expect(kind!.value).toBe("text")
+    fireEvent.change(kind!, { target: { value: "image-url" } })
+    expect(updateNodeDataMock).toHaveBeenCalledWith("C1", {
+      strategyConfig: { criteria: "best", inputKind: "image-url" },
+    })
+  })
+
+  it("shows the arrived count (the kind is the chip in AI mode, part of the count otherwise)", () => {
     renderNode({
       data: { label: "Choose Best", strategyId: "pick-best-llm", strategyConfig: { inputKind: "image-url" }, __upstreamCount: 5 },
+    })
+    expect(screen.getByText("5 arrived")).toBeInTheDocument()
+
+    cleanup()
+    renderNode({
+      data: { label: "Choose Best", strategyId: "concat", strategyConfig: { inputKind: "image-url" }, __upstreamCount: 5 },
     })
     expect(screen.getByText("5 arrived · Images")).toBeInTheDocument()
   })
@@ -259,7 +282,9 @@ describe("ReduceNode", () => {
     expect(document.querySelectorAll("[data-winner]")).toHaveLength(1)
     expect(screen.getByText("Chose #2 of 3")).toBeInTheDocument()
     expect(screen.getByText("Strongest focal point.")).toBeInTheDocument()
-    expect(screen.getByText("3 arrived · Images")).toBeInTheDocument()
+    // AI mode: the kind is the head-row chip, the count stands alone.
+    expect(screen.getByText("3 arrived")).toBeInTheDocument()
+    expect(selectWithOption("image-url")!.value).toBe("image-url")
   })
 
   it("renders text candidates and a text output; no WINNER tag without a selectedIndex", () => {

@@ -95,7 +95,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-suggest-description")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-suggest-description", "llm-suggest-description")) return
 
       if (!req.userId) {
         return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { REDUCE_STRATEGY_IDS, LLM_MODEL_IDS, buildLlmCreditIdentifier, getStrategy, type ReduceStrategyId } from "@nodaro/shared"
-import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
+import { maybeProxyLlmRouteToCloud, type CloudProxyHooks } from "../lib/cloud-llm-proxy.js"
+import { ensureCloudReachableMediaUrl } from "../providers/nodaro/client.js"
 import { isLlmProviderUnavailable } from "../lib/llm-client.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -48,6 +49,41 @@ function requestedStrategy(body: unknown): ReduceStrategyId | null {
   return typeof id === "string" && (REDUCE_STRATEGY_IDS as readonly string[]).includes(id) ? (id as ReduceStrategyId) : null
 }
 
+/**
+ * What the proxy must do differently for the AI judge on IMAGE candidates.
+ *
+ * The candidates usually live on THIS instance (uploads, generated results):
+ * `http://localhost:3002/storage/...` means nothing to the cloud, and the
+ * proxy's by-name media walk cannot know `inputs` holds pictures — only
+ * `strategyConfig.inputKind` says so. Unrehosted, the cloud judge either
+ * failed ("fetch failed") or, worse, answered "both candidates are empty" and
+ * picked #1 anyway — a pick that looked real (2026-08-16). So: re-host each
+ * candidate for the judge, then hand back the caller's ORIGINAL url for the
+ * winner (by `meta.selectedIndex`, the strategy's original-index contract) —
+ * the node, the downstream wiring and the mirrored job all key on THOSE
+ * urls, never on the cloud copies. Text candidates travel as they are.
+ */
+export function reduceProxyHooks(rawBody: unknown): CloudProxyHooks | undefined {
+  const b = rawBody as { strategyConfig?: { inputKind?: unknown }; inputs?: unknown } | undefined
+  if (b?.strategyConfig?.inputKind !== "image-url" || !Array.isArray(b.inputs)) return undefined
+  const original = b.inputs
+  return {
+    prepareBody: async (body) => {
+      const o = (body ?? {}) as Record<string, unknown>
+      const inputs = Array.isArray(o.inputs) ? o.inputs : []
+      const rehosted = await Promise.all(
+        inputs.map((v) => (typeof v === "string" ? ensureCloudReachableMediaUrl(v) : v)),
+      )
+      return { ...o, inputs: rehosted }
+    },
+    mapAnswer: (answer) => {
+      const idx = (answer.meta as { selectedIndex?: unknown } | undefined)?.selectedIndex
+      const winner = typeof idx === "number" ? original[idx] : undefined
+      return typeof winner === "string" ? { ...answer, output: winner } : answer
+    },
+  }
+}
+
 function reduceCreditIdentifier(body: unknown): string {
   const b = body as { strategyId?: unknown; strategyConfig?: { llmModel?: unknown } } | undefined
   const strategyId = String(b?.strategyId ?? "concat")
@@ -71,7 +107,11 @@ export async function reduceRoutes(app: FastifyInstance) {
       // answer). Every other strategy is local logic and never leaves this
       // server — decided by the strategy's own usesLlm flag, not its name.
       const requested = requestedStrategy(req.body)
-      if (requested && getStrategy(requested).usesLlm && (await maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce"))) return
+      if (
+        requested &&
+        getStrategy(requested).usesLlm &&
+        (await maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce", "reduce", reduceProxyHooks(req.body)))
+      ) return
 
       const parsed = reduceBody.safeParse(req.body)
       if (!parsed.success) {
