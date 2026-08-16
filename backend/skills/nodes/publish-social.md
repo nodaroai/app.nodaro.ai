@@ -1,7 +1,7 @@
 ---
 node_type: publish-social
-generated_at: 2026-07-19T00:35:28.818Z
-generated_from: f1c1674e0
+generated_at: 2026-08-15T21:55:10.032Z
+generated_from: 150c80ac9
 ---
 
 # Publish to Social

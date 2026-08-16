@@ -1,7 +1,7 @@
 ---
 node_type: ai-avatar
-generated_at: 2026-06-05T12:17:21.812Z
-generated_from: e5d0c6a2
+generated_at: 2026-08-15T21:55:08.300Z
+generated_from: 150c80ac9
 ---
 
 # AI Avatar

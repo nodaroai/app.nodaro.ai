@@ -1,7 +1,7 @@
 ---
 node_type: reference-board
-generated_at: 2026-06-13T20:30:09.259Z
-generated_from: b8a198cb
+generated_at: 2026-08-15T21:55:09.299Z
+generated_from: 150c80ac9
 ---
 
 # Reference Board

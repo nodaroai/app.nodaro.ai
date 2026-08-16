@@ -1,7 +1,7 @@
 ---
 node_type: extract-frame
-generated_at: 2026-05-20T19:56:14.149Z
-generated_from: c86c4b48
+generated_at: 2026-08-15T21:55:07.948Z
+generated_from: 150c80ac9
 ---
 
 # Extract Frame

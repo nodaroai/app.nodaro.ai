@@ -1,7 +1,7 @@
 ---
 node_type: paint-mask
-generated_at: 2026-08-12T01:03:22.107Z
-generated_from: 2178f7c5f
+generated_at: 2026-08-15T21:55:08.463Z
+generated_from: 150c80ac9
 ---
 
 # Paint Mask

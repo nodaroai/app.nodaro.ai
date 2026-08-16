@@ -1,7 +1,7 @@
 ---
 node_type: switchx
-generated_at: 2026-06-25T22:11:37.404Z
-generated_from: 9280bca55
+generated_at: 2026-08-15T21:55:06.673Z
+generated_from: 150c80ac9
 ---
 
 # Relight & Switch

@@ -134,7 +134,7 @@ function WorkflowViewerCanvas({
       />
       <Controls showInteractive={false} />
       {/* Header bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-[#121212]/90 backdrop-blur-sm border-b border-[#2D2D2D]">
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur-sm border-b border-border dark:bg-[#121212]/90 dark:border-[#2D2D2D]">
         <h2 className="text-sm font-medium text-white truncate">
           {workflowName}
         </h2>
@@ -163,7 +163,7 @@ export function WorkflowViewerModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-[85vw] h-[80vh] bg-[#121212] rounded-xl border border-[#2D2D2D] overflow-hidden"
+        className="relative w-[85vw] h-[80vh] bg-background rounded-xl border border-border dark:bg-[#121212] dark:border-[#2D2D2D] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <ReactFlowProvider>

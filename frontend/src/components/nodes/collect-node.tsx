@@ -2,8 +2,14 @@
 
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Layers, Combine } from "lucide-react"
-import { COLLECT_IN_HANDLE, groupHandleId, isCollectInEdge, presentTypes } from "@nodaro/shared"
+import { Layers, Combine, Film, Music } from "lucide-react"
+import {
+  AGGREGATEABLE_TYPES,
+  COLLECT_IN_HANDLE,
+  groupHandleId,
+  isCollectInEdge,
+  type AggregateableType,
+} from "@nodaro/shared"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
@@ -11,8 +17,17 @@ import { AggregateHandleVisual } from "@/components/nodes/handle-icon"
 import { HandleWithPopover, HANDLE_COLORS } from "@/components/nodes/handle-with-popover"
 import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
 import { BaseNode, type HandleConfig } from "@/components/nodes/base-node"
+import { CachedImage } from "@/components/ui/cached-image"
 import { computeCollectBuckets } from "@/components/editor/workflow-editor/execution-graph"
 import type { CollectNodeData, WorkflowNode, WorkflowEdge } from "@/types/nodes"
+
+// Collect's output contract is FIXED: one lane pip per aggregateable type,
+// always present. Deriving pips from wiring/results (any variant of it) means
+// an empty Collect has nothing to drag outward from — which blocks the
+// build-the-flow-first-run-later order of work — and lets edges point at
+// handles that don't exist yet. A constant lane set makes wiring possible in
+// any order and makes an invisible edge structurally impossible.
+const ALL_LANES: AggregateableType[] = [...AGGREGATEABLE_TYPES]
 
 function CollectNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CollectNodeData
@@ -49,7 +64,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
       ? computeCollectBuckets(node, nodes as WorkflowNode[], edges as WorkflowEdge[])
       : { text: [], image: [], video: [], audio: [] }
   }, [id, collectFingerprint])
-  const types = useMemo(() => presentTypes(buckets), [buckets])
+  const types = ALL_LANES
 
   useStaleHandleCleanup(id, types)
 
@@ -76,6 +91,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
   )
 
   const label = nodeData?.label || "Collect"
+  const hasContent = types.some((t) => buckets[t].length > 0)
 
   return (
     <div className="relative" style={{ width: "100%", height: "100%" }}>
@@ -94,10 +110,72 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         handles={handles}
       >
-        <div className="px-3 py-2 text-xs text-muted-foreground">
-          {incomingCount === 0
-            ? "Connect inputs"
-            : `${incomingCount} connection${incomingCount === 1 ? "" : "s"}`}
+        {/* The body shows WHAT was collected, in bucket order — thumbnails
+            for images, clamped lines for text, count chips for video/audio.
+            Display-only: rendering reads already-produced upstream results
+            and never executes anything. */}
+        <div className="px-2 py-2 flex flex-col gap-1.5">
+          {incomingCount === 0 ? (
+            <div className="px-1 text-xs text-muted-foreground">Connect inputs</div>
+          ) : !hasContent ? (
+            <div className="px-1 text-xs text-muted-foreground">
+              {incomingCount} connection{incomingCount === 1 ? "" : "s"} · waiting for results
+            </div>
+          ) : (
+            <>
+              {buckets.image.length > 0 && (
+                <div className="grid grid-cols-3 gap-1">
+                  {buckets.image.map((url, i) => (
+                    <CachedImage
+                      key={`${i}-${url}`}
+                      src={url}
+                      alt=""
+                      className="w-full aspect-square object-cover rounded-md"
+                    />
+                  ))}
+                </div>
+              )}
+              {buckets.text.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {buckets.text.slice(0, 3).map((t, i) => (
+                    <div
+                      key={i}
+                      className="px-1 text-[10px] leading-snug text-foreground/75"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 2,
+                        overflow: "hidden",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {t}
+                    </div>
+                  ))}
+                  {buckets.text.length > 3 && (
+                    <div className="px-1 text-[9px] text-muted-foreground">
+                      +{buckets.text.length - 3} more
+                    </div>
+                  )}
+                </div>
+              )}
+              {buckets.video.length > 0 && (
+                <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                  <Film className="w-3 h-3" />
+                  {buckets.video.length} video{buckets.video.length === 1 ? "" : "s"}
+                </div>
+              )}
+              {buckets.audio.length > 0 && (
+                <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                  <Music className="w-3 h-3" />
+                  {buckets.audio.length} audio
+                </div>
+              )}
+              <div className="px-1 text-[9px] text-muted-foreground/60">
+                {incomingCount} connection{incomingCount === 1 ? "" : "s"}
+              </div>
+            </>
+          )}
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="collect" handleId={COLLECT_IN_HANDLE} type="target" position={Position.Left} label="Inputs" color={HANDLE_COLORS.control} icon={<Combine />} side="left" top="24px" />

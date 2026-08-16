@@ -266,7 +266,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   // default-column seeding) now happens once at workflow load in
   // `migrateListLoopNodes` (list-loop-migration.ts); freshly-created `list`
   // nodes get their default column from `NODE_DEFINITIONS.list.defaultData`.
-  const showData = !!(nodeData as Record<string, unknown>).showData
+  const rawShowData = (nodeData as Record<string, unknown>).showData as boolean | undefined
   const setShowData = useCallback((v: boolean) => updateNodeData(id, { showData: v }), [id, updateNodeData])
 
   const thumbSize = nodeData.thumbnailSize ?? "md"
@@ -398,6 +398,21 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const displayRows = connectedRows ?? rows
   const displayRowCount = displayRows.length
   const isConnectedData = connectedRows !== null
+
+  // A media-typed table with actual content defaults to the data view — a
+  // column the user typed as image/video/audio exists to be SEEN, and the
+  // resolved values are already on the node (rendering never executes
+  // anything). An explicit user toggle (persisted boolean) always wins;
+  // empty tables and pure-text tables keep the compact info view so fresh
+  // nodes and prompt lists stay light on the canvas.
+  const hasMediaContent = useMemo(() => {
+    const mediaColIdxs = columns
+      .map((c, i) => (c.type === "image-url" || c.type === "video-url" || c.type === "audio-url" ? i : -1))
+      .filter((i) => i >= 0)
+    if (mediaColIdxs.length === 0) return false
+    return displayRows.some((row) => mediaColIdxs.some((ci) => (row[ci] ?? "").trim() !== ""))
+  }, [columns, displayRows])
+  const showData = rawShowData !== undefined ? !!rawShowData : hasMediaContent
 
   const firstImageColIdx = columns.findIndex((c) => c.type === "image-url")
   const maxItems = nodeData.maxItems ?? 20

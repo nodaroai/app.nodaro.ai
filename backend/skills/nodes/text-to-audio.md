@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-06-23T20:58:11.983Z
-generated_from: c4e4998f5
+generated_at: 2026-08-15T21:55:06.837Z
+generated_from: 150c80ac9
 ---
 
 # Text to Audio

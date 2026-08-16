@@ -26,7 +26,7 @@ export function SubWorkflowBreadcrumb({ onJumpToRoot, onJumpTo }: SubWorkflowBre
   return (
     <nav
       aria-label="Sub-workflow navigation"
-      className="flex items-center gap-1 text-sm text-white/80 px-3 py-1.5 bg-[#1E1E1E]/90 border-b border-[#2D2D2D] backdrop-blur-sm"
+      className="flex items-center gap-1 text-sm text-foreground/80 px-3 py-1.5 bg-card/90 border-b border-border dark:text-white/80 dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] backdrop-blur-sm"
     >
       <button
         type="button"

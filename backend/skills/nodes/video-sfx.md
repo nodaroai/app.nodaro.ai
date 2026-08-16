@@ -1,7 +1,7 @@
 ---
 node_type: video-sfx
-generated_at: 2026-06-04T12:41:28.581Z
-generated_from: 9bf1388db
+generated_at: 2026-08-15T21:55:06.601Z
+generated_from: 150c80ac9
 ---
 
 # Video SFX

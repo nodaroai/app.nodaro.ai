@@ -1,7 +1,7 @@
 ---
 node_type: telegram-channel-feed
-generated_at: 2026-07-19T01:25:23.622Z
-generated_from: c0d91988e
+generated_at: 2026-08-15T21:55:10.075Z
+generated_from: 150c80ac9
 ---
 
 # Telegram Channel Feed

@@ -1,7 +1,7 @@
 ---
 node_type: image-to-text
-generated_at: 2026-07-28T19:15:38.508Z
-generated_from: c5fbf290c
+generated_at: 2026-08-15T21:55:07.186Z
+generated_from: 150c80ac9
 ---
 
 # Describe Image

@@ -1,7 +1,7 @@
 ---
 node_type: after-effects
-generated_at: 2026-07-28T17:14:14.984Z
-generated_from: 15975a896
+generated_at: 2026-08-15T21:55:07.990Z
+generated_from: 150c80ac9
 ---
 
 # After Effects

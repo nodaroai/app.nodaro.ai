@@ -20,7 +20,7 @@ export interface RegisterReduceOpts {
  *
  * The Reduce node merges N upstream results into one — picking the best of
  * a batch, concatenating, voting, etc. Six strategies ship today:
- *   - `pick-best-llm` — Sonnet picks the best item against your criteria.
+ *   - `pick-best-llm` — an AI judge picks the best item against your criteria (judge model = strategyConfig.llmModel; its tier sets the price).
  *   - `concat` — Join all survivors with a separator.
  *   - `first-non-empty` — Return the first survivor (empty strings filtered).
  *   - `count` — Return how many survivors came through.
@@ -38,7 +38,7 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
   server.registerTool(
     "reduce",
     {
-      title: "Reduce (fan-in)",
+      title: "Choose Best (reduce)",
       description:
         "Merge multiple text/URL inputs into a single result using one of " +
         "6 strategies: `pick-best-llm`, `concat`, `first-non-empty`, " +
@@ -56,7 +56,7 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
           .record(z.string(), z.unknown())
           .optional()
           .describe(
-            "Strategy-specific config. `pick-best-llm`: { criteria: string, inputKind?: 'text'|'image-url' }. " +
+            "Strategy-specific config. `pick-best-llm`: { criteria: string, inputKind?: 'text'|'image-url', llmModel?: string (judge model id from the LLM registry; omitted = default; its tier sets the credit price) }. " +
             "`concat`: { separator?: string }. `vote`: { caseSensitive?: boolean }. " +
             "`merge-json`: { strategy?: 'deep'|'shallow' }. Others: {}.",
           ),

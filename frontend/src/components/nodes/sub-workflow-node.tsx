@@ -147,7 +147,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           aria-label="Edit referenced workflow"
           title="Edit referenced workflow"
-          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
+          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-card/80 hover:bg-muted text-foreground/70 hover:text-foreground dark:bg-[#1E1E1E]/80 dark:hover:bg-[#2D2D2D] dark:text-white/70 dark:hover:text-white"
           onClick={handleExpand}
         >
           <Expand className="w-3.5 h-3.5" />

@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-06-16T08:22:28.680Z
-generated_from: 877dfa01a
+generated_at: 2026-08-15T21:55:08.393Z
+generated_from: 150c80ac9
 ---
 
 # Extend Video

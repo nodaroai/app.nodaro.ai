@@ -1112,12 +1112,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "preview": 0,
   "teleport-send": 0,
   "teleport-receive": 0,
-  // ── Reduce (fan-in) — strategy-tiered pricing ──
-  // Pure logic strategies are free; pick-best-llm pays for an LLM ranking call.
-  // The composite key is built from the node's `data.strategyId` via the
-  // CREDIT_COSTS["reduce"] resolver below. There is no base "reduce" entry —
+  // ── Choose Best (reduce) — strategy-tiered pricing ──
+  // Pure logic strategies are free; pick-best-llm pays for an AI judge call and
+  // its price follows the chosen judge model's tier like every other LLM node
+  // (buildLlmCreditIdentifier over the "reduce:pick-best-llm" feature id):
+  // economy → :economy, standard → bare, premium → :premium. The composite key
+  // is built from the node's `data.strategyId` (+ strategyConfig.llmModel) via
+  // the CREDIT_COSTS["reduce"] resolver below. There is no base "reduce" entry —
   // the route always reads strategyId and resolves to a composite identifier.
   "reduce:pick-best-llm": 10,
+  "reduce:pick-best-llm:economy": 3,
+  "reduce:pick-best-llm:premium": 25,
   "reduce:concat": 0,
   "reduce:first-non-empty": 0,
   "reduce:count": 0,
@@ -1367,9 +1372,18 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 // drives the price.
 
 export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = {
-  // Reduce (fan-in): composite key = `reduce:<strategyId>`. Default to
+  // Choose Best (reduce): composite key = `reduce:<strategyId>`; the AI judge
+  // additionally tiers by its model (strategyConfig.llmModel). Default to
   // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
-  "reduce": (data) => `reduce:${(data as { strategyId?: string }).strategyId ?? "concat"}`,
+  // Mirrors reduceCreditIdentifier in routes/reduce.ts so the workflow
+  // estimator and the route bill the same id.
+  "reduce": (data) => {
+    const d = data as { strategyId?: string; strategyConfig?: { llmModel?: unknown } }
+    const strategyId = d.strategyId ?? "concat"
+    if (strategyId !== "pick-best-llm") return `reduce:${strategyId}`
+    const model = typeof d.strategyConfig?.llmModel === "string" ? d.strategyConfig.llmModel : undefined
+    return buildLlmCreditIdentifier("reduce:pick-best-llm", model)
+  },
 
   // AI Avatar (HeyGen): delegates to resolveAiAvatarCreditId — same body-reading
   // logic the creditGuard preHandler uses directly at request time.

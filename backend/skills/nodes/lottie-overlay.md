@@ -1,7 +1,7 @@
 ---
 node_type: lottie-overlay
-generated_at: 2026-07-28T17:14:14.990Z
-generated_from: 15975a896
+generated_at: 2026-08-15T21:55:08.021Z
+generated_from: 150c80ac9
 ---
 
 # Lottie Overlay

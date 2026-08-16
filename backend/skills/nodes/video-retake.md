@@ -1,7 +1,7 @@
 ---
 node_type: video-retake
-generated_at: 2026-06-16T07:25:41.348Z
-generated_from: 286cae6f4
+generated_at: 2026-08-15T21:55:06.695Z
+generated_from: 150c80ac9
 ---
 
 # Retake Video

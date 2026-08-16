@@ -47,7 +47,7 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
               </div>
               <NodeJobProgress progress={data.currentJobProgress} />
             </div>
-            <div className="mt-1 h-1 bg-[#2D2D2D] rounded-full overflow-hidden">
+            <div className="mt-1 h-1 bg-muted dark:bg-[#2D2D2D] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#ff0073] transition-all duration-300"
                 style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}

@@ -1,7 +1,7 @@
 ---
 node_type: loop-subject
-generated_at: 2026-06-23T16:51:38.081Z
-generated_from: 52fc7de9b
+generated_at: 2026-08-15T21:55:06.026Z
+generated_from: 150c80ac9
 ---
 
 # Loop Subject

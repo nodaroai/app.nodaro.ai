@@ -81,7 +81,13 @@ import {
   isValidLocationConnection,
 } from "./identity-handles"
 import { isAnalyzablePicker } from "@nodaro/prompts"
-import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES } from "@nodaro/shared"
+import {
+  resolveEffectiveSourceType,
+  ENTITY_IMAGE_HANDLE_TYPES,
+  AGGREGATE_LANE_SOURCE_TYPES,
+  AGGREGATEABLE_TYPES,
+  groupHandleId,
+} from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 
@@ -125,6 +131,21 @@ export function enumerableSourceHandles(
 ): string[] {
   if (ENTITY_IMAGE_HANDLE_TYPES.has(nodeType) && !declaredOutputs.includes("image")) {
     return [...declaredOutputs, "image"]
+  }
+  // Aggregates render one lane pip per aggregateable type (Collect: always;
+  // Group: per membership) — NODE_DEFINITIONS declares a placeholder `out`
+  // that never exists on canvas. Enumerate the real lane handles so an input
+  // popover can offer "Collect → out-image" (the accepts predicate + the
+  // effective-type remap then pick the lane matching the input's type).
+  // MEDIA LANES FIRST: `out-text` remaps to `list`, a DYNAMIC producer that
+  // every media input admits, so under "first match wins" it would shadow
+  // the exact-type lane (an image input offered `out-text`). Listing the
+  // typed media lanes ahead of text keeps the specific lane the winner and
+  // leaves `out-text` for prompt / list inputs, where it is the only match.
+  if (AGGREGATE_LANE_SOURCE_TYPES.has(nodeType)) {
+    const lanes = AGGREGATEABLE_TYPES.map(groupHandleId)
+    const textLane = groupHandleId("text")
+    return [...lanes.filter((h) => h !== textLane), textLane]
   }
   return [...declaredOutputs]
 }
@@ -249,6 +270,13 @@ export function isValidWorkflowConnection(
   // "possible connections" can't drift from this drop rule. For every other
   // source it returns the raw type, so existing connections are unaffected.
   const rawSourceType = typeOf(connection.source)
+  // Despite the historical name, this is the EFFECTIVE source type for ANY
+  // per-handle remap — entity `image` pips AND aggregate (group / collect)
+  // lane pips (`out-image` → upload-image, `out-video` → upload-video, …).
+  // Every media / text / data gate below consults it so a Collect lane
+  // reaches typed inputs exactly like the equivalent upload node. Identity /
+  // picker gates deliberately keep the RAW type: an entity is an identity
+  // there regardless of which pip the wire leaves.
   const imageSourceType = resolveEffectiveSourceType(rawSourceType, connection.sourceHandle)
 
   if (targetType === "generate-image" && connection.targetHandle) {
@@ -355,7 +383,7 @@ export function isValidWorkflowConnection(
   if (targetType === "video-retake" && connection.targetHandle) {
     const handleId = connection.targetHandle as VideoRetakeHandleId | null
     if (!handleId) return false
-    const sourceType = typeOf(connection.source) ?? ""
+    const sourceType = imageSourceType
     return isValidVideoRetakeConnection(handleId, sourceType, isVisualPickerType)
   }
 
@@ -364,7 +392,7 @@ export function isValidWorkflowConnection(
   // prompt/negative accept text producers OR pickers; video accepts video
   // producers; unknown handles return false.
   if (targetType === "video-sfx" && connection.targetHandle) {
-    const sourceType = typeOf(connection.source)
+    const sourceType = imageSourceType
     return isValidVideoSfxConnection(
       connection.targetHandle,
       sourceType ?? "",
@@ -425,7 +453,7 @@ export function isValidWorkflowConnection(
     return isValidFfmpegConnection(
       targetType,
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
 
@@ -435,7 +463,7 @@ export function isValidWorkflowConnection(
   // target-handle-registry.ts so drag-to-connect, the Connect button, and
   // the source-direction popover all agree.
   if (targetType === "assemble-narrated-video" && connection.targetHandle) {
-    const sourceType = typeOf(connection.source) ?? ""
+    const sourceType = imageSourceType
     if (connection.targetHandle === "video") return ACCEPTS_VIDEO(sourceType)
     if (connection.targetHandle === "audio") return ACCEPTS_AUDIO(sourceType)
     return false
@@ -466,20 +494,20 @@ export function isValidWorkflowConnection(
   if (targetType === "web-scrape" && connection.targetHandle) {
     return isValidWebScrapeConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
   // Video Analysis — single `video` target accepts video producers. Inline
   // ACCEPTS_VIDEO (same predicate the handle popover uses) so drag-to-connect
   // and the source-direction popover agree.
   if (targetType === "video-analysis" && connection.targetHandle === "video") {
-    return ACCEPTS_VIDEO(typeOf(connection.source) ?? "")
+    return ACCEPTS_VIDEO(imageSourceType)
   }
   // AI Audit — `video` takes the clip (same predicate as video-analysis);
   // `analysis` takes a finished analysis to re-verify (leave it unwired and the
   // node runs its own fast analysis first, at the pricier auto family).
   if (targetType === "video-audit" && connection.targetHandle) {
-    const auditSourceType = typeOf(connection.source) ?? ""
+    const auditSourceType = imageSourceType
     if (connection.targetHandle === "video") return ACCEPTS_VIDEO(auditSourceType)
     if (connection.targetHandle === "analysis") return ACCEPTS_ANALYSIS(auditSourceType)
     return false
@@ -487,38 +515,38 @@ export function isValidWorkflowConnection(
   if (targetType === "extract-field" && connection.targetHandle) {
     return isValidExtractFieldConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
   if (targetType === "filter-list" && connection.targetHandle) {
     return isValidFilterListConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
       isVisualPickerType,
     )
   }
   if (targetType === "deduplicate" && connection.targetHandle) {
     return isValidDeduplicateConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
   if (targetType === "merge-lists" && connection.targetHandle) {
     return isValidMergeListsConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
   if (targetType === "sort-list" && connection.targetHandle) {
     return isValidSortListConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
     )
   }
   if (targetType === "selector" && connection.targetHandle) {
     return isValidSelectorConnection(
       connection.targetHandle,
-      typeOf(connection.source) ?? "",
+      imageSourceType,
       isVisualPickerType,
     )
   }
@@ -529,7 +557,7 @@ export function isValidWorkflowConnection(
   // glow in agreement with the source-handle rule above (motion-graphics
   // `lottie` → lottie-overlay `lottie`). Other handles are not validated here.
   if (targetType === "lottie-overlay" && connection.targetHandle === "lottie") {
-    return ACCEPTS_LOTTIE_ASSET(typeOf(connection.source) ?? "")
+    return ACCEPTS_LOTTIE_ASSET(imageSourceType)
   }
 
   // Audio & Speech, Suno Music, Script & Text, and Processing (Audio + Text)
@@ -544,7 +572,7 @@ export function isValidWorkflowConnection(
   if (connection.targetHandle) {
     const validator = AUDIO_TEXT_VALIDATORS[targetType ?? ""]
     if (validator) {
-      const sourceType = typeOf(connection.source) ?? ""
+      const sourceType = imageSourceType
       return validator(connection.targetHandle, sourceType, isVisualPickerType)
     }
   }

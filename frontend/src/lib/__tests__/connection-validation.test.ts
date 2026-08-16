@@ -741,3 +741,92 @@ describe("entity image handle → list column (Gap A)", () => {
     expect(ok).toBe(false)
   })
 })
+
+// ─── Collect / Group lane pips reach typed inputs ─────────────────────────
+// A wire leaving an aggregate's `out-<type>` lane is a plain producer of that
+// type (resolveEffectiveSourceType), so every typed input a matching upload
+// node can reach, the lane can reach — the canvas can no longer reject an
+// edge the resolvers route at runtime.
+describe("aggregate lane → typed inputs (collect / group)", () => {
+  const typeOf = (types: Record<string, string>) => (id: string) => types[id]
+
+  it.each(["collect", "group"])("%s out-image → image-collage `in`", (agg) => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-image", target: "col", targetHandle: "in" },
+        typeOf({ agg, col: "image-collage" }),
+      ),
+    ).toBe(true)
+  })
+
+  it.each(["collect", "group"])("%s out-video → combine-videos `in`", (agg) => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-video", target: "cv", targetHandle: "in" },
+        typeOf({ agg, cv: "combine-videos" }),
+      ),
+    ).toBe(true)
+  })
+
+  it.each(["collect", "group"])("%s out-audio → mix-audio `in`", (agg) => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-audio", target: "mix", targetHandle: "in" },
+        typeOf({ agg, mix: "mix-audio" }),
+      ),
+    ).toBe(true)
+  })
+
+  it.each(["collect", "group"])("%s out-text → generate-image `prompt` and merge-lists `in`", (agg) => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-text", target: "gi", targetHandle: "prompt" },
+        typeOf({ agg, gi: "generate-image" }),
+      ),
+    ).toBe(true)
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-text", target: "ml", targetHandle: "in" },
+        typeOf({ agg, ml: "merge-lists" }),
+      ),
+    ).toBe(true)
+  })
+
+  it("the lane's TYPE is enforced — out-image is rejected by a video-only input", () => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-image", target: "cv", targetHandle: "in" },
+        typeOf({ agg: "collect", cv: "combine-videos" }),
+      ),
+    ).toBe(false)
+  })
+
+  it("a lane is NOT an identity — out-image is rejected by generate-image `assets`", () => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "agg", sourceHandle: "out-image", target: "gi", targetHandle: "assets" },
+        typeOf({ agg: "collect", gi: "generate-image" }),
+      ),
+    ).toBe(false)
+  })
+
+  it("enumerableSourceHandles lists the four real lane handles (media first, text last), not the placeholder `out`", () => {
+    expect(enumerableSourceHandles("collect", ["out"])).toEqual(["out-image", "out-video", "out-audio", "out-text"])
+    expect(enumerableSourceHandles("group", [])).toEqual(["out-image", "out-video", "out-audio", "out-text"])
+  })
+
+  it("an image input's popover offers a Collect wired to its out-image lane", () => {
+    const nodes = [{ id: "agg", type: "collect" }, { id: "col", type: "image-collage" }]
+    const { candidates } = collectTargetCandidates({
+      nodes,
+      edges: [],
+      consumerId: "col",
+      consumerHandleId: "in",
+      alreadyConnectedIds: new Set(),
+      accepts: (t) => isValidImageToImageConnection("image", t, isVisualPickerType),
+      nodeTypeById: (id) => nodes.find((n) => n.id === id)?.type,
+      outputsOf: (t) => NODE_DEF_MAP.get(t as never)?.outputs,
+    })
+    expect(candidates).toContainEqual({ nodeId: "agg", nodeType: "collect", sourceHandle: "out-image" })
+  })
+})

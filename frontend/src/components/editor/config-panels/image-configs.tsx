@@ -817,7 +817,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
-                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
+                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"
@@ -1566,7 +1566,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
-                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
+                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"

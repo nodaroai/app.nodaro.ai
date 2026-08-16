@@ -1,7 +1,7 @@
 ---
 node_type: suno-replace-section
-generated_at: 2026-08-03T12:33:47.313Z
-generated_from: 4260ead1d
+generated_at: 2026-08-15T21:55:07.035Z
+generated_from: 150c80ac9
 ---
 
 # Suno Replace Section

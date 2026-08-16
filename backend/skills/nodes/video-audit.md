@@ -1,7 +1,7 @@
 ---
 node_type: video-audit
-generated_at: 2026-08-04T14:59:29.789Z
-generated_from: 210cb078c
+generated_at: 2026-08-15T21:55:07.497Z
+generated_from: 150c80ac9
 ---
 
 # AI Audit

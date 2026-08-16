@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-06-25T00:52:39.876Z
-generated_from: e70d38e91
+generated_at: 2026-08-15T21:55:08.252Z
+generated_from: 150c80ac9
 ---
 
 # Lip Sync

@@ -8235,15 +8235,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "reduce",
-    label: "Reduce",
+    label: "Choose Best",
     category: "utility",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
-      label: "Reduce",
-      strategyId: "concat",
-      strategyConfig: { separator: "\n\n" },
+      label: "Choose Best",
+      // The AI judge is the node's headline use ("Choose Best"); a fresh node
+      // opens on it with a criteria placeholder rather than on plain joining.
+      strategyId: "pick-best-llm",
+      strategyConfig: { criteria: "Pick the highest-quality result.", inputKind: "text" },
     } as ReduceNodeData,
   },
   {

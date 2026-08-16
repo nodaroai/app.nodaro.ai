@@ -80,6 +80,10 @@ vi.mock("@/ee/components/credits/StorageExceededModal", () => ({
   StorageExceededModal: () => null,
 }))
 
+vi.mock("@/components/ui/cached-image", () => ({
+  CachedImage: ({ src }: { src: string }) => <img data-testid="cached-image" src={src} alt="" />,
+}))
+
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
     id: "node-1",
@@ -149,6 +153,51 @@ describe("LoopNode", () => {
     })
     expect(screen.getByTestId("handle-col_a")).toBeInTheDocument()
     expect(screen.getByTestId("handle-col_b")).toBeInTheDocument()
+  })
+
+  // Default view policy: a media-typed table WITH content opens in the data
+  // view (the user typed the column as image/video/audio to SEE it); empty
+  // media tables, pure-text tables, and an explicit showData:false keep the
+  // compact info view. Rendering is display-only — it never executes anything.
+  describe("default data view for media tables", () => {
+    const imageCols = [{ id: "1", name: "Shot", handleId: "col_a", type: "image-url" }]
+
+    it("shows images by default when an image column has content", () => {
+      renderNode({
+        data: { label: "Table", columns: imageCols, rows: [["https://cdn.example/a.png"]] },
+      })
+      expect(screen.getByTestId("cached-image")).toBeInTheDocument()
+    })
+
+    it("keeps the info view when the image column is empty", () => {
+      renderNode({
+        data: { label: "Table", columns: imageCols, rows: [[""]] },
+      })
+      expect(screen.queryByTestId("cached-image")).not.toBeInTheDocument()
+      expect(screen.getByText(/1 row/)).toBeInTheDocument()
+    })
+
+    it("keeps the info view for text tables with content", () => {
+      renderNode({
+        data: {
+          label: "Table",
+          columns: [
+            { id: "1", name: "Prompt", handleId: "col_a", type: "text" },
+            { id: "2", name: "Style", handleId: "col_b", type: "text" },
+          ],
+          rows: [["hello", "world"]],
+        },
+      })
+      expect(screen.getByText(/1 row/)).toBeInTheDocument()
+    })
+
+    it("respects an explicit showData:false over the media default", () => {
+      renderNode({
+        data: { label: "Table", columns: imageCols, rows: [["https://cdn.example/a.png"]], showData: false },
+      })
+      expect(screen.queryByTestId("cached-image")).not.toBeInTheDocument()
+      expect(screen.getByText(/1 row/)).toBeInTheDocument()
+    })
   })
 
   it("renders column-name labels next to source handles", () => {

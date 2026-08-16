@@ -1,7 +1,7 @@
 ---
 node_type: assemble-narrated-video
-generated_at: 2026-07-02T16:49:54.101Z
-generated_from: a8f6ce759
+generated_at: 2026-08-15T21:55:07.598Z
+generated_from: 150c80ac9
 ---
 
 # Assemble Narrated Video

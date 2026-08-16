@@ -70,6 +70,10 @@ vi.mock("@/components/nodes/base-node", () => ({
   ),
 }))
 
+vi.mock("@/components/ui/cached-image", () => ({
+  CachedImage: ({ src }: { src: string }) => <img data-testid="cached-image" src={src} alt="" />,
+}))
+
 const deleteEdgeMock = vi.fn()
 
 // Mutable per-test state ---
@@ -155,23 +159,16 @@ describe("CollectNode", () => {
     expect(screen.getByText("3 connections")).toBeInTheDocument()
   })
 
-  it("renders an output handle per type present in upstream sources", () => {
-    resetMocks(
-      [
-        { id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } },
-        { id: "tp-1", type: "text-prompt", position: { x: 0, y: 0 }, data: { text: "hello" } },
-        { id: "gi-1", type: "generate-image", position: { x: 0, y: 0 }, data: { generatedImageUrl: "https://x/img.png" } },
-      ],
-      [
-        { id: "e1", source: "tp-1", target: "collect-1", targetHandle: "in" },
-        { id: "e2", source: "gi-1", target: "collect-1", targetHandle: "in" },
-      ],
-    )
+  // Collect's output contract is FIXED: all four lane pips exist on a bare
+  // node so a flow can be wired in any order (build first, run later) and an
+  // edge can never point at a missing handle.
+  it("renders all four lane pips on a bare node with nothing wired", () => {
+    resetMocks([{ id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } }])
     renderNode()
     expect(screen.getByTestId("handle-source-out-text")).toBeInTheDocument()
     expect(screen.getByTestId("handle-source-out-image")).toBeInTheDocument()
-    expect(screen.queryByTestId("handle-source-out-video")).not.toBeInTheDocument()
-    expect(screen.queryByTestId("handle-source-out-audio")).not.toBeInTheDocument()
+    expect(screen.getByTestId("handle-source-out-video")).toBeInTheDocument()
+    expect(screen.getByTestId("handle-source-out-audio")).toBeInTheDocument()
   })
 
   it("places output handles on the right side as source handles", () => {
@@ -212,6 +209,53 @@ describe("CollectNode", () => {
     )
     renderNode()
     expect(updateNodeInternalsMock).toHaveBeenCalledWith("collect-1")
+  })
+
+  // A wired-but-not-yet-run producer keeps its pip AND the body says the
+  // node is waiting — the pre-run "no pip to drag from / pre-authored edge
+  // invisible" bug class.
+  it("keeps the lane pip and shows the waiting state for a wired producer without results", () => {
+    resetMocks(
+      [
+        { id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } },
+        { id: "gi-1", type: "generate-image", position: { x: 0, y: 0 }, data: { label: "Cover", prompt: "x" } },
+      ],
+      [{ id: "e1", source: "gi-1", target: "collect-1", targetHandle: "in" }],
+    )
+    renderNode()
+    expect(screen.getByTestId("handle-source-out-image")).toBeInTheDocument()
+    expect(screen.getByText("1 connection · waiting for results")).toBeInTheDocument()
+  })
+
+  it("renders the lane pip a pre-authored outgoing edge references", () => {
+    resetMocks(
+      [
+        { id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } },
+        { id: "downstream", type: "reduce", position: { x: 0, y: 0 }, data: { label: "Reduce" } },
+      ],
+      [{ id: "e1", source: "collect-1", sourceHandle: "out-image", target: "downstream", targetHandle: "in" }],
+    )
+    renderNode()
+    expect(screen.getByTestId("handle-source-out-image")).toBeInTheDocument()
+  })
+
+  it("shows collected image thumbnails in the body once results exist", () => {
+    resetMocks(
+      [
+        { id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } },
+        { id: "gi-1", type: "generate-image", position: { x: 0, y: 0 }, data: { generatedImageUrl: "https://x/a.png" } },
+        { id: "gi-2", type: "generate-image", position: { x: 0, y: 0 }, data: { generatedImageUrl: "https://x/b.png" } },
+      ],
+      [
+        { id: "e1", source: "gi-1", target: "collect-1", targetHandle: "in" },
+        { id: "e2", source: "gi-2", target: "collect-1", targetHandle: "in" },
+      ],
+    )
+    renderNode()
+    const thumbs = screen.getAllByTestId("cached-image")
+    expect(thumbs).toHaveLength(2)
+    expect(thumbs[0]).toHaveAttribute("src", "https://x/a.png")
+    expect(thumbs[1]).toHaveAttribute("src", "https://x/b.png")
   })
 
   it("does NOT delete stale edges on initial mount (no prior handles)", () => {

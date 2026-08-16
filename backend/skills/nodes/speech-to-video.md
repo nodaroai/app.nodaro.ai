@@ -1,7 +1,7 @@
 ---
 node_type: speech-to-video
-generated_at: 2026-06-16T08:22:28.647Z
-generated_from: 877dfa01a
+generated_at: 2026-08-15T21:55:08.277Z
+generated_from: 150c80ac9
 ---
 
 # Speech to Video

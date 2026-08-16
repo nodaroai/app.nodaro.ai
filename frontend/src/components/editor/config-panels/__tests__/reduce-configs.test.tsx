@@ -62,6 +62,7 @@ vi.mock("@/components/ui/select", () => {
       displayName: "SelectContent",
     }),
     SelectItem: ({ children, value }: any) => <option value={value}>{children}</option>,
+    SelectItemWithMeta: ({ children, value }: any) => <option value={value}>{children}</option>,
     SelectTrigger: Object.assign(
       ({ children }: any) => <>{children}</>,
       { displayName: "SelectTrigger" },
@@ -69,6 +70,13 @@ vi.mock("@/components/ui/select", () => {
     SelectValue: () => null,
   }
 })
+
+// ModelSelectOption (priced dropdown row) reads the credit-cost query — stub it
+// to a native <option> so the Select mock above can flatten it. The badge is
+// covered by model-select-option's own tests.
+vi.mock("../model-select-option", () => ({
+  ModelSelectOption: ({ value, label }: any) => <option value={value}>{label}</option>,
+}))
 
 vi.mock("@/components/ui/tabs", () => {
   const React = require("react")
@@ -129,23 +137,23 @@ const baseProps = {
 describe("ReduceConfig", () => {
   it("renders strategy picker with all 6 strategies", () => {
     render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
-    expect(screen.getByText(/Pick best/i)).toBeInTheDocument()
-    expect(screen.getByText(/Concatenate/i)).toBeInTheDocument()
-    expect(screen.getByText(/First non-empty/i)).toBeInTheDocument()
-    expect(screen.getByText(/Count/i)).toBeInTheDocument()
-    expect(screen.getByText(/Majority vote/i)).toBeInTheDocument()
-    expect(screen.getByText(/Merge JSON/i)).toBeInTheDocument()
+    expect(screen.getByText(/AI picks the best/i)).toBeInTheDocument()
+    expect(screen.getByText(/Join into one text/i)).toBeInTheDocument()
+    expect(screen.getByText(/First that has content/i)).toBeInTheDocument()
+    expect(screen.getByText(/Count them/i)).toBeInTheDocument()
+    expect(screen.getByText(/Most common answer/i)).toBeInTheDocument()
+    expect(screen.getByText(/Merge JSON objects/i)).toBeInTheDocument()
   })
 
   it("renders Tabs with Config + Inputs", () => {
     render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
     expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: /inputs/i })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: /candidates/i })).toBeInTheDocument()
   })
 
   it("Inputs tab disabled when node hasn't run", () => {
     render(<ReduceConfig {...baseProps} data={makeData({ executionStatus: "idle" })} onUpdate={vi.fn()} />)
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     expect(tab).toHaveAttribute("data-disabled")
   })
 
@@ -159,7 +167,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     expect(tab).toHaveAttribute("data-disabled")
   })
 
@@ -176,7 +184,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     expect(tab).not.toHaveAttribute("data-disabled")
   })
 
@@ -213,6 +221,40 @@ describe("ReduceConfig", () => {
     expect(screen.getByDisplayValue("best one")).toBeInTheDocument()
   })
 
+  // The AI judge exposes the same model selector every LLM node has; the
+  // chosen model lands on strategyConfig.llmModel (one field for route,
+  // estimator and SDK) and the strategy picker prices the judge by its tier.
+  it("renders the AI Model selector for pick-best-llm and writes strategyConfig.llmModel", () => {
+    const onUpdate = vi.fn()
+    render(
+      <ReduceConfig
+        {...baseProps}
+        data={makeData({
+          strategyId: "pick-best-llm",
+          strategyConfig: { criteria: "best one", inputKind: "text" },
+        })}
+        onUpdate={onUpdate}
+      />,
+    )
+    expect(screen.getByText(/AI Model/i)).toBeInTheDocument()
+    // Two comboboxes: the strategy picker and the model selector (the
+    // candidates-kind select makes three). Change the model one.
+    const selects = screen.getAllByRole("combobox")
+    const modelSelect = selects.find((s) => Array.from(s.querySelectorAll("option")).some((o) => o.value === "claude-opus-4.8"))
+    expect(modelSelect).toBeDefined()
+    fireEvent.change(modelSelect!, { target: { value: "claude-opus-4.8" } })
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strategyConfig: expect.objectContaining({ criteria: "best one", inputKind: "text", llmModel: "claude-opus-4.8" }),
+      }),
+    )
+  })
+
+  it("does NOT render the AI Model selector for non-AI strategies", () => {
+    render(<ReduceConfig {...baseProps} data={makeData({ strategyId: "concat", strategyConfig: { separator: "-" } })} onUpdate={vi.fn()} />)
+    expect(screen.queryByText(/AI Model/i)).not.toBeInTheDocument()
+  })
+
   it("renders Case-sensitive switch for vote strategy", () => {
     render(
       <ReduceConfig
@@ -221,7 +263,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/Case-sensitive/i)).toBeInTheDocument()
+    expect(screen.getByText(/letter case/i)).toBeInTheDocument()
   })
 
   it("renders deep/shallow select for merge-json strategy", () => {
@@ -232,10 +274,10 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    // "Deep merge" appears both in the <option> and in the helper text;
-    // use getAllByText so we don't fight the helper.
-    expect(screen.getAllByText(/Deep merge/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Shallow merge/i)).toBeInTheDocument()
+    // "Deep" appears both in the <option> and in the helper text; use
+    // getAllByText so we don't fight the helper.
+    expect(screen.getAllByText("Deep (nested objects too)").length).toBeGreaterThan(0)
+    expect(screen.getByText("Shallow (top level only)")).toBeInTheDocument()
   })
 
   it("renders 'No configuration' for first-non-empty strategy", () => {
@@ -246,7 +288,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/No configuration/i)).toBeInTheDocument()
+    expect(screen.getByText(/Nothing to configure/i)).toBeInTheDocument()
   })
 
   it("renders 'No configuration' for count strategy", () => {
@@ -257,7 +299,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/No configuration/i)).toBeInTheDocument()
+    expect(screen.getByText(/Nothing to configure/i)).toBeInTheDocument()
   })
 })
 
@@ -282,7 +324,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getAllByRole("tab", { name: /inputs/i })
+    const tab = screen.getAllByRole("tab", { name: /candidates/i })
     // Both renders share the disabled state since lastInputs missing
     tab.forEach((t) => expect(t).toHaveAttribute("data-disabled"))
   })
@@ -307,7 +349,7 @@ describe("ReduceConfig — Inputs tab content", () => {
       />,
     )
     // Activate the Inputs tab (it should be enabled now).
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     expect(tab).not.toHaveAttribute("data-disabled")
     fireEvent.click(tab)
 
@@ -321,7 +363,7 @@ describe("ReduceConfig — Inputs tab content", () => {
     expect(screen.getByText("charlie")).toBeInTheDocument()
 
     // selectedIndex=1 → "bravo" item has a "selected" badge
-    expect(screen.getByText(/selected/i)).toBeInTheDocument()
+    expect(screen.getByText(/chosen/i)).toBeInTheDocument()
   })
 
   it("does NOT render reasoning blockquote when pick-best-llm omits it (other strategies)", () => {
@@ -339,7 +381,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     fireEvent.click(tab)
     expect(screen.getByText("joined 2")).toBeInTheDocument()
     expect(screen.getByText("a")).toBeInTheDocument()
@@ -364,7 +406,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /inputs/i })
+    const tab = screen.getByRole("tab", { name: /candidates/i })
     fireEvent.click(tab)
     const expected = "x".repeat(80) + "…"
     expect(screen.getByText(expected)).toBeInTheDocument()

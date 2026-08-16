@@ -546,6 +546,21 @@ const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio", "assemble
  *  above) share the same routing instead of drifting per-site hardcoded checks. */
 const MULTI_VIDEO_INPUT_TYPES = new Set(["combine-videos", "assemble-narrated-video"]);
 
+/** Consumers that take an incoming plain image as a REFERENCE (accumulated
+ *  into referenceImageUrls[]) rather than as the single subject imageUrl —
+ *  the same set the per-source image branches below spell out inline. Used by
+ *  lane-routed aggregate sources (group / collect). Mirrors the backend
+ *  input-resolver.ts IMAGE_REFERENCE_TARGET_TYPES. */
+const IMAGE_REFERENCE_TARGET_TYPES = new Set([
+  "generate-image",
+  "reference-board",
+  "edit-image",
+  "image-to-image",
+  "modify-image",
+  "video-to-video",
+  "switchx",
+]);
+
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   // Legacy / i2v single-name handle ids (kept for un-migrated workflows)
   "references": "referenceImageUrls",
@@ -1337,6 +1352,67 @@ export function resolveNodeInputs(
         ...(inputs.imageUrlsWithSourceIds ?? []),
         { nodeId: src.id, url: output },
       ];
+      continue;
+    }
+
+    // Group / Collect: route by the LANE the wire leaves (out-text / out-image
+    // / out-video / out-audio), not by source node type — `output` is already
+    // that lane's value (extractNodeOutput is handle-aware for aggregates).
+    // Without this branch the aggregate matched no source-type branch below
+    // and its value was silently dropped for every consumer except the
+    // image-collage choke point above. Mirrors the sub-workflow mediaType
+    // routing at the end of the chain and the backend input-resolver.ts.
+    if (src.type === "group" || src.type === "collect") {
+      const lane = parseGroupHandle(resolvedSourceHandle);
+      if (lane === "image") {
+        if (IMAGE_REFERENCE_TARGET_TYPES.has(node.type ?? "")) {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image");
+        } else {
+          inputs.imageUrl = output;
+        }
+      } else if (lane === "video") {
+        if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+          inputs.videoUrlsWithSourceIds = [
+            ...(inputs.videoUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (node.type === "merge-video-audio") {
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = output;
+          } else {
+            inputs.audioSources = [
+              ...(inputs.audioSources ?? []),
+              { url: output, sourceNodeId: src.id, sourceType: "video" as const },
+            ];
+          }
+        } else {
+          inputs.videoUrl = output;
+        }
+      } else if (lane === "audio") {
+        if (node.type === "merge-video-audio") {
+          inputs.audioSources = [
+            ...(inputs.audioSources ?? []),
+            { url: output, sourceNodeId: src.id },
+          ];
+        } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+          inputs.audioUrlsWithSourceIds = [
+            ...(inputs.audioUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio");
+        } else {
+          inputs.audioUrl = output;
+        }
+      } else {
+        inputs.prompt = output;
+      }
       continue;
     }
 

@@ -19,10 +19,14 @@ export type ReduceStrategy<TConfig = unknown> = {
   readonly creditCostKey: string
 }
 
+// User-facing copy lives HERE (single source of truth) and flows into the node
+// body, the config panel dropdown, the SDK docs and the MCP tool. Written for
+// the person building the flow, not the engine: say what happens to their
+// candidates, never "survivor" / "fan-in" / "reduce" / model names.
 const PICK_BEST_LLM_STRATEGY = {
   id: "pick-best-llm",
-  label: "Pick best (LLM judge)",
-  description: "Sonnet picks the best item against your criteria.",
+  label: "AI picks the best",
+  description: "AI compares every candidate against your criteria and picks one.",
   configSchema: z.object({
     // Default to the sensible "best quality" criteria when omitted (matches
     // defaultConfig) so a reduce({strategyId:"pick-best-llm"}) call with no
@@ -30,16 +34,22 @@ const PICK_BEST_LLM_STRATEGY = {
     // rejects via min(1).
     criteria: z.string().min(1, "criteria cannot be empty").default("Pick the highest-quality result."),
     inputKind: z.enum(["text", "image-url"]).default("text"),
+    // The judge model, like every other LLM node (llmModel + LlmModelSelect).
+    // Optional: omitted → LLM_FEATURE_DEFAULTS["pick-best-llm"]. Validated
+    // against LLM_MODEL_IDS at the route (the registry can't import the model
+    // list without a cycle), and its tier drives the credit price via
+    // buildLlmCreditIdentifier — economy / standard / premium.
+    llmModel: z.string().optional(),
   }),
   defaultConfig: { criteria: "Pick the highest-quality result.", inputKind: "text" as const },
   outputType: "text" as OutputType,
   creditCostKey: "reduce:pick-best-llm",
-} as const satisfies ReduceStrategy<{ criteria: string; inputKind: "text" | "image-url" }>
+} as const satisfies ReduceStrategy<{ criteria: string; inputKind: "text" | "image-url"; llmModel?: string }>
 
 const CONCAT_STRATEGY = {
   id: "concat",
-  label: "Concatenate",
-  description: "Join all survivors with a separator.",
+  label: "Join into one text",
+  description: "Puts every candidate into a single text, one after another, with a separator between them.",
   configSchema: z.object({ separator: z.string().default("\n\n") }),
   defaultConfig: { separator: "\n\n" },
   outputType: "text" as OutputType,
@@ -48,8 +58,8 @@ const CONCAT_STRATEGY = {
 
 const FIRST_NON_EMPTY_STRATEGY = {
   id: "first-non-empty",
-  label: "First non-empty",
-  description: "Return the first survivor (empty strings filtered).",
+  label: "First that has content",
+  description: "Takes the first candidate that is not empty and ignores the rest.",
   configSchema: z.object({}),
   defaultConfig: {},
   outputType: "text" as OutputType,
@@ -58,8 +68,8 @@ const FIRST_NON_EMPTY_STRATEGY = {
 
 const COUNT_STRATEGY = {
   id: "count",
-  label: "Count",
-  description: "Return how many survivors came through.",
+  label: "Count them",
+  description: "Outputs how many candidates arrived.",
   configSchema: z.object({}),
   defaultConfig: {},
   outputType: "data" as OutputType,
@@ -68,8 +78,8 @@ const COUNT_STRATEGY = {
 
 const VOTE_STRATEGY = {
   id: "vote",
-  label: "Majority vote",
-  description: "Return the most common survivor (ties → first).",
+  label: "Most common answer",
+  description: "Picks the candidate that appears most often (ties go to the first).",
   configSchema: z.object({ caseSensitive: z.boolean().default(false) }),
   defaultConfig: { caseSensitive: false },
   outputType: "text" as OutputType,
@@ -78,8 +88,8 @@ const VOTE_STRATEGY = {
 
 const MERGE_JSON_STRATEGY = {
   id: "merge-json",
-  label: "Merge JSON",
-  description: "Parse each survivor as JSON and merge into one object.",
+  label: "Merge JSON objects",
+  description: "Reads every candidate as JSON and merges them into one object.",
   configSchema: z.object({ strategy: z.enum(["deep", "shallow"]).default("deep") }),
   defaultConfig: { strategy: "deep" as const },
   outputType: "data" as OutputType,

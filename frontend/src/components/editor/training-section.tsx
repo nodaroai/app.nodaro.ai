@@ -162,7 +162,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
   const insufficientPhotos = trainingImageCount < MIN_PHOTOS
 
   return (
-    <section className="mb-6 border-t border-[#2D2D2D] pt-4">
+    <section className="mb-6 border-t border-border dark:border-[#2D2D2D] pt-4">
       <header className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold">High-fidelity model</h3>
         <span className="text-[11px] text-muted-foreground">

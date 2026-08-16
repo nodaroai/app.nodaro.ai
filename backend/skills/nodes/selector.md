@@ -1,7 +1,7 @@
 ---
 node_type: selector
-generated_at: 2026-06-04T12:41:29.174Z
-generated_from: 9bf1388db
+generated_at: 2026-08-15T21:55:09.248Z
+generated_from: 150c80ac9
 ---
 
 # Selector

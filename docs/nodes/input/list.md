@@ -10,6 +10,8 @@ By default it is a simple single-column list of text items ("Items") — paste o
 
 The config panel adapts to the column count: it shows the single-column **List** editor at one column and the multi-column **Table** editor once you have more than one. The node's view mode (list / gallery / packed) is chosen automatically from the column types.
 
+On the canvas the node has two display states, toggled by the small table/info button in the strip under the node: a compact **info** summary ("N rows × M cols") and the full **data** view (the gallery/table itself). A table with a media column (image / video / audio) that has content — typed in, uploaded, or resolved live from a connected source — opens in the data view automatically; empty tables and pure-text tables start compact. The toggle is display-only and never executes anything; an explicit toggle always wins over the default.
+
 > The legacy `loop` node (UI label "Table") was merged into this node. `loop` is now a deprecated alias that auto-migrates to `list` on load — existing workflows keep working.
 
 ## Configuration

@@ -1,7 +1,7 @@
 ---
 node_type: merge-video-audio
-generated_at: 2026-05-18T13:23:37.525Z
-generated_from: cb1e786d
+generated_at: 2026-08-15T21:55:07.629Z
+generated_from: 150c80ac9
 ---
 
 # merge-video-audio

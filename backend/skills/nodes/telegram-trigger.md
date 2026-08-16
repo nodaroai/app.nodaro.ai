@@ -1,7 +1,7 @@
 ---
 node_type: telegram-trigger
-generated_at: 2026-05-18T13:23:37.883Z
-generated_from: cb1e786d
+generated_at: 2026-08-15T21:55:10.054Z
+generated_from: 150c80ac9
 ---
 
 # Telegram Trigger

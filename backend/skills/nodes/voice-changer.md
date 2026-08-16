@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-07-03T08:25:54.428Z
-generated_from: 1825a285d
+generated_at: 2026-08-15T21:55:07.299Z
+generated_from: 150c80ac9
 ---
 
 # Voice Changer
