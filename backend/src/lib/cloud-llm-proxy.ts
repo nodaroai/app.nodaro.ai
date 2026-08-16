@@ -37,7 +37,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { config } from "./config.js"
 import { getNodaroConnection, nodaroCloudBase } from "./nodaro-connect.js"
-import { ensureCloudReachableMediaUrl } from "../providers/nodaro/client.js"
+import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
 import { insertJob } from "./insert-job.js"
 import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request-helpers.js"
 
@@ -112,6 +112,23 @@ async function rehostBodyMedia(body: unknown, depth = 0): Promise<unknown> {
 }
 
 /**
+ * Route-owned adjustments around the forward. The proxy knows bodies and
+ * answers only by shape; a route knows what its fields MEAN.
+ *
+ * `prepareBody` runs only when the call is actually forwarded, after the
+ * instance-local keys are stripped and before the by-name media walk — the
+ * place for media the walk cannot recognise (reduce's `inputs` are pictures
+ * only when `strategyConfig.inputKind` says so; the cloud cannot fetch a
+ * private host, so unrehosted they judge nothing). `mapAnswer` runs on a
+ * finished 2xx JSON answer before it is mirrored and sent — e.g. to hand
+ * back the caller's ORIGINAL url for the winner rather than the cloud copy.
+ */
+export interface CloudProxyHooks {
+  prepareBody?: (body: unknown) => Promise<unknown> | unknown
+  mapAnswer?: (answer: Record<string, unknown>) => Record<string, unknown>
+}
+
+/**
  * A finished cloud job, mirrored as a local `completed` row so its id resolves
  * in THIS database. Returns the response body to send: the cloud's, with
  * `jobId` rewritten to the local row. When the row cannot be written the
@@ -125,6 +142,7 @@ async function mirrorCloudJob(
   res: Response,
   text: string,
   jobType: string,
+  mapAnswer?: CloudProxyHooks["mapAnswer"],
 ): Promise<string> {
   if (!res.ok) return text
   let parsed: unknown
@@ -134,8 +152,9 @@ async function mirrorCloudJob(
     return text
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return text
-  const { jobId: cloudJobId, ...answer } = parsed as Record<string, unknown>
+  const { jobId: cloudJobId, ...rawAnswer } = parsed as Record<string, unknown>
   if (typeof cloudJobId !== "string" || !cloudJobId) return text
+  const answer = mapAnswer ? mapAnswer(rawAnswer) : rawAnswer
 
   const userId = req.userId
   const now = new Date().toISOString()
@@ -176,13 +195,15 @@ async function mirrorCloudJob(
  *
  * `jobType` labels the mirrored row (`input_data.type`) the way the route's
  * own insert would — pass the same string the route gives
- * `buildJobInputData`.
+ * `buildJobInputData`. `hooks` are the route's own adjustments (see
+ * `CloudProxyHooks`).
  */
 export async function maybeProxyLlmRouteToCloud(
   req: FastifyRequest,
   reply: FastifyReply,
   cloudPath: string,
   jobType: string,
+  hooks: CloudProxyHooks = {},
 ): Promise<boolean> {
   if (!(await shouldProxyLlmToCloud())) return false
 
@@ -190,7 +211,9 @@ export async function maybeProxyLlmRouteToCloud(
   if (!conn?.accessToken) return false
 
   try {
-    const body = await rehostBodyMedia(stripInstanceLocalKeys(req.body))
+    const stripped = stripInstanceLocalKeys(req.body)
+    const prepared = hooks.prepareBody ? await hooks.prepareBody(stripped) : stripped
+    const body = await rehostBodyMedia(prepared)
     // Stop the upstream call when the client goes away, exactly as the local
     // routes do — otherwise the cloud keeps generating, and billing, for an
     // answer nobody will read.
@@ -205,7 +228,7 @@ export async function maybeProxyLlmRouteToCloud(
       body: JSON.stringify(body ?? {}),
       signal: abort.signal,
     })
-    const text = await mirrorCloudJob(req, res, await res.text(), jobType)
+    const text = await mirrorCloudJob(req, res, await res.text(), jobType, hooks.mapAnswer)
     void reply
       .status(res.status)
       .header("content-type", res.headers.get("content-type") ?? "application/json")
@@ -213,6 +236,14 @@ export async function maybeProxyLlmRouteToCloud(
     return true
   } catch (err) {
     req.log.error({ err, cloudPath }, "[cloud-llm-proxy] forward failed")
+    // Media that could not be handed to the cloud (too large, on a host this
+    // install does not own, unreadable) is the user's to fix and the client
+    // says exactly what — pass that sentence on instead of blaming the
+    // connection.
+    if (err instanceof NodaroCloudError) {
+      void reply.status(502).send({ error: { code: "cloud_media_unavailable", message: err.message } })
+      return true
+    }
     void reply.status(502).send({
       error: {
         code: "cloud_unreachable",

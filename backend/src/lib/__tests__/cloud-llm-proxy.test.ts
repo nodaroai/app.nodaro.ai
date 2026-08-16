@@ -25,8 +25,10 @@ vi.mock("../nodaro-connect.js", () => ({
 }))
 
 const ensureCloudReachableMediaUrl = vi.fn(async (u: string) => u)
+class NodaroCloudError extends Error {}
 vi.mock("../../providers/nodaro/client.js", () => ({
   ensureCloudReachableMediaUrl: (u: string) => ensureCloudReachableMediaUrl(u),
+  NodaroCloudError,
 }))
 
 /** The local mirror row. Default: the insert succeeds and hands back a local id. */
@@ -368,5 +370,71 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
       expect(insertJob, label).not.toHaveBeenCalled()
       fetchSpy.mockRestore()
     }
+  })
+})
+
+/**
+ * Route-owned hooks. The proxy knows bodies only by shape; a route knows what
+ * its fields mean — reduce's `inputs` are pictures only when its config says
+ * so, and the winner it hands back must be the caller's own url.
+ */
+describe("route hooks: prepareBody / mapAnswer, and media errors", () => {
+  beforeEach(() => {
+    env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
+    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) => u)
+    insertJob.mockReset().mockResolvedValue({ data: { id: "local-job-1" }, error: null })
+  })
+  const req = () =>
+    ({ body: { inputs: ["http://localhost:3002/storage/a.png"], workflowId: "w1" }, userId: "u1", raw: { on: vi.fn() }, log: { error: vi.fn() } }) as never
+
+  it("prepareBody sees the body AFTER the instance-local keys are stripped and its result is what travels", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }))
+    const seen: unknown[] = []
+    await maybeProxyLlmRouteToCloud(req(), makeReply() as never, "/v1/reduce", "reduce", {
+      prepareBody: async (body) => { seen.push(body); return { ...(body as object), inputs: ["https://cloud/up/a.png"] } },
+    })
+    expect(seen[0]).toEqual({ inputs: ["http://localhost:3002/storage/a.png"] }) // no workflowId
+    const sent = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string)
+    expect(sent).toEqual({ inputs: ["https://cloud/up/a.png"] })
+    fetchSpy.mockRestore()
+  })
+
+  it("mapAnswer rewrites the finished answer BEFORE it is mirrored and sent — the local row and the caller agree", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ jobId: "cloud-9", output: "https://cloud/up/a.png", meta: { selectedIndex: 0 } }), { status: 200 }),
+    )
+    const reply = makeReply()
+    await maybeProxyLlmRouteToCloud(req(), reply as never, "/v1/reduce", "reduce", {
+      mapAnswer: (a) => ({ ...a, output: "http://localhost:3002/storage/a.png" }),
+    })
+    const row = insertJob.mock.calls[0]![1]
+    expect((row.output_data as Record<string, unknown>).output).toBe("http://localhost:3002/storage/a.png")
+    expect(JSON.parse(String(reply.state.body))).toMatchObject({ jobId: "local-job-1", output: "http://localhost:3002/storage/a.png" })
+    fetchSpy.mockRestore()
+  })
+
+  it("mapAnswer is not consulted for errors — a 402 stays the cloud's 402, verbatim", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "insufficient_credits" } }), { status: 402 }),
+    )
+    const mapAnswer = vi.fn((a: Record<string, unknown>) => a)
+    const reply = makeReply()
+    await maybeProxyLlmRouteToCloud(req(), reply as never, "/v1/reduce", "reduce", { mapAnswer })
+    expect(mapAnswer).not.toHaveBeenCalled()
+    expect(reply.state.status).toBe(402)
+    fetchSpy.mockRestore()
+  })
+
+  it("media that cannot be handed to the cloud answers with the client's own sentence, not 'could not reach nodaro.ai'", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }))
+    const reply = makeReply()
+    await maybeProxyLlmRouteToCloud(req(), reply as never, "/v1/reduce", "reduce", {
+      prepareBody: async () => { throw new NodaroCloudError("nodaro.ai: media is too large to send to the cloud (120 MB; limit 100 MB)") },
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(reply.state.status).toBe(502)
+    expect(reply.state.body).toEqual({ error: { code: "cloud_media_unavailable", message: "nodaro.ai: media is too large to send to the cloud (120 MB; limit 100 MB)" } })
+    fetchSpy.mockRestore()
   })
 })

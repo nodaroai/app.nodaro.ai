@@ -374,6 +374,12 @@ describe("media re-hosting is narrow on purpose (SSRF containment)", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.restoreAllMocks()
+    // client.ts reads our own objects through the storage client; keep the
+    // real S3 client (and its config → supabase chain) out of these tests.
+    vi.doMock("../../../lib/storage.js", () => ({
+      r2KeyFromOurUrl: () => null,
+      readR2Object: vi.fn(async () => null),
+    }))
   })
 
   it("refuses to read a private host that isn't our own storage", async () => {
@@ -412,6 +418,87 @@ describe("media re-hosting is narrow on purpose (SSRF containment)", () => {
     await expect(ensureCloudReachableMediaUrl("https://picsum.photos/200")).resolves.toBe(
       "https://picsum.photos/200",
     )
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  // Our own media is read THROUGH THE STORE, never by fetching its public
+  // url from inside the container — that url is the browser's (host port,
+  // domain, proxy) and died with ECONNREFUSED on a remapped-port install.
+  function ownMediaSetup(readObject: unknown) {
+    vi.doMock("../../../lib/config.js", () => ({
+      config: {
+        R2_PUBLIC_URL: "http://localhost:3002/storage/nodaro-assets",
+        PUBLIC_URL: "http://localhost:3002",
+        R2_PUBLIC_FALLBACK_DOMAIN: "",
+      },
+    }))
+    vi.doMock("../../../lib/nodaro-connect.js", () => ({
+      getNodaroConnection: async () => ({ accessToken: "ndr_app_test" }),
+      nodaroCloudBase: () => "https://cloud.example",
+      nodaroCloudFetch: vi.fn(),
+    }))
+    vi.doMock("../../../lib/storage.js", () => ({
+      r2KeyFromOurUrl: (url: string) =>
+        url.startsWith("http://localhost:3002/storage/nodaro-assets/")
+          ? url.slice("http://localhost:3002/storage/nodaro-assets/".length)
+          : null,
+      readR2Object: readObject,
+    }))
+  }
+
+  it("re-hosts our own object by reading it through the storage client — the public url is never fetched", async () => {
+    const readR2Object = vi.fn(async () => ({ body: Buffer.from("PNG!"), contentType: "image/png", size: 4 }))
+    ownMediaSetup(readR2Object)
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const u = String(input)
+      if (u === "https://cloud.example/v1/upload") {
+        return new Response(JSON.stringify({ data: { url: "https://cdn.cloud.example/up/1.png" } }), { status: 200 })
+      }
+      throw new Error(`unexpected fetch ${u}`)
+    })
+    const { ensureCloudReachableMediaUrl } = await import("../client.js")
+    await expect(
+      ensureCloudReachableMediaUrl("http://localhost:3002/storage/nodaro-assets/uploads/a.png"),
+    ).resolves.toBe("https://cdn.cloud.example/up/1.png")
+    expect(readR2Object).toHaveBeenCalledWith("uploads/a.png", expect.objectContaining({ maxBytes: expect.any(Number) }))
+    // Exactly one network call — the upload. Never a GET of localhost:3002.
+    expect(fetchSpy.mock.calls.map((c) => String(c[0]))).toEqual(["https://cloud.example/v1/upload"])
+    // The bytes and type came from the store.
+    const form = (fetchSpy.mock.calls[0]![1] as RequestInit).body as FormData
+    const file = form.get("file") as Blob
+    expect(file.type).toBe("image/png")
+    expect(await file.text()).toBe("PNG!")
+  })
+
+  it("falls back to fetching the public url only when the store cannot produce the object", async () => {
+    ownMediaSetup(vi.fn(async () => null))
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const u = String(input)
+      if (u === "http://localhost:3002/storage/nodaro-assets/uploads/b.png") {
+        return new Response("BYTES", { status: 200, headers: { "content-type": "image/png", "content-length": "5" } })
+      }
+      if (u === "https://cloud.example/v1/upload") {
+        return new Response(JSON.stringify({ url: "https://cdn.cloud.example/up/2.png" }), { status: 200 })
+      }
+      throw new Error(`unexpected fetch ${u}`)
+    })
+    const { ensureCloudReachableMediaUrl } = await import("../client.js")
+    await expect(
+      ensureCloudReachableMediaUrl("http://localhost:3002/storage/nodaro-assets/uploads/b.png"),
+    ).resolves.toBe("https://cdn.cloud.example/up/2.png")
+    expect(fetchSpy.mock.calls.map((c) => String(c[0]))).toEqual([
+      "http://localhost:3002/storage/nodaro-assets/uploads/b.png",
+      "https://cloud.example/v1/upload",
+    ])
+  })
+
+  it("refuses an oversized object before buffering it", async () => {
+    ownMediaSetup(vi.fn(async () => ({ body: Buffer.alloc(0), contentType: "video/mp4", size: 900 * 1_000_000 })))
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const { ensureCloudReachableMediaUrl } = await import("../client.js")
+    await expect(
+      ensureCloudReachableMediaUrl("http://localhost:3002/storage/nodaro-assets/uploads/huge.mp4"),
+    ).rejects.toThrow(/too large/)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

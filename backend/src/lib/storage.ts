@@ -395,16 +395,43 @@ export async function downloadR2ObjectToFile(key: string, dest: string): Promise
  * that must never be read through the immutable-cached CDN.
  */
 export async function readR2ObjectBuffer(key: string): Promise<Buffer | null> {
+  return (await readR2Object(key))?.body ?? null
+}
+
+/**
+ * Read one of OUR objects through the storage client — with its content type
+ * and, when the store reports it, its size (checked before buffering so a
+ * caller with a cap can refuse without reading the whole thing).
+ *
+ * This is how code that runs INSIDE the app container reads the install's own
+ * media: through `R2_ENDPOINT` (e.g. `http://minio:9000`), which always
+ * resolves in there. The public URL (`PUBLIC_URL`/`R2_PUBLIC_URL`, e.g.
+ * `http://localhost:3002/storage/…`) is what BROWSERS use and often does not
+ * resolve from inside the container — a remapped port, a domain behind a
+ * proxy, split-horizon DNS. Fetching our own object by its public URL was how
+ * the cloud re-host died with ECONNREFUSED on a perfectly healthy install.
+ */
+export async function readR2Object(
+  key: string,
+  opts: { maxBytes?: number } = {},
+): Promise<{ body: Buffer; contentType: string | null; size: number | null } | null> {
   try {
     const res = await s3.send(
       new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
     )
     if (!res.Body) return null
+    const size = typeof res.ContentLength === "number" ? res.ContentLength : null
+    if (opts.maxBytes !== undefined && size !== null && size > opts.maxBytes) {
+      // Don't read a multi-GB object into memory just to refuse it.
+      ;(res.Body as Readable).destroy?.()
+      return { body: Buffer.alloc(0), contentType: res.ContentType ?? null, size }
+    }
     const chunks: Buffer[] = []
     for await (const chunk of res.Body as Readable) {
       chunks.push(chunk as Buffer)
     }
-    return Buffer.concat(chunks)
+    const body = Buffer.concat(chunks)
+    return { body, contentType: res.ContentType ?? null, size: size ?? body.length }
   } catch {
     return null
   }
