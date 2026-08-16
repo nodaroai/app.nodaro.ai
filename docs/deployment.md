@@ -384,6 +384,18 @@ point.
 **Redis HA**: BullMQ supports Redis cluster mode out of the box. Set
 `REDIS_URL` to a cluster endpoint or a Sentinel URL.
 
+**Shared caches on Redis (multi-instance API)**: besides the queues,
+the API keeps small shared snapshots in Redis so N API containers do
+not each redo the same slow provider work — today the HeyGen avatar /
+voice catalogs (`heygen:catalog:v1:*`, ≈4 MB, published once a fill
+completes and adopted by every instance at boot; one instance per
+environment refreshes it under a lock every
+`HEYGEN_CATALOG_REFRESH_HOURS`, default 24; the others notice a newer
+snapshot within about half a minute and adopt it). Everything there is a
+cache: with Redis unreachable each instance falls back to its own
+memory, and a flushed key is simply refilled from the provider on the
+next boot.
+
 **Object storage**: configure bucket-level lifecycle rules on R2/S3 to
 expire old assets (e.g. 90 days). Nodaro never deletes assets itself —
 it only references them by key. One exception: on Cloud, a daily cron

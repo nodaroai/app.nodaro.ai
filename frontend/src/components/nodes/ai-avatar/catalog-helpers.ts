@@ -2,6 +2,7 @@
 // bits of display copy. No React, no store: everything here is unit-tested.
 
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
+import { avatarIsUsable } from "@/components/heygen/heygen-catalog"
 
 /**
  * HeyGen look names read "Cora Office 4" — the person, then the scene. The
@@ -21,11 +22,14 @@ export function splitLookName(name: string): { person: string; scene: string } {
  * makes a poor first row — take ONE look per person in catalog order, and only
  * when the catalog has fewer persons than `n`, top up with further distinct
  * looks. Deterministic (no shuffling), so the row is stable across renders.
+ * A look HeyGen is still building (or failed) is never featured — the row is
+ * for picking; the full picker shows those with their status.
  */
 export function pickFeaturedAvatars(
-  avatars: ReadonlyArray<HeygenAvatar>,
+  catalog: ReadonlyArray<HeygenAvatar>,
   n: number,
 ): HeygenAvatar[] {
+  const avatars = catalog.filter(avatarIsUsable)
   const seenPersons = new Set<string>()
   const featured: HeygenAvatar[] = []
   for (const a of avatars) {

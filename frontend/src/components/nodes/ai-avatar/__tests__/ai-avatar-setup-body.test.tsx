@@ -190,6 +190,30 @@ describe("AiAvatarSetupBody — empty, catalog source", () => {
     expect(updateNodeData).toHaveBeenCalledWith("N1", expect.objectContaining({ avatarId: "cora-l1" }))
   })
 
+  it("the account's own look that HeyGen is still building is never featured; in search results it is labelled, unpickable, and says why", () => {
+    avatarsFixture = [
+      look("Me Building", "mine-b", { ownership: "private", status: "processing" }),
+      look("Me Broken", "mine-f", { ownership: "private", status: "failed" }),
+      ...CATALOG,
+    ]
+    renderBody(data())
+    // featured row: still the five presets, none of the unusable own looks
+    expect(screen.getAllByRole("radio").map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Cora Office 4", "Marieke Desk 1", "Signe Studio 1", "Margot Outdoor 1", "Livia Home 1",
+    ])
+    fireEvent.change(screen.getByLabelText("Search avatars"), { target: { value: "me b" } })
+    const tiles = screen.getAllByRole("radio")
+    expect(tiles.map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Me Building — HeyGen is still building this look",
+      "Me Broken — HeyGen could not build this look",
+    ])
+    expect(tiles[0]).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getAllByTestId("avatar-status-badge").map((b) => b.textContent)).toEqual(["Processing…", "Failed"])
+    fireEvent.click(tiles[0])
+    fireEvent.click(tiles[1])
+    expect(updateNodeData).not.toHaveBeenCalled()
+  })
+
   it("no match → says so and points at Browse all; clearing (✕ / Escape) restores the featured row", () => {
     renderBody(data())
     const box = screen.getByLabelText("Search avatars") as HTMLInputElement

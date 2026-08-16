@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { makeResponse, routeLooks, settle } from "./catalog-test-helpers.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — registered before module under test
@@ -7,6 +8,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("@/lib/config.js", () => ({
   config: { HEYGEN_API_KEY: "test-heygen-key", NODE_ENV: "test" },
 }))
+
+// The catalog store talks to the shared ioredis client from lib/queue.ts —
+// stand in an in-memory fake (see fake-redis.ts). Hoisted so every
+// `vi.resetModules()` + re-import of catalog.js keeps talking to the SAME
+// fake: that is how "instance B adopts instance A's snapshot" is modelled.
+const redisFake = vi.hoisted(async () => {
+  const { makeFakeRedis } = await import("./fake-redis.js")
+  return makeFakeRedis()
+})
+vi.mock("@/lib/queue.js", async () => ({ redis: await redisFake }))
+const fake = await redisFake
+beforeEach(() => fake.reset())
 
 // ---------------------------------------------------------------------------
 // Module under test
@@ -19,12 +32,8 @@ vi.mock("@/lib/config.js", () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  })
-}
+// makeResponse / routeLooks / settle live in catalog-test-helpers.ts (shared
+// with catalog-shared-store.test.ts).
 
 const avatarApiResponse = {
   code: 0,
@@ -118,7 +127,7 @@ describe("listAvatars", () => {
   })
 
   it("filters out non-photo_avatar entries and maps fields correctly", async () => {
-    fetchMock.mockResolvedValueOnce(makeResponse(avatarApiResponse))
+    routeLooks(fetchMock, { public: [avatarApiResponse] })
 
     const { listAvatars } = await import("../catalog.js")
     const avatars = await listAvatars()
@@ -176,9 +185,7 @@ describe("listAvatars", () => {
       // no next_token → last page
     }
 
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(page1))
-      .mockResolvedValueOnce(makeResponse(page2))
+    routeLooks(fetchMock, { public: [page1, page2] })
 
     const { listAvatars } = await import("../catalog.js")
     const avatars = await listAvatars()
@@ -187,12 +194,12 @@ describe("listAvatars", () => {
     expect(avatars.find((a) => a.avatarId === "avatar-p1")?.supportedEngines).toEqual(["avatar_iv"])
     expect(avatars.find((a) => a.avatarId === "avatar-p2")).toBeDefined()
 
-    // First call: no token param; second call: token=cursor-abc
-    const avatarCalls = fetchMock.mock.calls.filter((args) =>
-      (args[0] as string).includes("/v3/avatars/looks"),
+    // Public stream: first call no token param; second call token=cursor-abc
+    const publicCalls = fetchMock.mock.calls.filter((args) =>
+      (args[0] as string).includes("ownership=public"),
     )
-    expect(avatarCalls).toHaveLength(2)
-    expect(avatarCalls[1][0] as string).toContain("token=cursor-abc")
+    expect(publicCalls).toHaveLength(2)
+    expect(publicCalls[1][0] as string).toContain("token=cursor-abc")
   })
 
   it("stops paginating when has_more is false even if a cursor is present", async () => {
@@ -212,38 +219,47 @@ describe("listAvatars", () => {
       has_more: false,  // explicit false — stop despite having a cursor
     }
 
-    fetchMock.mockResolvedValueOnce(makeResponse(singlePage))
+    routeLooks(fetchMock, { public: [singlePage] })
 
     const { listAvatars } = await import("../catalog.js")
     const avatars = await listAvatars()
 
     expect(avatars).toHaveLength(1)
-    const avatarCalls = fetchMock.mock.calls.filter((args) =>
-      (args[0] as string).includes("/v3/avatars/looks"),
+    const publicCalls = fetchMock.mock.calls.filter((args) =>
+      (args[0] as string).includes("ownership=public"),
     )
-    expect(avatarCalls).toHaveLength(1)
+    expect(publicCalls).toHaveLength(1)
   })
 
   it("second call within TTL reuses cache without re-fetching", async () => {
-    fetchMock.mockResolvedValue(makeResponse(avatarApiResponse))
+    routeLooks(fetchMock, { public: [avatarApiResponse] })
 
     const { listAvatars } = await import("../catalog.js")
 
     await listAvatars()
     await listAvatars()
 
-    // fetch should only have been called once (avatar endpoint + any client calls)
-    // The key assertion is that the avatar endpoint is only hit once
-    const avatarCalls = fetchMock.mock.calls.filter((args) =>
-      (args[0] as string).includes("/v3/avatars/looks"),
-    )
-    expect(avatarCalls).toHaveLength(1)
+    // Each stream (own looks / presets) is hit exactly once
+    const publicCalls = fetchMock.mock.calls.filter((args) => (args[0] as string).includes("ownership=public"))
+    const privateCalls = fetchMock.mock.calls.filter((args) => (args[0] as string).includes("ownership=private"))
+    expect(publicCalls).toHaveLength(1)
+    expect(privateCalls).toHaveLength(1)
+  })
+
+  it("lists the account's own looks FIRST, then the presets", async () => {
+    routeLooks(fetchMock, {
+      private: [{ code: 0, message: "ok", data: [{ id: "mine-1", avatar_type: "photo_avatar", name: "Mine", gender: "Male", preview_image_url: "https://cdn.example.com/mine.jpg" }] }],
+      public: [avatarApiResponse],
+    })
+    const { listAvatars } = await import("../catalog.js")
+    const avatars = await listAvatars()
+    expect(avatars.map((a) => a.avatarId)).toEqual(["mine-1", "avatar-1", "avatar-3"])
+    expect(avatars[0]?.ownership).toBe("private")
+    expect(avatars[1]?.ownership).toBe("public")
   })
 
   it("handles empty data array gracefully", async () => {
-    fetchMock.mockResolvedValueOnce(
-      makeResponse({ code: 0, message: "success", data: [] }),
-    )
+    routeLooks(fetchMock, {})
 
     const { listAvatars } = await import("../catalog.js")
     const avatars = await listAvatars()
@@ -447,17 +463,20 @@ describe("snapshotAvatars — progressive fill", () => {
     const { snapshotAvatars } = await import("../catalog.js")
     expect((await snapshotAvatars()).items.map((a) => a.avatarId)).toEqual(["old-look"])
 
-    // Past the TTL: the old list comes back at once (complete), and a refresh starts.
-    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
+    // Past the TTL (24 h by default): the old list comes back at once
+    // (complete), and a refresh starts behind it — after the store check +
+    // refresh lock, i.e. a few microtask hops.
+    vi.setSystemTime(Date.now() + 25 * 60 * 60 * 1000)
     const refreshGate = gate()
     fetchMock.mockImplementationOnce(async () => { await refreshGate.opened; return makeResponse(page("new-look")) })
     const stale = await snapshotAvatars()
     expect(stale.complete).toBe(true)
     expect(stale.items.map((a) => a.avatarId)).toEqual(["old-look"])
+    await settle()
     expect(fetchMock.mock.calls.filter((c) => (c[0] as string).includes("/v3/avatars/looks"))).toHaveLength(2)
 
     refreshGate.release()
-    await vi.advanceTimersByTimeAsync(0)
+    await settle()
     const fresh = await snapshotAvatars()
     expect(fresh.items.map((a) => a.avatarId)).toEqual(["new-look"])
     expect(fresh.complete).toBe(true)
@@ -509,9 +528,7 @@ describe("snapshotAvatars — progressive fill", () => {
   })
 
   it("listAvatars (the full-list API) still waits for every page", async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(page("look-1", "cursor-2")))
-      .mockResolvedValueOnce(makeResponse(page("look-2")))
+    routeLooks(fetchMock, { public: [page("look-1", "cursor-2"), page("look-2")] })
     const { listAvatars, snapshotAvatars } = await import("../catalog.js")
     const all = await listAvatars()
     expect(all.map((a) => a.avatarId)).toEqual(["look-1", "look-2"])
@@ -585,10 +602,10 @@ describe("snapshotAvatars — offset / generation deltas", () => {
     const { snapshotAvatars } = await import("../catalog.js")
     const g1 = (await snapshotAvatars()).generation
 
-    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
+    vi.setSystemTime(Date.now() + 25 * 60 * 60 * 1000)
     fetchMock.mockResolvedValueOnce(makeResponse(page("new-look")))
-    await snapshotAvatars() // serves stale g1, kicks the refresh
-    await vi.advanceTimersByTimeAsync(0)
+    await snapshotAvatars() // serves stale g1, kicks the refresh (store check → lock → fill)
+    await settle()
     const fresh = await snapshotAvatars({ offset: 1, generation: g1 })
     expect(fresh.generation).not.toBe(g1)
     expect(fresh).toMatchObject({ offset: 0, total: 1, complete: true })
@@ -616,13 +633,10 @@ describe("snapshotAvatars — offset / generation deltas", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("the safety cap is far above HeyGen's real ≈460 pages (the old 50 silently cut the catalog to 1,000 looks)", async () => {
-    // 60 pages, each with a cursor → the old cap would have stopped at 50.
-    let served = 0
-    fetchMock.mockImplementation(async () => {
-      served++
-      return makeResponse(page(`look-${served}`, served < 60 ? `cursor-${served + 1}` : undefined))
-    })
+  it("the safety cap is far above HeyGen's real ≈140 pages of 50 (the old 50 silently cut the catalog to 1,000 looks)", async () => {
+    // 60 public pages, each with a cursor → the old cap would have stopped at 50.
+    const sixty = Array.from({ length: 60 }, (_, i) => page(`look-${i + 1}`, i < 59 ? `cursor-${i + 2}` : undefined))
+    routeLooks(fetchMock, { public: sixty })
     const { listAvatars } = await import("../catalog.js")
     const all = await listAvatars()
     expect(all).toHaveLength(60)
@@ -639,20 +653,50 @@ describe("fetch shape — what we ask HeyGen for", () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it("asks /v3/avatars/looks for photo avatars only, 50 per page, and threads the cursor", async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse({ code: 0, message: "ok", data: [], next_token: "c2", has_more: true }))
-      .mockResolvedValueOnce(makeResponse({ code: 0, message: "ok", data: [] }))
+  it("the account's own looks carry a normalized status (processing / failed; ready → none); presets carry none", async () => {
+    const own = [
+      { id: "mine-ready", avatar_type: "photo_avatar", name: "Ready", gender: "Female", preview_image_url: "", status: "completed" },
+      { id: "mine-building", avatar_type: "photo_avatar", name: "Building", gender: "Female", preview_image_url: "", status: "processing" },
+      { id: "mine-queued", avatar_type: "photo_avatar", name: "Queued", gender: "Female", preview_image_url: "", status: "PENDING" },
+      { id: "mine-broken", avatar_type: "photo_avatar", name: "Broken", gender: "Female", preview_image_url: "", status: "failed" },
+    ]
+    routeLooks(fetchMock, {
+      private: [{ code: 0, message: "success", data: own }],
+      public: [{ code: 0, message: "success", data: [{ id: "preset", avatar_type: "photo_avatar", name: "P", gender: "Male", preview_image_url: "", status: "completed" }] }],
+    })
+    const mod = await import("../catalog.js")
+    const list = await mod.listAvatars()
+    const byId = Object.fromEntries(list.map((a) => [a.avatarId, a]))
+    expect(byId["mine-ready"].status).toBeUndefined()
+    expect(byId["mine-building"].status).toBe("processing")
+    expect(byId["mine-queued"].status).toBe("processing")
+    expect(byId["mine-broken"].status).toBe("failed")
+    expect(byId["preset"].status).toBeUndefined()
+    expect(byId["preset"].ownership).toBe("public")
+    expect(mod.normalizeLookStatus("Error")).toBe("failed")
+    expect(mod.normalizeLookStatus("training")).toBe("processing")
+    expect(mod.normalizeLookStatus("")).toBeUndefined()
+  })
+
+  it("asks /v3/avatars/looks for photo avatars only, 50 per page, one ownership per stream, and threads the cursor", async () => {
+    routeLooks(fetchMock, {
+      private: [{ code: 0, message: "ok", data: [] }],
+      public: [{ code: 0, message: "ok", data: [], next_token: "c2", has_more: true }, { code: 0, message: "ok", data: [] }],
+    })
     const { listAvatars } = await import("../catalog.js")
     await listAvatars()
     const urls = fetchMock.mock.calls.map((c) => new URL(String(c[0])))
-    expect(urls).toHaveLength(2)
+    expect(urls).toHaveLength(3)
     for (const u of urls) {
       expect(u.pathname).toBe("/v3/avatars/looks")
       expect(u.searchParams.get("avatar_type")).toBe("photo_avatar")
       expect(u.searchParams.get("limit")).toBe("50") // HeyGen's documented maximum; the default is 20
     }
-    expect(urls[0].searchParams.get("token")).toBeNull()
-    expect(urls[1].searchParams.get("token")).toBe("c2")
+    const own = urls.filter((u) => u.searchParams.get("ownership") === "private")
+    const presets = urls.filter((u) => u.searchParams.get("ownership") === "public")
+    expect(own).toHaveLength(1)
+    expect(presets).toHaveLength(2)
+    expect(presets[0].searchParams.get("token")).toBeNull()
+    expect(presets[1].searchParams.get("token")).toBe("c2")
   })
 })

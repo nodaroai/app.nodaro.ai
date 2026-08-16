@@ -74,6 +74,13 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),
   HEYGEN_API_KEY: z.string().default(""),
+  /**
+   * How often the shared (Redis) HeyGen public catalog — ≈7,000 preset
+   * avatar looks + ≈2,500 voices — is refetched from HeyGen. The account's own
+   * (private) looks are fetched separately every couple of minutes, so this
+   * only bounds how quickly NEW PRESETS appear. Fractional hours are fine.
+   */
+  HEYGEN_CATALOG_REFRESH_HOURS: z.coerce.number().positive().max(24 * 30).default(24),
   BEEBLE_API_KEY: z.string().default(""),
   APIFY_API_TOKEN: z.string().default(""),
   PORT: z.coerce.number().default(8000),

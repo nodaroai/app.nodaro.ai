@@ -19,7 +19,11 @@ const mockGetHeygenVoices = vi.fn()
 vi.mock("@/lib/api", () => ({
   getHeygenAvatarCatalog: vi.fn(),
   getHeygenAvatars: vi.fn(),
-  getHeygenVoiceCatalog: async (...args: unknown[]) => ({ items: await mockGetHeygenVoices(...args), complete: true }),
+  getHeygenPrivateAvatars: async () => [],
+  getHeygenVoiceCatalog: async (...args: unknown[]) => {
+    const items = await mockGetHeygenVoices(...args)
+    return { items, offset: 0, total: items.length, complete: true, generation: "g1" }
+  },
   getHeygenVoices: (...args: unknown[]) => mockGetHeygenVoices(...args),
 }))
 

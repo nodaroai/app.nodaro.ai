@@ -17,6 +17,7 @@ import {
   useHeygenAvatars,
   keylessCatalogHint,
   avatarSupportsV,
+  avatarStatusLabel,
   filterAvatars,
 } from "@/components/heygen/heygen-catalog"
 import { pickFeaturedAvatars, splitLookName } from "./catalog-helpers"
@@ -51,23 +52,31 @@ interface LookTileProps {
   readonly onPick: (avatar: HeygenAvatar) => void
 }
 
-/** One look: portrait (fills the tile), Avatar-V badge, person / scene lines. */
+/** One look: portrait (fills the tile), Avatar-V badge, person / scene lines.
+ *  The account's own look that HeyGen is still building (or failed) shows its
+ *  status and cannot be picked. */
 function LookTile({ avatar, selected, onPick }: LookTileProps) {
   const { person, scene } = splitLookName(avatar.name)
+  const statusLabel = avatarStatusLabel(avatar)
+  const named = statusLabel
+    ? `${avatar.name} — ${statusLabel === "Failed" ? "HeyGen could not build this look" : "HeyGen is still building this look"}`
+    : avatar.name
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label={avatar.name}
-      title={avatar.name}
+      aria-disabled={statusLabel ? true : undefined}
+      aria-label={named}
+      title={named}
       className={cn(
-        "nodrag nopan group/tile flex flex-col min-w-0 min-h-0 rounded-lg border p-1 text-left transition-colors cursor-pointer",
+        "nodrag nopan group/tile flex flex-col min-w-0 min-h-0 rounded-lg border p-1 text-left transition-colors",
+        statusLabel ? "cursor-not-allowed opacity-50" : "cursor-pointer",
         selected
           ? "border-[#ff0073] ring-1 ring-[#ff0073]/50 bg-[#ff0073]/5"
           : "border-border/60 hover:border-[#ff0073]/60 hover:bg-muted/40",
       )}
-      onClick={(e) => { stop(e); onPick(avatar) }}
+      onClick={(e) => { stop(e); if (!statusLabel) onPick(avatar) }}
     >
       <div className="relative flex-1 min-h-0 overflow-hidden rounded-md bg-muted/40">
         <CachedImage
@@ -84,6 +93,18 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
             className="absolute top-1 left-1 grid place-items-center w-4 h-4 rounded bg-violet-600/90 text-white"
           >
             <Zap className="size-2.5" aria-hidden />
+          </span>
+        )}
+        {statusLabel && (
+          <span
+            aria-hidden
+            data-testid="avatar-status-badge"
+            className={cn(
+              "absolute bottom-1 left-1 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white",
+              statusLabel === "Failed" ? "bg-red-600/90" : "bg-amber-500/90",
+            )}
+          >
+            {statusLabel}
           </span>
         )}
       </div>

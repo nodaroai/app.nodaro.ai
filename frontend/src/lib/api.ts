@@ -5664,6 +5664,13 @@ export interface HeygenAvatar {
    *  Absent / empty means the backend didn't return engine metadata — treat as
    *  IV-only for filtering purposes (stock avatars often lack the field). */
   supportedEngines?: string[]
+  /** "public" = HeyGen's preset library; "private" = the account's own looks
+   *  (listed first, and what the picker's "Custom" filter means). Absent from
+   *  servers that predate the split. */
+  ownership?: "public" | "private"
+  /** Only the account's own looks have a lifecycle: absent = ready to use;
+   *  "processing" = HeyGen is still building it; "failed" = it never will be. */
+  status?: "processing" | "failed"
 }
 
 /** A single voice from /v2/voices. */
@@ -5690,11 +5697,13 @@ export interface HeygenCatalogSince {
 /**
  * One answer from a HeyGen catalog route. The server fills its catalog
  * progressively (HeyGen pages it — ≈140 pages for the ≈7,000 photo avatars;
- * a cold fill takes minutes), so an answer may be PARTIAL: `complete:false`
- * means "here is what has arrived so far — ask again". Answers are DELTAS:
- * `items` starts at `offset` within `generation`; a client sends back its
- * `{ offset, generation }` and appends what it gets (see heygen-catalog.ts).
- * A generation change (server refresh / restart) comes back at offset 0.
+ * a cold fill takes about a minute and a half), so an answer may be PARTIAL:
+ * `complete:false` means "here is what has arrived so far — ask again".
+ * Answers are DELTAS: `items` starts at `offset` within `generation`; a
+ * client sends back its `{ offset, generation }` and appends what it gets
+ * (see heygen-catalog.ts). A generation change (server refresh / restart)
+ * comes back at offset 0. `limit` bounds one answer so a warm list streams
+ * in chunks — `total` says how far the server's list goes.
  */
 export interface HeygenCatalogPage<T> {
   items: T[]
@@ -5708,9 +5717,17 @@ async function fetchHeygenCatalog<T>(
   path: string,
   field: "avatars" | "voices",
   since?: HeygenCatalogSince,
+  limit?: number,
+  signal?: AbortSignal,
 ): Promise<HeygenCatalogPage<T>> {
-  const qs = since ? `?offset=${since.offset}&generation=${encodeURIComponent(since.generation)}` : ""
-  const res = await fetch(`${API_BASE_URL}${path}${qs}`)
+  const params = new URLSearchParams()
+  if (since) {
+    params.set("offset", String(since.offset))
+    params.set("generation", since.generation)
+  }
+  if (limit && limit > 0) params.set("limit", String(limit))
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE_URL}${path}${qs ? `?${qs}` : ""}`, { signal })
   if (!res.ok) {
     throw new Error(`Failed to fetch HeyGen ${field}`)
   }
@@ -5734,16 +5751,72 @@ async function fetchHeygenCatalog<T>(
  * required. `items` is [] when HEYGEN_API_KEY is not configured on the server
  * (with `complete:true` — nothing more will come).
  */
-export function getHeygenAvatarCatalog(since?: HeygenCatalogSince): Promise<HeygenCatalogPage<HeygenAvatar>> {
-  return fetchHeygenCatalog<HeygenAvatar>("/v1/heygen/avatars", "avatars", since)
+export function getHeygenAvatarCatalog(
+  since?: HeygenCatalogSince,
+  limit?: number,
+  signal?: AbortSignal,
+): Promise<HeygenCatalogPage<HeygenAvatar>> {
+  return fetchHeygenCatalog<HeygenAvatar>("/v1/heygen/avatars", "avatars", since, limit, signal)
+}
+
+/**
+ * The account's OWN (private) HeyGen looks — a small list, always whole, that
+ * the server refreshes every couple of minutes. Public endpoint — no auth
+ * required. `[]` on a keyless install, and `[]` (never an error) on a server
+ * that predates the split — it answers 401/404 for the unknown route and
+ * includes private looks in the main list instead.
+ */
+export async function getHeygenPrivateAvatars(): Promise<HeygenAvatar[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/heygen/avatars/private`)
+  if (!res.ok) return []
+  const body = (await res.json().catch(() => null)) as { avatars?: unknown } | null
+  return Array.isArray(body?.avatars) ? (body.avatars as HeygenAvatar[]) : []
+}
+
+/** What one catalog did on a manual refresh (see `refreshHeygenCatalog`). */
+export type HeygenCatalogRefreshOutcome =
+  | "started"          // a fill is running in the background; pickers pick it up on their next poll
+  | "already-running"  // this server is already refreshing it
+  | "locked-elsewhere" // another server of this environment is refreshing it
+  | "adopted"          // a newer shared snapshot already existed — taken as-is
+  | "unconfigured"     // no HeyGen key on this install
+  | "relay-reset"      // connected install: the relayed copy was forgotten, the next request re-pulls
+
+export interface HeygenCatalogRefreshResponse {
+  /** "local" = this install's own catalog; "connection" = served through nodaro.ai. */
+  mode: "local" | "connection"
+  avatars: HeygenCatalogRefreshOutcome
+  privateAvatars: HeygenCatalogRefreshOutcome
+  voices: HeygenCatalogRefreshOutcome
+}
+
+/**
+ * Operator action: refetch the HeyGen catalogs from HeyGen now (the shared
+ * lists otherwise refresh once a day). Signed-in first-party session; where
+ * the edition has admins, admins only — a 403 means "not you".
+ */
+export async function refreshHeygenCatalog(): Promise<HeygenCatalogRefreshResponse> {
+  const res = await fetch(`${API_BASE_URL}/v1/heygen/catalog/refresh`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const errJson = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    throwApiError(errJson, "Failed to refresh the HeyGen catalog")
+  }
+  return (await res.json()) as HeygenCatalogRefreshResponse
 }
 
 /**
  * Fetches the HeyGen voices known to the server right now.
  * Public endpoint — no auth required. See `getHeygenAvatarCatalog`.
  */
-export function getHeygenVoiceCatalog(since?: HeygenCatalogSince): Promise<HeygenCatalogPage<HeygenVoice>> {
-  return fetchHeygenCatalog<HeygenVoice>("/v1/heygen/voices", "voices", since)
+export function getHeygenVoiceCatalog(
+  since?: HeygenCatalogSince,
+  limit?: number,
+  signal?: AbortSignal,
+): Promise<HeygenCatalogPage<HeygenVoice>> {
+  return fetchHeygenCatalog<HeygenVoice>("/v1/heygen/voices", "voices", since, limit, signal)
 }
 
 /** The avatar looks in one array — whatever the server has right now. */

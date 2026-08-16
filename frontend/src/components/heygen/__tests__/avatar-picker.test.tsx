@@ -18,8 +18,12 @@ const mockGetHeygenAvatars = vi.fn()
 // progressive fetcher (`{ items, complete }`). The mock keeps returning arrays
 // and wraps them as a whole answer.
 vi.mock("@/lib/api", () => ({
-  getHeygenAvatarCatalog: async (...args: unknown[]) => ({ items: await mockGetHeygenAvatars(...args), complete: true }),
+  getHeygenAvatarCatalog: async (...args: unknown[]) => {
+    const items = await mockGetHeygenAvatars(...args)
+    return { items, offset: 0, total: items.length, complete: true, generation: "g1" }
+  },
   getHeygenAvatars: (...args: unknown[]) => mockGetHeygenAvatars(...args),
+  getHeygenPrivateAvatars: async () => [],
   // VoicePicker is not used here but the module must export consistently.
   getHeygenVoiceCatalog: vi.fn(),
   getHeygenVoices: vi.fn(),
@@ -276,6 +280,25 @@ describe("AvatarPicker component", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Alex Studio/i }))
 
     expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledWith(MALE_AVATAR)
+  })
+
+  it("the account's own look that HeyGen is still building is shown with its status and cannot be picked", async () => {
+    const building = { ...MALE_AVATAR, avatarId: "av-building", name: "Me Building", ownership: "private" as const, status: "processing" as const }
+    const broken = { ...MALE_AVATAR, avatarId: "av-broken", name: "Me Broken", ownership: "private" as const, status: "failed" as const }
+    mockGetHeygenAvatars.mockResolvedValue([building, broken, MALE_AVATAR])
+    const onSelect = vi.fn()
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={onSelect} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Me Building/i }))
+    const badges = screen.getAllByTestId("avatar-status-badge").map((b) => b.textContent)
+    expect(badges).toEqual(["Processing…", "Failed"])
+    const tile = screen.getByRole("radio", { name: /Me Building/i })
+    expect(tile).toHaveAttribute("aria-disabled", "true")
+    fireEvent.click(tile)
+    fireEvent.click(screen.getByRole("radio", { name: /Me Broken/i }))
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("radio", { name: /Alex Studio/i }))
     expect(onSelect).toHaveBeenCalledWith(MALE_AVATAR)
   })
 

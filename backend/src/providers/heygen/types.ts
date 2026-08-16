@@ -20,6 +20,11 @@ export interface HeygenAvatar {
   preferredOrientation?: string
   /** Which API engines this avatar supports, e.g. ["avatar_iv", "avatar_v"]. */
   supportedEngines?: string[]
+  /** "public" = HeyGen's preset library; "private" = the account's own looks. */
+  ownership?: "public" | "private"
+  /** Only the account's own looks carry a lifecycle: absent = ready to use;
+   *  "processing" = HeyGen is still building it; "failed" = it never will be. */
+  status?: "processing" | "failed"
 }
 
 /** A single voice from /v2/voices. */
@@ -52,6 +57,9 @@ export interface RawHeygenAvatarLook {
   image_height?: number
   /** Engine types this look supports, e.g. ["avatar_iv", "avatar_v"]. */
   supported_api_engines?: string[]
+  /** Lifecycle of the account's OWN looks (e.g. "pending" | "processing" |
+   *  "completed" | "failed"); absent on the preset library. */
+  status?: string
 }
 
 /** GET /v3/avatars/looks response shape. */

@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import { PlatformCard } from "@/components/integrations/platform-card"
 import { NodaroCloudCard } from "@/components/integrations/nodaro-cloud-card"
 import { ModelProvidersCard } from "@/components/integrations/model-providers-card"
+import { HeygenCatalogCard } from "@/components/integrations/heygen-catalog-card"
 import { getSocialConnections, getSocialProviders, type SocialProviderInfo } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import type { SocialConnection } from "@/types/nodes"
@@ -55,6 +56,9 @@ export default function IntegrationsPage() {
           social-providers loading gate — each runs its own status fetch. */}
       <NodaroCloudCard />
       <ModelProvidersCard />
+      {/* The operator's manual HeyGen catalog refresh — every edition; the
+          card hides itself from people the server would refuse. */}
+      <HeygenCatalogCard />
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
