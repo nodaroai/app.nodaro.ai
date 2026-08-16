@@ -6,7 +6,8 @@ describe("NODE_REGISTRY: reduce", () => {
   it("has a 'reduce' entry with label, category=control, outputType=text", () => {
     const entry = NODE_REGISTRY.find((n) => n.type === "reduce")
     expect(entry).toBeDefined()
-    expect(entry!.label).toMatch(/reduce/i)
+    // Display name is "Choose Best" (intent vocabulary); the type id stays reduce.
+    expect(entry!.label).toBe("Choose Best")
     // Fan-in collapses N values into one — closest existing NodeCategory is
     // "control" (alongside list/loop/combine-text/split-text). The plan
     // suggested category "workflow" but no such category exists in the

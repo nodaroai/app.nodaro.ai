@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-06-27T20:11:22.269Z
-generated_from: f80b06e52
+generated_at: 2026-08-15T21:55:08.732Z
+generated_from: 150c80ac9
 ---
 
 # Animal/Creature

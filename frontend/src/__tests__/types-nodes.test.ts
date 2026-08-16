@@ -21,12 +21,15 @@ describe("ReduceNodeData", () => {
     expect(NODE_DEFINITIONS.find((n) => n.type === "reduce")).toBeTruthy()
   })
 
-  it("NODE_DEFINITIONS 'reduce' entry has the expected default strategy", () => {
+  it("NODE_DEFINITIONS 'reduce' entry defaults to the AI judge (Choose Best's headline use)", () => {
     const def = NODE_DEFINITIONS.find((n) => n.type === "reduce")
     expect(def).toBeDefined()
     const data = def!.defaultData as ReduceNodeData
-    expect(data.strategyId).toBe("concat")
+    expect(def!.label).toBe("Choose Best")
+    expect(data.strategyId).toBe("pick-best-llm")
     expect(data.strategyConfig).toBeDefined()
-    expect((data.strategyConfig as { separator?: string }).separator).toBe("\n\n")
+    const cfg = data.strategyConfig as { criteria?: string; inputKind?: string }
+    expect(cfg.criteria).toBe("Pick the highest-quality result.")
+    expect(cfg.inputKind).toBe("text")
   })
 })

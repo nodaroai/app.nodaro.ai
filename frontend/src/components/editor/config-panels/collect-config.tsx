@@ -15,9 +15,9 @@ function SortableRow({ id, label }: { id: string; label: string }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="flex items-center gap-2 p-2 bg-[#1E1E1E] border border-[#2D2D2D] rounded mb-1 cursor-grab"
+      className="flex items-center gap-2 p-2 bg-muted/50 hover:bg-muted border border-border rounded mb-1 cursor-grab text-foreground transition-colors"
     >
-      <span className="text-xs">⋮⋮</span>
+      <span className="text-xs text-muted-foreground">⋮⋮</span>
       <span className="text-sm">{label}</span>
     </div>
   )
@@ -29,7 +29,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
   if (!nodeId) {
-    return <div className="text-xs text-gray-500">Collect node id unavailable.</div>
+    return <div className="text-xs text-muted-foreground">Collect node id unavailable.</div>
   }
 
   const incoming = allEdges.filter(
@@ -54,7 +54,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
     <div className="collect-config">
       <h3 className="text-sm font-medium mb-2">Order</h3>
       {sourceIds.length === 0 ? (
-        <div className="text-xs text-gray-500">No connections yet.</div>
+        <div className="text-xs text-muted-foreground">No connections yet.</div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sourceIds} strategy={verticalListSortingStrategy}>
@@ -68,7 +68,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
       )}
       <button
         onClick={() => updateNodeData(nodeId, { order: incoming.map((e) => e.source) })}
-        className="mt-2 text-xs text-gray-400 hover:text-white"
+        className="mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         Reset to arrival order
       </button>

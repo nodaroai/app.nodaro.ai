@@ -4,30 +4,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { REDUCE_STRATEGIES } from "@nodaro/shared"
+import { REDUCE_STRATEGIES, buildLlmCreditIdentifier } from "@nodaro/shared"
 import type { ReduceNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { ReduceStrategyForms } from "./reduce-strategy-forms"
+import { ModelSelectOption } from "./model-select-option"
 
 /**
- * Config panel for the Reduce (fan-in) node.
+ * Config panel for the Choose Best node (type id `reduce`).
  *
  * Layout: two tabs.
- *   • Config  — strategy picker + per-strategy form.
- *   • Inputs  — per-iteration inspector for the most recent run: the meta
- *               summary, the LLM reasoning blockquote (when present), and a
- *               vertical list of every upstream item with `selectedIndex`
- *               highlighted in brand pink. Disabled until the node has
- *               completed at least once with persisted inputs.
+ *   • Config      — "what to do with the candidates" picker (one row per
+ *                   strategy: label, plain-language description, credit badge
+ *                   from the strategy's creditCostKey — the AI judge is priced
+ *                   by its chosen model's tier, the rest are free) + the
+ *                   per-strategy form.
+ *   • Candidates  — inspector for the most recent run: the summary, the
+ *                   judge's reasoning (when present), and every candidate
+ *                   with the chosen one highlighted in brand pink. Disabled
+ *                   until the node has completed at least once with
+ *                   persisted inputs.
  *
  * The strategy registry lives in `@nodaro/shared/reduce-strategy-registry`
- * — single source of truth for ids, labels, and default configs. Changing
- * a strategy snaps `strategyConfig` to that strategy's `defaultConfig`.
+ * — single source of truth for ids, labels, descriptions and default configs.
+ * Changing a strategy snaps `strategyConfig` to that strategy's
+ * `defaultConfig`.
  */
 export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   const status = data.executionStatus ?? "idle"
@@ -35,19 +40,22 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   const inputsTabEnabled = status === "completed" && hasLastInputs
 
   const strategy = REDUCE_STRATEGIES.find((s) => s.id === data.strategyId)
+  // The AI judge's price follows the chosen model's tier; the option row
+  // shows the price for the model currently picked on this node.
+  const judgeModel = typeof data.strategyConfig?.llmModel === "string" ? data.strategyConfig.llmModel : undefined
 
   return (
     <Tabs defaultValue="config" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="config">Config</TabsTrigger>
         <TabsTrigger value="inputs" disabled={!inputsTabEnabled}>
-          Inputs
+          Candidates
         </TabsTrigger>
       </TabsList>
 
       <TabsContent value="config" className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label>Strategy</Label>
+          <Label>What to do with the candidates</Label>
           <Select
             value={data.strategyId}
             onValueChange={(strategyId) => {
@@ -65,9 +73,17 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
             </SelectTrigger>
             <SelectContent>
               {REDUCE_STRATEGIES.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.label}
-                </SelectItem>
+                <ModelSelectOption
+                  key={s.id}
+                  value={s.id}
+                  label={s.label}
+                  desc={s.description}
+                  creditId={
+                    s.id === "pick-best-llm"
+                      ? buildLlmCreditIdentifier(s.creditCostKey, judgeModel)
+                      : s.creditCostKey
+                  }
+                />
               ))}
             </SelectContent>
           </Select>
@@ -88,7 +104,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
           <ReduceInputsTab inputs={data.lastInputs ?? []} meta={data.lastMeta} />
         ) : (
           <p className="text-sm text-muted-foreground">
-            Run the workflow to inspect inputs.
+            Run the workflow to see the candidates and which one was chosen.
           </p>
         )}
       </TabsContent>
@@ -96,7 +112,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   )
 }
 
-/** Per-iteration inspector. */
+/** Candidates inspector for the most recent run. */
 function ReduceInputsTab({
   inputs,
   meta,
@@ -119,7 +135,7 @@ function ReduceInputsTab({
 
       {reasoning && (
         <div className="flex flex-col gap-1">
-          <Label className="text-xs font-medium text-muted-foreground">Reasoning</Label>
+          <Label className="text-xs font-medium text-muted-foreground">Why it chose this</Label>
           <blockquote className="text-xs italic border-l-2 border-muted-foreground/40 pl-2 text-muted-foreground">
             {reasoning}
           </blockquote>
@@ -128,7 +144,7 @@ function ReduceInputsTab({
 
       <div className="flex flex-col gap-1">
         <Label className="text-xs font-medium text-muted-foreground">
-          Items ({inputs.length})
+          Candidates ({inputs.length})
         </Label>
         <ul className="flex flex-col gap-1.5">
           {inputs.map((item, i) => {
@@ -150,7 +166,7 @@ function ReduceInputsTab({
                   <span className="flex-1 min-w-0">{truncated}</span>
                   {isSelected && (
                     <span className="shrink-0 text-[10px] uppercase font-medium tracking-wide text-[#ff0073]">
-                      selected
+                      chosen
                     </span>
                   )}
                 </div>

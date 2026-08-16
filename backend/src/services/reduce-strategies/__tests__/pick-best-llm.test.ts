@@ -6,6 +6,7 @@ vi.mock("../../../lib/llm-client", () => ({
 
 const { llmComplete } = await import("../../../lib/llm-client")
 const { execute } = await import("../pick-best-llm")
+const { LLM_FEATURE_DEFAULTS } = await import("@nodaro/shared")
 
 const ctx = { userId: "u1", jobId: "j1", logger: console as any }
 
@@ -14,7 +15,7 @@ describe("pick-best-llm strategy", () => {
     vi.mocked(llmComplete).mockReset()
   })
 
-  it("calls llmComplete with claude-sonnet-4.6 (which routes via direct Anthropic SDK fallback)", async () => {
+  it("judges with the feature default model when none is chosen, under its own feature id", async () => {
     vi.mocked(llmComplete).mockResolvedValue({
       text: `{"chosen_index": 2, "reasoning": "sharper detail"}`,
       model: "claude-sonnet-4.6",
@@ -23,12 +24,29 @@ describe("pick-best-llm strategy", () => {
     await execute(["alpha", "beta", "gamma"], { criteria: "sharper", inputKind: "text" }, ctx)
 
     const callArg = vi.mocked(llmComplete).mock.calls[0][0]
-    // Per @nodaro/shared llm-models.ts, "claude-sonnet-4.6" has
-    // directFallbackModel: "claude-sonnet-4-6", so llmComplete() will route
-    // via the direct Anthropic SDK (which supports image content blocks)
-    // rather than the KIE proxy. Asserting on modelId is sufficient — the
-    // routing is a property of the model registry, not the request.
-    expect(callArg.modelId).toBe("claude-sonnet-4.6")
+    expect(callArg.modelId).toBe(LLM_FEATURE_DEFAULTS["pick-best-llm"])
+    expect(callArg.feature).toBe("pick-best-llm")
+  })
+
+  it("judges with the user's chosen model (strategyConfig.llmModel)", async () => {
+    vi.mocked(llmComplete).mockResolvedValue({
+      text: `{"chosen_index": 1, "reasoning": "ok"}`,
+      model: "claude-opus-4.8",
+    } as any)
+
+    await execute(["alpha", "beta"], { criteria: "best", inputKind: "image-url", llmModel: "claude-opus-4.8" }, ctx)
+
+    expect(vi.mocked(llmComplete).mock.calls[0][0].modelId).toBe("claude-opus-4.8")
+  })
+
+  it("summary speaks intent, not the model name", async () => {
+    vi.mocked(llmComplete).mockResolvedValue({
+      text: `{"chosen_index": 2, "reasoning": "sharper detail"}`,
+      model: "claude-sonnet-4.6",
+    } as any)
+    const r = await execute(["alpha", "beta", "gamma"], { criteria: "sharper", inputKind: "text" }, ctx)
+    expect(r.meta.summary).toMatch(/^Chose #2 of 3: sharper detail/)
+    expect(r.meta.summary).not.toMatch(/sonnet/i)
   })
 
   it("returns chosen item with selectedIndex (LLM 1-based → meta 0-based)", async () => {

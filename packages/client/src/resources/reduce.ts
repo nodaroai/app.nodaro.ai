@@ -13,7 +13,9 @@ export interface ReduceInput {
   /**
    * Strategy-specific config. Defaults to `{}` server-side, which uses every
    * strategy's `defaultConfig`. Schemas (from `@nodaro/shared`):
-   *   - `pick-best-llm`: `{ criteria: string, inputKind?: "text" | "image-url" }`
+   *   - `pick-best-llm`: `{ criteria: string, inputKind?: "text" | "image-url", llmModel?: string }`
+   *     (`llmModel` = the judge model id from the LLM registry; omitted → the
+   *     feature default. Its tier sets the price: economy / standard / premium.)
    *   - `concat`: `{ separator?: string }`
    *   - `vote`: `{ caseSensitive?: boolean }`
    *   - `merge-json`: `{ strategy?: "deep" | "shallow" }`

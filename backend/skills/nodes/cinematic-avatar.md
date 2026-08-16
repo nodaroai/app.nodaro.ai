@@ -1,7 +1,7 @@
 ---
 node_type: cinematic-avatar
-generated_at: 2026-06-05T10:16:15.038Z
-generated_from: 9f6254d9
+generated_at: 2026-08-15T21:55:08.322Z
+generated_from: 150c80ac9
 ---
 
 # Cinematic Avatar

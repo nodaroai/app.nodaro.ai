@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { REDUCE_STRATEGY_IDS, type ReduceStrategyId } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS, LLM_MODEL_IDS, buildLlmCreditIdentifier, type ReduceStrategyId } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -16,12 +16,37 @@ import { sendInternalError } from "../lib/http-errors.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
-// JSON object here.
+// JSON object here — EXCEPT the pick-best-llm judge model, which is checked
+// against the LLM registry here (the shared strategy registry can't import
+// the model list without a cycle) so an unknown model is a clean 400 rather
+// than a failed job after credits reserve.
 const reduceBody = z.object({
   strategyId: z.enum(REDUCE_STRATEGY_IDS as [string, ...string[]]),
   strategyConfig: z.record(z.string(), z.unknown()).default({}),
   inputs: z.array(z.string()).max(1000),
+}).superRefine((body, ctx) => {
+  const model = body.strategyConfig.llmModel
+  if (body.strategyId === "pick-best-llm" && model !== undefined && !LLM_MODEL_IDS.includes(model as never)) {
+    ctx.addIssue({ code: "custom", path: ["strategyConfig", "llmModel"], message: `Unknown AI model "${String(model)}"` })
+  }
 })
+
+/**
+ * Credit identifier for a reduce call. Every strategy bills at its flat
+ * `reduce:<strategyId>` key EXCEPT the AI judge, whose price follows the
+ * chosen model's tier exactly like every other LLM node
+ * (buildLlmCreditIdentifier: economy → `reduce:pick-best-llm:economy`,
+ * standard → `reduce:pick-best-llm`, premium → `reduce:pick-best-llm:premium`).
+ * Reads the raw body so the creditGuard preHandler (pre-Zod) and the
+ * reservation (post-Zod) resolve the SAME id.
+ */
+function reduceCreditIdentifier(body: unknown): string {
+  const b = body as { strategyId?: unknown; strategyConfig?: { llmModel?: unknown } } | undefined
+  const strategyId = String(b?.strategyId ?? "concat")
+  if (strategyId !== "pick-best-llm") return `reduce:${strategyId}`
+  const model = typeof b?.strategyConfig?.llmModel === "string" ? b.strategyConfig.llmModel : undefined
+  return buildLlmCreditIdentifier("reduce:pick-best-llm", model)
+}
 
 export async function reduceRoutes(app: FastifyInstance) {
   app.post(
@@ -30,14 +55,7 @@ export async function reduceRoutes(app: FastifyInstance) {
       // dedup: false — the same upstream fan-in run may legitimately be invoked
       // multiple times in quick succession (loop iterations, retries) and we
       // never want two distinct runs to silently collapse into one.
-      preHandler: creditGuard(
-        (req) => {
-          const body = req.body as Record<string, unknown> | undefined
-          const strategyId = String(body?.strategyId ?? "concat")
-          return `reduce:${strategyId}`
-        },
-        { dedup: false },
-      ),
+      preHandler: creditGuard((req) => reduceCreditIdentifier(req.body), { dedup: false }),
     },
     async (req, reply) => {
       const parsed = reduceBody.safeParse(req.body)
@@ -55,7 +73,7 @@ export async function reduceRoutes(app: FastifyInstance) {
       }
 
       const { strategyId, strategyConfig, inputs } = parsed.data
-      const modelIdentifier = `reduce:${strategyId}`
+      const modelIdentifier = reduceCreditIdentifier(parsed.data)
 
       const { data: job, error: jobError } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),

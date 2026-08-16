@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-07-28T17:14:14.776Z
-generated_from: 15975a896
+generated_at: 2026-08-15T21:55:07.213Z
+generated_from: 150c80ac9
 ---
 
 # Describe to Picker

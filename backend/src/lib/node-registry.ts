@@ -1032,9 +1032,9 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "component", label: "Component", category: "utility", description: "Embed a published Nodaro Component (a curated, versioned sub-workflow from the marketplace or your own apps) as a black-box node — its exposed inputs/settings/outputs surface in the config panel.", outputType: "data", creditCost: 0 },
   {
     type: "reduce",
-    label: "Reduce",
+    label: "Choose Best",
     category: "control",
-    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `reduce:<strategyId>` composite key.",
+    description: "Turns N candidate results into ONE: an AI judge picks the best against your criteria (pick-best-llm), or the candidates are joined (concat), the first non-empty is taken (first-non-empty), counted (count), voted (vote), or merged as JSON (merge-json). Credit cost varies per strategy via the `reduce:<strategyId>` composite key.",
     outputType: "text",
     creditCost: "0-3",
     inputSchema: {

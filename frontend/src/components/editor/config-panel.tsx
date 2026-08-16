@@ -397,7 +397,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
   "router": "Router",
-  "reduce": "Reduce",
+  "reduce": "Choose Best",
   "generative-pipeline": "Story → Video",
   "group": "Group",
   "collect": "Collect",

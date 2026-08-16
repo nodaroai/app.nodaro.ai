@@ -423,6 +423,10 @@ export type LlmFeature =
   | "generate-script"
   | "translate"
   | "image-critic"
+  // Choose Best (reduce) — the pick-best-llm strategy's judge. Its own
+  // feature (not ai-writer, which it used to piggyback on) so the model
+  // default and the tiered credit ids are the strategy's own.
+  | "pick-best-llm"
 
 /** Engine-dependent LlmFeature for the motion-graphics node (design §8: every credit-id site must branch on engine). */
 export function motionGraphicsFeature(engine?: string): LlmFeature {
@@ -446,6 +450,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "generate-script": "gemini-3.6-flash",
   "translate": "gemini-3.6-flash",
   "image-critic": "claude-sonnet-4.6",
+  "pick-best-llm": "claude-sonnet-4.6",
 }
 
 /**

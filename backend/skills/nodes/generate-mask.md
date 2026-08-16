@@ -1,7 +1,7 @@
 ---
 node_type: generate-mask
-generated_at: 2026-05-18T13:23:37.700Z
-generated_from: cb1e786d
+generated_at: 2026-08-15T21:55:08.442Z
+generated_from: 150c80ac9
 ---
 
 # Generate Mask

@@ -45,6 +45,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
   const useWorkflowStore: any = (selector: any) =>
     selector({
       nodes: mockNodes,
+      edges: mockEdges,
       updateNodeData: updateNodeDataMock,
       deleteEdge: deleteEdgeMock,
     })
@@ -128,6 +129,27 @@ describe("GroupNode", () => {
     expect(screen.getByTestId("handle-out-image")).toBeInTheDocument()
     expect(screen.queryByTestId("handle-out-video")).not.toBeInTheDocument()
     expect(screen.queryByTestId("handle-out-audio")).not.toBeInTheDocument()
+  })
+
+  // Lane presence derives from MEMBERSHIP, not just results — a pre-run
+  // member must already mint its lane pip so outgoing edges are draggable
+  // and pre-authored edges render (same fix as collect-node).
+  it("renders the lane pip for a member BEFORE it has results", () => {
+    resetMocks([
+      { id: "group-1", type: "group", position: { x: 0, y: 0 }, data: { label: "G" } },
+      { id: "gi-1", parentId: "group-1", type: "generate-image", position: { x: 0, y: 10 }, data: { label: "Cover", prompt: "x" } },
+    ])
+    renderNode({ data: { label: "G" } })
+    expect(screen.getByTestId("handle-out-image")).toBeInTheDocument()
+  })
+
+  it("renders the lane pip for a lane referenced by an outgoing edge", () => {
+    resetMocks(
+      [{ id: "group-1", type: "group", position: { x: 0, y: 0 }, data: { label: "G" } }],
+      [{ id: "e1", source: "group-1", sourceHandle: "out-audio", target: "downstream", targetHandle: "in" }],
+    )
+    renderNode({ data: { label: "G" } })
+    expect(screen.getByTestId("handle-out-audio")).toBeInTheDocument()
   })
 
   it("hides empty-state hint when there is at least one member output", () => {

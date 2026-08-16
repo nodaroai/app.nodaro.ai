@@ -1,7 +1,7 @@
 ---
 node_type: suno-add-instrumental
-generated_at: 2026-08-03T12:33:47.327Z
-generated_from: 4260ead1d
+generated_at: 2026-08-15T21:55:07.082Z
+generated_from: 150c80ac9
 ---
 
 # Suno Add Instrumental

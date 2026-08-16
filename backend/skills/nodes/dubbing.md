@@ -1,7 +1,7 @@
 ---
 node_type: dubbing
-generated_at: 2026-06-16T08:22:28.432Z
-generated_from: 877dfa01a
+generated_at: 2026-08-15T21:55:07.337Z
+generated_from: 150c80ac9
 ---
 
 # Dubbing

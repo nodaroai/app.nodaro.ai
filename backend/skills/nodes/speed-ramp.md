@@ -1,7 +1,7 @@
 ---
 node_type: speed-ramp
-generated_at: 2026-05-20T12:36:29.536Z
-generated_from: f43e0370
+generated_at: 2026-08-15T21:55:08.131Z
+generated_from: 150c80ac9
 ---
 
 # Adjust Speed

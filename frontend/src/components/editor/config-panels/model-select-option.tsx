@@ -10,10 +10,16 @@ export function ModelSelectOption({
   desc,
   tooltip,
   perSecond,
+  creditId,
 }: {
   value: string
   label: string
   desc: string
+  /** The credit identifier to price this row by, when it differs from the
+   *  Select `value`. Rows whose value is not itself a model id (a Choose Best
+   *  strategy id, priced by its creditCostKey — tiered by judge model) pass it
+   *  here; model rows leave it unset and are priced by `value`. */
+  creditId?: string
   /** When set, overrides the hover-tooltip content on the right side of the
    *  dropdown row. The inline description below the label still renders
    *  unchanged — caller uses this to surface model-specific capabilities
@@ -27,11 +33,12 @@ export function ModelSelectOption({
 }) {
   // Both hooks run unconditionally (Rules of Hooks). When not per-second the
   // second call resolves the same id as the first (cached, no extra fetch).
-  const baseCredits = useModelCredits(value)
-  const perSecondCredits = useModelCredits(perSecond ? `${value}:15s` : value)
+  const priceId = creditId ?? value
+  const baseCredits = useModelCredits(priceId)
+  const perSecondCredits = useModelCredits(perSecond ? `${priceId}:15s` : priceId)
   const badge = perSecond
     ? formatPerSecondCreditBadge(perSecondCredits)
-    : formatCreditBadge(value, baseCredits)
+    : formatCreditBadge(priceId, baseCredits)
 
   return (
     <SelectItemWithMeta

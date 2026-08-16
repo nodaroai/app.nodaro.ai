@@ -1,7 +1,7 @@
 ---
 node_type: suno-voice
-generated_at: 2026-05-18T20:01:15.985Z
-generated_from: 866224d8
+generated_at: 2026-08-15T21:55:06.857Z
+generated_from: 150c80ac9
 ---
 
 # Suno Voice

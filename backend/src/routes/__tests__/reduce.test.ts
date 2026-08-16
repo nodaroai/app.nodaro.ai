@@ -118,6 +118,47 @@ describe("POST /v1/reduce", () => {
     expect(body.inputs).toBeUndefined()
   })
 
+  // The AI judge bills by its chosen model's tier (like every LLM node);
+  // the reservation id must reflect the strategyConfig.llmModel the user picked.
+  it.each([
+    [undefined, "reduce:pick-best-llm"],
+    ["claude-sonnet-4.6", "reduce:pick-best-llm"],
+    ["gemini-3.6-flash", "reduce:pick-best-llm:economy"],
+    ["claude-opus-4.8", "reduce:pick-best-llm:premium"],
+  ])("pick-best-llm with llmModel=%s reserves credits under %s", async (llmModel, expectedId) => {
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    const { reserveCreditsForJob } = await import("../../middleware/credit-guard.js")
+    vi.mocked(dispatchStrategy).mockResolvedValue({ result: "a", meta: { summary: "Chose #1 of 2: ok", selectedIndex: 0 } })
+    vi.mocked(reserveCreditsForJob).mockClear()
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/reduce",
+      payload: {
+        strategyId: "pick-best-llm",
+        strategyConfig: { criteria: "best", inputKind: "text", ...(llmModel ? { llmModel } : {}) },
+        inputs: ["a", "b"],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const reserveArgs = vi.mocked(reserveCreditsForJob).mock.calls[0]
+    expect(reserveArgs[3]).toBe(expectedId)
+  })
+
+  it("400s on an unknown judge model before any credits reserve", async () => {
+    const { reserveCreditsForJob } = await import("../../middleware/credit-guard.js")
+    vi.mocked(reserveCreditsForJob).mockClear()
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/reduce",
+      payload: { strategyId: "pick-best-llm", strategyConfig: { criteria: "best", llmModel: "not-a-model" }, inputs: ["a", "b"] },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+  })
+
   it("does NOT dedup identical bodies within 10s (dedup: false)", async () => {
     const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
     vi.mocked(dispatchStrategy).mockResolvedValue({ result: "x", meta: { summary: "ok" } })

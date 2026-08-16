@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { LlmModelSelect } from "./llm-model-select"
 
 /**
- * Per-strategy config form for the Reduce (fan-in) node.
+ * Per-strategy config form for the Choose Best node (type id `reduce`).
  *
  * Strategy ids are declared in `@nodaro/shared/reduce-strategy-registry`.
  * Each branch here mirrors a strategy's `configSchema` field-by-field. When
@@ -31,20 +32,29 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
     case "pick-best-llm":
       return (
         <div className="flex flex-col gap-3">
+          {/* The judge model — same selector every LLM node uses (tier badges,
+              descriptions). Its tier drives the credit price: economy /
+              standard / premium. Stored on strategyConfig.llmModel so the
+              route, the estimator and the SDK all read one field. */}
+          <LlmModelSelect
+            feature="pick-best-llm"
+            value={typeof config.llmModel === "string" ? config.llmModel : undefined}
+            onChange={(llmModel) => onChange({ ...config, llmModel })}
+          />
           <div className="flex flex-col gap-1.5">
-            <Label>Criteria</Label>
+            <Label>Judge by</Label>
             <Textarea
               value={String(config.criteria ?? "")}
               onChange={(e) => onChange({ ...config, criteria: e.target.value })}
-              placeholder="e.g. 'Pick the sharpest image with no artifacts.'"
+              placeholder="e.g. 'The most eye-catching cover for a dark editorial Instagram feed — one clear focal point, readable as a thumbnail.'"
               rows={3}
             />
             <p className="text-[10px] text-muted-foreground">
-              Sonnet picks the best survivor against this rubric.
+              Describe what a winner looks like. The AI compares every candidate against this and picks one — its reasoning shows on the node and in the Candidates tab.
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Input kind</Label>
+            <Label>The candidates are</Label>
             <Select
               value={String(config.inputKind ?? "text")}
               onValueChange={(v) => onChange({ ...config, inputKind: v })}
@@ -53,8 +63,8 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="text">Text</SelectItem>
-                <SelectItem value="image-url">Image URL</SelectItem>
+                <SelectItem value="text">Texts</SelectItem>
+                <SelectItem value="image-url">Images</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -71,7 +81,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
             placeholder="e.g. '\n\n' or ' • '"
           />
           <p className="text-[10px] text-muted-foreground">
-            Joins all survivors with this string between each.
+            Placed between each candidate when they are joined into one text.
           </p>
         </div>
       )
@@ -83,14 +93,14 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
             checked={Boolean(config.caseSensitive)}
             onCheckedChange={(v) => onChange({ ...config, caseSensitive: v })}
           />
-          <Label className="cursor-pointer">Case-sensitive</Label>
+          <Label className="cursor-pointer">Treat different letter case as different answers</Label>
         </div>
       )
 
     case "merge-json":
       return (
         <div className="flex flex-col gap-1.5">
-          <Label>Merge strategy</Label>
+          <Label>How to merge</Label>
           <Select
             value={String(config.strategy ?? "deep")}
             onValueChange={(v) => onChange({ ...config, strategy: v })}
@@ -99,13 +109,13 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="deep">Deep merge</SelectItem>
-              <SelectItem value="shallow">Shallow merge</SelectItem>
+              <SelectItem value="deep">Deep (nested objects too)</SelectItem>
+              <SelectItem value="shallow">Shallow (top level only)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground">
-            Deep merges nested objects recursively. Shallow overwrites at the
-            top level only.
+            Deep merges nested objects field by field. Shallow replaces whole
+            top-level fields, later candidates winning.
           </p>
         </div>
       )
@@ -113,7 +123,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
     case "first-non-empty":
     case "count":
       return (
-        <p className="text-xs text-muted-foreground">No configuration.</p>
+        <p className="text-xs text-muted-foreground">Nothing to configure.</p>
       )
 
     default:

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-08-12T01:03:20.209Z
-generated_from: 2178f7c5f
+generated_at: 2026-08-15T21:55:05.596Z
+generated_from: 150c80ac9
 ---
 
 ---
@@ -165,7 +165,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `provider` — Provider
 - `publish-social` — Publish to Social
 - `qa-check` — QA Check
-- `reduce` — Reduce
+- `reduce` — Choose Best
 - `reference-audio` — Reference Audio
 - `reference-board` — Reference Board
 - `reference-sheet` — Reference Sheet

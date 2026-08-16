@@ -382,10 +382,11 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "generate-script",
     "translate",
     "image-critic",
+    "pick-best-llm",
   ]
 
-  it("has entries for all 15 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(15)
+  it("has entries for all 16 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(16)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }

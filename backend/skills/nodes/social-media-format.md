@@ -1,7 +1,7 @@
 ---
 node_type: social-media-format
-generated_at: 2026-05-18T13:23:37.542Z
-generated_from: cb1e786d
+generated_at: 2026-08-15T21:55:07.699Z
+generated_from: 150c80ac9
 ---
 
 # Social Media Format

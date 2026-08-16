@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-08-02T16:51:14.260Z
-generated_from: 77e082459
+generated_at: 2026-08-15T21:55:07.453Z
+generated_from: 150c80ac9
 ---
 
 # Video Analysis

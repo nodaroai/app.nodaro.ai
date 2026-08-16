@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-07-28T17:14:15.004Z
-generated_from: 15975a896
+generated_at: 2026-08-15T21:55:08.063Z
+generated_from: 150c80ac9
 ---
 
 # Motion Graphics

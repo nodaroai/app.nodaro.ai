@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-08-09T02:21:09.418Z
-generated_from: 34b3b3130
+generated_at: 2026-08-15T21:55:06.718Z
+generated_from: 150c80ac9
 ---
 
 # Text to Video

@@ -1,7 +1,7 @@
 ---
 node_type: suno-convert-wav
-generated_at: 2026-08-03T12:33:47.344Z
-generated_from: 4260ead1d
+generated_at: 2026-08-15T21:55:07.121Z
+generated_from: 150c80ac9
 ---
 
 # Suno Convert WAV

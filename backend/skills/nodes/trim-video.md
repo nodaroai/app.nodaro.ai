@@ -1,7 +1,7 @@
 ---
 node_type: trim-video
-generated_at: 2026-07-20T12:38:04.030Z
-generated_from: 4f35d44b5
+generated_at: 2026-08-15T21:55:07.926Z
+generated_from: 150c80ac9
 ---
 
 # trim-video

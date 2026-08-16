@@ -1,7 +1,7 @@
 ---
 node_type: text-prompt
-generated_at: 2026-06-01T20:05:20.450Z
-generated_from: c8fd1e03
+generated_at: 2026-08-15T21:55:05.612Z
+generated_from: 150c80ac9
 ---
 
 # text-prompt

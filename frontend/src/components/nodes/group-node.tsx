@@ -9,7 +9,13 @@ import {
 } from "@xyflow/react"
 import { Boxes } from "lucide-react"
 import { useTheme } from "next-themes"
-import { groupHandleId, presentTypes } from "@nodaro/shared"
+import {
+  computeAggregateLanes,
+  getOutputType,
+  groupHandleId,
+  isAggregateableType,
+  type AggregateableType,
+} from "@nodaro/shared"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
@@ -78,8 +84,9 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
   // type, position.y and output values). Subscribing to the whole `s.nodes`
   // array re-rendered the group on every unrelated mutation. Instead derive a
   // PRIMITIVE fingerprint that changes only when a child's membership /
-  // ordering / output actually changes; the heavy bucket computation reads
-  // live nodes from getState() keyed on that fingerprint.
+  // ordering / output actually changes (plus outgoing edges' source handles —
+  // they keep edge-referenced lanes alive); the heavy bucket computation
+  // reads live nodes from getState() keyed on that fingerprint.
   const childFingerprint = useWorkflowStore(
     useShallow((s) => {
       let fp = ""
@@ -87,19 +94,32 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
         if (n.parentId !== id) continue
         fp += `${n.id}\x01${n.type ?? ""}\x01${n.position?.y ?? 0}\x01${JSON.stringify(n.data ?? {})}\x02`
       }
+      for (const e of s.edges) {
+        if (e.source === id) fp += `out:${e.id}\x01${e.sourceHandle ?? ""}\x02`
+      }
       return fp
     }),
   )
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const buckets = useMemo(() => {
-    const { nodes } = useWorkflowStore.getState()
+  const types = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const node = (nodes as WorkflowNode[]).find((n) => n.id === id)
-    return node
+    const buckets = node
       ? computeGroupBuckets(node, nodes as WorkflowNode[])
       : { text: [], image: [], video: [], audio: [] }
+    // Lanes exist as soon as a member of that type is INSIDE the frame —
+    // buckets alone only fill after results exist, which left pre-run groups
+    // with zero source pips (nothing to drag from, pre-authored edges
+    // invisible). Mirrors collect-node's derivation via computeAggregateLanes.
+    const memberTypes: AggregateableType[] = []
+    for (const n of nodes as WorkflowNode[]) {
+      if (n.parentId !== id) continue
+      const t = getOutputType(n.type)
+      if (isAggregateableType(t)) memberTypes.push(t)
+    }
+    return computeAggregateLanes(id, memberTypes, buckets, edges)
   }, [id, childFingerprint])
-  const types = useMemo(() => presentTypes(buckets), [buckets])
 
   useStaleHandleCleanup(id, types)
 
@@ -121,7 +141,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
 
   return (
     <div
-      className={`group-node relative rounded-lg border ${tint ? "" : "border-[#2D2D2D] bg-[#1E1E1E]/40"}`}
+      className={`group-node relative rounded-lg border ${tint ? "" : "border-border bg-muted/30 dark:border-[#2D2D2D] dark:bg-[#1E1E1E]/40"}`}
       style={{ width: "100%", height: "100%", ...frameStyle }}
     >
       {/* Offset clears the banner when tinted, the caption when not. */}

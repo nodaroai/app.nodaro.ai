@@ -1,7 +1,7 @@
 ---
 node_type: generative-pipeline
-generated_at: 2026-06-26T10:54:21.244Z
-generated_from: b514860cd
+generated_at: 2026-08-15T21:55:10.170Z
+generated_from: 150c80ac9
 ---
 
 # Story → Video

@@ -1,7 +1,7 @@
 ---
 node_type: reduce
-generated_at: 2026-06-04T12:41:29.209Z
-generated_from: 9bf1388db
+generated_at: 2026-08-15T21:55:09.438Z
+generated_from: 150c80ac9
 ---
 
 # Reduce
@@ -30,10 +30,11 @@ generated_from: 9bf1388db
 **Default data:**
 ```json
 {
-  "label": "Reduce",
-  "strategyId": "concat",
+  "label": "Choose Best",
+  "strategyId": "pick-best-llm",
   "strategyConfig": {
-    "separator": "\n\n"
+    "criteria": "Pick the highest-quality result.",
+    "inputKind": "text"
   }
 }
 ```
@@ -62,10 +63,11 @@ generated_from: 9bf1388db
     "y": 0
   },
   "data": {
-    "label": "Reduce",
-    "strategyId": "concat",
+    "label": "Choose Best",
+    "strategyId": "pick-best-llm",
     "strategyConfig": {
-      "separator": "\n\n"
+      "criteria": "Pick the highest-quality result.",
+      "inputKind": "text"
     }
   }
 }

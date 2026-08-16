@@ -1,7 +1,7 @@
 ---
 node_type: voice-design
-generated_at: 2026-07-03T08:28:51.904Z
-generated_from: 487dd81ae
+generated_at: 2026-08-15T21:55:07.384Z
+generated_from: 150c80ac9
 ---
 
 # Voice Design

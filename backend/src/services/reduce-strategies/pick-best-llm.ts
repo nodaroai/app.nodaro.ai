@@ -1,7 +1,8 @@
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { llmComplete, type LlmContentBlock, type LlmMessage } from "../../lib/llm-client.js"
 import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
-type Config = { criteria: string; inputKind: "text" | "image-url" }
+type Config = { criteria: string; inputKind: "text" | "image-url"; llmModel?: string }
 
 const SYSTEM_PROMPT = "You are judging candidate outputs against criteria. Respond with strict JSON only — no prose, no markdown fences."
 
@@ -49,15 +50,20 @@ export async function execute(
     ? [{ role: "user", content: buildImageContent(survivors, config.criteria) }]
     : [{ role: "user", content: buildTextUserPrompt(survivors, config.criteria) }]
 
-  // Sonnet 4.6 has directFallbackModel: "claude-sonnet-4-6" in @nodaro/shared
-  // llm-models.ts, so llmComplete() routes via the direct Anthropic SDK path
-  // (which supports image content blocks) instead of the KIE proxy.
+  // The judge model is the user's pick (config.llmModel, validated against
+  // LLM_MODEL_IDS at the route) or the feature default. Every model in the
+  // registry with image support handles the image-url mode; llmComplete picks
+  // the lane per model (direct SDK / KIE) — nothing here is model-specific.
+  const modelId = config.llmModel || LLM_FEATURE_DEFAULTS["pick-best-llm"]
   const resp = await llmComplete({
-    feature: "ai-writer",
-    modelId: "claude-sonnet-4.6",
+    feature: "pick-best-llm",
+    modelId,
     system: SYSTEM_PROMPT,
     messages,
-    maxTokens: 200,
+    // Room for a full one-sentence reasoning plus the JSON envelope on the
+    // wordier models — 200 truncated some replies mid-sentence into an
+    // unparseable JSON, which silently fell back to "first survivor".
+    maxTokens: 400,
   })
 
   let chosenIndex = 0
@@ -85,7 +91,7 @@ export async function execute(
     meta: {
       selectedIndex: originalIndex,
       reasoning,
-      summary: `Sonnet picked item ${originalIndex + 1} of ${items.length}: ${reasoning.slice(0, 80)}`,
+      summary: `Chose #${originalIndex + 1} of ${items.length}: ${reasoning.slice(0, 80)}`,
     },
   }
 }

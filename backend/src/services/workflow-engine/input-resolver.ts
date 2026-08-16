@@ -11,7 +11,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
-import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP } from "@nodaro/shared"
+import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -177,9 +177,22 @@ export function resolveNodeInputs(
       // (not the stale-generatedResults-derived effectiveListResults, which we
       // zeroed above), so a reduce over `items` folds the same blocks the
       // frontend would. Falls through to the single-result wrap if no items.
+      // Group / Collect: the fold source is the LANE bucket (every value the
+      // aggregate gathered on out-<type>), read live from the graph — an
+      // aggregate never executes, so it has no state.output.listResults and
+      // no generatedResults for effectiveListResults to find. Without this
+      // the branch fell to the single-result fallback below, which called
+      // getNodeOutput WITHOUT the graph context that group/collect need to
+      // compute anything, and Choose Best received zero candidates on every
+      // server-side run ("no_valid_inputs: All upstream iterations failed").
+      // The bucket extractor returns undefined for ≤1 item (scalar), so the
+      // context-aware single fallback below still covers the one-item case.
+      const isAggregate = sourceNode.type === "group" || sourceNode.type === "collect"
       const fanInList: string[] | undefined = isLlmChatItemsEdge
         ? resolveLlmChatItems(sourceNode, effectiveSourceHandle, nodeStates)
-        : effectiveListResults
+        : isAggregate
+          ? extractSourceNodeOutputAsList(sourceNode, triggerData, effectiveSourceHandle, ctx)
+          : effectiveListResults
       const filtered: string[] = fanInList && fanInList.length > 0
         ? selectListItems(fanInList, edgeData as SelectorFields | undefined)
         : []
@@ -191,8 +204,9 @@ export function resolveNodeInputs(
         inputs.inputs = [...(inputs.inputs ?? []), ...collected]
         continue
       }
-      // Single-result fallback — upstream wasn't fanned out.
-      const single = getNodeOutput(sourceNode, effectiveSourceHandle, nodeStates, triggerData)
+      // Single-result fallback — upstream wasn't fanned out. Pass the graph
+      // context so group/collect can resolve their lane's first value.
+      const single = getNodeOutput(sourceNode, effectiveSourceHandle, nodeStates, triggerData, ctx)
       if (single) {
         inputs.inputs = [...(inputs.inputs ?? []), single]
       }
@@ -903,6 +917,19 @@ export function getListInputForNode(
 // Routing helpers — reduce repetition for audio/video target routing
 // ---------------------------------------------------------------------------
 
+/** Consumers that take an incoming plain image as a REFERENCE (accumulated
+ *  into referenceImageUrls[]) rather than as the single subject imageUrl.
+ *  Same set the per-source image branches below spell out inline. */
+const IMAGE_REFERENCE_TARGET_TYPES = new Set([
+  "generate-image",
+  "reference-board",
+  "edit-image",
+  "image-to-image",
+  "modify-image",
+  "video-to-video",
+  "switchx",
+])
+
 /** Route an audio output to the correct input field based on target node type. */
 function routeAudioOutput(
   inputs: ResolvedInputs,
@@ -1152,6 +1179,32 @@ function routeOutput(
     // A list source contributes N entries all bearing the list node's id, so
     // its images share the list's size hint.
     inputs.imageUrlsWithSourceIds = [...(inputs.imageUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
+    return
+  }
+
+  // --- Group / Collect: route by the LANE the wire leaves (out-text /
+  // out-image / out-video / out-audio), not by source node type. `output` was
+  // already narrowed to that lane's value by getPrimaryOutput / the bucket
+  // extractor. Without this branch the aggregate fell through every source-
+  // type branch to the "treat as prompt" fallback, so a Collect image feeding
+  // Combine Videos / lip-sync / etc. arrived as inputs.prompt on server-side
+  // runs. Mirrors the sub-workflow mediaType routing below; the frontend
+  // resolver has the same branch (node-input-resolver.ts).
+  if (srcType === "group" || srcType === "collect") {
+    const lane = parseGroupHandle(edge.sourceHandle)
+    if (lane === "image") {
+      if (IMAGE_REFERENCE_TARGET_TYPES.has(targetType)) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+      } else {
+        inputs.imageUrl = output
+      }
+    } else if (lane === "video") {
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else if (lane === "audio") {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    } else {
+      inputs.prompt = output
+    }
     return
   }
 

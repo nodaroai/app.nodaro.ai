@@ -270,6 +270,7 @@ export {
   parseGroupHandle,
   isCollectInEdge,
   buildChildrenByParent,
+  computeAggregateLanes,
   type AggregateableType,
   type Member,
   type AggregationBuckets,

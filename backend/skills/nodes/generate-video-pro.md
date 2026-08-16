@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-08-07T15:57:36.289Z
-generated_from: 0a444b4b8
+generated_at: 2026-08-15T21:55:06.498Z
+generated_from: 150c80ac9
 ---
 
 # Generate Video Pro

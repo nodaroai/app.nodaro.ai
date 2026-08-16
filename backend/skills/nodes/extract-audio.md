@@ -1,7 +1,7 @@
 ---
 node_type: extract-audio
-generated_at: 2026-06-03T16:56:58.440Z
-generated_from: 98514458
+generated_at: 2026-08-15T21:55:07.774Z
+generated_from: 150c80ac9
 ---
 
 # Extract Audio

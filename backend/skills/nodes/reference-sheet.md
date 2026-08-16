@@ -1,7 +1,7 @@
 ---
 node_type: reference-sheet
-generated_at: 2026-06-07T18:49:02.121Z
-generated_from: db2337ab
+generated_at: 2026-08-15T21:55:09.277Z
+generated_from: 150c80ac9
 ---
 
 # Reference Sheet

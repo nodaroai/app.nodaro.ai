@@ -1,7 +1,7 @@
 ---
 node_type: post-process-effects
-generated_at: 2026-06-23T16:51:38.251Z
-generated_from: 52fc7de9b
+generated_at: 2026-08-15T21:55:06.345Z
+generated_from: 150c80ac9
 ---
 
 # Post-Process Effects

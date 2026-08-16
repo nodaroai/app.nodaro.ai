@@ -90,7 +90,7 @@ the foot of the list.
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
 | **Get Content** | Web Scrape · Video URL · Telegram Channel Feed |
 | **Text** | Text · Combine Text · Split Text · Generate Text |
-| **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Reduce |
+| **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
 | **Workflows** | Sub-Workflow · Component · Sub-Workflow Input · Sub-Workflow Output |
 | **Canvas** | Group · Teleport Send · Teleport Receive · Preview · Sticky Note |
@@ -498,7 +498,7 @@ Helpers for debugging and workflow organization.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
-| [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List fan-out — pick the best variant, count survivors, or merge JSON |
+| [Choose Best](./utility/reduce.md) | Turn N candidate results into one — an AI judge picks the best against your criteria, or join / first / count / vote / merge JSON (type id `reduce`) | Close a List fan-out or a Collect bundle — pick the winning variant, count what came through, or merge JSON |
 | [Selector](./utility/selector.md) | Pick item(s) from a list — 7 modes (item / range / list / random / modulo / predicate / named-key); two outputs: `picked` + `rest` | Share a single selection across multiple consumers, route rejected items, or reach operators the edge selector doesn't support |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
 | [Group](./utility/group.md) | Spatial container that aggregates children's outputs by type | Organize related nodes; fan out per-type arrays into list-aware consumers |

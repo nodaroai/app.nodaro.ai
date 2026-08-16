@@ -1,7 +1,7 @@
 ---
 node_type: face
-generated_at: 2026-06-23T20:10:00.119Z
-generated_from: 527130f41
+generated_at: 2026-08-15T21:55:08.611Z
+generated_from: 150c80ac9
 ---
 
 # Face

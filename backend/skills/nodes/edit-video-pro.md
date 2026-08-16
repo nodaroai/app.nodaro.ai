@@ -1,7 +1,7 @@
 ---
 node_type: edit-video-pro
-generated_at: 2026-07-12T19:47:45.440Z
-generated_from: 60b869779
+generated_at: 2026-08-15T21:55:06.564Z
+generated_from: 150c80ac9
 ---
 
 # Edit Video Pro

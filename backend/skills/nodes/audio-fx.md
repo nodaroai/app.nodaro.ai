@@ -1,7 +1,7 @@
 ---
 node_type: audio-fx
-generated_at: 2026-06-20T20:51:29.710Z
-generated_from: 4ffe0ec68
+generated_at: 2026-08-15T21:55:07.897Z
+generated_from: 150c80ac9
 ---
 
 # Audio FX

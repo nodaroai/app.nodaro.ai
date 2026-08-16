@@ -174,20 +174,23 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
           { id: "mask",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
-        <div className="relative w-full h-full group/paintmask flex flex-col rounded-2xl border border-[#232327] bg-[#111114] overflow-hidden">
+        <div className="relative w-full h-full group/paintmask flex flex-col rounded-2xl border border-border bg-card dark:border-[#232327] dark:bg-[#111114] overflow-hidden">
           {/* Media area */}
-          <div className="relative flex-1 min-h-0 m-3 rounded-[10px] overflow-hidden bg-[#0e0e10]">
+          <div className="relative flex-1 min-h-0 m-3 rounded-[10px] overflow-hidden bg-muted/40 dark:bg-[#0e0e10]">
 
             {state === 1 && (
-              <div className="w-full h-full min-h-[160px] rounded-[10px] border border-dashed border-[#2e2e34] flex flex-col items-center justify-center gap-2.5 text-center px-3">
-                <div className="w-[34px] h-[34px] rounded-[9px] border border-[#2e2e34] flex items-center justify-center text-[#4f4f57]">
+              <div className="w-full h-full min-h-[160px] rounded-[10px] border border-dashed border-border dark:border-[#2e2e34] flex flex-col items-center justify-center gap-2.5 text-center px-3">
+                <div className="w-[34px] h-[34px] rounded-[9px] border border-border dark:border-[#2e2e34] flex items-center justify-center text-muted-foreground/60 dark:text-[#4f4f57]">
                   <Link2 className="w-4 h-4" />
                 </div>
-                <div className="text-[#75757c] text-xs">Connect an image to paint on</div>
-                <div className="text-[#4f4f57] text-[10.5px] font-mono">wire the image input</div>
+                <div className="text-muted-foreground dark:text-[#75757c] text-xs">Connect an image to paint on</div>
+                <div className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">wire the image input</div>
               </div>
             )}
 
+            {/* Everything below sits ON the image under a dark scrim
+                (rgba(10,10,12,…) gradients), so its light text / dark chrome is
+                image-relative and correct in BOTH themes — deliberately fixed. */}
             {state === 2 && substrateUrl && (
               <button
                 type="button"
@@ -295,26 +298,26 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
           </div>
 
           {/* Footer strip */}
-          <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#1d1d21]">
+          <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-t border-border dark:border-[#1d1d21]">
             {state === 1 && (
               <>
-                <span className="text-[#4f4f57] text-[11px]">Waiting for input</span>
-                <span className="px-2 py-0.5 rounded-full bg-[#1a1a1e] text-[#5c5c64] text-[10px] font-mono">idle</span>
+                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[11px]">Waiting for input</span>
+                <span className="px-2 py-0.5 rounded-full bg-muted dark:bg-[#1a1a1e] text-muted-foreground/70 dark:text-[#5c5c64] text-[10px] font-mono">idle</span>
               </>
             )}
             {state === 2 && (
               <>
-                <span className="text-[#75757c] text-[11px] font-mono">{dims ?? "ready to paint"}</span>
-                <span className="text-[#4f4f57] text-[10.5px]">double-click to open</span>
+                <span className="text-muted-foreground dark:text-[#75757c] text-[11px] font-mono">{dims ?? "ready to paint"}</span>
+                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px]">double-click to open</span>
               </>
             )}
             {state === 3 && (
               <>
-                <span className="flex items-center gap-1.5 text-[#a1a1a8] text-[11px]">
+                <span className="flex items-center gap-1.5 text-foreground/70 dark:text-[#a1a1a8] text-[11px]">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: PINK }} />
                   Mask ready
                 </span>
-                <span className="text-[#4f4f57] text-[10.5px] font-mono">{edited ?? dims ?? ""}</span>
+                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">{edited ?? dims ?? ""}</span>
               </>
             )}
           </div>

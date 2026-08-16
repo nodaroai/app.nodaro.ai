@@ -5,7 +5,9 @@ import {
   groupHandleId,
   parseGroupHandle,
   isAggregateableType,
+  computeAggregateLanes,
   AGGREGATEABLE_TYPES,
+  type AggregationBuckets,
   type Member,
 } from "../group-aggregation.js"
 
@@ -79,5 +81,42 @@ describe("isAggregateableType", () => {
   it("returns false for 'data' or undefined", () => {
     expect(isAggregateableType("data")).toBe(false)
     expect(isAggregateableType(undefined)).toBe(false)
+  })
+})
+
+describe("computeAggregateLanes", () => {
+  const EMPTY: AggregationBuckets = { text: [], image: [], video: [], audio: [] }
+
+  it("returns empty when nothing is wired, bucketed, or referenced", () => {
+    expect(computeAggregateLanes("c1", [], EMPTY, [])).toEqual([])
+  })
+
+  it("exposes lanes for wired types even with empty buckets (pre-run)", () => {
+    expect(computeAggregateLanes("c1", ["image", "image"], EMPTY, [])).toEqual(["image"])
+  })
+
+  it("exposes lanes for bucket contents (post-run)", () => {
+    const buckets: AggregationBuckets = { text: ["t"], image: [], video: [], audio: [] }
+    expect(computeAggregateLanes("c1", [], buckets, [])).toEqual(["text"])
+  })
+
+  it("keeps a lane alive when an outgoing edge references it", () => {
+    const edges = [{ source: "c1", sourceHandle: "out-video" }]
+    expect(computeAggregateLanes("c1", [], EMPTY, edges)).toEqual(["video"])
+  })
+
+  it("ignores outgoing edges of other nodes and non-lane handles", () => {
+    const edges = [
+      { source: "other", sourceHandle: "out-video" },
+      { source: "c1", sourceHandle: "out" },
+      { source: "c1", sourceHandle: null },
+    ]
+    expect(computeAggregateLanes("c1", [], EMPTY, edges)).toEqual([])
+  })
+
+  it("unions all three sources and orders by AGGREGATEABLE_TYPES", () => {
+    const buckets: AggregationBuckets = { text: [], image: [], video: [], audio: ["a"] }
+    const edges = [{ source: "c1", sourceHandle: "out-video" }]
+    expect(computeAggregateLanes("c1", ["text"], buckets, edges)).toEqual(["text", "video", "audio"])
   })
 })

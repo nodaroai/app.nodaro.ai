@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES, sourceRefKey } from "../entity-image-handle.js"
+import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES, AGGREGATE_LANE_SOURCE_TYPES, sourceRefKey } from "../entity-image-handle.js"
 
 const ENTITY_REF_HANDLE: Record<string, string> = {
   character: "characterRef",
@@ -60,5 +60,37 @@ describe("sourceRefKey (handle-scoped ref key — prevents node-id collision)", 
     expect(sourceRefKey("n1", "image", "generate-image")).toBe("n1")
     expect(sourceRefKey("n1", "image", "upload-image")).toBe("n1")
     expect(sourceRefKey("n1", undefined, "character")).toBe("n1")
+  })
+})
+
+describe("resolveEffectiveSourceType (aggregate lane handle → plain producer of that type)", () => {
+  const LANE_TO_PRODUCER: Record<string, string> = {
+    "out-image": "upload-image",
+    "out-video": "upload-video",
+    "out-audio": "upload-audio",
+    "out-text": "list",
+  }
+
+  it("remaps every Collect / Group lane to the plain producer of its media type", () => {
+    for (const agg of AGGREGATE_LANE_SOURCE_TYPES) {
+      for (const [lane, producer] of Object.entries(LANE_TO_PRODUCER)) {
+        expect(resolveEffectiveSourceType(agg, lane)).toBe(producer)
+      }
+    }
+  })
+
+  it("leaves a non-lane / missing handle as the raw aggregate type", () => {
+    expect(resolveEffectiveSourceType("collect", "out")).toBe("collect")
+    expect(resolveEffectiveSourceType("collect", undefined)).toBe("collect")
+    expect(resolveEffectiveSourceType("group", null)).toBe("group")
+  })
+
+  it("does not remap lane-shaped handles on non-aggregate producers", () => {
+    expect(resolveEffectiveSourceType("generate-image", "out-image")).toBe("generate-image")
+    expect(resolveEffectiveSourceType("list", "out-text")).toBe("list")
+  })
+
+  it("AGGREGATE_LANE_SOURCE_TYPES is exactly group + collect", () => {
+    expect([...AGGREGATE_LANE_SOURCE_TYPES].sort()).toEqual(["collect", "group"])
   })
 })

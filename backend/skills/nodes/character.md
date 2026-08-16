@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-07-09T23:04:34.173Z
-generated_from: a2d6a080
+generated_at: 2026-08-15T21:55:08.561Z
+generated_from: 150c80ac9
 ---
 
 # Character

@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-06-29T17:01:41.973Z
-generated_from: ef9c0616e
+generated_at: 2026-08-15T21:55:06.368Z
+generated_from: 150c80ac9
 ---
 
 # generate-image

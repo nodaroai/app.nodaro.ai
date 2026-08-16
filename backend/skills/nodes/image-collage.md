@@ -1,7 +1,7 @@
 ---
 node_type: image-collage
-generated_at: 2026-07-26T10:54:26.572Z
-generated_from: 3ca1eb295
+generated_at: 2026-08-15T21:55:07.563Z
+generated_from: 150c80ac9
 ---
 
 # Image Collage
