@@ -89,6 +89,9 @@ restart nodaro`) and hit Run. Details and the two-accounts model:
 file:
 
 ```bash
+NODARO_API_KEY=...         # nodaro.ai as a plain provider — a personal API token
+                           # from app.nodaro.ai → Settings → API (no OAuth flow)
+# or
 KIE_API_KEY=...            # kie.ai — broadest model coverage
 # or
 REPLICATE_API_TOKEN=...    # replicate.com

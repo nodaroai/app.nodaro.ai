@@ -8,9 +8,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const { maybeSingleMock } = vi.hoisted(() => ({
+const { maybeSingleMock, mockConfig } = vi.hoisted(() => ({
   maybeSingleMock: vi.fn<() => Promise<{ data: unknown; error: { message: string } | null }>>(),
+  mockConfig: { NODARO_API_KEY: "" as string, NODARO_CLOUD_URL: "" as string },
 }))
+
+vi.mock("../config.js", () => ({ config: mockConfig }))
 
 vi.mock("../supabase.js", () => ({
   supabase: {
@@ -24,10 +27,16 @@ vi.mock("../supabase.js", () => ({
   },
 }))
 
-import { getNodaroConnection, isNodaroConnected, readNodaroConnectionState } from "../nodaro-connect.js"
+import {
+  getNodaroConnection,
+  getNodaroCredential,
+  isNodaroConnected,
+  readNodaroConnectionState,
+} from "../nodaro-connect.js"
 
 beforeEach(() => {
   maybeSingleMock.mockReset()
+  mockConfig.NODARO_API_KEY = ""
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -53,15 +62,64 @@ describe("readNodaroConnectionState", () => {
   it("is 'connected' once a token is stored (JSON string or object value)", async () => {
     const conn = { clientId: "ndr_dcr_x", clientSecret: "s", accessToken: "ndr_app_t", connectedAt: "2026-08-16T00:00:00Z" }
     maybeSingleMock.mockResolvedValue({ data: { value: conn }, error: null })
-    expect(await readNodaroConnectionState()).toEqual({ state: "connected", connection: conn })
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "oauth", connection: conn })
 
     maybeSingleMock.mockResolvedValue({ data: { value: JSON.stringify(conn) }, error: null })
-    expect(await readNodaroConnectionState()).toEqual({ state: "connected", connection: conn })
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "oauth", connection: conn })
   })
 
   it("is 'unavailable' when the read throws", async () => {
     maybeSingleMock.mockRejectedValue(new Error("socket hang up"))
     expect(await readNodaroConnectionState()).toEqual({ state: "unavailable", reason: "socket hang up" })
+  })
+})
+
+// NODARO_API_KEY: nodaro.ai as a provider like the other six — a personal API
+// token from app.nodaro.ai (Settings -> API) pasted into .env. It is a
+// CREDENTIAL, not a registration: the OAuth flow's stored client_id/secret
+// stay in getNodaroConnection(); everything that only needs to CALL the cloud
+// asks getNodaroCredential(). A stored OAuth connection wins over the env key
+// (it carries per-instance caps and Connected Instances visibility).
+describe("NODARO_API_KEY as the credential", () => {
+  const conn = { clientId: "c", clientSecret: "s", accessToken: "ndr_app_oauth", connectedAt: "2026-08-16T00:00:00Z" }
+
+  it("is used when nothing is stored", async () => {
+    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_personal_key", source: "env" })
+    expect(await isNodaroConnected()).toBe(true)
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "env" })
+  })
+
+  it("loses to a stored OAuth connection", async () => {
+    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    maybeSingleMock.mockResolvedValue({ data: { value: conn }, error: null })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_app_oauth", source: "oauth" })
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "oauth", connection: conn })
+  })
+
+  it("makes the boot path race-free: an unreadable store still yields connected via env", async () => {
+    // The whole reason the provider registration retries is that the store is
+    // behind the container's own proxy at boot. With an env key there is
+    // nothing to wait for.
+    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: "TypeError: fetch failed" } })
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "env" })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_personal_key", source: "env" })
+  })
+
+  it("does not masquerade as a registration for the OAuth flow", async () => {
+    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    // /start must still see "not registered" and register properly.
+    expect(await getNodaroConnection()).toBeNull()
+  })
+
+  it("is trimmed and ignored when blank", async () => {
+    mockConfig.NODARO_API_KEY = "   "
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    expect(await getNodaroCredential()).toBeNull()
+    expect(await isNodaroConnected()).toBe(false)
   })
 })
 

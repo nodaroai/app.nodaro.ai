@@ -52,6 +52,11 @@ const envSchema = z.object({
     .transform((s) => s.toLowerCase() !== "false" && s !== "0"),
   /** fal.ai API key (https://fal.ai/dashboard/keys). Empty by default — fal provider is gated behind `falEnabled()`. */
   FAL_KEY: z.string().default(""),
+  /** nodaro.ai as a provider like the others: a personal API token from
+   *  app.nodaro.ai (Settings -> API), billed to that account. Alternative to
+   *  the OAuth "Connect nodaro.ai" flow, which stays the per-instance-accounted
+   *  path and wins when both exist. See lib/nodaro-connect.ts. */
+  NODARO_API_KEY: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
   ANTHROPIC_API_KEY: z.string().default(""),
   /** Google Gemini API key (https://aistudio.google.com/apikey). Enables the

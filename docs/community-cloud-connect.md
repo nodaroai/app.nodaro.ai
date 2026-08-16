@@ -48,6 +48,28 @@ If the button reports that nodaro.ai is not accepting connections or cannot
 be reached, that is the cloud side or your network — your own provider keys
 (`KIE_API_KEY`, `REPLICATE_API_TOKEN`, …) work independently of it.
 
+## Or: an API key, like any other provider
+
+nodaro.ai is also a provider in the ordinary sense — the same tile on
+`/setup` → Install health as KIE.ai or Replicate. If you would rather not
+run the OAuth flow (headless installs, infra-as-code, or you already keep
+keys in `.env`), create a personal API token on app.nodaro.ai → **Settings →
+API** and set:
+
+```bash
+NODARO_API_KEY=ndr_...
+```
+
+Restart the app container. Generation routes through your nodaro.ai
+account exactly as with the connection, billed to the account that owns the
+token, alongside whatever other keys you set (local keys are preferred per
+capability; nodaro.ai fills the rest).
+
+Differences from the OAuth connection: an API key is a personal credential —
+there is no per-instance monthly spend cap and the instance does not appear
+under **Connected Instances**; revoke it from Settings → API. If both an API
+key and an OAuth connection exist, the OAuth connection is used.
+
 ## Managing connected instances (cloud side)
 
 On app.nodaro.ai → Billing → **Connected Instances**, the account owner
@@ -62,6 +84,7 @@ sees every connected instance with its spend this month, and can:
 | Where | Variable | Meaning |
 |---|---|---|
 | Instance | `NODARO_CLOUD_URL` | Cloud host to connect to (default `https://app.nodaro.ai`) |
+| Instance | `NODARO_API_KEY` | Personal API token from app.nodaro.ai → Settings → API — nodaro.ai as a plain provider, no OAuth flow. The OAuth connection wins if both exist. |
 | Instance | `PUBLIC_URL` | Your instance's public URL — used for the OAuth callback |
 | Cloud | `COMMUNITY_CONNECT_ENABLED` | Master flag for instance registrations + the Connected Instances surface |
 

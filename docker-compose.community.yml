@@ -16,7 +16,9 @@
 # note on the `nodaro` service).
 #
 # .env is OPTIONAL for local play — every value below has a working default.
-# To actually generate media, add at least one provider key to .env:
+# To actually generate media, connect a provider — either click "Connect
+# nodaro.ai" in the app (OAuth, no key), or add at least one key to .env:
+#   NODARO_API_KEY=...     (a personal API token from app.nodaro.ai → Settings → API)
 #   KIE_API_KEY=...        (kie.ai — broadest model coverage)
 #   REPLICATE_API_TOKEN=...
 #
@@ -183,6 +185,9 @@ services:
       # Empty = the code default (https://app.nodaro.ai). Override in .env for
       # staging soaks: NODARO_CLOUD_URL=https://next.nodaro.ai
       NODARO_CLOUD_URL: ${NODARO_CLOUD_URL:-}
+      # nodaro.ai as a provider like the others: a personal API token from
+      # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
+      NODARO_API_KEY: ${NODARO_API_KEY:-}
       KIE_API_KEY: ${KIE_API_KEY:-}
       REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

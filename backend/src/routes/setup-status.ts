@@ -141,7 +141,14 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       probeStorage(),
     ])
 
+    // nodaro.ai is a provider like the other six — the tile is lit by EITHER
+    // the OAuth connection (Connect nodaro.ai) or NODARO_API_KEY. `keys` is
+    // the single list the setup screen renders and counts, so nodaro.ai
+    // belongs in it, first: it is the one that needs no third-party account.
+    const { getNodaroCredential } = await import("../lib/nodaro-connect.js")
+    const nodaroCredential = await getNodaroCredential().catch(() => null)
     const providerKeys = {
+      nodaro: nodaroCredential !== null,
       kie: config.KIE_API_KEY.length > 0,
       replicate: config.REPLICATE_API_TOKEN.length > 0,
       anthropic: config.ANTHROPIC_API_KEY.length > 0,
@@ -149,19 +156,19 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       elevenlabs: config.ELEVENLABS_API_KEY.length > 0,
       fal: config.FAL_KEY.length > 0,
     }
-    // Nodaro Cloud is a first-class media provider (Phase 4a): a connected
-    // instance can generate with zero local keys.
-    const { isNodaroConnected } = await import("../lib/nodaro-connect.js")
-    const nodaroConnected = await isNodaroConnected().catch(() => false)
+    const nodaroConnected = providerKeys.nodaro
     const anyMediaProvider = providerKeys.kie || providerKeys.replicate || nodaroConnected
     const providers = {
       ok: anyMediaProvider,
+      // Kept for older frontends; `keys.nodaro` is the tile.
       nodaroCloud: nodaroConnected,
+      // How nodaro.ai is authenticated, so the tile can say CONNECTED vs KEY.
+      nodaroSource: nodaroCredential?.source ?? null,
       keys: providerKeys,
       ...(anyMediaProvider
         ? {}
         : {
-            hint: "No media provider configured - connect nodaro.ai from Integrations (OAuth sign-in, no API keys to manage), or add KIE_API_KEY (kie.ai) / REPLICATE_API_TOKEN (replicate.com)",
+            hint: "No media provider configured - connect nodaro.ai from Integrations (OAuth sign-in, no API keys to manage), set NODARO_API_KEY, or add KIE_API_KEY (kie.ai) / REPLICATE_API_TOKEN (replicate.com)",
           }),
     }
 

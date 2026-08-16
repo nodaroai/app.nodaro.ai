@@ -10,11 +10,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockGetConnection, mockReadState, mockSave, mockFetch } = vi.hoisted(() => ({
+const { mockGetConnection, mockReadState, mockSave, mockFetch, mockCredential } = vi.hoisted(() => ({
   mockGetConnection: vi.fn(),
   mockReadState: vi.fn(),
   mockSave: vi.fn(),
   mockFetch: vi.fn(),
+  mockCredential: vi.fn(),
 }))
 
 vi.mock("../../lib/nodaro-connect.js", () => ({
@@ -22,6 +23,7 @@ vi.mock("../../lib/nodaro-connect.js", () => ({
   getNodaroConnection: mockGetConnection,
   readNodaroConnectionState: mockReadState,
   isNodaroConnected: vi.fn(async () => false),
+  getNodaroCredential: mockCredential,
   nodaroCloudBase: () => "https://cloud.example",
   nodaroCloudFetch: vi.fn(),
   saveNodaroConnection: mockSave,
@@ -156,5 +158,23 @@ describe("POST /v1/nodaro-connect/start", () => {
     expectActionable(body.error!.message)
     expect(mockFetch).not.toHaveBeenCalled()
     expect(mockSave).not.toHaveBeenCalled()
+  })
+})
+
+describe("GET /v1/nodaro-connect/status", () => {
+  it("reports not connected without a credential", async () => {
+    mockCredential.mockResolvedValue(null)
+    const res = await app.inject({ method: "GET", url: "/v1/nodaro-connect/status" })
+    expect(res.json()).toEqual({ connected: false })
+  })
+
+  it("names the credential source so the card knows whether it can disconnect", async () => {
+    // Balance is fetched through the (mocked) nodaroCloudFetch — best effort.
+    mockCredential.mockResolvedValue({ token: "ndr_personal", source: "env" })
+    const res = await app.inject({ method: "GET", url: "/v1/nodaro-connect/status" })
+    const body = res.json()
+    expect(body.connected).toBe(true)
+    expect(body.source).toBe("env")
+    expect(JSON.stringify(body)).not.toContain("ndr_personal")
   })
 })

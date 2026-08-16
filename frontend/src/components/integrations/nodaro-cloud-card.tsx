@@ -23,6 +23,8 @@ interface NodaroCloudBalance {
 
 interface NodaroCloudStatus {
   readonly connected: boolean
+  /** "oauth" = the Connect flow (disconnectable here); "env" = NODARO_API_KEY in .env. */
+  readonly source?: "oauth" | "env"
   readonly balance?: NodaroCloudBalance | null
 }
 
@@ -119,6 +121,7 @@ export function NodaroCloudCard() {
   if (isCloud()) return null
 
   const connected = status?.connected === true
+  const viaEnvKey = connected && status?.source === "env"
   const totalCredits =
     typeof status?.balance?.total === "number" ? status.balance.total : null
 
@@ -140,8 +143,10 @@ export function NodaroCloudCard() {
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {connected
-              ? "This instance generates with nodaro.ai models through your connected account."
-              : "Generate with nodaro.ai models — 1,500 free credits, no credit card."}
+              ? viaEnvKey
+                ? "This instance generates with nodaro.ai models through NODARO_API_KEY in its .env — billed to that account. Remove the key and restart to disconnect."
+                : "This instance generates with nodaro.ai models through your connected account."
+              : "Generate with nodaro.ai models — 1,500 free credits, no credit card. Or set NODARO_API_KEY in .env."}
           </p>
         </div>
       </div>
@@ -169,20 +174,26 @@ export function NodaroCloudCard() {
               </span>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-          >
-            {disconnecting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <Unlink className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Disconnect
-          </Button>
+          {viaEnvKey ? (
+            <span className="shrink-0 text-[11px] font-mono text-gray-500 dark:text-gray-400">
+              via NODARO_API_KEY
+            </span>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              {disconnecting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Unlink className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Disconnect
+            </Button>
+          )}
         </div>
       ) : (
         <Button
