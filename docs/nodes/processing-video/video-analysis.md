@@ -56,7 +56,8 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 |-------|------|---------|-------------|
 | Analysis Quality (`llmModel`) | Select | `pro` | `smart` (highest accuracy — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result; pick this when the shot list will drive regeneration), `fast` (economy), `pro` (default), or `mixed` / `mixed-fast` (several economy passes combined for completeness). See [Credit Cost](#credit-cost) |
 | Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended). **Does not apply to `smart`** — that tier always refines regardless of this setting |
-| Cast variations (`variations`) | Checkbox | off | On — the analysis may also detect per-entity appearance variations (dream, flashback, disguise, costume, transformation, era looks) and bind each look to the scenes where it is active (`slots[].variations` + `scenes[].slotVariations`). Off — the result keeps the pre-variations shape. Note: on single-pass tiers this option can reduce how many entities are extracted; leave it off unless you need the looks |
+| Cast variations (`variations`) | Checkbox | off | On — the analysis also detects per-entity appearance **looks** — a plain wardrobe change between scenes (a different outfit at the café, on the boat, at the wedding) counts exactly as much as a dream, flashback, disguise, transformation, or era look — and binds each look to the scenes where it is active (`slots[].variations` + `scenes[].slotVariations`). Off — the result keeps the pre-variations shape. Look extraction runs as its own dedicated pass after the main analysis, so turning it on does not reduce how many entities are extracted |
+| Music video (`musicVideo`) | API / MCP only | off | On — the clip is declared a **music video**: the song IS the piece, so all sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Off — the default classification: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. No canvas control yet — pass it in the request body (`musicVideo: true`) or the MCP tool's `music_video` flag |
 | Translate speech (`translateSpeechToEnglish`) | Checkbox | off | On — spoken and sung words come back in English. See [Output language](#output-language) |
 | Translate on-screen text (`translateOnScreenTextToEnglish`) | Checkbox | off | On — signs, captions, and titles come back in English. Independent of the speech checkbox |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
@@ -269,9 +270,9 @@ node analyzes without them, and consuming apps that support per-look casting
 
 **`audio`** — an **array of concurrent sound layers**. Real footage stacks sound
 (a music bed under dialogue over ambient sfx), so a scene captures every
-simultaneous layer as its own entry: a music bed + a sung vocal + a water splash
-is three entries. An **empty array `[]` means genuine silence** — there is no
-`silence` mode. Each layer:
+simultaneous layer as its own entry: a music bed under a character's line over a
+water splash is three entries. An **empty array `[]` means genuine silence** —
+there is no `silence` mode. Each layer:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -279,6 +280,17 @@ is three entries. An **empty array `[]` means genuine silence** — there is no
 | `content` | string | `speech`: the words, verbatim as spoken — or translated when [Translate speech](#output-language) is on; `music` / `sfx`: generation-ready description. |
 | `voice` | string, optional | Voice-casting descriptor (`"male, warm, conversational"`) — `speech` layers only. Describes the *voice*, not who owns it. |
 | `speakerSlot` | string, optional | `slotId` of the on-screen speaker — `speech` layers only. See below. |
+
+**Soundtrack vocals are `music`, not `speech`.** `speech` is reserved for words
+uttered *inside the story world* — spoken, shouted, or sung by a character or an
+on-screen performer. A soundtrack song nobody on screen performs (score vocals, a
+pop track over a montage) rides the `music` layer, with the vocal folded into its
+description as a generation prompt (e.g. *"romantic acoustic pop, warm male vocal
+singing 'you had me at hello'"*) — its lyrics are never spread scene-by-scene
+across `speech` layers. A character's utterance **over** the song still gets its
+own `speech` layer. For actual **music videos** — where the song IS the piece —
+set the `musicVideo` flag (see [Configuration](#configuration)) to get every sung
+lyric back verbatim as per-scene `speech` layers instead.
 
 **`speakerSlot`** answers *who* is talking, where `voice` only says what the
 voice sounds like. Most scenes have one speaker and the pairing is obvious, which

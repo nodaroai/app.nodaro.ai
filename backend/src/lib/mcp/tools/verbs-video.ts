@@ -2306,6 +2306,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             'Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended).',
           ),
+        variations: z
+          .boolean()
+          .optional()
+          .describe(
+            "Cast-variations opt-in: the analysis also detects per-entity appearance LOOKS — a plain " +
+              "wardrobe change between scenes counts exactly as much as a dream / flashback / disguise / " +
+              "era look — and binds each look to its scenes (`slots[].variations` + `scenes[].slotVariations`). " +
+              "Default false: the result keeps the pre-variations shape.",
+          ),
         music_video: z
           .boolean()
           .optional()
@@ -2385,6 +2394,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
         ...(args.llm_model ? { llmModel: args.llm_model } : {}),
         ...(args.selection_mode ? { selectionMode: args.selection_mode } : {}),
+        ...(args.variations ? { variations: true } : {}),
         ...(args.music_video ? { musicVideo: true } : {}),
         ...(args.translate_speech_to_english ? { translateSpeechToEnglish: true } : {}),
         ...(args.translate_on_screen_text_to_english ? { translateOnScreenTextToEnglish: true } : {}),

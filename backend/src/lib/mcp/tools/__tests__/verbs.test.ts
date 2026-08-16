@@ -1206,6 +1206,7 @@ describe("video_analysis verb", () => {
       video_url: "https://a/clip.mp4",
       llm_model: "pro",
       selection_mode: "combine",
+      variations: true,
       music_video: true,
       analysis_focus: "focus on the product shots",
     })
@@ -1216,6 +1217,9 @@ describe("video_analysis verb", () => {
     expect(received.body?.llmModel).toBe("pro")
     // Best-of-N strategy forwards snake→camel (audit gap: was untested).
     expect(received.body?.selectionMode).toBe("combine")
+    // Cast-variations opt-in forwards as-is (parity with the node checkbox and
+    // recast — the verb previously had no way to request looks at all).
+    expect(received.body?.variations).toBe(true)
     // Music-video lyric mode forwards snake→camel (plugin ≥0.144.0 consumes it;
     // older plugins strip the unknown key — same posture as `variations`).
     expect(received.body?.musicVideo).toBe(true)
