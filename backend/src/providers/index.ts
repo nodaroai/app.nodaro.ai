@@ -16,10 +16,87 @@
 import { config } from "../lib/config.js"
 import { registerKieProviders } from "./kie/index.js"
 import { registerReplicateProviders } from "./replicate/index.js"
-import { registerNodaroCloudProviderWithRetry } from "./nodaro/index.js"
+import {
+  NODARO_PROVIDER_ID,
+  registerNodaroCloudProviderIfConnected,
+  registerNodaroCloudProviderWithRetry,
+} from "./nodaro/index.js"
+import { providerRegistry } from "./registry.js"
+import { resolveProviderKey, subscribeProviderKeys, type ProviderKeyId } from "../lib/provider-keys-runtime.js"
+import { loadProviderCredentials, refreshProviderCredentialsIfStale, PROVIDER_CREDENTIALS_TTL_MS } from "../lib/provider-credentials.js"
 
 let initialized = false
 let nodaroRegistration: Promise<void> = Promise.resolve()
+
+/**
+ * Registry providers whose presence follows a key. Direct-call providers
+ * (Anthropic, Gemini, ElevenLabs, fal) are not registry entries — their
+ * clients read the live key per call, nothing to (un)register.
+ */
+const KEYED_REGISTRY_PROVIDERS: Partial<Record<ProviderKeyId, { register: () => void | Promise<unknown> }>> = {
+  kie: { register: registerKieProviders },
+  replicate: { register: registerReplicateProviders },
+  nodaro: { register: registerNodaroCloudProviderIfConnected },
+}
+
+/**
+ * Bring the registry in line with the keys in force for `changed` ids:
+ * register a provider whose key appeared and unregister one whose key went
+ * away — no restart. Hooked to the runtime's change events (a paste on
+ * /setup in this process, or the encrypted store loading / refreshing).
+ */
+export async function reconcileProviders(changed: ReadonlyArray<ProviderKeyId>): Promise<void> {
+  for (const id of changed) {
+    const entry = KEYED_REGISTRY_PROVIDERS[id]
+    if (!entry) continue
+    const has = resolveProviderKey(id) !== null
+    const registered = providerRegistry.getProvider(id === "nodaro" ? NODARO_PROVIDER_ID : id) !== null
+    if (has && !registered) {
+      try {
+        await entry.register()
+        console.log(`[providers] ${id} registered (key now present)`)
+      } catch (err) {
+        console.error(`[providers] ${id} registration failed:`, err)
+      }
+    } else if (!has && registered) {
+      providerRegistry.unregister(id === "nodaro" ? NODARO_PROVIDER_ID : id)
+      console.log(`[providers] ${id} unregistered (key removed)`)
+    }
+  }
+}
+
+let credentialsWatch: ReturnType<typeof setInterval> | null = null
+
+/**
+ * The poll runs at a fraction of the TTL: a tick that lands a few ms before
+ * the snapshot turns stale must not push the next read a whole period out
+ * (with tick == TTL, timer drift skipped every other tick — a 60 s pickup
+ * for a 30 s TTL). Worst-case passive pickup is TTL + one tick.
+ */
+export const PROVIDER_CREDENTIALS_POLL_MS = Math.max(1_000, Math.floor(PROVIDER_CREDENTIALS_TTL_MS / 3))
+
+/**
+ * Load the operator-supplied keys and keep them fresh. Call once per process
+ * after initProviders(): applies the encrypted store's snapshot (registering
+ * whatever it unlocks) and re-reads it on the TTL so the worker sees what
+ * the API process saved. The reconcile is returned to the runtime so a
+ * caller awaiting `applyAppSnapshot` (the router's self-heal) continues only
+ * once the registry reflects the new keys.
+ */
+export function watchProviderCredentials(): void {
+  if (credentialsWatch) return
+  subscribeProviderKeys((changed) => reconcileProviders(changed))
+  void loadProviderCredentials()
+  credentialsWatch = setInterval(() => {
+    void refreshProviderCredentialsIfStale()
+  }, PROVIDER_CREDENTIALS_POLL_MS)
+  credentialsWatch.unref?.()
+}
+
+export function _resetProviderCredentialsWatchForTests(): void {
+  if (credentialsWatch) clearInterval(credentialsWatch)
+  credentialsWatch = null
+}
 
 export function initProviders(): void {
   if (initialized) return

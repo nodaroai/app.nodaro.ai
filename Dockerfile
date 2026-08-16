@@ -446,6 +446,39 @@ if [ -z "$INTERNAL_ORCHESTRATOR_SECRET" ]; then
   echo "Generated INTERNAL_ORCHESTRATOR_SECRET (set the env var to persist across restarts)"
 fi
 
+# --- Instance encryption key (self-host ONLY) --------------------------------
+# NODARO_ENCRYPTION_KEY encrypts every secret the server stores for itself
+# (social OAuth tokens, provider keys pasted on /setup). Unlike the
+# orchestrator secret above, a value that CHANGES across restarts turns all
+# of that into noise — so when it is not provided we generate it ONCE and
+# persist it to the app-data volume, then reuse it on every later boot.
+# Gate: RUN_MIGRATIONS_ON_BOOT=true is set only by the community compose
+# stack. Managed deployments (Cloud/business on Railway) have no persistent
+# disk between deploys and MUST set the variable explicitly — there we
+# deliberately do nothing, so a misconfiguration surfaces as the named
+# EncryptionKeyMissingError instead of a silently rotating key.
+if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -z "$NODARO_ENCRYPTION_KEY" ] && [ -z "$SOCIAL_ENCRYPTION_KEY" ]; then
+  KEY_DIR="${NODARO_DATA_DIR:-/data/nodaro}"
+  KEY_FILE="$KEY_DIR/encryption-key"
+  if [ -s "$KEY_FILE" ]; then
+    export NODARO_ENCRYPTION_KEY=$(cat "$KEY_FILE")
+    export NODARO_ENCRYPTION_KEY_SOURCE=generated
+    echo "[start.sh] instance encryption key loaded from $KEY_FILE"
+  else
+    mkdir -p "$KEY_DIR" 2>/dev/null || true
+    if [ -d "$KEY_DIR" ] && [ -w "$KEY_DIR" ]; then
+      GENERATED=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+      umask 077
+      printf '%s' "$GENERATED" > "$KEY_FILE"
+      export NODARO_ENCRYPTION_KEY="$GENERATED"
+      export NODARO_ENCRYPTION_KEY_SOURCE=generated
+      echo "[start.sh] generated the instance encryption key and saved it to $KEY_FILE — BACK THIS FILE UP with the database (it is in the app-data volume); losing it makes stored keys unreadable"
+    else
+      echo "[start.sh] WARNING: no NODARO_ENCRYPTION_KEY and $KEY_DIR is not writable — stored provider keys and social connections are disabled until the key is set"
+    fi
+  fi
+fi
+
 # --- Signal topology (incident 2026-07-15) -----------------------------------
 # This script stays PID 1. Docker/Railway deliver SIGTERM to PID 1 ONLY; the
 # previous `exec caddy` made Caddy PID 1, so on every deploy Caddy shut down
@@ -556,6 +589,11 @@ exit 0
 EOF
 
 RUN chmod +x /app/start.sh
+
+# Self-host app data (the generated instance encryption key lives here; the
+# community compose mounts a named volume on it). Created and owned by the
+# runtime user so a fresh volume inherits writable ownership.
+RUN mkdir -p /data/nodaro && chown node:node /data/nodaro
 
 USER node
 

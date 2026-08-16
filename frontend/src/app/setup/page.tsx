@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getAuthHeaders } from "@/lib/api"
 import { CONNECT_START_NETWORK_MESSAGE, interpretConnectStart } from "@/lib/cloud-connect-start"
-import { PROVIDER_META, providerTiles, type NodaroCredentialSource } from "@/lib/provider-tiles"
-import { browserBlockedFolderReason, installFolderForClipboard } from "@/lib/install-folder-path"
+import {
+  PROVIDER_META,
+  cloudCoverageSummary,
+  groupProviderTiles,
+  providerTiles,
+  type ProviderMeta,
+  type ProviderSource,
+} from "@/lib/provider-tiles"
+import { ProviderKeyTile } from "./provider-key-tile"
 import { Link } from "react-router-dom"
 
 /**
@@ -32,9 +39,22 @@ interface ProvidersCheck {
   /** Live Nodaro Cloud connection — a first-class provider, not an env var. */
   readonly nodaroCloud?: boolean
   /** How nodaro.ai is authenticated: the OAuth connection or NODARO_API_KEY. */
-  readonly nodaroSource?: NodaroCredentialSource
+  readonly nodaroSource?: "oauth" | "env" | null
   /** One entry per provider, nodaro.ai included — the grid renders this. */
   readonly keys: Record<string, boolean>
+  /** Where each set key comes from: env | app (pasted here) | oauth | null. */
+  readonly sources?: Record<string, ProviderSource>
+  /** Labels, env var, what it powers, and whether nodaro.ai covers it. */
+  readonly meta?: Record<string, ProviderMeta>
+  readonly hint?: string
+}
+
+/** The instance encryption key — presence and provenance, never the key. */
+interface EncryptionCheck {
+  readonly ok: boolean
+  readonly status: "ok" | "missing"
+  readonly source?: "env" | "generated"
+  readonly envVar?: string
   readonly hint?: string
 }
 
@@ -49,6 +69,7 @@ interface SetupStatus {
     readonly redis: CheckResult
     readonly storage: CheckResult
     readonly providers: ProvidersCheck
+    readonly encryption?: EncryptionCheck
   }
 }
 
@@ -189,6 +210,57 @@ function Sparkline({ samples }: { readonly samples: readonly number[] }) {
   )
 }
 
+/**
+ * The instance encryption key: what makes pasted provider keys and social
+ * connections storable. Presence + provenance only (the backend never sends
+ * the key). "generated" = start.sh minted it on first boot and keeps it in
+ * the app-data volume — the one file to back up with the database.
+ */
+function EncryptionCard({ check }: { readonly check: EncryptionCheck }) {
+  const severity: Severity = check.ok ? "up" : "down"
+  return (
+    <div
+      style={{
+        background: SURFACE,
+        border: "1px solid rgba(11,13,18,.09)",
+        borderRadius: 16,
+        padding: "20px 22px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>Encryption</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>instance key · pasted keys, social tokens</span>
+        </div>
+        <span
+          aria-label={check.ok ? "key present" : "key missing"}
+          style={{ width: 9, height: 9, borderRadius: 999, background: SEVERITY_COLOR[severity], marginTop: 6, flexShrink: 0 }}
+        />
+      </div>
+      {check.ok ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 14, color: INK }}>
+            key present &middot;{" "}
+            <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED }}>
+              {check.source === "generated" ? "generated on first boot" : `from ${check.envVar ?? "environment"}`}
+            </span>
+          </span>
+          {check.source === "generated" && (
+            <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
+              lives in the app-data volume (/data/nodaro/encryption-key) — back it up with the database
+            </span>
+          )}
+        </div>
+      ) : (
+        <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43" }}>{check.hint ?? "No instance encryption key."}</span>
+      )}
+    </div>
+  )
+}
+
 function ServiceCard({
   service,
   samples,
@@ -246,53 +318,12 @@ function ServiceCard({
   )
 }
 
-/** Minimal IndexedDB store for the granted install-folder handle, so the
- *  second click writes without re-opening the OS picker. */
-const HANDLE_DB = "nodaro-setup"
-const HANDLE_STORE = "handles"
-const HANDLE_KEY = "install-dir"
-
-function handleDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(HANDLE_DB, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(HANDLE_STORE)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-async function loadStoredHandle(): Promise<FileSystemDirectoryHandle | null> {
-  try {
-    const db = await handleDb()
-    return await new Promise((resolve) => {
-      const tx = db.transaction(HANDLE_STORE, "readonly")
-      const req = tx.objectStore(HANDLE_STORE).get(HANDLE_KEY)
-      req.onsuccess = () => resolve((req.result as FileSystemDirectoryHandle | undefined) ?? null)
-      req.onerror = () => resolve(null)
-    })
-  } catch {
-    return null
-  }
-}
-
-async function storeHandle(handle: FileSystemDirectoryHandle): Promise<void> {
-  try {
-    const db = await handleDb()
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction(HANDLE_STORE, "readwrite")
-      tx.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => resolve()
-    })
-  } catch {
-    // Best effort — the picker path still works without persistence.
-  }
-}
-
 /** Paste-ready provider-key block for the .env next to
  *  docker-compose.community.yml. Mirrors the compose passthrough list. */
 const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .env next to
 # docker-compose.community.yml, uncomment what you use, then: docker compose up -d
+# (Or skip this file: paste keys on /setup \u2192 Install health \u2014 a key set here
+# WINS over one pasted on the screen.)
 # nodaro.ai: click "Connect nodaro.ai" in the app (OAuth, no key) \u2014 OR paste a
 # personal API token from app.nodaro.ai \u2192 Settings \u2192 API. Runs alongside the others.
 
@@ -303,6 +334,9 @@ const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .e
 # GEMINI_API_KEY=          # aistudio.google.com \u2014 LLM + video analysis
 # ELEVENLABS_API_KEY=      # elevenlabs.io \u2014 speech + voice
 # FAL_KEY=                 # fal.ai
+# HEYGEN_API_KEY=          # heygen.com \u2014 AI Avatar + Cinematic Avatar nodes (not covered by Connect)
+# BEEBLE_API_KEY=          # beeble.ai \u2014 Relight & Switch node (not covered by Connect)
+# APIFY_API_TOKEN=         # apify.com \u2014 Web Scrape node (not covered by Connect)
 `
 
 export default function SetupPage() {
@@ -315,7 +349,6 @@ export default function SetupPage() {
   const [tab, setTab] = useState<"setup" | "health">("setup")
   const [envCopied, setEnvCopied] = useState(false)
   const [envHelpOpen, setEnvHelpOpen] = useState(false)
-  const [envWrite, setEnvWrite] = useState<"idle" | "picking" | "done" | "nocompose" | "error">("idle")
   const [connectPending, setConnectPending] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -372,6 +405,19 @@ export default function SetupPage() {
   const keysSet = status ? Object.values(status.checks.providers.keys).filter(Boolean).length : 0
   const keysTotal = status ? Object.keys(status.checks.providers.keys).length : Object.keys(PROVIDER_META).length
   const keysMissing = keysTotal - keysSet
+  // Tiles + what connecting nodaro.ai would clear, straight from the backend's
+  // list. Until the first status arrives, render the known set so the layout
+  // does not jump.
+  const tiles = providerTiles({
+    keys: status?.checks.providers.keys ?? PROVIDER_PLACEHOLDER_KEYS,
+    sources: status?.checks.providers.sources,
+    meta: status?.checks.providers.meta,
+  })
+  const coverage = cloudCoverageSummary(tiles)
+  // Core keys unlock model families; the node-specific ones (HeyGen, Beeble,
+  // Apify) sit apart so three niche keys do not read as a general requirement.
+  const tileGroups = groupProviderTiles(tiles)
+  const refresh = load
   const latencies = services.map((s) => s.check.latencyMs).filter((v): v is number => v !== null)
   const avgLatency = latencies.length
     ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
@@ -477,80 +523,6 @@ export default function SetupPage() {
     }
   }
 
-  // File System Access API (Chrome/Edge): pick the install folder and write
-  // the .env template into it directly — no text editor needed. Hidden where
-  // unsupported; the COPY-template path stays for everyone else.
-  const pickerSupported = typeof window !== "undefined" && "showDirectoryPicker" in window
-  // Chromium refuses grants inside AppData / Program Files / Library / system
-  // roots — offering the picker there ends in "can't open this folder" AFTER
-  // the user navigated to it. Steer to COPY instead.
-  const blockedFolderReason = browserBlockedFolderReason(status?.installDir)
-  const canPickFolder = pickerSupported && !blockedFolderReason
-  const openInstallFolder = async () => {
-    try {
-      // A previously granted handle skips the OS dialog entirely.
-      let dir: FileSystemDirectoryHandle | null = await loadStoredHandle()
-      if (dir) {
-        type Permissioned = FileSystemDirectoryHandle & {
-          queryPermission: (o: { mode: string }) => Promise<string>
-          requestPermission: (o: { mode: string }) => Promise<string>
-        }
-        const perm = dir as Permissioned
-        let state = await perm.queryPermission({ mode: "readwrite" }).catch(() => "denied")
-        if (state !== "granted") state = await perm.requestPermission({ mode: "readwrite" }).catch(() => "denied")
-        if (state !== "granted") dir = null
-      }
-      if (!dir) {
-        // The picker cannot be told to open AT the install folder — the File
-        // System Access API only accepts well-known folders or a previously
-        // granted handle, so the first pick always lands in Documents (founder
-        // hit this: "it never opens in the right folder", 2026-08-16). What we
-        // CAN do: put the path on the clipboard, in the form the OS picker
-        // navigates to, and say so in place. After one successful pick the
-        // handle is stored and this dialog never shows again.
-        const clip = installFolderForClipboard(status?.installDir)
-        if (clip) {
-          await navigator.clipboard?.writeText(clip).catch(() => {})
-        }
-        setEnvWrite("picking")
-        const picker = (window as unknown as { showDirectoryPicker: (o: { mode: string; id?: string }) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
-        // id: Chrome remembers the last-picked directory per id, so the second
-        // visit opens straight at the install folder instead of Documents.
-        dir = await picker({ mode: "readwrite", id: "nodaro-install" })
-      }
-      try {
-        await dir.getFileHandle("docker-compose.community.yml")
-      } catch {
-        setEnvWrite("nocompose")
-        return
-      }
-      void storeHandle(dir)
-      let existing = ""
-      try {
-        const fh = await dir.getFileHandle(".env")
-        existing = await (await fh.getFile()).text()
-      } catch {
-        // No .env yet — we'll create it.
-      }
-      const alreadySeeded = existing.includes("KIE_API_KEY")
-      const next = alreadySeeded
-        ? existing
-        : existing
-          ? `${existing.replace(/\s*$/, "")}\n\n${ENV_TEMPLATE}`
-          : ENV_TEMPLATE
-      if (next !== existing) {
-        const out = await dir.getFileHandle(".env", { create: true })
-        const writable = await out.createWritable()
-        await writable.write(next)
-        await writable.close()
-      }
-      setEnvWrite("done")
-    } catch (err) {
-      // Picker dismissed: keep the "paste the path" hint up so a retry is easy.
-      if (err instanceof DOMException && err.name === "AbortError") return
-      setEnvWrite("error")
-    }
-  }
 
   return (
     <div
@@ -980,7 +952,10 @@ export default function SetupPage() {
         {/* 3. Service cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
           {status
-            ? services.map((s) => <ServiceCard key={s.id} service={s} samples={samples[s.id] ?? []} />)
+            ? [
+                ...services.map((s) => <ServiceCard key={s.id} service={s} samples={samples[s.id] ?? []} />),
+                ...(status.checks.encryption ? [<EncryptionCard key="encryption" check={status.checks.encryption} />] : []),
+              ]
             : Array.from({ length: 3 }, (_, i) => (
                 <div
                   key={`skeleton-${i}`}
@@ -1023,7 +998,7 @@ export default function SetupPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>Provider keys</span>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>environment variables &middot; relates to step 2</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>paste here or set in .env &middot; relates to step 2</span>
             </div>
             {status && (() => {
               // Choosing the cloud path must not read as a warning: with a
@@ -1105,11 +1080,28 @@ export default function SetupPage() {
                   </span>
                   <span style={{ fontSize: 14.5, color: MUTED }}>
                     {connected ? (
-                      <>This install generates through your nodaro.ai account &mdash; every model, none of the keys below required.</>
-                    ) : keysMissing > 0 ? (
                       <>
-                        <strong style={{ color: INK, fontWeight: 600 }}>One click clears all {keysMissing}</strong>
-                        {" \u2014 OAuth sign-in, no API keys to manage"}
+                        This install generates through your nodaro.ai account &mdash; image, video, speech and LLM models
+                        without the keys they would need.
+                        {coverage.uncoveredMissing.length > 0 && (
+                          <>
+                            {" "}Still needs its own key:{" "}
+                            {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
+                          </>
+                        )}
+                      </>
+                    ) : coverage.coveredMissing > 0 ? (
+                      <>
+                        <strong style={{ color: INK, fontWeight: 600 }}>
+                          One click clears {coverage.coveredMissing} of the {keysMissing} missing
+                        </strong>
+                        {" \u2014 OAuth sign-in, no API keys to manage."}
+                        {coverage.uncoveredMissing.length > 0 && (
+                          <>
+                            {" "}Not covered (own key needed):{" "}
+                            {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
+                          </>
+                        )}
                       </>
                     ) : (
                       <>One account, every model &mdash; OAuth sign-in, runs alongside your keys.</>
@@ -1182,47 +1174,36 @@ export default function SetupPage() {
               </div>
             )
           })()}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-            {providerTiles(
-              status?.checks.providers.keys ?? PROVIDER_PLACEHOLDER_KEYS,
-              status?.checks.providers.nodaroSource ?? null,
-            ).map((p) => {
-              const present = p.present
-              return (
-                <div
-                  key={p.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "14px 22px",
-                    borderBottom: "1px solid rgba(11,13,18,.05)",
-                  }}
-                >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>{p.name}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 11, color: FAINT }}>{p.env}</span>
-                  </div>
-                  <span
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 11,
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                      color: present ? "#166534" : FAINT,
-                      border: present ? "1px solid rgba(22,163,74,.35)" : "1px dashed rgba(11,13,18,.18)",
-                      borderRadius: 6,
-                      padding: "3px 8px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {p.state}
-                  </span>
-                </div>
-              )
-            })}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+            {tileGroups.core.map((tile) => (
+              <ProviderKeyTile key={tile.id} tile={tile} onChanged={() => void refresh()} />
+            ))}
           </div>
+          {tileGroups.nodeSpecific.length > 0 && (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  padding: "14px 22px 6px",
+                  borderTop: "1px solid rgba(11,13,18,.05)",
+                }}
+              >
+                <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: SUBTLE }}>
+                  Used by specific nodes
+                </span>
+                <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>
+                  only needed for the node each one names &mdash; leave them empty otherwise
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+                {tileGroups.nodeSpecific.map((tile) => (
+                  <ProviderKeyTile key={tile.id} tile={tile} onChanged={() => void refresh()} />
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Answers "where does the key go?" in plain words — expandable
               numbered steps, because "put it in the .env" assumes terminal
@@ -1242,31 +1223,11 @@ export default function SetupPage() {
               }}
             >
               <span>
-                keys live in a plain-text file named <span style={{ color: INK }}>.env</span> in your install
-                folder{status?.installDir ? <> &mdash; <span style={{ color: INK, userSelect: "all" }}>{status.installDir}</span></> : null} &mdash; this
-                list refreshes on its own
+                prefer a file? keys can also live in a plain-text <span style={{ color: INK }}>.env</span> in your install
+                folder{status?.installDir ? <> &mdash; <span style={{ color: INK, userSelect: "all" }}>{status.installDir}</span></> : null} &mdash; a key
+                set there wins over one pasted here &mdash; this list refreshes on its own
               </span>
               <span style={{ display: "inline-flex", gap: 18 }}>
-                {canPickFolder && (
-                  <button
-                    onClick={openInstallFolder}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      fontFamily: MONO,
-                      fontSize: 11.5,
-                      letterSpacing: ".08em",
-                      color: INK,
-                      textDecoration: "underline",
-                      textUnderlineOffset: 4,
-                      whiteSpace: "nowrap",
-                      padding: 0,
-                    }}
-                  >
-                    WRITE .ENV INTO INSTALL FOLDER
-                  </button>
-                )}
                 <button
                   onClick={() => setEnvHelpOpen((v) => !v)}
                   style={{
@@ -1312,38 +1273,6 @@ export default function SetupPage() {
                 </button>
               </span>
             </div>
-            {pickerSupported && blockedFolderReason && (
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 11.5,
-                  padding: "0 22px 12px",
-                  color: MUTED,
-                }}
-              >
-                the browser can&rsquo;t write into this install folder &mdash; {blockedFolderReason} &mdash; so use COPY .ENV
-                TEMPLATE and paste it into a{" "}
-                <code style={{ fontFamily: MONO, fontSize: 11.5, color: INK }}>.env</code> file there with any text editor
-              </div>
-            )}
-            {envWrite !== "idle" && (
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 11.5,
-                  padding: "0 22px 12px",
-                  color: envWrite === "done" ? "#166534" : envWrite === "picking" ? INK : "#92400e",
-                }}
-              >
-                {envWrite === "done"
-                  ? ".env is ready in that folder \u2713 \u2014 paste your key into it, then run: docker compose -f docker-compose.community.yml up -d"
-                  : envWrite === "picking"
-                    ? "the folder picker can't jump there by itself \u2014 the install path is on your clipboard: paste it into the picker's Folder box (Ctrl+V), press Enter, then Select Folder. One time only; after that this step is skipped."
-                    : envWrite === "nocompose"
-                      ? "that folder has no docker-compose.community.yml \u2014 pick the folder you installed Nodaro into (the path is on your clipboard)"
-                      : "couldn't write there \u2014 use COPY .ENV TEMPLATE instead"}
-              </div>
-            )}
             {envHelpOpen && (
               <ol
                 style={{
@@ -1371,13 +1300,6 @@ export default function SetupPage() {
                 <li>
                   Create (or open) a file named <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}
                   there, in any text editor, and paste the template &mdash; the COPY button above fills your clipboard.
-                  {canPickFolder && (
-                    <>
-                      {" "}Or let the browser write it: WRITE .ENV INTO INSTALL FOLDER opens a folder picker (it cannot
-                      jump to the folder by itself &mdash; paste the path from your clipboard into its Folder box) and
-                      creates the file for you. One pick; it is remembered.
-                    </>
-                  )}
                 </li>
                 <li>
                   Put your key after the <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>=</code> and remove

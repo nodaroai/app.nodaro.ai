@@ -1,5 +1,13 @@
 import "dotenv/config"
 import { z } from "zod"
+import {
+  PROVIDER_KEY_ENV,
+  PROVIDER_KEY_IDS,
+  resolveProviderKey,
+  setEnvProviderKey,
+  setEnvProviderKeys,
+  type ProviderKeyId,
+} from "./provider-keys-runtime.js"
 
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -80,7 +88,13 @@ const envSchema = z.object({
   REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
   /** KIE.ai account unique ID for credit audit API (constant per account) */
   KIE_UNIQUE_ID: z.string().default(""),
-  /** 64-char hex string (32 bytes) for AES-256-GCM encryption of social media OAuth tokens */
+  /** 64-char hex string (32 bytes): the instance encryption key for every
+   *  secret the server stores for itself (social OAuth tokens, operator-
+   *  supplied provider keys) — see lib/instance-cipher.ts. The community
+   *  compose stack generates it once on first boot; managed deployments must
+   *  set it. SOCIAL_ENCRYPTION_KEY below is the older name, still accepted. */
+  NODARO_ENCRYPTION_KEY: z.string().default(""),
+  /** Older name for NODARO_ENCRYPTION_KEY — kept so no existing install re-encrypts. */
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
   PUBLIC_URL: z.string().default(""),
@@ -191,3 +205,39 @@ export const config = {
     .filter((s) => s.length > 0),
 }
 export type Config = z.infer<typeof envSchema> & { MCP_DCR_ALLOWLIST_PARSED: string[] }
+
+// ---------------------------------------------------------------------------
+// Provider keys are LIVE.
+//
+// `config.KIE_API_KEY` & co (the seven ids in lib/provider-keys-runtime.ts)
+// are getters, not the parsed strings: they resolve through
+// resolveProviderKey(), i.e. the environment value first, and — where env is
+// empty — the operator-supplied key stored encrypted in provider_credentials
+// (loaded at boot and refreshed on write / TTL by lib/provider-credentials.ts).
+// That is what lets a self-hoster paste a key on /setup and Run without a
+// restart, while the ~120 existing read sites stay untouched — every one of
+// them reads per call (KIE, ElevenLabs, fal, the LLM lanes) or through a
+// token-checking factory (Replicate, Gemini), see tools/check-provider-key-captures.mjs.
+//
+// Setters exist because tests assign `config.ELEVENLABS_API_KEY = "…"`; they
+// write the env layer, which keeps precedence intact. Tests that vi.mock this
+// module with a plain object never see any of this — that is deliberate: do
+// not "simplify" the getters back into fields.
+// ---------------------------------------------------------------------------
+setEnvProviderKeys(
+  Object.fromEntries(
+    PROVIDER_KEY_IDS.map((id) => [id, (baseConfig as Record<string, unknown>)[PROVIDER_KEY_ENV[id]] as string | undefined]),
+  ) as Partial<Record<ProviderKeyId, string>>,
+)
+for (const id of PROVIDER_KEY_IDS) {
+  const envVar = PROVIDER_KEY_ENV[id]
+  // Only keys the schema actually declares (keeps this safe if a provider is
+  // added to the runtime list before its env var reaches the schema).
+  if (!(envVar in baseConfig)) continue
+  Object.defineProperty(config, envVar, {
+    enumerable: true,
+    configurable: false,
+    get: () => resolveProviderKey(id)?.value ?? "",
+    set: (value: string) => setEnvProviderKey(id, value),
+  })
+}

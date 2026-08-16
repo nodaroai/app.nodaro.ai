@@ -400,6 +400,8 @@ jobs:
         run: node tools/check-ee-imports.mjs
       - name: Check for private-extraction symbol leaks
         run: node tools/check-private-leaks.mjs
+      - name: Check no provider key is frozen at construction/import (keys are live)
+        run: node tools/check-provider-key-captures.mjs
 
   check-pricing-leaks:
     # packages/shared, packages/prompts, packages/client, and packages/cli are

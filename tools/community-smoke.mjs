@@ -328,8 +328,28 @@ await check("a keyed generation completes and its media lands in the install's o
   }
   // BYO key means a LOCAL media key. A nodaro.ai connection alone is the
   // connect lane — different plumbing, asserted elsewhere.
+  //
+  // Two ways to bring it: KIE_API_KEY in the install's .env (the classic
+  // path), or SMOKE_KIE_API_KEY on THIS process, which the probe pastes
+  // through PUT /v1/setup/provider-keys/kie — the in-app path — and then
+  // generates against. The second proves hot registration end to end: the
+  // worker must pick the key up without a restart — on its poll, or, for a
+  // Run that lands before the poll, through the router's self-heal (a route
+  // that finds no provider re-reads the store once and re-routes).
+  let viaApp = false
+  if (!ctx.keys.kie && !ctx.keys.replicate && process.env.SMOKE_KIE_API_KEY) {
+    const put = await api("/v1/setup/provider-keys/kie", { method: "PUT", token: ctx.token, body: { value: process.env.SMOKE_KIE_API_KEY } })
+    assert(put.status === 200 && put.json?.set === true, `pasting the key through /setup failed: ${put.status} ${JSON.stringify(put.json).slice(0, 200)}`)
+    ctx.keys.kie = true
+    viaApp = true
+    // Deliberately SHORT — the promise under test is "paste, then Run". The
+    // pause only clears the router's self-heal rate limiter, which the
+    // keyless check above may have just tripped in the worker; it is not
+    // "wait for the poll" (that would hide a broken self-heal).
+    await new Promise((r) => setTimeout(r, Number(process.env.SMOKE_KEY_PROPAGATION_MS ?? 5_000)))
+  }
   const model = ctx.keys.kie ? "z-image" : ctx.keys.replicate ? "flux-2-klein" : null
-  assert(model, "--keyed needs a local media key on the install under test (KIE_API_KEY or REPLICATE_API_TOKEN; a cloud connection alone is not the BYO-key lane)")
+  assert(model, "--keyed needs a local media key on the install under test (KIE_API_KEY / REPLICATE_API_TOKEN in .env, or SMOKE_KIE_API_KEY on the probe to paste it through /setup; a cloud connection alone is not the BYO-key lane)")
 
   const submitted = await api("/v1/generate-image", {
     method: "POST",
@@ -377,7 +397,7 @@ await check("a keyed generation completes and its media lands in the install's o
   assert(!(typeof credits === "number" && credits > 0), `community job carries a credit charge (${credits})`)
 
   const own = imageUrl.startsWith(`${BASE}/`) ? " — this install's own origin" : ""
-  return `${model} completed in ${Math.round((Date.now() - started) / 1000)}s, ${bytes}B ${contentType} from ${new URL(imageUrl).origin}${own}, no credits charged`
+  return `${model} completed in ${Math.round((Date.now() - started) / 1000)}s, ${bytes}B ${contentType} from ${new URL(imageUrl).origin}${own}, no credits charged${viaApp ? " — key pasted through /setup, no restart" : ""}`
 })
 
 await check("starting the nodaro.ai connection is honest either way", async () => {
@@ -434,6 +454,47 @@ await check("a fresh install seeds its tutorials", async () => {
     "no tutorial workflows after boot — the seeded templates are missing from the image (see backend/scripts/copy-build-assets.mjs)",
   )
   return `${flows.length} tutorial workflow(s) seeded`
+})
+
+await check("a provider key pasted on /setup is stored, shown, and clearable — never echoed", async () => {
+  // In-app credentials: the paste field behind every Install-health tile.
+  // Bogus value on purpose — no vendor is called; the contract is the
+  // round trip: PUT -> tile reads set (source app) on BOTH the provider-keys
+  // route and setup/status -> DELETE -> missing. The plaintext must never
+  // appear in any response. If the install manages this key through the
+  // environment (env wins) the write is refused with a message naming the
+  // variable — also a pass, and asserted as such.
+  const enc = (await api("/v1/setup/status")).json?.checks?.encryption
+  if (enc && enc.ok !== true) {
+    return skip(
+      "a provider key pasted on /setup is stored, shown, and clearable — never echoed",
+      `no instance encryption key on this install (${enc.hint ?? "encryption.ok=false"}) — pasted keys cannot be stored`,
+    )
+  }
+  const bogus = `smoke-not-a-real-key-${Date.now()}`
+  const put = await api("/v1/setup/provider-keys/heygen", { method: "PUT", token: ctx.token, body: { value: bogus } })
+  if (put.status === 409 && put.json?.error?.code === "managed_by_env") {
+    assert(/HEYGEN_API_KEY/.test(put.json.error.message), "managed_by_env must name the variable")
+    return "heygen is managed by the environment here — write refused honestly (env wins)"
+  }
+  assert(put.status === 200, `PUT expected 200, got ${put.status}: ${JSON.stringify(put.json).slice(0, 200)}`)
+  assert(put.json?.set === true && put.json?.source === "app", `PUT answered ${JSON.stringify(put.json)}`)
+  assert(!put.text.includes(bogus), "PUT response echoed the key")
+
+  const list = await api("/v1/setup/provider-keys", { token: ctx.token })
+  const row = (list.json?.providers ?? []).find((p) => p.id === "heygen")
+  assert(row?.set === true && row?.source === "app", `list shows ${JSON.stringify(row)}`)
+  assert(!list.text.includes(bogus), "list echoed the key")
+  const status = await api("/v1/setup/status")
+  assert(status.json?.checks?.providers?.keys?.heygen === true, "setup/status tile did not light")
+  assert(status.json?.checks?.providers?.sources?.heygen === "app", "setup/status source is not app")
+  assert(!status.text.includes(bogus), "setup/status echoed the key")
+
+  const del = await api("/v1/setup/provider-keys/heygen", { method: "DELETE", token: ctx.token })
+  assert(del.status === 200 && del.json?.set === false, `DELETE answered ${del.status} ${JSON.stringify(del.json)}`)
+  const after = await api("/v1/setup/status")
+  assert(after.json?.checks?.providers?.keys?.heygen === false, "tile still lit after DELETE")
+  return "PUT -> set (app) on provider-keys + setup/status -> DELETE -> missing; value never echoed"
 })
 
 await check("billing routes are absent on an edition with no billing", async () => {

@@ -98,6 +98,42 @@ export function guardProviderClient<T extends object>(
 }
 
 /**
+ * A guarded client that is BUILT from the key in force and rebuilt when the
+ * key changes. For SDKs that take the credential at construction (Replicate's
+ * `auth`, Gemini's `apiKey`): with provider keys now live (`config.X_KEY`
+ * resolves env → app-managed store), a singleton constructed once at import
+ * would keep a stale key after the operator pastes a new one on /setup.
+ * Same guard as guardProviderClient while the key is unset.
+ *
+ * Any new SDK singleton must go through this or read the key per call —
+ * tools/check-provider-key-captures.mjs fails CI on a bare `new Sdk({ …
+ * config.X_KEY })`.
+ */
+export function liveProviderClient<T extends object>(
+  factory: (key: string) => T,
+  keyName: ProviderKeyName,
+  readKey: () => string | undefined,
+): T {
+  let built: { key: string; client: T } | null = null
+  const current = (): T => {
+    const key = readKey()
+    requireProviderKey(key, keyName)
+    if (!built || built.key !== key) built = { key: key!, client: factory(key!) }
+    return built.client
+  }
+  return new Proxy({} as T, {
+    get(_target, prop) {
+      const client = current()
+      const value = Reflect.get(client, prop, client)
+      return typeof value === "function" ? value.bind(client) : value
+    },
+    has(_target, prop) {
+      return prop in current()
+    },
+  })
+}
+
+/**
  * Why a capability had NO provider to serve it.
  *
  * The router's own phrasing ("Model X is not supported for Y by any

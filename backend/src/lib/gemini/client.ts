@@ -38,14 +38,18 @@ export interface GeminiCallParams {
   maxTokens: number
 }
 
-let client: GoogleGenAI | undefined
+// Memoised per KEY, not once: provider keys are live (env, then the
+// operator-supplied key from /setup), so a client built for one key must be
+// rebuilt when the key changes rather than keep signing with the old one.
+let client: { key: string; sdk: GoogleGenAI } | undefined
 
 export function getGeminiClient(): GoogleGenAI {
-  if (!config.GEMINI_API_KEY) {
+  const apiKey = config.GEMINI_API_KEY
+  if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured — the direct Gemini lane is unavailable")
   }
-  client ??= new GoogleGenAI({ apiKey: config.GEMINI_API_KEY })
-  return client
+  if (!client || client.key !== apiKey) client = { key: apiKey, sdk: new GoogleGenAI({ apiKey }) }
+  return client.sdk
 }
 
 /** Test seam: drop the memoized client so a suite can swap the key. */

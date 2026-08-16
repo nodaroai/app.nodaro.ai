@@ -5,9 +5,11 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect, mockCredential } = vi.hoisted(() => ({
+const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect, mockCredential, mockCipherSource } = vi.hoisted(() => ({
   // getNodaroCredential(): null = not connected; {token, source} = connected.
   mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" } | null>>(),
+  // encryptionKeySource(): null = no key; else which env var supplies it.
+  mockCipherSource: { value: "NODARO_ENCRYPTION_KEY" as "NODARO_ENCRYPTION_KEY" | "SOCIAL_ENCRYPTION_KEY" | null },
   mockConfig: {
     EDITION: "community",
     REDIS_URL: "redis://localhost:6379",
@@ -58,6 +60,11 @@ vi.mock("../../lib/nodaro-connect.js", () => ({
   isNodaroConnected: vi.fn(async () => (await mockCredential()) !== null),
 }))
 
+// The instance cipher: which variable (if any) supplies the encryption key.
+vi.mock("../../lib/instance-cipher.js", () => ({
+  encryptionKeySource: () => mockCipherSource.value,
+}))
+
 vi.mock("@/lib/storage.js", () => ({
   s3: { send: (...args: unknown[]) => mockS3Send(...args) },
   // Mirrors the real isStorageConfigured so the existing R2_* toggles in
@@ -78,6 +85,7 @@ vi.mock("ioredis", () => ({
 
 import { setupStatusRoutes } from "../setup-status.js"
 import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../../lib/system-account.js"
+import { applyAppSnapshot, setEnvProviderKeys, _resetProviderKeysRuntimeForTests } from "../../lib/provider-keys-runtime.js"
 
 let app: FastifyInstance
 
@@ -87,6 +95,7 @@ beforeEach(async () => {
   mockSelect.mockResolvedValue({ data: [], error: null })
   mockCount.mockResolvedValue({ count: 0, error: null })
   mockCredential.mockResolvedValue(null)
+  mockCipherSource.value = "NODARO_ENCRYPTION_KEY"
   mockConnect.mockResolvedValue(undefined)
   mockPing.mockResolvedValue("PONG")
   mockS3Send.mockResolvedValue({})
@@ -96,6 +105,10 @@ beforeEach(async () => {
   mockConfig.R2_ENDPOINT = ""
   mockConfig.KIE_API_KEY = ""
   mockConfig.REPLICATE_API_TOKEN = ""
+  // Tiles resolve through the provider-keys runtime (env, then app). config
+  // is a plain mock in this suite, so seed the runtime the way config.ts does.
+  _resetProviderKeysRuntimeForTests()
+  setEnvProviderKeys({})
 
   app = Fastify({ logger: false })
   await app.register(setupStatusRoutes)
@@ -120,6 +133,9 @@ describe("GET /v1/setup/status", () => {
       gemini: false,
       elevenlabs: false,
       fal: false,
+      heygen: false,
+      beeble: false,
+      apify: false,
     })
     expect(body.checks.providers.hint).toContain("KIE_API_KEY")
     // Never cached — the page polls this for live status.
@@ -181,7 +197,7 @@ describe("GET /v1/setup/status", () => {
   })
 
   it("reports provider keys as present without exposing values", async () => {
-    mockConfig.KIE_API_KEY = "kie-secret-value"
+    setEnvProviderKeys({ kie: "kie-secret-value" })
 
     const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
     const body = res.json()
@@ -202,6 +218,59 @@ describe("GET /v1/setup/status", () => {
     expect(providers.nodaroSource).toBeNull()
     expect(providers.ok).toBe(false)
     expect(providers.hint).toContain("NODARO_API_KEY")
+  })
+
+  // The instance encryption key is what makes pasted provider keys (and social
+  // tokens) storable. The screen must show whether one exists and where it
+  // came from — never the key. On the community stack start.sh generates and
+  // persists it; a managed deploy without one shows a red card with the fix.
+  it("reports the encryption key's presence and source, never the key", async () => {
+    mockCipherSource.value = null
+    let res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.encryption).toMatchObject({ ok: false, status: "missing" })
+    expect(res.json().checks.encryption.hint).toContain("NODARO_ENCRYPTION_KEY")
+
+    mockCipherSource.value = "NODARO_ENCRYPTION_KEY"
+    process.env.NODARO_ENCRYPTION_KEY_SOURCE = "generated"
+    res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.encryption).toEqual({ ok: true, status: "ok", source: "generated", envVar: "NODARO_ENCRYPTION_KEY" })
+    delete process.env.NODARO_ENCRYPTION_KEY_SOURCE
+
+    mockCipherSource.value = "SOCIAL_ENCRYPTION_KEY"
+    res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.encryption).toEqual({ ok: true, status: "ok", source: "env", envVar: "SOCIAL_ENCRYPTION_KEY" })
+    expect(JSON.stringify(res.json())).not.toMatch(/[0-9a-f]{64}/)
+  })
+
+  // The tile list is DERIVED from the backend's provider-key list, so a key
+  // the backend requires can no longer be missing from the screen (HeyGen,
+  // Beeble and Apify were — 2026-08-16). Each tile carries its label, what
+  // it powers, where to get it, its env var, and whether connecting nodaro.ai
+  // stands in for it.
+  it("ships every backend provider key with labels and cloud coverage", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(Object.keys(providers.keys)).toEqual([
+      "nodaro", "kie", "replicate", "anthropic", "gemini", "elevenlabs", "fal", "heygen", "beeble", "apify",
+    ])
+    expect(providers.meta.heygen).toMatchObject({ name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: false })
+    expect(providers.meta.heygen.powers).toMatch(/avatar/i)
+    expect(providers.meta.kie.cloudCovered).toBe(true)
+  })
+
+  it("reports where each set key comes from — env, app (pasted on /setup) or oauth — never a value", async () => {
+    setEnvProviderKeys({ kie: "kie-from-env" })
+    applyAppSnapshot({ heygen: "hg-from-app" })
+    mockCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.keys.kie).toBe(true)
+    expect(providers.sources.kie).toBe("env")
+    expect(providers.keys.heygen).toBe(true)
+    expect(providers.sources.heygen).toBe("app")
+    expect(providers.sources.nodaro).toBe("oauth")
+    expect(providers.sources.fal).toBeNull()
+    expect(JSON.stringify(res.json())).not.toMatch(/kie-from-env|hg-from-app|ndr_app_x/)
   })
 
   it("lights the nodaro.ai tile from the OAuth connection and says so", async () => {

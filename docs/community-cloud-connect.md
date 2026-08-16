@@ -17,10 +17,16 @@ locally; the Nodaro connection adds:
   one-time 1,500-credit signup grant. Free-account outputs are
   watermarked; the first credit purchase lifts the watermark and unlocks
   every model. Connected-instance usage has **no daily spending cap**.
-- **Standard models without wrangling keys** — image and video generation
-  route through your Nodaro balance.
+- **Standard models without wrangling keys** — image and video generation,
+  speech and the LLM lanes route through your Nodaro balance.
 - **Nodaro-exclusive capabilities** — cloud-only models run through the
   connection and bill only that usage.
+
+**What the connection does not cover (yet):** nodes whose handlers call the
+vendor directly — HeyGen (AI Avatar, Cinematic Avatar), Beeble (Relight &
+Switch) and Apify (Web Scrape). Those still need their own key on
+`/setup` even when connected; the tiles say so, and the Install-health banner
+counts only what connecting actually clears.
 
 ## How to connect
 
