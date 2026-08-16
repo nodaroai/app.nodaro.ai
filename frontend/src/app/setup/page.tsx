@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getAuthHeaders } from "@/lib/api"
 import { CONNECT_START_NETWORK_MESSAGE, interpretConnectStart } from "@/lib/cloud-connect-start"
+import { PROVIDER_META, providerTiles, type NodaroCredentialSource } from "@/lib/provider-tiles"
+import { browserBlockedFolderReason, installFolderForClipboard } from "@/lib/install-folder-path"
 import { Link } from "react-router-dom"
 
 /**
@@ -29,6 +31,9 @@ interface ProvidersCheck {
   readonly ok: boolean
   /** Live Nodaro Cloud connection — a first-class provider, not an env var. */
   readonly nodaroCloud?: boolean
+  /** How nodaro.ai is authenticated: the OAuth connection or NODARO_API_KEY. */
+  readonly nodaroSource?: NodaroCredentialSource
+  /** One entry per provider, nodaro.ai included — the grid renders this. */
   readonly keys: Record<string, boolean>
   readonly hint?: string
 }
@@ -107,14 +112,13 @@ interface ServiceView {
   readonly check: CheckResult
 }
 
-const PROVIDERS: ReadonlyArray<{ id: string; name: string; env: string }> = [
-  { id: "kie", name: "KIE.ai", env: "KIE_API_KEY" },
-  { id: "replicate", name: "Replicate", env: "REPLICATE_API_TOKEN" },
-  { id: "anthropic", name: "Anthropic", env: "ANTHROPIC_API_KEY" },
-  { id: "gemini", name: "Google Gemini", env: "GEMINI_API_KEY" },
-  { id: "elevenlabs", name: "ElevenLabs", env: "ELEVENLABS_API_KEY" },
-  { id: "fal", name: "fal.ai", env: "FAL_KEY" },
-]
+// The provider grid is DERIVED from the backend's `checks.providers.keys`
+// (see lib/provider-tiles.ts) — the backend holds the keys, so it owns which
+// providers exist; this page only labels them. Until the first status
+// arrives, render the known set so the layout does not jump.
+const PROVIDER_PLACEHOLDER_KEYS: Readonly<Record<string, boolean>> = Object.fromEntries(
+  Object.keys(PROVIDER_META).map((id) => [id, false]),
+)
 
 function clockOf(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0")
@@ -289,8 +293,10 @@ async function storeHandle(handle: FileSystemDirectoryHandle): Promise<void> {
  *  docker-compose.community.yml. Mirrors the compose passthrough list. */
 const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .env next to
 # docker-compose.community.yml, uncomment what you use, then: docker compose up -d
-# nodaro.ai models need NO key here \u2014 click "Connect nodaro.ai" in the app instead (OAuth).
+# nodaro.ai: click "Connect nodaro.ai" in the app (OAuth, no key) \u2014 OR paste a
+# personal API token from app.nodaro.ai \u2192 Settings \u2192 API. Runs alongside the others.
 
+# NODARO_API_KEY=          # nodaro.ai \u2014 every model, one account (billed to that account)
 # KIE_API_KEY=             # kie.ai \u2014 broadest media-model coverage
 # REPLICATE_API_TOKEN=     # replicate.com
 # ANTHROPIC_API_KEY=       # console.anthropic.com \u2014 LLM nodes
@@ -309,7 +315,7 @@ export default function SetupPage() {
   const [tab, setTab] = useState<"setup" | "health">("setup")
   const [envCopied, setEnvCopied] = useState(false)
   const [envHelpOpen, setEnvHelpOpen] = useState(false)
-  const [envWrite, setEnvWrite] = useState<"idle" | "done" | "nocompose" | "error">("idle")
+  const [envWrite, setEnvWrite] = useState<"idle" | "picking" | "done" | "nocompose" | "error">("idle")
   const [connectPending, setConnectPending] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -364,7 +370,7 @@ export default function SetupPage() {
 
   const upCount = services.filter((s) => s.check.ok).length
   const keysSet = status ? Object.values(status.checks.providers.keys).filter(Boolean).length : 0
-  const keysTotal = status ? Object.keys(status.checks.providers.keys).length : PROVIDERS.length
+  const keysTotal = status ? Object.keys(status.checks.providers.keys).length : Object.keys(PROVIDER_META).length
   const keysMissing = keysTotal - keysSet
   const latencies = services.map((s) => s.check.latencyMs).filter((v): v is number => v !== null)
   const avgLatency = latencies.length
@@ -474,7 +480,12 @@ export default function SetupPage() {
   // File System Access API (Chrome/Edge): pick the install folder and write
   // the .env template into it directly — no text editor needed. Hidden where
   // unsupported; the COPY-template path stays for everyone else.
-  const canPickFolder = typeof window !== "undefined" && "showDirectoryPicker" in window
+  const pickerSupported = typeof window !== "undefined" && "showDirectoryPicker" in window
+  // Chromium refuses grants inside AppData / Program Files / Library / system
+  // roots — offering the picker there ends in "can't open this folder" AFTER
+  // the user navigated to it. Steer to COPY instead.
+  const blockedFolderReason = browserBlockedFolderReason(status?.installDir)
+  const canPickFolder = pickerSupported && !blockedFolderReason
   const openInstallFolder = async () => {
     try {
       // A previously granted handle skips the OS dialog entirely.
@@ -490,6 +501,18 @@ export default function SetupPage() {
         if (state !== "granted") dir = null
       }
       if (!dir) {
+        // The picker cannot be told to open AT the install folder — the File
+        // System Access API only accepts well-known folders or a previously
+        // granted handle, so the first pick always lands in Documents (founder
+        // hit this: "it never opens in the right folder", 2026-08-16). What we
+        // CAN do: put the path on the clipboard, in the form the OS picker
+        // navigates to, and say so in place. After one successful pick the
+        // handle is stored and this dialog never shows again.
+        const clip = installFolderForClipboard(status?.installDir)
+        if (clip) {
+          await navigator.clipboard?.writeText(clip).catch(() => {})
+        }
+        setEnvWrite("picking")
         const picker = (window as unknown as { showDirectoryPicker: (o: { mode: string; id?: string }) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
         // id: Chrome remembers the last-picked directory per id, so the second
         // visit opens straight at the install folder instead of Documents.
@@ -523,6 +546,7 @@ export default function SetupPage() {
       }
       setEnvWrite("done")
     } catch (err) {
+      // Picker dismissed: keep the "paste the path" hint up so a retry is easy.
       if (err instanceof DOMException && err.name === "AbortError") return
       setEnvWrite("error")
     }
@@ -1159,8 +1183,11 @@ export default function SetupPage() {
             )
           })()}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-            {PROVIDERS.map((p) => {
-              const present = status?.checks.providers.keys[p.id] === true
+            {providerTiles(
+              status?.checks.providers.keys ?? PROVIDER_PLACEHOLDER_KEYS,
+              status?.checks.providers.nodaroSource ?? null,
+            ).map((p) => {
+              const present = p.present
               return (
                 <div
                   key={p.id}
@@ -1190,7 +1217,7 @@ export default function SetupPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {present ? "set" : "missing"}
+                    {p.state}
                   </span>
                 </div>
               )
@@ -1237,7 +1264,7 @@ export default function SetupPage() {
                       padding: 0,
                     }}
                   >
-                    OPEN INSTALL FOLDER
+                    WRITE .ENV INTO INSTALL FOLDER
                   </button>
                 )}
                 <button
@@ -1285,20 +1312,36 @@ export default function SetupPage() {
                 </button>
               </span>
             </div>
+            {pickerSupported && blockedFolderReason && (
+              <div
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 11.5,
+                  padding: "0 22px 12px",
+                  color: MUTED,
+                }}
+              >
+                the browser can&rsquo;t write into this install folder &mdash; {blockedFolderReason} &mdash; so use COPY .ENV
+                TEMPLATE and paste it into a{" "}
+                <code style={{ fontFamily: MONO, fontSize: 11.5, color: INK }}>.env</code> file there with any text editor
+              </div>
+            )}
             {envWrite !== "idle" && (
               <div
                 style={{
                   fontFamily: MONO,
                   fontSize: 11.5,
                   padding: "0 22px 12px",
-                  color: envWrite === "done" ? "#166534" : "#92400e",
+                  color: envWrite === "done" ? "#166534" : envWrite === "picking" ? INK : "#92400e",
                 }}
               >
                 {envWrite === "done"
                   ? ".env is ready in that folder \u2713 \u2014 paste your key into it, then run: docker compose -f docker-compose.community.yml up -d"
-                  : envWrite === "nocompose"
-                    ? "that folder has no docker-compose.community.yml \u2014 pick the folder you installed Nodaro into"
-                    : "couldn't write there \u2014 use COPY .ENV TEMPLATE instead"}
+                  : envWrite === "picking"
+                    ? "the folder picker can't jump there by itself \u2014 the install path is on your clipboard: paste it into the picker's Folder box (Ctrl+V), press Enter, then Select Folder. One time only; after that this step is skipped."
+                    : envWrite === "nocompose"
+                      ? "that folder has no docker-compose.community.yml \u2014 pick the folder you installed Nodaro into (the path is on your clipboard)"
+                      : "couldn't write there \u2014 use COPY .ENV TEMPLATE instead"}
               </div>
             )}
             {envHelpOpen && (
@@ -1328,6 +1371,13 @@ export default function SetupPage() {
                 <li>
                   Create (or open) a file named <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}
                   there, in any text editor, and paste the template &mdash; the COPY button above fills your clipboard.
+                  {canPickFolder && (
+                    <>
+                      {" "}Or let the browser write it: WRITE .ENV INTO INSTALL FOLDER opens a folder picker (it cannot
+                      jump to the folder by itself &mdash; paste the path from your clipboard into its Folder box) and
+                      creates the file for you. One pick; it is remembered.
+                    </>
+                  )}
                 </li>
                 <li>
                   Put your key after the <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>=</code> and remove

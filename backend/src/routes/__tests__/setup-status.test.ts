@@ -5,7 +5,9 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect } = vi.hoisted(() => ({
+const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect, mockCredential } = vi.hoisted(() => ({
+  // getNodaroCredential(): null = not connected; {token, source} = connected.
+  mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" } | null>>(),
   mockConfig: {
     EDITION: "community",
     REDIS_URL: "redis://localhost:6379",
@@ -50,6 +52,12 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+// The route dynamic-imports this; the same relative path from src/routes.
+vi.mock("../../lib/nodaro-connect.js", () => ({
+  getNodaroCredential: mockCredential,
+  isNodaroConnected: vi.fn(async () => (await mockCredential()) !== null),
+}))
+
 vi.mock("@/lib/storage.js", () => ({
   s3: { send: (...args: unknown[]) => mockS3Send(...args) },
   // Mirrors the real isStorageConfigured so the existing R2_* toggles in
@@ -78,6 +86,7 @@ beforeEach(async () => {
   // Healthy defaults; individual tests break specific probes.
   mockSelect.mockResolvedValue({ data: [], error: null })
   mockCount.mockResolvedValue({ count: 0, error: null })
+  mockCredential.mockResolvedValue(null)
   mockConnect.mockResolvedValue(undefined)
   mockPing.mockResolvedValue("PONG")
   mockS3Send.mockResolvedValue({})
@@ -104,6 +113,7 @@ describe("GET /v1/setup/status", () => {
     expect(body.checks.storage).toMatchObject({ ok: false, status: "not_configured" })
     expect(body.checks.providers.ok).toBe(false)
     expect(body.checks.providers.keys).toEqual({
+      nodaro: false,
       kie: false,
       replicate: false,
       anthropic: false,
@@ -178,6 +188,41 @@ describe("GET /v1/setup/status", () => {
     expect(body.checks.providers.ok).toBe(true)
     expect(body.checks.providers.keys.kie).toBe(true)
     expect(JSON.stringify(body)).not.toContain("kie-secret-value")
+  })
+
+  // nodaro.ai is a provider like the other six — one tile in `keys`, lit by
+  // either the OAuth connection or NODARO_API_KEY. It used to live outside the
+  // list as a banner-only boolean, so "0/6 set" ignored it and it never read
+  // as a provider (founder feedback 2026-08-16).
+  it("lists nodaro.ai first among the provider keys, unset when not connected", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(Object.keys(providers.keys)[0]).toBe("nodaro")
+    expect(providers.keys.nodaro).toBe(false)
+    expect(providers.nodaroSource).toBeNull()
+    expect(providers.ok).toBe(false)
+    expect(providers.hint).toContain("NODARO_API_KEY")
+  })
+
+  it("lights the nodaro.ai tile from the OAuth connection and says so", async () => {
+    mockCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.keys.nodaro).toBe(true)
+    expect(providers.nodaroSource).toBe("oauth")
+    expect(providers.nodaroCloud).toBe(true)
+    expect(providers.ok).toBe(true)
+    expect(JSON.stringify(res.json())).not.toContain("ndr_app_x")
+  })
+
+  it("lights the nodaro.ai tile from NODARO_API_KEY and says so", async () => {
+    mockCredential.mockResolvedValue({ token: "ndr_personal", source: "env" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.keys.nodaro).toBe(true)
+    expect(providers.nodaroSource).toBe("env")
+    expect(providers.ok).toBe(true)
+    expect(JSON.stringify(res.json())).not.toContain("ndr_personal")
   })
 
   // hasUsers drives the guided setup's step 1 ("create your server login").

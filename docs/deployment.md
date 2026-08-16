@@ -621,6 +621,7 @@ the flow itself.
 | Where | Variable | Meaning |
 |---|---|---|
 | Your instance (community / business) | `NODARO_CLOUD_URL` | Cloud host the **Connect nodaro.ai** button registers with. Default `https://app.nodaro.ai`. Set to `https://next.nodaro.ai` for a staging soak. |
+| Your instance (community / business) | `NODARO_API_KEY` | nodaro.ai as a provider like KIE or Replicate: a personal API token from app.nodaro.ai → Settings → API, billed to that account. Alternative to the OAuth connect flow — both light the same **nodaro.ai** tile on `/setup`; if both exist the OAuth connection is used (it carries per-instance spend caps and Connected Instances visibility). |
 | The cloud (a `cloud`-edition deployment) | `COMMUNITY_CONNECT_ENABLED` | Master switch for accepting self-hosted registrations (`software_id: nodaro-community` at `/v1/oauth/register`) and for the account's **Connected Instances** page. Default `false`. Enabled on `app.nodaro.ai` since 2026-08-16. Requires migration 312 (`developer_apps.kind = community_instance`). Read at boot — redeploy after changing. |
 
 When the cloud has it off, the instance's `POST /v1/nodaro-connect/start`

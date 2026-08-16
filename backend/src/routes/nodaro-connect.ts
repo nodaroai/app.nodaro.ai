@@ -5,7 +5,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import {
   clearNodaroConnection,
   getNodaroConnection,
-  isNodaroConnected,
+  getNodaroCredential,
   nodaroCloudBase,
   nodaroCloudFetch,
   readNodaroConnectionState,
@@ -175,8 +175,11 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
 
   app.get("/v1/nodaro-connect/status", async (req, reply) => {
     try {
-      const connected = await isNodaroConnected()
-      if (!connected) return reply.send({ connected: false })
+      const credential = await getNodaroCredential()
+      if (!credential) return reply.send({ connected: false })
+      // `source` tells the card whether this is the OAuth connection (which it
+      // can disconnect) or NODARO_API_KEY from .env (which it cannot).
+      const source = credential.source
       let balance: unknown = null
       try {
         const res = await nodaroCloudFetch("/v1/credits/balance")
@@ -184,7 +187,7 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
       } catch {
         // Balance is best-effort — a cloud hiccup must not read as "not connected".
       }
-      return reply.send({ connected: true, balance })
+      return reply.send({ connected: true, source, balance })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to read Nodaro connection status")
     }

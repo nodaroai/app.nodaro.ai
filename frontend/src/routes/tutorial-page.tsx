@@ -5,7 +5,7 @@
 // loading and the "start it for real" action; the look belongs to the body.
 
 import { Suspense, useCallback, useEffect, useState } from "react"
-import { useParams, useNavigate, Link } from "react-router-dom"
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
@@ -28,6 +28,7 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 export default function TutorialPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const focus = useTutorialFocus()
@@ -35,10 +36,19 @@ export default function TutorialPage() {
 
   const definition = getTutorial(slug)
 
+  // The guided view is keyed on the registry slug, but the template it reads
+  // may live under another one: every freshly published template carries the
+  // random suffix `generateSlug()` appends, until its slug migration lands on
+  // main. `?template=<published-slug>` lets an author preview the guided view
+  // against that real row in the meantime. It reads only what the template
+  // endpoint already lets this user read (a listed row, or their own), so it
+  // widens nothing — and the shell's Run clones the same row.
+  const templateSlug = searchParams.get("template") || slug
+
   const { data: template, isLoading, isError } = useQuery({
-    queryKey: ["tutorial-template", slug],
-    queryFn: () => getTemplateBySlug(slug as string),
-    enabled: !!slug && !!definition,
+    queryKey: ["tutorial-template", templateSlug],
+    queryFn: () => getTemplateBySlug(templateSlug as string),
+    enabled: !!templateSlug && !!definition,
     staleTime: 5 * 60_000,
   })
 
@@ -69,22 +79,23 @@ export default function TutorialPage() {
    * button and its credit guard live.
    */
   const startForReal = useCallback(async () => {
-    if (!slug || starting) return
+    if (!slug || !templateSlug || starting) return
     if (!user) {
-      navigate(`/login?next=${encodeURIComponent(`/tutorials/${slug}`)}`)
+      const search = searchParams.toString()
+      navigate(`/login?next=${encodeURIComponent(`/tutorials/${slug}${search ? `?${search}` : ""}`)}`)
       return
     }
     setStarting(true)
     try {
       const { data: projectId, error } = await createClient().rpc("ensure_default_project")
       if (error || !projectId) throw new Error(error?.message ?? "No project available")
-      const result = await cloneTemplate(slug, projectId as string, template?.name)
+      const result = await cloneTemplate(templateSlug, projectId as string, template?.name)
       navigate(`/projects/${result.projectId}/workflows/${result.workflowId}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not open this tutorial")
       setStarting(false)
     }
-  }, [slug, starting, user, navigate, template?.name])
+  }, [slug, templateSlug, searchParams, starting, user, navigate, template?.name])
 
   if (!definition) {
     return (

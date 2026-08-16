@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js"
+import { config } from "./config.js"
 
 /**
  * Community cloud-connect — instance-side connection store (Phase 4a).
@@ -37,12 +38,37 @@ export interface NodaroConnection {
  * stack) and STOP on `not-connected`; treating both as null is what left the
  * cloud provider unregistered on every boot.
  */
+/** How the instance authenticates to the cloud: the OAuth flow's stored
+ *  `ndr_app_` token, or a personal API token from NODARO_API_KEY. */
+export type NodaroCredentialSource = "oauth" | "env"
+
 export type NodaroConnectionState =
-  | { state: "connected"; connection: NodaroConnection }
+  | { state: "connected"; source: "oauth"; connection: NodaroConnection }
+  | { state: "connected"; source: "env" }
   | { state: "not-connected" }
   | { state: "unavailable"; reason: string }
 
+/** NODARO_API_KEY, or null when unset/blank. */
+function envApiKey(): string | null {
+  const key = (config.NODARO_API_KEY ?? "").trim()
+  return key.length > 0 ? key : null
+}
+
+/**
+ * Connection state with the env key folded in. A stored OAuth connection wins
+ * — it carries per-instance spend caps and Connected Instances visibility on
+ * the cloud; the env key is a plain personal credential. With an env key set,
+ * an UNREADABLE store still reads as connected: nothing about that credential
+ * lives in the database, so boot-time registration has nothing to wait for.
+ */
 export async function readNodaroConnectionState(): Promise<NodaroConnectionState> {
+  const stored = await readStoredConnectionState()
+  if (stored.state === "connected") return stored
+  if (envApiKey()) return { state: "connected", source: "env" }
+  return stored
+}
+
+async function readStoredConnectionState(): Promise<NodaroConnectionState> {
   try {
     const { data, error } = await supabase
       .from("app_settings")
@@ -55,10 +81,24 @@ export async function readNodaroConnectionState(): Promise<NodaroConnectionState
     if (!value || typeof value !== "object") return { state: "not-connected" }
     const conn = value as NodaroConnection
     if (!conn.clientId || !conn.clientSecret || !conn.accessToken) return { state: "not-connected" }
-    return { state: "connected", connection: conn }
+    return { state: "connected", source: "oauth", connection: conn }
   } catch (err) {
     return { state: "unavailable", reason: err instanceof Error ? err.message : String(err) }
   }
+}
+
+/**
+ * The bearer token to CALL the cloud with, and where it came from. This is
+ * what nodaroCloudFetch and every "is the instance connected" check use.
+ * Deliberately NOT getNodaroConnection(): that one is the OAuth
+ * REGISTRATION (client id/secret) the connect routes need, and an env key
+ * must never masquerade as a registration.
+ */
+export async function getNodaroCredential(): Promise<{ token: string; source: NodaroCredentialSource } | null> {
+  const state = await readNodaroConnectionState()
+  if (state.state !== "connected") return null
+  if (state.source === "oauth") return { token: state.connection.accessToken!, source: "oauth" }
+  return { token: envApiKey()!, source: "env" }
 }
 
 /**
@@ -98,8 +138,7 @@ export async function clearNodaroConnection(): Promise<void> {
 
 /** True once the instance holds a usable cloud token. */
 export async function isNodaroConnected(): Promise<boolean> {
-  const conn = await getNodaroConnection()
-  return Boolean(conn?.accessToken)
+  return (await getNodaroCredential()) !== null
 }
 
 /**
@@ -108,15 +147,15 @@ export async function isNodaroConnected(): Promise<boolean> {
  * itself only when connected, so this is a programming-error guard).
  */
 export async function nodaroCloudFetch(path: string, init?: RequestInit): Promise<Response> {
-  const conn = await getNodaroConnection()
-  if (!conn?.accessToken) {
+  const credential = await getNodaroCredential()
+  if (!credential) {
     throw new Error("nodaro.ai is not connected")
   }
   return fetch(`${nodaroCloudBase()}${path}`, {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
-      Authorization: `Bearer ${conn.accessToken}`,
+      Authorization: `Bearer ${credential.token}`,
       "Content-Type": "application/json",
     },
   })
