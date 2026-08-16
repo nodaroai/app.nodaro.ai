@@ -107,7 +107,9 @@ describe("POST /v1/reduce — the AI judge on the nodaro.ai connection", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({ jobId: "cloud-job", output: "B" })
-    expect(cloudMocks.maybeProxyLlmRouteToCloud).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/v1/reduce")
+    // The 4th argument labels the mirrored local row exactly like the route's
+    // own insert (`buildJobInputData(..., "reduce")`).
+    expect(cloudMocks.maybeProxyLlmRouteToCloud).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/v1/reduce", "reduce")
     expect(dispatchStrategy).not.toHaveBeenCalled()
   })
 

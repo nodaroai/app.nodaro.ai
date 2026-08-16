@@ -58,7 +58,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back (the
       // sibling lottie / 3d-title routes do the same; this one was missed).
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/motion-graphics/generate")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/motion-graphics/generate", "motion-graphics")) return
       req.raw.setTimeout(60000)
       reply.raw.setTimeout(60000)
 

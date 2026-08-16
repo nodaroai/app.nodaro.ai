@@ -46,7 +46,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/ai-writer/generate")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/ai-writer/generate", "ai-writer")) return
 
       // Set timeouts at every layer to prevent premature connection close
       req.raw.setTimeout(120000)

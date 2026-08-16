@@ -39,7 +39,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/image-to-text/describe")) return
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/image-to-text/describe", "image-to-text")) return
 
       const parsed = imageToTextBody.safeParse(req.body)
       if (!parsed.success) {

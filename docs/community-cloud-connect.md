@@ -32,6 +32,19 @@ avatar/voice pickers list the cloud's catalog the same way. Billed to the
 connected account like any other cloud model. Paste your own key for any of
 them and that vendor is called directly instead — local keys win.
 
+**The text (LLM) nodes work the same way, standalone or inside a workflow.**
+Generate Text, AI Writer, Choose Best (AI judge), Image to Text, QA Check,
+Prompt Helper, Motion Graphics / Lottie / 3D Title and the picker analyzers do
+not go through the model router either — each route calls the LLM directly.
+With no LLM key (KIE, Anthropic or Gemini) and a live connection, the route
+forwards the same request to your nodaro.ai account's identical route
+(`lib/cloud-llm-proxy.ts`), then records the finished answer as a job in your
+own database (`viaNodaroCloud: true`, the cloud's id kept as `cloudJobId`) —
+so the job shows in your execution history and the `jobId` you get back is
+one your instance can resolve. Identifiers that only mean something on your
+instance (`workflowId`, `nodeId`) never leave it. Any local LLM key switches
+the route back to your own provider — local keys win.
+
 ## How to connect
 
 1. In your instance: **/setup → step 2 → Connect nodaro.ai** (or

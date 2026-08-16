@@ -71,7 +71,7 @@ export async function reduceRoutes(app: FastifyInstance) {
       // answer). Every other strategy is local logic and never leaves this
       // server — decided by the strategy's own usesLlm flag, not its name.
       const requested = requestedStrategy(req.body)
-      if (requested && getStrategy(requested).usesLlm && (await maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce"))) return
+      if (requested && getStrategy(requested).usesLlm && (await maybeProxyLlmRouteToCloud(req, reply, "/v1/reduce", "reduce"))) return
 
       const parsed = reduceBody.safeParse(req.body)
       if (!parsed.success) {
