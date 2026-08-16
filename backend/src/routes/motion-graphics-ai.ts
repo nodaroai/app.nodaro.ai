@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -54,6 +55,10 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same
+      // code, so forward the body and pass its answer straight back (the
+      // sibling lottie / 3d-title routes do the same; this one was missed).
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/motion-graphics/generate")) return
       req.raw.setTimeout(60000)
       reply.raw.setTimeout(60000)
 

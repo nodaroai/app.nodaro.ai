@@ -17,6 +17,13 @@ export type ReduceStrategy<TConfig = unknown> = {
   readonly defaultConfig: TConfig
   readonly outputType: OutputType
   readonly creditCostKey: string
+  /**
+   * The strategy calls an LLM (its judge model). Everything that treats
+   * "an LLM strategy" specially — the connected-install cloud proxy, the
+   * tiered credit id — reads this rather than matching on the id, so a new
+   * LLM strategy is covered by declaring it here.
+   */
+  readonly usesLlm?: boolean
 }
 
 // User-facing copy lives HERE (single source of truth) and flows into the node
@@ -44,6 +51,7 @@ const PICK_BEST_LLM_STRATEGY = {
   defaultConfig: { criteria: "Pick the highest-quality result.", inputKind: "text" as const },
   outputType: "text" as OutputType,
   creditCostKey: "reduce:pick-best-llm",
+  usesLlm: true,
 } as const satisfies ReduceStrategy<{ criteria: string; inputKind: "text" | "image-url"; llmModel?: string }>
 
 const CONCAT_STRATEGY = {

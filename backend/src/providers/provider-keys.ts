@@ -161,16 +161,28 @@ export function describeEmptyCapability(
   model: string,
   keys: Readonly<Record<ProviderKeyName, string>>,
   connectedToCloud: boolean,
+  /**
+   * The keys that can actually serve THIS capability, in the order to name
+   * them. Callers that know their lane pass it (the LLM client: KIE, then
+   * Anthropic for Claude models, Gemini for Gemini models); without it every
+   * unset key is a candidate — which once told a Claude caller to add
+   * REPLICATE_API_TOKEN.
+   */
+  candidates?: readonly ProviderKeyName[],
 ): string {
-  const unset = (Object.keys(WHERE_TO_GET) as ProviderKeyName[]).filter((k) => !keys[k])
+  const pool = candidates ?? (Object.keys(WHERE_TO_GET) as ProviderKeyName[])
+  const unset = pool.filter((k) => !keys[k])
   if (unset.length === 0) {
     // Every key this install could hold is set — the model really is unknown.
     return `Model "${model}" is not supported for ${capability} by any registered provider`
   }
   const options = unset.slice(0, 2).join(" or ")
+  // Not connected: connecting is an answer too (every key here is covered by
+  // the connection except nodaro.ai's own). Connected and still here: the
+  // connection did not cover this one — only a key will.
   const cloudNote = connectedToCloud ? "the nodaro.ai connection doesn't cover it" : "no provider is configured"
-  return (
-    `No provider for ${capability} \u2014 ${cloudNote}. ` +
-    `Add ${options} in Install health \u2192 Provider keys.`
-  )
+  const remedy = connectedToCloud
+    ? `Add ${options} in Install health → Provider keys.`
+    : `Add ${options} in Install health → Provider keys, or connect nodaro.ai.`
+  return `No provider for ${capability} — ${cloudNote}. ${remedy}`
 }

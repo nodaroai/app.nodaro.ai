@@ -178,11 +178,24 @@ describe("describeEmptyCapability — why nothing served the request", () => {
     expect(msg.length).toBeLessThanOrEqual(160)
   })
 
-  it("omits the cloud note when the instance isn't connected", () => {
+  it("offers the connection as a remedy when the instance isn't connected", () => {
     const msg = describeEmptyCapability("lip-sync", "x", { ...allSet, KIE_API_KEY: "" }, false)
-    expect(msg).not.toContain("nodaro.ai connection")
+    expect(msg).not.toContain("nodaro.ai connection doesn't cover")
     expect(msg).toContain("no provider is configured")
     expect(msg).toContain("KIE_API_KEY")
+    // A keyless, unconnected install has two ways out — say both.
+    expect(msg).toContain("or connect nodaro.ai")
+    expect(msg.length).toBeLessThanOrEqual(180)
+  })
+
+  it("names only the keys that can serve the capability when the caller says which (an LLM caller was told to add REPLICATE_API_TOKEN)", () => {
+    const keys = { ...allSet, KIE_API_KEY: "", ANTHROPIC_API_KEY: "", REPLICATE_API_TOKEN: "", GEMINI_API_KEY: "" }
+    const msg = describeEmptyCapability("LLM nodes", "claude-sonnet-4.6", keys, false, ["KIE_API_KEY", "ANTHROPIC_API_KEY"])
+    expect(msg).toContain("KIE_API_KEY or ANTHROPIC_API_KEY")
+    expect(msg).not.toContain("REPLICATE_API_TOKEN")
+    expect(msg).not.toContain("GEMINI_API_KEY")
+    // With every candidate set the model itself is the unknown — not the keys.
+    expect(describeEmptyCapability("LLM nodes", "claude-x", { ...allSet }, false, ["KIE_API_KEY", "ANTHROPIC_API_KEY"])).toContain("is not supported")
   })
 
   it("keeps the unknown-model wording once every key is configured", () => {

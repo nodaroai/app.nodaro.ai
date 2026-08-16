@@ -11,6 +11,13 @@ vi.mock("../../services/reduce-strategies/index.js", async () => {
   }
 })
 
+// The connected-install proxy: the AI judge is an LLM call and goes to the
+// cloud when this install has no LLM key and a live connection; every other
+// strategy stays local. Default: local (keyed / not connected).
+const cloudMocks = vi.hoisted(() => ({
+  maybeProxyLlmRouteToCloud: vi.fn<(req: unknown, reply: { status: (c: number) => { send: (b: unknown) => unknown } }, path: string) => Promise<boolean>>(async () => false),
+}))
+vi.mock("../../lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: cloudMocks.maybeProxyLlmRouteToCloud }))
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
@@ -83,6 +90,52 @@ async function buildTestApp() {
 beforeEach(() => {
   vi.clearAllMocks()
   nextJobId = 0
+  cloudMocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
+})
+
+describe("POST /v1/reduce — the AI judge on the nodaro.ai connection", () => {
+  it("forwards pick-best-llm to the cloud when the install has no LLM key and is connected — no local job, no local dispatch", async () => {
+    cloudMocks.maybeProxyLlmRouteToCloud.mockImplementation(async (_req: unknown, reply: { status: (c: number) => { send: (b: unknown) => unknown } }) => {
+      reply.status(200).send({ jobId: "cloud-job", output: "B", meta: { winnerIndex: 1 } })
+      return true
+    })
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/reduce",
+      payload: { strategyId: "pick-best-llm", strategyConfig: { criteria: "best" }, inputs: ["A", "B"] },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ jobId: "cloud-job", output: "B" })
+    expect(cloudMocks.maybeProxyLlmRouteToCloud).toHaveBeenCalledWith(expect.anything(), expect.anything(), "/v1/reduce")
+    expect(dispatchStrategy).not.toHaveBeenCalled()
+  })
+
+  it("never forwards a local strategy (concat) — no LLM in it, nothing for the cloud to add", async () => {
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    vi.mocked(dispatchStrategy).mockResolvedValue({ output: "A B", meta: {} } as never)
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/reduce",
+      payload: { strategyId: "concat", strategyConfig: {}, inputs: ["A", "B"] },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(cloudMocks.maybeProxyLlmRouteToCloud).not.toHaveBeenCalled()
+  })
+
+  it("answers 503 provider_unavailable (not 500) when no LLM can judge — the same shape as every other LLM route", async () => {
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    const { LlmProviderUnavailableError } = await import("../../lib/llm-client.js")
+    vi.mocked(dispatchStrategy).mockRejectedValue(new LlmProviderUnavailableError("No provider for LLM nodes — no provider is configured. Add KIE_API_KEY or ANTHROPIC_API_KEY in Install health → Provider keys, or connect nodaro.ai."))
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/reduce",
+      payload: { strategyId: "pick-best-llm", strategyConfig: { criteria: "best" }, inputs: ["A", "B"] },
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("provider_unavailable")
+    expect(res.json().error.message).toMatch(/ANTHROPIC_API_KEY/)
+  })
 })
 
 describe("POST /v1/reduce", () => {
