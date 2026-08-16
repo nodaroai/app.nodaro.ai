@@ -1,0 +1,582 @@
+{
+  "slug": "camera-coverage",
+  "name": "Camera Coverage — one frame, ten angles",
+  "description": "One reference frame in, ten shots of the same scene out. A director's coverage plan — wide, medium, close-up, over-the-shoulder, reverse — with only the camera changing.",
+  "markdownDescription": null,
+  "category": "image-generation",
+  "outputTypes": [
+    "image"
+  ],
+  "tags": [
+    "coverage",
+    "camera",
+    "shot list",
+    "fan-out",
+    "image"
+  ],
+  "complexity": "intermediate",
+  "previewMediaUrl": "https://cdn.nodaro.ai/images/168f6e61-5b1c-4380-aaa7-77b57755f143.png",
+  "previewMediaType": "image",
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 2,
+  "nodes": [
+    {
+      "id": "frame-source",
+      "data": {
+        "color": "#22D3EE40",
+        "label": "1 · One reference frame"
+      },
+      "type": "group",
+      "width": 1530,
+      "height": 1344,
+      "position": {
+        "x": -2789.476556643346,
+        "y": -776.207245492968
+      }
+    },
+    {
+      "id": "frame-plan",
+      "data": {
+        "color": "#818CF840",
+        "label": "2 · Plan the shots"
+      },
+      "type": "group",
+      "width": 2503,
+      "height": 1561,
+      "position": {
+        "x": -974,
+        "y": 433
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "frame-shoot",
+      "data": {
+        "color": "#ff007340",
+        "label": "3 · One node shoots all 10"
+      },
+      "type": "group",
+      "width": 794,
+      "height": 628,
+      "position": {
+        "x": 1830,
+        "y": 346
+      }
+    },
+    {
+      "id": "frame-sheet",
+      "data": {
+        "color": "#22c55e40",
+        "label": "4 · Contact sheet"
+      },
+      "type": "group",
+      "width": 5123,
+      "height": 3640,
+      "position": {
+        "x": 2692,
+        "y": -1002
+      }
+    },
+    {
+      "id": "note-intro",
+      "data": {
+        "bold": false,
+        "text": "Camera Coverage — one frame → N angles\n\nWHAT IT DOES\nOne reference frame in, ten shots of the SAME scene out — wide, medium, close-up, over-the-shoulder, reverse, insert, low angle, profile. Character, wardrobe, location, time of day and light never change. Only the camera does.\n\nTHE GOAL\nReal film coverage from a single image: a set of stills an editor could cut together, and that all work as start frames for animation.\n\nUSE IT WHEN\n• You have one hero frame and need a shot list around it (storyboard, previz, pitch deck)\n• You want to feed image-to-video with several angles of the same moment\n• You are about to spend on 10 generations and want them planned, not guessed",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 984,
+        "height": 854,
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "type": "sticky-note",
+      "width": 984,
+      "height": 854,
+      "zIndex": -1,
+      "position": {
+        "x": 599.9999999999999,
+        "y": -2463
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "note-how",
+      "data": {
+        "bold": false,
+        "text": "How it works\n\n1  Reference Frame — a prompt makes one image. This is the scene.\n2  Coverage Brief — the rules of real coverage (which shots, one angle per line, keep screen direction, leave room for animation). Edit these to change the plan.\n3  Write Coverage Prompts — an LLM reads the frame + the brief and returns 10 lines. Split Lines makes them a list.\n4  Shot List — the 10 lines, EDITABLE. Rewrite any line before spending credits.\n5  Coverage Shot — ONE image node. The list fans it out: 10 rows → 10 images, each with the reference frame as a visual anchor.\n6  Contact sheet — the 10 shots as a gallery. Pick one for the next step (a second List pulls a single shot).",
+        "color": "#A855F740",
+        "label": "Sticky Note",
+        "width": 900,
+        "height": 620,
+        "italic": false,
+        "fontSize": "lg",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "type": "sticky-note",
+      "width": 900,
+      "height": 620,
+      "zIndex": -1,
+      "position": {
+        "x": -1003.5905686620985,
+        "y": 2097.62519956966
+      }
+    },
+    {
+      "id": "note-yours",
+      "data": {
+        "bold": false,
+        "text": "Make it yours\n\n• Change the Reference Prompt and re-run from the top — a new scene, same coverage plan.\n• Change the Coverage Brief to ask for 6 shots, or a different order, or a different style of coverage (documentary, action, interview).\n• Edit a single line in the Shot List and re-run only Coverage Shot — one angle fixed, nine unchanged.\n• The list is the lever: it turns one image node into ten runs. Six nodes, not twenty-five.",
+        "color": "#22D3EE40",
+        "label": "Sticky Note",
+        "width": 820,
+        "height": 520,
+        "italic": false,
+        "fontSize": "lg",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "type": "sticky-note",
+      "width": 820,
+      "height": 520,
+      "zIndex": 10,
+      "position": {
+        "x": 1830,
+        "y": 1054
+      }
+    },
+    {
+      "id": "ref-prompt",
+      "data": {
+        "text": "a young woman in a worn olive field jacket sitting alone at a rain-streaked cafe window at night, warm interior lamp light on her face, cold neon glow outside, wet street reflections, shallow depth of field, 35mm film grain, cinematic still, photorealistic, high detail",
+        "label": "Reference Prompt",
+        "width": 558,
+        "height": 249,
+        "variables": {},
+        "generatedText": "a young woman in a worn olive field jacket sitting alone at a rain-streaked cafe window at night, warm interior lamp light on her face, cold neon glow outside, wet street reflections, shallow depth of field, 35mm film grain, cinematic still, photorealistic, high detail",
+        "generatedResults": [
+          {
+            "text": "a young woman in a worn olive field jacket sitting alone at a rain-streaked cafe window at night, warm interior lamp light on her face, cold neon glow outside, wet street reflections, shallow depth of field, 35mm film grain, cinematic still, photorealistic, high detail",
+            "jobId": "exec-ref-prompt",
+            "timestamp": "2026-08-15T21:15:47.337Z"
+          }
+        ],
+        "activeResultIndex": 0
+      },
+      "type": "text-prompt",
+      "width": 558,
+      "height": 249,
+      "parentId": "frame-source",
+      "position": {
+        "x": 35.17797746815495,
+        "y": 44.80859376001649
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "ref-frame",
+      "data": {
+        "label": "Reference Frame",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/168f6e61-5b1c-4380-aaa7-77b57755f143.png",
+            "jobId": "168f6e61-5b1c-4380-aaa7-77b57755f143",
+            "width": 320,
+            "height": 180,
+            "timestamp": "2026-08-15T20:10:33.565Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/168f6e61-5b1c-4380-aaa7-77b57755f143.png"
+      },
+      "type": "generate-image",
+      "width": 1345.3874709976799,
+      "height": 757,
+      "parentId": "frame-source",
+      "position": {
+        "x": 129.1421338575201,
+        "y": 416.3431464569923
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "coverage-brief",
+      "data": {
+        "text": "You are given a reference frame from a scene. Write 10 image prompts that COVER THE SAME SCENE from different camera setups, so the shots can be cut together into one sequence. Character, wardrobe, location, time of day and lighting stay identical. Only the camera setup changes.\n\nRules:\n- Build real coverage, in this order: 1 wide establishing, 2 medium, 2 close-up on the character, 1 over-the-shoulder, 1 reverse angle showing what she faces, 1 insert / cutaway detail, 1 low or high dynamic angle, 1 profile.\n- The character must stay recognizable in at least 7 of the 10. Pure detail shots: maximum 2.\n- ONE camera angle per prompt. Never stack two angle terms in the same line.\n- Describe the camera position, NOT camera movement. No pans, no zooms, no dolly - motion is added later.\n- Keep screen direction consistent across all shots: she stays on the same side of the frame line, so the cuts do not jump.\n- Every frame must be a usable start frame for an animated clip: leave breathing room around the subject, never crop tight against the frame edge.\n- No two prompts may describe the same framing. Reject near-duplicates before writing.\n- Each prompt under 30 words, phrased as a camera setup, not as a story.\n- Output exactly 10 lines, one prompt per line. No numbering, no bullets, no blank lines, no preamble.",
+        "label": "Coverage Brief",
+        "width": 582,
+        "height": 525,
+        "variables": {},
+        "generatedText": "You are given a reference frame from a scene. Write 10 image prompts that COVER THE SAME SCENE from different camera setups, so the shots can be cut together into one sequence. Character, wardrobe, location, time of day and lighting stay identical. Only the camera setup changes.\n\nRules:\n- Build real coverage, in this order: 1 wide establishing, 2 medium, 2 close-up on the character, 1 over-the-shoulder, 1 reverse angle showing what she faces, 1 insert / cutaway detail, 1 low or high dynamic angle, 1 profile.\n- The character must stay recognizable in at least 7 of the 10. Pure detail shots: maximum 2.\n- ONE camera angle per prompt. Never stack two angle terms in the same line.\n- Describe the camera position, NOT camera movement. No pans, no zooms, no dolly - motion is added later.\n- Keep screen direction consistent across all shots: she stays on the same side of the frame line, so the cuts do not jump.\n- Every frame must be a usable start frame for an animated clip: leave breathing room around the subject, never crop tight against the frame edge.\n- No two prompts may describe the same framing. Reject near-duplicates before writing.\n- Each prompt under 30 words, phrased as a camera setup, not as a story.\n- Output exactly 10 lines, one prompt per line. No numbering, no bullets, no blank lines, no preamble.",
+        "generatedResults": [
+          {
+            "text": "You are given a reference frame from a scene. Write 10 image prompts that COVER THE SAME SCENE from different camera setups, so the shots can be cut together into one sequence. Character, wardrobe, location, time of day and lighting stay identical. Only the camera setup changes.\n\nRules:\n- Build real coverage, in this order: 1 wide establishing, 2 medium, 2 close-up on the character, 1 over-the-shoulder, 1 reverse angle showing what she faces, 1 insert / cutaway detail, 1 low or high dynamic angle, 1 profile.\n- The character must stay recognizable in at least 7 of the 10. Pure detail shots: maximum 2.\n- ONE camera angle per prompt. Never stack two angle terms in the same line.\n- Describe the camera position, NOT camera movement. No pans, no zooms, no dolly - motion is added later.\n- Keep screen direction consistent across all shots: she stays on the same side of the frame line, so the cuts do not jump.\n- Every frame must be a usable start frame for an animated clip: leave breathing room around the subject, never crop tight against the frame edge.\n- No two prompts may describe the same framing. Reject near-duplicates before writing.\n- Each prompt under 30 words, phrased as a camera setup, not as a story.\n- Output exactly 10 lines, one prompt per line. No numbering, no bullets, no blank lines, no preamble.",
+            "jobId": "exec-coverage-brief",
+            "timestamp": "2026-08-15T21:15:47.337Z"
+          }
+        ],
+        "activeResultIndex": 0
+      },
+      "type": "text-prompt",
+      "width": 582,
+      "height": 525,
+      "parentId": "frame-plan",
+      "position": {
+        "x": 113.40596824714544,
+        "y": 947.9429939906238
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "coverage-llm",
+      "data": {
+        "label": "Write Coverage Prompts",
+        "llmModel": "gpt-5.2",
+        "maxTokens": 2048,
+        "temperature": 0.9,
+        "systemPrompt": "You are a director of photography planning the shot coverage of a single scene, so an editor can cut the shots together. Output only the 10 prompt lines - no numbering, no commentary, no preamble.",
+        "fieldMappings": {},
+        "generatedText": "Wide establishing shot from inside the cozy café, woman seated left of frame beside rain-streaked window, neon-lit street outside, warm tungsten lighting, ample headroom.\nMedium waist-up from across the table, woman left of frame gazing through rain-covered glass, coffee mug and books foreground, identical night lighting.\nMedium three-quarter side view from café aisle, woman left of frame leaning on folded arms beside window, reflections shimmering outside, warm interior glow.\nClose-up on her face in profile-three-quarter, eyes fixed outside, raindrops and neon bokeh behind, soft warm café lighting, breathing room around head.\nTight close-up of her thoughtful expression, window reflections crossing her face, identical wardrobe and lighting, negative space ahead of her gaze.\nOver-the-shoulder from behind her left shoulder toward the rain-soaked street, her silhouette and jacket foreground, neon storefronts beyond, consistent screen direction.\nReverse angle from outside the window toward the café interior, rain-speckled glass foreground, woman visible inside watching the street, warm interior contrasting cool night.\nInsert detail of steaming coffee mug, worn books, and raindrops on the windowsill, warm café light reflecting across wet surfaces.\nLow-angle medium shot from table height, woman left of frame against glowing window and neon reflections, same wardrobe, location, and nighttime lighting.\nClean side-profile shot parallel to the window, woman left of frame facing right toward the rain, café interior softly receding behind her.",
+        "generatedItems": [
+          "Wide establishing shot from inside the cozy café, woman seated left of frame beside rain-streaked window, neon-lit street outside, warm tungsten lighting, ample headroom.\nMedium waist-up from across the table, woman left of frame gazing through rain-covered glass, coffee mug and books foreground, identical night lighting.\nMedium three-quarter side view from café aisle, woman left of frame leaning on folded arms beside window, reflections shimmering outside, warm interior glow.\nClose-up on her face in profile-three-quarter, eyes fixed outside, raindrops and neon bokeh behind, soft warm café lighting, breathing room around head.\nTight close-up of her thoughtful expression, window reflections crossing her face, identical wardrobe and lighting, negative space ahead of her gaze.\nOver-the-shoulder from behind her left shoulder toward the rain-soaked street, her silhouette and jacket foreground, neon storefronts beyond, consistent screen direction.\nReverse angle from outside the window toward the café interior, rain-speckled glass foreground, woman visible inside watching the street, warm interior contrasting cool night.\nInsert detail of steaming coffee mug, worn books, and raindrops on the windowsill, warm café light reflecting across wet surfaces.\nLow-angle medium shot from table height, woman left of frame against glowing window and neon reflections, same wardrobe, location, and nighttime lighting.\nClean side-profile shot parallel to the window, woman left of frame facing right toward the rain, café interior softly receding behind her."
+        ],
+        "generatedResults": [
+          {
+            "text": "Wide establishing shot from inside the cozy café, woman seated left of frame beside rain-streaked window, neon-lit street outside, warm tungsten lighting, ample headroom.\nMedium waist-up from across the table, woman left of frame gazing through rain-covered glass, coffee mug and books foreground, identical night lighting.\nMedium three-quarter side view from café aisle, woman left of frame leaning on folded arms beside window, reflections shimmering outside, warm interior glow.\nClose-up on her face in profile-three-quarter, eyes fixed outside, raindrops and neon bokeh behind, soft warm café lighting, breathing room around head.\nTight close-up of her thoughtful expression, window reflections crossing her face, identical wardrobe and lighting, negative space ahead of her gaze.\nOver-the-shoulder from behind her left shoulder toward the rain-soaked street, her silhouette and jacket foreground, neon storefronts beyond, consistent screen direction.\nReverse angle from outside the window toward the café interior, rain-speckled glass foreground, woman visible inside watching the street, warm interior contrasting cool night.\nInsert detail of steaming coffee mug, worn books, and raindrops on the windowsill, warm café light reflecting across wet surfaces.\nLow-angle medium shot from table height, woman left of frame against glowing window and neon reflections, same wardrobe, location, and nighttime lighting.\nClean side-profile shot parallel to the window, woman left of frame facing right toward the rain, café interior softly receding behind her.",
+            "jobId": "3b3410e1-4e58-49db-a527-0c850c80a11a",
+            "model": "gpt-5.2",
+            "runId": "manual",
+            "listValue": "You are given a reference frame from a scene. Write 10 image prompts that COVER THE SAME SCENE from different camera setups, so the shots can be cut together into one sequence. Character, wardrobe, location, time of day and lighting stay identical. Only the camera setup changes.\n\nRules:\n- Build real coverage, in this order: 1 wide establishing, 2 medium, 2 close-up on the character, 1 over-the-shoulder, 1 reverse angle showing what she faces, 1 insert / cutaway detail, 1 low or high dynamic angle, 1 profile.\n- The character must stay recognizable in at least 7 of the 10. Pure detail shots: maximum 2.\n- ONE camera angle per prompt. Never stack two angle terms in the same line.\n- Describe the camera position, NOT camera movement. No pans, no zooms, no dolly - motion is added later.\n- Keep screen direction consistent across all shots: she stays on the same side of the frame line, so the cuts do not jump.\n- Every frame must be a usable start frame for an animated clip: leave breathing room around the subject, never crop tight against the frame edge.\n- No two prompts may describe the same framing. Reject near-duplicates before writing.\n- Each prompt under 30 words, phrased as a camera setup, not as a story.\n- Output exactly 10 lines, one prompt per line. No numbering, no bullets, no blank lines, no preamble.",
+            "timestamp": "2026-08-15T20:15:30.513Z",
+            "templateId": "custom",
+            "userPrompt": "You are given a reference frame from a scene. Write 10 image prompts that COVER THE SAME SCENE from different camera setups, so the shots can be cut together into one sequence. Character, wardrobe, location, time of day and lighting stay identical. Only the camera setup changes.\n\nRules:\n- Build real coverage, in this order: 1 wide establishing, 2 medium, 2 close-up on the character, 1 over-the-shoulder, 1 reverse angle showing what she faces, 1 insert / cutaway detail, 1 low or high dynamic angle, 1 profile.\n- The character must stay recognizable in at least 7 of the 10. Pure detail shots: maximum 2.\n- ONE camera angle per prompt. Never stack two angle terms in the same line.\n- Describe the camera position, NOT camera movement. No pans, no zooms, no dolly - motion is added later.\n- Keep screen direction consistent across all shots: she stays on the same side of the frame line, so the cuts do not jump.\n- Every frame must be a usable start frame for an animated clip: leave breathing room around the subject, never crop tight against the frame edge.\n- No two prompts may describe the same framing. Reject near-duplicates before writing.\n- Each prompt under 30 words, phrased as a camera setup, not as a story.\n- Output exactly 10 lines, one prompt per line. No numbering, no bullets, no blank lines, no preamble.",
+            "systemPrompt": "You are a director of photography planning the shot coverage of a single scene, so an editor can cut the shots together. Output only the 10 prompt lines - no numbering, no commentary, no preamble."
+          }
+        ],
+        "activeResultIndex": 0
+      },
+      "type": "llm-chat",
+      "width": 628,
+      "height": 580,
+      "parentId": "frame-plan",
+      "position": {
+        "x": 82.09163691693743,
+        "y": 87.68913176054821
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "split-lines",
+      "data": {
+        "label": "Split Lines",
+        "separator": "newline",
+        "removeEmpty": true,
+        "splitResults": [
+          "Wide establishing shot from inside the cozy café, woman seated left of frame beside rain-streaked window, neon-lit street outside, warm tungsten lighting, ample headroom.",
+          "Medium waist-up from across the table, woman left of frame gazing through rain-covered glass, coffee mug and books foreground, identical night lighting.",
+          "Medium three-quarter side view from café aisle, woman left of frame leaning on folded arms beside window, reflections shimmering outside, warm interior glow.",
+          "Close-up on her face in profile-three-quarter, eyes fixed outside, raindrops and neon bokeh behind, soft warm café lighting, breathing room around head.",
+          "Tight close-up of her thoughtful expression, window reflections crossing her face, identical wardrobe and lighting, negative space ahead of her gaze.",
+          "Over-the-shoulder from behind her left shoulder toward the rain-soaked street, her silhouette and jacket foreground, neon storefronts beyond, consistent screen direction.",
+          "Reverse angle from outside the window toward the café interior, rain-speckled glass foreground, woman visible inside watching the street, warm interior contrasting cool night.",
+          "Insert detail of steaming coffee mug, worn books, and raindrops on the windowsill, warm café light reflecting across wet surfaces.",
+          "Low-angle medium shot from table height, woman left of frame against glowing window and neon reflections, same wardrobe, location, and nighttime lighting.",
+          "Clean side-profile shot parallel to the window, woman left of frame facing right toward the rain, café interior softly receding behind her."
+        ],
+        "trimWhitespace": true,
+        "customSeparator": "",
+        "generatedSplitResults": [
+          "Wide establishing shot from inside the cozy café, woman seated left of frame beside rain-streaked window, neon-lit street outside, warm tungsten lighting, ample headroom.",
+          "Medium waist-up from across the table, woman left of frame gazing through rain-covered glass, coffee mug and books foreground, identical night lighting.",
+          "Medium three-quarter side view from café aisle, woman left of frame leaning on folded arms beside window, reflections shimmering outside, warm interior glow.",
+          "Close-up on her face in profile-three-quarter, eyes fixed outside, raindrops and neon bokeh behind, soft warm café lighting, breathing room around head.",
+          "Tight close-up of her thoughtful expression, window reflections crossing her face, identical wardrobe and lighting, negative space ahead of her gaze.",
+          "Over-the-shoulder from behind her left shoulder toward the rain-soaked street, her silhouette and jacket foreground, neon storefronts beyond, consistent screen direction.",
+          "Reverse angle from outside the window toward the café interior, rain-speckled glass foreground, woman visible inside watching the street, warm interior contrasting cool night.",
+          "Insert detail of steaming coffee mug, worn books, and raindrops on the windowsill, warm café light reflecting across wet surfaces.",
+          "Low-angle medium shot from table height, woman left of frame against glowing window and neon reflections, same wardrobe, location, and nighttime lighting.",
+          "Clean side-profile shot parallel to the window, woman left of frame facing right toward the rain, café interior softly receding behind her."
+        ]
+      },
+      "type": "split-text",
+      "parentId": "frame-plan",
+      "position": {
+        "x": 915.7168364865972,
+        "y": 471.6217364789037
+      }
+    },
+    {
+      "id": "shot-list",
+      "data": {
+        "rows": [
+          [
+            ""
+          ]
+        ],
+        "label": "Shot List (editable)",
+        "columns": [
+          {
+            "id": "default",
+            "name": "Split Lines",
+            "type": "text",
+            "handleId": "col_default",
+            "connectedSourceId": "split-lines",
+            "connectedSourceHandle": "text"
+          }
+        ],
+        "viewMode": "packed",
+        "textFontSize": "small",
+        "textMaxLines": 1,
+        "fieldMappings": {}
+      },
+      "type": "list",
+      "width": 859,
+      "height": 417,
+      "parentId": "frame-plan",
+      "position": {
+        "x": 1267.0673952816446,
+        "y": 406.0743214631568
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "coverage-shot",
+      "data": {
+        "label": "Coverage Shot (fan-out)",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "aspectRatio": "16:9",
+        "fieldMappings": {},
+        "negativePrompt": "",
+        "generatedResults": [
+          {
+            "url": "https://cdn.nodaro.ai/images/1aadc3b0-bb2b-4216-81bf-04a2868fe9d9.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-0",
+            "width": 320,
+            "height": 180,
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/aa92457d-e2bf-4b79-aa44-dfc7e2495788.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-1",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/69e48181-045c-481a-a754-ee6ab543c024.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-2",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/f1183d99-15bb-4c3a-8848-2be78affec87.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-3",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/61915542-812b-4dd9-aea2-8d136437fc70.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-4",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/59ffc03a-716a-448c-be92-ca84c6aaa61d.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-5",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/3315ad52-1b8b-44fc-8819-68a18009620d.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-6",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/20cee3fc-07f8-421c-a23a-23dc3b8be0c5.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-7",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/a43b504a-df6e-45b4-9b35-9cbeac4ab51c.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-8",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          },
+          {
+            "url": "https://cdn.nodaro.ai/images/32fbd2ee-4dad-4ce2-8066-243eff0994bc.png",
+            "jobId": "iter-5ee7a19c-e205-41a8-918f-9dc9945aaeda-9",
+            "timestamp": "2026-08-15T20:28:13.245Z"
+          }
+        ],
+        "activeResultIndex": 0,
+        "generatedImageUrl": "https://cdn.nodaro.ai/images/a43b504a-df6e-45b4-9b35-9cbeac4ab51c.png"
+      },
+      "type": "generate-image",
+      "width": 654.2222222222222,
+      "height": 368,
+      "parentId": "frame-shoot",
+      "position": {
+        "x": 70,
+        "y": 190
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_2",
+      "data": {
+        "rows": [
+          [
+            ""
+          ]
+        ],
+        "label": "Shots List",
+        "columns": [
+          {
+            "id": "default",
+            "name": "Coverage Shot (fan-out)",
+            "type": "image-url",
+            "handleId": "col_default",
+            "connectedSourceId": "coverage-shot",
+            "connectedSourceHandle": "image"
+          }
+        ],
+        "showData": true,
+        "galleryCols": 2,
+        "textFontSize": "large",
+        "fieldMappings": {}
+      },
+      "type": "list",
+      "width": 2352,
+      "height": 3380,
+      "parentId": "frame-sheet",
+      "position": {
+        "x": 70,
+        "y": 190
+      },
+      "className": "rf-resized"
+    },
+    {
+      "id": "node_4",
+      "data": {
+        "rows": [
+          [
+            ""
+          ]
+        ],
+        "label": "List",
+        "columns": [
+          {
+            "id": "default",
+            "name": "Shots List",
+            "type": "image-url",
+            "handleId": "col_default",
+            "connectedSourceId": "node_2"
+          }
+        ],
+        "showData": true,
+        "galleryCols": 1,
+        "textFontSize": "large",
+        "fieldMappings": {}
+      },
+      "type": "list",
+      "width": 2002,
+      "height": 1432,
+      "parentId": "frame-sheet",
+      "position": {
+        "x": 3051,
+        "y": 964
+      },
+      "className": "rf-resized"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "ref-prompt",
+      "target": "ref-frame",
+      "sourceHandle": "prompt",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e2",
+      "source": "ref-frame",
+      "target": "coverage-llm",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e3",
+      "source": "coverage-brief",
+      "target": "coverage-llm",
+      "sourceHandle": "prompt",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e4",
+      "source": "coverage-llm",
+      "target": "split-lines",
+      "sourceHandle": "text",
+      "targetHandle": "text"
+    },
+    {
+      "id": "edge_1786818487740",
+      "type": "default",
+      "source": "split-lines",
+      "target": "shot-list",
+      "sourceHandle": "text",
+      "targetHandle": "col_default_in"
+    },
+    {
+      "id": "e5",
+      "source": "shot-list",
+      "target": "coverage-shot",
+      "sourceHandle": "col_default",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e6",
+      "source": "ref-frame",
+      "target": "coverage-shot",
+      "sourceHandle": "image",
+      "targetHandle": "references"
+    },
+    {
+      "id": "edge_1786821200001",
+      "type": "default",
+      "source": "coverage-shot",
+      "target": "node_2",
+      "sourceHandle": "image",
+      "targetHandle": "col_default_in"
+    },
+    {
+      "id": "edge_1786828582017",
+      "data": {
+        "itemIndex": "7",
+        "outputMode": "item"
+      },
+      "type": "default",
+      "source": "node_2",
+      "target": "node_4",
+      "selected": false,
+      "sourceHandle": "col_default",
+      "targetHandle": "col_default_in"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 320,
+      "y": 300,
+      "zoom": 0.14
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

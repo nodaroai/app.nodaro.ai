@@ -161,6 +161,28 @@ const REGISTRY: Record<string, TutorialDefinition> = {
     Body: lazy(() => import("./bodies/image-editing-body")),
   },
 
+  "camera-coverage": {
+    title: "Camera Coverage — one frame, ten angles",
+    summary:
+      "One reference frame in, ten shots of the same scene out. Only the camera changes — a director's coverage plan you can cut together, from a single image.",
+    minutes: 4,
+    // A finished run: every image is already generated and reading them costs
+    // nothing. What a newcomer actually spends is the ten-image fan-out.
+    chip: "10 shots",
+    note: {
+      eyebrow: "The lever is the list",
+      body: "One image node, ten rows. The list fans it out so ten shots cost six nodes, not twenty-five — and editing one line re-shoots one angle.",
+    },
+    // One step per column. This template is not IN → OUT: there is a plan you
+    // see before you spend, so the body is three columns and the rail follows.
+    steps: [
+      { n: 1, title: "The reference frame", sub: "One image, and the brief that governs the plan" },
+      { n: 2, title: "The shot list", sub: "Ten lines you can read — and rewrite — before you spend" },
+      { n: 3, title: "The contact sheet", sub: "Ten shots of one moment, from one image node" },
+    ],
+    Body: lazy(() => import("./bodies/camera-coverage-body")),
+  },
+
   "underwater-giants": {
     title: "Underwater Giants",
     summary:
