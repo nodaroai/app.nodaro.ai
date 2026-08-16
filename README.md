@@ -246,7 +246,7 @@ the CLA bot will prompt on your first pull request and never again after.
 
 ## License
 
-Nodaro is **fair-code** with three license tiers — full overview in
+Nodaro is **fair-code** with four license tiers — full overview in
 [`LICENSE.md`](LICENSE.md):
 
 - **Community code** (default) — [Nodaro Sustainable Use License](LICENSE):

@@ -22,6 +22,11 @@ Portions of this software are licensed as follows:
   Sustainable Use License set out below, and the branch-scope
   restriction in the first bullet does not affect their Apache 2.0
   grant.
+- Source code files in `packages/prompts/` are licensed under the
+  **Functional Source License, Version 1.1, Apache 2.0 Future License
+  (FSL-1.1-Apache-2.0)** as set out in `packages/prompts/LICENSE`. Those
+  files are NOT subject to the Nodaro Sustainable Use License set out
+  below.
 - All third-party components incorporated into the Nodaro Software are
   licensed under the original license provided by the owner of the
   applicable component.
