@@ -407,6 +407,15 @@ Three things are stateful:
 - **Redis** — only ephemeral job state. If you lose Redis, in-flight
   workflows fail; everything else recovers from Postgres on restart.
   Don't bother backing up Redis.
+- **The instance encryption key** — everything the server stores for
+  itself (provider keys pasted on `/setup`, social OAuth tokens) is
+  AES-256-GCM encrypted with it. On the community compose stack it is
+  generated on first boot and lives in the `app-data` volume at
+  `/data/nodaro/encryption-key`; on a managed deployment it is the
+  `NODARO_ENCRYPTION_KEY` variable. **Back it up together with Postgres** —
+  a database restore without the matching key gives you rows nobody can
+  read (the tiles show `missing` and the keys must be re-entered; nothing
+  else breaks).
 
 If you take Postgres down for migration or recovery, the backend will
 crash-loop until it's reachable. That's fine — once Postgres is back,
@@ -627,6 +636,30 @@ the flow itself.
 When the cloud has it off, the instance's `POST /v1/nodaro-connect/start`
 answers `503 cloud_connect_unavailable` and the setup screen says so in
 place, pointing at your own provider keys instead.
+
+## 12. Provider keys: paste on /setup, or set in the environment
+
+Self-host editions take provider keys two ways, and both are live at once:
+
+| Way | Where it lives | Takes effect | Who may change it |
+|---|---|---|---|
+| **Paste in the app** — `/setup` → Install health (setup time, pre-login) or **Integrations → Model providers** (in the app); both use `PUT /v1/setup/provider-keys/:id` | `provider_credentials` table, AES-256-GCM with the instance key; never returned by any route | Immediately in the API process. The worker re-reads the store on a poll (~30 s) — and a Run that lands before the poll is not refused: a route that finds no provider re-reads once and re-routes (the router self-heal), so "paste, then Run" works. No restart. | Community: any signed-in user (single operator by design). Business: admins. Always a first-party session — never an API/app token. |
+| **Environment** (`KIE_API_KEY`, `REPLICATE_API_TOKEN`, …) | `.env` / the platform's variables | On start | Whoever manages the deployment |
+
+**Precedence: environment wins.** A key set in the environment is read-only
+on the screen — the tile shows `set (env)` and names the variable to remove.
+Pasted keys fill in only where the environment is empty.
+
+The full list of provider keys is `PROVIDER_KEY_IDS` in
+`backend/src/lib/provider-keys-runtime.ts` (nodaro.ai, KIE.ai, Replicate,
+Anthropic, Google Gemini, ElevenLabs, fal.ai, HeyGen, Beeble, Apify) — the
+tiles, the `.env` template and `GET /v1/setup/status` all derive from it.
+Provider code reads keys per call, so a change is picked up everywhere;
+`tools/check-provider-key-captures.mjs` (CI) fails on a construction-time
+capture that would freeze a key.
+
+Requires the instance encryption key (section 8). Without one, tiles report
+`missing` and `/setup` shows a red **Encryption** card with the fix.
 
 ## See also
 

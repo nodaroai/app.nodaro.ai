@@ -2,7 +2,7 @@ import { Worker, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { initProviders } from "../providers/index.js"
+import { initProviders, watchProviderCredentials } from "../providers/index.js"
 import { KieError } from "../providers/kie/client.js"
 import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellation.js"
 // NOTE: imported from their CORE modules, not re-exported through ./shared.js —
@@ -70,6 +70,10 @@ if (engines.smartCut) {
 
 export function createVideoWorker() {
   initProviders()
+  // Operator-supplied keys (pasted on /setup, stored encrypted): load them
+  // now — registering whatever they unlock — and re-read on the TTL so a key
+  // saved by the API process reaches this worker without a restart.
+  watchProviderCredentials()
 
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,

@@ -151,6 +151,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"   # Caddy serves both frontend + /v1/* API on the same port
+    volumes:
+      # App data: the auto-generated instance encryption key lives here. It
+      # must survive restarts and upgrades — everything encrypted with it
+      # (pasted provider keys, social tokens) is unreadable without it.
+      - app-data:/data/nodaro
     environment:
       EDITION: community
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
@@ -167,6 +172,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:nodaro-postgres-pw@db:5432/postgres}
       REDIS_URL: redis://redis:6379
       INTERNAL_ORCHESTRATOR_SECRET: ${INTERNAL_ORCHESTRATOR_SECRET:-}
+      # Instance encryption key (provider keys pasted on /setup, social OAuth
+      # tokens). Leave empty and the app generates one on first boot and keeps
+      # it in the app-data volume — back that volume up with the database.
+      # SOCIAL_ENCRYPTION_KEY is the older name; either works.
+      NODARO_ENCRYPTION_KEY: ${NODARO_ENCRYPTION_KEY:-}
       SOCIAL_ENCRYPTION_KEY: ${SOCIAL_ENCRYPTION_KEY:-}
       # Storage defaults to the bundled MinIO (media on your disk, zero cloud
       # accounts). Setting R2_ACCOUNT_ID + the R2_* keys in .env switches to
@@ -194,6 +204,12 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       FAL_KEY: ${FAL_KEY:-}
+      # The three the nodaro.ai connection does not stand in for (their nodes
+      # call the vendor directly): AI Avatar / Cinematic Avatar (HeyGen),
+      # Relight & Switch (Beeble), Web Scrape (Apify). Every key here can also
+      # be pasted on /setup instead — the env value wins when both exist.
+      HEYGEN_API_KEY: ${HEYGEN_API_KEY:-}
+      BEEBLE_API_KEY: ${BEEBLE_API_KEY:-}
       APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
     depends_on:
       redis:
@@ -217,3 +233,4 @@ volumes:
   redis-data:
   db-data:
   minio-data:
+  app-data:

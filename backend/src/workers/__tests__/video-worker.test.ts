@@ -89,6 +89,8 @@ vi.mock("@/lib/supabase.js", () => ({
 
 vi.mock("@/providers/index.js", () => ({
   initProviders: mocks.mockInitProviders,
+  // The worker also starts the pasted-key watch; a no-op here (own suite).
+  watchProviderCredentials: vi.fn(),
 }))
 
 vi.mock("@/config/content-filter.js", () => ({

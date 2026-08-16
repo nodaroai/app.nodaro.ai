@@ -9,7 +9,7 @@ import Replicate from "replicate"
 import { config } from "../../lib/config.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { guardProviderClient, requireProviderKey } from "../provider-keys.js"
+import { liveProviderClient, requireProviderKey } from "../provider-keys.js"
 
 // Singleton Replicate client.
 //
@@ -18,8 +18,12 @@ import { guardProviderClient, requireProviderKey } from "../provider-keys.js"
 // video worker handlers...), bypassing runReplicatePrediction. Without the
 // guard a keyless self-host got a raw "401 Unauthorized" from api.replicate.com
 // with no hint about what to do — and every new call site would inherit that.
-export const replicate = guardProviderClient(
-  new Replicate({ auth: config.REPLICATE_API_TOKEN }),
+//
+// Built from the key IN FORCE and rebuilt when it changes (provider keys are
+// live: env, then the operator-supplied key from /setup) — a client
+// constructed once at import would keep a stale token after a paste.
+export const replicate = liveProviderClient(
+  (auth) => new Replicate({ auth }),
   "REPLICATE_API_TOKEN",
   () => config.REPLICATE_API_TOKEN,
 )

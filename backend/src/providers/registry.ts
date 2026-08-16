@@ -16,6 +16,15 @@ class ProviderRegistry {
     )
   }
 
+  // Remove a provider — the router skips unregistered providers, so this is
+  // how a cleared key stops a provider from claiming models it can no longer
+  // serve. No-op for an unknown id.
+  unregister(providerId: string): void {
+    if (this.providers.delete(providerId)) {
+      console.log(`[ProviderRegistry] Unregistered: ${providerId}`)
+    }
+  }
+
   // Get a specific provider by id
   getProvider(providerId: string): unknown | null {
     return this.providers.get(providerId)?.instance ?? null

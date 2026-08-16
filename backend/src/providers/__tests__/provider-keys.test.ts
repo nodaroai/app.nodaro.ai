@@ -3,6 +3,7 @@ import {
   MissingProviderKeyError,
   describeEmptyCapability,
   guardProviderClient,
+  liveProviderClient,
   requireProviderKey,
 } from "../provider-keys.js"
 
@@ -77,6 +78,35 @@ describe("provider key guards", () => {
       expect(guarded.run()).toBe("ran")
       key = ""
       expect(() => guarded.run).toThrow(MissingProviderKeyError)
+    })
+  })
+
+  // SDK singletons that take the key at CONSTRUCTION (Replicate's `auth`,
+  // Gemini's `apiKey`) would keep serving a stale key after the operator
+  // pastes a new one on /setup. liveProviderClient builds the client from the
+  // key that is in force and rebuilds when it changes — no restart, no stale
+  // credential.
+  describe("liveProviderClient", () => {
+    it("builds lazily from the current key and rebuilds only when the key changes", () => {
+      let key = "r8_one"
+      const factory = vi.fn((auth: string) => ({ auth, run: () => `ran:${auth}` }))
+      const live = liveProviderClient(factory, "REPLICATE_API_TOKEN", () => key)
+      expect(factory).not.toHaveBeenCalled()
+      expect(live.run()).toBe("ran:r8_one")
+      expect(live.run()).toBe("ran:r8_one")
+      expect(factory).toHaveBeenCalledTimes(1)
+      key = "r8_two"
+      expect(live.run()).toBe("ran:r8_two")
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory).toHaveBeenLastCalledWith("r8_two")
+    })
+
+    it("guards like guardProviderClient while the key is unset", () => {
+      let key = ""
+      const live = liveProviderClient((auth: string) => ({ auth, run: () => "ran" }), "GEMINI_API_KEY", () => key)
+      expect(() => live.run).toThrow(MissingProviderKeyError)
+      key = "gm_live"
+      expect(live.run()).toBe("ran")
     })
   })
 })

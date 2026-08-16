@@ -20,6 +20,7 @@ import {
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
+import { watchProviderCredentials } from "./providers/index.js"
 import { ensureStorageBucket } from "./lib/storage.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
@@ -74,6 +75,11 @@ async function main() {
   // there. Fire-and-forget: tutorials are not worth delaying boot for, and the
   // seeder swallows its own failures.
   void seedTutorialTemplates()
+
+  // Operator-supplied provider keys (pasted on /setup, stored encrypted).
+  // The API process reads keys too (LLM lanes, setup status) and is where
+  // the pastes happen; load the store now and keep it fresh on the TTL.
+  watchProviderCredentials()
 
   // Start schedule cron for workflow triggers
   startScheduleCron()

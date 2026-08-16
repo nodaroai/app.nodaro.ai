@@ -46,6 +46,13 @@ vi.mock("../nodaro/index.js", () => ({
   registerNodaroCloudProviderIfConnected: vi.fn(async () => false),
 }))
 
+// The pasted-key half of the self-heal: a forced re-read of the encrypted
+// store. Never a real DB read in here; each test that needs it says what
+// the re-read found.
+vi.mock("../../lib/provider-credentials.js", () => ({
+  refreshProviderCredentialsNow: vi.fn(async () => false),
+}))
+
 const { configMocks, registryMocks } = vi.hoisted(() => {
   const configMocks = {
     buildRoutingDecision: vi.fn<
@@ -231,6 +238,43 @@ describe("routeAndExecute (via generateImage)", () => {
       expect(configMocks.buildRoutingDecision).toHaveBeenCalledTimes(2)
       expect(result.providerUsed).toBe("nodaro")
       expect(nodaroGen).toHaveBeenCalledOnce()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  // The in-app credentials promise is "paste a key on /setup, hit Run" — the
+  // worker must not answer that Run with "no provider" just because its 30 s
+  // poll has not come round. When the walked chain finds nothing registered,
+  // the router forces one re-read of the store and re-routes through whatever
+  // that registered.
+  it("a chain with nothing registered re-reads the pasted keys (self-heal) and serves through the late key", async () => {
+    const credentials = await import("../../lib/provider-credentials.js")
+    const reread = vi.mocked(credentials.refreshProviderCredentialsNow)
+    reread.mockClear()
+    reread.mockResolvedValueOnce(true)
+    // Sit outside any rate-limit window an earlier test opened (the previous
+    // heal test pinned Date.now at MAX/2 — go later, not earlier).
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Number.MAX_SAFE_INTEGER * 0.75)
+
+    const kieGen = vi.fn().mockResolvedValue({ imageUrl: "https://cdn/late.png", cost: 1 })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"], active: "kie" }))
+    // KIE is not registered until the re-read has run (the reconcile that the
+    // re-read awaits is what registers it).
+    registryMocks.supportsModel.mockImplementation((id) => id === "kie" && reread.mock.calls.length > 0)
+    registryMocks.getProvider.mockImplementation((id) =>
+      id === "kie" && reread.mock.calls.length > 0
+        ? makeProviderInstance({ image: { generateImage: kieGen } })
+        : null,
+    )
+
+    try {
+      const result = await generateImage("a dog", "z-image")
+      expect(reread).toHaveBeenCalledOnce()
+      // Rebuilt after the heal, re-walked with KIE now registered.
+      expect(configMocks.buildRoutingDecision).toHaveBeenCalledTimes(2)
+      expect(result.providerUsed).toBe("kie")
+      expect(kieGen).toHaveBeenCalledOnce()
     } finally {
       nowSpy.mockRestore()
     }

@@ -48,6 +48,7 @@ import {
 } from "./nodaro/index.js"
 import { describeEmptyCapability } from "./provider-keys.js"
 import { config } from "../lib/config.js"
+import { refreshProviderCredentialsNow } from "../lib/provider-credentials.js"
 
 // ─── Result type ──────────────────────────────────────────────────
 
@@ -81,35 +82,51 @@ export interface RouteResult {
  * @param executor     callback that receives the provider instance and
  *                     returns a ProviderResult
  */
-/** Self-healing late registration of the cloud connection (community).
+/** Self-healing late registration (community).
  *
- *  The boot-time gate misses two real cases (both hit live, 2026-08-15):
- *  connect-AFTER-boot (the operator connects and generates immediately — no
- *  restart), and a transient DB/proxy race at worker boot that silently
- *  resolved "not connected". When routing finds no provider, try once to
- *  (re)register the connection and re-route. Cheap: skipped when already
- *  registered, rate-limited to one probe per 10s per process. */
-let lastNodaroSelfHealAt = 0
+ *  The boot-time gates miss real cases: a provider key pasted on /setup
+ *  after this process loaded its snapshot (the worker learns of it on a
+ *  30 s poll — too slow for "paste, then Run"), connect-AFTER-boot (the
+ *  operator connects and generates immediately — no restart), and a
+ *  transient DB/proxy race at worker boot that silently resolved "not
+ *  connected" (both cloud cases hit live, 2026-08-15). When routing finds no
+ *  provider, re-read the pasted keys once and (re)register the connection,
+ *  then re-route. Cheap: bounded reads, rate-limited to one probe per few
+ *  seconds per process — short enough that "Run, paste the key, Run again"
+ *  is not refused by the limiter. */
+const SELF_HEAL_MIN_INTERVAL_MS = 3_000
+let lastSelfHealAt = 0
 
-async function selfHealNodaroRegistration(): Promise<boolean> {
-  if (providerRegistry.getProvider(NODARO_PROVIDER_ID)) return false
+async function selfHealLateRegistrations(): Promise<boolean> {
   const now = Date.now()
-  if (now - lastNodaroSelfHealAt < 10_000) return false
-  lastNodaroSelfHealAt = now
+  if (now - lastSelfHealAt < SELF_HEAL_MIN_INTERVAL_MS) return false
+  lastSelfHealAt = now
+  let keysChanged = false
   try {
-    // Bounded probe: a hung DB read must not stall a failing route.
-    const registered = await Promise.race([
-      registerNodaroCloudProviderIfConnected(),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
-    ])
-    if (registered) {
-      console.log("[router] nodaro.ai connection registered late (self-heal)")
+    // Resolves after the registry reflects the re-read keys (bounded inside).
+    keysChanged = await refreshProviderCredentialsNow()
+    if (keysChanged) {
+      console.log("[router] provider keys re-read late (self-heal)")
     }
-    return registered
   } catch (err) {
-    console.error("[router] nodaro.ai self-heal registration failed:", err)
-    return false
+    console.error("[router] provider-key self-heal re-read failed:", err)
   }
+  let nodaroRegistered = false
+  if (!providerRegistry.getProvider(NODARO_PROVIDER_ID)) {
+    try {
+      // Bounded probe: a hung DB read must not stall a failing route.
+      nodaroRegistered = await Promise.race([
+        registerNodaroCloudProviderIfConnected(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
+      ])
+      if (nodaroRegistered) {
+        console.log("[router] nodaro.ai connection registered late (self-heal)")
+      }
+    } catch (err) {
+      console.error("[router] nodaro.ai self-heal registration failed:", err)
+    }
+  }
+  return keysChanged || nodaroRegistered
 }
 
 async function routeAndExecute(
@@ -125,7 +142,7 @@ async function routeAndExecute(
   // connection registered late (or missed at boot) is the only thing that
   // could serve the job. Try the heal here too, not only after a walked chain
   // came back null; otherwise the throw below fires first.
-  if (decision.providerChain.length === 0 && (await selfHealNodaroRegistration())) {
+  if (decision.providerChain.length === 0 && (await selfHealLateRegistrations())) {
     decision = await buildRoutingDecision(capability, model)
   }
   if (decision.providerChain.length === 0) {
@@ -136,8 +153,9 @@ async function routeAndExecute(
   }
 
   let result = await walkChainAndExecute(capability, model, operation, executor, decision)
-  if (result === null && (await selfHealNodaroRegistration())) {
-    // The chain may now include the cloud connection — rebuild and re-walk.
+  if (result === null && (await selfHealLateRegistrations())) {
+    // The chain may now include a late-registered key or the cloud
+    // connection — rebuild and re-walk.
     decision = await buildRoutingDecision(capability, model)
     result = await walkChainAndExecute(capability, model, operation, executor, decision)
   }

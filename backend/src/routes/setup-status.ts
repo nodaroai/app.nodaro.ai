@@ -5,6 +5,15 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { s3, isStorageConfigured } from "../lib/storage.js"
 import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../lib/system-account.js"
+import { encryptionKeySource } from "../lib/instance-cipher.js"
+import {
+  PROVIDER_KEY_ENV,
+  PROVIDER_KEY_IDS,
+  PROVIDER_KEY_META,
+  resolveProviderKey,
+  type ProviderKeyId,
+  type ProviderKeyMeta,
+} from "../lib/provider-keys-runtime.js"
 
 /**
  * GET /v1/setup/status — self-host install health screen backend.
@@ -145,17 +154,25 @@ export async function setupStatusRoutes(app: FastifyInstance) {
     // the OAuth connection (Connect nodaro.ai) or NODARO_API_KEY. `keys` is
     // the single list the setup screen renders and counts, so nodaro.ai
     // belongs in it, first: it is the one that needs no third-party account.
+    // One list, one resolver: every tile comes from PROVIDER_KEY_IDS and its
+    // state from resolveProviderKey() — env first, then the operator-supplied
+    // key stored via /setup (lib/provider-keys-runtime.ts). nodaro.ai adds
+    // the OAuth connection as a third way to be "set".
     const { getNodaroCredential } = await import("../lib/nodaro-connect.js")
     const nodaroCredential = await getNodaroCredential().catch(() => null)
-    const providerKeys = {
-      nodaro: nodaroCredential !== null,
-      kie: config.KIE_API_KEY.length > 0,
-      replicate: config.REPLICATE_API_TOKEN.length > 0,
-      anthropic: config.ANTHROPIC_API_KEY.length > 0,
-      gemini: config.GEMINI_API_KEY.length > 0,
-      elevenlabs: config.ELEVENLABS_API_KEY.length > 0,
-      fal: config.FAL_KEY.length > 0,
-    }
+    const providerKeys = Object.fromEntries(
+      PROVIDER_KEY_IDS.map((id) => [id, id === "nodaro" ? nodaroCredential !== null : resolveProviderKey(id) !== null]),
+    ) as Record<ProviderKeyId, boolean>
+    // Where each set key comes from: "env" | "app" (pasted on /setup) |
+    // "oauth" (nodaro.ai only). Booleans/enums only — never a value.
+    const providerSources = Object.fromEntries(
+      PROVIDER_KEY_IDS.map((id) => [id, id === "nodaro" ? (nodaroCredential?.source ?? null) : (resolveProviderKey(id)?.source ?? null)]),
+    ) as Record<ProviderKeyId, "env" | "app" | "oauth" | null>
+    // Labels + coverage the frontend renders from, so a provider added to the
+    // runtime list shows up on the screen with no frontend change.
+    const providerMeta = Object.fromEntries(
+      PROVIDER_KEY_IDS.map((id) => [id, { ...PROVIDER_KEY_META[id], env: PROVIDER_KEY_ENV[id] }]),
+    ) as Record<ProviderKeyId, ProviderKeyMeta & { env: string }>
     const nodaroConnected = providerKeys.nodaro
     const anyMediaProvider = providerKeys.kie || providerKeys.replicate || nodaroConnected
     const providers = {
@@ -165,6 +182,8 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       // How nodaro.ai is authenticated, so the tile can say CONNECTED vs KEY.
       nodaroSource: nodaroCredential?.source ?? null,
       keys: providerKeys,
+      sources: providerSources,
+      meta: providerMeta,
       ...(anyMediaProvider
         ? {}
         : {
@@ -196,13 +215,31 @@ export async function setupStatusRoutes(app: FastifyInstance) {
     // credentials in it; omit entirely when compose didn't provide one.
     const installDir = (process.env.NODARO_INSTALL_DIR ?? "").trim()
 
+    // The instance encryption key is what makes pasted provider keys (and
+    // social tokens) storable. Presence + provenance only — never the key.
+    // `generated` = start.sh minted it on first boot and keeps it in the
+    // app-data volume (community compose only); `env` = the operator set it.
+    const keyVar = encryptionKeySource()
+    const encryption = keyVar
+      ? {
+          ok: true,
+          status: "ok",
+          source: process.env.NODARO_ENCRYPTION_KEY_SOURCE === "generated" ? "generated" : "env",
+          envVar: keyVar,
+        }
+      : {
+          ok: false,
+          status: "missing",
+          hint: "No instance encryption key — provider keys pasted here and social connections cannot be stored. Set NODARO_ENCRYPTION_KEY (64-char hex, `openssl rand -hex 32`); the community compose stack generates one on first boot.",
+        }
+
     reply.header("Cache-Control", "no-store")
     return reply.send({
       edition: config.EDITION,
       timestamp: new Date().toISOString(),
       hasUsers,
       ...(installDir ? { installDir } : {}),
-      checks: { database, redis, storage, providers },
+      checks: { database, redis, storage, providers, encryption },
     })
   })
 }

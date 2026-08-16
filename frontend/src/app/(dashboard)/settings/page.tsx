@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
-  Plus, Trash2, Sparkles, Braces,
+  Plus, Trash2, Sparkles, Braces, KeyRound,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { hasAdmin, hasCredits} from "@/lib/edition"
+import { hasAdmin, hasCredits, isCloud } from "@/lib/edition"
 import { toast } from "sonner"
 import { Link } from "react-router-dom"
 import {
@@ -367,6 +367,27 @@ export default function SettingsPage() {
               <h2 className="text-base font-semibold">API Tokens</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Create tokens to execute workflows programmatically via REST API.
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+      )}
+
+      {/* Provider keys — self-hosted editions manage them under Integrations
+          (next to the nodaro.ai connection); this is the pointer for anyone
+          who looks here first. Cloud has no keys to manage. */}
+      {!isCloud() && (
+        <Link
+          to="/integrations"
+          className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <KeyRound className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h2 className="text-base font-semibold">Provider keys</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                KIE.ai, Replicate, ElevenLabs and the other model providers this install can use — paste a key or connect nodaro.ai under Integrations.
               </p>
             </div>
           </div>

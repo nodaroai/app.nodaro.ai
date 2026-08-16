@@ -75,31 +75,45 @@ flag the probe never spends anything.
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need
-a model provider — either of these, and both can run side by side:
+a model provider. Three ways, and they run side by side:
 
-**Connect nodaro.ai (no keys to manage).** On http://localhost:3000/setup,
-step 2 → **Connect nodaro.ai**. Your browser opens the nodaro.ai consent
-screen; sign in or create a free account there (1,500 free credits, no
-card), approve, and you land back on your install connected. Restart the
-app container once (`docker compose -f docker-compose.community.yml
-restart nodaro`) and hit Run. Details and the two-accounts model:
+**Paste a key in the app (no files, no restart).** Two places show the same
+tiles: http://localhost:3000/setup → **Install health** (setup time, works
+before you log in) and, once you are in the app, **Integrations → Model
+providers**. Every provider is a tile — nodaro.ai, KIE.ai, Replicate,
+Anthropic, Google Gemini, ElevenLabs, fal.ai, and, grouped apart as *used by
+specific nodes*, HeyGen (avatar nodes), Beeble (Relight & Switch), Apify (Web
+Scrape) — with a **PASTE KEY** field. Paste, Save, hit Run on the demo's Scene
+Image node: Z-Image, the cheapest model, answers in seconds. The key is stored
+encrypted in your own database (the install generates its encryption key on
+first boot and keeps it in the `app-data` volume — back that volume up with
+the database) and takes effect at once, no restart. Each tile says what the
+key powers and where to get one.
+
+**Connect nodaro.ai (no keys to manage).** On the same page, step 2 →
+**Connect nodaro.ai**. Your browser opens the nodaro.ai consent screen; sign
+in or create a free account there (1,500 free credits, no card), approve, and
+you land back on your install connected — image, video, speech and LLM models
+route through your nodaro.ai account. Tiles the connection does not cover
+(HeyGen avatars, Beeble relight, Apify) still need their own key and say so.
+Details and the two-accounts model:
 [Connect your instance to Nodaro Cloud](./community-cloud-connect.md).
 
-**Or bring your own key.** Create a file named `.env` next to the compose
-file:
+**Or keep keys in `.env` (infra-as-code).** Create a file named `.env` next
+to the compose file:
 
 ```bash
-NODARO_API_KEY=...         # nodaro.ai as a plain provider — a personal API token
-                           # from app.nodaro.ai → Settings → API (no OAuth flow)
-# or
 KIE_API_KEY=...            # kie.ai — broadest model coverage
 # or
 REPLICATE_API_TOKEN=...    # replicate.com
+# or
+NODARO_API_KEY=...         # nodaro.ai as a plain provider — a personal API token
+                           # from app.nodaro.ai → Settings → API (no OAuth flow)
 ```
 
-Optional extras: `ANTHROPIC_API_KEY` (LLM nodes), `ELEVENLABS_API_KEY`
-(voice). Restart the stack (`docker compose ... up -d`) and hit Run on the
-demo's Scene Image node — Z-Image, the cheapest model, answers in seconds.
+then `docker compose -f docker-compose.community.yml up -d`. A key set in
+`.env` takes precedence over one pasted on the screen; the tile shows
+`set (env)` and is read-only there until you remove it from `.env`.
 
 You pay providers directly; the Community edition has no credit system, no
 Nodaro fees, and no watermark.

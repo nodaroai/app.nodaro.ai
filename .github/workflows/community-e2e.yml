@@ -23,11 +23,13 @@ name: Community E2E
 #
 # SECOND LANE (#648): after the keyless contracts pass, internal pushes and
 # manual dispatches ALSO walk the bring-your-own-key SUCCESS path — the
-# configuration most self-hosters actually run (their own KIE_API_KEY in .env,
-# the quickstart's documented happy path). The app container is restarted with
-# a key and the probe submits one REAL Z-Image generation (cheapest model,
-# under a cent of provider spend per run), follows it to `completed`, and
-# asserts the media landed in the install's own MinIO. This lane needs the
+# configuration most self-hosters actually run (their own KIE key), the
+# quickstart's documented happy path. The probe PASTES the key through
+# /v1/setup/provider-keys (the in-app path — encrypted at rest, no .env, no
+# restart), waits for the worker's refresh, and submits one REAL Z-Image
+# generation (cheapest model, under a cent of provider spend per run), follows
+# it to `completed`, and asserts the media landed in the install's own MinIO.
+# That is hot registration end to end. This lane needs the
 # COMMUNITY_E2E_KIE_KEY secret (a low-budget kie.ai key); when the secret is
 # absent — every fork, and this repo until someone configures it — the lane
 # no-ops and the job stays green on the keyless contracts alone. It never runs
@@ -144,26 +146,17 @@ jobs:
             echo "::notice::COMMUNITY_E2E_KIE_KEY is not configured — BYO-key lane skipped"
           fi
 
-      # Recreates ONLY the app container, now with a provider key — the same
-      # "add the key to .env and restart" move the quickstart tells users to
-      # make, against the same DB/Redis/MinIO the keyless lane just exercised.
-      - name: Restart the app with a provider key
+      # One real generation, the way the quickstart now tells users to do it:
+      # paste the key on /setup (the probe PUTs it to /v1/setup/provider-keys
+      # — the in-app path, encrypted at rest) and hit Run — NO restart. The
+      # worker has to pick the key up on its refresh interval, so this proves
+      # hot registration end to end against the same DB/Redis/MinIO the
+      # keyless lane just exercised. The key reaches the probe process only,
+      # never compose (a compose passthrough would fail --strict-keyless).
+      - name: Run the BYO-key success probe (key pasted through /setup, no restart)
         if: steps.keyed_gate.outputs.run == 'true'
         env:
-          NODARO_IMAGE: nodaro-community:ci
-          # Same unreachable cloud as the keyless boot — a compose recreate
-          # re-reads every ${VAR}, so leaving this out would silently point
-          # the keyed lane back at production.
-          NODARO_CLOUD_URL: http://127.0.0.1:9
-          KIE_API_KEY: ${{ secrets.COMMUNITY_E2E_KIE_KEY }}
-        run: |
-          docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 180 --no-build nodaro
-
-      # One real generation: submit → completed → media fetchable from the
-      # install's own storage. This is what backs the quickstart's "hit Run
-      # and Z-Image answers in seconds".
-      - name: Run the BYO-key success probe
-        if: steps.keyed_gate.outputs.run == 'true'
+          SMOKE_KIE_API_KEY: ${{ secrets.COMMUNITY_E2E_KIE_KEY }}
         run: node tools/community-smoke.mjs http://localhost:3000 --keyed
 
       # Without this a failure is a red X and nothing else — the stack is gone

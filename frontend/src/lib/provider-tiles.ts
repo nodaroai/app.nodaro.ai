@@ -1,60 +1,124 @@
 /**
- * The Install-health provider grid, derived from the backend's
- * `checks.providers.keys` — one tile per key, in the backend's order.
+ * The provider grid — Install health on /setup and "Model providers" on
+ * Integrations both render from it — derived from /v1/setup/status:
+ * `providers.keys` (which providers exist, in order, set or not),
+ * `providers.sources` (env | app | oauth | null per provider) and
+ * `providers.meta` (labels, env var, what it powers, cloud coverage, scope).
  *
- * The grid used to be a second, hand-copied list of six providers while the
- * "N/6 set" counter already came from `keys`; nodaro.ai lived outside both as
- * a banner-only boolean, so it never read as a provider. The backend owns
- * WHICH providers exist (it is the thing that holds the keys); this module
- * only owns how each one is labelled. A key the backend reports and this map
- * does not know renders with its id, so a new provider is visible on day one
- * rather than silently absent.
+ * The backend owns WHICH providers exist (it holds the keys) and what the
+ * nodaro.ai connection covers; this module turns that into tile states, the
+ * "who may edit" rule (env wins → an env-managed key is read-only here), the
+ * core / node-specific grouping and the coverage banner. An older backend
+ * that sends keys only still renders from the local label map, and an id
+ * nobody labelled renders with its id rather than vanishing.
  */
 
-export type NodaroCredentialSource = "oauth" | "env" | null
+export type ProviderSource = "env" | "app" | "oauth" | null
+
+/** "core" unlocks model families; "node" exists for one or two specific nodes. */
+export type ProviderScope = "core" | "node"
 
 export interface ProviderMeta {
   readonly name: string
-  /** What lights the tile — an env var name, or for nodaro.ai the two ways. */
+  /** What lights the tile — the env var name. */
   readonly env: string
+  readonly whereToGet?: string
+  readonly powers?: string
+  /** Whether connecting nodaro.ai stands in for this key. */
+  readonly cloudCovered?: boolean
+  readonly scope?: ProviderScope
 }
 
+/** Fallback labels for a backend that predates `providers.meta`. */
 export const PROVIDER_META: Record<string, ProviderMeta> = {
-  nodaro: { name: "nodaro.ai", env: "Connect (OAuth) · or NODARO_API_KEY" },
-  kie: { name: "KIE.ai", env: "KIE_API_KEY" },
-  replicate: { name: "Replicate", env: "REPLICATE_API_TOKEN" },
-  anthropic: { name: "Anthropic", env: "ANTHROPIC_API_KEY" },
-  gemini: { name: "Google Gemini", env: "GEMINI_API_KEY" },
-  elevenlabs: { name: "ElevenLabs", env: "ELEVENLABS_API_KEY" },
-  fal: { name: "fal.ai", env: "FAL_KEY" },
+  nodaro: { name: "nodaro.ai", env: "NODARO_API_KEY", cloudCovered: false, scope: "core" },
+  kie: { name: "KIE.ai", env: "KIE_API_KEY", cloudCovered: true, scope: "core" },
+  replicate: { name: "Replicate", env: "REPLICATE_API_TOKEN", cloudCovered: true, scope: "core" },
+  anthropic: { name: "Anthropic", env: "ANTHROPIC_API_KEY", cloudCovered: true, scope: "core" },
+  gemini: { name: "Google Gemini", env: "GEMINI_API_KEY", cloudCovered: true, scope: "core" },
+  elevenlabs: { name: "ElevenLabs", env: "ELEVENLABS_API_KEY", cloudCovered: true, scope: "core" },
+  fal: { name: "fal.ai", env: "FAL_KEY", cloudCovered: true, scope: "core" },
+  heygen: { name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: false, scope: "node" },
+  beeble: { name: "Beeble", env: "BEEBLE_API_KEY", cloudCovered: false, scope: "node" },
+  apify: { name: "Apify", env: "APIFY_API_TOKEN", cloudCovered: false, scope: "node" },
 }
 
-export type TileState = "set" | "missing" | "connected" | "key set"
+export type TileState = "set" | "set (env)" | "set (app)" | "connected" | "key set (env)" | "key set (app)" | "missing"
 
 export interface ProviderTile {
   readonly id: string
   readonly name: string
   readonly env: string
+  readonly powers?: string
+  readonly whereToGet?: string
+  readonly cloudCovered: boolean
+  readonly scope: ProviderScope
   readonly present: boolean
+  readonly source: ProviderSource
   readonly state: TileState
+  /** False when the key is managed by the environment (env wins) or by the OAuth connection. */
+  readonly editable: boolean
 }
 
-export function providerTiles(
-  keys: Readonly<Record<string, boolean>>,
-  nodaroSource: NodaroCredentialSource,
-): ProviderTile[] {
-  return Object.entries(keys).map(([id, present]) => {
-    const meta = PROVIDER_META[id] ?? { name: id, env: id.toUpperCase() }
-    const state: TileState =
-      id === "nodaro"
-        ? present
-          ? nodaroSource === "env"
-            ? "key set"
-            : "connected"
-          : "missing"
-        : present
-          ? "set"
-          : "missing"
-    return { id, name: meta.name, env: meta.env, present: Boolean(present), state }
+export interface ProviderTileInput {
+  readonly keys: Readonly<Record<string, boolean>>
+  readonly sources?: Readonly<Record<string, ProviderSource>>
+  readonly meta?: Readonly<Record<string, ProviderMeta>>
+}
+
+export function providerTiles({ keys, sources, meta }: ProviderTileInput): ProviderTile[] {
+  return Object.entries(keys).map(([id, presentRaw]) => {
+    const present = Boolean(presentRaw)
+    const m = meta?.[id] ?? PROVIDER_META[id] ?? { name: id, env: id.toUpperCase() }
+    const source: ProviderSource = sources ? (sources[id] ?? null) : present ? "env" : null
+    const withSource = sources !== undefined
+    let state: TileState
+    if (!present) state = "missing"
+    else if (id === "nodaro") state = source === "oauth" ? "connected" : source === "app" ? "key set (app)" : "key set (env)"
+    else if (!withSource) state = "set"
+    else state = source === "app" ? "set (app)" : "set (env)"
+    const editable = !(present && (source === "env" || source === "oauth"))
+    return {
+      id,
+      name: m.name,
+      env: m.env,
+      powers: m.powers,
+      whereToGet: m.whereToGet,
+      cloudCovered: m.cloudCovered ?? false,
+      scope: m.scope ?? PROVIDER_META[id]?.scope ?? "core",
+      present,
+      source,
+      state,
+      editable,
+    }
   })
+}
+
+export interface ProviderTileGroups {
+  /** Keys that unlock model families — what a fresh install reaches for. */
+  readonly core: ProviderTile[]
+  /** Keys that exist for specific nodes; shown apart so they do not read as a general requirement. */
+  readonly nodeSpecific: ProviderTile[]
+}
+
+export function groupProviderTiles(tiles: ReadonlyArray<ProviderTile>): ProviderTileGroups {
+  return {
+    core: tiles.filter((t) => t.scope === "core"),
+    nodeSpecific: tiles.filter((t) => t.scope === "node"),
+  }
+}
+
+export interface CloudCoverageSummary {
+  /** Missing tiles that connecting nodaro.ai would clear. */
+  readonly coveredMissing: number
+  /** Missing tiles the connection does NOT cover — their own key is still needed. */
+  readonly uncoveredMissing: ProviderTile[]
+}
+
+export function cloudCoverageSummary(tiles: ReadonlyArray<ProviderTile>): CloudCoverageSummary {
+  const missing = tiles.filter((t) => !t.present && t.id !== "nodaro")
+  return {
+    coveredMissing: missing.filter((t) => t.cloudCovered).length,
+    uncoveredMissing: missing.filter((t) => !t.cloudCovered),
+  }
 }
