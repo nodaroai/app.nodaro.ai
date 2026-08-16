@@ -127,4 +127,13 @@ describe("generate-video-pro node registry", () => {
       expect.arrayContaining(["prompt", "provider", "duration", "aspectRatio", "resolution", "generateAudio", "noBackgroundMusic", "preferredSegmentSec", "segmentDurations"]),
     )
   })
+
+  it("marks soundtrack capability for recast original-audio S1", () => {
+    const d = NODE_REGISTRY.find((n) => n.type === "generate-video-pro")
+    // The deployed plugin bundle accepts the `soundtrack` input; clients gate
+    // their Music lever on this marker. The create schema strips unknown keys, so
+    // an ungated client against an older bundle would silently lose the user's
+    // track.
+    expect(d?.soundtrack).toBe(true)
+  })
 })
