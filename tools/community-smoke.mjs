@@ -535,7 +535,11 @@ await check("discovery does not advertise nodes this edition cannot run", async 
   assert(types.size > 0, "/v1/nodes returned an empty catalog")
   const advertised = [...cloudOnly].filter((t) => types.has(t))
   assert(advertised.length === 0, `cloud-only nodes advertised: ${advertised.join(", ")}`)
-  return `${types.size} nodes, none of the ${cloudOnly.size} cloud-only types`
+  // …and prices nothing: there is no credit system here, so a descriptor that
+  // says "costs N credits" is a lie the SDK/CLI/MCP would build on (#646).
+  const priced = (json?.data ?? []).filter((n) => n && n.creditCost !== undefined && n.creditCost !== null)
+  assert(priced.length === 0, `community discovery advertises creditCost on ${priced.length} node(s): ${priced.slice(0, 5).map((n) => n.type).join(", ")}`)
+  return `${types.size} nodes, none of the ${cloudOnly.size} cloud-only types, no creditCost`
 })
 
 /**
