@@ -231,6 +231,11 @@ export const AvatarPicker = memo(function AvatarPicker({
     queryKey: ["heygen-avatars"],
     queryFn: getHeygenAvatars,
     staleTime: 5 * 60 * 1000, // avatars change rarely
+    // An EMPTY list is a state that changes under the user — a self-host that
+    // pastes its HeyGen key or connects nodaro.ai (the catalog then arrives
+    // through the connection) should see the pickers fill without a reload.
+    // Cheap: the server caches the catalog for an hour.
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? false : 15_000),
   })
 
   const [query, setQuery] = useState("")
@@ -336,7 +341,7 @@ export const AvatarPicker = memo(function AvatarPicker({
         <User className="size-10 text-muted-foreground/40" />
         <p className="text-sm font-medium text-muted-foreground">No HeyGen avatars</p>
         <p className="text-xs text-muted-foreground/70">
-          Configure the HeyGen API key in Settings to browse available avatars.
+          Add a HeyGen key or connect nodaro.ai under Integrations &rarr; Model providers to browse avatars.
         </p>
       </div>
     )
