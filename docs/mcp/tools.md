@@ -524,6 +524,7 @@ the job's `output_data`.
 | `youtube_url` | string, optional | YouTube video URL (youtube.com / youtu.be). |
 | `llm_model` | enum, optional | Analysis quality tier: `fast` (economy), `pro` (default, higher fidelity), or `mixed` / `mixed-fast` (advanced tiers — maximum completeness and accuracy). |
 | `selection_mode` | enum, optional | Result strategy: `choose` (default — standard result) or `combine` (enhanced, verified result with maximum detail; slightly slower, recommended). |
+| `music_video` | boolean, optional | Declare the clip a music video: the song IS the piece, so all sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Default `false`: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. |
 | `analysis_focus` | string ≤2000, optional | Steer the analysis (e.g. "focus on the product shots and on-screen text"). |
 
 Pass **exactly one** of `video_asset_id` / `video_url` / `youtube_url` —
