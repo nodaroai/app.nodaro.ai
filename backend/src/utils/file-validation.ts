@@ -33,6 +33,8 @@ const ALLOWED_MIME_TYPES: Record<string, ReadonlyArray<string>> = {
     "audio/aac",
     "audio/ogg",
     "audio/webm",
+    "audio/flac",
+    "audio/x-flac",
   ],
   data: [
     "application/json",
@@ -117,6 +119,8 @@ export function getExtensionFromMime(mimeType: string): string {
     "audio/aac": "aac",
     "audio/ogg": "ogg",
     "audio/webm": "weba",
+    "audio/flac": "flac",
+    "audio/x-flac": "flac",
     "application/json": "json",
   }
   return map[mimeType] ?? "bin"

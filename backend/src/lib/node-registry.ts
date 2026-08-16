@@ -66,6 +66,11 @@ export interface NodeDescriptor {
   providerResolutionWire?: Record<string, Record<string, string>>
   /** Capabilities flags (e.g. "supports-reference-image", "supports-end-frame"). */
   capabilities?: string[]
+  /** generate-video-pro: the deployed plugin bundle accepts the `soundtrack`
+   *  input (recast original-audio S1). Clients gate their Music lever on this
+   *  marker — the create schema strips unknown keys, so an ungated client
+   *  against an older bundle would silently lose the user's track. */
+  soundtrack?: boolean
   /**
    * Dynamic upper bound for a bounded numeric input, when the input isn't a
    * fixed catalog list and the cap itself is runtime-configurable (env var).
@@ -364,6 +369,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 100,
     providers: GVP_PROVIDERS,
     sparseProviders: GVP_SPARSE_PROVIDERS,
+    soundtrack: true,
     providerResolutions: GVP_PROVIDER_RESOLUTIONS,
     providerResolutionWire: GVP_RESOLUTION_WIRE,
     capabilities: ["long-form", "auto-segmentation", "seamless-stitch"],

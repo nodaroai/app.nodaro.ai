@@ -22,6 +22,8 @@ describe("detectCategory", () => {
     expect(detectCategory("audio/mpeg")).toBe("audio")
     expect(detectCategory("audio/wav")).toBe("audio")
     expect(detectCategory("audio/ogg")).toBe("audio")
+    expect(detectCategory("audio/flac")).toBe("audio")
+    expect(detectCategory("audio/x-flac")).toBe("audio")
   })
 
   it("detects data types", () => {
@@ -41,6 +43,8 @@ describe("getExtensionFromMime", () => {
     expect(getExtensionFromMime("image/heic")).toBe("heic")
     expect(getExtensionFromMime("video/mp4")).toBe("mp4")
     expect(getExtensionFromMime("audio/mpeg")).toBe("mp3")
+    expect(getExtensionFromMime("audio/flac")).toBe("flac")
+    expect(getExtensionFromMime("audio/x-flac")).toBe("flac")
     expect(getExtensionFromMime("video/quicktime")).toBe("mov")
   })
 
@@ -78,6 +82,18 @@ describe("validateFile", () => {
 
   it("accepts valid audio files", () => {
     const result = validateFile("audio/mpeg", 5 * 1024 * 1024)
+    expect(result.valid).toBe(true)
+    expect(result.category).toBe("audio")
+  })
+
+  it("accepts valid FLAC audio files at 50MB limit", () => {
+    const result = validateFile("audio/flac", 50 * 1024 * 1024)
+    expect(result.valid).toBe(true)
+    expect(result.category).toBe("audio")
+  })
+
+  it("accepts valid x-flac audio files under 50MB", () => {
+    const result = validateFile("audio/x-flac", 30 * 1024 * 1024)
     expect(result.valid).toBe(true)
     expect(result.category).toBe("audio")
   })
