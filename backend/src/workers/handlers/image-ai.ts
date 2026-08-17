@@ -9,7 +9,7 @@ import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
-import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, type ImageGenProvider } from "@nodaro/shared"
+import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type ImageGenProvider } from "@nodaro/shared"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
@@ -140,7 +140,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, maskUrl } = job.data as {
+  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, maskUrl, maskIndexes } = job.data as {
     jobId: string
     imageUrl?: string
     taskId?: string
@@ -152,17 +152,20 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     style?: string
     seed?: number
     maskUrl?: string
+    maskIndexes?: number[]
   }
   const resolvedProvider = provider ?? "recraft-upscale"
-  // grok-upscale takes a prior Grok task_id instead of an image URL; the KIE
-  // provider's editImage uses `imageParam` to route the input value to the
-  // correct request key, so we just plumb taskId through the imageUrl arg
-  // and let imageParam: "task_id" (in models.ts) place it correctly.
-  const inputId = resolvedProvider === "grok-upscale" ? taskId : imageUrl
+  // The task-chained Grok providers (grok-upscale / grok-2-edit /
+  // grok-2-segment) take a prior Grok task_id instead of an image URL; the
+  // KIE provider's editImage uses `imageParam` to route the input value to
+  // the correct request key, so we just plumb taskId through the imageUrl
+  // arg and let imageParam: "task_id" (in models.ts) place it correctly.
+  const isTaskChained = TASK_CHAINED_EDIT_PROVIDERS.has(resolvedProvider)
+  const inputId = isTaskChained ? taskId : imageUrl
   if (!inputId) {
     throw new Error(
-      resolvedProvider === "grok-upscale"
-        ? "grok-upscale requires taskId from a prior Grok generation"
+      isTaskChained
+        ? `${resolvedProvider} requires taskId from a prior Grok generation`
         : "edit-image requires imageUrl",
     )
   }
@@ -176,6 +179,9 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),
     ...(maskUrl && { mask_url: maskUrl }),
+    // grok-2-edit region targeting: 1-based segment indexes from a prior
+    // grok-2-segment run — KIE's param spelling is `mask_indexs`.
+    ...(maskIndexes?.length && { mask_indexs: maskIndexes }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
 
@@ -200,6 +206,10 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     jobId: ctx.jobId,
     jobType: "edit-image",
     result,
+    // grok-2-segment: persist the named-region metadata next to the masks —
+    // entries are order-aligned with the R2-uploaded output imageUrls, and
+    // `index` is what grok-2-edit's maskIndexes expects.
+    ...(result.segments?.length && { extraOutputData: { segments: result.segments } }),
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)

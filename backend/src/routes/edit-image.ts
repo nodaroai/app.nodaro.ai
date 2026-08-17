@@ -8,20 +8,22 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier } from "@nodaro/shared"
+import { IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
 const editImageBody = z.object({
-  // imageUrl is required for every provider EXCEPT grok-upscale, which
-  // takes a prior Grok task_id instead of an image URL. The refinement
-  // below enforces "imageUrl XOR taskId" with provider-aware routing.
+  // imageUrl is required for every provider EXCEPT the task-chained Grok ops
+  // (grok-upscale / grok-2-edit / grok-2-segment), which take a prior Grok
+  // generation's task_id instead of an image URL. The refinement below
+  // enforces "imageUrl XOR taskId" with provider-aware routing.
   imageUrl: safeUrlSchema.optional(),
   /**
-   * Prior Grok generation task_id, used only by `provider: "grok-upscale"`.
-   * KIE's grok-imagine/upscale endpoint upscales by referencing a previous
-   * task rather than re-uploading the image, so we plumb the task_id through
-   * a separate field instead of overloading imageUrl.
+   * Prior Grok generation task_id, used only by the task-chained providers
+   * (see `TASK_CHAINED_EDIT_PROVIDERS`). KIE's grok endpoints operate by
+   * referencing a previous task rather than re-uploading the image, so we
+   * plumb the task_id through a separate field instead of overloading
+   * imageUrl. A generation job's task id is in its `output_data.kieTaskId`.
    */
   taskId: z.string().min(1).max(200).optional(),
   // Generous ceiling; per-model truncation happens in the assembler (warn-don't-block).
@@ -37,14 +39,20 @@ const editImageBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   // Optional inpainting mask (forwarded as mask_url to the provider; only consumed by providers that support it)
   maskUrl: safeUrlSchema.optional(),
+  /**
+   * grok-2-edit only: segment indexes (1-based, from a prior grok-2-segment
+   * run) restricting the edit to those named regions. Forwarded to KIE as
+   * `mask_indexs` (their spelling). Ignored by every other provider.
+   */
+  maskIndexes: z.array(z.number().int().min(1)).min(1).max(64).optional(),
 }).refine(
   (data) => {
-    if (data.provider === "grok-upscale") {
+    if (TASK_CHAINED_EDIT_PROVIDERS.has(data.provider ?? "recraft-upscale")) {
       return Boolean(data.taskId)
     }
     return Boolean(data.imageUrl)
   },
-  { message: "imageUrl is required (or taskId for grok-upscale)" },
+  { message: "imageUrl is required (or taskId for grok-upscale / grok-2-edit / grok-2-segment)" },
 )
 
 export async function editImageRoutes(app: FastifyInstance) {
@@ -61,7 +69,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, maskUrl } = parsed.data
+    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, maskUrl, maskIndexes } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -70,12 +78,12 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validate that nano-banana-edit has a prompt
-    if (provider === "nano-banana-edit" && !prompt) {
+    // Validate that prompt-driven edit providers have a prompt
+    if ((provider === "nano-banana-edit" || provider === "grok-2-edit") && !prompt) {
       return reply.status(400).send({
         error: {
           code: "validation_error",
-          message: "Prompt is required for nano-banana-edit provider",
+          message: `Prompt is required for ${provider} provider`,
         },
       })
     }
@@ -116,6 +124,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       seed,
       referenceImageUrls,
       maskUrl,
+      maskIndexes,
       usageLogId,
     })
 

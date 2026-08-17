@@ -166,6 +166,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "gpt-image": "Creative concepts, illustration, variable quality tiers",
     "gpt-image-2": "Latest GPT Image — sharp text, photorealism, 1K/2K/4K resolution",
     "grok": "General purpose, good text understanding",
+    "grok-2": "Grok Imagine 2 — expressive, high-contrast, stylized output",
     "imagen4": "Google's latest, strong photorealism and text rendering",
     "imagen4-fast": "Faster Imagen 4 variant",
     "imagen4-ultra": "Highest quality Imagen 4",

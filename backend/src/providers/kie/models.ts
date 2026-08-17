@@ -164,6 +164,37 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_urls",  // Grok uses image_urls array, not "image"
     extraParams: {},
   },
+  // Grok Imagine Image 2.0 family — t2i plus task-chained edit + FREE segment
+  // map. See docs.kie.ai/market/grok-imagine-image-2-0/{text-to-image,image-edit,segment-map}.md
+  // The edit + segment endpoints take a PRIOR grok-2 generation's task_id
+  // (NOT an image URL) — same plumbing as grok-upscale: the worker passes the
+  // taskId through editImage's imageUrl arg and `imageParam: "task_id"` places
+  // it in the request body. grok-2-edit additionally accepts `mask_indexs`
+  // (segment indexes from grok-2-segment) via extraParams for region edits.
+  "grok-2": {
+    model: "grok-imagine-image-2-0/text-to-image",
+    credits: 4,
+    cost: 0.02,
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "grok-2-edit": {
+    model: "grok-imagine-image-2-0/image-edit",
+    credits: 4,
+    cost: 0.02,
+    inputType: "image-to-image",
+    imageParam: "task_id",
+    extraParams: {},
+  },
+  // Segment map is FREE on KIE. Results come back as resultObject.segments
+  // (named masks + indexes), NOT resultUrls — mapped in image.ts::editImage.
+  "grok-2-segment": {
+    model: "grok-imagine-image-2-0/segment-map",
+    credits: 0,
+    cost: 0,
+    inputType: "image-to-image",
+    imageParam: "task_id",
+    extraParams: {},
+  },
 
   // GPT Image family
   // GPT Image 1.5 — Supported aspect_ratio: "1:1", "3:2", "2:3" ONLY. Quality: "medium", "high"

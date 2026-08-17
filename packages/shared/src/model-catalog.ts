@@ -872,6 +872,47 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["upscale"],
     pricing: [{ identifier: "grok-upscale", credits: 25 }],
   },
+  // Grok Imagine Image 2.0 — t2i plus task-chained region editing. The edit
+  // and segment-map endpoints take a PRIOR grok-2 generation's task id (the
+  // job's `kieTaskId` output), not an image URL — same contract as
+  // grok-upscale (see TASK_CHAINED_EDIT_PROVIDERS in model-constants).
+  "grok-2": {
+    id: "grok-2",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "xAI",
+    label: "Grok Imagine 2",
+    series: "Grok",
+    description:
+      "Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits).",
+    useCases: ["stylized", "expressive", "general"],
+    aspectRatios: GROK_RATIOS,
+    pricing: [{ identifier: "grok-2", credits: 10 }],
+  },
+  "grok-2-edit": {
+    id: "grok-2-edit",
+    kind: "image",
+    modes: ["edit"] as const,
+    family: "xAI",
+    label: "Grok Imagine 2 Edit",
+    series: "Grok",
+    description:
+      "Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions.",
+    useCases: ["edit", "region-edit"],
+    pricing: [{ identifier: "grok-2-edit", credits: 10 }],
+  },
+  "grok-2-segment": {
+    id: "grok-2-segment",
+    kind: "image",
+    modes: ["edit"] as const,
+    family: "xAI",
+    label: "Grok Imagine 2 Segment Map",
+    series: "Grok",
+    description:
+      "FREE semantic segment map of a prior grok-2 generation — named region masks whose indexes feed grok-2-edit's region targeting.",
+    useCases: ["segmentation", "region-edit"],
+    pricing: [{ identifier: "grok-2-segment", credits: 0, note: "free" }],
+  },
 
   // ── Utilities ──
   "recraft-remove-bg": {

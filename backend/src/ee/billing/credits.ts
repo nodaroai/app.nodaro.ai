@@ -265,6 +265,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "flux": 13,                     // (1K default)
   "flux:2K": 20,
   "grok": 10,
+  "grok-2": 10,                   // Grok Imagine Image 2.0 t2i ($0.02)
   "gpt-image": 10,                // (medium default)
   "gpt-image:high": 60,
   "gpt-image-2": 15,              // (1K default; estimated, recalibrate from anomalies)
@@ -344,6 +345,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz-image-upscale:4K": 50,
   "topaz-image-upscale:8K": 100,
   "grok-upscale": 25,
+  // Grok Imagine 2 task-chained ops (prior grok-2 task_id, not an image URL)
+  "grok-2-edit": 10,              // prompt/region edit ($0.02)
+  "grok-2-segment": 0,            // segment map is FREE upstream
   // ── Image-to-Image ──
   "flux-i2i": 60,                 // (1K default)
   "flux-i2i:2K": 60,
