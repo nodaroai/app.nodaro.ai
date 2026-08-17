@@ -15,33 +15,58 @@ import { TIER_CREDITS, FREE_TIER_RESTRICTIONS } from "../stripe-config.js"
 // changing a constant without re-seeding the table fails here instead of
 // silently misreporting a user's allowance.
 
-const MIGRATION = join(
-  import.meta.dirname,
-  "../../../../../supabase/migrations/287_credit_redenomination_tier_config.sql",
-)
+const MIGRATIONS_DIR = join(import.meta.dirname, "../../../../../supabase/migrations")
 
-function seededFreeValues(): { monthly: number; daily: number } {
+const MIGRATION = join(MIGRATIONS_DIR, "287_credit_redenomination_tier_config.sql")
+
+function seededFreeMonthly(): number {
   const sql = readFileSync(MIGRATION, "utf8")
   const monthly = /monthly_credits\s*=\s*(\d+)/.exec(sql)
-  const daily = /daily_credit_limit\s*=\s*(\d+)/.exec(sql)
-  if (!monthly || !daily) throw new Error("could not parse the tier_config seeding migration")
-  return { monthly: Number(monthly[1]), daily: Number(daily[1]) }
+  if (!monthly) throw new Error("could not parse the tier_config seeding migration")
+  return Number(monthly[1])
+}
+
+/**
+ * daily_credit_limit for 'free' as the LATEST migration to set it leaves it
+ * (null = uncapped). Scanned rather than pinned to one file so a re-seed
+ * without a matching constant change (or vice versa) fails here.
+ */
+function latestSeededFreeDaily(): { value: number | null; migration: string } {
+  const hits = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort() // NNN_ prefix sorts chronologically
+    .flatMap((f) => {
+      const m = /daily_credit_limit\s*=\s*(NULL|\d+)\s+WHERE\s+tier\s*=\s*'free'/i.exec(
+        readFileSync(join(MIGRATIONS_DIR, f), "utf8"),
+      )
+      return m ? [{ value: /null/i.test(m[1]!) ? null : Number(m[1]), migration: f }] : []
+    })
+  if (hits.length === 0) throw new Error("no migration seeds the free tier daily_credit_limit")
+  return hits[hits.length - 1]!
 }
 
 describe("free tier_config row matches the code constants", () => {
   it("seeds monthly_credits from TIER_CREDITS.free", () => {
-    expect(seededFreeValues().monthly).toBe(TIER_CREDITS.free)
+    expect(seededFreeMonthly()).toBe(TIER_CREDITS.free)
   })
 
   it("seeds daily_credit_limit from FREE_TIER_RESTRICTIONS.dailyCreditCap", () => {
-    expect(seededFreeValues().daily).toBe(FREE_TIER_RESTRICTIONS.dailyCreditCap)
+    const { value, migration } = latestSeededFreeDaily()
+    expect(
+      value,
+      `${migration} leaves tier_config.daily_credit_limit at ${value ?? "NULL"}, but ` +
+        `FREE_TIER_RESTRICTIONS.dailyCreditCap is ${FREE_TIER_RESTRICTIONS.dailyCreditCap ?? "null"}. ` +
+        `Change both together (constant + re-seed migration).`,
+    ).toBe(FREE_TIER_RESTRICTIONS.dailyCreditCap)
   })
 
-  it("free tier is 1,500/month and 500/day", () => {
+  it("free tier is 1,500/month with no daily cap", () => {
     // Pinned explicitly: these are the numbers quoted to users, so a change
     // should be a deliberate edit here, not an incidental one elsewhere.
+    // The daily cap was removed 2026-08-17 (migration 326) — the one-time
+    // 1,500 signup grant bounds free-tier exposure on its own.
     expect(TIER_CREDITS.free).toBe(1500)
-    expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(500)
+    expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBeNull()
   })
 })
 
