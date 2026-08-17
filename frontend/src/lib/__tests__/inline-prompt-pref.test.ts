@@ -1,24 +1,21 @@
-// frontend/src/lib/__tests__/inline-prompt-pref.test.ts
 import { describe, it, expect, beforeEach } from "vitest"
-import {
-  INLINE_PROMPT_MODE_KEY,
-  getInlinePromptMode,
-  setInlinePromptMode,
-} from "../inline-prompt-pref"
+import { getInlinePromptMode, setInlinePromptMode, INLINE_PROMPT_MODE_KEY } from "../inline-prompt-pref"
 
 describe("inline-prompt-pref", () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => localStorage.removeItem(INLINE_PROMPT_MODE_KEY))
 
-  it("defaults to OFF when unset (ships dark; opt-in via the canvas toggle)", () => {
-    expect(getInlinePromptMode()).toBe(false)
+  it("defaults ON for a fresh device (the newcomer experience)", () => {
+    expect(getInlinePromptMode()).toBe(true)
   })
 
-  it("round-trips through localStorage under the documented key", () => {
+  it("an explicit opt-out survives the ON default", () => {
     setInlinePromptMode(false)
     expect(localStorage.getItem(INLINE_PROMPT_MODE_KEY)).toBe("0")
     expect(getInlinePromptMode()).toBe(false)
+  })
+
+  it("an explicit opt-in round-trips", () => {
     setInlinePromptMode(true)
-    expect(localStorage.getItem(INLINE_PROMPT_MODE_KEY)).toBe("1")
     expect(getInlinePromptMode()).toBe(true)
   })
 })
