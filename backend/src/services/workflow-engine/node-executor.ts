@@ -10,6 +10,7 @@
  */
 
 import { supabase } from "../../lib/supabase.js"
+import { insertInternalJob } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config } from "../../lib/config.js"
@@ -1250,18 +1251,15 @@ async function executeWorkerNode(
   // this, a mid-flight orchestrator crash leaves the execution stuck and
   // eventually marked "orphaned" even though the child job succeeded.
   const isUploadDescendant = ctx.uploadDescendantIds?.has(node.id) ?? false
-  const { data: job, error: jobError } = await supabase
-    .from("jobs")
-    .insert({
-      workflow_id: null,
-      workflow_execution_id: ctx.executionId,
-      user_id: ctx.userId,
-      status: "pending",
-      input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
-      ...(isUploadDescendant && { force_private: true }),
-    })
-    .select("id")
-    .single()
+  const { data: job, error: jobError } = await insertInternalJob("orchestrator", {
+    workflow_id: null,
+    workflow_execution_id: ctx.executionId,
+    user_id: ctx.userId,
+    status: "pending",
+    input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
+    job_type: node.type,
+    ...(isUploadDescendant && { force_private: true }),
+  })
 
   if (jobError || !job) {
     throw new Error(`Failed to create job for node ${node.id}: ${jobError?.message ?? "unknown"}`)

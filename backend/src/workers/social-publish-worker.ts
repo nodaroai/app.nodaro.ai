@@ -2,6 +2,7 @@ import { DelayedError, UnrecoverableError, Worker, type ConnectionOptions, type 
 import { redis } from "../lib/queue.js"
 import type { SocialPublishJobData } from "../lib/social-queue.js"
 import { supabase } from "../lib/supabase.js"
+import { insertInternalJob } from "../lib/insert-job.js"
 import { hasCredits } from "../lib/config.js"
 import { acquireConnectionLock, releaseConnectionLock } from "../services/social/connection-lock.js"
 import {
@@ -55,27 +56,23 @@ async function updateRow(id: string, patch: Record<string, unknown>): Promise<vo
 
 async function ensureJobRow(row: ScheduledPostRow): Promise<string | null> {
   if (row.job_id) return row.job_id
-  const { data } = await supabase
-    .from("jobs")
-    .insert({
-      user_id: row.user_id,
-      status: "processing",
-      provider: "social-publish",
-      job_type: "social-publish",
-      // Not gallery media — see routes/social-publish.ts: is_public defaults
-      // TRUE and the gallery RLS makes completed public rows world-readable.
-      is_public: false,
-      input_data: {
-        type: "social-publish",
-        scheduled: true,
-        scheduledPostId: row.id,
-        platform: row.platform,
-        action: row.action,
-      },
-    })
-    .select("id")
-    .single()
-  const jobId = (data as { id: string } | null)?.id ?? null
+  const { data } = await insertInternalJob("social-publish-worker", {
+    user_id: row.user_id,
+    status: "processing",
+    provider: "social-publish",
+    job_type: "social-publish",
+    // Not gallery media — see routes/social-publish.ts: is_public defaults
+    // TRUE and the gallery RLS makes completed public rows world-readable.
+    is_public: false,
+    input_data: {
+      type: "social-publish",
+      scheduled: true,
+      scheduledPostId: row.id,
+      platform: row.platform,
+      action: row.action,
+    },
+  })
+  const jobId = data?.id ?? null
   if (jobId) await updateRow(row.id, { job_id: jobId })
   return jobId
 }

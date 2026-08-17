@@ -63,6 +63,9 @@ export interface AdminJob {
   /** Specific identity within `source`: MCP client name, browser origin host,
    *  client package/version, or developer-app id. */
   readonly source_detail: string | null
+  /** Resolved display name when source='app' (source_detail is the app's id).
+   *  Null when the app row is gone (DCR sweep) — the badge shows the raw id. */
+  readonly source_app_name: string | null
   readonly workflow_project_id: string | null
   /** Set by Phase 1 reconciliation: which upstream provider type was called. */
   readonly provider_kind: string | null
@@ -271,11 +274,36 @@ export function useAdminJobs(
       if (error) throw error
       if (!jobs || jobs.length === 0) return []
       const userIds = [...new Set(jobs.map((j) => j.user_id))]
-      const workflowIds = [...new Set(jobs.map((j) => j.workflow_id).filter(Boolean) as string[])]
-      const [usersRes, workflowsRes] = await Promise.all([
+      // Orchestrator-created rows carry only workflow_execution_id (their
+      // workflow_id is null), so the owning workflow is resolved through the
+      // execution row — otherwise the Workflow column has nothing to link.
+      const executionIds = [
+        ...new Set(jobs.filter((j) => !j.workflow_id && j.workflow_execution_id).map((j) => j.workflow_execution_id as string)),
+      ]
+      // source='app' rows store the developer-app ID in source_detail (it is a
+      // query key for credit-guard/connected-instances, so the stored value
+      // stays an id). Resolve the display name here; a miss stays null — the
+      // app may have been deleted (DCR sweep) — and the badge shows the id.
+      const appIds = [
+        ...new Set(jobs.filter((j) => j.source === "app" && j.source_detail).map((j) => j.source_detail as string)),
+      ]
+      // The two `as never` / `as unknown as` casts mirror the jobs query above:
+      // the generated Database type predates these tables.
+      const [usersRes, executionsRes, appsRes] = await Promise.all([
         supabase.from("profiles").select("id, email").in("id", userIds),
-        supabase.from("workflows").select("id, name, project_id").in("id", workflowIds),
+        supabase.from("workflow_executions" as never).select("id, workflow_id").in("id", executionIds) as unknown as PromiseLike<{
+          data: Array<{ id: string; workflow_id: string | null }> | null
+        }>,
+        supabase.from("developer_apps" as never).select("id, name").in("id", appIds) as unknown as PromiseLike<{
+          data: Array<{ id: string; name: string }> | null
+        }>,
       ])
+      const execWfMap = new Map((executionsRes.data ?? []).map((e) => [e.id, e.workflow_id]))
+      const appNameMap = new Map((appsRes.data ?? []).map((a) => [a.id, a.name]))
+      const resolveWorkflowId = (j: JobRow): string | null =>
+        j.workflow_id ?? (j.workflow_execution_id ? (execWfMap.get(j.workflow_execution_id) ?? null) : null)
+      const workflowIds = [...new Set(jobs.map(resolveWorkflowId).filter(Boolean) as string[])]
+      const workflowsRes = await supabase.from("workflows").select("id, name, project_id").in("id", workflowIds)
       const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
       const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, { name: w.name, project_id: w.project_id }]))
       return jobs.map((j) => ({
@@ -294,12 +322,13 @@ export function useAdminJobs(
         completed_at: j.completed_at ?? null,
         user_id: j.user_id,
         user_email: userMap.get(j.user_id) ?? "Unknown",
-        workflow_id: j.workflow_id ?? null,
-        workflow_name: wfMap.get(j.workflow_id ?? "")?.name ?? "Unknown",
+        workflow_id: resolveWorkflowId(j),
+        workflow_name: wfMap.get(resolveWorkflowId(j) ?? "")?.name ?? "Unknown",
         workflow_execution_id: j.workflow_execution_id ?? null,
-        workflow_project_id: wfMap.get(j.workflow_id ?? "")?.project_id ?? null,
+        workflow_project_id: wfMap.get(resolveWorkflowId(j) ?? "")?.project_id ?? null,
         source: j.source ?? null,
         source_detail: j.source_detail ?? null,
+        source_app_name: j.source === "app" && j.source_detail ? (appNameMap.get(j.source_detail) ?? null) : null,
         provider_kind: j.provider_kind ?? null,
         provider_task_id: j.provider_task_id ?? null,
         reconcile_attempts: j.reconcile_attempts ?? 0,

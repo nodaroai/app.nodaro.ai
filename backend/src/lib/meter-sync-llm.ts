@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
+import { insertJob } from "./insert-job.js"
 import { reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 export interface SyncLlmMeter {
@@ -32,11 +33,12 @@ export async function meterSyncLlm(
   jobType: string,
   creditIdentifier: string,
 ): Promise<SyncLlmMeter | null> {
-  const { data: job, error: jobError } = await supabase
-    .from("jobs")
-    .insert({ user_id: req.userId, status: "pending", input_data: { type: jobType } })
-    .select("id")
-    .single()
+  const { data: job, error: jobError } = await insertJob(req, {
+    user_id: req.userId,
+    status: "pending",
+    input_data: { type: jobType },
+    job_type: jobType,
+  })
   if (jobError || !job) {
     reply.status(500).send({ error: { code: "internal_error", message: jobError?.message ?? "Failed to create job" } })
     return null

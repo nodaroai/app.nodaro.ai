@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { insertInternalJob } from "../../../lib/insert-job.js"
 import { pollForAssetId, pollJobUntilComplete } from "./_poll.js"
 
 /**
@@ -90,17 +91,20 @@ export async function runPipelineWorkerJob(
   } = args
 
   // 1. Create jobs row tagged with pipeline_id so admin/billing/cleanup paths
-  //    can correlate this child job back to its parent pipeline.
-  const { data: job, error: insertErr } = await supabase
-    .from("jobs")
-    .insert({
+  //    can correlate this child job back to its parent pipeline. `jobName` is
+  //    the worker's switch key ("generate-image", "lip-sync", …), i.e. the
+  //    job_type vocabulary.
+  const { data: job, error: insertErr } = await insertInternalJob(
+    `pipeline:${jobName}`,
+    {
       user_id: userId,
       status: "pending",
       input_data: inputData,
+      job_type: jobName,
       pipeline_id: pipelineId,
-    })
-    .select("id")
-    .single()
+    },
+    { client: supabase },
+  )
   if (insertErr || !job?.id) {
     throw new Error(
       `Failed to create ${jobName} job: ${insertErr?.message ?? "no id returned"}`,
