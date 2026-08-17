@@ -43,8 +43,10 @@ export function startCleanupCron(): void {
   // lib/oauth-dcr-sweep.ts (#708).
   cron.schedule("15 * * * *", async () => {
     try {
-      const { deleted } = await sweepStaleDcrRegistrations()
-      if (deleted > 0) console.log(`[cron] stale DCR registrations swept: ${deleted}`)
+      const { deleted, keptAuthorized } = await sweepStaleDcrRegistrations()
+      if (deleted > 0 || keptAuthorized > 0) {
+        console.log(`[cron] stale DCR registrations swept: ${deleted} deleted, ${keptAuthorized} kept (consented but unclaimed — see migration 323)`)
+      }
     } catch (err) {
       console.error("[cron] stale DCR sweep failed:", err)
     }
