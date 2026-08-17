@@ -100,7 +100,8 @@ export class DeveloperAppsResource {
     )
   }
 
-  /** Delete a developer app. Returns `{ success: true }`. */
+  /** Delete a developer app. Returns `{ success: true }`. Throws
+   *  `NotFoundError` when the id doesn't exist or isn't yours. */
   delete(id: string): Promise<{ success: true }> {
     return this.client.request(
       "DELETE",

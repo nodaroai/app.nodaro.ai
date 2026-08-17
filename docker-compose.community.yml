@@ -136,8 +136,8 @@ services:
 
   nodaro:
     # Pulls a prebuilt image so the first boot is a download, not a 5-10 minute
-    # compile. `latest` tracks main; pin the :<sha> tag for a reproducible
-    # install.
+    # compile. `latest` tracks main; pin `:v<X.Y.Z>` (the version the app
+    # sidebar shows) or the `:<sha>` tag for a reproducible install.
     image: ${NODARO_IMAGE:-ghcr.io/nodaroai/nodaro-community:latest}
     # Build from source instead with:
     #     docker compose -f docker-compose.community.yml build

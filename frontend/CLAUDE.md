@@ -30,8 +30,8 @@ Vite dev server proxy in `frontend/vite.config.ts` forwards `/v1/*` to the backe
 - `API_BASE_URL` in `frontend/src/lib/api.ts` is `""` (empty string) -- NEVER hardcode `localhost:8000`
 - Admin pages and hooks must also use relative `/v1/...` paths, NOT their own `API_BASE_URL`
 - The backend URL is configured via `VITE_API_URL` env var in `vite.config.ts` only
-- **Exception: SSE streaming** calls bypass the proxy and call `VITE_API_URL` directly (proxy buffers responses, breaking real-time delivery)
-- All env vars use `VITE_` prefix (NOT `NEXT_PUBLIC_`), accessed via `import.meta.env.VITE_*`
+- **Exception: SSE streaming** calls bypass the proxy and hit the API base directly (proxy buffers responses, breaking real-time delivery) — take the base from `runtimeApiUrl()` in `src/lib/runtime-config.ts`, never `import.meta.env.VITE_API_URL`
+- All env vars use `VITE_` prefix (NOT `NEXT_PUBLIC_`), accessed via `import.meta.env.VITE_*` — EXCEPT `VITE_API_URL` / `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`: those are runtime-overridable via `/config.js` on the published community image and MUST be read through the `src/lib/runtime-config.ts` getters (a guard test fails any direct `import.meta.env` read of the trio outside that file)
 
 ### Auth Headers (`frontend/src/lib/api.ts`)
 - `getAuthHeaders()` returns `{ Authorization: 'Bearer <token>' }` from Supabase session, or `{}` if not logged in

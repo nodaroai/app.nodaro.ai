@@ -9,6 +9,7 @@ REST-first; the included visual editor is one of many possible clients.
 ## Quickstart by goal
 
 - **Self-host Nodaro for my team** → [Community Edition Quickstart](./community-edition-quickstart.md)
+- **Learn the editor with guided tutorials** (dashboard Tutorials tab; self-host installs seed a starter set on first boot) → [Tutorials](./tutorials.md)
 - **Use Nodaro Cloud models from my self-hosted instance** → [Community Cloud-Connect](./community-cloud-connect.md)
 - **Build a server-side integration** → [API Integration](./api-integration.md) → [OAuth Flow](./oauth-flow.md)
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)
@@ -37,7 +38,7 @@ Set `EDITION=community|business|cloud` to switch.
 Three npm packages in this repo:
 
 - `@nodaro/shared` — pure-logic types, model registries, prompt helpers, [picker catalogs](./picker-catalogs.md)
-- `@nodaro/sdk` — typed REST client (3 auth modes, 17 resource classes)
+- `@nodaro/sdk` — typed REST client (3 auth modes, a typed resource class per `/v1` surface — the full inventory lives in the [SDK Reference](./sdk-reference.md))
 - `@nodaro/cli` — terminal client wrapping `@nodaro/sdk`; also distributed as standalone binaries via [GitHub Releases](https://github.com/nodaroai/app.nodaro.ai/releases)
 
 ## API reference

@@ -50,7 +50,7 @@ Examples:
                 kind: section.kind,
                 family: group.family,
                 modes: m.modes.join(","),
-                credits: m.pricing.map((p) => p.credits).join("/") || "-",
+                credits: (m.pricing ?? []).map((p) => p.credits).join("/") || "-",
                 featured: m.featured ? "★" : "",
                 doctrine: m.doctrineCovered ? "✓" : "",
               })),

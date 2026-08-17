@@ -174,9 +174,13 @@ DCR is governed by the `MCP_DYNAMIC_REGISTRATION` operator setting:
 | `open` | Any client may register, but there's a cap of **5 unconsumed registrations per (`client_name` + `redirect_uris`)** within a 24h window (429 `too_many_open_registrations` once exceeded). |
 | `off` | DCR is disabled entirely (403 `dcr_disabled`); operators hand out a static `client_id`/`client_secret` instead. |
 
-A dynamically-registered client carries `kind=dynamic_mcp`. Because it
-self-claimed its name, the consent screen renders an extra warning so the
-user knows the app identity wasn't vetted by an operator. Its declared
+A dynamically-registered MCP client carries `kind=dynamic_mcp`. (Self-hosted
+community installs also register at this endpoint — with
+`kind=community_instance`, governed by the separate connect flow in the
+[community cloud-connect guide](community-cloud-connect.md), not by the modes
+above.) Because a `dynamic_mcp` client self-claimed its name, the consent
+screen renders an extra warning so the user knows the app identity wasn't
+vetted by an operator. Its declared
 scopes are informational — the user-controlled consent screen is the
 actual gate, so any valid Nodaro scope may be requested at authorize-time.
 

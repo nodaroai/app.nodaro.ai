@@ -359,6 +359,12 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
             .enum(["scenes", "scenes-max"])
             .optional()
             .describe('Part packing: "scenes-max" (default — fewest seams, cheapest) or "scenes" (shorter parts).'),
+          anchor_mode: z
+            .enum(["progressive", "none"])
+            .optional()
+            .describe(
+              'Keyframes anchor discipline: "progressive" (each part\'s start still chains off the previous render, no closing pin) or "none" (no frame conditioning — references carry the shot; the quote drops the anchor-still surcharge). Omit for the server default.',
+            ),
           provider: z.string().optional().describe("Video model override; omit for the server default."),
           interactive: z
             .boolean()
@@ -450,6 +456,9 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
             resolution,
             segmentSec,
             renderMethod: "keyframes",
+            // The quote must price the run that will render: under "none" the
+            // engine skips anchor stills, so the estimate drops that surcharge.
+            ...(args.anchor_mode ? { anchorMode: args.anchor_mode } : {}),
             ...(args.interactive ? { interactive: true } : {}),
             ...(args.provider ? { provider: args.provider } : {}),
           },
@@ -486,6 +495,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
             // answer it (widget + resolve_recast_gate). Sent always: additive
             // field, a pre-sheet plugin Zod-strips it harmlessly.
             clientCapabilities: ["sheet-gate"],
+            ...(args.anchor_mode ? { anchorMode: args.anchor_mode } : {}),
             ...(args.interactive ? { interactive: true } : {}),
             ...(args.provider ? { provider: args.provider } : {}),
           },

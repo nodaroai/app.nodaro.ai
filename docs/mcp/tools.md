@@ -491,7 +491,7 @@ prompt with no questions round-trip.
 | `get_recast_authoring_skill` | (Cloud only) The authoring guide for writing a movie as JSON — the preferred lane for end-to-end "make me a video of X" requests. Generated from the platform's own planner doctrine. Ungated. See [Recast authoring](./recast-authoring.md). |
 | `validate_recast_script` | (Cloud only) FREE validation of an authored script; returns `{ valid, errors (path+hint), warnings }` for the repair loop. Ungated, never charges. |
 | `import_recast_script` | (Cloud only) Turn a validated script into a real recast project (visible at recast.nodaro.ai). Free. Requires `rights_attested: true`, which must reflect the **user's own** confirmation of ownership — authored recasts render Faithful, exactly as written. `workflows:write`. |
-| `start_recast` | (Cloud only) Quote (no `confirm`) then render (`confirm: true` after the user accepts the credits) an imported recast; called again it advances a planned or interactive run. Pass `interactive: true` to choose the cast at pick-1-of-3 gates (priced surcharge — it rides the quote). `workflows:execute`. |
+| `start_recast` | (Cloud only) Quote (no `confirm`) then render (`confirm: true` after the user accepts the credits) an imported recast; called again it advances a planned or interactive run. Pass `interactive: true` to choose the cast at pick-1-of-3 gates (priced surcharge — it rides the quote). Optional `anchor_mode` picks the keyframes anchor discipline — `"progressive"` (each part's start still chains off the previous render) or `"none"` (no frame conditioning; the quote drops the anchor-still surcharge); omitted, the server default applies. `workflows:execute`. |
 | `resolve_recast_gate` | (Cloud only) Record the user's pick at an interactive gate (cast / identity sheet / scene stills / music) and advance the run — the pick is free, pure state. `picks` serves the two pick-1-of-3 gates: bare it answers the CAST gate; with `gate: "sheet"` it answers the identity-sheet gate (person slots only, opens after the cast pick — the face panel is identical across the 3 sheets, so the pick chooses body & wardrobe). `finish_auto: true` resolves every remaining gate with the critic's top candidate. `workflows:execute`. |
 | `get_recast_status` | (Cloud only) Progress of a recast run — planning / planned / generating (segments, live preview) / completed (result URL) — plus the recast.nodaro.ai deep link. `workflows:read`. |
 
@@ -1134,8 +1134,9 @@ component's input schema keys. Returns an `execution_id`.
 
 Browse AI models available on this Nodaro instance. Returns grouped JSON
 with per-model capability sheets (aspect ratios, resolutions, qualities,
-durations, features, per-variant credit pricing) and a `recommendations`
-array. Models with model-family prompting guidance (e.g. Seedance 2.0)
+durations, features, and — on editions with a credit system — per-variant
+credit pricing; community/business installs omit `pricing`) and a
+`recommendations` array. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
 before calling `generate_video` / `animate_image` — and every model
 carries `doctrineCovered`: `true` only when a sourced per-family prompt

@@ -117,6 +117,7 @@ added to `config.ts` without a row here.
 | `SUPABASE_SERVICE_ROLE_KEY` | **required** | Service-role JWT the backend uses (bundled: generated on first boot) |
 | `INTERNAL_ORCHESTRATOR_SECRET` | **required**, ≥ 32 chars | Shared secret between the orchestrator and the API (bundled: generated on first boot) |
 | `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue |
+| `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
@@ -275,7 +276,11 @@ docker compose -f docker-compose.community.yml up
 The app image is **pulled prebuilt** (`ghcr.io/nodaroai/nodaro-community`),
 so first boot downloads ~2.4 GB rather than compiling for 5–10 minutes;
 subsequent boots are seconds. (Set `NODARO_IMAGE` or use
-`docker compose build` to build from source instead.) You'll see logs from
+`docker compose build` to build from source instead.) Besides `latest`
+(which tracks `main`), every release is also tagged `v<X.Y.Z>` and `v<X.Y>`
+— the version the app sidebar shows — so
+`NODARO_IMAGE=ghcr.io/nodaroai/nodaro-community:v1.23.0` pins a
+reproducible install. You'll see logs from
 Redis and the `nodaro` service interleaving.
 
 When you see:
@@ -419,6 +424,10 @@ docker compose -f docker-compose.community.yml up -d
 
 (Building from source instead? Swap `pull` for `build`.)
 
+Rolling back is pinning the previous version: releases are tagged
+`v<X.Y.Z>` / `v<X.Y>` alongside `latest`, so point `NODARO_IMAGE` at the
+last good tag and `up -d` again.
+
 On the bundled stack, migrations apply **automatically on boot**
 (`RUN_MIGRATIONS_ON_BOOT`, §2c) — there is nothing to run by hand. Only
 when pointing at your own managed Supabase project with boot migrations
@@ -526,6 +535,12 @@ Cloud edition.
 which Zod-validated vars are wrong. Common culprits:
 `SUPABASE_SERVICE_ROLE_KEY` empty, `INTERNAL_ORCHESTRATOR_SECRET` shorter
 than 32 chars.
+
+**`port is already allocated` on `docker compose up`.** Only two host
+ports are published — 3000 (app) and loopback 9001 (MinIO console); Redis
+and the database never bind one. Change the host side of the conflicting
+mapping (`"3001:3000"`) and, for the app port, set `PUBLIC_URL` to match —
+same fix as the [quickstart](./community-edition-quickstart.md).
 
 **Frontend renders, but the editor stays blank or "Loading…" forever.**
 Open the browser console. If you see CORS errors, set `CORS_ORIGIN` to

@@ -7,13 +7,14 @@ Nodaro is a Fastify backend + Vite/React frontend, source-available under the [N
 ## Quickstart
 
 - [Community Edition Quickstart](https://nodaroai.github.io/app.nodaro.ai/community-edition-quickstart.md): self-host Nodaro in 5 steps using Docker Compose
+- [Tutorials](https://nodaroai.github.io/app.nodaro.ai/tutorials.md): the dashboard Tutorials tab — video tutorials plus guided walkthroughs; self-host installs seed a starter set on first boot
 - [Architecture](https://nodaroai.github.io/app.nodaro.ai/architecture.md): system overview — frontend, backend, workers, auth modes, edition tiers
 - [Deployment](https://nodaroai.github.io/app.nodaro.ai/deployment.md): full self-hosting guide with reverse proxy, scaling, backups
 
 ## SDK & CLI
 
 - [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): install `@nodaro/sdk`, three auth modes, error handling, common recipes
-- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 24 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, creatures, pipelines, reduce, promptHelper, apps, developerApps, oauth, voices, media, audio, credits, uploads, library, presets, pickerCatalogs, community)
+- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, and a typed resource class per `/v1` surface (workflows, projects, jobs, executions, models, characters, credits, shots, recast, tutorials, community and the rest — the reference holds the full inventory)
 - [Video models](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-video/generate-video.md): every generate-video provider id with modes, durations, resolutions, credit costs, and the platform default (`seedance-2-fast`, 4s when unspecified)
 - [Image models](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-image/generate-image.md): every generate-image provider id with params and credit costs
 - [OpenAPI 3.1 spec](https://app.nodaro.ai/v1/openapi.json): live machine-readable spec of the automation core (workflows, jobs, node run + discovery, oauth, credit costs) — generate typed clients for any language
