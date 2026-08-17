@@ -1,5 +1,42 @@
 # @nodaro/sdk
 
+## 1.17.0
+
+### Minor Changes
+
+- 6fe2aae: Surface-parity catch-up — every recent platform feature reachable through the SDK:
+
+  - New `client.shots` resource — Cine share → remix records: `create` / `get` / `update` / `delete` over `/v1/shots` (unguessable capability ids, private-by-default visibility, signed-URL rejection documented on the types).
+  - New `client.recast` resource — the authored-script lane (`authoringSkill()`, `validateScript()`, `importScript()` with its required rights attestation) and the run lane (`estimate` / `create` / `get` / `start` / `resolveGate`, including the `clientCapabilities` gate opt-in such as `["sheet-gate"]`). Cloud edition only.
+  - `NodeDescriptor` catches up with what `GET /v1/nodes` actually serves: new optional `maxDurationSec`, `sparseProviders`, `providerResolutions`, `providerResolutionWire`, and `soundtrack` fields.
+
+### Patch Changes
+
+- 8221886: **@nodaro/shared**
+
+  - `resolveEffectiveSourceType` now also remaps aggregate lane handles: a wire leaving `collect` / `group` on `out-image` / `out-video` / `out-audio` / `out-text` resolves to the plain producer of that lane's type (`upload-image` / `upload-video` / `upload-audio` / `list`), so lane pips connect to typed inputs exactly like the equivalent upload node. New export `AGGREGATE_LANE_SOURCE_TYPES`.
+  - New `computeAggregateLanes(nodeId, wiredTypes, buckets, edges)` in the group-aggregation module — the lane set an aggregate node exposes (wired-input types ∪ bucket contents ∪ lanes referenced by outgoing edges).
+  - Reduce strategy registry ("Choose Best"): labels/descriptions rewritten in plain language (`AI picks the best`, `Join into one text`, `First that has content`, `Count them`, `Most common answer`, `Merge JSON objects`); the `pick-best-llm` config schema gains optional `llmModel` (the judge model id from the LLM registry).
+  - New `LlmFeature` `"pick-best-llm"` with an entry in `LLM_FEATURE_DEFAULTS`. Its credit identifiers tier by the judge model like every other LLM feature (`reduce:pick-best-llm[:economy|:premium]`).
+
+  **@nodaro/sdk**
+
+  - `client.reduce` docs: `pick-best-llm` accepts `strategyConfig.llmModel` (judge model; omitted = default; its tier sets the credit price).
+
+- f86c20f: **@nodaro/sdk**
+
+  - `ModelSummary.pricing` is now optional — `GET /v1/models` (and the MCP `list_models` twin) omit per-variant credit pricing on editions without a credit system (community/business), the same principle `/v1/nodes` applies to `creditCost`. JSDoc on `NodeDescriptor.creditCost` and on `workflows.delete()` / `developerApps.delete()` now states the edition behavior and the `NotFoundError` thrown when the id doesn't exist or isn't yours.
+
+  **@nodaro/cli**
+
+  - `nodaro models list` renders `-` in the credits column for models served without pricing (creditless editions) instead of crashing on the missing field.
+
+- Updated dependencies [8221886]
+- Updated dependencies [3792fbb]
+- Updated dependencies [d36034c]
+  - @nodaro/shared@2.6.0
+  - @nodaro/prompts@1.7.1
+
 ## 1.16.0
 
 ### Minor Changes

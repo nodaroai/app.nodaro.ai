@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/sdk",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -41,8 +41,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@nodaro/shared": "^2.4.0",
-    "@nodaro/prompts": "^1.7.0"
+    "@nodaro/shared": "^2.6.0",
+    "@nodaro/prompts": "^1.7.1"
   },
   "peerDependencies": {
     "@supabase/ssr": "^0.12.3",
