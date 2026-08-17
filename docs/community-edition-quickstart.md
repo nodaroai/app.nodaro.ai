@@ -75,6 +75,10 @@ flag the probe never spends anything.
 
 ## 3. Generate for real
 
+The demo isn't the only free material: the dashboard's **Tutorials** tab
+ships pre-populated — a starter set of guided walkthroughs is seeded on
+first boot, and browsing them costs nothing (see [Tutorials](./tutorials.md)).
+
 Viewing the demo is free and works offline. To run nodes yourself you need
 a model provider — until you have one, the dashboard shows a dismissible
 *"This install can't generate yet"* callout with both buttons (Connect

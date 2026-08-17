@@ -127,7 +127,8 @@ export class WorkflowsResource {
     )
   }
 
-  /** Delete a workflow. Returns `{ success: true }`. */
+  /** Delete a workflow. Returns `{ success: true }`. Throws `NotFoundError`
+   *  when the id doesn't exist or isn't yours (the delete is not silent). */
   delete(id: string): Promise<{ success: true }> {
     return this.client.request("DELETE", `/v1/workflows/${encodeURIComponent(id)}`)
   }

@@ -50,8 +50,10 @@ an API endpoint, a webhook target, and an MCP tool — all at the same time.
   after-effects-style composites rendered with [Remotion](https://www.remotion.dev).
 - **Self-hostable in two commands** — `git clone` and `docker compose up` bring
   up the whole stack (database, auth, storage, queues) on your machine, with no
-  cloud accounts and no API keys to start. Bring your own provider key when you
-  want to generate; fair-code, no watermarks, no metering.
+  cloud accounts and no API keys to start. A fresh install seeds a starter set
+  of [guided tutorials](docs/tutorials.md) to learn the editor with. Bring your
+  own provider key when you want to generate; fair-code, no watermarks, no
+  metering.
 
 ## Quickstart
 

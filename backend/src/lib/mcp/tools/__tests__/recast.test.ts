@@ -265,6 +265,36 @@ describe("start_recast", () => {
     expect(calls.some((c) => c.url === "/v1/recast/run-1/start")).toBe(true)
     expect(calls.some((c) => c.url === "/v1/recast/estimate")).toBe(false)
   })
+
+  it("anchor_mode rides estimate AND create; absent sends nothing", async () => {
+    h.workflowsRow = seeded()
+    const { fastify, calls } = stubFastify({
+      "/v1/recast/estimate": () => ({ statusCode: 200, body: { totalCredits: 380, breakdown: {} } }),
+      "/v1/recast": (c) => (c.method === "POST" ? { statusCode: 200, body: { recastId: "run-1" } } : { statusCode: 404, body: {} }),
+      "/v1/workflows/": () => ({ statusCode: 200, body: { data: { id: WF_ID } } }),
+    })
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID, confirm: true, anchor_mode: "none" })
+    // The estimate must price the run that renders: "none" drops the anchor
+    // surcharge, so the flag reaches BOTH hops, same discipline as interactive.
+    const est = calls.find((c) => c.url === "/v1/recast/estimate")!
+    expect((est.payload as Record<string, unknown>).anchorMode).toBe("none")
+    const create = calls.find((c) => c.url === "/v1/recast" && c.method === "POST")!
+    expect((create.payload as Record<string, unknown>).anchorMode).toBe("none")
+  })
+
+  it("without anchor_mode the payloads omit anchorMode (server default rules)", async () => {
+    h.workflowsRow = seeded()
+    const { fastify, calls } = stubFastify({
+      "/v1/recast/estimate": () => ({ statusCode: 200, body: { totalCredits: 420, breakdown: {} } }),
+    })
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID })
+    const est = calls.find((c) => c.url === "/v1/recast/estimate")!
+    expect("anchorMode" in (est.payload as Record<string, unknown>)).toBe(false)
+  })
 })
 
 describe("interactive (P3)", () => {

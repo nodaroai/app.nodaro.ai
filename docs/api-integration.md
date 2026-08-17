@@ -632,7 +632,9 @@ minutes (`Cache-Control: public, max-age=300`). Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
-per-variant credit `pricing`, compact `promptTips`, and the
+per-variant credit `pricing` (Cloud only — like `creditCost` on
+`/v1/nodes`, editions without a credit system omit it), compact
+`promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 

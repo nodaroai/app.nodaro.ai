@@ -47,6 +47,10 @@ Nothing on either view spends credits. **Run tutorial** in the top-right
 clones the workflow into one of your projects, exactly like Clone & Try
 below, and that copy is what you run.
 
+Every walkthrough lives at a shareable `/tutorials/<slug>` URL. The page is
+viewable without signing in — sending someone a link just works; they are
+asked to log in only when they press **Run tutorial**.
+
 ## Clone & Try
 
 Hit **Clone & Try** on any flow tutorial card to copy the workflow into one

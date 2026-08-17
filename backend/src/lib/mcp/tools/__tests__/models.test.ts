@@ -37,6 +37,14 @@ vi.mock("../../../../ee/billing/credits.js", () => ({
   },
 }))
 
+// Mutable edition flag: default matches setup.ts's EDITION=cloud; the
+// pricing-stripping test flips it to model a community/business install.
+let mockHasCredits = true
+vi.mock("../../../config.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../../../config.js")>()
+  return { ...orig, hasCredits: () => mockHasCredits }
+})
+
 const { registerModels } = await import("../models.js")
 const { supabase } = await import("../../../supabase.js")
 
@@ -93,6 +101,36 @@ describe("list_models tool (always available)", () => {
     const text = result.content[0]?.text ?? ""
     expect(text).toContain("\"promptTips\"")
     expect(text).toContain("WITHOUT timestamps") // distinctive seedance tip
+  })
+
+  it("serves per-variant credit pricing on the cloud edition", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "image" })
+    expect(result.content[0]?.text ?? "").toContain("\"pricing\"")
+  })
+
+  it("omits pricing entirely on editions without credits (same principle as /v1/nodes creditCost)", async () => {
+    mockHasCredits = false
+    try {
+      const server = buildServer()
+      registerModels({
+        server,
+        session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+        fastify: Fastify(),
+      })
+      const result = await callTool(server, "list_models", {})
+      expect(result.isError).toBeUndefined()
+      const text = result.content[0]?.text ?? ""
+      expect(text).toContain("\"nano-banana-2\"") // catalog still served
+      expect(text).not.toContain("\"pricing\"")
+    } finally {
+      mockHasCredits = true
+    }
   })
 })
 

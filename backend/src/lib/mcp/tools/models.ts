@@ -28,7 +28,9 @@ export function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
     description: m.description,
     modes: m.modes,
     useCases: m.useCases,
-    pricing: m.pricing,
+    // Credit pricing is a Cloud concept — editions without a credit system
+    // omit it entirely, same principle as /v1/nodes' creditCost (#714).
+    ...(hasCredits() ? { pricing: m.pricing } : {}),
   }
   if (m.featured) out.featured = true
   if (m.features?.length) out.features = m.features
@@ -59,8 +61,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       description:
         "Browse the AI models available on this Nodaro instance. Returns " +
         "nested JSON: per-kind groups, families, and per-model capability sheets " +
-        "(aspect ratios, resolutions, qualities, durations, features, per-variant " +
-        "credit pricing). Includes a `recommendations` array — short 'best for X' " +
+        "(aspect ratios, resolutions, qualities, durations, features, and — on " +
+        "editions with a credit system — per-variant credit pricing). Includes a " +
+        "`recommendations` array — short 'best for X' " +
         "picks Claude can echo back when the user is undecided. Use this BEFORE " +
         "calling generate_image / generate_video / etc. to pick the right model + " +
         "settings for the user's intent.",

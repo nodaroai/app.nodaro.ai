@@ -429,7 +429,8 @@ await client.workflows.update(id, { thumbnailUrl: "https://cdn.example.com/thumb
 delete(id: string): Promise<{ success: true }>
 ```
 
-Deletes a workflow.
+Deletes a workflow. Throws `NotFoundError` when the id doesn't exist or
+isn't yours — the delete is never a silent no-op.
 
 ```ts
 await client.workflows.delete(id)
@@ -780,7 +781,7 @@ Fetches one descriptor by its type slug (e.g. `"generate-image"`,
 
 ```ts
 const { data } = await client.nodes.get("generate-image")
-console.log(data.providers, data.creditCost)
+console.log(data.providers, data.creditCost) // creditCost: Cloud only
 ```
 
 #### `run(type, params?)`
@@ -1006,7 +1007,8 @@ list(opts?: { kind?: "image" | "video" | "audio"; mode?: string; family?: string
 
 `GET /v1/models` → the model catalog grouped by kind and vendor family:
 capability sheets (`modes`, `features`, `aspectRatios`, `resolutions`,
-`durations`), per-variant credit `pricing`, compact `promptTips`, and the
+`durations`), per-variant credit `pricing` (Cloud only — editions without a
+credit system omit the field), compact `promptTips`, and the
 `doctrineCovered` truth flag — `true` only when a sourced per-family prompt
 doctrine exists for the model, so "vendor doctrine" badges can never
 overclaim. The same projection the MCP `list_models` tool serves, so the two
@@ -2409,6 +2411,8 @@ await client.developerApps.update(appId, {
 ```ts
 delete(id: string): Promise<{ success: true }>
 ```
+
+Throws `NotFoundError` when the id doesn't exist or isn't yours.
 
 ```ts
 await client.developerApps.delete(appId)

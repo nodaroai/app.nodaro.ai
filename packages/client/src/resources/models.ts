@@ -11,7 +11,9 @@ export interface ModelSummary {
   description: string
   modes: string[]
   useCases: string[]
-  pricing: Array<{ identifier: string; credits: number; note?: string }>
+  /** Per-variant credit pricing. Cloud only — editions without a credit
+   *  system (community/business) omit the field entirely. */
+  pricing?: Array<{ identifier: string; credits: number; note?: string }>
   featured?: boolean
   features?: string[]
   aspectRatios?: string[]
