@@ -1,5 +1,23 @@
 # @nodaro/shared
 
+## 2.7.0
+
+### Minor Changes
+
+- 01a9716: **@nodaro/shared**
+
+  - Video analysis scenes gain two optional CHRONICLE TIME fields (window and merged layers alike, both enum-validated and congruence-safe for the window decode grammar): `timeOfDay` (`dawn|day|dusk|night|ambiguous`) and `storyJump` (`continuous|same-day|another-day|years-later|unclear`) — the story clock as data, so continuity/variations/keyframes consumers can judge "same look or different" by narrative time first, location second. New exports `VIDEO_ANALYSIS_TIMES_OF_DAY`, `VIDEO_ANALYSIS_STORY_JUMPS`. Absent on every pre-2.6.0 analysis by design.
+  - New `inferMusicVideo(analysis)` — deterministic, throw-proof music-video inference over an analysis' scenes (≥4 scenes, ≥80% carrying a music layer, at least one non-negated sung-vocal evidence). Shared because the recast server's `music.mode` derivation and the client's prep pricing + generate-time mode guard must agree byte-for-byte; callers use `flag === true || inferMusicVideo(analysis)`.
+
+- 034ac61: **@nodaro/shared**
+
+  - New Grok Imagine Image 2.0 model ids in `MODEL_CATALOG` and the provider enums: `grok-2` (t2i, in `IMAGE_GEN_PROVIDERS`), `grok-2-edit` and `grok-2-segment` (in `IMAGE_EDIT_PROVIDERS`). The edit and segment ops reference a prior grok-2 generation's KIE task id (the generation job's `kieTaskId` output) instead of an image URL; `grok-2-edit` optionally takes 1-based segment `maskIndexes` for region-targeted edits, and `grok-2-segment` is free.
+  - New export `TASK_CHAINED_EDIT_PROVIDERS` — the set of edit providers that take a prior Grok task id instead of an image URL (`grok-upscale`, `grok-2-edit`, `grok-2-segment`); single source of truth for the route/worker/MCP taskId-vs-imageUrl branching.
+
+  **@nodaro/prompts**
+
+  - Prompt-wizard image capabilities gain a `grok-2` entry.
+
 ## 2.6.0
 
 ### Minor Changes
