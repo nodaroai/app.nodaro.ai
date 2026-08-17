@@ -614,16 +614,19 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Seedance 2.5 — docs.kie.ai/market/bytedance/seedance-2-5
   // Next generation, NOT a tier of the 2.0 ladder. Per-second pricing:
-  // 480p no-ref 28 cr/s, 480p ref 17 cr/s, 720p no-ref 63 cr/s, 720p ref 38 cr/s.
+  // 480p no-ref 28 cr/s, 480p ref 17 cr/s; 720p 63 / 38; 1080p 114 / 68.5.
   // Per-second composites in credits.ts are authoritative.
   //
-  // Live-probe findings vs. the published schema (api.kie.ai, 2026-08-08):
-  //  - resolution is 480p/720p ONLY. 1080p / 4k / 2k / 1440p are rejected with
-  //    the same "not within the range of allowed options" as a nonsense value,
-  //    so ByteDance's native 4K is NOT exposed through KIE. Do not add tiers
+  // Live-probe findings vs. the published schema (api.kie.ai, 2026-08-08;
+  // re-probed 2026-08-17 for the "Seedance 2.5 now supports 1080P" release):
+  //  - resolution is 480p/720p/1080p (1080p accepted since 2026-08-17; it was
+  //    rejected on 2026-08-08). 4k / 2k / 1440p are still rejected with the
+  //    same "not within the range of allowed options" as a nonsense value, so
+  //    ByteDance's native 4K is NOT exposed through KIE. Do not add tiers
   //    here without re-probing.
-  //  - duration accepts 1-30; 31+ is rejected, so the "ultra-long 180s" mode is
-  //    likewise not exposed. We expose 4-30 (the documented floor is 4).
+  //  - duration accepts 1-30; 31+ is rejected (re-confirmed 2026-08-17), so
+  //    the "ultra-long 180s" mode is likewise not exposed. We expose 4-30
+  //    (the documented floor is 4).
   //  - a start frame forces aspect_ratio "adaptive" — see
   //    FRAME_MODE_ADAPTIVE_ONLY_ASPECT, applied in video.ts.
   "seedance-2-5": {
@@ -970,9 +973,9 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Seedance 2.5 T2V — docs.kie.ai/market/bytedance/seedance-2-5
-  // 480p/720p only and 4-30s — both probe-verified against KIE 2026-08-08; see
-  // the i2v entry above for the full findings. The adaptive-aspect restriction
-  // is frame-mode only, so t2v keeps the full ratio enum.
+  // 480p/720p/1080p (1080p since the 2026-08-17 re-probe) and 4-30s — see the
+  // i2v entry above for the full probe findings. The adaptive-aspect
+  // restriction is frame-mode only, so t2v keeps the full ratio enum.
   "seedance-2-5": {
     model: "bytedance/seedance-2-5",
     credits: 126,

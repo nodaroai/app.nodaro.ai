@@ -61,7 +61,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
 | Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
-| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5` | T2V, I2V, reference (S2) | S2: 4–15s; **`seedance-2-5`: 4–30s in one shot**. Aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** — **`adaptive` is the default** (output matches the wired input; was `16:9`); on `seedance-2-5` a wired start frame forces `adaptive` (any explicit ratio is rejected, so the frame sets the ratio). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` **480p / 720p only** (no 1080p, no 4K); `seedance-2-mini` **480p / 720p only**; `seedance-2-5` **480p / 720p only**. Refs: up to 9 image + 3 video + 3 audio (**`seedance-2-5`: 30 / 10 / 10**) |
+| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5` | T2V, I2V, reference (S2) | S2: 4–15s; **`seedance-2-5`: 4–30s in one shot**. Aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** — **`adaptive` is the default** (output matches the wired input; was `16:9`); on `seedance-2-5` a wired start frame forces `adaptive` (any explicit ratio is rejected, so the frame sets the ratio). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` **480p / 720p only** (no 1080p, no 4K); `seedance-2-mini` **480p / 720p only**; `seedance-2-5` **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). Refs: up to 9 image + 3 video + 3 audio (**`seedance-2-5`: 30 / 10 / 10**) |
 | MiniMax Hailuo 3 | `minimax-h3` | T2V, I2V (first/last frame), reference | 4–15s (any second, default 6); resolution **2K (default) / 768P** (768P is the cheaper per-second rate); aspect 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 + **adaptive** (default; pure T2V requires a concrete ratio and renders 16:9 when left on adaptive). Up to 9 image + 3 video + 3 audio refs; audio always on |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
@@ -216,7 +216,10 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `seedance-2-5` | 8s | 480p | i2v | no ref | 560 |
 | `seedance-2-5` | 8s | 720p | i2v | no ref | 1260 |
 | `seedance-2-5` | 8s | 720p | i2v | with ref | 760 |
+| `seedance-2-5` | 8s | 1080p | i2v | no ref | 2280 |
+| `seedance-2-5` | 8s | 1080p | i2v | with ref | 1370 |
 | `seedance-2-5` | 30s | 720p | i2v | no ref | 4730 |
+| `seedance-2-5` | 30s | 1080p | i2v | no ref | 8550 |
 | `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 300 |
 | `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 510 |
 | `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 950 |
@@ -243,10 +246,11 @@ So at 8s: 1080p = `ceil(102×8/4) × 10` = **2040** no-ref / `ceil(62×8/4) × 1
 
 | Resolution | Per-sec (no ref) | Per-sec (with ref) |
 |---|---:|---:|
+| 1080p | 114 | 68.5 |
 | 720p | 63 | 38 |
 | 480p | 28 | 17 |
 
-So at 8s: 720p = `ceil(63×8/4) × 10` = **1260** no-ref / `ceil(38×8/4) × 10` = **760** with-ref; 480p = **560** / **340**. At its 30s maximum: 720p = `ceil(63×30/4) × 10` = **4730** no-ref / **2850** with-ref; 480p = **2100** / **1280**. Seedance 2.5 has **no 1080p or 4K SKU** — for those, use the full `seedance-2`.
+So at 8s: 1080p = `ceil(114×8/4) × 10` = **2280** no-ref / `ceil(68.5×8/4) × 10` = **1370** with-ref; 720p = **1260** / **760**; 480p = **560** / **340**. At its 30s maximum: 1080p = `ceil(114×30/4) × 10` = **8550** no-ref / **5140** with-ref; 720p = **4730** / **2850**; 480p = **2100** / **1280**. The 1080p tier arrived on KIE 2026-08-17; Seedance 2.5 still has **no 4K SKU** — for 4K, use the full `seedance-2`.
 
 **MiniMax Hailuo 3** (`minimax-h3`) is per-second priced at two resolution rates. The composite is `minimax-h3:<N>s` (N = 4–15) for **2K** — the default, and what any non-768P resolution value renders and bills as — and `minimax-h3:<N>s:768p` for **768P**, the cheaper tier. Credits = `ceil(rate × seconds / 4) × 10`, with rate = 36.5 KIE cr/s @2K and 22.5 @768P. Examples: @2K 4s = 370, 6s = 550 (the default duration), 8s = 730, 15s = 1370; @768P 4s = 230, 6s = 340, 8s = 450, 15s = 850. There is no `-ref` dimension. Two extra billing dimensions are reserved dynamically on top of the composite:
 

@@ -477,15 +477,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 1080p — authoritative KIE rate is /s (no video) / 62 (with video)
   // ~2.49× the 720p rate (the original 1.5× estimate under-billed ~40%; KIE pricing
   // page verified 2026-06-25).
-  "seedance-2:4s:1080p": 1020,
-  "seedance-2:8s:1080p": 2040,
-  "seedance-2:12s:1080p": 3060,
-  "seedance-2:15s:1080p": 3830,   // → ceil
+  "seedance-2:4s:1080p":  1020,
+  "seedance-2:8s:1080p":  2040,
+  "seedance-2:12s:1080p":  3060,
+  "seedance-2:15s:1080p":  3830,   // → ceil
   // 1080p with video ref (/s)
-  "seedance-2:4s:1080p-ref": 620,
-  "seedance-2:8s:1080p-ref": 1240,
-  "seedance-2:12s:1080p-ref": 1860,
-  "seedance-2:15s:1080p-ref": 2330, // → ceil
+  "seedance-2:4s:1080p-ref":   620,
+  "seedance-2:8s:1080p-ref":  1240,
+  "seedance-2:12s:1080p-ref":  1860,
+  "seedance-2:15s:1080p-ref":  2330, // → ceil
   // 4K (/s no video / 128 with video) — full seedance-2 only.
   "seedance-2:4s:4k": 2080,
   "seedance-2:8s:4k": 4160,
@@ -544,7 +544,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-mini:15s:720p-ref": 470,
   // ── Seedance 2.5 — per-second billing, resolution × video-ref, 4-30s ──
   // KIE rates (kie.ai/model/bytedance/seedance-2-5, 2026-08-08), KIE cr/s:
-  //   480p 28 no-video-ref / 17 with-video-ref; 720p 63 / 38.
+  //   480p 28 no-video-ref / 17 with-video-ref; 720p 63 / 38; 1080p 114 / 68.5
+  //   (1080p tier added 2026-08-17 — probe-verified; 4k/2k/1440p still rejected).
   // Nodaro = ceil(rate x duration / 4) x 10 — the same at-cost conversion the
   // rest of the Seedance 2 family and minimax-h3 use.
   //
@@ -673,6 +674,62 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-5:28s:720p-ref":  2660,
   "seedance-2-5:29s:720p-ref":  2760,
   "seedance-2-5:30s:720p-ref":  2850,
+  // 1080p no video ref (/s) — added 2026-08-17 (KIE 1080P release)
+  "seedance-2-5:4s:1080p":  1140,
+  "seedance-2-5:5s:1080p":  1430,
+  "seedance-2-5:6s:1080p":  1710,
+  "seedance-2-5:7s:1080p":  2000,
+  "seedance-2-5:8s:1080p":  2280,
+  "seedance-2-5:9s:1080p":  2570,
+  "seedance-2-5:10s:1080p":  2850,
+  "seedance-2-5:11s:1080p":  3140,
+  "seedance-2-5:12s:1080p":  3420,
+  "seedance-2-5:13s:1080p":  3710,
+  "seedance-2-5:14s:1080p":  3990,
+  "seedance-2-5:15s:1080p":  4280,
+  "seedance-2-5:16s:1080p":  4560,
+  "seedance-2-5:17s:1080p":  4850,
+  "seedance-2-5:18s:1080p":  5130,
+  "seedance-2-5:19s:1080p":  5420,
+  "seedance-2-5:20s:1080p":  5700,
+  "seedance-2-5:21s:1080p":  5990,
+  "seedance-2-5:22s:1080p":  6270,
+  "seedance-2-5:23s:1080p":  6560,
+  "seedance-2-5:24s:1080p":  6840,
+  "seedance-2-5:25s:1080p":  7130,
+  "seedance-2-5:26s:1080p":  7410,
+  "seedance-2-5:27s:1080p":  7700,
+  "seedance-2-5:28s:1080p":  7980,
+  "seedance-2-5:29s:1080p":  8270,
+  "seedance-2-5:30s:1080p":  8550,
+  // 1080p with video ref (/s)
+  "seedance-2-5:4s:1080p-ref":   690,
+  "seedance-2-5:5s:1080p-ref":   860,
+  "seedance-2-5:6s:1080p-ref":  1030,
+  "seedance-2-5:7s:1080p-ref":  1200,
+  "seedance-2-5:8s:1080p-ref":  1370,
+  "seedance-2-5:9s:1080p-ref":  1550,
+  "seedance-2-5:10s:1080p-ref":  1720,
+  "seedance-2-5:11s:1080p-ref":  1890,
+  "seedance-2-5:12s:1080p-ref":  2060,
+  "seedance-2-5:13s:1080p-ref":  2230,
+  "seedance-2-5:14s:1080p-ref":  2400,
+  "seedance-2-5:15s:1080p-ref":  2570,
+  "seedance-2-5:16s:1080p-ref":  2740,
+  "seedance-2-5:17s:1080p-ref":  2920,
+  "seedance-2-5:18s:1080p-ref":  3090,
+  "seedance-2-5:19s:1080p-ref":  3260,
+  "seedance-2-5:20s:1080p-ref":  3430,
+  "seedance-2-5:21s:1080p-ref":  3600,
+  "seedance-2-5:22s:1080p-ref":  3770,
+  "seedance-2-5:23s:1080p-ref":  3940,
+  "seedance-2-5:24s:1080p-ref":  4110,
+  "seedance-2-5:25s:1080p-ref":  4290,
+  "seedance-2-5:26s:1080p-ref":  4460,
+  "seedance-2-5:27s:1080p-ref":  4630,
+  "seedance-2-5:28s:1080p-ref":  4800,
+  "seedance-2-5:29s:1080p-ref":  4970,
+  "seedance-2-5:30s:1080p-ref":  5140,
   // ── MiniMax Hailuo 3 — per-second billing at two resolution rates ──
   // KIE 36.5 cr/s @2K (default) and 22.5 cr/s @768P (lever added 2026-08-03);
   // Nodaro = ceil(rate × duration / 4) × 10 (at cost, like Seedance-2). One
@@ -794,10 +851,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-extend:8s:720p": 530,
   "seedance-2-extend:12s:720p": 780,
   "seedance-2-extend:15s:720p": 970,
-  "seedance-2-extend:4s:1080p": 410,
-  "seedance-2-extend:8s:1080p": 780,
-  "seedance-2-extend:12s:1080p": 1160,
-  "seedance-2-extend:15s:1080p": 1440,
+  "seedance-2-extend:4s:1080p":   410,
+  "seedance-2-extend:8s:1080p":   780,
+  "seedance-2-extend:12s:1080p":  1160,
+  "seedance-2-extend:15s:1080p":  1440,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -854,33 +911,33 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "happyhorse:12s:720p": 680, "happyhorse:13s:720p": 740, "happyhorse:14s:720p": 790,
   "happyhorse:15s:720p": 850,
   // 1080p — ceil(29 × s ÷ 4)
-  "happyhorse:3s:1080p": 220, "happyhorse:4s:1080p": 290, "happyhorse:5s:1080p": 370,
-  "happyhorse:6s:1080p": 440, "happyhorse:7s:1080p": 510, "happyhorse:8s:1080p": 580,
-  "happyhorse:9s:1080p": 660, "happyhorse:10s:1080p": 730, "happyhorse:11s:1080p": 800,
-  "happyhorse:12s:1080p": 870, "happyhorse:13s:1080p": 950, "happyhorse:14s:1080p": 1020,
-  "happyhorse:15s:1080p": 1090,
+  "happyhorse:3s:1080p":   220, "happyhorse:4s:1080p": 290, "happyhorse:5s:1080p": 370,
+  "happyhorse:6s:1080p":   440, "happyhorse:7s:1080p": 510, "happyhorse:8s:1080p": 580,
+  "happyhorse:9s:1080p":   660, "happyhorse:10s:1080p": 730, "happyhorse:11s:1080p": 800,
+  "happyhorse:12s:1080p":   870, "happyhorse:13s:1080p": 950, "happyhorse:14s:1080p": 1020,
+  "happyhorse:15s:1080p":  1090,
   "happyhorse-i2v": 282,    // (5s 720p fallback)
   "happyhorse-i2v:3s:720p": 170, "happyhorse-i2v:4s:720p": 230, "happyhorse-i2v:5s:720p": 290,
   "happyhorse-i2v:6s:720p": 340, "happyhorse-i2v:7s:720p": 400, "happyhorse-i2v:8s:720p": 450,
   "happyhorse-i2v:9s:720p": 510, "happyhorse-i2v:10s:720p": 570, "happyhorse-i2v:11s:720p": 620,
   "happyhorse-i2v:12s:720p": 680, "happyhorse-i2v:13s:720p": 740, "happyhorse-i2v:14s:720p": 790,
   "happyhorse-i2v:15s:720p": 850,
-  "happyhorse-i2v:3s:1080p": 220, "happyhorse-i2v:4s:1080p": 290, "happyhorse-i2v:5s:1080p": 370,
-  "happyhorse-i2v:6s:1080p": 440, "happyhorse-i2v:7s:1080p": 510, "happyhorse-i2v:8s:1080p": 580,
-  "happyhorse-i2v:9s:1080p": 660, "happyhorse-i2v:10s:1080p": 730, "happyhorse-i2v:11s:1080p": 800,
-  "happyhorse-i2v:12s:1080p": 870, "happyhorse-i2v:13s:1080p": 950, "happyhorse-i2v:14s:1080p": 1020,
-  "happyhorse-i2v:15s:1080p": 1090,
+  "happyhorse-i2v:3s:1080p":   220, "happyhorse-i2v:4s:1080p": 290, "happyhorse-i2v:5s:1080p": 370,
+  "happyhorse-i2v:6s:1080p":   440, "happyhorse-i2v:7s:1080p": 510, "happyhorse-i2v:8s:1080p": 580,
+  "happyhorse-i2v:9s:1080p":   660, "happyhorse-i2v:10s:1080p": 730, "happyhorse-i2v:11s:1080p": 800,
+  "happyhorse-i2v:12s:1080p":   870, "happyhorse-i2v:13s:1080p": 950, "happyhorse-i2v:14s:1080p": 1020,
+  "happyhorse-i2v:15s:1080p":  1090,
   "happyhorse-ref2v": 282,  // (5s 720p fallback)
   "happyhorse-ref2v:3s:720p": 170, "happyhorse-ref2v:4s:720p": 230, "happyhorse-ref2v:5s:720p": 290,
   "happyhorse-ref2v:6s:720p": 340, "happyhorse-ref2v:7s:720p": 400, "happyhorse-ref2v:8s:720p": 450,
   "happyhorse-ref2v:9s:720p": 510, "happyhorse-ref2v:10s:720p": 570, "happyhorse-ref2v:11s:720p": 620,
   "happyhorse-ref2v:12s:720p": 680, "happyhorse-ref2v:13s:720p": 740, "happyhorse-ref2v:14s:720p": 790,
   "happyhorse-ref2v:15s:720p": 850,
-  "happyhorse-ref2v:3s:1080p": 220, "happyhorse-ref2v:4s:1080p": 290, "happyhorse-ref2v:5s:1080p": 370,
-  "happyhorse-ref2v:6s:1080p": 440, "happyhorse-ref2v:7s:1080p": 510, "happyhorse-ref2v:8s:1080p": 580,
-  "happyhorse-ref2v:9s:1080p": 660, "happyhorse-ref2v:10s:1080p": 730, "happyhorse-ref2v:11s:1080p": 800,
-  "happyhorse-ref2v:12s:1080p": 870, "happyhorse-ref2v:13s:1080p": 950, "happyhorse-ref2v:14s:1080p": 1020,
-  "happyhorse-ref2v:15s:1080p": 1090,
+  "happyhorse-ref2v:3s:1080p":   220, "happyhorse-ref2v:4s:1080p": 290, "happyhorse-ref2v:5s:1080p": 370,
+  "happyhorse-ref2v:6s:1080p":   440, "happyhorse-ref2v:7s:1080p": 510, "happyhorse-ref2v:8s:1080p": 580,
+  "happyhorse-ref2v:9s:1080p":   660, "happyhorse-ref2v:10s:1080p": 730, "happyhorse-ref2v:11s:1080p": 800,
+  "happyhorse-ref2v:12s:1080p":   870, "happyhorse-ref2v:13s:1080p": 950, "happyhorse-ref2v:14s:1080p": 1020,
+  "happyhorse-ref2v:15s:1080p":  1090,
   // HappyHorse Edit stays on the 1.0 endpoint (1.1 has no video-edit mode).
   // KIE bills per second (published: 28 cr/s @720p, 48 cr/s @1080p) but the
   // input clip's duration isn't known at reservation time (the v2v route has
