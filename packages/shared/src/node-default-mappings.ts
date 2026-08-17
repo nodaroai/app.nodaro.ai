@@ -184,8 +184,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "seedance-2":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "seedance-2-fast":     { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
   "seedance-2-mini":     { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
-  // Seedance 2.5 tops out at 720p on KIE (1080p/4k probe-rejected 2026-08-08).
-  "seedance-2-5":        { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
+  // Seedance 2.5 spans 480p/720p/1080p on KIE (1080p accepted since the
+  // 2026-08-17 re-probe; 4k still rejected), so each quality rung gets its own tier.
+  "seedance-2-5":        { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

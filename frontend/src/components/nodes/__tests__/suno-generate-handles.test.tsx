@@ -133,7 +133,7 @@ describe("suno-generate on-node Edit menu", () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 })
     renderNode({ advancedOpen: true })
 
-    await user.click(screen.getByRole("button", { name: /edit/i }))
+    await user.click(screen.getByRole("button", { name: "Edit ▾" }))
     // Scope to the menuitem role: the field PIP labels (e.g. "Lyrics") render
     // the same text, so a bare findByText would be ambiguous.
     await user.click(await screen.findByRole("menuitem", { name: "Lyrics" }))
@@ -153,7 +153,7 @@ describe("suno-generate on-node Edit menu", () => {
       const user = userEvent.setup({ pointerEventsCheck: 0 })
       renderNode({ advancedOpen: true })
 
-      await user.click(screen.getByRole("button", { name: /edit/i }))
+      await user.click(screen.getByRole("button", { name: "Edit ▾" }))
       const items = await screen.findAllByRole("menuitem")
       // Prompt is prepended → it is the first item; the 4 secondary items stay.
       expect(items[0]).toHaveTextContent("Prompt")

@@ -13,6 +13,7 @@ import {
 } from "../../../providers/video/ffmpeg-utils.js"
 import { pickTargetResolution } from "../../../providers/video/combine-videos.js"
 import { uploadFileToR2 } from "../../../lib/storage.js"
+import { insertInternalJob } from "../../../lib/insert-job.js"
 import { settledOrThrow } from "../../../lib/settled-or-throw.js"
 import {
   commitReservedCreditsForJob,
@@ -139,9 +140,9 @@ export async function pipelineFinalMerge(
 
   // 1. Create the jobs row + reserve credits BEFORE doing FFmpeg work. Mirrors
   //    the pattern in `_run-worker-job.ts` (reserve → work → commit/refund).
-  const { data: job, error: insertErr } = await supabase
-    .from("jobs")
-    .insert({
+  const { data: job, error: insertErr } = await insertInternalJob(
+    "pipeline:final-merge",
+    {
       user_id: userId,
       status: "pending",
       input_data: {
@@ -150,10 +151,11 @@ export async function pipelineFinalMerge(
         musicEnabled: !!musicAssetUrl,
         narrationEnabled: !!narrationAssetUrl,
       },
+      job_type: "pipeline-final-merge",
       pipeline_id: pipelineId,
-    })
-    .select("id")
-    .single()
+    },
+    { client: supabase },
+  )
   if (insertErr || !job?.id) {
     throw new Error(
       `Failed to create pipeline-final-merge job: ${insertErr?.message ?? "no id returned"}`,

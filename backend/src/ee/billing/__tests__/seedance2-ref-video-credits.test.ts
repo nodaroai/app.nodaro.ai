@@ -16,4 +16,10 @@ describe("seedance2RefVideoBaseCredits", () => {
     const mini720 = seedance2RefVideoBaseCredits({ provider: "seedance-2-mini", resolution: "720p", outputDurationSec: 8, inputVideoDurationSec: 0 })
     expect(mini).toBe(mini720)
   })
+  it("seedance-2-5 1080p (2026-08-17 tier) per-sec base = 1370/8: 8s out + 5s in = ceil(171.25 × 13) = 2227", () => {
+    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 5 })).toBe(2227)
+  })
+  it("seedance-2-5 1080p no input video → equals the plain -ref composite (8s = 1370)", () => {
+    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 0 })).toBe(1370)
+  })
 })

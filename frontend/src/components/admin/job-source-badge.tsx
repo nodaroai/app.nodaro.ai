@@ -44,6 +44,12 @@ const LABEL: Record<string, string> = {
 export interface JobSourceBadgeProps {
   source: string | null | undefined
   sourceDetail?: string | null
+  /** Resolved display name when `source === "app"` — `sourceDetail` stores the
+   *  developer-app's UUID (it is a query key elsewhere, so the stored value
+   *  never becomes a name). When present it replaces the raw id as the visible
+   *  detail; the id stays in the hover title. Null/undefined (app deleted, or
+   *  name not resolved) falls back to showing the id. */
+  appName?: string | null
   /** Set when the job ran inside an orchestrated workflow. Orthogonal to
    *  `source` — a workflow run still has an originating caller — so it renders
    *  as a second badge rather than replacing the first. */
@@ -51,34 +57,44 @@ export interface JobSourceBadgeProps {
   className?: string
 }
 
-export function JobSourceBadge({ source, sourceDetail, workflowExecutionId, className = "" }: JobSourceBadgeProps) {
+export function JobSourceBadge({ source, sourceDetail, appName, workflowExecutionId, className = "" }: JobSourceBadgeProps) {
   const badges = []
 
   if (source) {
     const label = LABEL[source] ?? source
+    const visibleDetail = (source === "app" && appName) || sourceDetail
     badges.push(
       <Badge
         key="source"
         variant="outline"
         className={`text-xs ${TONE[source] ?? ""}`}
         // Full detail on hover: the visible text is truncated for table density,
-        // but an operator chasing a specific integration needs the whole value.
-        title={sourceDetail ? `${label} · ${sourceDetail}` : label}
+        // but an operator chasing a specific integration needs the whole value —
+        // for app jobs that means the app id even when the name is shown.
+        title={
+          source === "app" && appName && sourceDetail
+            ? `${label} · ${appName} · ${sourceDetail}`
+            : sourceDetail
+              ? `${label} · ${sourceDetail}`
+              : label
+        }
       >
         {label}
-        {sourceDetail && (
+        {visibleDetail && (
           <span className="ml-1 font-normal opacity-70 max-w-[14ch] truncate inline-block align-bottom">
-            {sourceDetail}
+            {visibleDetail}
           </span>
         )}
       </Badge>,
     )
   } else {
-    // Rows predating migration 282 whose origin could not be inferred. Shown as
-    // an explicit em-dash rather than a guess — "unknown" is a usable answer,
+    // Origin never recorded: the row predates migration 282, or was written by
+    // an internal path from before provenance stamping was enforced everywhere
+    // (the no-direct-job-insert guard now covers all of src/). Shown as an
+    // explicit em-dash rather than a guess — "unknown" is a usable answer,
     // a wrong label is not.
     badges.push(
-      <span key="none" className="text-xs text-muted-foreground" title="Predates source tracking (migration 282)">
+      <span key="none" className="text-xs text-muted-foreground" title="No source recorded (row predates source stamping on this path)">
         —
       </span>,
     )

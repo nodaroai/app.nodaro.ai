@@ -84,6 +84,32 @@ export async function insertJob<T = { id: string }>(
 }
 
 /**
+ * Insert for INTERNAL creators — pipeline services, workers, crons — that have
+ * no FastifyRequest to derive provenance from. They still must say who they
+ * are: a row with `source: "internal"` and a named creator beats the null the
+ * admin table can only render as "—", which reads as data loss (and was
+ * reported as exactly that — see the pipeline stages and meterSyncLlm).
+ * `sourceDetail` is required on purpose: "internal" alone answers nothing.
+ *
+ * Caller-supplied columns win, same contract as `withJobProvenance` — a
+ * creator that DOES know the originating surface may override `source`.
+ * `opts.client` exists for call sites that operate on an injected Supabase
+ * client (the pipeline services take one as an argument for testability).
+ */
+export async function insertInternalJob<T = { id: string }>(
+  sourceDetail: string,
+  row: Record<string, unknown>,
+  opts: { selectColumns?: string; client?: typeof supabase } = {},
+): Promise<InsertJobResult<T>> {
+  const { data, error } = await (opts.client ?? supabase)
+    .from("jobs")
+    .insert({ source: "internal", source_detail: sourceDetail, ...row })
+    .select(opts.selectColumns ?? "id")
+    .single()
+  return (error ? { data: null, error } : { data: data as T, error: null }) as InsertJobResult<T>
+}
+
+/**
  * Insert many job rows in one statement (variants, per-segment children),
  * stamped with the same request provenance.
  */

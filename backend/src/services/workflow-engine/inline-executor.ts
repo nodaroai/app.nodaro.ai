@@ -12,6 +12,7 @@ import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js
 import { getNodeOutput } from "./input-resolver.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 import { supabase } from "../../lib/supabase.js"
+import { insertInternalJob } from "../../lib/insert-job.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 
@@ -909,20 +910,17 @@ export async function executeWebhookOutput(
   // unit-test callers may omit ctx and skip the DB round-trip.
   let jobId: string | undefined
   if (ctx?.userId) {
-    const { data: job } = await supabase
-      .from("jobs")
-      .insert({
-        workflow_id: null,
-        workflow_execution_id: ctx.executionId,
-        user_id: ctx.userId,
-        status: "pending",
-        provider: "webhook-output",
-        // `node_id` lets the reconcile cron map this row back to its node
-        // when the orchestrator dies before persisting node_states[X].jobId.
-        input_data: { url, payload, type: "webhook-output", node_id: node.id },
-      })
-      .select("id")
-      .single()
+    const { data: job } = await insertInternalJob("orchestrator", {
+      workflow_id: null,
+      workflow_execution_id: ctx.executionId,
+      user_id: ctx.userId,
+      status: "pending",
+      provider: "webhook-output",
+      job_type: "webhook-output",
+      // `node_id` lets the reconcile cron map this row back to its node
+      // when the orchestrator dies before persisting node_states[X].jobId.
+      input_data: { url, payload, type: "webhook-output", node_id: node.id },
+    })
     jobId = job?.id
     if (jobId) ctx.onJobCreated?.(node.id, jobId)
   }

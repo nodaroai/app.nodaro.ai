@@ -52,6 +52,14 @@ function formatDateTime(dateStr: string | null): string {
   return new Date(dateStr).toLocaleString()
 }
 
+/** Older insert paths never set the job_type column; the type still lives in
+ *  input_data.type — show that rather than a dash. */
+function jobTypeLabel(job: AdminJob): string | null {
+  if (job.job_type) return job.job_type
+  const t = job.input_data?.type
+  return typeof t === "string" ? t : null
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -84,8 +92,8 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
             <CopyButton text={job.id} />
             <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
           </DialogTitle>
-          {job.job_type && (
-            <p className="text-sm text-muted-foreground">{job.job_type}</p>
+          {jobTypeLabel(job) && (
+            <p className="text-sm text-muted-foreground">{jobTypeLabel(job)}</p>
           )}
         </DialogHeader>
 
@@ -143,7 +151,7 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
           <div className="col-span-2">
             <span className="text-muted-foreground">Source</span>
             <p>
-              <JobSourceBadge source={job.source} sourceDetail={job.source_detail} />
+              <JobSourceBadge source={job.source} sourceDetail={job.source_detail} appName={job.source_app_name} />
               {job.workflow_execution_id && (
                 <span className="ml-2">Workflow Execution <span className="font-mono text-xs text-muted-foreground">({job.workflow_execution_id.slice(0, 8)})</span></span>
               )}
@@ -312,7 +320,7 @@ export default function AdminJobsPage() {
                 <td className="px-3 py-2">
                   <Badge variant={statusVariant(job.status)} className="text-xs">{job.status}</Badge>
                 </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{job.job_type ?? "-"}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{jobTypeLabel(job) ?? "-"}</td>
                 <td className="px-3 py-2 text-xs max-w-[140px] truncate" title={job.user_email}>{job.user_email}</td>
                 <td className="px-3 py-2 text-xs max-w-[120px] truncate">
                   {job.workflow_id ? (
@@ -330,6 +338,7 @@ export default function AdminJobsPage() {
                   <JobSourceBadge
                     source={job.source}
                     sourceDetail={job.source_detail}
+                    appName={job.source_app_name}
                     workflowExecutionId={job.workflow_execution_id}
                   />
                 </td>

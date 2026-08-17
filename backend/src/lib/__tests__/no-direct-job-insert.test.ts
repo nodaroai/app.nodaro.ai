@@ -8,21 +8,28 @@
  * new route had to remember it, and nothing anywhere reported the gap. The same
  * would happen to `source` / `source_detail` within a few features.
  *
- * So the rule is mechanical: a route that hand-rolls the insert fails this
+ * So the rule is mechanical: a file that hand-rolls the insert fails this
  * test, with the fix in the message.
  *
- * Scope is `src/routes/` only. Workers, the orchestrator and reconcile paths
- * legitimately insert without a FastifyRequest to derive provenance from — they
- * are acting on behalf of an earlier request whose surface is already recorded
- * on the parent row, and inventing a source for them would be worse than
- * leaving it null.
+ * Scope is ALL of `src/` (originally `src/routes/` only). Workers, pipelines
+ * and the orchestrator have no FastifyRequest to derive provenance from, but
+ * "no request" never meant "nothing to say": they use `insertInternalJob`,
+ * which stamps `source: "internal"` plus a named creator. The null rows the
+ * old scope permitted surfaced in the admin Jobs table as "—" and were
+ * reported as missing data (meterSyncLlm, the pipeline services, the
+ * orchestrator's per-node insert — all fixed when the scope widened).
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join, dirname, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const ROUTES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "routes")
+const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
+const ROUTES_DIR = join(SRC_DIR, "routes")
+
+/** The one file allowed to touch `.from("jobs").insert(` — the helpers live
+ *  there. Everything else goes through them. */
+const ALLOWLIST = new Set(["lib/insert-job.ts"])
 
 function tsFiles(dir: string): string[] {
   const out: string[] = []
@@ -40,33 +47,36 @@ function tsFiles(dir: string): string[] {
  *  untouched by this rule and must not match. */
 const DIRECT_INSERT = /\.from\(\s*["']jobs["']\s*\)\s*\.insert\s*\(/
 
-describe("routes create jobs through insertJob", () => {
-  const files = tsFiles(ROUTES_DIR)
+describe("all job inserts go through insert-job.ts", () => {
+  const files = tsFiles(SRC_DIR)
 
-  it("finds route files to check (the guard is wired to something)", () => {
-    expect(files.length).toBeGreaterThan(50)
+  it("finds source files to check (the guard is wired to something)", () => {
+    expect(files.length).toBeGreaterThan(200)
   })
 
-  it("no route inserts into jobs directly", () => {
+  it("no file inserts into jobs directly", () => {
     const offenders = files
-      .filter((f) => DIRECT_INSERT.test(readFileSync(f, "utf8")))
-      .map((f) => relative(ROUTES_DIR, f))
+      .map((f) => relative(SRC_DIR, f))
+      .filter((rel) => !ALLOWLIST.has(rel))
+      .filter((rel) => DIRECT_INSERT.test(readFileSync(join(SRC_DIR, rel), "utf8")))
 
     expect(
       offenders,
       offenders.length === 0
         ? ""
-        : `These routes insert into "jobs" directly, so their rows carry no source/source_detail ` +
-          `and are invisible in the admin provenance view:\n` +
-          offenders.map((o) => `  - routes/${o}`).join("\n") +
-          `\n\nUse insertJob(req, row) from lib/insert-job.js — it returns the same ` +
-          `{ data, error } shape, so only the call changes.`,
+        : `These files insert into "jobs" directly, so their rows carry no source/source_detail ` +
+          `and render as "—" in the admin provenance view:\n` +
+          offenders.map((o) => `  - src/${o}`).join("\n") +
+          `\n\nRoutes: use insertJob(req, row) from lib/insert-job.js. Workers/pipelines/` +
+          `orchestrator (no request): use insertInternalJob("<creator>", row) from the same ` +
+          `file. Both return the same { data, error } shape, so only the call changes.`,
     ).toEqual([])
   })
 
   it("insertJob is actually used by routes (the rule isn't vacuous)", () => {
     // A regex-only guard passes trivially if every route stopped creating jobs.
-    const users = files.filter((f) => readFileSync(f, "utf8").includes("insertJob("))
+    const routeFiles = tsFiles(ROUTES_DIR)
+    const users = routeFiles.filter((f) => readFileSync(f, "utf8").includes("insertJob("))
     expect(users.length).toBeGreaterThan(50)
   })
 })

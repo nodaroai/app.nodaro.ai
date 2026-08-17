@@ -1354,7 +1354,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
   // Seedance 2.5 — the next Seedance generation, not a tier of the 2.0 ladder.
   // Two levers differ from every 2.0 SKU and drive its own entries throughout:
-  // durations run to 30s (2.0 caps at 15s) and there is NO 1080p/4K tier.
+  // durations run to 30s (2.0 caps at 15s) and there is NO 4K tier (1080p
+  // arrived on KIE 2026-08-17 — probe-verified; 4k/2k/1440p still rejected).
   // Reference caps are also wider (30 images / 10 videos / 10 audio) — see
   // SEEDANCE_2_5_REF_LIMITS in model-constants.
   "seedance-2-5": {
@@ -1364,20 +1365,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Bytedance",
     label: "Seedance 2.5",
     series: "Seedance",
-    description: "Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p.",
+    description: "Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p/1080p.",
     useCases: ["premium", "narrative", "long-form"],
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
-    resolutions: ["480p", "720p"],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance-2-5", credits: 1260, note: "default 8s 720p — see :Ns:res variants for exact" },
       { identifier: "seedance-2-5:8s:480p", credits: 560, note: "8s 480p" },
       { identifier: "seedance-2-5:8s:720p", credits: 1260, note: "8s 720p" },
+      { identifier: "seedance-2-5:8s:1080p", credits: 2280, note: "8s 1080p" },
       { identifier: "seedance-2-5:8s:480p-ref", credits: 340, note: "8s 480p with reference video" },
       { identifier: "seedance-2-5:8s:720p-ref", credits: 760, note: "8s 720p with reference video" },
+      { identifier: "seedance-2-5:8s:1080p-ref", credits: 1370, note: "8s 1080p with reference video" },
       { identifier: "seedance-2-5:30s:480p", credits: 2100, note: "30s 480p (max)" },
       { identifier: "seedance-2-5:30s:720p", credits: 4730, note: "30s 720p (max)" },
+      { identifier: "seedance-2-5:30s:1080p", credits: 8550, note: "30s 1080p (max)" },
     ],
   },
 
