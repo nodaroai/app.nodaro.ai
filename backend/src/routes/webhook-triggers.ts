@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -376,15 +377,17 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       })
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("workflow_triggers")
       .delete()
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
+      .select("id")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to delete trigger")
     }
+    if (deletedNothing(data)) return sendNotFound(reply, "Trigger not found")
 
     return { success: true }
   })

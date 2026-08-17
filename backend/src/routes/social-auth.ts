@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { supabase } from "../lib/supabase.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
 import { generateAuthUrl, exchangeCodeForTokens, type TokenSet } from "../services/social/oauth.js"
@@ -249,13 +250,15 @@ export async function socialAuthRoutes(app: FastifyInstance) {
 
     const { id } = req.params as { id: string }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("social_connections")
       .delete()
       .eq("user_id", userId)
       .eq("id", id)
+      .select("id")
 
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })
+    if (deletedNothing(data)) return sendNotFound(reply, "Connection not found")
     return { success: true }
   })
 

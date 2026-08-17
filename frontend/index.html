@@ -13,6 +13,13 @@
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
     <title>Nodaro.ai</title>
+    <!-- Runtime config: start.sh writes /config.js from the container's env at
+         boot (PUBLIC_URL, the browser-facing Supabase URL, the anon key) so one
+         published image serves any port or domain without a rebuild. A classic
+         script on purpose — it must run before the (deferred) module entry
+         reads it; src/lib/runtime-config.ts falls back to the build-time value
+         when a key is absent. In dev/plain builds public/config.js is empty. -->
+    <script src="/config.js"></script>
     <!-- Analytics (Microsoft Clarity + Google gtag) — opt-in via build-time env
          (VITE_CLARITY_ID / VITE_GA_ID); empty/unset (the self-hosted
          Community/Business default) is a no-op and nothing leaves the

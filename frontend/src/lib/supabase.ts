@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSharedSupabaseClient } from '@nodaro/sdk/supabase'
 import type { Database } from '@/types/database.types'
+import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from '@/lib/runtime-config'
 
 let cachedClient: SupabaseClient<Database> | null = null
 
@@ -10,8 +11,8 @@ let cachedClient: SupabaseClient<Database> | null = null
 export function createClient() {
   if (!cachedClient) {
     cachedClient = createSharedSupabaseClient<Database>({
-      url: import.meta.env.VITE_SUPABASE_URL!,
-      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY!,
+      url: runtimeSupabaseUrl(),
+      anonKey: runtimeSupabaseAnonKey(),
       cookieDomain: '.nodaro.ai',
     })
   }

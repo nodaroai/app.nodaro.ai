@@ -109,6 +109,20 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      # Human-readable version tags beside `latest` and the commit SHA, so a
+      # self-hoster can pin (`nodaro-community:v1.23.0`, `:v1.23`) and a bad
+      # `latest` can be rolled back by retagging a version (release check 48).
+      # The version is the app's own (frontend/package.json — what the sidebar
+      # shows), so the tag matches what the running install reports.
+      - name: Resolve version tags
+        id: ver
+        run: |
+          v=$(node -p "require('./frontend/package.json').version")
+          echo "full=v$v" >> "$GITHUB_OUTPUT"
+          echo "minor=v${v%.*}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
@@ -132,6 +146,8 @@ jobs:
           docker buildx imagetools create \
             -t ${{ env.IMAGE }}:latest \
             -t ${{ env.IMAGE }}:${{ github.sha }} \
+            -t ${{ env.IMAGE }}:${{ steps.ver.outputs.full }} \
+            -t ${{ env.IMAGE }}:${{ steps.ver.outputs.minor }} \
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
 
       - name: Inspect published image

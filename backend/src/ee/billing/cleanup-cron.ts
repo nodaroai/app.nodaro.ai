@@ -10,6 +10,7 @@ import {
   expireTopupCredits,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
+import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -37,6 +38,20 @@ export function startCleanupCron(): void {
   }
 
   // Expire subscriptions -- every hour
+  // Stale dynamic-client registrations (MCP clients + community instances
+  // that started a connection and never consented) — every hour at :15. See
+  // lib/oauth-dcr-sweep.ts (#708).
+  cron.schedule("15 * * * *", async () => {
+    try {
+      const { deleted, keptAuthorized } = await sweepStaleDcrRegistrations()
+      if (deleted > 0 || keptAuthorized > 0) {
+        console.log(`[cron] stale DCR registrations swept: ${deleted} deleted, ${keptAuthorized} kept (consented but unclaimed — see migration 323)`)
+      }
+    } catch (err) {
+      console.error("[cron] stale DCR sweep failed:", err)
+    }
+  })
+
   cron.schedule("0 * * * *", async () => {
     console.log("[cron] Starting subscription expiry check...")
     const start = Date.now()

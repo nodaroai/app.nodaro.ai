@@ -152,14 +152,28 @@ export async function oauthRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "invalid_request", message: "code_challenge_method must be S256" } })
     }
 
-    // Dynamic_mcp clients (RFC 7591 DCR): claim the row for this user on first
-    // consent. Idempotent — re-consenting a second time is a no-op.
-    if (dApp.kind === "dynamic_mcp" && dApp.owner_user_id == null) {
-      await supabase
+    // DCR-registered clients (RFC 7591) — MCP clients AND community
+    // instances: claim the row for this user on first consent. Idempotent —
+    // re-consenting a second time is a no-op. `owner_user_id` is also what
+    // oauth-register.ts reads as "this registration was consumed"; community
+    // instances were never claimed, so every connection they ever made
+    // counted as open forever and five Connect clicks in a day locked an
+    // install out (#708).
+    // Best-effort on purpose: a failed claim must not deny a consent the user
+    // just granted. It is logged rather than swallowed because an unclaimed
+    // row still counts against the registration cap — and because
+    // `lib/oauth-dcr-sweep.ts` must never treat "unclaimed" as "never
+    // consented" (it asks the authorizations table instead, precisely so a
+    // failure here cannot lead to deleting a live client).
+    if ((dApp.kind === "dynamic_mcp" || dApp.kind === "community_instance") && dApp.owner_user_id == null) {
+      const { error: claimError } = await supabase
         .from("developer_apps")
         .update({ owner_user_id: req.userId })
         .eq("id", dApp.id)
         .is("owner_user_id", null)
+      if (claimError) {
+        req.log.warn({ err: claimError, appId: dApp.id, kind: dApp.kind }, "[oauth] could not claim DCR registration at consent")
+      }
     }
 
     const code = issueCode({

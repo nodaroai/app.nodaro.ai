@@ -1,0 +1,587 @@
+/* One Character, Any Scene — two images, five recipes, no masks.
+ *
+ * Three columns: the two sources (teal = a source), the five recipes with what
+ * the selected one takes and what it teaches, and the payoff — the result plus
+ * the HOW IT ADDS UP strip (borrowed fragments = the result). Every colour is
+ * a `--nd-*` token from tutorial-theme.css or one of the teal literals the
+ * design shares with the camera-coverage and image-editing tutorials; nothing
+ * here invents a palette. Token chips carry the screen's colour logic: teal
+ * for a bare `{image:N}` (a whole source), pink for `{image:N:part}` (a
+ * fragment).
+ *
+ * Breakpoints are CONTAINER queries, not viewport ones — this body sits beside
+ * a rail that collapses on its own schedule, so the same viewport width means
+ * two different body widths.
+ */
+
+.occ {
+  container-type: inline-size;
+  container-name: occ;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- headline band -------------------------------------------------------- */
+
+.occ-band {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.occ-headline {
+  font-family: var(--nd-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--nd-text);
+}
+.occ-subline {
+  margin-top: 10px;
+  max-width: 76ch;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--nd-muted);
+  text-wrap: pretty;
+}
+.occ-band .nd-chips {
+  margin-top: 0;
+  padding-bottom: 4px;
+}
+.occ-band .nd-chip {
+  padding: 7px 12px;
+  border-radius: 7px;
+}
+
+/* --- the three columns ---------------------------------------------------- */
+
+.occ-cols {
+  display: grid;
+  /* 300 / 640 / 780 in the design, kept as ratios so the columns breathe. */
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.55fr) minmax(0, 1.9fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.occ-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 16px;
+  background: var(--nd-panel);
+  border: 1px solid var(--nd-border);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transition: opacity 180ms ease, border-color 180ms ease;
+}
+.occ-panel[data-dimmed="true"] {
+  opacity: 0.5;
+}
+.occ-panel[data-focused="true"] {
+  border-color: var(--nd-accent-b35);
+}
+/* The result column is the payoff, so it carries the accent ring always. */
+.occ-payoff {
+  border-color: var(--nd-accent-b35);
+  box-shadow: 0 0 0 5px rgba(255, 45, 120, 0.06), 0 18px 44px rgba(0, 0, 0, 0.4);
+}
+
+.occ-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nd-border-subtle);
+}
+.occ-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.occ-badge {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font-family: var(--nd-mono);
+  font-size: 11px;
+  color: var(--nd-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.occ-badge-tint {
+  color: var(--nd-accent-dim);
+  background: var(--nd-accent-14);
+  border-color: var(--nd-accent-b35);
+}
+.occ-badge-accent {
+  color: #fff;
+  background: var(--nd-accent);
+  border-color: rgba(255, 45, 120, 0.5);
+}
+.occ-title {
+  font-family: var(--nd-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.015em;
+  color: var(--nd-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--nd-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-meta {
+  flex: none;
+  font-family: var(--nd-mono);
+  font-size: 10px;
+  color: var(--nd-eyebrow);
+}
+.occ-meta-accent {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--nd-accent-dim);
+}
+
+.occ-panel-body {
+  padding: 16px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.occ-eyebrow {
+  font-family: var(--nd-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nd-eyebrow);
+}
+.occ-eyebrow-teal {
+  color: #4f8f8a;
+}
+.occ-eyebrow-accent {
+  color: var(--nd-accent-dim);
+}
+.occ-empty {
+  display: grid;
+  place-items: center;
+  font-family: var(--nd-mono);
+  font-size: 10px;
+  color: var(--nd-eyebrow);
+  background: var(--nd-inset);
+}
+
+/* --- token chips ---------------------------------------------------------- */
+
+.occ-token {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--nd-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+  color: var(--nd-accent-text);
+  background: rgba(255, 45, 120, 0.16);
+  border: 1px solid rgba(255, 45, 120, 0.4);
+}
+.occ-token[data-bare="true"] {
+  color: #8fe9e0;
+  background: rgba(46, 230, 214, 0.12);
+  border-color: rgba(46, 230, 214, 0.35);
+}
+.occ-token[data-small="true"] {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+/* --- column 1: the two sources -------------------------------------------- */
+
+.occ-sources {
+  gap: 14px;
+}
+.occ-source {
+  flex: 1 1 0;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.occ-source-img {
+  flex: 1;
+  min-height: 140px;
+  width: 100%;
+  border-radius: 11px;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid rgba(46, 230, 214, 0.35);
+  display: block;
+}
+.occ-source-cap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+}
+.occ-source-role {
+  font-size: 11.5px;
+  color: var(--nd-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-note {
+  flex: none;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(46, 230, 214, 0.07);
+  border: 1px solid rgba(46, 230, 214, 0.28);
+}
+.occ-note p {
+  margin-top: 7px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--nd-muted);
+  text-wrap: pretty;
+}
+
+/* --- column 2: the five recipes ------------------------------------------- */
+
+.occ-rows {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+.occ-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 10px;
+  text-align: left;
+  background: var(--nd-surface-soft);
+  border: 1px solid var(--nd-divider);
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.occ-row:hover,
+.occ-row:focus-visible {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.occ-row[data-selected="true"] {
+  background: rgba(255, 45, 120, 0.12);
+  border-color: rgba(255, 45, 120, 0.45);
+}
+.occ-row-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-family: var(--nd-mono);
+  font-size: 10.5px;
+  color: var(--nd-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.occ-row[data-selected="true"] .occ-row-num {
+  color: #fff;
+  background: var(--nd-accent);
+  border-color: rgba(255, 45, 120, 0.5);
+}
+.occ-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.occ-prompt {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  font-family: var(--nd-mono);
+  font-size: 12px;
+  color: var(--nd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-row[data-selected="true"] .occ-prompt {
+  color: var(--nd-text);
+}
+.occ-row-name {
+  font-size: 11px;
+  color: var(--nd-eyebrow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-row[data-selected="true"] .occ-row-name {
+  color: var(--nd-accent-dim);
+}
+
+.occ-recipe-detail {
+  padding-top: 4px;
+}
+.occ-inset {
+  flex: none;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--nd-inset);
+  border: 1px solid var(--nd-border);
+}
+.occ-takes {
+  list-style: none;
+  margin: 11px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.occ-take {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.occ-take-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.occ-take-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--nd-text-3);
+  text-wrap: pretty;
+}
+.occ-lesson {
+  flex: none;
+  padding: 13px 14px;
+  border-radius: 11px;
+  background: var(--nd-accent-09);
+  border: 1px solid var(--nd-accent-b28);
+}
+.occ-lesson p {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nd-accent-text);
+  text-wrap: pretty;
+}
+.occ-noderow {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--nd-surface-soft);
+  border: 1px solid var(--nd-divider);
+}
+.occ-noderow .occ-eyebrow {
+  flex: none;
+  letter-spacing: 0.1em;
+}
+.occ-noderow-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--nd-text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occ-noderow-model {
+  flex: none;
+  font-family: var(--nd-mono);
+  font-size: 9.5px;
+  color: var(--nd-eyebrow);
+}
+
+/* --- column 3: the result and the breakdown ------------------------------- */
+
+.occ-out {
+  gap: 12px;
+}
+.occ-hero {
+  flex: 1;
+  min-height: 220px;
+  width: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid rgba(255, 45, 120, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 45, 120, 0.12);
+  display: block;
+}
+.occ-rule {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.occ-rule-line {
+  flex: 1;
+  height: 1px;
+  background: var(--nd-border);
+}
+/* Every tile is a fixed 137px and never flexes — equal heights are what make
+   the strip read as one comparison. */
+.occ-strip {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 186px;
+}
+.occ-part {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.occ-part .occ-token {
+  margin-top: 9px;
+}
+.occ-crop {
+  width: 100%;
+  height: 137px;
+  flex: none;
+  border-radius: 10px;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(46, 230, 214, 0.4);
+  box-sizing: border-box;
+}
+.occ-crop-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  background: var(--nd-inset);
+  border: 1px dashed rgba(46, 230, 214, 0.45);
+  font-family: var(--nd-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: #4f8f8a;
+  text-align: center;
+}
+.occ-crop-result {
+  background-size: cover;
+  background-position: center 22%;
+  border: 1px solid rgba(255, 45, 120, 0.7);
+  box-shadow: 0 0 0 3px rgba(255, 45, 120, 0.14);
+}
+.occ-part-caption {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nd-faint);
+  text-align: center;
+  /* One line at the column width, or the fixed-height row overflows. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.occ-equals {
+  flex: none;
+  align-self: flex-start;
+  height: 137px;
+  display: flex;
+  align-items: center;
+  font-family: var(--nd-mono);
+  font-size: 20px;
+  color: #4f8f8a;
+}
+.occ-result-chip {
+  margin-top: 9px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--nd-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--nd-accent-dim);
+  background: rgba(255, 45, 120, 0.16);
+  border: 1px solid rgba(255, 45, 120, 0.4);
+}
+
+/* --- responsive ----------------------------------------------------------- */
+
+/* The sources become a horizontal pair above the other two. */
+@container occ (max-width: 1400px) {
+  .occ-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  .occ-cols > .occ-panel:first-child {
+    grid-column: 1 / -1;
+  }
+  .occ-sources {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .occ-source {
+    flex: 1 1 220px;
+  }
+  .occ-source-img {
+    min-height: 180px;
+    max-height: 260px;
+  }
+  .occ-note {
+    flex: 1 1 100%;
+  }
+}
+
+/* Everything stacks (recipes → result → sources is the useful order); the
+   strip wraps its part columns rather than shrinking them below ~140px. */
+@container occ (max-width: 1100px) {
+  .occ-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .occ-cols > .occ-panel:first-child {
+    order: 3;
+  }
+  .occ-headline {
+    font-size: 26px;
+  }
+  .occ-strip {
+    flex-wrap: wrap;
+  }
+  .occ-part {
+    flex: 1 1 140px;
+  }
+}
+
+/* Browsers without container queries keep the three columns and simply scroll
+   the body, which is the pre-container behaviour and still readable. */
+@supports not (container-type: inline-size) {
+  .occ-cols {
+    min-width: 1100px;
+  }
+}

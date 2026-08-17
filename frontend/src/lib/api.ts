@@ -8,6 +8,7 @@ import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
+import { runtimeApiUrl } from "@/lib/runtime-config"
 
 export const API_BASE_URL = ''
 
@@ -5117,7 +5118,7 @@ async function llmStreamGeneric(
 
   // SSE streaming must bypass the Vite rewrite proxy (which buffers the
   // response body) and call the backend directly so tokens arrive in real-time.
-  const sseBaseUrl = import.meta.env.VITE_API_URL || ""
+  const sseBaseUrl = runtimeApiUrl()
 
   try {
     const { streamRequest } = await import("@/lib/sse-client")
@@ -6231,7 +6232,7 @@ export async function streamWorkflowExecution(
   callbacks: StreamExecutionCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const sseBaseUrl = import.meta.env.VITE_API_URL || ""
+  const sseBaseUrl = runtimeApiUrl()
   const authHeaders = await getAuthHeaders()
 
   const { streamGet } = await import("@/lib/sse-client")

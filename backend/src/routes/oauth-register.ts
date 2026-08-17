@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { randomBytes } from "node:crypto"
+import { randomBytes, createHash } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
@@ -13,11 +13,33 @@ const CLIENT_ID_PREFIX = "ndr_dcr_"
 // Abuse mitigations for unauthenticated DCR (RFC 7591 endpoint is public by design):
 // - Per-IP rate limit: 10 req/min via @fastify/rate-limit (registered in app.ts).
 //   Configured per-route below via the `config.rateLimit` option.
-// - Per-(client_name + redirect_uris) open-registration cap: max 5 unconsumed
-//   registrations from the same identity (rejected with 429 once exceeded).
-//   Storage exhaustion is bounded by this cap.
+// - Open-registration cap: max N unconsumed registrations per identity in
+//   the last 24 h (rejected with 429 once exceeded). "Consumed" = the row's
+//   owner_user_id was set at first consent (oauth.ts). The IDENTITY differs
+//   by kind, and that difference matters:
+//     * dynamic_mcp — (client_name + overlapping redirect_uris), as before.
+//     * community_instance — the CALLER (hashed X-Forwarded-For / ip). Every
+//       default self-hosted install registers as "Nodaro instance
+//       (localhost:3000)" with the same callback URL, so a name-keyed cap was
+//       ONE bucket shared by every install in the world: five people clicking
+//       Connect in a day and the sixth got 429 (#708, release check 10).
+//   Storage exhaustion is bounded by this cap plus the stale-row sweep
+//   (lib/oauth-dcr-sweep.ts).
 const OPEN_REGISTRATIONS_CAP = 5
+const OPEN_REGISTRATIONS_CAP_PER_CALLER = 10
 const OPEN_REGISTRATION_LOOKBACK_MS = 24 * 60 * 60 * 1000
+
+/**
+ * The caller for the community-instance cap. Same derivation as the global
+ * rate limiter's unauthenticated branch (app.ts rateLimitKeyGenerator): the
+ * first X-Forwarded-For hop, else the socket ip. Hashed — an ip is personal
+ * data and the row outlives the request.
+ */
+export function callerKeyHash(req: { headers: Record<string, string | string[] | undefined>; ip?: string }): string {
+  const xff = req.headers["x-forwarded-for"]
+  const raw = (typeof xff === "string" && xff.length > 0 ? xff.split(",")[0]!.trim() : req.ip) || "unknown"
+  return createHash("sha256").update(raw).digest("hex")
+}
 
 // IMPORTANT: this schema must NOT be `.strict()`. RFC 7591 §2 requires the
 // registration endpoint to IGNORE unrecognized client metadata, and real MCP
@@ -72,9 +94,8 @@ function parseScope(scope?: string): string[] {
 async function countOpenRegistrations(clientName: string, redirectUris: string[], kind: string): Promise<number> {
   const cutoff = new Date(Date.now() - OPEN_REGISTRATION_LOOKBACK_MS).toISOString()
   // Open = same kind + same name + overlapping redirect URIs + no consummated
-  // authorization yet (community instances get the same storage-exhaustion cap
-  // as MCP clients). We approximate "no authorization" by checking
-  // owner_user_id IS NULL (set during the first OAuth consent step).
+  // authorization yet. "No authorization" = owner_user_id IS NULL (set during
+  // the first OAuth consent step, for MCP clients and community instances).
   const { count, error } = await supabase
     .from("developer_apps")
     .select("id", { count: "exact", head: true })
@@ -83,6 +104,22 @@ async function countOpenRegistrations(clientName: string, redirectUris: string[]
     .is("owner_user_id", null)
     .gte("created_at", cutoff)
     .overlaps("redirect_uris", redirectUris)
+  if (error) {
+    return 0
+  }
+  return count ?? 0
+}
+
+/** Community instances: open registrations from the same caller in the window. */
+async function countOpenRegistrationsByCaller(ipHash: string): Promise<number> {
+  const cutoff = new Date(Date.now() - OPEN_REGISTRATION_LOOKBACK_MS).toISOString()
+  const { count, error } = await supabase
+    .from("developer_apps")
+    .select("id", { count: "exact", head: true })
+    .eq("kind", "community_instance")
+    .eq("registered_ip_hash", ipHash)
+    .is("owner_user_id", null)
+    .gte("created_at", cutoff)
   if (error) {
     return 0
   }
@@ -148,20 +185,29 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
         }
       }
 
-      // Per-(client_name + redirect_uris) cap. Prevents storage exhaustion via
-      // repeated registrations from the same caller before any consents.
-      const openCount = await countOpenRegistrations(
-        meta.client_name,
-        meta.redirect_uris,
-        isCommunityInstance ? "community_instance" : "dynamic_mcp",
-      )
-      if (openCount >= OPEN_REGISTRATIONS_CAP) {
-        return reply.status(429).send({
-          error: {
-            code: "too_many_open_registrations",
-            message: `${openCount} unconsumed registration(s) for "${meta.client_name}" with these redirect_uris already exist. Complete the OAuth consent flow on an existing one, or wait for stale rows to be cleaned up.`,
-          },
-        })
+      // Open-registration cap — see the note at the top of the file for why
+      // the identity differs by kind.
+      const ipHash = callerKeyHash(req)
+      if (isCommunityInstance) {
+        const openByCaller = await countOpenRegistrationsByCaller(ipHash)
+        if (openByCaller >= OPEN_REGISTRATIONS_CAP_PER_CALLER) {
+          return reply.status(429).send({
+            error: {
+              code: "too_many_open_registrations",
+              message: `${openByCaller} connection attempts from this address in the last 24 hours were never completed. Finish the nodaro.ai consent flow you already started, or try again later.`,
+            },
+          })
+        }
+      } else {
+        const openCount = await countOpenRegistrations(meta.client_name, meta.redirect_uris, "dynamic_mcp")
+        if (openCount >= OPEN_REGISTRATIONS_CAP) {
+          return reply.status(429).send({
+            error: {
+              code: "too_many_open_registrations",
+              message: `${openCount} unconsumed registration(s) for "${meta.client_name}" with these redirect_uris already exist. Complete the OAuth consent flow on an existing one, or wait for stale rows to be cleaned up.`,
+            },
+          })
+        }
       }
 
       const clientId = genClientId()
@@ -189,6 +235,8 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
           client_secret_hash: await hashSecret(clientSecret),
           scopes_requested: scopes,
           status: "active",
+          // Who registered (hashed) — the community-instance cap counts by it.
+          registered_ip_hash: ipHash,
         })
         .select("id, client_id, created_at")
         .single()

@@ -450,30 +450,34 @@ describe("DELETE /v1/api-tokens/:id", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
-  it("returns success on valid delete", async () => {
-    const mockFrom = vi.mocked(supabase.from)
-    mockFrom.mockReturnValue({
-      delete: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
+  // .delete().eq().eq().select("id") — the route reads the deleted rows back
+  // and answers 404 when the owner scope matched nothing (#699).
+  const deleteChain = (result: { data: unknown[] | null; error: unknown }) => ({
+    delete: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue(result) }),
       }),
-    } as never)
+    }),
+  })
+
+  it("returns success on valid delete", async () => {
+    vi.mocked(supabase.from).mockReturnValue(deleteChain({ data: [{ id: TEST_TOKEN_ID }], error: null }) as never)
 
     const res = await authedDelete(`/v1/api-tokens/${TEST_TOKEN_ID}`)
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
   })
 
+  it("returns 404 when the scoped delete matched nothing (someone else's token)", async () => {
+    vi.mocked(supabase.from).mockReturnValue(deleteChain({ data: [], error: null }) as never)
+
+    const res = await authedDelete(`/v1/api-tokens/${TEST_TOKEN_ID}`)
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
   it("returns 500 on DB error", async () => {
-    const mockFrom = vi.mocked(supabase.from)
-    mockFrom.mockReturnValue({
-      delete: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: { message: "DB error" } }),
-        }),
-      }),
-    } as never)
+    vi.mocked(supabase.from).mockReturnValue(deleteChain({ data: null, error: { message: "DB error" } }) as never)
 
     const res = await authedDelete(`/v1/api-tokens/${TEST_TOKEN_ID}`)
     expect(res.statusCode).toBe(500)

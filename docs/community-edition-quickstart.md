@@ -13,8 +13,9 @@ The first boot downloads the prebuilt app image (~2.4 GB, so a few minutes on
 a typical connection) plus the bundled services — a download rather than a
 compile, and it does not pin your CPU. After that, boots take seconds.
 
-Building from source instead (needed if you change the code, `PUBLIC_URL`,
-or the Supabase keys — the frontend inlines those at build time):
+Building from source instead (needed only if you change the code —
+`PUBLIC_URL`, another port or a domain, and the Supabase keys are read at
+runtime, so the published image serves them after a plain restart):
 
 ```bash
 docker compose -f docker-compose.community.yml build
@@ -75,7 +76,10 @@ flag the probe never spends anything.
 ## 3. Generate for real
 
 Viewing the demo is free and works offline. To run nodes yourself you need
-a model provider. Three ways, and they run side by side:
+a model provider — until you have one, the dashboard shows a dismissible
+*"This install can't generate yet"* callout with both buttons (Connect
+nodaro.ai · Paste a key); it disappears on its own once a provider exists.
+Three ways, and they run side by side:
 
 **Paste a key in the app (no files, no restart).** Two places show the same
 tiles: http://localhost:3000/setup → **Install health** (setup time, works
@@ -128,9 +132,8 @@ For anything reachable by other people:
 
 1. Mint fresh auth keys — `node tools/generate-selfhost-keys.mjs >> .env`
    (JWT secret + anon + service keys must always come from the same run).
-   Changing the anon key requires rebuilding the app image
-   (`docker compose -f docker-compose.community.yml build`) because Vite
-   inlines it into the frontend.
+   A changed anon key needs only a restart — the container hands it to the
+   browser at runtime (`/config.js`), no rebuild.
 2. Set `POSTGRES_PASSWORD` and a matching `DATABASE_URL`, and fresh MinIO
    credentials (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`). Note the
    Postgres role passwords are aligned at the database's FIRST init — if
@@ -161,6 +164,12 @@ Every bundled service can be swapped for a managed one in `.env`:
 - **Migrations failed on boot**: the app container logs name the exact
   file; the API refuses to start against a half-migrated schema. Re-run
   `docker compose up` after fixing — applied files are tracked and skipped.
+- **`port is already allocated` on `docker compose up`**: the stack publishes
+  exactly two host ports — **3000** (the app) and **9001** (the MinIO console,
+  loopback only). Redis and the database are internal to the compose network
+  and never bind a host port. If 3000 or 9001 is taken, change the host side
+  of that mapping in `docker-compose.community.yml` (`"3001:3000"`) and, for
+  the app port, set `PUBLIC_URL` to match.
 - **Storage errors on upload**: open the MinIO console at
   http://localhost:9001 (default credentials are in the compose file).
 - **CORS errors in browser**: set `CORS_ORIGIN=http://localhost:3000` in `.env`.

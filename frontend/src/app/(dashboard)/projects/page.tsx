@@ -25,6 +25,7 @@ import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
 import { StudioWorkflowsView } from "@/components/dashboard/studio-workflows-view"
 import { FlagshipApps } from "@/components/dashboard/flagship-apps"
+import { ProviderSetupCallout } from "@/components/dashboard/provider-setup-callout"
 import { MoveWorkflowDialog } from "@/components/dashboard/move-workflow-dialog"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { useAuth } from "@/hooks/use-auth"
@@ -483,6 +484,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="p-4 sm:p-6">
+      {/* Community: "this install can't generate yet" until a key or the
+          connection exists — dismissible, per user (#706). Renders null on cloud. */}
+      <ProviderSetupCallout userId={user?.id} />
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting}{displayName ? `, ${displayName}` : ""}

@@ -71,6 +71,15 @@ If the button reports that nodaro.ai is not accepting connections or cannot
 be reached, that is the cloud side or your network — your own provider keys
 (`KIE_API_KEY`, `REPLICATE_API_TOKEN`, …) work independently of it.
 
+If it reports **too many unfinished connection attempts from this address in
+the last 24 hours**: each click on Connect registers this instance with the
+cloud, and registrations nobody consented to expire after a day. Ten of those
+from one address in a day and the cloud pauses that address. Finish the
+consent window you already opened, or wait it out — pasting your own provider
+key works meanwhile. Connect / Disconnect / Connect on the same instance does
+not count against it: the instance keeps its registration across a
+disconnect and reuses it.
+
 ## Or: an API key, like any other provider
 
 nodaro.ai is also a provider in the ordinary sense — the same tile on
@@ -111,5 +120,6 @@ sees every connected instance with its spend this month, and can:
 | Instance | `PUBLIC_URL` | Your instance's public URL — used for the OAuth callback |
 | Cloud | `COMMUNITY_CONNECT_ENABLED` | Master flag for instance registrations + the Connected Instances surface |
 
-Disconnecting from the instance only forgets the local credential; revoke
+Disconnecting from the instance only forgets the local access token — the
+instance keeps its cloud registration so the next Connect reuses it; revoke
 from the cloud's Connected Instances page to kill access outright.

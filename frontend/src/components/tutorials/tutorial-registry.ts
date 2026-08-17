@@ -183,6 +183,29 @@ const REGISTRY: Record<string, TutorialDefinition> = {
     Body: lazy(() => import("./bodies/camera-coverage-body")),
   },
 
+  "one-character-any-scene": {
+    title: "One Character, Any Scene",
+    summary:
+      "Two source images, five one-line recipes, no masks and no layers. What changes between the results is which part of each source you name — and which number you name it on.",
+    minutes: 4,
+    // Every result is already generated; reading them costs nothing. What is
+    // worth counting is the recipes.
+    chip: "5 recipes",
+    // The IN column already says "same two, every time"; the rail adds the
+    // one thing a first-timer gets wrong.
+    note: {
+      eyebrow: "Read the numbers, not the pictures",
+      body: "{image:1} and {image:2} are positions in the References list — the order the sources were connected — not the nodes' names. Recipe 2 is recipe 1 with the numbers swapped, and that is the whole lesson.",
+    },
+    // One step per column: the sources, the recipes, the result.
+    steps: [
+      { n: 1, title: "Two sources", sub: "One generated, one uploaded — {image:1} and {image:2}" },
+      { n: 2, title: "Five recipes", sub: "Click one: what it takes from each source, and what it teaches" },
+      { n: 3, title: "The result", sub: "The image, and how the borrowed parts add up to it" },
+    ],
+    Body: lazy(() => import("./bodies/one-character-body")),
+  },
+
   "underwater-giants": {
     title: "Underwater Giants",
     summary:

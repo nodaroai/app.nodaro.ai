@@ -27,7 +27,7 @@ This node has no configurable fields.
 
 ## Common Use Cases
 
-- Pull a video's audio to feed [Transcribe](../ai-audio/transcribe.md), [Dubbing](../ai-audio/dubbing.md), or [Voice Changer](../ai-audio/voice-changer.md)
+- Pull a video's audio to feed [Transcribe](../ai-text/transcribe.md), [Dubbing](../ai-audio/dubbing.md), or [Voice Changer](../ai-audio/voice-changer.md)
 - Extract a soundtrack from a video clip for reuse
 - Isolate dialogue or music for downstream audio processing
 

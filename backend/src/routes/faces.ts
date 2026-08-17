@@ -4,6 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 const upsertFaceBody = z.object({
   id: z.string().uuid().optional(),
@@ -215,15 +216,17 @@ export async function faceRoutes(app: FastifyInstance) {
 
     const { id } = parsed.data
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("faces")
       .delete()
       .eq("id", id)
       .eq("user_id", userId)
+      .select("id")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to delete face")
     }
+    if (deletedNothing(data)) return sendNotFound(reply, "Face not found")
 
     return { success: true }
   })

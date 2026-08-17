@@ -101,6 +101,7 @@ import { FreeCutImportPicker } from "../freecut-import-picker";
 import { studioWorkflowUrl } from "@/lib/studio";
 import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
+import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
@@ -630,12 +631,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (state.isReadOnly) return;
       if (!state.isDirty || state.nodes.length === 0) return;
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as
-        | string
-        | undefined;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as
-        | string
-        | undefined;
+      const supabaseUrl = runtimeSupabaseUrl() || undefined;
+      const supabaseKey = runtimeSupabaseAnonKey() || undefined;
       const wfId = state.workflowId;
       const token = cachedAccessTokenRef.current;
       if (!supabaseUrl || !supabaseKey || !wfId || !token) return;

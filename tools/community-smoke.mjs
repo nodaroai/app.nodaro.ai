@@ -28,6 +28,12 @@
  *                     founder pointing the script at their own configured
  *                     install does not, and gets the edition checks that still
  *                     apply.
+ *   --live-connect    ALSO call POST /v1/nodaro-connect/start against a
+ *                     REACHABLE cloud. Off by default: on a real cloud that
+ *                     step registers a client for this address, and unfinished
+ *                     registrations count against a per-address daily cap
+ *                     (#708). CI runs the step anyway because its cloud URL is
+ *                     unreachable (error branch, nothing registered).
  *   --keyed           ALSO walk the bring-your-own-key SUCCESS path (#648) —
  *                     the configuration most self-hosters actually run: submit
  *                     one real generation on the cheapest model, follow it to
@@ -48,6 +54,12 @@ import { fileURLToPath } from "node:url"
 const args = process.argv.slice(2)
 const STRICT_KEYLESS = args.includes("--strict-keyless")
 const KEYED = args.includes("--keyed")
+// Starting the nodaro.ai connection REGISTERS a real client on the cloud when
+// the install can reach it. Five unfinished ones in a day from one address
+// lock that address out of connecting (#708) — so a local run of this probe
+// against a reachable cloud never does it unless asked. CI points
+// NODARO_CLOUD_URL at an unreachable host and exercises the error branch.
+const LIVE_CONNECT = args.includes("--live-connect")
 if (STRICT_KEYLESS && KEYED) {
   console.error("--strict-keyless asserts the keyless shape; --keyed needs a key. Pick one.")
   process.exit(2)
@@ -417,6 +429,9 @@ await check("a connected install lists HeyGen avatars through the connection —
 })
 
 await check("starting the nodaro.ai connection is honest either way", async () => {
+  if (!LIVE_CONNECT && !ctx.connected && !process.env.CI) {
+    return skip("starting the nodaro.ai connection is honest either way", "would register a real client on the cloud — pass --live-connect (or set CI with an unreachable NODARO_CLOUD_URL)")
+  }
   // The guided setup's headline CTA. Two acceptable answers: a consent URL on
   // the cloud host, or an error the user can act on. What shipped before was
   // a third thing — the cloud's refusal relayed as "not enabled on THIS
@@ -535,7 +550,11 @@ await check("discovery does not advertise nodes this edition cannot run", async 
   assert(types.size > 0, "/v1/nodes returned an empty catalog")
   const advertised = [...cloudOnly].filter((t) => types.has(t))
   assert(advertised.length === 0, `cloud-only nodes advertised: ${advertised.join(", ")}`)
-  return `${types.size} nodes, none of the ${cloudOnly.size} cloud-only types`
+  // …and prices nothing: there is no credit system here, so a descriptor that
+  // says "costs N credits" is a lie the SDK/CLI/MCP would build on (#646).
+  const priced = (json?.data ?? []).filter((n) => n && n.creditCost !== undefined && n.creditCost !== null)
+  assert(priced.length === 0, `community discovery advertises creditCost on ${priced.length} node(s): ${priced.slice(0, 5).map((n) => n.type).join(", ")}`)
+  return `${types.size} nodes, none of the ${cloudOnly.size} cloud-only types, no creditCost`
 })
 
 /**

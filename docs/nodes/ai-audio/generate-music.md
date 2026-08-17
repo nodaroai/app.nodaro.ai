@@ -26,7 +26,7 @@ The Generate Music node produces original music from a text description using Mi
 |----------|-------|-------|
 | `minimax` | MiniMax Music | The only provider for this node |
 
-> **Note:** Suno models (`suno` / `suno-v5`) are **not** available through this node. They run through the dedicated **Suno Generate** node (and related Suno-specific nodes) which use a separate client path. See [Suno Generate](../../nodes/ai-audio/suno-generate.md) for Suno-based music generation.
+> **Note:** Suno models (`suno` / `suno-v5`) are **not** available through this node. They run through the dedicated **Suno Generate** node (and related Suno-specific nodes) which use a separate client path. See [Suno Generate](../suno-music/suno-generate.md) for Suno-based music generation.
 
 ## Inputs & Outputs
 

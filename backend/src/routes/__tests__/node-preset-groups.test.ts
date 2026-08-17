@@ -76,7 +76,8 @@ describe("node-preset-groups routes", () => {
   })
 
   it("DELETE scopes to id + user_id", async () => {
-    const qb = makeQB({})
+    // .delete().eq().eq().select("id") resolves to the deleted rows.
+    const qb = makeQB({ rows: [{ id: "g1" }] })
     fromMock.mockReturnValue(qb)
     const app = buildApp()
     await app.register(nodePresetGroupRoutes)
@@ -84,6 +85,16 @@ describe("node-preset-groups routes", () => {
     expect(res.statusCode).toBe(200)
     expect(qb.eq).toHaveBeenCalledWith("id", "g1")
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+  })
+
+  it("DELETE answers 404 when the scoped delete matched nothing (someone else's group) — #699", async () => {
+    const qb = makeQB({ rows: [] })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetGroupRoutes)
+    const res = await app.inject({ method: "DELETE", url: "/v1/node-preset-groups/g1" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
   })
 
   it("rejects unauthenticated requests", async () => {

@@ -12,8 +12,9 @@
 # The app image is PULLED, not built — first boot downloads ~2.4 GB rather
 # than compiling for 5-10 minutes. Build from source instead with:
 #     docker compose -f docker-compose.community.yml build
-# (needed if you changed the code, PUBLIC_URL, or the Supabase keys — see the
-# note on the `nodaro` service).
+# (needed only if you changed the code — PUBLIC_URL, another port, a domain
+# and the Supabase keys are read at RUNTIME; see the note on the `nodaro`
+# service).
 #
 # .env is OPTIONAL for local play — every value below has a working default.
 # To actually generate media, connect a provider — either click "Connect
@@ -28,8 +29,8 @@
 #      knowledge by definition).
 #   2. Set POSTGRES_PASSWORD, DATABASE_URL, and the MinIO credentials
 #      (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) to fresh values.
-#   NOTE: changing SUPABASE_ANON_KEY requires rebuilding the app image
-#   (docker compose build) — Vite inlines it into the frontend at build time.
+#   Changing SUPABASE_ANON_KEY (or PUBLIC_URL) needs only a restart — the
+#   container hands both to the browser at runtime via /config.js.
 #
 # If you set POSTGRES_PASSWORD, also set DATABASE_URL + the GoTrue/PostgREST
 # connection strings are derived from it automatically below.
@@ -38,8 +39,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Deliberately NOT host-published. Only the app talks to it, and it does
+    # so as redis:6379 on the compose network. Publishing it used to make the
+    # very first `docker compose up` die with "Bind for 0.0.0.0:6379 failed:
+    # port is already allocated" on any machine that already runs a Redis
+    # (most developer laptops) — and on a VPS it exposed an unauthenticated
+    # Redis to the network (Docker's published ports bypass ufw/firewalld).
+    # Need a shell into it? `docker compose exec redis redis-cli`.
     volumes:
       - redis-data:/data
     healthcheck:
@@ -112,11 +118,14 @@ services:
       MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-nodaro-minio}
       MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-nodaro-minio-secret}
     ports:
-      # Web console (optional): http://localhost:9001. The S3 API itself is
-      # NOT host-published — the app reaches it as minio:9000 on the compose
-      # network, and the browser reads media through Caddy's /storage/* proxy
-      # (see R2_PUBLIC_URL below), so one origin serves app + media.
-      - "9001:9001"
+      # Web console (optional): http://localhost:9001, loopback only — it is
+      # a troubleshooting aid for the person at the keyboard, not a service.
+      # Change the host port here if 9001 is taken (the app never uses it).
+      # The S3 API itself is NOT host-published — the app reaches it as
+      # minio:9000 on the compose network, and the browser reads media
+      # through Caddy's /storage/* proxy (see R2_PUBLIC_URL below), so one
+      # origin serves app + media.
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -132,10 +141,10 @@ services:
     image: ${NODARO_IMAGE:-ghcr.io/nodaroai/nodaro-community:latest}
     # Build from source instead with:
     #     docker compose -f docker-compose.community.yml build
-    # Required if you changed the code, OR if you changed PUBLIC_URL or the
-    # Supabase keys — the frontend inlines VITE_* at BUILD time, so the
-    # published image carries the localhost defaults below and cannot pick up
-    # new values at runtime.
+    # Required only if you changed the code. PUBLIC_URL (another port, a
+    # domain behind a proxy) and the Supabase keys are read at RUNTIME: the
+    # container writes them into /config.js at boot and the browser reads that
+    # before the app starts (VITE_* below are only the build-time fallbacks).
     build:
       context: .
       dockerfile: Dockerfile
@@ -161,9 +170,15 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       # In-container, localhost:3000 is this container's own Caddy, which
-      # routes /supabase/* to the auth/rest containers — so backend and
-      # browser share one Supabase URL.
+      # routes /supabase/* to the auth/rest containers. The BROWSER reaches the
+      # same proxy at PUBLIC_URL/supabase — start.sh derives that from this
+      # default (override with FRONTEND_SUPABASE_URL for a managed project).
       SUPABASE_URL: ${SUPABASE_URL:-http://localhost:3000/supabase}
+      # Runtime copy of the anon key for the browser (same default as the
+      # VITE_SUPABASE_ANON_KEY build arg above); rotate it in .env, restart —
+      # no rebuild.
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU0Nzg0MDAwLCJleHAiOjIwNzAxNDQwMDB9.Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo}
+      FRONTEND_SUPABASE_URL: ${FRONTEND_SUPABASE_URL:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTQ3ODQwMDAsImV4cCI6MjA3MDE0NDAwMH0.1S--a7iJ0v6nNEKWYcqAfE3-xI0iZ30ypsFs_xrLLbA}
       # Self-host migration runner (start.sh): applies supabase/migrations/
       # before the API starts. Keep the password segment in sync with

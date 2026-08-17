@@ -6,6 +6,7 @@ import { pipelinesApi } from "@/lib/pipelines-api"
 import { getAuthHeaders } from "@/lib/api"
 import { streamGet } from "@/lib/sse-client"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runtimeApiUrl } from "@/lib/runtime-config"
 
 interface UsePipelineEventsResult {
   /**
@@ -103,7 +104,7 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
       // SSE must bypass the Vite dev proxy (it buffers responses → socket
       // hang up). Call VITE_API_URL directly when set; fall back to
       // same-origin otherwise. Mirrors the AI-writer streaming path.
-      const sseBaseUrl = import.meta.env.VITE_API_URL || ""
+      const sseBaseUrl = runtimeApiUrl()
       try {
         setConnected(true)
         for await (const frame of streamGet<{

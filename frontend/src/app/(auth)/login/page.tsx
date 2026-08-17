@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
+import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -63,8 +64,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (isCloud()) return
     let cancelled = false
-    const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
-    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+    const base = runtimeSupabaseUrl() || undefined
+    const anon = runtimeSupabaseAnonKey() || undefined
     if (!base || !anon) return
     fetch(`${base.replace(/\/$/, "")}/auth/v1/settings`, { headers: { apikey: anon } })
       .then((res) => (res.ok ? res.json() : null))

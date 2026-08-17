@@ -9,6 +9,7 @@ import { invalidateDynamicOriginsCache } from "../lib/dynamic-origins.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
@@ -224,14 +225,16 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
     }
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("developer_apps")
       .delete()
       .eq("id", parsed.data.id)
       .eq("owner_user_id", req.userId)
+      .select("id")
     if (error) {
       return sendInternalError(reply, req, error, "Failed to delete app")
     }
+    if (deletedNothing(data)) return sendNotFound(reply, "App not found")
     invalidateDynamicOriginsCache()
     return { success: true }
   })

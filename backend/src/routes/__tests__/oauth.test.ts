@@ -192,4 +192,65 @@ describe("oauth routes", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().kind).toBe("user")
   })
+
+  // Consent claims the DCR row for MCP clients AND community instances. The
+  // registration cap in oauth-register.ts reads owner_user_id as "consumed":
+  // community instances were never claimed, so every connection they ever
+  // made counted as open and five Connect clicks in a day locked an install
+  // out (#708, release check 10).
+  describe("consent claims the DCR row (owner_user_id) — dynamic_mcp AND community_instance", () => {
+    async function consentAs(kind: string, ownerUserId: string | null) {
+      const { supabase } = await import("@/lib/supabase.js")
+      const { issueCode } = await import("@/lib/oauth-codes.js")
+      const isFn = vi.fn().mockResolvedValue({ error: null })
+      const eqFn = vi.fn(() => ({ is: isFn }))
+      const updateFn = vi.fn(() => ({ eq: eqFn }))
+      vi.mocked(supabase.from).mockReturnValue({ update: updateFn } as never)
+      vi.mocked(issueCode).mockReturnValue("code-1" as never)
+      vi.mocked(findAppByClientId).mockResolvedValue({
+        id: "app-1",
+        kind,
+        owner_user_id: ownerUserId,
+        redirect_uris: ["http://localhost:3000/v1/nodaro-connect/callback"],
+        scopes_requested: ["assets:write", "workflows:execute", "jobs:read", "credits:read"],
+      } as never)
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/oauth/authorize",
+        headers: { "x-user-id": "user-9" },
+        payload: {
+          clientId: "ndr_dcr_x",
+          redirectUri: "http://localhost:3000/v1/nodaro-connect/callback",
+          scopes: ["assets:write", "workflows:execute", "jobs:read", "credits:read"],
+        },
+      })
+      return { res, updateFn, eqFn, isFn }
+    }
+
+    it("community_instance with no owner → claimed for the consenting user", async () => {
+      const { res, updateFn, eqFn, isFn } = await consentAs("community_instance", null)
+      expect(res.statusCode).toBe(200)
+      expect(updateFn).toHaveBeenCalledWith({ owner_user_id: "user-9" })
+      expect(eqFn).toHaveBeenCalledWith("id", "app-1")
+      expect(isFn).toHaveBeenCalledWith("owner_user_id", null)
+    })
+
+    it("dynamic_mcp with no owner → claimed (unchanged behaviour)", async () => {
+      const { res, updateFn } = await consentAs("dynamic_mcp", null)
+      expect(res.statusCode).toBe(200)
+      expect(updateFn).toHaveBeenCalledWith({ owner_user_id: "user-9" })
+    })
+
+    it("already-owned rows are left alone (idempotent re-consent)", async () => {
+      const { res, updateFn } = await consentAs("community_instance", "user-1")
+      expect(res.statusCode).toBe(200)
+      expect(updateFn).not.toHaveBeenCalled()
+    })
+
+    it("dashboard-registered apps (kind=user) are never claimed", async () => {
+      const { res, updateFn } = await consentAs("user", null)
+      expect(res.statusCode).toBe(200)
+      expect(updateFn).not.toHaveBeenCalled()
+    })
+  })
 })

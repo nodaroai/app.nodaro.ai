@@ -62,6 +62,13 @@ on:
       - "tools/community-smoke.mjs"
       - ".github/workflows/community-e2e.yml"
   workflow_dispatch: {}
+  # Nightly, against the PUBLISHED image (ghcr…:latest) — the artifact
+  # self-hosters actually run. Push/PR runs build from source; nothing watched
+  # the published image at rest (a provider change, an expired dependency, a
+  # broken mirror) until release check 53 (2026-08-16). Internal repo only,
+  # where the alert issue lands. 04:23 UTC = an hour after the nightly mirror.
+  schedule:
+    - cron: '23 4 * * *'
 
 # One run per ref — the stack is heavy and a superseded run tells us nothing.
 concurrency:
@@ -70,6 +77,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   e2e:
@@ -96,6 +104,7 @@ jobs:
       # not a release. The multi-arch push-by-digest build lives in
       # community-image.yml and runs only on the public mirror.
       - name: Build the community image
+        if: github.event_name != 'schedule'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -117,9 +126,13 @@ jobs:
       # ERROR branch here: with the default (app.nodaro.ai) and
       # COMMUNITY_CONNECT_ENABLED now on in production, every CI run would
       # otherwise mint a real DCR client on the production cloud.
+      - name: Pull the published community image (nightly)
+        if: github.event_name == 'schedule'
+        run: docker pull ghcr.io/nodaroai/nodaro-community:latest
       - name: Boot the community stack
         env:
-          NODARO_IMAGE: nodaro-community:ci
+          # Push/PR: the image built above. Nightly: the published one.
+          NODARO_IMAGE: ${{ github.event_name == 'schedule' && 'ghcr.io/nodaroai/nodaro-community:latest' || 'nodaro-community:ci' }}
           NODARO_CLOUD_URL: http://127.0.0.1:9
         run: |
           docker compose -f docker-compose.community.yml up -d --wait --wait-timeout 420 --no-build
@@ -166,6 +179,24 @@ jobs:
         run: |
           docker compose -f docker-compose.community.yml ps
           docker compose -f docker-compose.community.yml logs --no-color --tail 400
+
+      # Nightly only: a broken PUBLISHED image must not fail silently (the
+      # same one-issue-per-outage pattern as mirror-to-public).
+      - name: Alert on nightly failure (auto-issue)
+        if: failure() && github.event_name == 'schedule' && github.repository == 'nodaroai/app.nodaro.ai-internal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create community-image-failure --repo "$GITHUB_REPOSITORY" --color B60205 --description "nightly community-e2e against the published image failed" --force 2>/dev/null || true
+          OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label community-image-failure --state open --json number --jq '.[0].number // empty')
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "nightly community-e2e (published image) failed again: $RUN_URL"
+          else
+            BODY=$(printf 'The nightly community contract probe against the PUBLISHED image (ghcr.io/nodaroai/nodaro-community:latest) failed: %s\n\nThis is what self-hosters download today. Check the run log for the contract that broke; close this issue when a nightly run succeeds.' "$RUN_URL")
+            gh issue create --repo "$GITHUB_REPOSITORY" --label community-image-failure --title "community-e2e: the published image fails the contract probe" --body "$BODY"
+          fi
 
       - name: Tear down
         if: always()

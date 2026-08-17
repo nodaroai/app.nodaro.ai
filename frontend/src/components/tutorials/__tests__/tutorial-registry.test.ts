@@ -5,7 +5,7 @@ import { getTutorial, hasTutorial } from "../tutorial-registry"
 // route and the breadcrumb all ask it the same question, so a slug being
 // registered is what turns the guided view on everywhere at once.
 describe("tutorial registry", () => {
-  it.each(["multi-reference-control", "welcome-demo", "person-node-basics", "suno-music-basics", "social-media-autopilot", "underwater-giants", "get-started-with-image-editing", "camera-coverage"])("recognises %s", (slug) => {
+  it.each(["multi-reference-control", "welcome-demo", "person-node-basics", "suno-music-basics", "social-media-autopilot", "underwater-giants", "get-started-with-image-editing", "camera-coverage", "one-character-any-scene"])("recognises %s", (slug) => {
     expect(hasTutorial(slug)).toBe(true)
     expect(getTutorial(slug)).not.toBeNull()
   })
@@ -37,7 +37,7 @@ describe("tutorial registry", () => {
     }
   })
 
-  it.each(["multi-reference-control", "welcome-demo", "person-node-basics", "suno-music-basics", "social-media-autopilot", "underwater-giants", "get-started-with-image-editing", "camera-coverage"])(
+  it.each(["multi-reference-control", "welcome-demo", "person-node-basics", "suno-music-basics", "social-media-autopilot", "underwater-giants", "get-started-with-image-editing", "camera-coverage", "one-character-any-scene"])(
     "gives %s the pieces the shell needs",
     (slug) => {
       const def = getTutorial(slug)!

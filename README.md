@@ -236,6 +236,17 @@ Nodaro is built alongside — and embeds — open projects:
   studio product built entirely on the public Nodaro API and SDK: proof that
   the headless surface is complete.
 
+## Questions, bugs, support
+
+- **Found a bug or something confusing?** Open an issue — the template asks for
+  the few details that make it fixable:
+  [github.com/nodaroai/app.nodaro.ai/issues/new/choose](https://github.com/nodaroai/app.nodaro.ai/issues/new/choose).
+- **Security problem?** Do not open an issue — see [SECURITY.md](SECURITY.md)
+  (private advisory or security@nodaro.ai).
+- **Stuck on an install?** [Community Edition Quickstart → Troubleshooting](docs/community-edition-quickstart.md#troubleshooting)
+  and [Deployment](docs/deployment.md) cover the common failures.
+- **Commercial licensing:** [license@nodaro.ai](mailto:license@nodaro.ai).
+
 ## Contributing
 
 Contributions are welcome — see [Contributing](docs/contributing.md) for dev
@@ -246,7 +257,7 @@ the CLA bot will prompt on your first pull request and never again after.
 
 ## License
 
-Nodaro is **fair-code** with three license tiers — full overview in
+Nodaro is **fair-code** with four license tiers — full overview in
 [`LICENSE.md`](LICENSE.md):
 
 - **Community code** (default) — [Nodaro Sustainable Use License](LICENSE):

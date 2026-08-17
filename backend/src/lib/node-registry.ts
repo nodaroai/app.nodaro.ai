@@ -1,6 +1,7 @@
 import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
+import { hasCredits } from "./config.js"
 
 export type NodeCategory =
   | "input"
@@ -1144,8 +1145,20 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "exposure-settings",    label: "Exposure Settings",    category: "parameter", description: "Multi-dim picker for aperture + shutter-speed + ISO (20 catalog options across 3 fields). Emits a camera-exposure prompt fragment via the cinematography handle.", outputType: "text" },
 ]
 
-/** Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS. */
+/**
+ * Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS.
+ *
+ * On an edition without a credit system (community / business) the
+ * descriptors carry NO `creditCost` at all — not the enriched one and not
+ * the literal declared on the entry. `GET /v1/nodes` is the discovery
+ * contract SDK / CLI / MCP callers build against; telling them each node
+ * costs N credits on an install with no wallet and no billing routes was the
+ * same family as the editor's credit badges, one layer lower (#646).
+ */
 export function getEnrichedRegistry(): NodeDescriptor[] {
+  if (!hasCredits()) {
+    return NODE_REGISTRY.map(({ creditCost: _omit, ...desc }) => desc)
+  }
   return NODE_REGISTRY.map((desc) => {
     if (desc.creditCost !== undefined) return desc
     const cost = STATIC_CREDIT_COSTS[desc.type]
