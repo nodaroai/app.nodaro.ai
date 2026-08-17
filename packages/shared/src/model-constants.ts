@@ -558,6 +558,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "nano-banana-2",
   "nano-banana-2-lite",
   "grok",
+  "grok-2",
   "gpt-image",
   "gpt-image-2",
   "imagen4",
@@ -623,7 +624,28 @@ export const IMAGE_EDIT_PROVIDERS = [
   // grok-upscale takes a prior Grok generation's task_id (NOT an image URL) —
   // see edit-image route for the taskId-vs-imageUrl branching.
   "grok-upscale",
+  // Grok Imagine 2 task-chained ops — same task_id contract as grok-upscale.
+  // grok-2-edit: prompt edit of a prior grok-2 generation, optionally region-
+  // targeted via mask indexes from grok-2-segment. grok-2-segment: FREE named
+  // segment-mask map of a prior grok-2 generation.
+  "grok-2-edit",
+  "grok-2-segment",
 ] as const
+
+/**
+ * Edit providers that take a PRIOR KIE Grok generation's task id instead of
+ * an image URL. Single source of truth for the taskId-vs-imageUrl branching:
+ * the edit-image route requires `taskId` (imageUrl alone is rejected), the
+ * worker routes `taskId` into the provider call, and the KIE model config
+ * (`imageParam: "task_id"`) places it in the request body. Membership here
+ * must match the KIE configs with `imageParam: "task_id"` — guarded by
+ * backend/src/routes/__tests__/edit-image.test.ts.
+ */
+export const TASK_CHAINED_EDIT_PROVIDERS: ReadonlySet<string> = new Set([
+  "grok-upscale",
+  "grok-2-edit",
+  "grok-2-segment",
+])
 
 /** Modify image providers (I2I + edit-with-prompt) */
 export const MODIFY_IMAGE_PROVIDERS = [
@@ -1071,6 +1093,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "flux": "composite",
   "flux-flex": "composite",
   "grok": "composite",
+  "grok-2": "composite",
   "imagen4": "composite",
   "imagen4-fast": "composite",
   "imagen4-ultra": "composite",

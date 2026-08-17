@@ -86,7 +86,13 @@ export const RETENTION_DAYS = {
 } as const
 
 export const FREE_TIER_RESTRICTIONS = {
-  dailyCreditCap: 500,
+  // Daily spend cap for free-tier accounts (payg "web-free" spending rides it
+  // too). null = no daily cap — disabled 2026-08-17; total free exposure is
+  // bounded by the one-time 1,500 signup grant (profiles.subscription_credits
+  // DEFAULT, migration 295). To re-enable, set a number AND re-seed
+  // tier_config.daily_credit_limit for 'free' in a migration —
+  // free-tier-config.test.ts enforces that pairing.
+  dailyCreditCap: null as number | null,
   blockedModels: ["veo3", "veo3.1", "gemini-omni-video:4k:4", "gemini-omni-video:4k:6", "gemini-omni-video:4k:8", "gemini-omni-video:4k:10", "gemini-omni-video:4k:vref"],
   watermark: true,
 } as const

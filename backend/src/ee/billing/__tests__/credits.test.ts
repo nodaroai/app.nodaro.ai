@@ -338,27 +338,26 @@ describe("CreditsService", () => {
       expect(result.required).toBe(2000)
     })
 
-    it("returns not allowed when free tier daily cap is exceeded", async () => {
+    it("free tier has no daily cap — allowed even after heavy same-day spend", async () => {
       mockTable("model_pricing", {
         credit_cost: 1,
         is_enabled: true,
         tier_restriction: null,
       })
 
-      const dailyCapProfile: CreditProfile = {
+      const heavySpendProfile: CreditProfile = {
         lifetime_topup_credits: 0,
         tier: "free",
         subscription_credits: 50,
         topup_credits: 10,
-        daily_spent_credits: 500, // already at cap of 500
+        daily_spent_credits: 1400, // would have exceeded the old 500/day cap
         last_daily_reset: new Date().toISOString(), // today, so no reset
       }
 
-      const result = await CreditsService.checkCreditsWithProfile(userId, dailyCapProfile, "flux")
-      expect(result.allowed).toBe(false)
-      expect(result.error).toContain("Daily credit limit reached")
-      expect(result.dailyLimit).toBe(500)
-      expect(result.dailySpent).toBe(500)
+      const result = await CreditsService.checkCreditsWithProfile(userId, heavySpendProfile, "flux")
+      expect(result.allowed).toBe(true)
+      expect(result.dailyLimit).toBeUndefined()
+      expect(result.dailySpent).toBeUndefined()
       expect(result.watermark).toBe(true)
     })
 

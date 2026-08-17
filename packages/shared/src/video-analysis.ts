@@ -100,6 +100,21 @@ export type VideoAnalysisTransition = (typeof VIDEO_ANALYSIS_TRANSITIONS)[number
  * the majority of shots.
  */
 export const VIDEO_ANALYSIS_SPEED_EFFECTS = ["slow-motion", "ramp-in", "ramp-out", "timelapse", "freeze", "reverse"] as const
+
+/** CHRONICLE TIME (2026-08-17): the STORY clock, per scene, as read from the
+ *  pictures — light, sky, practicals. "ambiguous" is the honest answer for a
+ *  windowless interior; guessing day is exactly the kind of tidy inference
+ *  the analysis doctrine forbids. */
+export const VIDEO_ANALYSIS_TIMES_OF_DAY = ["dawn", "day", "dusk", "night", "ambiguous"] as const
+
+/** STORY JUMP since the PREVIOUS scene in the list: how much narrative time
+ *  passed across the cut, judged from evidence (wardrobe change, aged
+ *  subjects, season, a title card), not from the cut itself. Time outranks
+ *  location for continuity judgements (same person, new place, continuous
+ *  time ⇒ same outfit; same place, years later ⇒ anything may differ), which
+ *  is why this is a structured field and not prose. "unclear" is the honest
+ *  default; the FIRST scene of a clip is "continuous" by convention. */
+export const VIDEO_ANALYSIS_STORY_JUMPS = ["continuous", "same-day", "another-day", "years-later", "unclear"] as const
 export type VideoAnalysisSpeedEffect = (typeof VIDEO_ANALYSIS_SPEED_EFFECTS)[number]
 
 /**
@@ -268,6 +283,12 @@ const windowSceneBase = z.object({
   angle: z.enum(VIDEO_ANALYSIS_SHOT_ANGLES).optional(),
   /** Time manipulation. Absent ⇒ normal speed. */
   speed: z.enum(VIDEO_ANALYSIS_SPEED_EFFECTS).optional(),
+  /** CHRONICLE TIME (2026-08-17) — see the consts' docstrings. Both optional:
+   *  absent on every pre-2.6.0 analysis, and legitimately absent when the
+   *  analyser cannot read the clock. Enum + optional keeps the window decode
+   *  grammar congruence-safe (no ints, no maxItems). */
+  timeOfDay: z.enum(VIDEO_ANALYSIS_TIMES_OF_DAY).optional(),
+  storyJump: z.enum(VIDEO_ANALYSIS_STORY_JUMPS).optional(),
   visual: z.string().min(1),
   /**
    * Text burned into the PICTURE of this shot — titles, captions, lower-thirds,
@@ -520,4 +541,53 @@ export function aspectRatioFromDims(w: number, h: number): string {
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
   const g = gcd(Math.round(w), Math.round(h))
   return `${Math.round(w) / g}:${Math.round(h) / g}`
+}
+
+/** Sung-vocal evidence in a music layer's gen-ready description. Word-bounded
+ *  and deliberately WITHOUT bare "song"/"music" (an instrumental bed is
+ *  routinely described as a "pop song"). Quoted text of some length inside a
+ *  music layer counts too — analysers quote lyrics. */
+const MUSIC_VOCAL_RE = /\b(?:lyrics?|sung|sings?|singing|vocals?|chorus|verse|rap(?:ping|ped)?|a cappella)\b/i
+const MUSIC_VOCAL_QUOTE_RE = /["\u201c][^"\u201d]{6,}["\u201d]/
+/** Negated-vocal phrasing — a layer matching this contributes NO vocal
+ *  evidence (it does not veto other layers). */
+const MUSIC_NO_VOCAL_RE = /\b(?:no|without|non)[- ](?:vocals?|lyrics?|singing)\b|\binstrumental\b|\bwordless\b/i
+
+/**
+ * MUSIC-VIDEO INFERENCE (2026-08-17): is this clip a music video — one whose
+ * soundtrack IS the content, to be taken as-is with no stem separation?
+ *
+ * Lives in SHARED because two sides must agree BYTE-FOR-BYTE on the answer:
+ * the recast route derives `music.mode` from it server-side, and the client
+ * both prices the original-audio prep and GUARDS on the server's derived mode
+ * at generate time — two hand-written copies of this heuristic would drift
+ * into that guard firing on honest runs. Deterministic, throw-proof on any
+ * malformed analysis (absent fields ⇒ false).
+ *
+ * The rule is conservative toward FALSE (a false positive keeps unwanted
+ * dialogue in the render; a false negative merely runs the separation, which
+ * was yesterday's default): at least 4 scenes, at least 80% of scenes carry a
+ * music layer, and at least one music layer carries sung-vocal evidence that
+ * is not negated ("instrumental", "no vocals").
+ *
+ * An EXPLICIT analyze-time flag always wins — callers use
+ * `flag === true || inferMusicVideo(analysis)` and never let a cached false
+ * suppress the inference (the flag can only ever be set true; false means
+ * "unset", not "denied").
+ */
+export function inferMusicVideo(analysis: {
+  scenes?: ReadonlyArray<{ audio?: ReadonlyArray<{ mode?: string; content?: string }> }>
+} | undefined | null): boolean {
+  const scenes = analysis?.scenes ?? []
+  if (scenes.length < 4) return false
+  const musicLayers = (sc: (typeof scenes)[number]) => (sc.audio ?? []).filter((a) => a?.mode === "music")
+  const withMusic = scenes.filter((sc) => musicLayers(sc).length > 0).length
+  if (withMusic / scenes.length < 0.8) return false
+  return scenes.some((sc) =>
+    musicLayers(sc).some((a) => {
+      const content = typeof a.content === "string" ? a.content : ""
+      if (MUSIC_NO_VOCAL_RE.test(content)) return false
+      return MUSIC_VOCAL_RE.test(content) || MUSIC_VOCAL_QUOTE_RE.test(content)
+    }),
+  )
 }

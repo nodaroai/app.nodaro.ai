@@ -265,6 +265,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "flux": 13,                     // (1K default)
   "flux:2K": 20,
   "grok": 10,
+  "grok-2": 10,                   // Grok Imagine Image 2.0 t2i ($0.02)
   "gpt-image": 10,                // (medium default)
   "gpt-image:high": 60,
   "gpt-image-2": 15,              // (1K default; estimated, recalibrate from anomalies)
@@ -344,6 +345,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz-image-upscale:4K": 50,
   "topaz-image-upscale:8K": 100,
   "grok-upscale": 25,
+  // Grok Imagine 2 task-chained ops (prior grok-2 task_id, not an image URL)
+  "grok-2-edit": 10,              // prompt/region edit ($0.02)
+  "grok-2-segment": 0,            // segment map is FREE upstream
   // ── Image-to-Image ──
   "flux-i2i": 60,                 // (1K default)
   "flux-i2i:2K": 60,
@@ -1936,24 +1940,38 @@ export class CreditsService {
       }
     }
 
-    // Free tier: daily credit cap. Connected community instances are exempt
-    // (founder decision D2: don't interrupt the first evening) — the total
-    // exposure is still bounded by the one-time 1,500 grant, and the
-    // per-instance monthly cap guards run in the credit guard.
+    // Free tier: daily credit cap (dailyCreditCap null = cap disabled, the
+    // state since 2026-08-17 — total exposure is bounded by the one-time
+    // 1,500 signup grant). When a cap is set, connected community instances
+    // are exempt (founder decision D2: don't interrupt the first evening) —
+    // their per-instance monthly cap guards run in the credit guard.
     if (isFree && !surface?.communityInstance) {
       const dailyCap = FREE_TIER_RESTRICTIONS.dailyCreditCap
-      const dailySpent = await getEffectiveDailySpent(
-        userId,
-        profile.daily_spent_credits ?? 0,
-        profile.last_daily_reset ?? null
-      )
+      if (dailyCap !== null) {
+        const dailySpent = await getEffectiveDailySpent(
+          userId,
+          profile.daily_spent_credits ?? 0,
+          profile.last_daily_reset ?? null
+        )
 
-      if (dailySpent >= dailyCap) {
+        if (dailySpent >= dailyCap) {
+          return {
+            allowed: false,
+            error: `Daily credit limit reached for free tier. Limit: ${dailyCap}, Spent today: ${dailySpent}. Upgrade for higher limits.`,
+            balance: totalBalance,
+            required: pricing.creditCost,
+            dailyLimit: dailyCap,
+            dailySpent,
+            watermark,
+          }
+        }
+
         return {
-          allowed: false,
-          error: `Daily credit limit reached for free tier. Limit: ${dailyCap}, Spent today: ${dailySpent}. Upgrade for higher limits.`,
+          allowed: true,
           balance: totalBalance,
           required: pricing.creditCost,
+          subscriptionCredits,
+          topupCredits,
           dailyLimit: dailyCap,
           dailySpent,
           watermark,
@@ -1966,8 +1984,6 @@ export class CreditsService {
         required: pricing.creditCost,
         subscriptionCredits,
         topupCredits,
-        dailyLimit: dailyCap,
-        dailySpent,
         watermark,
       }
     }
@@ -2054,8 +2070,9 @@ export class CreditsService {
       : ((userTier === "free" || webFree) && FREE_TIER_RESTRICTIONS.watermark)
 
     // Daily credit cap, enforced atomically inside reserve_credits (closes the
-    // TOCTOU the read-only creditGuard preHandler left open). Free tier uses the
-    // fixed cap; paid tiers use their configured daily_credit_limit (null = no cap).
+    // TOCTOU the read-only creditGuard preHandler left open). Free tier uses
+    // FREE_TIER_RESTRICTIONS.dailyCreditCap (null since 2026-08-17 = no cap);
+    // paid tiers use their configured daily_credit_limit (null = no cap).
     // Web-free payg runs ride the free cap — they ARE free-tier spending.
     const dailyLimit: number | null = options?.communityInstance
       ? null // D2: connected community instances ride uncapped days

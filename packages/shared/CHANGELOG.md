@@ -1,5 +1,34 @@
 # @nodaro/shared
 
+## 2.6.0
+
+### Minor Changes
+
+- 8221886: **@nodaro/shared**
+
+  - `resolveEffectiveSourceType` now also remaps aggregate lane handles: a wire leaving `collect` / `group` on `out-image` / `out-video` / `out-audio` / `out-text` resolves to the plain producer of that lane's type (`upload-image` / `upload-video` / `upload-audio` / `list`), so lane pips connect to typed inputs exactly like the equivalent upload node. New export `AGGREGATE_LANE_SOURCE_TYPES`.
+  - New `computeAggregateLanes(nodeId, wiredTypes, buckets, edges)` in the group-aggregation module — the lane set an aggregate node exposes (wired-input types ∪ bucket contents ∪ lanes referenced by outgoing edges).
+  - Reduce strategy registry ("Choose Best"): labels/descriptions rewritten in plain language (`AI picks the best`, `Join into one text`, `First that has content`, `Count them`, `Most common answer`, `Merge JSON objects`); the `pick-best-llm` config schema gains optional `llmModel` (the judge model id from the LLM registry).
+  - New `LlmFeature` `"pick-best-llm"` with an entry in `LLM_FEATURE_DEFAULTS`. Its credit identifiers tier by the judge model like every other LLM feature (`reduce:pick-best-llm[:economy|:premium]`).
+
+  **@nodaro/sdk**
+
+  - `client.reduce` docs: `pick-best-llm` accepts `strategyConfig.llmModel` (judge model; omitted = default; its tier sets the credit price).
+
+- d36034c: **@nodaro/shared**
+
+  - Seedance 2.5 (`seedance-2-5`) gains the **1080p** resolution tier (KIE "Seedance 2.5 now supports 1080P", probe-verified 2026-08-17 — 4k/2k/1440p are still rejected). `MODEL_CATALOG` `resolutions` is now `["480p", "720p", "1080p"]`, catalog pricing rows carry the 8s/30s 1080p anchors (2280/8550 no-ref, 1370 with-ref at 8s), and the `QUALITY_MAP` `high` rung maps to `1080p` (was `720p`). Everything derived from the catalog — credit identifier clamping, `/v1/nodes` `providerResolutions`, GVP/EVP tier clamps, resolution dropdowns — picks the new tier up automatically.
+
+  **@nodaro/prompts**
+
+  - Seedance 2.5 doctrine and wizard capability strings updated for the 1080p tier (routing advice now sends only 4K jobs to `seedance-2`).
+
+### Patch Changes
+
+- 3792fbb: **@nodaro/shared**
+
+  - Reduce strategy registry: `ReduceStrategy` gains an optional `usesLlm` flag, set on `pick-best-llm` (the AI judge). Anything that treats "an LLM strategy" specially — such as a self-hosted install forwarding the judge to its nodaro.ai connection — reads this flag instead of matching on the strategy id, so a future LLM strategy is covered by declaring it.
+
 ## 2.5.0
 
 ### Minor Changes

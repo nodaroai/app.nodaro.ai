@@ -46,12 +46,15 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 <!-- AUTO-GEN:START model-table-image -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
+| Grok Imagine 2 Segment Map | xAI | Everyday | 0 | edit | FREE semantic segment map of a prior grok-2 generation — named region masks whose indexes feed grok-2-edit's region targeting. |
 | Recraft Crisp Upscale | Recraft | Everyday | 2 | upscale | Light-weight image upscale (Recraft Crisp). |
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 2 | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Standard | 3 | t2i | Open Flux 2 9B from BFL — fast, no safety filter. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Standard | 3 | remove-bg | Remove image background. Cheap utility. |
 | Grok Imagine | xAI | Premium | 10 | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
 | Grok Imagine (I2I) | xAI | Premium | 10 | i2i | Image-to-image with Grok. |
+| Grok Imagine 2 | xAI | Premium | 10 | t2i | Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits). |
+| Grok Imagine 2 Edit | xAI | Premium | 10 | edit | Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions. |
 | Imagen 4 Fast | Google | Premium | 10 | t2i | Cheaper / quicker Imagen 4 tier. |
 | Nano Banana 2 Lite | Google | Premium | 10 | t2i, i2i | Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing. |
 | Nano Banana Edit | Google | Premium | 10 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |

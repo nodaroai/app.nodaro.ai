@@ -68,9 +68,18 @@ const ALL_MODEL_KEYS = [
 // Tests
 // ---------------------------------------------------------------------------
 
+// Models that are genuinely free upstream (KIE charges 0). Explicit allowlist
+// so an ACCIDENTAL zero (forgotten pricing) still fails the positivity check.
+const FREE_KIE_MODELS = new Set(["grok-2-segment"])
+
 describe("KIE model config integrity", () => {
-  it("every image model has positive cost and credits", () => {
+  it("every image model has positive cost and credits (unless explicitly free)", () => {
     for (const [key, cfg] of Object.entries(KIE_IMAGE_MODELS)) {
+      if (FREE_KIE_MODELS.has(key)) {
+        expect(cfg.cost, `${key} cost`).toBe(0)
+        expect(cfg.credits, `${key} credits`).toBe(0)
+        continue
+      }
       expect(cfg.cost, `${key} cost`).toBeGreaterThan(0)
       expect(cfg.credits, `${key} credits`).toBeGreaterThan(0)
     }

@@ -12,7 +12,7 @@ import type {
   ReconcileOpts,
 } from "../provider.interface.js"
 import sharp from "sharp"
-import { KieError, createSanitizedError, runKieTask } from "./client.js"
+import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -347,10 +347,17 @@ export class KieImageProvider
     const providerMs = ("providerMs" in result && typeof result.providerMs === "number")
       ? result.providerMs
       : undefined
+    // Surface the KIE task id so it lands in output_data.kieTaskId (via
+    // buildProviderMeta) — grok-2's task-chained edit/segment endpoints and
+    // grok-upscale consume it downstream.
+    const kieTaskId = ("taskId" in result && typeof result.taskId === "string")
+      ? result.taskId
+      : undefined
     return {
       url: imageUrl,
       ...(extraUrls.length ? { extraUrls } : {}),
       cost: modelConfig.cost,
+      ...(kieTaskId && { kieTaskId }),
       ...(providerMs !== undefined && { providerMs }),
     }
   }
@@ -411,7 +418,8 @@ export class KieImageProvider
       provider === "qwen-edit" ||
       provider === "seedream-edit" ||
       provider === "seedream-5-lite-i2i" ||
-      provider === "seedream-5-pro-i2i"
+      provider === "seedream-5-pro-i2i" ||
+      provider === "grok-2-edit"
     )) {
       input.prompt = prompt
     }
@@ -421,7 +429,32 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, providerMs } = await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+    const { resultJson, providerMs, taskId } = await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+
+    // Grok 2 segment-map returns named region masks in resultObject.segments
+    // (NOT resultUrls). Map onto the standard result shape: first mask → url,
+    // rest → extraUrls, with {index,name} sidecar metadata order-aligned so
+    // the worker can persist it next to the R2-uploaded masks.
+    if (provider === "grok-2-segment") {
+      const segments = extractGrokSegments(resultJson)
+      if (!segments.length) {
+        throw createSanitizedError(
+          "segment-map task succeeded but no segments in result",
+          "Image editing"
+        )
+      }
+      console.log(
+        `[KIE.ai] Segment map completed: ${segments.length} segments (${segments.map((s) => s.name).join(", ")})`
+      )
+      return {
+        url: segments[0].maskUrl,
+        ...(segments.length > 1 ? { extraUrls: segments.slice(1).map((s) => s.maskUrl) } : {}),
+        cost: modelConfig.cost,
+        segments: segments.map(({ index, name }) => ({ index, name })),
+        ...(taskId ? { kieTaskId: taskId } : {}),
+        ...(providerMs !== undefined && { providerMs }),
+      }
+    }
 
     const allUrls = resultJson.resultUrls ?? []
     const outputUrl = allUrls[0]
@@ -441,7 +474,43 @@ export class KieImageProvider
       url: outputUrl,
       ...(extraUrls.length ? { extraUrls } : {}),
       cost: modelConfig.cost,
+      ...(taskId ? { kieTaskId: taskId } : {}),
       ...(providerMs !== undefined && { providerMs }),
     }
   }
+}
+
+interface GrokSegment {
+  index: number
+  name: string
+  maskUrl: string
+}
+
+/**
+ * Parse the grok-2 segment-map result. KIE returns the segments under
+ * `resultObject.segments` (each {index, name, maskUrl}); read defensively —
+ * top-level `segments` and snake_case `mask_url` are tolerated, entries
+ * without a usable mask URL are dropped.
+ */
+function extractGrokSegments(resultJson: KieResultJson): GrokSegment[] {
+  const parsed = resultJson as {
+    resultObject?: { segments?: unknown }
+    segments?: unknown
+  }
+  const raw = parsed.resultObject?.segments ?? parsed.segments
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry) => {
+    const seg = entry as { index?: unknown; name?: unknown; maskUrl?: unknown; mask_url?: unknown }
+    const maskUrl = typeof seg.maskUrl === "string" && seg.maskUrl
+      ? seg.maskUrl
+      : typeof seg.mask_url === "string" && seg.mask_url
+        ? seg.mask_url
+        : null
+    if (!maskUrl) return []
+    return [{
+      index: typeof seg.index === "number" ? seg.index : 0,
+      name: typeof seg.name === "string" ? seg.name : "",
+      maskUrl,
+    }]
+  })
 }

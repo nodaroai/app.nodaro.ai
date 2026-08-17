@@ -111,6 +111,9 @@ export function runImageGeneration(
     "generatedImageUrl",
     "Image generation",
     ctx,
+    // KIE generations surface their task id — grok-2's task-chained
+    // edit/segment ops (and grok-upscale) consume it downstream.
+    extractKieTaskId,
   );
 }
 

@@ -219,4 +219,96 @@ describe("KIE image generation — request body snapshots", () => {
     // negative_prompt MUST be absent — flux doesn't support it natively
     expect(Object.keys(captured.body)).not.toContain("negative_prompt")
   })
+
+  it("grok-2 sends only aspect_ratio to grok-imagine-image-2-0/text-to-image and surfaces kieTaskId", async () => {
+    runKieTaskSpy.mockResolvedValue({
+      resultJson: { resultUrls: ["https://kie.test/result.png"] },
+      providerMs: 1000,
+      taskId: "task_grok_imagine_image_2_0_123",
+    })
+    const result = await provider.generateImage("a robot", undefined, "grok-2")
+    const [model, body] = runKieTaskSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect({ model, body }).toMatchInlineSnapshot(`
+      {
+        "body": {
+          "aspect_ratio": "16:9",
+          "prompt": "a robot",
+        },
+        "model": "grok-imagine-image-2-0/text-to-image",
+      }
+    `)
+    // The task id must surface — grok-2's edit/segment chain consumes it.
+    expect(result.kieTaskId).toBe("task_grok_imagine_image_2_0_123")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Grok Imagine 2 task-chained edit ops — the worker passes the PRIOR
+// generation's task id through editImage's imageUrl arg; imageParam
+// "task_id" must place it in the request body (never as an image URL).
+// ---------------------------------------------------------------------------
+
+describe("KIE image editing — grok-2 task-chained request bodies", () => {
+  it("grok-2-edit sends task_id + prompt + mask_indexs (no image params)", async () => {
+    await provider.editImage(
+      "task_grok_prior_123",
+      "make the sky stormy",
+      "grok-2-edit",
+      { mask_indexs: [2, 5] },
+    )
+    const [model, body] = runKieTaskSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect({ model, body }).toMatchInlineSnapshot(`
+      {
+        "body": {
+          "mask_indexs": [
+            2,
+            5,
+          ],
+          "prompt": "make the sky stormy",
+          "task_id": "task_grok_prior_123",
+        },
+        "model": "grok-imagine-image-2-0/image-edit",
+      }
+    `)
+  })
+
+  it("grok-2-segment sends task_id only and maps resultObject.segments onto url/extraUrls/segments", async () => {
+    runKieTaskSpy.mockResolvedValue({
+      resultJson: {
+        resultObject: {
+          segments_count: 3,
+          segments: [
+            { index: 1, name: "sky", maskUrl: "https://kie.test/mask-1.png" },
+            { index: 2, name: "person", maskUrl: "https://kie.test/mask-2.png" },
+            { index: 3, name: "tree", maskUrl: "https://kie.test/mask-3.png" },
+          ],
+        },
+      },
+      providerMs: 500,
+      taskId: "task_grok_segment_999",
+    })
+    const result = await provider.editImage("task_grok_prior_123", undefined, "grok-2-segment")
+    const [model, body] = runKieTaskSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(model).toBe("grok-imagine-image-2-0/segment-map")
+    expect(body).toEqual({ task_id: "task_grok_prior_123" })
+    // First mask → url, rest → extraUrls, {index,name} sidecar order-aligned.
+    expect(result.url).toBe("https://kie.test/mask-1.png")
+    expect(result.extraUrls).toEqual(["https://kie.test/mask-2.png", "https://kie.test/mask-3.png"])
+    expect(result.segments).toEqual([
+      { index: 1, name: "sky" },
+      { index: 2, name: "person" },
+      { index: 3, name: "tree" },
+    ])
+    expect(result.cost).toBe(0)
+  })
+
+  it("grok-2-segment with no segments in the result throws (never silently returns nothing)", async () => {
+    runKieTaskSpy.mockResolvedValue({
+      resultJson: { resultObject: { segments_count: 0, segments: [] } },
+      providerMs: 500,
+    })
+    await expect(
+      provider.editImage("task_grok_prior_123", undefined, "grok-2-segment"),
+    ).rejects.toThrow(/no segments/)
+  })
 })

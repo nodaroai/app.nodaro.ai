@@ -401,3 +401,134 @@ describe("POST /v1/edit-image — grok-upscale provider", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// Grok Imagine 2 task-chained providers — edit (prompt + optional region
+// mask indexes) and segment map (free), both keyed off a prior grok-2
+// generation's taskId.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/edit-image — grok-2-edit / grok-2-segment providers", () => {
+  it("grok-2-edit accepts taskId + prompt + maskIndexes and forwards them to the queue", async () => {
+    mockJobInsert({ data: { id: "job-grok2-edit" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-edit",
+        taskId: "task_grok_imagine_image_2_0_123",
+        prompt: "make the sky stormy",
+        maskIndexes: [2, 5],
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({
+        provider: "grok-2-edit",
+        taskId: "task_grok_imagine_image_2_0_123",
+        prompt: "make the sky stormy",
+        maskIndexes: [2, 5],
+      })
+    )
+  })
+
+  it("grok-2-edit returns 400 without a prompt", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-edit",
+        taskId: "task_grok_imagine_image_2_0_123",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("grok-2-edit")
+  })
+
+  it("grok-2-edit returns 400 without taskId (even with imageUrl)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-edit",
+        imageUrl: "https://example.com/photo.png",
+        prompt: "make the sky stormy",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("grok-2-segment accepts taskId with no prompt (segment map is prompt-free)", async () => {
+    mockJobInsert({ data: { id: "job-grok2-segment" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-segment",
+        taskId: "task_grok_imagine_image_2_0_123",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({
+        provider: "grok-2-segment",
+        taskId: "task_grok_imagine_image_2_0_123",
+      })
+    )
+  })
+
+  it("rejects maskIndexes with 0 or negative entries (KIE indexes are 1-based)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-edit",
+        taskId: "task_grok_imagine_image_2_0_123",
+        prompt: "make the sky stormy",
+        maskIndexes: [0],
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Invariant: TASK_CHAINED_EDIT_PROVIDERS (shared, drives route/worker/MCP
+// branching) must exactly match the KIE image models registered with
+// imageParam: "task_id" (which drives the request-body placement), and every
+// member must be an IMAGE_EDIT_PROVIDERS route-enum value. A provider in one
+// set but not the other either 400s valid requests or sends a task id as an
+// image URL upstream.
+// ---------------------------------------------------------------------------
+
+describe("TASK_CHAINED_EDIT_PROVIDERS ↔ KIE imageParam task_id sync", () => {
+  it("matches the KIE image models with imageParam 'task_id' exactly", async () => {
+    const { TASK_CHAINED_EDIT_PROVIDERS, IMAGE_EDIT_PROVIDERS } = await import("@nodaro/shared")
+    const { KIE_IMAGE_MODELS } = await import("@/providers/kie/models.js")
+
+    const taskIdModels = Object.keys(KIE_IMAGE_MODELS)
+      .filter((k) => KIE_IMAGE_MODELS[k].imageParam === "task_id")
+      .sort()
+    expect([...TASK_CHAINED_EDIT_PROVIDERS].sort()).toEqual(taskIdModels)
+
+    const editEnum = new Set<string>(IMAGE_EDIT_PROVIDERS)
+    for (const provider of TASK_CHAINED_EDIT_PROVIDERS) {
+      expect(editEnum.has(provider), `${provider} missing from IMAGE_EDIT_PROVIDERS`).toBe(true)
+    }
+  })
+})

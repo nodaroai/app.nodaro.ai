@@ -5,7 +5,7 @@
 
 ## Overview
 
-Edit Image takes an existing image as input and applies a transformation operation. It supports five operations: AI upscaling (Recraft, Topaz, and Grok), background removal (Recraft), and context-aware prompt-based editing (Nano Banana Edit). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
+Edit Image takes an existing image as input and applies a transformation operation. It supports AI upscaling (Recraft, Topaz, and Grok), background removal (Recraft), context-aware prompt-based editing (Nano Banana Edit), and the Grok Imagine 2 task-chained operations — a free segment map and region-targeted prompt edits of a prior Grok 2 generation (see [Grok Imagine 2 Task-Chained Editing](#grok-imagine-2-task-chained-editing)). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
 
 ## Configuration
 
@@ -44,14 +44,28 @@ The interactive **Mask Painter** UI (Paint Mask / Edit Mask buttons, brush/erase
 | topaz-image-upscale | Topaz Upscale | Advanced upscaling with configurable factor (1x/2x/4x/8x) and target resolution (2K/4K/8K). |
 | recraft-remove-bg | Recraft Remove BG | Removes the background and outputs a transparent PNG. No additional configuration needed. |
 | nano-banana-edit | Nano Banana Edit | Context-aware image editing using a text prompt. Supports style presets, negative prompts, aspect ratio, seed, and character/asset references. |
-| grok-upscale | Grok Upscale | AI upscaling via Grok. |
+| grok-upscale | Grok Upscale | AI upscaling via Grok. Takes a prior Grok generation's `taskId` instead of an image URL. |
+| grok-2-edit | Grok Imagine 2 Edit | Prompt-based edit of a prior Grok 2 generation (`taskId` + `prompt` required). Optional `maskIndexes` restrict the edit to named regions from a segment map. Priced the same as a Grok 2 generation. |
+| grok-2-segment | Grok Imagine 2 Segment Map | **Free.** Named segment-mask map of a prior Grok 2 generation (`taskId` required, no prompt). |
+
+## Grok Imagine 2 Task-Chained Editing
+
+The three `grok-*` operations don't take an image URL. They reference a **prior Grok generation on the provider side** via `taskId` — the task id is returned in the source generation job's output as `kieTaskId` (fetch the job via the API/SDK/MCP `get_job` and read `output_data.kieTaskId`). Only Grok generations can be chained; images from other providers or uploads cannot.
+
+The full region-editing flow with `grok-2`:
+
+1. **Generate** an image with the `grok-2` provider (Generate Image node or `POST /v1/generate-image`). Note the completed job's `kieTaskId`.
+2. **Segment (optional, free)** — `POST /v1/edit-image` with `{ "provider": "grok-2-segment", "taskId": "<kieTaskId>" }`. The job's output images are the region masks, and `output_data.segments` lists `{ index, name }` pairs order-aligned with them (e.g. `1 = sky`, `2 = person`).
+3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<kieTaskId>", "prompt": "make the sky stormy", "maskIndexes": [1] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
+
+`maskIndexes` entries are the 1-based `index` values from the segment map. A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing.
 
 ## Best Practices
 
 - Use Recraft Upscale for quick, low-cost enhancement when precise resolution control is not needed.
 - Use Topaz Upscale for production-quality upscaling where you need to target a specific resolution (2K/4K/8K).
 - Recraft Remove BG outputs transparent PNGs suitable for compositing workflows.
-- Nano Banana Edit is the only Edit Image operation that accepts a text prompt -- use it for targeted modifications (e.g., "change the sky to sunset", "add a hat to the person").
+- Nano Banana Edit and Grok Imagine 2 Edit are the Edit Image operations that accept a text prompt -- use them for targeted modifications (e.g., "change the sky to sunset", "add a hat to the person").
 - Chain Edit Image nodes for multi-step operations: remove background first, then upscale.
 
 ## Common Use Cases

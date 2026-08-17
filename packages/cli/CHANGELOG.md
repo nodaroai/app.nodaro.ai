@@ -1,5 +1,35 @@
 # @nodaro/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- 6fe2aae: Surface-parity catch-up — four new command groups/subcommands:
+
+  - `nodaro models list` — browse the model catalog: capability sheets, per-variant credit tiers, featured ★ and the `doctrineCovered` ✓ flag, filterable by `--kind` / `--mode` / `--family` / `--featured`.
+  - `nodaro shots` — Cine share → remix records: `get` / `create` / `update` (visibility toggle) / `delete`.
+  - `nodaro recast` — the authored-script lane (`skill` / `validate` / `import --rights-attested`) plus headless run control (`estimate` / `create` / `start` / `status`). Cloud edition only.
+  - `nodaro pickers analyze "<text>"` — AI Fill: choose picker values from a free-text description (credit-billed).
+
+### Patch Changes
+
+- f86c20f: **@nodaro/sdk**
+
+  - `ModelSummary.pricing` is now optional — `GET /v1/models` (and the MCP `list_models` twin) omit per-variant credit pricing on editions without a credit system (community/business), the same principle `/v1/nodes` applies to `creditCost`. JSDoc on `NodeDescriptor.creditCost` and on `workflows.delete()` / `developerApps.delete()` now states the edition behavior and the `NotFoundError` thrown when the id doesn't exist or isn't yours.
+
+  **@nodaro/cli**
+
+  - `nodaro models list` renders `-` in the credits column for models served without pricing (creditless editions) instead of crashing on the missing field.
+
+- Updated dependencies [8221886]
+- Updated dependencies [f86c20f]
+- Updated dependencies [3792fbb]
+- Updated dependencies [d36034c]
+- Updated dependencies [6fe2aae]
+  - @nodaro/shared@2.6.0
+  - @nodaro/sdk@1.17.0
+  - @nodaro/prompts@1.7.1
+
 ## 1.8.1
 
 ### Patch Changes

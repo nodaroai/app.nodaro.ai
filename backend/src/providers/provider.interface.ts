@@ -14,7 +14,11 @@ export interface ProviderResult {
    *  markup is applied once at reserve over the 0%-base price. See the pricing-
    *  convention design (decision A). */
   meteredCost?: boolean
-  kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
+  kieTaskId?: string  // KIE task ID for chained operations (VEO/Runway extend-upscale; Grok task-chained edit/segment)
+  /** Grok 2 segment-map only: named region metadata, order-aligned with
+   *  [url, ...extraUrls] (and thus with the R2-uploaded output imageUrls).
+   *  `index` is the value grok-2-edit's mask_indexs region targeting expects. */
+  segments?: readonly { index: number; name: string }[]
   /** Provider-reported seed VEO actually used. Captured even when no seed
    *  was supplied — KIE returns it. Used by perfect-loop component to pin
    *  a winning roll for reruns. Currently only VEO surfaces this. */

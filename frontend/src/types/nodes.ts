@@ -6268,6 +6268,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "gpt-image", label: "GPT Image" },
           { value: "gpt-image-2", label: "GPT Image 2" },
           { value: "grok", label: "Grok" },
+          { value: "grok-2", label: "Grok Imagine 2" },
           { value: "ideogram-v3", label: "Ideogram V3" },
           { value: "imagen4", label: "Imagen 4" },
           { value: "imagen4-fast", label: "Imagen 4 Fast" },

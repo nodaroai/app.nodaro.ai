@@ -17,7 +17,7 @@ import {
 } from "./_verb-helpers.js"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
+import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
@@ -696,15 +696,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "  • `topaz-image-upscale` — Topaz AI upscale (1×/2×/4×).\n" +
         "  • `recraft-remove-bg` — remove background, returns PNG with transparency.\n" +
         "  • `nano-banana-edit` — AI-guided edit with a prompt (inpainting/outpainting).\n" +
-        "  • `grok-upscale` — Grok creative upscale (pass kie_task_id from prior Grok generation instead of image_url).",
+        "  • `grok-upscale` — Grok creative upscale (pass kie_task_id from prior Grok generation instead of image_url).\n" +
+        "  • `grok-2-segment` — FREE named segment-mask map of a prior grok-2 generation (kie_task_id required). Result masks land as the job's images; segment {index,name} pairs land in the job's output `segments` (read via get_job).\n" +
+        "  • `grok-2-edit` — prompt edit of a prior grok-2 generation (kie_task_id + prompt required); optional mask_indexes (from grok-2-segment) restrict the edit to those named regions.\n\n" +
+        "The kie_task_id for the grok ops is in the source generation job's output (`kieTaskId` via get_job).",
       inputSchema: {
-        image_url: z.string().url().optional().describe("Source image URL (all providers except grok-upscale)."),
+        image_url: z.string().url().optional().describe("Source image URL (all providers except the task-chained grok ops)."),
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
-        model: z.enum(["recraft-upscale", "topaz-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-upscale"]).optional().describe("Edit operation. Default recraft-upscale."),
+        model: z.enum(["recraft-upscale", "topaz-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-upscale", "grok-2-edit", "grok-2-segment"]).optional().describe("Edit operation. Default recraft-upscale."),
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor (for topaz-image-upscale). Default 2."),
         target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Target output resolution."),
-        prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit)."),
-        kie_task_id: z.string().optional().describe("KIE task id from prior Grok generation (required for grok-upscale instead of image_url)."),
+        prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit and grok-2-edit)."),
+        kie_task_id: z.string().optional().describe("KIE task id from a prior Grok generation (required for grok-upscale / grok-2-edit / grok-2-segment instead of image_url; read it from the generation job's output kieTaskId)."),
+        mask_indexes: z.array(z.number().int().min(1)).min(1).max(64).optional().describe("grok-2-edit only: 1-based segment indexes from a prior grok-2-segment run — restricts the edit to those regions."),
         negative_prompt: z.string().max(5000).optional(),
         style: z.string().max(500).optional(),
         seed: z.number().int().min(0).optional(),
@@ -723,13 +727,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
     },
     async (args) => {
       const provider = args.model ?? "recraft-upscale"
-      const isGrokUpscale = provider === "grok-upscale"
+      const isTaskChained = TASK_CHAINED_EDIT_PROVIDERS.has(provider)
 
-      if (isGrokUpscale && !args.kie_task_id) {
-        return { content: [{ type: "text" as const, text: "grok-upscale requires kie_task_id from the original Grok image generation." }], isError: true }
+      if (isTaskChained && !args.kie_task_id) {
+        return { content: [{ type: "text" as const, text: `${provider} requires kie_task_id from the original Grok image generation (the generation job's output kieTaskId).` }], isError: true }
       }
-      if (provider === "nano-banana-edit" && !args.prompt) {
-        return { content: [{ type: "text" as const, text: "nano-banana-edit requires a prompt." }], isError: true }
+      if ((provider === "nano-banana-edit" || provider === "grok-2-edit") && !args.prompt) {
+        return { content: [{ type: "text" as const, text: `${provider} requires a prompt.` }], isError: true }
       }
 
       const imageUrl =
@@ -737,14 +741,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         (args.image_asset_id
           ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
           : null)
-      if (!isGrokUpscale && !imageUrl) {
+      if (!isTaskChained && !imageUrl) {
         return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
       }
 
       const payload: Record<string, unknown> = {
         provider,
-        ...(imageUrl ? { imageUrl } : {}),
+        ...(imageUrl && !isTaskChained ? { imageUrl } : {}),
         ...(args.kie_task_id ? { taskId: args.kie_task_id } : {}),
+        ...(args.mask_indexes?.length ? { maskIndexes: args.mask_indexes } : {}),
         ...(args.upscale_factor ? { upscaleFactor: args.upscale_factor } : {}),
         ...(args.target_resolution ? { targetResolution: args.target_resolution } : {}),
         ...(args.prompt ? { prompt: args.prompt } : {}),

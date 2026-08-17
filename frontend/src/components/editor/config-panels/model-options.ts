@@ -12,6 +12,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
   { value: "gpt-image-2", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
+  { value: "grok-2", label: "Grok Imagine 2", desc: "Latest Grok — expressive, high-contrast imagery" },
   { value: "ideogram-v3", label: "Ideogram V3", desc: "Fast text-to-image, affordable" },
   { value: "imagen4", label: "Imagen 4", desc: "Google's latest, strong prompt adherence" },
   { value: "imagen4-fast", label: "Imagen 4 Fast", desc: "Fast Imagen, lower latency" },

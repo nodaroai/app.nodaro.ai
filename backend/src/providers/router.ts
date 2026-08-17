@@ -61,7 +61,10 @@ export interface RouteResult {
   cost: number | null
   displayCost: number | null
   providerUsed: ProviderUsed
-  kieTaskId?: string  // Provider task ID for extend/upscale operations (VEO, Runway)
+  kieTaskId?: string  // Provider task ID for chained operations (VEO/Runway extend-upscale; Grok task-chained edit/segment)
+  /** Grok 2 segment-map only: named region metadata, order-aligned with
+   *  [url, ...extraUrls]. See ProviderResult.segments. */
+  segments?: readonly { index: number; name: string }[]
   /** Provider-reported seed (VEO only). */
   seed?: number
   /** Whether the provider silently used a fallback model (VEO only). */
@@ -230,6 +233,7 @@ async function walkChainAndExecute(
       displayCost,
       providerUsed,
       kieTaskId: result.kieTaskId,
+      ...(result.segments?.length ? { segments: result.segments } : {}),
       seed: result.seed,
       fallbackFlag: result.fallbackFlag,
       providerMs: result.providerMs,
