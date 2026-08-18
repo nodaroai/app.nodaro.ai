@@ -36,12 +36,13 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 
 ### Model selector
 
-The model is chosen from the shared LLM model selector — a searchable picker grouped by provider (Anthropic / Google / OpenAI / xAI), with each group ordered economy → premium. The selected model determines the credit cost by tier. All 17 models accept an image reference; only the **Gemini** models additionally accept video and audio references.
+The model is chosen from the shared LLM model selector — a searchable picker grouped by provider (Anthropic / Google / OpenAI / xAI), with each group ordered economy → premium. The selected model determines the credit cost by tier. Every model accepts an image reference; the table below shows which **Gemini** models additionally accept video and audio references.
 
 | Model | Tier | Multimodal (references) |
 |-------|------|--------------------------|
 | Gemini 3 Flash | Economy | image + video + audio |
 | Gemini 3.6 Flash | Economy | image + video + audio |
+| Gemini 3.7 Flash | Economy | image only |
 | Claude Haiku 4.5 | Economy | image only |
 | GPT-5.6 Luna | Economy | image only |
 | Claude Sonnet 4.6 | Standard | image only |
@@ -58,7 +59,9 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 | Claude Opus 5 | Premium | image only |
 | Claude Fable 5 | Premium | image only |
 
-The default model is Gemini 3.6 Flash (economy tier). 13 of the 17 models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
+The default model is Gemini 3.6 Flash (economy tier). Most models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
+
+Gemini 3.7 Flash currently accepts **image references only** — video/audio references for it are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
 
 ## Canvas controls
 
@@ -87,7 +90,7 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 ### Multimodal inputs
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
-- **Video / audio reference** — supported **only by Gemini models** (Gemini Flash or Gemini Pro). If a video or audio reference is connected, select a Gemini model or the reference is ignored.
+- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.7 Flash is image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
 
 ## Presets
 
@@ -150,7 +153,7 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
 - Grok 4.6 at `xhigh` → 3 credits (standard billed as premium; its ladder is low/medium/high/xhigh)
 - GPT-5.6 Sol at `max` → 3 credits (premium, unchanged)
 - Claude Sonnet 5 at `high` → 2 credits (high never changes the price)
-- Gemini 3.6 Flash exposes `low`/`high` only — neither changes the price (requests above `high` clamp down to it)
+- Gemini 3.6 Flash and Gemini 3.7 Flash expose `low`/`high` only — neither changes the price (requests above `high` clamp down to it)
 
 ## Best Practices
 
@@ -160,7 +163,7 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
 - For long-form content, raise Max Tokens. The default (8192) handles most cases but may truncate very long outputs. At `xhigh`/`max` effort the cap is automatically floored to 32768.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (3 cr) for complex reasoning.
-- To process a video or audio reference, select a Gemini model.
+- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash is image-only for now).
 
 ## Common Use Cases
 

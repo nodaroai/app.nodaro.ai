@@ -6,6 +6,8 @@ import {
   LLM_REASONING_EFFORTS,
   getLlmModel,
   getLlmTier,
+  getLlmModalityCaps,
+  VIDEO_ANALYSIS_LLM_MODELS,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
@@ -591,6 +593,39 @@ describe("reasoning effort registry", () => {
 
   it("grok-4.6 resolves from its dash-form wire slug", () => {
     expect(getLlmModel("grok-4-6")?.id).toBe("grok-4.6")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// gemini-3.7-flash exposure (both lanes live-verified 2026-08-18: KIE
+// chat-completions with reasoning_effort + enforced response_format, and the
+// direct Google id resolving on generativelanguage)
+// ---------------------------------------------------------------------------
+describe("gemini-3.7-flash exposure", () => {
+  it("KIE-first chat-completions with a direct lane — 3.6-flash's proven shape", () => {
+    const m = getLlmModel("gemini-3.7-flash")
+    expect(m?.tier).toBe("economy")
+    expect(m?.vendor).toBe("google")
+    expect(m?.kieFormat).toBe("chat-completions")
+    expect(m?.kieSlugOrModel).toBe("gemini-3-7-flash-openai")
+    // KIE-first on purpose (no preferDirect): the cheap lane serves Generate
+    // Text; the direct lane is Advanced mode + the reliability fallback.
+    expect(m?.preferDirect).toBeUndefined()
+    expect(m?.directGeminiModel).toBe("gemini-3.7-flash")
+    expect(m?.reasoningEfforts).toEqual(["low", "high"])
+    expect(m?.structuredOutputMode).toBe("kie-response-format")
+    expect(supportsAdvancedMode("gemini-3.7-flash")).toBe(true)
+    expect(availableReasoningEfforts("gemini-3.7-flash", true)).toEqual(["none", "low", "medium", "high"])
+  })
+
+  it("stays OUT of video-analysis — image-only modality caps by decision, not omission", () => {
+    // Full video+audio caps would auto-enroll it in VIDEO_ANALYSIS_LLM_MODELS
+    // and force a VA tier + pricing decision that is deliberately deferred
+    // while the smart-family A/B routes this model internally (2026-08-18).
+    // If this test goes red, someone flipped the caps — that flip is only
+    // valid TOGETHER with the VA-side tier/pricing decision.
+    expect(getLlmModalityCaps("gemini-3.7-flash")).toEqual({ image: true, video: false, audio: false })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-3.7-flash")
   })
 })
 

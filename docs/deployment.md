@@ -587,6 +587,7 @@ not by a global switch:
 |-------|--------------|-----------------------|
 | `gemini-3-flash` | KIE | KIE fails |
 | `gemini-3.6-flash` | KIE | KIE fails |
+| `gemini-3.7-flash` | KIE | KIE fails |
 | `gemini-3.1-pro` | Direct Google | always (KIE is the fallback) |
 | **video-analysis (any tier)** | **Direct Google — ONLY** | **always; there is no fallback** |
 
