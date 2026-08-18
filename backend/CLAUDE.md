@@ -43,6 +43,8 @@ app.post("/v1/my-route", async (req, reply) => {
 
 `sendInternalError(reply, req, err, clientMessage)` logs `err` (with stack) via `req.log.error`, sends `{ error: { code: "internal_error", message: clientMessage } }`, and marks the reply (via a `WeakSet`) so the net leaves the curated message intact. **`clientMessage` is sent verbatim** — keep it generic (`"Failed to <operation>"`); never interpolate a raw `.message`, table/column, or RPC name (pass those as the `err` arg to be logged, not shown).
 
+**Server-error telemetry (same file):** every 5xx the API produces — an uncaught route throw (`registerErrorTelemetry`'s `onError` hook, registered in `app.ts`), a `sendInternalError` call, or a hand-composed body the net genericized — ALSO files a `kind: "internal-error"` row into `app_reports` (node `http-error-net`, with route pattern, userId, raw message + stack in the payload), surfacing at `/admin/app-reports`. Best-effort + throttled per (method, route, message) at one report / 5 min, and wrapped so telemetry can never break the error-response path. Observability only — never alters a response body.
+
 **Scope / non-goals:**
 - The net only touches `statusCode === 500` + `code === "internal_error"`. Structured errors (402 `insufficient_credits`, 403 `forbidden`, 409 `name_taken`, …) have different codes/statuses and pass through untouched — keep sending those explicitly via `reply.status(...).send(...)`.
 - SSE writes to `reply.raw` and bypasses `onSend`; SSE errors use the `error` event, not this path.
@@ -598,7 +600,7 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 
 ## Unified LLM Client (`lib/llm-client.ts`)
 
-Unified interface for all LLM calls across 13 models and 3 tiers:
+Unified interface for all LLM calls across 17 models and 3 tiers:
 
 ### Model Registry (`packages/shared/src/llm-models.ts`)
 
@@ -610,6 +612,7 @@ Unified interface for all LLM calls across 13 models and 3 tiers:
 | `claude-sonnet-4.6` | Standard | messages | reasoning efforts (low/medium/high/max) |
 | `gpt-5.2` | Standard | chat-completions | |
 | `gpt-5.6-terra` | Standard | responses | reasoning efforts; `supportsTemperature: false` |
+| `grok-4.6` | Standard | responses | vendor `xai` (grok/v1/responses path); efforts low–xhigh; `supportsTemperature: false`; `thinkingDefaultOn` |
 | `claude-sonnet-5` | Standard | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
 | `gemini-3.1-pro` | Premium | chat-completions | |
 | `claude-opus-4.7` | Premium | messages | reasoning efforts (low–max); `supportsTemperature: false`; `preferKie` |
@@ -618,15 +621,16 @@ Unified interface for all LLM calls across 13 models and 3 tiers:
 | `gpt-5.6-sol` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
 | `claude-opus-4.8` | Premium | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
 
-`grok-4.5` is intentionally NOT in the registry — live verification against KIE (2026-07-13)
-returned 422 on every slug/endpoint permutation tried; grok chat isn't live on KIE yet.
-Fast-follow (new registry entry + rate row + docs) once it activates — don't hand-add a
-placeholder.
+`grok-4.6` is the activation of the long-deferred Grok chat slot (grok-4.5's endpoint was
+never live on KIE, verified 2026-07-13). Its endpoint, vision, structured output, effort
+enum (low–xhigh), stream shape, and `credits_consumed` were all live-verified 2026-08-18.
+`temperature` is silently ignored by the endpoint (echo stays at the default) →
+`supportsTemperature: false`; it reasons with no reasoning param sent → `thinkingDefaultOn`.
 
 ### API Formats
 - **chat-completions** — `gemini-3-flash`, `gemini-3.1-pro`, `gpt-5.2` — `POST {KIE_API_BASE}/{model.kieSlugOrModel}/v1/chat/completions` (the model's own KIE slug prefixes the path — there's no single shared chat-completions URL)
 - **messages** — every Claude model (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.7`, `claude-sonnet-5`, `claude-opus-4.8`) — `POST {KIE_API_BASE}/claude/v1/messages` with `X-Api-Key` + `anthropic-version`. KIE defaults `stream: true` for Claude — non-streaming calls must explicitly send `stream: false`.
-- **responses** — `gpt-5.4`, `gpt-5.5`, and the GPT-5.6 family (`gpt-5.6-luna`/`gpt-5.6-terra`/`gpt-5.6-sol`) — `POST {KIE_API_BASE}/codex/v1/responses` with an `input` array + `developer` role.
+- **responses** — `gpt-5.4`, `gpt-5.5`, the GPT-5.6 family (`gpt-5.6-luna`/`gpt-5.6-terra`/`gpt-5.6-sol`), and `grok-4.6` — `POST {KIE_API_BASE}/{family}/v1/responses` with an `input` array + `developer` role. The path family is derived from the registry `vendor` (`openai` → `codex`, `xai` → `grok`; see `kieResponsesUrl`) — the wrong family is a hard error, not an alias. Grok's endpoint additionally rejects the plain-string `input` form (500) — always the array form, which is the only shape the builder emits.
 
 ### Functions
 - `llmComplete(params)` — sync completion, returns `{ text, usage, model, providerCost }`
@@ -669,7 +673,7 @@ Effort maps to `thinkingConfig.thinkingLevel` (`minimal|low|medium|high`; our `x
 A zod `z.record()` compiles to an `additionalProperties`-only object schema. Gemini's enforced `responseSchema` (the KIE `response-format` lane) cannot express that shape — the property silently VANISHES from the constrained decode grammar, model-independently, so the model can NEVER emit the field no matter what the prompt says (discovered the hard way: scene-binding recall was 0 lifetime across every prompt reinforcement until the wire shape changed). Any model-emitted map field on that lane must ship as a fixed-property **array-of-pairs** on the wire and convert to the canonical record immediately post-parse (the cloud-plugins `slotLooks` roll schema is the reference implementation, with a drift-tripwire test pinning roll shape = canonical shape − record + array). The `anthropic-tool` and `responses` json-schema lanes do NOT share this constraint. **Neither does the direct Google lane** — it sends `responseJsonSchema`, which accepts real JSON Schema *including* `additionalProperties`, so record/map fields survive there. That asymmetry is exactly why it is a *lane* rule and not a *model* rule: the same `gemini-3.1-pro` drops the field via KIE and keeps it via Google. Until a schema is pinned to one lane, keep writing map fields as array-of-pairs — the array shape is correct on BOTH lanes, the record shape only on one.
 
 ### `supportsTemperature: false` — registry-derived strip
-Models with `supportsTemperature: false` (`claude-opus-4.7`, `gpt-5.5`, the GPT-5.6 family, `claude-sonnet-5`, `claude-opus-4.8`) have `temperature` stripped from every wire body in `deriveParams()` — never sent, regardless of what the caller passed. The same registry flag also derives `ee/pipelines/llms/call-llm.ts`'s `TEMPERATURE_UNSUPPORTED_MODELS` set (`LLM_MODELS.filter(m => m.supportsTemperature === false).flatMap(m => [m.kieSlugOrModel, ...(m.directFallbackModel ? [m.directFallbackModel] : [])])` — covers both the KIE slug and the direct-Anthropic model id). The film-studio pipeline's LLM wrapper is a SEPARATE call path from `llm-client.ts` and used to hand-list this set; it's now single-sourced from the registry so a new reasoning model can't ship covered on one call path but forgotten on the other.
+Models with `supportsTemperature: false` (`claude-opus-4.7`, `gpt-5.5`, the GPT-5.6 family, `grok-4.6`, `claude-sonnet-5`, `claude-opus-4.8`) have `temperature` stripped from every wire body in `deriveParams()` — never sent, regardless of what the caller passed. The same registry flag also derives `ee/pipelines/llms/call-llm.ts`'s `TEMPERATURE_UNSUPPORTED_MODELS` set (`LLM_MODELS.filter(m => m.supportsTemperature === false).flatMap(m => [m.kieSlugOrModel, ...(m.directFallbackModel ? [m.directFallbackModel] : [])])` — covers both the KIE slug and the direct-Anthropic model id). The film-studio pipeline's LLM wrapper is a SEPARATE call path from `llm-client.ts` and used to hand-list this set; it's now single-sourced from the registry so a new reasoning model can't ship covered on one call path but forgotten on the other.
 
 ### KIE `credits_consumed` — actual-cost capture + drift warning
 KIE's non-stream response bodies carry `credits_consumed` (KIE credits; 1 credit = $0.005) — the REAL provider charge for that call. `extractActualUsd()` reads it (when present, positive, finite) and `buildResponse()` prefers it over the per-token rate-table estimate (`calculateLlmCost`, `pricing/llm-cost.ts`) as the returned `providerCost`; the table estimate is still computed alongside it (when usage is available) purely so the two can be compared. A >25% divergence between the two logs `console.warn("[llm-cost-drift] model=... estimated=$... actual=$...")` — an ops signal that KIE repriced the model and the rate table needs a manual update. **Non-stream only** — KIE's SSE stream responses don't reliably carry `credits_consumed`, so `parseSseStream()` always falls back to the table estimate.

@@ -15,6 +15,7 @@ const VENDOR_COLORS: Record<AdminLlmModel["vendor"], string> = {
   anthropic: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
   google: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
   openai: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  xai: "bg-neutral-500/10 text-neutral-600 dark:text-neutral-300 border-neutral-500/20",
 }
 
 const TIER_COLORS: Record<LlmTier, string> = {

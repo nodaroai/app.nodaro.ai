@@ -237,12 +237,11 @@ describe("ReduceConfig", () => {
       />,
     )
     expect(screen.getByText(/AI Model/i)).toBeInTheDocument()
-    // Two comboboxes: the strategy picker and the model selector (the
-    // candidates-kind select makes three). Change the model one.
-    const selects = screen.getAllByRole("combobox")
-    const modelSelect = selects.find((s) => Array.from(s.querySelectorAll("option")).some((o) => o.value === "claude-opus-4.8"))
-    expect(modelSelect).toBeDefined()
-    fireEvent.change(modelSelect!, { target: { value: "claude-opus-4.8" } })
+    // The model selector is the searchable grouped combobox (aria-label
+    // "AI Model") — open it and pick a row; the strategy picker is a separate
+    // combobox that never carries that label.
+    fireEvent.click(screen.getByRole("combobox", { name: "AI Model" }))
+    fireEvent.click(screen.getByText("Claude Opus 4.8"))
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         strategyConfig: expect.objectContaining({ criteria: "best one", inputKind: "text", llmModel: "claude-opus-4.8" }),

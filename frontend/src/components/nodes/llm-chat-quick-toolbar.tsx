@@ -18,7 +18,7 @@ import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
-import { supportsAdvancedMode, availableReasoningEfforts, LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import { supportsAdvancedMode, availableReasoningEfforts, LLM_MODELS, LLM_FEATURE_DEFAULTS, groupLlmModelsByVendor } from "@nodaro/shared"
 import type { LlmReasoningEffort } from "@nodaro/shared"
 import { GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
@@ -185,10 +185,17 @@ export function LlmChatQuickToolbar({
 
   const modelItems = (
     <SelectContent className="node-menu-surface">
-      {LLM_MODELS.map((m) => (
-        <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS[m.tier]} description={m.desc} className="text-xs">
-          {m.displayName}
-        </SelectItemWithMeta>
+      {/* Vendor groups, tier-ordered inside each — the shared ordering every
+          LLM menu renders (a flat registry dump was unscannable at 17 models). */}
+      {groupLlmModelsByVendor(LLM_MODELS).map((group) => (
+        <SelectGroup key={group.vendor}>
+          <SelectLabel>{group.label}</SelectLabel>
+          {group.models.map((m) => (
+            <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS[m.tier]} description={m.desc} className="text-xs">
+              {m.displayName}
+            </SelectItemWithMeta>
+          ))}
+        </SelectGroup>
       ))}
     </SelectContent>
   )

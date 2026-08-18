@@ -41,7 +41,7 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, getLlmModel, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
+import { availableReasoningEfforts, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
@@ -187,12 +187,13 @@ const sunoVocalControl: QuickConfigControl = {
 }
 
 /** LLM model dropdown (writes `data.llmModel`), shared by the LLM-backed nodes.
- *  LLM_MODELS uses `id`/`displayName`. */
+ *  Vendor-clustered + tier-ordered via the shared ordering (the strip's compact
+ *  Select can't render group headers, but the clustering still scans). */
 const llmModelControl: QuickConfigControl = {
   field: "llmModel",
   ariaLabel: "Model",
   icon: Sparkles,
-  options: LLM_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
+  options: orderedLlmModels().map((m) => ({ value: m.id, label: m.displayName })),
   // Clearing `advancedMode` on ANY model switch is deliberately blunt: the
   // registry's additionalClear is unconditional, so a Gemini→Gemini switch also
   // turns Advanced off and the user has to re-enable it. That is a visible,
@@ -241,7 +242,7 @@ const visionModelControl: QuickConfigControl = {
   field: "llmModel",
   ariaLabel: "Model",
   icon: Sparkles,
-  options: STRUCTURED_VISION_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
+  options: orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
   // Same rationale as llmModelControl: a stranded advancedMode fails an
   // orchestrated run invisibly, so clear it on any model switch.
   additionalClear: ["advancedMode"],

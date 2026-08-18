@@ -12,6 +12,10 @@ import {
   effectiveReasoningEffort,
   supportsAdvancedMode,
   availableReasoningEfforts,
+  LLM_VENDOR_ORDER,
+  LLM_VENDOR_LABELS,
+  groupLlmModelsByVendor,
+  orderedLlmModels,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
@@ -28,6 +32,7 @@ import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
 const EXPECTED_MODEL_IDS = [
   "gemini-3-flash",
   "gemini-3.6-flash",
+  "gemini-3.7-flash",
   "claude-haiku-4.5",
   "claude-sonnet-4.6",
   "gpt-5.2",
@@ -38,6 +43,7 @@ const EXPECTED_MODEL_IDS = [
   "gpt-5.6-luna",
   "gpt-5.6-terra",
   "gpt-5.6-sol",
+  "grok-4.6",
   "claude-sonnet-5",
   "claude-opus-4.8",
   "claude-opus-5",
@@ -86,13 +92,13 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 4 economy, 4 standard, 8 premium models", () => {
+  it("has 5 economy, 5 standard, 8 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(4)
-    expect(tierCounts.standard).toBe(4)
+    expect(tierCounts.economy).toBe(5)
+    expect(tierCounts.standard).toBe(5)
     expect(tierCounts.premium).toBe(8)
   })
 
@@ -103,11 +109,12 @@ describe("LLM_MODELS data integrity", () => {
     expect(formats).toContain("responses")
   })
 
-  it("all three vendors are represented", () => {
+  it("all four vendors are represented", () => {
     const vendors = new Set(LLM_MODELS.map((m) => m.vendor))
     expect(vendors).toContain("anthropic")
     expect(vendors).toContain("google")
     expect(vendors).toContain("openai")
+    expect(vendors).toContain("xai")
   })
 
   it("all models support images", () => {
@@ -472,6 +479,7 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "claude-sonnet-4.6",
         "gemini-3-flash",
         "gemini-3.6-flash",
+        "gemini-3.7-flash",
         "gemini-3.1-pro",
         "claude-sonnet-5",
         "claude-opus-4.8",
@@ -484,15 +492,18 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "gpt-5.6-luna",
         "gpt-5.6-terra",
         "gpt-5.6-sol",
+        // responses-format Grok — vision + text.format live-verified 2026-08-18.
+        "grok-4.6",
       ].sort(),
     )
   })
 
-  it("includes Anthropic (forced-tool), Gemini (response_format), and OpenAI (responses text.format) vendors", () => {
+  it("includes Anthropic (forced-tool), Gemini (response_format), and OpenAI/xAI (responses text.format) vendors", () => {
     const vendors = new Set(STRUCTURED_VISION_MODELS.map((m) => m.vendor))
     expect(vendors).toContain("anthropic")
     expect(vendors).toContain("google")
     expect(vendors).toContain("openai")
+    expect(vendors).toContain("xai")
   })
 
   it("excludes chat-completions GPT models — no native structured mode there (parse+retry only)", () => {
@@ -509,9 +520,9 @@ describe("STRUCTURED_VISION_MODELS", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Reasoning effort registry (GPT-5.6 / Claude Sonnet 5 / Claude Opus 4.8)
-// grok-4.5 is DEFERRED — its chat endpoint is not live on the provider yet
-// (2026-07-13); its tests are intentionally omitted here.
+// Reasoning effort registry (GPT-5.6 / Claude Sonnet 5 / Claude Opus 4.8 /
+// Grok 4.6 — grok-4.5 was deferred on 2026-07-13 because its chat endpoint
+// wasn't live; grok-4.6 is its activation, live-verified 2026-08-18.)
 // ---------------------------------------------------------------------------
 describe("reasoning effort registry", () => {
   it("every reasoningEfforts list is a subset of the superset, in ascending order", () => {
@@ -526,6 +537,7 @@ describe("reasoning effort registry", () => {
     expect(getLlmTier("gpt-5.6-luna")).toBe("economy")
     expect(getLlmTier("gpt-5.6-terra")).toBe("standard")
     expect(getLlmTier("gpt-5.6-sol")).toBe("premium")
+    expect(getLlmTier("grok-4.6")).toBe("standard")
     expect(getLlmTier("claude-sonnet-5")).toBe("standard")
     expect(getLlmTier("claude-opus-4.8")).toBe("premium")
     expect(getLlmTier("gpt-5.5")).toBe("premium")
@@ -557,6 +569,29 @@ describe("reasoning effort registry", () => {
     expect(getLlmModel("claude-fable-5")?.reasoningEfforts).toEqual(["low", "medium", "high", "xhigh", "max"])
     expect(getLlmModel("claude-fable-5")?.directFallbackModel).toBe("claude-fable-5")
   })
+
+  it("grok-4.6: responses format on the grok family path, KIE's documented effort enum, no sampling params, reasons by default", () => {
+    const m = getLlmModel("grok-4.6")
+    expect(m?.vendor).toBe("xai")
+    expect(m?.kieFormat).toBe("responses")
+    expect(m?.kieSlugOrModel).toBe("grok-4-6")
+    expect(m?.structuredOutputMode).toBe("responses-json-schema")
+    // KIE's enum is low..xhigh with NO `none` — the endpoint reasons
+    // unconditionally (thinkingDefaultOn), so `none` would be a lie.
+    expect(m?.reasoningEfforts).toEqual(["low", "medium", "high", "xhigh"])
+    // Live-probed 2026-08-18: temperature is silently ignored — never send it.
+    expect(m?.supportsTemperature).toBe(false)
+    // Load-bearing: consumers floor max_tokens off this flag (a trivial probe
+    // spent 169/170 output tokens on reasoning with no reasoning param sent).
+    expect(m?.thinkingDefaultOn).toBe(true)
+    // KIE-only: no direct lane on either vendor SDK.
+    expect(m?.directFallbackModel).toBeUndefined()
+    expect(m?.directGeminiModel).toBeUndefined()
+  })
+
+  it("grok-4.6 resolves from its dash-form wire slug", () => {
+    expect(getLlmModel("grok-4-6")?.id).toBe("grok-4.6")
+  })
 })
 
 describe("effectiveReasoningEffort", () => {
@@ -584,6 +619,7 @@ describe("buildLlmCreditIdentifier effort bump (xhigh/max only)", () => {
   })
   it("standard + xhigh → premium", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-terra", "xhigh")).toBe("llm-chat:premium")
+    expect(buildLlmCreditIdentifier("llm-chat", "grok-4.6", "xhigh")).toBe("llm-chat:premium")
   })
   it("premium + max stays premium", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-sol", "max")).toBe("llm-chat:premium")
@@ -765,5 +801,60 @@ describe("lane-aware reasoning efforts", () => {
   it("only advanced-capable models declare a direct ladder", () => {
     const bad = LLM_MODELS.filter((m) => m.directReasoningEfforts && !supportsAdvancedMode(m.id)).map((m) => m.id)
     expect(bad).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Vendor grouping — the ONE ordering every LLM model menu renders
+// ---------------------------------------------------------------------------
+describe("groupLlmModelsByVendor / orderedLlmModels", () => {
+  it("every vendor in the union has an order slot AND a label (totality)", () => {
+    // A new vendor added to LlmVendor without a menu decision would silently
+    // sort its models to the end of every picker unlabeled — fail here instead.
+    const vendorsInUse = new Set(LLM_MODELS.map((m) => m.vendor))
+    for (const v of vendorsInUse) {
+      expect(LLM_VENDOR_ORDER, `vendor "${v}" missing from LLM_VENDOR_ORDER`).toContain(v)
+      expect(LLM_VENDOR_LABELS[v], `vendor "${v}" missing from LLM_VENDOR_LABELS`).toBeTruthy()
+    }
+    for (const v of LLM_VENDOR_ORDER) {
+      expect(LLM_VENDOR_LABELS[v]).toBeTruthy()
+    }
+  })
+
+  it("covers every model exactly once, in vendor order", () => {
+    const groups = groupLlmModelsByVendor()
+    const flattened = groups.flatMap((g) => g.models.map((m) => m.id))
+    expect(flattened.sort()).toEqual(LLM_MODELS.map((m) => m.id).sort())
+    expect(new Set(flattened).size).toBe(flattened.length)
+    const groupVendors = groups.map((g) => g.vendor)
+    expect(groupVendors).toEqual(LLM_VENDOR_ORDER.filter((v) => groupVendors.includes(v)))
+  })
+
+  it("inside each group models are tier-ordered economy → standard → premium", () => {
+    const rank = { economy: 0, standard: 1, premium: 2 } as const
+    for (const g of groupLlmModelsByVendor()) {
+      const ranks = g.models.map((m) => rank[m.tier])
+      expect(ranks, g.vendor).toEqual([...ranks].sort((a, b) => a - b))
+    }
+  })
+
+  it("groups carry their display label and omit empty groups after a filter", () => {
+    const groups = groupLlmModelsByVendor(LLM_MODELS.filter((m) => m.vendor === "xai"))
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe("xAI")
+    expect(groups[0].models.map((m) => m.id)).toEqual(["grok-4.6"])
+  })
+
+  it("does not mutate the registry (registry order is load-bearing for LLM_MODEL_IDS)", () => {
+    const before = LLM_MODELS.map((m) => m.id)
+    groupLlmModelsByVendor()
+    orderedLlmModels()
+    expect(LLM_MODELS.map((m) => m.id)).toEqual(before)
+  })
+
+  it("orderedLlmModels is the flattened grouping", () => {
+    expect(orderedLlmModels().map((m) => m.id)).toEqual(
+      groupLlmModelsByVendor().flatMap((g) => g.models.map((m) => m.id)),
+    )
   })
 })
