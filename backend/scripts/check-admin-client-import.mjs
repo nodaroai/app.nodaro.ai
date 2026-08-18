@@ -382,6 +382,14 @@ const ALLOWED_PATHS = [
   // required because there is no session to scope by.
   /^src\/routes\/setup-status\.ts$/,
 
+  // 4b exclusive-node relay routes (self-host only). The gvp stop/continue
+  // handlers read the jobs row by id to (a) enforce ownership explicitly
+  // (row.user_id !== req.userId -> 404, indistinguishable from absent) and
+  // (b) map the LOCAL job id to its cloud provider_task_id — the same
+  // ownership-checked jobs-row pattern as the baselined job routes. Migrates
+  // to the request-scoped client with the rest under roadmap #4.
+  /^src\/routes\/nodaro-exclusive\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]

@@ -210,55 +210,12 @@ describe("path extraction sanity", () => {
 // ---------------------------------------------------------------------------
 
 const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
-  // voice-changer-pro's route moved to the private @nodaroai/cloud-plugins
-  // package (Stage 1 VCP private extraction, 2026-07-06) — it now registers
-  // dynamically at boot via loadPrivatePlugins() (see
-  // backend/src/lib/private-plugins/load.ts), not a static file under
-  // backend/src/routes/ or backend/src/ee/routes/ that this scanner walks.
-  // Runtime behavior is unchanged: cloud edition still serves
-  // POST /v1/voice-changer-pro (401/400, not 404); community/business get
-  // 404 same as before (the route was already cloud-only pre-extraction).
-  "/v1/voice-changer-pro",
-
-  // generate-video-pro's route is registered at runtime by the private
-  // @nodaroai/cloud-plugins package (v0.4.0, published 2026-07-12) via
-  // loadPrivatePlugins(app) on cloud builds — same architecture as
-  // voice-changer-pro. Not a static file under backend/src/routes/ or
-  // backend/src/ee/routes/ that this scanner walks. The node is
-  // CLOUD_ONLY-gated, so community builds never expose the frontend entry
-  // point; only cloud edition serves the route.
-  "/v1/generate-video-pro",
-
-  // gvp Stop & keep + Continue (2026-07-21): same plugin-registered runtime
-  // routes as the base path above. The frontend calls landed in a
-  // frontend-only PR, so the path-filtered Backend Tests job never ran this
-  // test and the missing entries surfaced on the next backend-touching PR.
-  "/v1/generate-video-pro/:p/stop",
-  "/v1/generate-video-pro/continue",
-
-  // edit-video-pro's route is registered at runtime by the private
-  // @nodaroai/cloud-plugins package — same architecture as generate-video-pro
-  // above. Not a static file under backend/src/routes/ or backend/src/ee/routes/
-  // that this scanner walks. The node is CLOUD_ONLY-gated, so community builds
-  // never expose the frontend entry point; only cloud edition serves the route.
-  "/v1/edit-video-pro",
-
-  // video-analysis's route + probe endpoint moved to the private
-  // @nodaroai/cloud-plugins package — it registers at runtime via
-  // loadPrivatePlugins({ app }) (see backend/src/lib/private-plugins/load.ts),
-  // not a static file under backend/src/routes/ this scanner walks. Cloud
-  // edition serves POST /v1/video-analysis + /v1/video-analysis/probe;
-  // community/business get 404 (the node was already cloud-gated).
-  "/v1/video-analysis",
-  "/v1/video-analysis/probe",
-
-  // video-audit ("AI Audit") ships in the SAME private
-  // @nodaroai/cloud-plugins package as video-analysis above (it re-uses that
-  // plugin's watcher/reasoner internals), registering POST /v1/video-audit at
-  // runtime via loadPrivatePlugins({ app }) — not a static file under
-  // backend/src/routes/ this scanner walks. Cloud edition serves it;
-  // community/business get 404, same as the analysis node.
-  "/v1/video-audit",
+  // 4b (2026-08-18): the five Nodaro-exclusive node paths (voice-changer-pro,
+  // generate-video-pro (+ /stop, /continue), edit-video-pro, video-analysis
+  // (+ /probe), video-audit) used to be allowlisted here as plugin-registered
+  // runtime routes the scanner can't see. They now ALSO have a static route
+  // file — backend/src/routes/nodaro-exclusive.ts, the self-hosted relay —
+  // so the scanner resolves them and the entries were removed.
 ])
 
 // ---------------------------------------------------------------------------

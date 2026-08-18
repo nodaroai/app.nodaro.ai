@@ -38,6 +38,7 @@ import {
   REPLICATE_RECOVER_KINDS as REPLICATE_KINDS,
   ELEVENLABS_RECOVER_KINDS as ELEVENLABS_KINDS,
   FAL_RECOVER_KINDS as FAL_KINDS,
+  NODARO_CLOUD_RECOVER_KINDS as NODARO_CLOUD_KINDS,
 } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import { MAX_POLL_ATTEMPTS } from "../providers/kie/client.js"
@@ -97,6 +98,20 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       // reconcileFalJob recovers the fal endpoint from input_data.provider, so
       // the row must carry it (the worker's stall-retry SELECT includes input_data).
       await reconcileFalJob({ ...row, input_data: row.input_data ?? null }, { claimant: "worker" })
+      return
+    }
+    if (NODARO_CLOUD_KINDS.has(kind)) {
+      const { reconcileNodaroCloudJob } = await import("../lib/reconcile/nodaro-cloud.js")
+      console.log(
+        `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
+        `(kind=${kind}, task=${row.provider_task_id}) — polling the nodaro.ai cloud job inline`,
+      )
+      await reconcileNodaroCloudJob({
+        id: row.id,
+        provider_task_id: row.provider_task_id,
+        reconcile_attempts: row.reconcile_attempts,
+        job_type: row.job_type,
+      })
       return
     }
     // Unknown async kind — leave to the cron's catch-all sync sweep.

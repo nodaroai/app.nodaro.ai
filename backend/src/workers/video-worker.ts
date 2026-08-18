@@ -59,6 +59,14 @@ const allHandlers: Record<string, HandlerFn> = {
 // (module-load-time construction is no longer possible — see
 // `handlers/surround.ts`'s header comment), so it's built here rather than
 // alongside the other static `...xHandlers` spreads above.
+// 4b: the exclusive-node RELAY handlers, self-hosted editions only. Merged
+// BEFORE privatePluginHandlers so that on cloud (where the loader returns
+// real handlers) the plugin implementations win the keys unconditionally —
+// on community the plugin map is empty and the relay serves the five types.
+if (!hasCredits()) {
+  const { nodaroExclusiveRelayHandlers } = await import("./handlers/nodaro-exclusive-relay.js")
+  Object.assign(allHandlers, nodaroExclusiveRelayHandlers)
+}
 const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
 Object.assign(allHandlers, createSurroundHandlers(engines.surround))
 Object.assign(allHandlers, privatePluginHandlers)

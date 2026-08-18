@@ -120,7 +120,7 @@ import {
   ZoomIn,
 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
-import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
+import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -1497,9 +1497,16 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
 
 /**
  * Returns `NODE_OPTIONS` filtered for the current edition.
- * Cloud-only nodes (`CLOUD_ONLY_NODE_TYPES`) are excluded when `hasCredits()` is false.
+ * Cloud-only nodes are excluded when `hasCredits()` is false. The
+ * Nodaro-exclusive nodes are STILL excluded here for now — PR 4 of 4b
+ * surfaces them with the NODARO mark + connect CTA; until then self-host
+ * pickers behave exactly as before the set split.
  * Use this instead of `NODE_OPTIONS` whenever building a user-visible list.
  */
 export function getNodeOptions(): ReadonlyArray<NodeOption> {
-  return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits());
+  return NODE_OPTIONS.filter(
+    (o) =>
+      (!CLOUD_ONLY_NODE_TYPES.has(o.type) && !NODARO_EXCLUSIVE_NODE_TYPES.has(o.type)) ||
+      hasCredits(),
+  );
 }

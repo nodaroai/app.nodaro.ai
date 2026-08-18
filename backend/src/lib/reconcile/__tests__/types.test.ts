@@ -8,12 +8,13 @@ import {
   REPLICATE_RECOVER_KINDS,
   ELEVENLABS_RECOVER_KINDS,
   FAL_RECOVER_KINDS,
+  NODARO_CLOUD_RECOVER_KINDS,
   ASYNC_RECOVERABLE_KINDS,
   isReconcileRecoverable,
 } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -24,6 +25,7 @@ describe("ProviderKind registry", () => {
       "heygen",
       "beeble",
       "fal-request",
+      "nodaro-cloud",
       "pre-task",
     ])
   })
@@ -47,6 +49,10 @@ describe("ProviderKind registry", () => {
     // (or exhausts→refund), so it is NOT a sync-sweep kind.
     expect(isSyncKind("fal-request")).toBe(false)
     expect(ASYNC_RECOVERABLE_KINDS.has("fal-request")).toBe(true)
+    // nodaro-cloud (4b): the exclusive-node relay persists the CLOUD job id,
+    // so reconcile recovers it with one idempotent poll — async, never swept.
+    expect(isSyncKind("nodaro-cloud")).toBe(false)
+    expect(ASYNC_RECOVERABLE_KINDS.has("nodaro-cloud")).toBe(true)
     expect(isSyncKind("kie-standard")).toBe(false)
     expect(isSyncKind("kie-aleph")).toBe(false)
     expect(isSyncKind("kie-veo-1080p")).toBe(false)
@@ -65,12 +71,17 @@ describe("recoverable-kind sets (single source of truth — audit M5)", () => {
     expect(new Set(FAL_RECOVER_KINDS)).toEqual(new Set(["fal-request"]))
   })
 
+  it("NODARO_CLOUD_RECOVER_KINDS holds exactly the nodaro-cloud kind", () => {
+    expect(new Set(NODARO_CLOUD_RECOVER_KINDS)).toEqual(new Set(["nodaro-cloud"]))
+  })
+
   it("ASYNC_RECOVERABLE_KINDS is exactly the union of the per-provider dispatch sets", () => {
     const union = new Set([
       ...KIE_RECOVER_KINDS,
       ...REPLICATE_RECOVER_KINDS,
       ...ELEVENLABS_RECOVER_KINDS,
       ...FAL_RECOVER_KINDS,
+      ...NODARO_CLOUD_RECOVER_KINDS,
     ])
     expect(new Set(ASYNC_RECOVERABLE_KINDS)).toEqual(union)
   })

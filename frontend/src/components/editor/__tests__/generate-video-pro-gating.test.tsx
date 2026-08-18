@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
+import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 
 // Read at module load (before any `vi.resetModules()` runs in the tests
 // below) — mirrors node-toolbar.test.tsx's file-parsing approach. Resolved
@@ -50,13 +50,14 @@ describe("generate-video-pro discovery gating", () => {
   })
 })
 
-describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => {
-  it("the shared set includes the cloud-only nodes", () => {
-    expect(CLOUD_ONLY_NODE_TYPES.has("voice-changer-pro")).toBe(true)
-    expect(CLOUD_ONLY_NODE_TYPES.has("generate-video-pro")).toBe(true)
-    // video-analysis's implementation moved to @nodaroai/cloud-plugins, so its
-    // node is Cloud-only too (else it would 404 on run under community/business).
-    expect(CLOUD_ONLY_NODE_TYPES.has("video-analysis")).toBe(true)
+describe("both surfaces consume the shared gating module", () => {
+  it("the shared sets carry the 4b split: exclusives relay via nodaro.ai, generative-pipeline stays cloud-only", () => {
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("voice-changer-pro")).toBe(true)
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("generate-video-pro")).toBe(true)
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("video-analysis")).toBe(true)
+    expect(CLOUD_ONLY_NODE_TYPES.has("generative-pipeline")).toBe(true)
+    // No overlap — a node is exclusive-relayed OR cloud-only, never both.
+    expect([...NODARO_EXCLUSIVE_NODE_TYPES].filter((t) => CLOUD_ONLY_NODE_TYPES.has(t))).toEqual([])
   })
 
   // Source-text guard: the catalogue and its edition filter now live in one
@@ -78,9 +79,9 @@ describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => 
       path.resolve(process.cwd(), "src/lib/node-options.tsx"),
       "utf8",
     )
-    // The edition gate lives there now, once.
+    // The edition gate lives there now, once (both halves of the 4b split).
     expect(NODE_OPTIONS_SRC).toMatch(
-      /import \{ CLOUD_ONLY_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
+      /import \{ CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
     )
     expect(NODE_OPTIONS_SRC).toMatch(/hasCredits\(\)/)
 

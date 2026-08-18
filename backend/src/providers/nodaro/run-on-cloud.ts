@@ -114,7 +114,7 @@ const PAYLOAD_ADAPTERS: Readonly<
  * If this map ever grows past a handful of hand-checked entries, replace this
  * with a per-type allowlist derived from the route schema.
  */
-const INSTANCE_ONLY_FIELDS = new Set([
+export const INSTANCE_ONLY_FIELDS = new Set([
   "jobId",
   "usageLogId",
   "userId",
@@ -143,7 +143,7 @@ async function rehostObjectUrlFields(obj: Record<string, unknown>): Promise<Reco
   )
 }
 
-async function rehostIfUrlField(key: string, value: unknown): Promise<unknown> {
+export async function rehostIfUrlField(key: string, value: unknown): Promise<unknown> {
   // A list of objects (cinematic-avatar's `references: [{ type, url }]`)
   // carries its media one level down; the list's own name says nothing
   // about URLs, so look inside regardless of the key.

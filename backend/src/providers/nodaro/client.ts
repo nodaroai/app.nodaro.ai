@@ -170,12 +170,17 @@ export async function createCloudJob(
 export async function waitForCloudJob(
   jobId: string,
   onProgress?: ProgressCallback,
+  opts: { budgetMs?: number } = {},
 ): Promise<CloudJob> {
   const startedAt = Date.now()
+  // Default stays POLL_BUDGET_MS (~15 min). The exclusive-node relay passes
+  // a bigger budget for gvp/evp-class runs (they legitimately take an hour+),
+  // kept under the orchestrator's 90-min NODE_TIMEOUT_MS.
+  const budgetMs = opts.budgetMs ?? POLL_BUDGET_MS
   let attempt = 0
   let transientFailures = 0
 
-  while (Date.now() - startedAt < POLL_BUDGET_MS) {
+  while (Date.now() - startedAt < budgetMs) {
     if (attempt > 0) {
       await sleep(attempt <= POLL_FAST_ATTEMPTS ? POLL_FAST_MS : POLL_SLOW_MS)
     }
