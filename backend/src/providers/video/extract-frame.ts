@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir, wroteOutputFile } from "./ffmpeg-utils.js"
 import { resolveFrameCount } from "../../lib/ffprobe-frames.js"
 
 interface ExtractFrameOptions {
@@ -129,6 +129,17 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<{ imag
     console.log(`[extractFrame] Running FFmpeg: ffmpeg ${args.join(" ")}`)
     try {
       await runFfmpeg(args)
+      // ffmpeg exits 0 even when the seek decodes ZERO frames ("Output file
+      // is empty, nothing was encoded" is a warning, not an error) — e.g. a
+      // timestamp at/past the container duration (studio's capture scrubber
+      // dragged to the very end, 2026-08-18 report). The run "succeeds" with
+      // no file written and the consumer ENOENTs later — so a missing/empty
+      // output IS a primary-seek failure, recovered by the same fallback.
+      if (!(await wroteOutputFile(outputPath))) {
+        throw new Error(
+          "extract-frame: primary seek decoded zero frames (no output written)",
+        )
+      }
     } catch (primaryErr) {
       // A seek computed from container metadata can land PAST the actual last
       // frame (nb_frames/fps/duration lie on some encoders). Zero frames then
@@ -148,6 +159,11 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<{ imag
       const fallbackArgs = ["-y", "-sseof", "-1", "-i", inputPath, "-update", "1", outputPath]
       try {
         await runFfmpeg(fallbackArgs)
+        // Same zero-frame trap as the primary: a "successful" fallback that
+        // wrote nothing is a failure, not a result.
+        if (!(await wroteOutputFile(outputPath))) {
+          throw new Error("extract-frame: fallback wrote no output")
+        }
       } catch {
         // Both attempts down: report something a human can act on instead of
         // the raw ffmpeg dump (kept in logs above).

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   runFfprobe: vi.fn().mockResolvedValue(""),
   createWorkDir: vi.fn().mockResolvedValue("/tmp/work"),
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
+  wroteOutputFile: vi.fn().mockResolvedValue(true),
 }))
 
 vi.mock("../ffmpeg-utils.js", () => ({
@@ -25,6 +26,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   runFfprobe: mocks.runFfprobe,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
+  wroteOutputFile: mocks.wroteOutputFile,
 }))
 
 import { extractFrame } from "../extract-frame.js"
@@ -40,6 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.createWorkDir.mockResolvedValue("/tmp/work")
   mocks.runFfmpeg.mockResolvedValue("")
+  mocks.wroteOutputFile.mockResolvedValue(true)
   // fps + frame-count probes for the end-seeking modes.
   mocks.runFfprobe.mockImplementation(async (args: string[]) => {
     if (args.includes("stream=r_frame_rate")) return "24/1"
@@ -80,6 +83,27 @@ describe("extractFrame fallback", () => {
     mocks.runFfmpeg.mockRejectedValueOnce(FFMPEG_WALL)
     await extractFrame({ videoUrl: "https://x/v.mp4", mode: "timestamp", timestamp: 99 })
     expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
+  })
+
+  // ffmpeg exits 0 on a past-the-end seek that decodes ZERO frames ("Output
+  // file is empty" is a warning) — runFfmpeg resolves, no file is written, and
+  // pre-fix the consumer ENOENT'd on frame.png (studio's capture scrubber at
+  // the clip's very end, 2026-08-18). A silent empty output must take the same
+  // fallback as a thrown seek failure.
+  it("falls back when the primary run 'succeeds' but writes NO output (silent zero-frame seek)", async () => {
+    mocks.wroteOutputFile.mockResolvedValueOnce(false) // primary wrote nothing
+    const result = await extractFrame({ videoUrl: "https://x/v.mp4", mode: "timestamp", timestamp: 10 })
+
+    expect(result.imagePath).toBe(FRAME_PATH)
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
+    expect(ffmpegCall(1)).toContain("-sseof")
+  })
+
+  it("an empty-output fallback is a failure too — clean actionable error", async () => {
+    mocks.wroteOutputFile.mockResolvedValue(false) // neither run writes a frame
+    await expect(
+      extractFrame({ videoUrl: "https://x/v.mp4", mode: "timestamp", timestamp: 10 }),
+    ).rejects.toThrow(/no decodable frame at the requested position/)
   })
 
   it("does NOT fall back for mode=first — answering a broken input with the LAST frame is wrong", async () => {

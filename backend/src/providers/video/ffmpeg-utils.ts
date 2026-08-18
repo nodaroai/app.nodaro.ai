@@ -131,6 +131,21 @@ export async function runFfmpegCapture(
  * ffmpeg?". Non-fatal: a missing binary logs a loud error line here and
  * fails the first render anyway — boot must not die over logging.
  */
+/**
+ * Whether an ffmpeg run actually WROTE its output file (exists + non-empty).
+ * ffmpeg exits 0 even when a seek lands past the last frame and ZERO frames
+ * reach the encoder ("Output file is empty, nothing was encoded" is a warning,
+ * not an error) — so a "successful" run must be verified before the output is
+ * consumed, or the caller ENOENTs later on a file that was never written.
+ */
+export async function wroteOutputFile(filePath: string): Promise<boolean> {
+  try {
+    return (await fs.stat(filePath)).size > 0
+  } catch {
+    return false
+  }
+}
+
 export function logFfmpegVersion(tag: string): void {
   execFile("ffmpeg", ["-version"], { timeout: 10_000 }, (error, stdout) => {
     if (error) {
