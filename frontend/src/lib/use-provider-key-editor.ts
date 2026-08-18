@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { invalidateNodaroConnectionCache } from "@/hooks/use-nodaro-connection"
 import { getAuthHeaders } from "@/lib/api"
 
 /**
@@ -51,6 +52,9 @@ export function useProviderKeyEditor(providerId: string, onChanged: () => void):
         setError(json?.error?.message ?? `Could not ${method === "PUT" ? "save" : "remove"} the key (${res.status})`)
         return false
       }
+      // A nodaro key save/remove flips the install's connection state — the
+      // editor's NODARO chips read it through the shared cached hook.
+      if (providerId === "nodaro") invalidateNodaroConnectionCache()
       return true
     } catch {
       setError("Could not reach this server — check that it is running")

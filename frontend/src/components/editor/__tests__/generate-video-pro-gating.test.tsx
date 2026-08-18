@@ -31,13 +31,16 @@ describe("generate-video-pro discovery gating", () => {
   // 20s timeout: vi.resetModules + fresh dynamic imports re-evaluate the whole
   // editor import graph, which since the picker-ui seam includes the full
   // picker/editor surface — slow under a loaded parallel run, not a hang.
-  it("is hidden from BOTH the popup and the sidebar toolbar when the edition has no credits (community/business)", { timeout: 20_000 }, async () => {
+  it("4b: appears on BOTH surfaces even without credits — exclusives relay through nodaro.ai; generative-pipeline stays hidden", { timeout: 20_000 }, async () => {
     vi.doMock("@/lib/edition", () => ({ hasCredits: () => false, isCloud: () => false }))
     const { getNodeOptions: getPopupOptions } = await import("../add-node-popup")
     const { getNodeOptions: getToolbarOptions } = await import("../node-toolbar")
 
-    expect(getPopupOptions().map((o) => o.type)).not.toContain("generate-video-pro")
-    expect(getToolbarOptions().map((o) => o.type)).not.toContain("generate-video-pro")
+    expect(getPopupOptions().map((o) => o.type)).toContain("generate-video-pro")
+    expect(getToolbarOptions().map((o) => o.type)).toContain("generate-video-pro")
+    // The truly cloud-only engine keeps its gate.
+    expect(getPopupOptions().map((o) => o.type)).not.toContain("generative-pipeline")
+    expect(getToolbarOptions().map((o) => o.type)).not.toContain("generative-pipeline")
   })
 
   it("appears in BOTH the popup and the sidebar toolbar when the edition has credits (cloud)", async () => {
@@ -47,6 +50,7 @@ describe("generate-video-pro discovery gating", () => {
 
     expect(getPopupOptions().map((o) => o.type)).toContain("generate-video-pro")
     expect(getToolbarOptions().map((o) => o.type)).toContain("generate-video-pro")
+    expect(getPopupOptions().map((o) => o.type)).toContain("generative-pipeline")
   })
 })
 
@@ -79,9 +83,11 @@ describe("both surfaces consume the shared gating module", () => {
       path.resolve(process.cwd(), "src/lib/node-options.tsx"),
       "utf8",
     )
-    // The edition gate lives there now, once (both halves of the 4b split).
+    // The edition gate lives there now, once. Since the PR-4 surfacing only
+    // the truly cloud-only set is filtered — the exclusive set is consumed
+    // by the mark components, not the catalogue filter.
     expect(NODE_OPTIONS_SRC).toMatch(
-      /import \{ CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
+      /import \{ CLOUD_ONLY_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
     )
     expect(NODE_OPTIONS_SRC).toMatch(/hasCredits\(\)/)
 

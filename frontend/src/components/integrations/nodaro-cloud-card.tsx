@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { invalidateNodaroConnectionCache } from "@/hooks/use-nodaro-connection"
 import { Cloud, Loader2, Unlink } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -70,6 +71,7 @@ export function NodaroCloudCard() {
     // straight back there — step 2 flips done and step 3 lights up.
     if (localStorage.getItem("nodaro_connect_from") === "setup") {
       localStorage.removeItem("nodaro_connect_from")
+      invalidateNodaroConnectionCache()
       window.location.replace("/setup?nodaro=connected")
       return
     }
@@ -117,6 +119,7 @@ export function NodaroCloudCard() {
       })
       if (!res.ok) throw new Error(`status ${res.status}`)
       toast.success("Disconnected from nodaro.ai")
+      invalidateNodaroConnectionCache()
       await refresh()
     } catch {
       toast.error("Failed to disconnect")

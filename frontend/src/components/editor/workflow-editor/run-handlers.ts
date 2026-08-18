@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
+import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
 import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { isNotFound } from "@/lib/api-errors";
@@ -461,7 +461,15 @@ export async function handleRunSingleNode(
       // Cascade to downstream auto-execute nodes (combine-text, split-text, extract-field)
       cascadeAutoExecute(nodeId);
     })
-    .catch(() => {
+    .catch((err: unknown) => {
+      // 4b: an exclusive node on an unconnected install — surface the SAME
+      // structured refusal the backend sent, with the connect CTA attached.
+      if (err instanceof NodaroConnectionRequiredError) {
+        toast.error("Connect nodaro.ai to run this node", {
+          description: err.message,
+          action: { label: "Connect", onClick: () => { window.location.href = "/integrations"; } },
+        });
+      }
       // Error already surfaced via toast in executeNode. If the node never left
       // the optimistic "pending" flip — e.g. executeNode rejected on synchronous
       // input validation before writing any status — roll it back to "failed"

@@ -109,6 +109,18 @@ export class ConcurrentModificationError extends Error {
 }
 
 /**
+ * The install has no nodaro.ai connection but the request needs one (the
+ * exclusive nodes' 503). Callers render a Connect CTA — see
+ * handleRunSingleNode's toast and the node card's header chip.
+ */
+export class NodaroConnectionRequiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NodaroConnectionRequiredError"
+  }
+}
+
+/**
  * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
  * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
@@ -150,6 +162,12 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.message as string) ?? fallback,
       (errObj.videoCount as number) ?? 0,
       (errObj.flowCount as number) ?? 0,
+    )
+  }
+  if (errObj?.code === "nodaro_connection_required") {
+    throw new NodaroConnectionRequiredError(
+      (errObj.message as string) ??
+        "This node runs on nodaro.ai — connect your install from Integrations.",
     )
   }
   if (errObj?.code === "concurrent_modification") {

@@ -18,6 +18,8 @@ import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
+import { NodaroHeaderChipForNode } from "./nodaro-exclusive-mark"
+import { hasCredits } from "@/lib/edition"
 
 export interface HandleConfig {
   readonly id: string
@@ -744,7 +746,12 @@ function BaseNodeComponent({
               x{listCount}
             </span>
           )}
-          {credits !== undefined && credits > 0 && (
+          {/* 4b: NODARO provenance/CTA chip for the exclusive nodes.
+              Mount-gated on !hasCredits() so cloud builds pay nothing. */}
+          {!hasCredits() && <NodaroHeaderChipForNode nodeId={id} />}
+          {/* Credit chip only where credits exist as a concept — on
+              community/business the numbers would be fiction. */}
+          {hasCredits() && credits !== undefined && credits > 0 && (
             <span className={cn(
               "font-mono text-[10px]",
               (category === "ai" || category === "scene" || category === "script" || category === "i2v")
