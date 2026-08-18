@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => {
   })
 
   // Captured processor callback from Worker constructor
-  let capturedProcessor: ((job: unknown) => Promise<void>) | null = null
+  let capturedProcessor: ((job: unknown, token?: string) => Promise<void>) | null = null
 
   return {
     mockHasCreditsRef,
@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => {
     mockSelect,
     mockUpdate,
     getCapturedProcessor: () => capturedProcessor,
-    setCapturedProcessor: (p: ((job: unknown) => Promise<void>) | null) => { capturedProcessor = p },
+    setCapturedProcessor: (p: ((job: unknown, token?: string) => Promise<void>) | null) => { capturedProcessor = p },
   }
 })
 
@@ -62,11 +62,16 @@ vi.mock("bullmq", () => {
   class MockWorker {
     on = vi.fn()
     close = vi.fn()
-    constructor(_queue: string, processor: (job: unknown) => Promise<void>) {
+    constructor(_queue: string, processor: (job: unknown, token?: string) => Promise<void>) {
       mocks.setCapturedProcessor(processor)
     }
   }
-  return { Worker: MockWorker }
+  // The REAL class shape matters: the worker throws `new DelayedError()` after
+  // `job.moveToDelayed(...)`, and the drain tests assert `instanceof`.
+  class DelayedError extends Error {
+    constructor(message = "Delayed") { super(message); this.name = "DelayedError" }
+  }
+  return { Worker: MockWorker, DelayedError }
 })
 
 // IORedis mock — must be a class (called with `new`)
@@ -176,6 +181,7 @@ import { PostProcessingError } from "../../lib/post-processing-error.js"
 // Real class (module not mocked) — the drain branch discriminates on
 // instanceof DrainAbortError, so tests must throw the genuine type.
 import { DrainAbortError } from "../../lib/worker-drain.js"
+import { DelayedError } from "bullmq"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -197,6 +203,9 @@ function makeBullJob(name: string, data: Record<string, unknown> = {}) {
     data: { jobId: "job-1", ...data },
     id: "bull-1",
     updateProgress: vi.fn(),
+    // BullMQ's in-processor requeue primitive (drain path): the job moves back
+    // to the queue WITHOUT spending an attempt.
+    moveToDelayed: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -219,7 +228,7 @@ describe("createVideoWorker", () => {
 })
 
 describe("video worker processor", () => {
-  let processor: (job: unknown) => Promise<void>
+  let processor: (job: unknown, token?: string) => Promise<void>
 
   beforeEach(() => {
     createVideoWorker()
@@ -657,15 +666,44 @@ describe("video worker processor", () => {
   // (or already delivered) upstream.
   // -------------------------------------------------------------------------
 
-  it("DrainAbortError on the FINAL attempt → rethrows untouched: no mark-failed, no refund, no self-heal select", async () => {
-    mocks.mockIsFinalJobAttempt.mockReturnValueOnce(true)
+  // 2026-08-18 (recast run f4f503b6): a rethrow SPENDS a BullMQ attempt, and
+  // two rollouts inside two minutes (staging deploys on every dev merge)
+  // exhausted `attempts: 3` on one paid cycle — the job went failed-permanent
+  // in BullMQ while its row sat `processing` for 30 minutes until the reconcile
+  // sweep failed it. A drain is the WORKER dying, not the job failing: it must
+  // go back to the queue at zero cost — `job.moveToDelayed(now + δ, token)` +
+  // `DelayedError`, the same primitive the social-publish worker already uses.
+  it("DrainAbortError → moves the job back to the queue WITHOUT spending an attempt (moveToDelayed + DelayedError); row untouched", async () => {
+    mocks.mockIsFinalJobAttempt.mockReturnValueOnce(true) // even on the final attempt
     mocks.mockHandler.mockRejectedValueOnce(new DrainAbortError())
 
     const job = makeBullJob("generate-image")
-    await expect(processor(job)).rejects.toBeInstanceOf(DrainAbortError)
+    await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DelayedError)
+
+    // Requeued through BullMQ's own primitive, with the processor's lock token,
+    // a short delay (the replacement container is already up — Railway rolls
+    // the new one in before draining the old), never a long park.
+    expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    const [ts, token] = job.moveToDelayed.mock.calls[0]
+    expect(token).toBe("lock-token")
+    expect(ts - Date.now()).toBeGreaterThan(0)
+    expect(ts - Date.now()).toBeLessThanOrEqual(10_000)
 
     // Only the pickup jobRecord fetch — no self-heal row re-select.
     expect(mocks.mockSingle).toHaveBeenCalledTimes(1)
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    )
+  })
+
+  it("DrainAbortError when moveToDelayed itself fails (lock gone / connection closing) → falls back to the plain rethrow, still no mark-failed/refund", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(new DrainAbortError())
+    const job = makeBullJob("generate-image")
+    job.moveToDelayed.mockRejectedValueOnce(new Error("Missing lock for job bull-1"))
+
+    await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DrainAbortError)
+
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" }),

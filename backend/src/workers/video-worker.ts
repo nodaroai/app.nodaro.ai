@@ -1,4 +1,4 @@
-import { Worker, type ConnectionOptions } from "bullmq"
+import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -25,6 +25,12 @@ import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
+
+/** How far back into the queue a drain-interrupted job is moved (ms) — a
+ *  moment, not a park: Railway brings the replacement container up BEFORE
+ *  draining this one, so a worker is already listening. See the DrainAbortError
+ *  branch below. */
+const DRAIN_REQUEUE_DELAY_MS = 2_000
 
 const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
@@ -81,7 +87,7 @@ export function createVideoWorker() {
 
   return new Worker(
     "video-generation",
-    async (job) => {
+    async (job, token) => {
       const { jobId } = job.data as { jobId: string }
 
       // Fetch job record (with should_watermark from reservation) + user profile for public_outputs.
@@ -255,17 +261,38 @@ export function createVideoWorker() {
         // Drain abort (deploy SIGTERM — lib/worker-drain.ts): the WORKER is
         // dying, not the job. Leave the row exactly as-is (reservation intact,
         // status untouched — the provider task may still be running or already
-        // delivered upstream) and rethrow REGARDLESS of attempt number: BullMQ
-        // requeues the job with its lock released, so the replacement process
-        // re-picks it seconds after boot and the stall guard's inline
-        // reconcile resumes/recovers it. Marking failed+refunding here would
-        // charge nothing for a result we can still collect (incident
-        // 2026-07-15: 15–20 min stalls when locks died with the process).
+        // delivered upstream) and hand the job BACK TO THE QUEUE AT ZERO COST:
+        // `moveToDelayed` + `DelayedError` (BullMQ's in-processor requeue,
+        // the primitive social-publish-worker already uses) requeues it with
+        // its lock released and its attempt count UNTOUCHED, so the
+        // replacement process re-picks it seconds after boot and the stall
+        // guard's inline reconcile resumes/recovers it. Marking failed+
+        // refunding would charge nothing for a result we can still collect
+        // (incident 2026-07-15: 15–20 min stalls when locks died with the
+        // process).
+        //
+        // WHY NOT A PLAIN RETHROW (2026-08-18, recast run f4f503b6): a rethrow
+        // SPENDS an attempt. Two rollouts inside two minutes (staging deploys
+        // on every dev merge) exhausted `attempts: 3` on one paid cycle — the
+        // job went failed-permanent in BullMQ while its row sat `processing`
+        // for 30 minutes until the reconcile sweep failed it. A short delay,
+        // not a park: Railway brings the new container up BEFORE draining the
+        // old one, so a worker is already listening.
         if (err instanceof DrainAbortError) {
+          try {
+            await job.moveToDelayed(Date.now() + DRAIN_REQUEUE_DELAY_MS, token)
+          } catch (moveErr) {
+            // The lock is gone or the connection is closing under us — the
+            // plain rethrow (BullMQ's own requeue rules) is the fallback.
+            console.warn(
+              `[worker] Job ${jobId} interrupted by worker drain — moveToDelayed failed (${moveErr instanceof Error ? moveErr.message : String(moveErr)}); rethrowing for BullMQ requeue (row left for stall-retry recovery)`,
+            )
+            throw err
+          }
           console.warn(
-            `[worker] Job ${jobId} interrupted by worker drain — rethrowing for BullMQ requeue (row left for stall-retry recovery)`,
+            `[worker] Job ${jobId} interrupted by worker drain — moved back to the queue (attempt not spent; row left for stall-retry recovery)`,
           )
-          throw err
+          throw new DelayedError()
         }
 
         const message = err instanceof Error ? err.message : "Unknown error"
