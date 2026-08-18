@@ -37,6 +37,10 @@ const mocks = vi.hoisted(() => {
   const getVideoDuration = vi.fn().mockResolvedValue(10)
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
+  // extract-frame verifies its output was actually written after every run
+  // (the silent zero-frame guard) - default true so the happy paths stay
+  // single-call; the fallback behavior has its own suite.
+  const wroteOutputFile = vi.fn().mockResolvedValue(true)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
   const youtubedl = vi.fn().mockResolvedValue({})
   const smartLoopCut = vi.fn().mockResolvedValue({
@@ -47,6 +51,7 @@ const mocks = vi.hoisted(() => {
     fps: 24,
   })
   return {
+    wroteOutputFile,
     downloadFile, runFfmpeg, runFfprobe, getVideoDuration,
     createWorkDir, cleanupWorkDir, fsWriteFile, youtubedl, smartLoopCut,
   }
@@ -59,6 +64,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   getVideoDuration: mocks.getVideoDuration,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
+  wroteOutputFile: mocks.wroteOutputFile,
 }))
 
 vi.mock("node:fs", () => ({
