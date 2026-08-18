@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-08-15T21:55:06.368Z
-generated_from: 150c80ac9
+generated_at: 2026-08-18T12:16:55.631Z
+generated_from: 894717598
 ---
 
 # generate-image
@@ -37,6 +37,12 @@ generated_from: 150c80ac9
 - `maskUrl?: string`
 - `strength?: number`
 - `guidanceScale?: number`
+- `grokSegments?: {
+    readonly taskId: string
+    readonly segments: readonly GrokSegmentInfo[]
+  }`
+- `grokSelectedSegments?: readonly number[]`
+- `grokRegionPrompt?: string`
 - `referenceImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`

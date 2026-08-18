@@ -430,13 +430,23 @@ export function pollImageRefineToNode(
                 ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as
                   Record<string, unknown>)?.generatedResults as
                   readonly GeneratedResult[] | undefined) ?? [];
+              // Carry the provider task id per-result (and node-level) so
+              // grok task-chained ops can keep chaining off a refined result.
+              const kieTaskId =
+                typeof job.output_data?.kieTaskId === "string"
+                  ? job.output_data.kieTaskId
+                  : undefined;
               updateNodeData(nodeId, {
                 executionStatus: "completed",
                 generatedImageUrl: url,
-                generatedResults: [buildSingleResult(url, jobId), ...existing],
+                generatedResults: [
+                  buildSingleResult(url, jobId, kieTaskId ? { extraFields: { kieTaskId } } : undefined),
+                  ...existing,
+                ],
                 activeResultIndex: 0,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
+                ...(kieTaskId ? { kieTaskId } : {}),
               });
               guardedToast.success(`${label} complete`);
               resolve(url);
