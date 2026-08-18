@@ -46,8 +46,63 @@ env:
   IMAGE: ghcr.io/nodaroai/nodaro-community
 
 jobs:
+  # Resolve THE version for this commit — the exact `vX.Y.Z` tag app-release
+  # puts on it. The tag is pushed to this (public) repo seconds AFTER the
+  # mirror pushes main (mirror first, always: pushing a tag whose commit is
+  # not yet on the mirror would smuggle main past the leak-gated publish
+  # path), so this job polls briefly for it. If it never arrives (e.g. the
+  # release's public half failed), the build still ships `:latest`+`:sha` but
+  # SKIPS the version tags — an untagged build must not overwrite a version
+  # tag, which is exactly the immutability bug this replaced (v1.23.0 was
+  # re-pushed for six months).
+  version:
+    name: Resolve release version
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.ver.outputs.app_version }}
+      exact: ${{ steps.ver.outputs.exact }}
+      full: ${{ steps.ver.outputs.full }}
+      minor: ${{ steps.ver.outputs.minor }}
+      major: ${{ steps.ver.outputs.major }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for this commit's version tag
+        id: ver
+        run: |
+          set -euo pipefail
+          tag=""
+          for _ in $(seq 1 20); do
+            git fetch --tags --force --quiet origin
+            tag=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+            [ -n "$tag" ] && break
+            sleep 15
+          done
+          if [ -n "$tag" ]; then
+            v=${tag#v}
+            {
+              echo "exact=true"
+              echo "app_version=$v"
+              echo "full=v$v"
+              echo "minor=v${v%.*}"
+              echo "major=v${v%%.*}"
+            } >> "$GITHUB_OUTPUT"
+            echo "exact release tag: $tag"
+          else
+            near=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v0.0.0)
+            sha=$(git rev-parse --short HEAD)
+            {
+              echo "exact=false"
+              echo "app_version=${near#v}-dev.$sha"
+            } >> "$GITHUB_OUTPUT"
+            echo "no exact tag on HEAD after 5 min — shipping :latest/:sha only (version ${near#v}-dev.$sha)"
+          fi
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: version
     if: github.repository == 'nodaroai/app.nodaro.ai'
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -80,6 +135,8 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           build-args: |
+            APP_VERSION=${{ needs.version.outputs.app_version }}
+            VITE_APP_VERSION=${{ needs.version.outputs.app_version }}
             VITE_API_URL=http://localhost:3000
             VITE_EDITION=community
             VITE_SUPABASE_URL=http://localhost:3000/supabase
@@ -106,22 +163,10 @@ jobs:
   merge:
     name: Publish multi-arch tags
     if: github.repository == 'nodaroai/app.nodaro.ai'
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Human-readable version tags beside `latest` and the commit SHA, so a
-      # self-hoster can pin (`nodaro-community:v1.23.0`, `:v1.23`) and a bad
-      # `latest` can be rolled back by retagging a version (release check 48).
-      # The version is the app's own (frontend/package.json — what the sidebar
-      # shows), so the tag matches what the running install reports.
-      - name: Resolve version tags
-        id: ver
-        run: |
-          v=$(node -p "require('./frontend/package.json').version")
-          echo "full=v$v" >> "$GITHUB_OUTPUT"
-          echo "minor=v${v%.*}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -137,18 +182,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Version tags (immutable vX.Y.Z + floating vX.Y and vX — the
+      # quickstart pins :vX so majors never arrive unannounced) only when the
+      # commit carries its release tag; :latest and :sha always.
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
           # SC2046: the word splitting is the point — one argument per digest
           # file, which is how imagetools is told what to stitch together.
           # shellcheck disable=SC2046
-          docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:latest \
-            -t ${{ env.IMAGE }}:${{ github.sha }} \
-            -t ${{ env.IMAGE }}:${{ steps.ver.outputs.full }} \
-            -t ${{ env.IMAGE }}:${{ steps.ver.outputs.minor }} \
-            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+          if [ "${{ needs.version.outputs.exact }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t ${{ env.IMAGE }}:latest \
+              -t ${{ env.IMAGE }}:${{ github.sha }} \
+              -t ${{ env.IMAGE }}:${{ needs.version.outputs.full }} \
+              -t ${{ env.IMAGE }}:${{ needs.version.outputs.minor }} \
+              -t ${{ env.IMAGE }}:${{ needs.version.outputs.major }} \
+              $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+          else
+            docker buildx imagetools create \
+              -t ${{ env.IMAGE }}:latest \
+              -t ${{ env.IMAGE }}:${{ github.sha }} \
+              $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+          fi
 
       - name: Inspect published image
         run: docker buildx imagetools inspect ${{ env.IMAGE }}:latest

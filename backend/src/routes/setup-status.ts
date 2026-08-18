@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { getAppVersion } from "../lib/app-version.js"
 import IORedis from "ioredis"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
@@ -256,6 +257,7 @@ export async function setupStatusRoutes(app: FastifyInstance) {
     reply.header("Cache-Control", "no-store")
     return reply.send({
       edition: config.EDITION,
+      version: getAppVersion(),
       timestamp: new Date().toISOString(),
       hasUsers,
       checks: { database, redis, storage, providers, encryption },
