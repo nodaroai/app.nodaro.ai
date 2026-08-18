@@ -1,15 +1,18 @@
-import { Fragment, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { Loader2, CheckCircle, CheckCheck, XCircle, ChevronRight, ChevronDown, Download, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { hasAdmin } from "@/lib/edition"
 import {
   useAdminAppReports,
   usePatchAppReportMutation,
   fetchAdminAppReportsPage,
+  useAllAdminUsersLite,
   type AppReport,
+  type AppReportsUserScope,
 } from "@/ee/hooks/queries/use-admin-queries"
 import { downloadMarkdown, exportDateStamp, exportPreamble, fetchAllRows } from "@/ee/lib/admin-export"
 
@@ -91,10 +94,23 @@ export default function AdminAppReportsPage() {
   const [kind, setKind] = useState("all")
   const [appSlug, setAppSlug] = useState("all")
   const [status, setStatus] = useState("new")
+  const [userFilter, setUserFilter] = useState<UserFilterValue>({ kind: "all" })
   const [expanded, setExpanded] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
-  const listQuery = useAdminAppReports(offset, kind, appSlug, status)
+  const { data: users = [] } = useAllAdminUsersLite()
+  const adminIds = useMemo(() => users.filter((u) => u.role !== "user").map((u) => u.id), [users])
+  const userScope: AppReportsUserScope = useMemo(
+    () =>
+      userFilter.kind === "user"
+        ? { userId: userFilter.id }
+        : userFilter.kind === "exclude_admins"
+          ? { excludeUserIds: adminIds }
+          : {},
+    [userFilter, adminIds],
+  )
+
+  const listQuery = useAdminAppReports(offset, kind, appSlug, status, userScope)
   const patch = usePatchAppReportMutation()
   if (!isAdmin) return null
 
@@ -106,11 +122,16 @@ export default function AdminAppReportsPage() {
     setExporting(true)
     try {
       const { rows, total: all } = await fetchAllRows((off, lim) =>
-        fetchAdminAppReportsPage(off, lim, kind, appSlug, status),
+        fetchAdminAppReportsPage(off, lim, kind, appSlug, status, userScope),
       )
       downloadMarkdown(
         `app-reports-${exportDateStamp()}.md`,
-        reportsMarkdown(rows, all, { kind, app: appSlug, status }),
+        reportsMarkdown(rows, all, {
+          kind,
+          app: appSlug,
+          status,
+          user: userFilter.kind === "user" ? (users.find((u) => u.id === userFilter.id)?.email ?? userFilter.id) : userFilter.kind,
+        }),
       )
     } finally {
       setExporting(false)
@@ -146,6 +167,12 @@ export default function AdminAppReportsPage() {
             </SelectContent>
           </Select>
         </div>
+        {users.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">User</label>
+            <UserFilter users={users} value={userFilter} onChange={(next) => { setUserFilter(next); setOffset(0) }} />
+          </div>
+        )}
         <Button variant="outline" size="sm" className="ml-auto" disabled={exporting || total === 0} onClick={exportMd}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
           Export .md

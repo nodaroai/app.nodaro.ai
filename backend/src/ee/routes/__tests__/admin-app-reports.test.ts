@@ -13,7 +13,7 @@ const REPORT_ID = "00000000-0000-4000-8000-0000000000aa"
 /** Chainable+thenable Supabase stub (house style — admin-client-apps.test.ts). */
 function chain(result: Record<string, unknown>) {
   const obj: Record<string, any> = {}
-  for (const m of ["select", "eq", "in", "order", "range", "update"]) obj[m] = vi.fn(() => obj)
+  for (const m of ["select", "eq", "in", "or", "order", "range", "update"]) obj[m] = vi.fn(() => obj)
   obj.then = (resolve: (v: unknown) => void) => Promise.resolve({ error: null, ...result }).then(resolve)
   return obj
 }
@@ -99,6 +99,39 @@ describe("GET /v1/admin/app-reports", () => {
     })
     expect(chains.profiles.in).toHaveBeenCalledWith("id", [TEST_USER_ID])
     expect(chains.jobs.in).toHaveBeenCalledWith("id", [JOB_ID])
+  })
+
+  it("filters by userId and excludes admin ids null-safely (bogus ids dropped)", async () => {
+    const ADMIN_A = "00000000-0000-4000-8000-00000000ad01"
+    const ADMIN_B = "00000000-0000-4000-8000-00000000ad02"
+    const c = chain({ data: [], count: 0 })
+    vi.mocked(supabase.from).mockReturnValue(c as never)
+
+    const byUser = await app.inject({
+      method: "GET",
+      url: `/v1/admin/app-reports?userId=${TEST_USER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(byUser.statusCode).toBe(200)
+    expect(c.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+
+    const excl = await app.inject({
+      method: "GET",
+      url: `/v1/admin/app-reports?excludeUserIds=${ADMIN_A},not-a-uuid,${ADMIN_B}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(excl.statusCode).toBe(200)
+    // NULL-user (platform-internal) reports stay visible; the bogus id is dropped.
+    expect(c.or).toHaveBeenCalledWith(`user_id.is.null,user_id.not.in.(${ADMIN_A},${ADMIN_B})`)
+
+    // A userId that is not a UUID is ignored, not passed to the query.
+    const bogusUser = await app.inject({
+      method: "GET",
+      url: "/v1/admin/app-reports?userId=strange';drop--",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(bogusUser.statusCode).toBe(200)
+    expect(c.eq).not.toHaveBeenCalledWith("user_id", "strange';drop--")
   })
 
   it("resolves execution context for execution-keyed reports (no job)", async () => {
