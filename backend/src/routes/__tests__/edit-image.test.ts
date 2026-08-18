@@ -490,7 +490,29 @@ describe("POST /v1/edit-image — grok-2-edit / grok-2-segment providers", () =>
     )
   })
 
-  it("rejects maskIndexes with 0 or negative entries (KIE indexes are 1-based)", async () => {
+  it("accepts maskIndexes [0] — production grok segment indexes are 0-BASED (contra KIE docs)", async () => {
+    mockJobInsert({ data: { id: "job-grok2-idx0" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-edit",
+        taskId: "task_grok_imagine_image_2_0_123",
+        prompt: "recolor the first region",
+        maskIndexes: [0],
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({ maskIndexes: [0] })
+    )
+  })
+
+  it("rejects negative maskIndexes entries", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/edit-image",
@@ -498,7 +520,7 @@ describe("POST /v1/edit-image — grok-2-edit / grok-2-segment providers", () =>
         provider: "grok-2-edit",
         taskId: "task_grok_imagine_image_2_0_123",
         prompt: "make the sky stormy",
-        maskIndexes: [0],
+        maskIndexes: [-1],
         userId: "00000000-0000-4000-8000-000000000001",
       },
     })

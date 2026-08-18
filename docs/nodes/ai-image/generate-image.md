@@ -122,7 +122,7 @@ For providers that expose them, the **Strength** (i2i denoising) and **Guidance 
 
 With the **grok-2** provider, the panel adds a **Refine Regions** section powered by Grok's task-chained editing (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)):
 
-1. **Detect regions** (free) — runs a segment map over the active result and returns named region masks (e.g. *sky*, *person*, *tree*), shown as toggleable chips. Hovering or selecting a chip tints that region on the result preview.
+1. **Detect regions** (free) — runs a segment map over the active result and returns named regions (e.g. *sky*, *person*, *tree*), shown as toggleable tiles with a cutout preview of each region's content.
 2. Tick the regions to change, write an edit prompt, and **Apply**. Leave nothing ticked for a whole-image edit.
 3. The edit lands as a **new version** in the node's result strip — and carries its own task reference, so it can be segmented and refined again, iteratively.
 

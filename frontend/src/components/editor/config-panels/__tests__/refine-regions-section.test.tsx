@@ -10,9 +10,11 @@
  *    and stores the zipped {index, name, maskUrl} list keyed by that task id.
  *  - A stored segment map whose taskId doesn't match the active result is
  *    STALE — the section offers a fresh Detect instead of rendering it.
- *  - Chips toggle grokSelectedSegments; Apply fires grok-2-edit with the
- *    sorted 1-based indexes (or none for a whole-image edit) through
- *    pollImageRefineToNode so the edit lands as a new node result version.
+ *  - Segment tiles (Grok's maskUrls are ~128×128 RGB cutout previews, not
+ *    full-frame masks) toggle grokSelectedSegments; Apply fires grok-2-edit
+ *    with the sorted VERBATIM indexes — 0-based in production, so index 0
+ *    must survive — through pollImageRefineToNode so the edit lands as a new
+ *    node result version.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
@@ -65,9 +67,10 @@ function baseData(overrides: Partial<GenerateImageData> = {}): GenerateImageData
 const SEGMENT_OUTPUT = {
   imageUrl: "https://r2.test/mask-1.png",
   imageUrls: ["https://r2.test/mask-1.png", "https://r2.test/mask-2.png"],
+  // 0-based, mirroring production (contra KIE's docs claiming ≥1).
   segments: [
-    { index: 1, name: "sky" },
-    { index: 2, name: "person" },
+    { index: 0, name: "sky" },
+    { index: 1, name: "person" },
   ],
 }
 
@@ -109,8 +112,8 @@ describe("RefineRegionsSection", () => {
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 1, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
-          { index: 2, name: "person", maskUrl: "https://r2.test/mask-2.png" },
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
+          { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
       grokSelectedSegments: [],
@@ -121,7 +124,7 @@ describe("RefineRegionsSection", () => {
     const data = baseData({
       grokSegments: {
         taskId: "task_grok_OLD",
-        segments: [{ index: 1, name: "sky", maskUrl: "https://r2.test/old-mask.png" }],
+        segments: [{ index: 0, name: "sky", maskUrl: "https://r2.test/old-mask.png" }],
       },
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
@@ -129,41 +132,42 @@ describe("RefineRegionsSection", () => {
     expect(screen.queryByText("sky")).toBeNull()
   })
 
-  it("renders chips for a fresh segment map and toggles selection through onUpdate", () => {
+  it("renders cutout thumbnail tiles and toggles selection through onUpdate (index 0 included)", () => {
     const onUpdate = vi.fn()
     const data = baseData({
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 1, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
-          { index: 2, name: "person", maskUrl: "https://r2.test/mask-2.png" },
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
+          { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
-      grokSelectedSegments: [1],
+      grokSelectedSegments: [0],
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={onUpdate} />)
 
-    // Selected chip renders pressed; a selected region paints its overlay.
-    expect(screen.getByRole("button", { name: /sky/ }).getAttribute("aria-pressed")).toBe("true")
-    expect(screen.getByTestId("region-overlay-1")).toBeTruthy()
+    // Selected tile renders pressed and shows the cutout preview image.
+    const skyTile = screen.getByRole("button", { name: /sky/ })
+    expect(skyTile.getAttribute("aria-pressed")).toBe("true")
+    expect(skyTile.querySelector("img")?.getAttribute("src")).toBe("https://r2.test/mask-1.png")
 
     fireEvent.click(screen.getByRole("button", { name: /person/ }))
-    expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [1, 2] })
+    expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [0, 1] })
 
-    fireEvent.click(screen.getByRole("button", { name: /sky/ }))
+    fireEvent.click(skyTile)
     expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [] })
   })
 
-  it("applies a region edit with the sorted selected indexes via pollImageRefineToNode", async () => {
+  it("applies a region edit with the sorted VERBATIM indexes (0-based survives) via pollImageRefineToNode", async () => {
     const data = baseData({
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 1, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
-          { index: 2, name: "person", maskUrl: "https://r2.test/mask-2.png" },
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
+          { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
-      grokSelectedSegments: [2, 1],
+      grokSelectedSegments: [1, 0],
       grokRegionPrompt: "make the sky stormy",
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
@@ -176,13 +180,13 @@ describe("RefineRegionsSection", () => {
 
     grokRegionEditMock.mockResolvedValue({ jobId: "edit-job-1" })
     await apiCall()
-    expect(grokRegionEditMock).toHaveBeenCalledWith("task_grok_123", "make the sky stormy", [1, 2])
+    expect(grokRegionEditMock).toHaveBeenCalledWith("task_grok_123", "make the sky stormy", [0, 1])
   })
 
   it("applies a whole-image edit (no maskIndexes) when nothing is selected, and disables Apply without a prompt", async () => {
     const segments = {
       taskId: "task_grok_123",
-      segments: [{ index: 1, name: "sky", maskUrl: "https://r2.test/mask-1.png" }],
+      segments: [{ index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" }],
     }
     const { rerender } = render(
       <RefineRegionsSection nodeId="n1" data={baseData({ grokSegments: segments })} onUpdate={vi.fn()} />,

@@ -40,11 +40,13 @@ const editImageBody = z.object({
   // Optional inpainting mask (forwarded as mask_url to the provider; only consumed by providers that support it)
   maskUrl: safeUrlSchema.optional(),
   /**
-   * grok-2-edit only: segment indexes (1-based, from a prior grok-2-segment
-   * run) restricting the edit to those named regions. Forwarded to KIE as
-   * `mask_indexs` (their spelling). Ignored by every other provider.
+   * grok-2-edit only: segment indexes (the `index` values a grok-2-segment
+   * run returned, passed through VERBATIM — observed 0-based in production,
+   * contra KIE's docs claiming ≥1) restricting the edit to those named
+   * regions. Forwarded to KIE as `mask_indexs` (their spelling). Ignored by
+   * every other provider.
    */
-  maskIndexes: z.array(z.number().int().min(1)).min(1).max(64).optional(),
+  maskIndexes: z.array(z.number().int().min(0)).min(1).max(64).optional(),
 }).refine(
   (data) => {
     if (TASK_CHAINED_EDIT_PROVIDERS.has(data.provider ?? "recraft-upscale")) {

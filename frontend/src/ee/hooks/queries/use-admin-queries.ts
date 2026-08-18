@@ -1005,6 +1005,13 @@ export interface AppReport {
   readonly created_at: string
 }
 
+/** User scoping for the reports list — same three modes as the jobs page's
+ *  UserFilter: everything, one user, or everyone except admins. */
+export interface AppReportsUserScope {
+  readonly userId?: string
+  readonly excludeUserIds?: ReadonlyArray<string>
+}
+
 /** Shared by the list hook and the .md export (which pages through ALL rows). */
 export async function fetchAdminAppReportsPage(
   offset: number,
@@ -1012,20 +1019,32 @@ export async function fetchAdminAppReportsPage(
   kind: string,
   appSlug: string,
   status: string,
+  userScope: AppReportsUserScope = {},
 ): Promise<{ data: AppReport[]; total: number }> {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
   if (kind !== "all") params.set("kind", kind)
   if (appSlug !== "all") params.set("appSlug", appSlug)
   if (status !== "all") params.set("status", status)
+  if (userScope.userId) params.set("userId", userScope.userId)
+  if (userScope.excludeUserIds && userScope.excludeUserIds.length > 0) {
+    params.set("excludeUserIds", userScope.excludeUserIds.join(","))
+  }
   const res = await fetch(`/v1/admin/app-reports?${params}`, { headers: await getAuthHeaders() })
   if (!res.ok) throw new Error("Failed to fetch app reports")
   return res.json()
 }
 
-export function useAdminAppReports(offset: number, kind: string, appSlug: string, status: string) {
+export function useAdminAppReports(
+  offset: number,
+  kind: string,
+  appSlug: string,
+  status: string,
+  userScope: AppReportsUserScope = {},
+) {
+  const userFilterKey = userScope.userId ?? (userScope.excludeUserIds?.length ? `excl:${userScope.excludeUserIds.length}` : "all")
   return useQuery({
-    queryKey: queryKeys.admin.appReports(offset, kind, appSlug, status),
-    queryFn: () => fetchAdminAppReportsPage(offset, 50, kind, appSlug, status),
+    queryKey: queryKeys.admin.appReports(offset, kind, appSlug, status, userFilterKey),
+    queryFn: () => fetchAdminAppReportsPage(offset, 50, kind, appSlug, status, userScope),
     enabled: hasAdmin(),
     staleTime: 15_000,
   })

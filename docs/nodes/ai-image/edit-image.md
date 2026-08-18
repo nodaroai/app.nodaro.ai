@@ -55,10 +55,10 @@ The three `grok-*` operations don't take an image URL. They reference a **prior 
 The full region-editing flow with `grok-2`:
 
 1. **Generate** an image with the `grok-2` provider (Generate Image node or `POST /v1/generate-image`). Note the completed job's `kieTaskId`.
-2. **Segment (optional, free)** — `POST /v1/edit-image` with `{ "provider": "grok-2-segment", "taskId": "<kieTaskId>" }`. The job's output images are the region masks, and `output_data.segments` lists `{ index, name }` pairs order-aligned with them (e.g. `1 = sky`, `2 = person`).
-3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<kieTaskId>", "prompt": "make the sky stormy", "maskIndexes": [1] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
+2. **Segment (optional, free)** — `POST /v1/edit-image` with `{ "provider": "grok-2-segment", "taskId": "<kieTaskId>" }`. `output_data.segments` lists `{ index, name }` pairs (e.g. `0 = sky`, `1 = person`), order-aligned with the job's output images — which are ~128×128 **cutout previews** of each region (a bounding-box crop on white), *not* full-frame binary masks.
+3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<kieTaskId>", "prompt": "make the sky stormy", "maskIndexes": [0] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
 
-`maskIndexes` entries are the 1-based `index` values from the segment map. A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing.
+`maskIndexes` entries are the segment map's `index` values passed through **verbatim** (0-based in practice, whatever the segment map returned). A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing. Note the edit is region-*driven* rather than pixel-locked: Grok may adjust global lighting to keep the scene consistent (e.g. a night-sky edit also relights the water).
 
 In the editor, this flow is built into the **Generate Image** node: with the grok-2 provider selected, its config panel shows a **Refine Regions** section (detect regions → tick named chips → prompt edit) — see [Generate Image → Refine regions](./generate-image.md#refine-regions-grok-imagine-2). The API/MCP flow above is the same machinery.
 

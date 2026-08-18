@@ -14,6 +14,8 @@ const updateReportBody = z.object({
 
 const reportIdParams = z.object({ id: z.string().uuid() })
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /** Job context attached to each listed report (all best-effort; null when the
  *  report has no job or the job row is gone). `source`/`source_detail` are the
  *  jobs provenance columns (migration 282: mcp | web | cli | sdk | app | api |
@@ -115,8 +117,9 @@ async function enrichReports(rows: Array<Record<string, unknown>>): Promise<Arra
 export async function adminAppReportsRoutes(app: FastifyInstance): Promise<void> {
   // List reports, newest first, with filters + pagination.
   app.get("/v1/admin/app-reports", { preHandler: requireAdmin }, async (req, reply) => {
-    const { offset = "0", limit = "50", kind, appSlug, node, status } = req.query as {
+    const { offset = "0", limit = "50", kind, appSlug, node, status, userId, excludeUserIds } = req.query as {
       offset?: string; limit?: string; kind?: string; appSlug?: string; node?: string; status?: string
+      userId?: string; excludeUserIds?: string
     }
     const from = parseInt(offset, 10)
     const size = Math.min(parseInt(limit, 10) || 50, 100)
@@ -131,6 +134,17 @@ export async function adminAppReportsRoutes(app: FastifyInstance): Promise<void>
     if (appSlug) query = (query as any).eq("app_slug", appSlug)
     if (node) query = (query as any).eq("node", node)
     if (status) query = (query as any).eq("status", status)
+    if (userId && UUID_RE.test(userId)) query = (query as any).eq("user_id", userId)
+    if (excludeUserIds) {
+      // Strictly UUIDs only — these ids are interpolated into a PostgREST
+      // `or` expression, so anything else is dropped, never passed through.
+      const ids = excludeUserIds.split(",").filter((id) => UUID_RE.test(id))
+      if (ids.length > 0) {
+        // user_id is nullable (platform-internal reports): a plain NOT IN
+        // would drop the NULL rows too, so keep them explicitly.
+        query = (query as any).or(`user_id.is.null,user_id.not.in.(${ids.join(",")})`)
+      }
+    }
 
     const { data, error, count } = await (query as any)
     if (error) return reply.status(500).send({ error: { message: error.message } })

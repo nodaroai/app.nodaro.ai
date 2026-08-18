@@ -491,6 +491,12 @@ interface GrokSegment {
  * `resultObject.segments` (each {index, name, maskUrl}); read defensively —
  * top-level `segments` and snake_case `mask_url` are tolerated, entries
  * without a usable mask URL are dropped.
+ *
+ * Production observations (2026-08-18): `index` values are 0-BASED (contra
+ * KIE's docs claiming ≥1) and pass through verbatim to the edit endpoint;
+ * `maskUrl` is NOT a full-frame binary mask — it's a ~128×128 RGB CUTOUT
+ * preview of the segment (bounding-box crop on white). Consumers must treat
+ * it as a thumbnail, never as an overlay/inpaint mask.
  */
 function extractGrokSegments(resultJson: KieResultJson): GrokSegment[] {
   const parsed = resultJson as {
@@ -508,7 +514,9 @@ function extractGrokSegments(resultJson: KieResultJson): GrokSegment[] {
         : null
     if (!maskUrl) return []
     return [{
-      index: typeof seg.index === "number" ? seg.index : 0,
+      // Verbatim provider index (0-based in production). Positional fallback
+      // stays 0-based for consistency when an entry omits it.
+      index: typeof seg.index === "number" ? seg.index : raw.indexOf(entry),
       name: typeof seg.name === "string" ? seg.name : "",
       maskUrl,
     }]
