@@ -62,8 +62,6 @@ interface SetupStatus {
   readonly edition: string
   readonly timestamp: string
   readonly hasUsers?: boolean
-  /** Host path of the compose project dir (from NODARO_INSTALL_DIR). */
-  readonly installDir?: string
   readonly checks: {
     readonly database: CheckResult
     readonly redis: CheckResult
@@ -1225,8 +1223,7 @@ export default function SetupPage() {
             >
               <span>
                 prefer a file? keys can also live in a plain-text <span style={{ color: INK }}>.env</span> in your install
-                folder{status?.installDir ? <> &mdash; <span style={{ color: INK, userSelect: "all" }}>{status.installDir}</span></> : null} &mdash; a key
-                set there wins over one pasted here &mdash; this list refreshes on its own
+                folder &mdash; a key set there wins over one pasted here &mdash; this list refreshes on its own
               </span>
               <span style={{ display: "inline-flex", gap: 18 }}>
                 <button
@@ -1289,14 +1286,8 @@ export default function SetupPage() {
                 }}
               >
                 <li>
-                  Open the folder where you installed Nodaro &mdash;{" "}
-                  {status?.installDir ? (
-                    <code style={{ fontFamily: MONO, fontSize: 12, color: INK, userSelect: "all" }}>{status.installDir}</code>
-                  ) : (
-                    <>the one that contains{" "}
-                    <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker-compose.community.yml</code></>
-                  )}
-                  .
+                  Open the folder where you installed Nodaro &mdash; the one that contains{" "}
+                  <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker-compose.community.yml</code>.
                 </li>
                 <li>
                   Create (or open) a file named <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}

@@ -209,12 +209,6 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       // Unreachable DB already surfaces via the database check.
     }
 
-    // Deliberate exception to the booleans-only stance: the compose file
-    // passes the HOST path of the install folder (${PWD}) so the setup UI
-    // can tell users where the .env lives. It is a directory path with no
-    // credentials in it; omit entirely when compose didn't provide one.
-    const installDir = (process.env.NODARO_INSTALL_DIR ?? "").trim()
-
     // The instance encryption key is what makes pasted provider keys (and
     // social tokens) storable. Presence + provenance only — never the key.
     // `generated` = start.sh minted it on first boot and keeps it in the
@@ -238,7 +232,6 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       edition: config.EDITION,
       timestamp: new Date().toISOString(),
       hasUsers,
-      ...(installDir ? { installDir } : {}),
       checks: { database, redis, storage, providers, encryption },
     })
   })
