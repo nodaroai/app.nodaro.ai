@@ -4,6 +4,7 @@ import { appBaseUrl } from "../lib/deployment-urls.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import {
   clearNodaroConnection,
+  forgetNodaroClient,
   getNodaroConnection,
   getNodaroCredential,
   getNodaroProviderPrefs,
@@ -99,6 +100,32 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
       }
 
       let conn = await getNodaroConnection()
+
+      // A kept registration can DIE cloud-side (Connected Instances →
+      // Disconnect revokes it; stale never-consented registrations expire) —
+      // reusing it blindly hands the browser a consent screen that can only
+      // say "Unknown client_id" (hit live 2026-08-18). Probe the PUBLIC
+      // app-info endpoint first: an explicit not-found means re-register
+      // fresh; any transient failure keeps the reuse path (#708's
+      // registration-cap protection stays intact for live clients).
+      if (conn) {
+        try {
+          const probe = await fetch(
+            `${nodaroCloudBase()}/v1/oauth/app-info?client_id=${encodeURIComponent(conn.clientId)}`,
+          )
+          if (probe.status === 404) {
+            req.log.warn(
+              { clientId: conn.clientId },
+              "[nodaro-connect] stored registration no longer exists on the cloud — re-registering",
+            )
+            await forgetNodaroClient()
+            conn = null
+          }
+        } catch {
+          // Cloud unreachable — the register/consent steps will surface it.
+        }
+      }
+
       if (!conn) {
         // One-time self-registration against the cloud DCR.
         let res: Response

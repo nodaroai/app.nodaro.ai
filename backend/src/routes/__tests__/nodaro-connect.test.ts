@@ -10,17 +10,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockGetConnection, mockReadState, mockSave, mockFetch, mockCredential } = vi.hoisted(() => ({
+const { mockGetConnection, mockReadState, mockSave, mockFetch, mockCredential, mockForget } = vi.hoisted(() => ({
   mockGetConnection: vi.fn(),
   mockReadState: vi.fn(),
   mockSave: vi.fn(),
   mockFetch: vi.fn(),
   mockCredential: vi.fn(),
+  mockForget: vi.fn(async () => {}),
 }))
 
 vi.mock("../../lib/nodaro-connect.js", () => ({
   getNodaroProviderPrefs: async () => ({ scope: "all", precedence: "local" }),
   clearNodaroConnection: vi.fn(),
+  forgetNodaroClient: mockForget,
   getNodaroConnection: mockGetConnection,
   readNodaroConnectionState: mockReadState,
   isNodaroConnected: vi.fn(async () => false),
@@ -43,6 +45,7 @@ beforeEach(async () => {
   mockReadState.mockReset()
   mockSave.mockReset()
   mockFetch.mockReset()
+  mockForget.mockClear()
   vi.stubGlobal("fetch", mockFetch)
   app = Fastify({ logger: false })
   await app.register(nodaroConnectRoutes)
@@ -90,16 +93,51 @@ describe("POST /v1/nodaro-connect/start", () => {
     expect(mockFetch).toHaveBeenCalledWith("https://cloud.example/v1/oauth/register", expect.objectContaining({ method: "POST" }))
   })
 
-  it("reuses a stored registration instead of registering again", async () => {
+  it("reuses a stored registration the cloud still recognizes — probe passes, no re-register", async () => {
     mockReadState.mockResolvedValue({ state: "not-connected" })
     mockGetConnection.mockResolvedValue({ clientId: "ndr_dcr_kept", clientSecret: "s" })
+    mockFetch.mockResolvedValue(cloudResponse(200, { name: "Nodaro instance" }))
 
     const { status, body } = await start()
 
     expect(status).toBe(200)
     expect(body.authorizeUrl).toContain("client_id=ndr_dcr_kept")
-    expect(mockFetch).not.toHaveBeenCalled()
+    // Exactly the public liveness probe — never the register endpoint.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(String(mockFetch.mock.calls[0]?.[0])).toContain("/v1/oauth/app-info?client_id=ndr_dcr_kept")
+    expect(mockForget).not.toHaveBeenCalled()
     expect(mockSave).not.toHaveBeenCalled()
+  })
+
+  it("self-heals a registration the cloud no longer knows: forgets it and registers fresh (live trap 2026-08-18)", async () => {
+    mockReadState.mockResolvedValue({ state: "not-connected" })
+    mockGetConnection.mockResolvedValue({ clientId: "ndr_dcr_dead", clientSecret: "s" })
+    mockFetch.mockImplementation(async (url: unknown) => {
+      if (String(url).includes("/v1/oauth/app-info")) {
+        return cloudResponse(404, { error: { code: "not_found", message: "Unknown client_id or app suspended" } })
+      }
+      return cloudResponse(201, { client_id: "ndr_dcr_fresh", client_secret: "s2" })
+    })
+
+    const { status, body } = await start()
+
+    expect(status).toBe(200)
+    expect(mockForget).toHaveBeenCalledTimes(1)
+    expect(body.authorizeUrl).toContain("client_id=ndr_dcr_fresh")
+    expect(body.authorizeUrl).not.toContain("ndr_dcr_dead")
+    expect(mockSave).toHaveBeenCalledWith({ clientId: "ndr_dcr_fresh", clientSecret: "s2" })
+  })
+
+  it("keeps the stored registration when the liveness probe merely fails to reach the cloud", async () => {
+    mockReadState.mockResolvedValue({ state: "not-connected" })
+    mockGetConnection.mockResolvedValue({ clientId: "ndr_dcr_kept", clientSecret: "s" })
+    mockFetch.mockRejectedValue(new TypeError("fetch failed"))
+
+    const { status, body } = await start()
+
+    expect(status).toBe(200)
+    expect(body.authorizeUrl).toContain("client_id=ndr_dcr_kept")
+    expect(mockForget).not.toHaveBeenCalled()
   })
 
   it("names the cloud, not 'this server', when nodaro.ai has the feature switched off", async () => {
