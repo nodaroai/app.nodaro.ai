@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { hasCredits } from "@/lib/edition"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -34,8 +33,8 @@ import type { ConfigProps } from "./types"
  *      audio track. Pin the warning at the top so it's seen before any
  *      knob is touched. Suggests Merge Video + Audio as the workaround.
  *   2. Prompt textarea (mappable) with inline AI helper button. The
- *      helper is gated behind `hasCredits()` so community/business builds
- *      don't render it.
+ *      helper self-gates on LLM availability (useLlmAvailability — #752),
+ *      so it renders in any edition that can actually reach an LLM.
  *   3. Negative prompt (single-line) with the default value `"music"`
  *      surfaced in the label so users understand why prompts like
  *      "epic orchestral score" produce silence — MMAudio's Replicate-
@@ -105,8 +104,8 @@ export function VideoSfxConfig({
 
       {/* 2. Prompt — mappable from upstream text nodes. The AI helper
           button is wired to `audio-prompt-styles` via `prompt-helper-styles.ts`
-          and gated behind `hasCredits()` so community/business builds don't
-          show it (the route requires credits to run). */}
+          and self-gates on LLM availability (#752) — no external gate here,
+          PromptHelperButton owns the decision for every render site. */}
       <MappableField
         field="prompt"
         label="Prompt"
@@ -117,14 +116,12 @@ export function VideoSfxConfig({
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
-            {hasCredits() && (
-              <PromptHelperButton
-                nodeType="video-sfx"
-                currentPrompt={data.prompt ?? ""}
-                provider={data.provider}
-                onAccept={(prompt) => onUpdate({ prompt })}
-              />
-            )}
+            <PromptHelperButton
+              nodeType="video-sfx"
+              currentPrompt={data.prompt ?? ""}
+              provider={data.provider}
+              onAccept={(prompt) => onUpdate({ prompt })}
+            />
           </span>
         }
       >

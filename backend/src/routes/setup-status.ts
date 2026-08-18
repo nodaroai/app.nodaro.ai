@@ -181,6 +181,14 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       nodaroCloud: nodaroConnected,
       // How nodaro.ai is authenticated, so the tile can say CONNECTED vs KEY.
       nodaroSource: nodaroCredential?.source ?? null,
+      // CAPABILITY, not billing: whether any LLM lane is reachable — a KIE
+      // key (the primary proxy for every LLM model), a direct Anthropic or
+      // Google key, or the nodaro.ai connection (the LLM routes proxy
+      // through it). The frontend gates the "Generate with AI" prompt-helper
+      // entry points on this (#752) instead of hasCredits(), which answers
+      // "do we charge for this", never "can this install do this". Derived
+      // from the same live key resolution as `keys` (env + pasted keys).
+      llm: providerKeys.kie || providerKeys.anthropic || providerKeys.gemini || nodaroConnected,
       keys: providerKeys,
       sources: providerSources,
       meta: providerMeta,
