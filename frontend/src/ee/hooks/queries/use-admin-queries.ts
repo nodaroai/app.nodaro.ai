@@ -978,6 +978,15 @@ export interface AppReportJobInfo {
   readonly app_slug: string | null
 }
 
+/** Execution context for execution-keyed reports (kind execution-failure):
+ *  the run's trigger, MCP client, and the published app's slug when the run
+ *  came from an app. */
+export interface AppReportExecutionInfo {
+  readonly trigger_type: string | null
+  readonly mcp_client: string | null
+  readonly app_slug: string | null
+}
+
 export interface AppReport {
   readonly id: string
   readonly app_slug: string | null
@@ -990,6 +999,8 @@ export interface AppReport {
   readonly user_email: string | null
   readonly job_id: string | null
   readonly job: AppReportJobInfo | null
+  readonly execution_id: string | null
+  readonly execution: AppReportExecutionInfo | null
   readonly status: "new" | "reviewed" | "resolved" | "dismissed"
   readonly created_at: string
 }

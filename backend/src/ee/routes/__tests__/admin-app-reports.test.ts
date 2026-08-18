@@ -47,7 +47,7 @@ describe("GET /v1/admin/app-reports", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
-      data: rows.map((r) => ({ ...r, user_email: null, job: null })),
+      data: rows.map((r) => ({ ...r, user_email: null, job: null, execution: null })),
       total: 1,
     })
     expect(c.order).toHaveBeenCalledWith("created_at", { ascending: false })
@@ -99,6 +99,28 @@ describe("GET /v1/admin/app-reports", () => {
     })
     expect(chains.profiles.in).toHaveBeenCalledWith("id", [TEST_USER_ID])
     expect(chains.jobs.in).toHaveBeenCalledWith("id", [JOB_ID])
+  })
+
+  it("resolves execution context for execution-keyed reports (no job)", async () => {
+    const EXEC_ID = "00000000-0000-4000-8000-0000000000cc"
+    const rows = [
+      { id: REPORT_ID, kind: "execution-failure", status: "new", title: "t", user_id: null, job_id: null, execution_id: EXEC_ID },
+    ]
+    const chains: Record<string, any> = {
+      app_reports: chain({ data: rows, count: 1 }),
+      workflow_executions: chain({ data: [{ id: EXEC_ID, trigger_type: "webhook", mcp_client: null }] }),
+      app_runs: chain({ data: [] }),
+    }
+    vi.mocked(supabase.from).mockImplementation(((table: string) => chains[table]) as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/admin/app-reports",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0].execution).toEqual({ trigger_type: "webhook", mcp_client: null, app_slug: null })
+    expect(chains.workflow_executions.in).toHaveBeenCalledWith("id", [EXEC_ID])
   })
 
   it("degrades to nulls when the referenced user/job rows are gone", async () => {

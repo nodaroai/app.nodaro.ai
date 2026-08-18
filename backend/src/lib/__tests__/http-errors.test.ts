@@ -291,3 +291,100 @@ describe("server-error telemetry → app_reports", () => {
     await app.close()
   })
 })
+
+describe("structured-failure telemetry (402 / 400 / 503) — observe-only", () => {
+  async function buildTestApp() {
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const header = req.headers["x-user-id"]
+      if (typeof header === "string") (req as unknown as { userId?: string }).userId = header
+    })
+    registerInternalErrorSanitizer(app)
+    app.post("/generate", async (req, reply) => {
+      const mode = (req.body as { mode?: string })?.mode
+      if (mode === "credits")
+        return reply.status(402).send({
+          error: { code: "insufficient_credits", message: "Insufficient credits" },
+          required: 50,
+          balance: 3,
+        })
+      if (mode === "validation")
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "resolution: Invalid enum value",
+            issues: [{ path: "resolution", message: "Invalid enum value" }],
+          },
+        })
+      if (mode === "price")
+        return reply.status(503).send({
+          error: { code: "price_not_configured", message: "No price for kling-4:10s" },
+        })
+      if (mode === "forbidden") return reply.status(403).send({ error: { code: "forbidden", message: "nope" } })
+      return reply.send({ ok: true })
+    })
+    await app.ready()
+    return app
+  }
+
+  it("reports a 402 credit wall per user, body untouched", async () => {
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/generate", payload: { mode: "credits" },
+      headers: { "x-user-id": "user-a" },
+    })
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({
+      error: { code: "insufficient_credits", message: "Insufficient credits" },
+      required: 50,
+      balance: 3,
+    })
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(1))
+    const report = vi.mocked(insertAppReport).mock.calls[0][0]
+    expect(report.kind).toBe("insufficient-credits")
+    expect(report.severity).toBe("info")
+    expect(report.userId).toBe("user-a")
+    expect(report.payload).toMatchObject({ required: 50, balance: 3, route: "/generate" })
+
+    // Same user again within the window → throttled. A DIFFERENT user → reported.
+    await app.inject({ method: "POST", url: "/generate", payload: { mode: "credits" }, headers: { "x-user-id": "user-a" } })
+    await app.inject({ method: "POST", url: "/generate", payload: { mode: "credits" }, headers: { "x-user-id": "user-b" } })
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(insertAppReport).mock.calls[1][0].userId).toBe("user-b")
+    await app.close()
+  })
+
+  it("reports a 400 validation reject with its issues, body untouched", async () => {
+    const app = await buildTestApp()
+    const res = await app.inject({ method: "POST", url: "/generate", payload: { mode: "validation" } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.issues).toEqual([{ path: "resolution", message: "Invalid enum value" }])
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(1))
+    const report = vi.mocked(insertAppReport).mock.calls[0][0]
+    expect(report.kind).toBe("validation-reject")
+    expect(report.severity).toBe("warning")
+    expect(report.title).toContain("invalid parameters: resolution: Invalid enum value")
+    expect(report.payload).toMatchObject({ issues: [{ path: "resolution", message: "Invalid enum value" }] })
+    await app.close()
+  })
+
+  it("reports a 503 price_not_configured as an error", async () => {
+    const app = await buildTestApp()
+    await app.inject({ method: "POST", url: "/generate", payload: { mode: "price" } })
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(1))
+    const report = vi.mocked(insertAppReport).mock.calls[0][0]
+    expect(report.kind).toBe("price-not-configured")
+    expect(report.severity).toBe("error")
+    expect(report.title).toContain("kling-4:10s")
+    await app.close()
+  })
+
+  it("ignores other structured errors (403, 200)", async () => {
+    const app = await buildTestApp()
+    await app.inject({ method: "POST", url: "/generate", payload: { mode: "forbidden" } })
+    await app.inject({ method: "POST", url: "/generate", payload: {} })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(insertAppReport).not.toHaveBeenCalled()
+    await app.close()
+  })
+})

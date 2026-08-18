@@ -72,6 +72,12 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`maskUrl?: string\`
 - \`strength?: number\`
 - \`guidanceScale?: number\`
+- \`grokSegments?: {
+    readonly taskId: string
+    readonly segments: readonly GrokSegmentInfo[]
+  }\`
+- \`grokSelectedSegments?: readonly number[]\`
+- \`grokRegionPrompt?: string\`
 - \`referenceImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
