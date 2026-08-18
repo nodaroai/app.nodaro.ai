@@ -58,9 +58,12 @@ export interface GeneratedResult {
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
-  /** 1-based — the value grok-2-edit's maskIndexes expects. */
+  /** Provider index passed through VERBATIM — what grok-2-edit's maskIndexes
+   *  expects. Observed 0-based in production (contra KIE's docs). */
   readonly index: number
   readonly name: string
+  /** NOT a full-frame mask: a ~128×128 RGB cutout preview of the region
+   *  (bounding-box crop on white). Render as a thumbnail only. */
   readonly maskUrl: string
 }
 

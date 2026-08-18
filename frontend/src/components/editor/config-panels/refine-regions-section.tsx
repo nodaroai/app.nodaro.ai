@@ -5,7 +5,6 @@ import { Loader2, ScanSearch, Wand2 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { optimizedImageUrl } from "@/lib/image"
 import { getJobStatusLean, grokRegionEdit, grokSegmentMap } from "@/lib/api"
 import { pollImageRefineToNode } from "../workflow-editor/poll-job"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
@@ -13,29 +12,20 @@ import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/type
 /**
  * "Refine regions" — grok-2's task-chained region editing, in the Generate
  * Image panel. One free segment-map call turns the active result into named
- * region masks; the user ticks regions and runs a prompt edit restricted to
+ * region tiles; the user ticks regions and runs a prompt edit restricted to
  * them (or leaves none ticked for a whole-image edit). The edit lands as a
  * new version in the node's result strip, carrying its own kieTaskId so it
  * can itself be segmented and refined again.
+ *
+ * Grok's segment `maskUrl`s are NOT full-frame masks — they are ~128×128 RGB
+ * CUTOUT previews of each region (bounding-box crop on white), so they render
+ * as tile thumbnails; there is no geometry to overlay them on the result.
+ * Segment `index` values pass through verbatim (0-based in production).
  *
  * Only mounted for provider `grok-2` (the edit endpoint references a prior
  * grok-2 generation's KIE task id — it cannot edit arbitrary images), and
  * only useful once the active result carries a `kieTaskId`.
  */
-
-/** Distinct overlay tints, cycled by segment position. Brand pink first. */
-const SEGMENT_COLORS = [
-  "#ff0073",
-  "#38bdf8",
-  "#34d399",
-  "#fbbf24",
-  "#a78bfa",
-  "#fb923c",
-  "#22d3ee",
-  "#f472b6",
-] as const
-
-const segmentColor = (position: number) => SEGMENT_COLORS[position % SEGMENT_COLORS.length]
 
 /** ~3 min at 2s ticks — the segment map usually completes in seconds. */
 const SEGMENT_POLL_INTERVAL_MS = 2000
@@ -47,7 +37,7 @@ interface RefineRegionsSectionProps {
   readonly onUpdate: (updates: Partial<GenerateImageData>) => void
 }
 
-/** Zip the job's order-aligned mask URLs + {index,name} pairs into GrokSegmentInfo[]. */
+/** Zip the job's order-aligned cutout URLs + {index,name} pairs into GrokSegmentInfo[]. */
 function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
   const meta = Array.isArray(od.segments) ? (od.segments as { index?: unknown; name?: unknown }[]) : []
   const primary = typeof od.imageUrl === "string" ? [od.imageUrl] : []
@@ -58,7 +48,7 @@ function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
   const out: GrokSegmentInfo[] = []
   for (let i = 0; i < count; i++) {
     out.push({
-      index: typeof meta[i].index === "number" ? (meta[i].index as number) : i + 1,
+      index: typeof meta[i].index === "number" ? (meta[i].index as number) : i,
       name: typeof meta[i].name === "string" ? (meta[i].name as string) : `Region ${i + 1}`,
       maskUrl: urls[i],
     })
@@ -70,7 +60,6 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | undefined>()
   const [applying, setApplying] = useState(false)
-  const [hoveredIndex, setHoveredIndex] = useState<number | undefined>()
   // Cancels the detect poll loop if the panel unmounts mid-flight.
   const aliveRef = useRef(true)
   useEffect(() => {
@@ -157,25 +146,6 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
     }
   }
 
-  const overlayFor = (seg: GrokSegmentInfo, position: number, emphasized: boolean) => (
-    <div
-      key={seg.index}
-      data-testid={`region-overlay-${seg.index}`}
-      className="absolute inset-0 pointer-events-none rounded"
-      style={{
-        backgroundColor: segmentColor(position),
-        opacity: emphasized ? 0.55 : 0.4,
-        // Luminance mask: the white region of the B/W mask shows the tint,
-        // black stays clear. (Alpha-mode would show the tint everywhere —
-        // the masks have no alpha channel.)
-        maskImage: `url("${seg.maskUrl}")`,
-        maskMode: "luminance",
-        maskSize: "100% 100%",
-        maskRepeat: "no-repeat",
-      }}
-    />
-  )
-
   return (
     <div className="pt-1" data-testid="refine-regions-section">
       <Separator className="mb-3" />
@@ -190,23 +160,10 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
         </p>
       ) : (
         <div className="flex flex-col gap-2 mt-2">
-          {/* Result preview with tinted overlays for selected / hovered regions */}
-          {segments && (
-            <div className="relative rounded overflow-hidden border border-border dark:border-[#2D2D2D]">
-              <img src={optimizedImageUrl(imageUrl)} alt="Active result" className="w-full h-auto block" />
-              {segments.map((seg, pos) => {
-                const isSelected = selected.includes(seg.index)
-                const isHovered = hoveredIndex === seg.index
-                if (!isSelected && !isHovered) return null
-                return overlayFor(seg, pos, isHovered)
-              })}
-            </div>
-          )}
-
-          {/* Segment chips */}
+          {/* Segment tiles — each shows Grok's cutout preview of the region */}
           {segments ? (
-            <div className="flex flex-wrap gap-1.5" data-testid="region-chip-list">
-              {segments.map((seg, pos) => {
+            <div className="grid grid-cols-3 gap-1.5" data-testid="region-chip-list">
+              {segments.map((seg) => {
                 const isSelected = selected.includes(seg.index)
                 return (
                   <button
@@ -214,20 +171,30 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => toggleSegment(seg.index)}
-                    onMouseEnter={() => setHoveredIndex(seg.index)}
-                    onMouseLeave={() => setHoveredIndex((h) => (h === seg.index ? undefined : h))}
+                    title={seg.name || `Region ${seg.index}`}
                     className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 text-[10px] rounded-full border transition-colors",
+                      "flex flex-col items-stretch rounded-lg border overflow-hidden transition-colors text-left",
                       isSelected
-                        ? "border-[#ff0073] bg-[#ff0073]/10 text-foreground"
-                        : "hover:bg-muted text-muted-foreground",
+                        ? "border-[#ff0073] ring-1 ring-[#ff0073] bg-[#ff0073]/10"
+                        : "hover:bg-muted border-border dark:border-[#2D2D2D]",
                     )}
                   >
+                    <span className="bg-white aspect-square w-full overflow-hidden">
+                      <img
+                        src={seg.maskUrl}
+                        alt={seg.name || `Region ${seg.index}`}
+                        loading="lazy"
+                        className="w-full h-full object-contain"
+                      />
+                    </span>
                     <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: segmentColor(pos) }}
-                    />
-                    {seg.name || `Region ${seg.index}`}
+                      className={cn(
+                        "px-1.5 py-1 text-[10px] leading-tight truncate",
+                        isSelected ? "text-foreground font-medium" : "text-muted-foreground",
+                      )}
+                    >
+                      {seg.name || `Region ${seg.index}`}
+                    </span>
                   </button>
                 )
               })}
