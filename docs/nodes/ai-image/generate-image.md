@@ -118,9 +118,19 @@ The node also exposes a **↻ Refine from this result** affordance. It takes the
 
 For providers that expose them, the **Strength** (i2i denoising) and **Guidance Scale** sliders appear in the panel and let you control how far the refine moves from the base image.
 
+### Refine regions (Grok Imagine 2)
+
+With the **grok-2** provider, the panel adds a **Refine Regions** section powered by Grok's task-chained editing (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)):
+
+1. **Detect regions** (free) — runs a segment map over the active result and returns named region masks (e.g. *sky*, *person*, *tree*), shown as toggleable chips. Hovering or selecting a chip tints that region on the result preview.
+2. Tick the regions to change, write an edit prompt, and **Apply**. Leave nothing ticked for a whole-image edit.
+3. The edit lands as a **new version** in the node's result strip — and carries its own task reference, so it can be segmented and refined again, iteratively.
+
+Region editing is grok-2-only: the underlying endpoint references the prior grok-2 generation on the provider side rather than accepting an image, so it can't serve other providers or uploaded images (results from before this feature shipped lack the task reference and show a re-run hint). A region edit is priced the same as a grok-2 generation; the segment map costs nothing.
+
 ### Credits
 
-An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation).
+An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation). The same holds for a grok-2 region edit, and its region detection is free.
 
 ## Best Practices
 

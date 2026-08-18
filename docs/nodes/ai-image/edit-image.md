@@ -60,6 +60,8 @@ The full region-editing flow with `grok-2`:
 
 `maskIndexes` entries are the 1-based `index` values from the segment map. A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing.
 
+In the editor, this flow is built into the **Generate Image** node: with the grok-2 provider selected, its config panel shows a **Refine Regions** section (detect regions → tick named chips → prompt edit) — see [Generate Image → Refine regions](./generate-image.md#refine-regions-grok-imagine-2). The API/MCP flow above is the same machinery.
+
 ## Best Practices
 
 - Use Recraft Upscale for quick, low-cost enhancement when precise resolution control is not needed.

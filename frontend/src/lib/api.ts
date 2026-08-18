@@ -534,6 +534,39 @@ export async function editImage(
   })
 }
 
+// --- Grok 2 task-chained ops (free segment map + region edit) ---
+// Both reference a PRIOR grok-2 generation via its KIE task id (the
+// generation result's `kieTaskId`) instead of an image URL.
+
+/** Start a FREE grok-2 segment-map job. The job's output images are the
+ *  region masks; `output_data.segments` carries order-aligned {index, name}. */
+export async function grokSegmentMap(taskId: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/edit-image", {
+    body: { provider: "grok-2-segment", taskId },
+    workflowId: true,
+    label: "Failed to start region detection",
+  })
+}
+
+/** Prompt edit of a prior grok-2 generation — whole-image, or restricted to
+ *  the named regions whose 1-based segment indexes are passed. */
+export async function grokRegionEdit(
+  taskId: string,
+  prompt: string,
+  maskIndexes?: readonly number[],
+): Promise<{ jobId: string }> {
+  return apiJson("/v1/edit-image", {
+    body: {
+      provider: "grok-2-edit",
+      taskId,
+      prompt,
+      ...(maskIndexes?.length ? { maskIndexes: [...maskIndexes] } : {}),
+    },
+    workflowId: true,
+    label: "Failed to start region edit",
+  })
+}
+
 // --- Image to Image (transform image with prompt) ---
 
 export async function imageToImage(

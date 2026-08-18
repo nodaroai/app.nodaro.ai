@@ -49,6 +49,19 @@ export interface GeneratedResult {
   // resolve these from the ACTIVE result; the suno-generate node displays them.
   readonly sunoTaskId?: string
   readonly sunoTrackId?: string
+  // KIE task id of the generation that produced this result (merged per-result
+  // via poll-job extraFields, like sunoTaskId). Grok task-chained ops
+  // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
+  // task id so region edits target the version the user is looking at.
+  readonly kieTaskId?: string
+}
+
+/** Named region from a grok-2 segment map (RefineRegionsSection). */
+export interface GrokSegmentInfo {
+  /** 1-based — the value grok-2-edit's maskIndexes expects. */
+  readonly index: number
+  readonly name: string
+  readonly maskUrl: string
 }
 
 export interface ManualReferenceImage {
@@ -1449,6 +1462,17 @@ export type GenerateImageData = {
   strength?: number
   /** Guidance scale (provider-gated by GUIDANCE_SCALE_SUPPORT). */
   guidanceScale?: number
+  /** grok-2 only: cached segment map for the generation task `taskId` (from a
+   *  free grok-2-segment run). The Refine-regions section treats a mismatch
+   *  with the active result's kieTaskId as stale and offers a fresh detect. */
+  grokSegments?: {
+    readonly taskId: string
+    readonly segments: readonly GrokSegmentInfo[]
+  }
+  /** grok-2 only: ticked segment indexes for the next region edit. */
+  grokSelectedSegments?: readonly number[]
+  /** grok-2 only: region-edit prompt (separate from the generation prompt). */
+  grokRegionPrompt?: string
   referenceImageOrder?: readonly string[]
   /**
    * Unified reorder of the injected-references list (wired raw + @-mentions

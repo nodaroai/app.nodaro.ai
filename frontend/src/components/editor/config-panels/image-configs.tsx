@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Suspense, useMemo, memo } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { optimizedImageUrl } from "@/lib/image"
+import { RefineRegionsSection } from "./refine-regions-section"
 import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin, Paintbrush } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -857,6 +858,14 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             />
           </Suspense>
         </div>
+      )}
+
+      {/* Refine Regions — grok-2's task-chained region editing (free segment
+          map → tick named regions → prompt edit). grok-2 only: the edit
+          endpoint references a prior grok-2 generation's task id, so it can't
+          serve other providers or arbitrary images. */}
+      {currentProvider === "grok-2" && !isMulti && nodeId && (
+        <RefineRegionsSection nodeId={nodeId} data={data} onUpdate={onUpdate} />
       )}
 
       {showAssetLibrary && (
