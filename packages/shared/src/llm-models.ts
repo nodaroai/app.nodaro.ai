@@ -161,6 +161,30 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     directGeminiModel: "gemini-3.6-flash",
   },
   {
+    id: "gemini-3.7-flash",
+    displayName: "Gemini 3.7 Flash",
+    desc: "Newest fast Gemini, agentic-tuned",
+    tier: "economy",
+    kieFormat: "chat-completions",
+    // KIE serves it on the OpenAI-compatible dialect under this slug
+    // (docs.kie.ai/market/gemini/gemini-3-7-flash-openai.md) — same
+    // chat-completions path shape as gemini-3.6-flash.
+    kieSlugOrModel: "gemini-3-7-flash-openai",
+    vendor: "google",
+    structuredOutputMode: "kie-response-format",
+    supportsImages: true,
+    // Google's own cap is 65,536, but the field feeds BOTH lanes and the KIE
+    // flash endpoints cap at 8192 (the measured 3.6 posture) — stay at the
+    // KIE-safe intersection, same reasoning as `reasoningEfforts` below.
+    maxOutputTokens: 8192,
+    // KIE's 3.7 endpoint enumerates reasoning_effort low | high (verified
+    // against its OpenAPI spec 2026-08-18), identical to 3.6.
+    reasoningEfforts: ["low", "high"],
+    // Assumed parity with 3.6 pending a live probe on the direct lane.
+    directReasoningEfforts: ["none", "low", "medium", "high"],
+    directGeminiModel: "gemini-3.7-flash",
+  },
+  {
     id: "claude-haiku-4.5",
     displayName: "Claude Haiku 4.5",
     desc: "Fast economy, good reasoning",

@@ -32,6 +32,7 @@ import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
 const EXPECTED_MODEL_IDS = [
   "gemini-3-flash",
   "gemini-3.6-flash",
+  "gemini-3.7-flash",
   "claude-haiku-4.5",
   "claude-sonnet-4.6",
   "gpt-5.2",
@@ -91,12 +92,12 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 4 economy, 5 standard, 8 premium models", () => {
+  it("has 5 economy, 5 standard, 8 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(4)
+    expect(tierCounts.economy).toBe(5)
     expect(tierCounts.standard).toBe(5)
     expect(tierCounts.premium).toBe(8)
   })
@@ -478,6 +479,7 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "claude-sonnet-4.6",
         "gemini-3-flash",
         "gemini-3.6-flash",
+        "gemini-3.7-flash",
         "gemini-3.1-pro",
         "claude-sonnet-5",
         "claude-opus-4.8",

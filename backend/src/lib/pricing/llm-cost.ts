@@ -54,6 +54,9 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // KIE list price 90/450 KIE-credits per M ($0.005/credit) — ~30% of the
   // official vendor price (confirmed 2026-07-26). 3× the 3-flash rate.
   "gemini-3.6-flash":  { inputPricePerM: 0.45,  outputPricePerM: 2.25 },
+  // KIE list price unpublished at add time (2026-08-18) — pinned to Google's
+  // own INTRO rate as the margin-safe ceiling; revisit when KIE lists it.
+  "gemini-3.7-flash":  { inputPricePerM: 0.75,  outputPricePerM: 3.75 },
   "claude-haiku-4.5":  { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   "claude-sonnet-4.6": { inputPricePerM: 3.00,  outputPricePerM: 15.00 },
   "gpt-5.2":           { inputPricePerM: 2.50,  outputPricePerM: 10.00 },
@@ -106,6 +109,10 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
 const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "gemini-3-flash": { inputPricePerM: 0.50, outputPricePerM: 3.00 },
   "gemini-3.6-flash": { inputPricePerM: 1.50, outputPricePerM: 7.50 },
+  // INTRO pricing through 2026-12-31 ($0.75/$3.75); standard $1.50/$7.50
+  // applies 2027-01-01 — bump this row then (Google launch pricing,
+  // verified 2026-08-18).
+  "gemini-3.7-flash": { inputPricePerM: 0.75, outputPricePerM: 3.75 },
   "gemini-3.1-pro": {
     inputPricePerM: 2.00,
     outputPricePerM: 12.00,
