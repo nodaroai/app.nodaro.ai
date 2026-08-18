@@ -12,6 +12,7 @@
  */
 
 import { PROVIDER_KEY_META, providerIdFor } from "../lib/provider-keys-runtime.js"
+import { isNodaroConnectedCached } from "../lib/nodaro-connect-cache.js"
 
 /** Whether connecting nodaro.ai stands in for this key — from the one
  *  runtime table (PROVIDER_KEY_META), never a hand-kept list here. */
@@ -55,10 +56,20 @@ export class MissingProviderKeyError extends Error {
     // keyless install shopping for a key it does not need), and where the
     // how-to lives (Install health).
     const head = `${label ? `${label}: n` : "N"}eeds ${keyName}`
+    // `cloudCovered` is per-KEY; coverage is per-CODE-PATH (#761: TTS was
+    // covered, STT was not — same key, same flag, one true promise and one
+    // false one). Reality check beats a finer-grained table: if the install
+    // is ALREADY connected and this error still fired, the connection did
+    // not cover THIS path — telling the user to connect again is asking them
+    // to redo the thing they already did. Best-effort sync read; unknown
+    // (null) keeps the optimistic wording.
+    const alreadyConnected = isNodaroConnectedCached() === true
     super(
-      connectionCovers(keyName)
+      connectionCovers(keyName) && !alreadyConnected
         ? `${head} \u2014 or connect nodaro.ai, which covers it. Either one: Install health \u2192 Provider keys.`
-        : `${head} (your own) \u2014 not covered by the nodaro.ai connection. Add it in Install health \u2192 Provider keys.`,
+        : alreadyConnected && connectionCovers(keyName)
+          ? `${head} \u2014 the nodaro.ai connection doesn't cover this operation. Add the key in Install health \u2192 Provider keys.`
+          : `${head} (your own) \u2014 not covered by the nodaro.ai connection. Add it in Install health \u2192 Provider keys.`,
     )
     this.name = "MissingProviderKeyError"
   }

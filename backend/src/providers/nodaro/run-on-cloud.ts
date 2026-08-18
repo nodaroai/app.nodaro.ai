@@ -64,6 +64,13 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "ai-avatar": "/v1/ai-avatar",
   "cinematic-avatar": "/v1/cinematic-avatar",
   "switchx": "/v1/switchx",
+  // Transcription (#761): the enqueue payload (routes/transcribe.ts) is the
+  // validated route body plus jobId/usageLogId, both stripped below. The
+  // audioUrl field re-hosts through URL_FIELD — a local-MinIO or extracted
+  // social-audio URL becomes cloud-reachable before the POST; wordTimestamps
+  // and the whisper/elevenlabs provider choice ride through verbatim (the
+  // cloud holds keys for both lanes).
+  "transcribe": "/v1/transcribe",
 }
 
 

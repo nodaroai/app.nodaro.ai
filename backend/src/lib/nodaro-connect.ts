@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
 import { config } from "./config.js"
+import { rememberNodaroConnected } from "./nodaro-connect-cache.js"
 
 /**
  * Community cloud-connect — instance-side connection store (Phase 4a).
@@ -63,9 +64,17 @@ function envApiKey(): string | null {
  */
 export async function readNodaroConnectionState(): Promise<NodaroConnectionState> {
   const stored = await readStoredConnectionState()
-  if (stored.state === "connected") return stored
-  if (envApiKey()) return { state: "connected", source: "env" }
-  return stored
+  const resolved: NodaroConnectionState =
+    stored.state === "connected"
+      ? stored
+      : envApiKey()
+        ? { state: "connected", source: "env" }
+        : stored
+  // Feed the sync last-known cache (nodaro-connect-cache.ts). An
+  // `unavailable` read teaches it nothing (could not read ≠ not connected).
+  if (resolved.state === "connected") rememberNodaroConnected(true)
+  else if (resolved.state === "not-connected") rememberNodaroConnected(false)
+  return resolved
 }
 
 async function readStoredConnectionState(): Promise<NodaroConnectionState> {

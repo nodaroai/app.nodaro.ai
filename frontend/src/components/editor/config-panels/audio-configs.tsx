@@ -1231,16 +1231,30 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
 }
 
 export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TranscribeData>) {
+  // Persist the UI's default (step-12b fail-safe pattern): the Select SHOWS
+  // elevenlabs-stt when provider is undefined, but the backend defaults an
+  // absent provider to whisper — so an untouched node ran a different lane
+  // than the panel displayed (surfaced by the #761 review, worse once all
+  // three lanes became selectable). Writing the shown default makes the
+  // stored data match the pixels.
+  useEffect(() => {
+    if (data.provider === undefined) onUpdate({ provider: "elevenlabs-stt" })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.provider])
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.provider || "elevenlabs-stt"} onValueChange={(v) => onUpdate({ provider: v as TranscribeData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Replicate disabled */}
-            {/* <SelectItem value="whisper">Whisper (default)</SelectItem> */}
-            {/* <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem> */}
+            {/* All three backend lanes are selectable again (#761): the two
+                whisper lanes run on a Replicate key locally and — like
+                elevenlabs-stt — through the nodaro.ai connection on keyless
+                installs (the cloud holds keys for both). They were commented
+                out as dead code while no lane could serve them. */}
             <SelectItem value="elevenlabs-stt">ElevenLabs STT</SelectItem>
+            <SelectItem value="whisper">Whisper</SelectItem>
+            <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
