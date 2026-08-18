@@ -1,22 +1,16 @@
 /**
- * The picker-ui SEAM — the single import path for everything that moved into
- * the private `@nodaroai/picker-ui` package (animated previews, rich pickers,
- * the @-mention prompt editor, the parameter-picker registry).
+ * Picker UI — animated previews, rich single/multi-dim pickers, the
+ * @-mention prompt editor, and the parameter-picker registry.
  *
- * Two lanes, chosen at build time (see ./rich-or-stub.ts):
- *   - RICH: the private package is installed (first-party builds) — vite
- *     aliases the switch file to `@nodaroai/picker-ui`.
- *   - STUB: community/self-host builds without registry access — plain
- *     functional fallbacks (text tiles, per-field selects, TagTextarea).
+ * One implementation for every edition: the in-repo workspace package
+ * `@nodaro/picker-ui` (packages/picker-ui/). The build-time two-lane seam
+ * that used to live here (private registry package vs a functional stub)
+ * was collapsed in #748 — the only closed surface is the backend's
+ * `@nodaroai/cloud-plugins`. Wiring DATA still comes from `@nodaro/prompts`
+ * (`picker-wiring.ts`) — single source of truth.
  *
- * App code imports ONLY from here (`@/lib/picker-ui`); the stub module is
- * also the seam's type contract for shared code. Wiring DATA for both lanes
- * comes from `@nodaro/prompts` (`picker-wiring.ts`) — single source of truth.
+ * App code imports from here (`@/lib/picker-ui`) so call sites stay stable.
  */
-// Bare specifier resolved by vite/vitest alias (pickerUiAlias in
-// vite.config.ts) → the private package in rich builds, ./stub otherwise;
-// tsc resolves it via tsconfig `paths` → always the stub (the type contract).
-export * from "picker-ui-impl"
+export * from "@nodaro/picker-ui"
 
-// Lane-switched styles: package CSS in rich builds, empty in community.
-import "picker-ui-impl-styles.css"
+import "@nodaro/picker-ui/styles.css"

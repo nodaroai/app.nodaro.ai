@@ -44,7 +44,7 @@ The Apache 2.0 grant applies ONLY to:
 
 Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE), [`packages/shared/LICENSE`](./packages/shared/LICENSE), and [`packages/cli/LICENSE`](./packages/cli/LICENSE).
 
-The rest of the repository — backend, frontend, `packages/remotion/`, scripts, infrastructure — remains under the root `LICENSE` (Nodaro Sustainable Use License) plus the `ee/LICENSE` (Enterprise License) where applicable.
+The rest of the repository — backend, frontend, `packages/remotion/`, `packages/picker-ui/` (in-repo workspace package, not published to npm), scripts, infrastructure — remains under the root `LICENSE` (Nodaro Sustainable Use License) plus the `ee/LICENSE` (Enterprise License) where applicable.
 
 ## Combined builds
 

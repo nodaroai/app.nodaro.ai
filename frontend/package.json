@@ -14,13 +14,13 @@
     "pretest": "npm -w @nodaro/shared run build && npm -w @nodaro/sdk run build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "typecheck:picker-ui": "tsc -p tsconfig.picker-ui.json"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@nodaro/picker-ui": "*",
     "@nodaro/prompts": "*",
     "@nodaro/sdk": "*",
     "@nodaro/shared": "*",

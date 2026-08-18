@@ -33,6 +33,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
+COPY packages/picker-ui/package.json ./packages/picker-ui/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 
@@ -56,6 +57,16 @@ COPY packages/prompts/src ./packages/prompts/src
 COPY packages/prompts/tsconfig.json ./packages/prompts/
 COPY packages/prompts/tsup.config.ts ./packages/prompts/
 WORKDIR /app/packages/prompts
+RUN npm run build
+
+# @nodaro/picker-ui (workspace, SUL, not published) — rich pickers, animated
+# previews, and the @-mention prompt editor. One implementation for every
+# edition (#748); depends on @nodaro/shared + @nodaro/prompts dists above.
+WORKDIR /app
+COPY packages/picker-ui/src ./packages/picker-ui/src
+COPY packages/picker-ui/tsconfig.json ./packages/picker-ui/
+COPY packages/picker-ui/tsup.config.ts ./packages/picker-ui/
+WORKDIR /app/packages/picker-ui
 RUN npm run build
 
 # ── Stage 2b: Build @nodaro/sdk (tsup) ─────────────────────────────
@@ -129,6 +140,11 @@ COPY packages/shared/src/i18n ./packages/shared/src/i18n
 COPY --from=client-build /app/packages/client/dist ./packages/client/dist
 COPY --from=client-build /app/packages/client/package.json ./packages/client/package.json
 
+# Picker-UI dist (Vite imports @nodaro/picker-ui via workspace symlink → dist;
+# its CSS ships as dist/index.css, imported once by the frontend barrel).
+COPY --from=shared-build /app/packages/picker-ui/dist ./packages/picker-ui/dist
+COPY --from=shared-build /app/packages/picker-ui/package.json ./packages/picker-ui/package.json
+
 # Remotion package source (Vite alias `@remotion-pkg` points at src/).
 COPY packages/remotion/ ./packages/remotion/
 
@@ -168,24 +184,6 @@ ENV VITE_CLARITY_ID=$VITE_CLARITY_ID
 ENV VITE_PLATFORM_OWNER_EMAIL=$VITE_PLATFORM_OWNER_EMAIL
 ENV VITE_IMAGE_REFERENCE_FORMAT=$VITE_IMAGE_REFERENCE_FORMAT
 
-# Optional PRIVATE picker UI (@nodaroai/picker-ui — animated previews + the
-# @-mention prompt editor; see frontend/src/lib/picker-ui/). Same mechanism as
-# @nodaroai/cloud-plugins in prod-deps: with NPM_TOKEN + PICKER_UI_VERSION the
-# package installs (--no-save, token never persisted in a layer) and
-# vite.config's pickerUiAlias switches the seam to the rich lane; without them
-# (self-hosted/community/public CI) this is a no-op and the build ships the
-# functional stub lane. Token is read via $(printenv ...) — see the prod-deps
-# note on why `${NPM_TOKEN}` would leak into BuildKit's printed command.
-ARG NPM_TOKEN
-ARG PICKER_UI_VERSION
-RUN if [ -n "$(printenv NPM_TOKEN)" ] && [ -n "${PICKER_UI_VERSION}" ]; then \
-      echo "@nodaroai:registry=https://npm.pkg.github.com" > .npmrc && \
-      echo "//npm.pkg.github.com/:_authToken=$(printenv NPM_TOKEN)" >> .npmrc && \
-      npm install --no-save "@nodaroai/picker-ui@${PICKER_UI_VERSION}" && \
-      node -e "const fs=require('fs');if(!fs.existsSync('node_modules/@nodaroai/picker-ui/dist/index.js')){console.error('picker-ui smoke: dist missing');process.exit(1)}" && \
-      rm -f .npmrc; \
-    fi
-
 WORKDIR /app/frontend
 # Skip the `prebuild` lifecycle hook (would re-run tsup for shared+client
 # but src dirs aren't copied; prebuilt dists are already in place).
@@ -223,6 +221,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
+COPY packages/picker-ui/package.json ./packages/picker-ui/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 

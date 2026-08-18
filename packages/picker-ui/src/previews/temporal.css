@@ -1,0 +1,371 @@
+/* ============================================================================
+   Temporal preview styles.
+   Each preview expresses its temporal character — a speed, a freeze mode, a
+   playback direction, or a shutter look. Animations ride a viewport with a
+   subject silhouette; a "tick marker" or motion bar conveys time flow, while
+   freeze/blur/strobe variants modify the subject or its trail. Keep each
+   preview's animation concise (~10 lines of CSS) to avoid CPU burn with
+   ~18 tiles visible.
+   ========================================================================== */
+
+.temporal-preview {
+  position: relative;
+  background: linear-gradient(180deg, #19233a 0%, #1a2838 55%, #0c1520 100%);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.temporal-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.temporal-preview__subject {
+  position: relative;
+  background: radial-gradient(ellipse at 35% 30%, #9df0ff 0%, #4cc3ff 55%, #163a6e 100%);
+  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
+  width: 30%;
+  aspect-ratio: 1 / 1.4;
+  box-shadow: 0 0 10px rgba(80, 190, 255, 0.35);
+  z-index: 2;
+}
+
+/* Generic motion-bar helpers — a horizontal ticking bar at the bottom tells
+   viewers "this is how fast time is moving". Used by the speed group. */
+.temporal-preview__bar {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 12%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  z-index: 3;
+}
+.temporal-preview__bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 20%;
+  background: linear-gradient(90deg, transparent 0%, #66d6ff 50%, transparent 100%);
+  border-radius: 2px;
+  animation: temporal-tick-normal 2.4s linear infinite;
+}
+
+/* ============================================================================
+   SPEED
+   ========================================================================== */
+
+/* Real-time — steady metronome */
+.temporal-preview--real-time .temporal-preview__bar::after { animation: temporal-tick-normal 2.4s linear infinite; }
+@keyframes temporal-tick-normal { 0% { left: -25%; } 100% { left: 100%; } }
+
+/* Slow Motion — same motion but 3x slower */
+.temporal-preview--slow-motion .temporal-preview__bar::after { animation: temporal-tick-normal 7s linear infinite; }
+.temporal-preview--slow-motion .temporal-preview__subject { animation: temporal-subject-hover-slow 5s ease-in-out infinite alternate; }
+@keyframes temporal-subject-hover-slow { 0% { transform: translateY(0); } 100% { transform: translateY(-4%); } }
+
+/* Super Slow-mo — extreme 10x slower */
+.temporal-preview--super-slow-mo .temporal-preview__bar::after { animation: temporal-tick-normal 14s linear infinite; }
+.temporal-preview--super-slow-mo .temporal-preview__subject { animation: temporal-subject-hover-super 10s ease-in-out infinite alternate; }
+@keyframes temporal-subject-hover-super { 0% { transform: translateY(0); } 100% { transform: translateY(-3%); } }
+
+/* Time-lapse — very fast ticking */
+.temporal-preview--time-lapse .temporal-preview__bar::after { animation: temporal-tick-normal 0.5s linear infinite; }
+.temporal-preview--time-lapse {
+  background: linear-gradient(180deg, #12243e 0%, #1d3a66 45%, #091020 100%);
+}
+.temporal-preview--time-lapse .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 180, 80, 0.3) 0%, transparent 40%, rgba(20, 30, 90, 0.4) 100%);
+  animation: temporal-sky-sweep 2s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes temporal-sky-sweep { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
+
+/* Hyper-lapse — time-lapse + forward motion (diagonal streaks) */
+.temporal-preview--hyper-lapse .temporal-preview__bar::after { animation: temporal-tick-normal 0.6s linear infinite; }
+.temporal-preview--hyper-lapse .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background: repeating-linear-gradient(100deg, transparent 0 10px, rgba(180, 220, 255, 0.25) 10px 12px);
+  animation: temporal-hyper-streak 0.7s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes temporal-hyper-streak { 0% { transform: translate(0, 0); } 100% { transform: translate(-28px, 10px); } }
+
+/* Speed Ramp — slow → fast → slow cycle */
+.temporal-preview--speed-ramp .temporal-preview__bar::after {
+  animation: temporal-ramp 3s cubic-bezier(0.55, 0, 0.85, 1) infinite;
+}
+@keyframes temporal-ramp {
+  0%   { left: -25%; }
+  35%  { left: 20%; }
+  55%  { left: 75%; }
+  100% { left: 130%; }
+}
+
+/* ============================================================================
+   FREEZE
+   ========================================================================== */
+
+/* Full freeze — static frame with subtle "captured" flash border */
+.temporal-preview--full-freeze {
+  background: linear-gradient(180deg, #1d2b4a 0%, #1a2540 55%, #0b1020 100%);
+}
+.temporal-preview--full-freeze .temporal-preview__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 255, 255, 0);
+  pointer-events: none;
+  animation: temporal-freeze-flash 3.6s ease-in-out infinite;
+  z-index: 4;
+}
+@keyframes temporal-freeze-flash {
+  0%, 90%, 100% { border-color: rgba(255, 255, 255, 0); box-shadow: inset 0 0 0 rgba(255,255,255,0); }
+  92%           { border-color: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 12px rgba(255,255,255,0.35); }
+}
+
+/* Bullet time — subject frozen, camera orbits (marker rotates around subject) */
+.temporal-preview--bullet-time {
+  background: linear-gradient(180deg, #141b3a 0%, #1a2447 55%, #08101d 100%);
+}
+.temporal-preview--bullet-time .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  height: 60%;
+  transform-origin: 0 0;
+  animation: temporal-orbit 4s linear infinite;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(circle at 100% 50%, rgba(255, 255, 255, 0.9) 0 3px, transparent 4px);
+}
+@keyframes temporal-orbit {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Frozen subject — subject static, world moves (diagonal streaks) */
+.temporal-preview--frozen-subject {
+  background: linear-gradient(180deg, #1b2338 0%, #1e2946 55%, #0a1120 100%);
+}
+.temporal-preview--frozen-subject .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background: repeating-linear-gradient(92deg, transparent 0 14px, rgba(160, 210, 255, 0.3) 14px 16px);
+  animation: temporal-world-drift 1.4s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes temporal-world-drift { 0% { transform: translateX(0); } 100% { transform: translateX(-30px); } }
+
+/* Moving subject — world static, subject moves */
+.temporal-preview--moving-subject {
+  background: linear-gradient(180deg, #1b2642 0%, #1d2d52 55%, #0a1224 100%);
+}
+.temporal-preview--moving-subject .temporal-preview__subject {
+  animation: temporal-subject-slide 2.2s ease-in-out infinite alternate;
+}
+@keyframes temporal-subject-slide {
+  0%   { transform: translateX(-18%) scale(0.96); }
+  100% { transform: translateX(18%) scale(1.04); }
+}
+
+/* ============================================================================
+   DIRECTION
+   ========================================================================== */
+
+/* Forward — arrow moves right */
+.temporal-preview--forward .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 5%;
+  width: 22%;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent 0%, #66d6ff 100%);
+  animation: temporal-arrow-forward 2s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+.temporal-preview--forward .temporal-preview__frame::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 8px solid #66d6ff;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  transform: translateY(-50%);
+  animation: temporal-arrowhead-forward 2s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes temporal-arrow-forward { 0% { left: -30%; } 100% { left: 110%; } }
+@keyframes temporal-arrowhead-forward { 0% { left: -10%; } 100% { left: 130%; } }
+
+/* Reverse — arrow moves left with subtle desaturation wash (rewind feel) */
+.temporal-preview--reverse {
+  background: linear-gradient(180deg, #2a1d3a 0%, #231a33 55%, #14101f 100%);
+}
+.temporal-preview--reverse .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 5%;
+  width: 22%;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, #ff7fbd 0%, transparent 100%);
+  animation: temporal-arrow-reverse 2s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+.temporal-preview--reverse .temporal-preview__frame::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-right: 8px solid #ff7fbd;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  transform: translateY(-50%);
+  animation: temporal-arrowhead-reverse 2s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes temporal-arrow-reverse { 0% { right: -30%; } 100% { right: 110%; } }
+@keyframes temporal-arrowhead-reverse { 0% { right: -10%; } 100% { right: 130%; } }
+
+/* Loop / Boomerang — arrow ping-pongs left-right */
+.temporal-preview--loop-boomerang .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24%;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ff7fbd 0%, #66d6ff 100%);
+  transform: translate(-50%, -50%);
+  animation: temporal-boomerang 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes temporal-boomerang {
+  0%   { transform: translate(-130%, -50%); }
+  100% { transform: translate(30%, -50%); }
+}
+
+/* ============================================================================
+   SHUTTER
+   ========================================================================== */
+
+/* Long Exposure — horizontal light streaks behind subject */
+.temporal-preview--long-exposure {
+  background: linear-gradient(180deg, #0f1a36 0%, #0b1530 55%, #060a1a 100%);
+}
+.temporal-preview--long-exposure .temporal-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 210, 120, 0.55) 15%, rgba(255, 180, 60, 0.3) 45%, transparent 90%);
+  filter: blur(2px);
+  pointer-events: none;
+  z-index: 1;
+}
+.temporal-preview--long-exposure .temporal-preview__subject {
+  animation: temporal-streak-drift 3.5s ease-in-out infinite alternate;
+}
+@keyframes temporal-streak-drift {
+  0%   { transform: translateX(-10%); filter: blur(0.5px); }
+  100% { transform: translateX(10%); filter: blur(0.5px); }
+}
+
+/* Crisp Shutter — sharp frame, no blur, subtle shutter chirp */
+.temporal-preview--crisp-shutter {
+  background: linear-gradient(180deg, #102143 0%, #0f1d3a 55%, #06101e 100%);
+}
+.temporal-preview--crisp-shutter .temporal-preview__subject {
+  filter: contrast(1.15) saturate(1.1);
+  animation: temporal-crisp-chirp 2.8s steps(4, end) infinite;
+}
+@keyframes temporal-crisp-chirp {
+  0%, 60%   { transform: translateX(0); }
+  65%, 70%  { transform: translateX(-5%); }
+  75%, 80%  { transform: translateX(5%); }
+  85%, 100% { transform: translateX(0); }
+}
+
+/* Motion Blur — blurred trailing subject */
+.temporal-preview--motion-blur {
+  background: linear-gradient(180deg, #152034 0%, #13203a 55%, #091120 100%);
+}
+.temporal-preview--motion-blur .temporal-preview__subject {
+  filter: blur(3px);
+  animation: temporal-blur-sweep 2.6s ease-in-out infinite alternate;
+}
+@keyframes temporal-blur-sweep {
+  0%   { transform: translateX(-14%); filter: blur(2px); }
+  100% { transform: translateX(14%); filter: blur(5px); }
+}
+
+/* Stutter / Strobe — step-wise jumps */
+.temporal-preview--stutter-strobe {
+  background: linear-gradient(180deg, #1a1830 0%, #1e1a3c 55%, #0b0820 100%);
+}
+.temporal-preview--stutter-strobe .temporal-preview__subject {
+  animation: temporal-stutter 1.6s steps(5, end) infinite;
+}
+@keyframes temporal-stutter {
+  0%   { transform: translateX(-16%); opacity: 1; }
+  20%  { transform: translateX(-8%);  opacity: 0.9; }
+  40%  { transform: translateX(0);    opacity: 1; }
+  60%  { transform: translateX(8%);   opacity: 0.9; }
+  80%  { transform: translateX(16%);  opacity: 1; }
+  100% { transform: translateX(-16%); opacity: 1; }
+}
+
+/* Stop-motion — coarser steps, slower cadence */
+.temporal-preview--stop-motion {
+  background: linear-gradient(180deg, #1e1a28 0%, #22192c 55%, #0f0a18 100%);
+}
+.temporal-preview--stop-motion .temporal-preview__subject {
+  animation: temporal-stop-motion 2.4s steps(6, end) infinite;
+}
+@keyframes temporal-stop-motion {
+  0%   { transform: translate(-14%, 0)    rotate(-3deg); }
+  16%  { transform: translate(-8%, -2%)   rotate(-1deg); }
+  32%  { transform: translate(0, 0)       rotate(1deg); }
+  48%  { transform: translate(8%, -3%)    rotate(2deg); }
+  64%  { transform: translate(12%, 0)     rotate(0deg); }
+  80%  { transform: translate(6%, -1%)    rotate(-2deg); }
+  100% { transform: translate(-14%, 0)    rotate(-3deg); }
+}

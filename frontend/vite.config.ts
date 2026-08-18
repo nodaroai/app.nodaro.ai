@@ -1,39 +1,6 @@
 import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "path"
-import fs from "fs"
-
-/**
- * Picker-UI seam (two-mode build): when the PRIVATE `@nodaroai/picker-ui`
- * package is installed (first-party builds; conditional Dockerfile install
- * gated on NPM_TOKEN — same mechanism as `@nodaroai/cloud-plugins`), alias
- * the seam's switch file to it so the app renders the rich pickers + the
- * @-mention prompt editor. Without it (community self-host, public CI) the
- * switch file's own source re-exports the functional stub. tsc never
- * resolves the private module in either lane — the stub is the type
- * contract (see src/lib/picker-ui/).
- */
-export function pickerUiAlias(dirname: string): Record<string, string> {
-  const pkgDir = path.resolve(dirname, "../node_modules/@nodaroai/picker-ui")
-  const installed = fs.existsSync(path.join(pkgDir, "dist", "index.js"))
-  // PICKER_UI_FORCE_STUB=1 is the escape hatch for CI/dev: force the
-  // community stub lane even when the package is installed, so both lanes
-  // can be exercised on one machine.
-  const rich = installed && process.env.PICKER_UI_FORCE_STUB !== "1"
-  // BARE specifiers, not file paths: vite/rollup alias matches the raw import
-  // specifier BEFORE resolution, so aliasing a resolved absolute path of a
-  // relative import silently never fires (that bug shipped the stub to every
-  // lane until the lane-probe caught it). tsc resolves these via tsconfig
-  // `paths` — always to the stub, which is the seam's type contract.
-  return {
-    "picker-ui-impl": rich
-      ? path.join(pkgDir, "dist", "index.js")
-      : path.resolve(dirname, "./src/lib/picker-ui/stub.tsx"),
-    "picker-ui-impl-styles.css": rich
-      ? path.join(pkgDir, "dist", "index.css")
-      : path.resolve(dirname, "./src/lib/picker-ui/picker-ui-styles.css"),
-  }
-}
 
 /**
  * Injects `import React from 'react'` into react-filerobot-image-editor files
@@ -58,7 +25,6 @@ export default defineConfig({
   plugins: [react(), filerobotReactShim()],
   resolve: {
     alias: {
-      ...pickerUiAlias(__dirname),
       "@": path.resolve(__dirname, "./src"),
       "@remotion-pkg": path.resolve(__dirname, "../packages/remotion/src"),
     },
