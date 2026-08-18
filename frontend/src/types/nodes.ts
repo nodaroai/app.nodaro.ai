@@ -4628,8 +4628,20 @@ export type WebScrapeNodeData = {
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
-  // execution result — single structured json output (matches backend ActorOutput)
+  // execution result — single structured json output (matches backend ActorOutput).
+  // #765 invariant: this is the last GOOD payload — a failed or empty run
+  // records its outcome below but never overwrites it.
   generatedJson?: unknown
+  // run-state (#765) — all optional so pre-existing workflows load unchanged
+  lastRunOutcome?: "success" | "empty" | "failed"
+  lastRunAt?: number
+  lastRunCount?: number
+  lastRunStartedAt?: number
+  /** Fingerprint of the fetch-shaping fields at run time; a mismatch at
+   *  render time = the STALE state (nothing is deleted). */
+  lastRunFingerprint?: string
+  lastGoodAt?: number
+  lastGoodCount?: number
 }
 
 // --- Video Analysis Node Data ---

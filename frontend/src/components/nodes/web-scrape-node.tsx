@@ -1,17 +1,25 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useEffect, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Globe, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
-import { SCRAPER_ACTOR_LABELS } from "@nodaro/shared"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import {
+  WEB_SCRAPE_PEEK,
+  deriveWebScrapeCardState,
+  elapsedLabel,
+  relativeTime,
+  webScrapeItems,
+  webScrapePeekLine,
+} from "./web-scrape-run-state"
 
 const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 
@@ -27,22 +35,77 @@ function getActorSummary(nodeData: WebScrapeNodeData): string {
     case "instagram":
     case "tiktok":
       return nodeData.target?.trim() || "Enter target..."
+    // rss reads url like content-crawler — it fell through to the query
+    // default and showed "Enter search query..." on a configured feed.
+    case "rss":
+      return nodeData.url?.trim() || "Enter feed URL..."
     case "google-search":
     default:
       return nodeData.query?.trim() || "Enter search query..."
   }
 }
 
+/**
+ * Live clock for the status row. 1s cadence ONLY while running (the elapsed
+ * counter needs it); 30s otherwise — "2m ago" doesn't, and a canvas full of
+ * completed scrape nodes must not each re-render every second forever
+ * (#765 review finding). Off entirely when there is nothing to age.
+ */
+function useNowTick(mode: "off" | "slow" | "fast"): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (mode === "off") return
+    const t = setInterval(() => setNow(Date.now()), mode === "fast" ? 1_000 : 30_000)
+    return () => clearInterval(t)
+  }, [mode])
+  return now
+}
+
+/** One peek row: 14px glyph slot + one truncated line. */
+function PeekRow({ glyph, text }: { readonly glyph: string; readonly text: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5 min-w-0">
+      <span className="w-[14px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{glyph}</span>
+      <span className="truncate text-[11px] text-foreground/80">{text}</span>
+    </div>
+  )
+}
+
+function SkeletonRows() {
+  return (
+    <div className="flex flex-col gap-1.5" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <span className="w-[14px]" />
+          <span className="h-2.5 flex-1 rounded bg-muted-foreground/15 animate-pulse" style={{ maxWidth: `${88 - i * 14}%` }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function StatusDot({ color }: { readonly color: string }) {
+  return <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+}
+
 function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as WebScrapeNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const status = nodeData.executionStatus ?? "idle"
 
-  const actor = nodeData.actor ?? "google-search"
+  const actor: ScraperActorId = nodeData.actor ?? "google-search"
   const actorLabel = SCRAPER_ACTOR_LABELS[actor]
   const summary = getActorSummary(nodeData)
   const credits = estimateNodeCredits({ type: "web-scrape", data: nodeData })
+  const peek = WEB_SCRAPE_PEEK[actor]
+
+  const state = deriveWebScrapeCardState(nodeData)
+  const running = state.kind === "running"
+  const hasAge = state.kind !== "never-ran" && !running && "at" in state && state.at !== undefined
+  const now = useNowTick(running ? "fast" : hasAge ? "slow" : "off")
+
+  const items = webScrapeItems(nodeData.generatedJson)
+  const peekItems = items.slice(0, 3)
 
   return (
     <div className="relative max-w-[220px]">
@@ -58,21 +121,113 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
         category="input"
         credits={credits}
         selected={selected}
-        isRunning={status === "running"}
+        isRunning={running}
         minWidth={220}
         hideHeader
+        className={state.kind === "never-ran" ? "border-dashed" : undefined}
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={credits} isRunning={running} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={HANDLES}
       >
-        <div className="p-3 flex flex-col gap-1">
+        <div className="p-3 flex flex-col gap-1.5">
+          {/* Identity block: actor + query, one truncated line each. */}
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#38BDF8]">
             {actorLabel}
           </span>
-          <p className="text-muted-foreground truncate max-w-[180px]">
-            {summary}
-          </p>
+          <p className="text-muted-foreground truncate max-w-[180px]">{summary}</p>
+
+          {/* Everything below the divider is run state (#765). */}
+          <div className="border-t border-border/60 -mx-1 my-0.5" />
+
+          {state.kind === "never-ran" && (
+            <>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <StatusDot color="var(--muted-foreground)" />
+                  Not run yet
+                </span>
+                <span className="text-muted-foreground/60">—</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70">Run to fetch results.</p>
+            </>
+          )}
+
+          {state.kind === "running" && (
+            <>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <StatusDot color="#38BDF8" />
+                  Scraping…
+                </span>
+                <span className="tabular-nums text-muted-foreground/80">{elapsedLabel(state.startedAt, now)}</span>
+              </div>
+              {/* Skeleton rows sit exactly where results land — no jump. */}
+              <SkeletonRows />
+            </>
+          )}
+
+          {state.kind !== "never-ran" && state.kind !== "running" && (
+            <>
+              {state.stale && (
+                <div className="rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] px-1.5 py-0.5">
+                  Inputs changed — result is stale
+                </div>
+              )}
+              <div className="flex items-center justify-between text-[11px]">
+                {state.kind === "success" && (
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <StatusDot color="#22c55e" />
+                    {state.count} {peek.countNoun}
+                  </span>
+                )}
+                {state.kind === "empty" && (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <StatusDot color="var(--muted-foreground)" />
+                    Searched · 0 {peek.countNoun}
+                  </span>
+                )}
+                {state.kind === "failed" && (
+                  <span className="flex items-center gap-1.5 font-medium text-red-500">
+                    <StatusDot color="#ef4444" />
+                    Failed
+                  </span>
+                )}
+                <span className="text-muted-foreground/60 tabular-nums">{relativeTime(state.at, now)}</span>
+              </div>
+
+              {state.kind === "success" && (
+                <div className={`flex flex-col gap-1 ${state.stale ? "opacity-50" : ""}`}>
+                  {peekItems.map((item, i) => (
+                    <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} />
+                  ))}
+                  {state.count > peekItems.length && (
+                    <span className="text-[10px] text-[#FF0073]">View all {state.count}</span>
+                  )}
+                </div>
+              )}
+
+              {state.kind === "empty" && (
+                <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                  The run completed. This query matched nothing — try broader wording or another source.
+                </p>
+              )}
+
+              {state.kind === "failed" && (
+                <p className="text-[10px] text-muted-foreground/80 leading-snug">
+                  {nodeData.errorMessage || "Scrape failed."}
+                  {state.kept && (
+                    <>
+                      {" "}
+                      <span className="font-medium text-foreground/80">
+                        Previous result kept: {state.kept.count} items{state.kept.at ? `, ${relativeTime(state.kept.at, now)}` : ""}.
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="in"   type="target" position={Position.Left}  label="URL / Query" color={DATA_HANDLE_COLORS.text} icon={<Globe />}  side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IN} />
