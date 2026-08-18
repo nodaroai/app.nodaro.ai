@@ -6,6 +6,8 @@ import {
 } from "../shared.js"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
+import { locateGrokSegments } from "../../lib/grok-segment-placement.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
@@ -202,14 +204,46 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   }
   await setJobProgress(job, ctx.jobId, 60)
 
+  // grok-2-segment: recover each cutout's placement in the SOURCE image so
+  // the UI can outline regions in place — Grok returns no geometry, only
+  // ~128×128 alpha-masked cutouts (see lib/grok-segment-placement.ts). Uses
+  // the caller-supplied imageUrl (the generation result being segmented);
+  // best-effort — on any failure segments ship without bboxes and the UI
+  // degrades to non-overlaid chips.
+  let segmentsOut = result.segments
+  if (resolvedProvider === "grok-2-segment" && result.segments?.length && imageUrl) {
+    try {
+      const fetchBuffer = async (url: string) =>
+        Buffer.from(await (await safeFetch(url)).arrayBuffer())
+      const cutoutUrls = [result.url, ...(result.extraUrls ?? [])]
+      const [sourceBuf, ...cutoutBufs] = await Promise.all([
+        fetchBuffer(imageUrl),
+        ...cutoutUrls.map(fetchBuffer),
+      ])
+      const boxes = await locateGrokSegments(sourceBuf, cutoutBufs)
+      segmentsOut = result.segments.map((seg, i) => {
+        const b = boxes[i]
+        return b ? { ...seg, bbox: { x: b.x, y: b.y, w: b.w, h: b.h } } : seg
+      })
+      console.log(
+        `[worker] grok-2-segment placement: located ${boxes.filter(Boolean).length}/${boxes.length} regions`
+      )
+    } catch (err) {
+      console.warn(
+        `[worker] grok-2-segment placement skipped: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "edit-image",
     result,
     // grok-2-segment: persist the named-region metadata next to the masks —
     // entries are order-aligned with the R2-uploaded output imageUrls, and
-    // `index` is what grok-2-edit's maskIndexes expects.
-    ...(result.segments?.length && { extraOutputData: { segments: result.segments } }),
+    // `index` is what grok-2-edit's maskIndexes expects; `bbox` (normalized,
+    // when placement succeeded) is where the region sits in the source image.
+    ...(segmentsOut?.length && { extraOutputData: { segments: segmentsOut } }),
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)

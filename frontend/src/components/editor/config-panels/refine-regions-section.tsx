@@ -5,6 +5,7 @@ import { Loader2, ScanSearch, Wand2 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 import { getJobStatusLean, grokRegionEdit, grokSegmentMap } from "@/lib/api"
 import { pollImageRefineToNode } from "../workflow-editor/poll-job"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
@@ -12,20 +13,38 @@ import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/type
 /**
  * "Refine regions" — grok-2's task-chained region editing, in the Generate
  * Image panel. One free segment-map call turns the active result into named
- * region tiles; the user ticks regions and runs a prompt edit restricted to
- * them (or leaves none ticked for a whole-image edit). The edit lands as a
- * new version in the node's result strip, carrying its own kieTaskId so it
- * can itself be segmented and refined again.
+ * regions; hovering or selecting a region OUTLINES it on the result preview,
+ * and a prompt edit restricted to the ticked regions (or the whole image when
+ * none) lands as a new version in the node's result strip — which carries its
+ * own kieTaskId, so it can itself be segmented and refined again.
  *
- * Grok's segment `maskUrl`s are NOT full-frame masks — they are ~128×128 RGB
- * CUTOUT previews of each region (bounding-box crop on white), so they render
- * as tile thumbnails; there is no geometry to overlay them on the result.
- * Segment `index` values pass through verbatim (0-based in production).
+ * How the outlines work: Grok returns each segment as a ~128×128 RGBA CUTOUT
+ * (the region's own pixels, alpha-masked to its shape, cropped to its
+ * bounding box) with NO geometry. The backend recovers each cutout's
+ * placement by template-matching it against the source image and persists a
+ * normalized `bbox` per segment (see backend/src/lib/grok-segment-placement.ts).
+ * Here the cutout's ALPHA channel becomes a CSS mask positioned at that bbox —
+ * a shape-accurate silhouette outline. Segments without a confident placement
+ * degrade to chips without an on-image outline.
  *
- * Only mounted for provider `grok-2` (the edit endpoint references a prior
- * grok-2 generation's KIE task id — it cannot edit arbitrary images), and
- * only useful once the active result carries a `kieTaskId`.
+ * Segment `index` values pass through verbatim (0-based in production). Only
+ * mounted for provider `grok-2` — the edit endpoint references a prior grok-2
+ * generation's KIE task id and cannot edit arbitrary images.
  */
+
+/** Distinct overlay tints, cycled by segment position. Brand pink first. */
+const SEGMENT_COLORS = [
+  "#ff0073",
+  "#38bdf8",
+  "#34d399",
+  "#fbbf24",
+  "#a78bfa",
+  "#fb923c",
+  "#22d3ee",
+  "#f472b6",
+] as const
+
+const segmentColor = (position: number) => SEGMENT_COLORS[position % SEGMENT_COLORS.length]
 
 /** ~3 min at 2s ticks — the segment map usually completes in seconds. */
 const SEGMENT_POLL_INTERVAL_MS = 2000
@@ -37,9 +56,11 @@ interface RefineRegionsSectionProps {
   readonly onUpdate: (updates: Partial<GenerateImageData>) => void
 }
 
-/** Zip the job's order-aligned cutout URLs + {index,name} pairs into GrokSegmentInfo[]. */
+/** Zip the job's order-aligned cutout URLs + {index,name,bbox?} into GrokSegmentInfo[]. */
 function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
-  const meta = Array.isArray(od.segments) ? (od.segments as { index?: unknown; name?: unknown }[]) : []
+  const meta = Array.isArray(od.segments)
+    ? (od.segments as { index?: unknown; name?: unknown; bbox?: unknown }[])
+    : []
   const primary = typeof od.imageUrl === "string" ? [od.imageUrl] : []
   const urls = Array.isArray(od.imageUrls)
     ? (od.imageUrls.filter((u) => typeof u === "string") as string[])
@@ -47,19 +68,49 @@ function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
   const count = Math.min(meta.length, urls.length)
   const out: GrokSegmentInfo[] = []
   for (let i = 0; i < count; i++) {
+    const rawBox = meta[i].bbox as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | undefined
+    const bbox =
+      rawBox &&
+      typeof rawBox.x === "number" &&
+      typeof rawBox.y === "number" &&
+      typeof rawBox.w === "number" &&
+      typeof rawBox.h === "number"
+        ? { x: rawBox.x, y: rawBox.y, w: rawBox.w, h: rawBox.h }
+        : undefined
     out.push({
       index: typeof meta[i].index === "number" ? (meta[i].index as number) : i,
       name: typeof meta[i].name === "string" ? (meta[i].name as string) : `Region ${i + 1}`,
       maskUrl: urls[i],
+      ...(bbox ? { bbox } : {}),
     })
   }
   return out
+}
+
+const pct = (n: number) => `${(n * 100).toFixed(2)}%`
+
+/** Shape-accurate silhouette: a colored div alpha-masked by the cutout. */
+function silhouetteStyle(seg: GrokSegmentInfo, color: string, opacity: number, dx: number, dy: number): React.CSSProperties {
+  return {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: color,
+    opacity,
+    transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
+    WebkitMaskImage: `url("${seg.maskUrl}")`,
+    maskImage: `url("${seg.maskUrl}")`,
+    WebkitMaskSize: "100% 100%",
+    maskSize: "100% 100%",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+  }
 }
 
 export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSectionProps) {
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | undefined>()
   const [applying, setApplying] = useState(false)
+  const [hoveredIndex, setHoveredIndex] = useState<number | undefined>()
   // Cancels the detect poll loop if the panel unmounts mid-flight.
   const aliveRef = useRef(true)
   useEffect(() => {
@@ -91,7 +142,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
     setDetecting(true)
     setDetectError(undefined)
     try {
-      const { jobId } = await grokSegmentMap(taskId)
+      const { jobId } = await grokSegmentMap(taskId, imageUrl)
       for (let tick = 0; tick < SEGMENT_POLL_MAX_TICKS; tick++) {
         await new Promise((r) => setTimeout(r, SEGMENT_POLL_INTERVAL_MS))
         if (!aliveRef.current) return
@@ -146,6 +197,14 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
     }
   }
 
+  // Regions outlined on the preview: every selected one, plus the hovered one.
+  const outlined = (segments ?? []).filter(
+    (seg) => seg.bbox && (selected.includes(seg.index) || hoveredIndex === seg.index),
+  )
+  // Maps stored before placement shipped (or whose matching failed wholesale)
+  // have no geometry at all — offer a free re-detect to upgrade them.
+  const noneLocated = Boolean(segments?.length) && segments!.every((seg) => !seg.bbox)
+
   return (
     <div className="pt-1" data-testid="refine-regions-section">
       <Separator className="mb-3" />
@@ -160,10 +219,38 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
         </p>
       ) : (
         <div className="flex flex-col gap-2 mt-2">
-          {/* Segment tiles — each shows Grok's cutout preview of the region */}
+          {/* Result preview — selected/hovered regions are outlined in place */}
+          {segments && (
+            <div className="relative rounded overflow-hidden border border-border dark:border-[#2D2D2D]">
+              <img src={optimizedImageUrl(imageUrl)} alt="Active result" className="w-full h-auto block" />
+              {outlined.map((seg) => {
+                const position = segments.indexOf(seg)
+                const color = segmentColor(position)
+                const box = seg.bbox!
+                const emphasized = hoveredIndex === seg.index
+                return (
+                  <div
+                    key={seg.index}
+                    data-testid={`region-outline-${seg.index}`}
+                    className="absolute pointer-events-none"
+                    style={{ left: pct(box.x), top: pct(box.y), width: pct(box.w), height: pct(box.h) }}
+                  >
+                    {/* Sticker outline: 4 offset silhouette copies + a soft fill,
+                        all shaped by the cutout's alpha channel. */}
+                    {[[-2, 0], [2, 0], [0, -2], [0, 2]].map(([dx, dy]) => (
+                      <div key={`${dx},${dy}`} style={silhouetteStyle(seg, color, 0.95, dx, dy)} />
+                    ))}
+                    <div style={silhouetteStyle(seg, color, emphasized ? 0.4 : 0.25, 0, 0)} />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Region chips — tiny cutout thumbnail + name; toggling outlines + selects */}
           {segments ? (
-            <div className="grid grid-cols-3 gap-1.5" data-testid="region-chip-list">
-              {segments.map((seg) => {
+            <div className="flex flex-wrap gap-1.5" data-testid="region-chip-list">
+              {segments.map((seg, position) => {
                 const isSelected = selected.includes(seg.index)
                 return (
                   <button
@@ -171,30 +258,24 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => toggleSegment(seg.index)}
-                    title={seg.name || `Region ${seg.index}`}
+                    onMouseEnter={() => setHoveredIndex(seg.index)}
+                    onMouseLeave={() => setHoveredIndex((h) => (h === seg.index ? undefined : h))}
+                    title={seg.bbox ? undefined : "Couldn't locate this region on the image — selectable, but no outline"}
                     className={cn(
-                      "flex flex-col items-stretch rounded-lg border overflow-hidden transition-colors text-left",
+                      "flex items-center gap-1.5 pl-1 pr-2 py-1 text-[10px] rounded-full border transition-colors",
                       isSelected
-                        ? "border-[#ff0073] ring-1 ring-[#ff0073] bg-[#ff0073]/10"
-                        : "hover:bg-muted border-border dark:border-[#2D2D2D]",
+                        ? "border-[#ff0073] bg-[#ff0073]/10 text-foreground"
+                        : "hover:bg-muted text-muted-foreground",
+                      !seg.bbox && "border-dashed",
                     )}
                   >
-                    <span className="bg-white aspect-square w-full overflow-hidden">
-                      <img
-                        src={seg.maskUrl}
-                        alt={seg.name || `Region ${seg.index}`}
-                        loading="lazy"
-                        className="w-full h-full object-contain"
-                      />
-                    </span>
                     <span
-                      className={cn(
-                        "px-1.5 py-1 text-[10px] leading-tight truncate",
-                        isSelected ? "text-foreground font-medium" : "text-muted-foreground",
-                      )}
+                      className="w-4 h-4 rounded-full overflow-hidden shrink-0 ring-1"
+                      style={{ backgroundColor: "#fff", ["--tw-ring-color" as string]: segmentColor(position) }}
                     >
-                      {seg.name || `Region ${seg.index}`}
+                      <img src={seg.maskUrl} alt="" loading="lazy" className="w-full h-full object-contain" />
                     </span>
+                    {seg.name || `Region ${seg.index}`}
                   </button>
                 )
               })}
@@ -216,6 +297,16 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                   <span className="text-muted-foreground">(free)</span>
                 </>
               )}
+            </button>
+          )}
+          {segments && noneLocated && (
+            <button
+              type="button"
+              onClick={handleDetect}
+              disabled={detecting}
+              className="self-start text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+            >
+              {detecting ? "Re-detecting…" : "Outlines unavailable for this map — re-detect (free)"}
             </button>
           )}
           {detectError && <p className="text-[10px] text-destructive">{detectError}</p>}

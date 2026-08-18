@@ -539,10 +539,13 @@ export async function editImage(
 // generation result's `kieTaskId`) instead of an image URL.
 
 /** Start a FREE grok-2 segment-map job. The job's output images are the
- *  region masks; `output_data.segments` carries order-aligned {index, name}. */
-export async function grokSegmentMap(taskId: string): Promise<{ jobId: string }> {
+ *  region cutouts; `output_data.segments` carries order-aligned
+ *  {index, name, bbox?}. Passing the source image URL lets the worker
+ *  recover each region's on-image placement (bbox) by template matching —
+ *  omit it and segments come back without geometry. */
+export async function grokSegmentMap(taskId: string, imageUrl?: string): Promise<{ jobId: string }> {
   return apiJson("/v1/edit-image", {
-    body: { provider: "grok-2-segment", taskId },
+    body: { provider: "grok-2-segment", taskId, ...(imageUrl ? { imageUrl } : {}) },
     workflowId: true,
     label: "Failed to start region detection",
   })
