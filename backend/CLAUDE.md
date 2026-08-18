@@ -602,13 +602,15 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 
 ## Unified LLM Client (`lib/llm-client.ts`)
 
-Unified interface for all LLM calls across 17 models and 3 tiers:
+Unified interface for all LLM calls across the registry's models and 3 tiers (count deliberately not written here — `LLM_MODELS` in `packages/shared/src/llm-models.ts` is the single source):
 
 ### Model Registry (`packages/shared/src/llm-models.ts`)
 
 | Model | Tier | API Format | Notes |
 |-------|------|------------|-------|
 | `gemini-3-flash` | Economy | chat-completions | |
+| `gemini-3.6-flash` | Economy | chat-completions | efforts low/high (KIE) / none–high (direct); direct lane (Advanced mode); backs 5 feature defaults — stays KIE-first |
+| `gemini-3.7-flash` | Economy | chat-completions | efforts low/high (KIE) / none–high (direct); direct lane (Advanced mode); image-only modality caps (VA decision deferred — see llm-models.ts) |
 | `claude-haiku-4.5` | Economy | messages | |
 | `gpt-5.6-luna` | Economy | responses | reasoning efforts; `supportsTemperature: false` |
 | `claude-sonnet-4.6` | Standard | messages | reasoning efforts (low/medium/high/max) |
@@ -622,6 +624,8 @@ Unified interface for all LLM calls across 17 models and 3 tiers:
 | `gpt-5.5` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
 | `gpt-5.6-sol` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
 | `claude-opus-4.8` | Premium | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
+| `claude-opus-5` | Premium | messages | reasoning efforts; `supportsTemperature: false`; `preferKie`; `thinkingDefaultOn` |
+| `claude-fable-5` | Premium | messages | reasoning efforts; `supportsTemperature: false`; `preferKie` |
 
 `grok-4.6` is the activation of the long-deferred Grok chat slot (grok-4.5's endpoint was
 never live on KIE, verified 2026-07-13). Its endpoint, vision, structured output, effort
@@ -630,7 +634,7 @@ enum (low–xhigh), stream shape, and `credits_consumed` were all live-verified 
 `supportsTemperature: false`; it reasons with no reasoning param sent → `thinkingDefaultOn`.
 
 ### API Formats
-- **chat-completions** — `gemini-3-flash`, `gemini-3.1-pro`, `gpt-5.2` — `POST {KIE_API_BASE}/{model.kieSlugOrModel}/v1/chat/completions` (the model's own KIE slug prefixes the path — there's no single shared chat-completions URL)
+- **chat-completions** — `gemini-3-flash`, `gemini-3.6-flash` (slug `gemini-3-6-flash-openai`), `gemini-3.7-flash` (slug `gemini-3-7-flash-openai`), `gemini-3.1-pro`, `gpt-5.2` — `POST {KIE_API_BASE}/{model.kieSlugOrModel}/v1/chat/completions` (the model's own KIE slug prefixes the path — there's no single shared chat-completions URL)
 - **messages** — every Claude model (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.7`, `claude-sonnet-5`, `claude-opus-4.8`) — `POST {KIE_API_BASE}/claude/v1/messages` with `X-Api-Key` + `anthropic-version`. KIE defaults `stream: true` for Claude — non-streaming calls must explicitly send `stream: false`.
 - **responses** — `gpt-5.4`, `gpt-5.5`, the GPT-5.6 family (`gpt-5.6-luna`/`gpt-5.6-terra`/`gpt-5.6-sol`), and `grok-4.6` — `POST {KIE_API_BASE}/{family}/v1/responses` with an `input` array + `developer` role. The path family is derived from the registry `vendor` (`openai` → `codex`, `xai` → `grok`; see `kieResponsesUrl`) — the wrong family is a hard error, not an alias. Grok's endpoint additionally rejects the plain-string `input` form (500) — always the array form, which is the only shape the builder emits.
 

@@ -567,6 +567,12 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
 export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean; audio: boolean }> = {
   "gemini-3-flash":    { image: true,  video: true,  audio: true  },
   "gemini-3.6-flash":  { image: true,  video: true,  audio: true  },
+  // gemini-3.7-flash is IMAGE-ONLY by DECISION, not omission: full video+audio
+  // caps would auto-enroll it in VIDEO_ANALYSIS_LLM_MODELS (derived below) and
+  // force a video-analysis tier + pricing decision that is deliberately
+  // deferred while the smart-family A/B routes this model internally (#747).
+  // Flip these two flags ONLY together with that VA-side decision.
+  "gemini-3.7-flash":  { image: true,  video: false, audio: false },
   "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
