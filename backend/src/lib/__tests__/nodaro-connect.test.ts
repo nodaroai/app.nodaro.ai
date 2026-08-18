@@ -15,6 +15,14 @@ const { maybeSingleMock, mockConfig } = vi.hoisted(() => ({
 
 vi.mock("../config.js", () => ({ config: mockConfig }))
 
+// The key lane now reads provider-keys-runtime directly (env -> app) so the
+// SOURCE stays honest; seed it the way config.ts does in production.
+import {
+  _resetProviderKeysRuntimeForTests,
+  applyAppSnapshot,
+  setEnvProviderKeys,
+} from "../provider-keys-runtime.js"
+
 vi.mock("../supabase.js", () => ({
   supabase: {
     from: vi.fn(() => ({
@@ -38,6 +46,8 @@ import {
 beforeEach(() => {
   maybeSingleMock.mockReset()
   mockConfig.NODARO_API_KEY = ""
+  _resetProviderKeysRuntimeForTests()
+  setEnvProviderKeys({})
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -85,7 +95,7 @@ describe("NODARO_API_KEY as the credential", () => {
   const conn = { clientId: "c", clientSecret: "s", accessToken: "ndr_app_oauth", connectedAt: "2026-08-16T00:00:00Z" }
 
   it("is used when nothing is stored", async () => {
-    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    setEnvProviderKeys({ nodaro: "ndr_personal_key" })
     maybeSingleMock.mockResolvedValue({ data: null, error: null })
     expect(await getNodaroCredential()).toEqual({ token: "ndr_personal_key", source: "env" })
     expect(await isNodaroConnected()).toBe(true)
@@ -93,7 +103,7 @@ describe("NODARO_API_KEY as the credential", () => {
   })
 
   it("loses to a stored OAuth connection", async () => {
-    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    setEnvProviderKeys({ nodaro: "ndr_personal_key" })
     maybeSingleMock.mockResolvedValue({ data: { value: conn }, error: null })
     expect(await getNodaroCredential()).toEqual({ token: "ndr_app_oauth", source: "oauth" })
     expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "oauth", connection: conn })
@@ -103,14 +113,14 @@ describe("NODARO_API_KEY as the credential", () => {
     // The whole reason the provider registration retries is that the store is
     // behind the container's own proxy at boot. With an env key there is
     // nothing to wait for.
-    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    setEnvProviderKeys({ nodaro: "ndr_personal_key" })
     maybeSingleMock.mockResolvedValue({ data: null, error: { message: "TypeError: fetch failed" } })
     expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "env" })
     expect(await getNodaroCredential()).toEqual({ token: "ndr_personal_key", source: "env" })
   })
 
   it("does not masquerade as a registration for the OAuth flow", async () => {
-    mockConfig.NODARO_API_KEY = "ndr_personal_key"
+    setEnvProviderKeys({ nodaro: "ndr_personal_key" })
     maybeSingleMock.mockResolvedValue({ data: null, error: null })
     // /start must still see "not registered" and register properly.
     expect(await getNodaroConnection()).toBeNull()
@@ -173,5 +183,33 @@ describe("clearNodaroConnection keeps the instance's DCR client (#708)", () => {
     })) as never)
     await clearNodaroConnection()
     expect(upsert).not.toHaveBeenCalled()
+  })
+})
+
+// A key pasted on /setup lives in the APP layer of provider-keys-runtime.
+// Reporting it as "env" is what locked the tile read-only — the founder could
+// not Remove/Change a key he had just pasted (4b plan, PR 1). The source must
+// carry the true layer end to end.
+describe("pasted (app-layer) key reports source 'app'", () => {
+  it("credential + state carry 'app' for a pasted key", async () => {
+    await applyAppSnapshot({ nodaro: "ndr_pasted_key" })
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    expect(await readNodaroConnectionState()).toEqual({ state: "connected", source: "app" })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_pasted_key", source: "app" })
+    expect(await isNodaroConnected()).toBe(true)
+  })
+
+  it("env wins over app within the key lane — mirroring resolveProviderKey", async () => {
+    setEnvProviderKeys({ nodaro: "ndr_env_key" })
+    await applyAppSnapshot({ nodaro: "ndr_pasted_key" })
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_env_key", source: "env" })
+  })
+
+  it("OAuth still wins over a pasted key", async () => {
+    await applyAppSnapshot({ nodaro: "ndr_pasted_key" })
+    const conn = { clientId: "c", clientSecret: "s", accessToken: "ndr_app_oauth", connectedAt: "2026-08-16T00:00:00Z" }
+    maybeSingleMock.mockResolvedValue({ data: { value: conn }, error: null })
+    expect(await getNodaroCredential()).toEqual({ token: "ndr_app_oauth", source: "oauth" })
   })
 })

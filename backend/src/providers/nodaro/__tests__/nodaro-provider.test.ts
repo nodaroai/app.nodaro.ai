@@ -391,7 +391,7 @@ describe("media re-hosting is narrow on purpose (SSRF containment)", () => {
       },
     }))
     vi.doMock("../../../lib/nodaro-connect.js", () => ({
-      getNodaroConnection: async () => ({ accessToken: "ndr_app_test" }),
+      getNodaroCredential: async () => ({ token: "ndr_app_test", source: "oauth" }),
       nodaroCloudBase: () => "https://cloud.example",
       nodaroCloudFetch: vi.fn(),
     }))
@@ -433,7 +433,11 @@ describe("media re-hosting is narrow on purpose (SSRF containment)", () => {
       },
     }))
     vi.doMock("../../../lib/nodaro-connect.js", () => ({
-      getNodaroConnection: async () => ({ accessToken: "ndr_app_test" }),
+      // A KEY-lane credential (env/pasted), not an OAuth connection: the
+      // re-host must authenticate with getNodaroCredential so a
+      // NODARO_API_KEY-only install can upload media too (4b plan, PR 1 —
+      // it used to read getNodaroConnection and die "not connected" here).
+      getNodaroCredential: async () => ({ token: "ndr_personal_key", source: "app" }),
       nodaroCloudBase: () => "https://cloud.example",
       nodaroCloudFetch: vi.fn(),
     }))

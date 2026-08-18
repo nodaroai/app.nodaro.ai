@@ -49,6 +49,14 @@ describe("providerTiles", () => {
     expect(providerTiles(input({ keys: { ...keys, nodaro: true }, sources: { ...none, nodaro: "app" } }))[0].state).toBe("key set (app)")
   })
 
+  it("a PASTED nodaro key is editable — Remove/Change must render (founder bug)", () => {
+    const tile = providerTiles(
+      input({ keys: { ...keys, nodaro: true }, sources: { ...none, nodaro: "app" } }),
+    )[0]
+    expect(tile.state).toBe("key set (app)")
+    expect(tile.editable).toBe(true)
+  })
+
   it("only an env-managed key is read-only in the UI (env wins)", () => {
     const tiles = providerTiles(input({ keys: { ...keys, kie: true, fal: true }, sources: { ...none, kie: "env", fal: "app" } }))
     expect(tiles.find((t) => t.id === "kie")?.editable).toBe(false)

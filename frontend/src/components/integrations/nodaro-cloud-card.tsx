@@ -23,8 +23,10 @@ interface NodaroCloudBalance {
 
 interface NodaroCloudStatus {
   readonly connected: boolean
-  /** "oauth" = the Connect flow (disconnectable here); "env" = NODARO_API_KEY in .env. */
-  readonly source?: "oauth" | "env"
+  /** "oauth" = the Connect flow (disconnectable here); "env" = NODARO_API_KEY
+   *  in .env (read-only here); "app" = an API key pasted on /setup or in
+   *  Model providers below (managed there — Change/Remove). */
+  readonly source?: "oauth" | "env" | "app"
   readonly balance?: NodaroCloudBalance | null
 }
 
@@ -122,6 +124,7 @@ export function NodaroCloudCard() {
 
   const connected = status?.connected === true
   const viaEnvKey = connected && status?.source === "env"
+  const viaAppKey = connected && status?.source === "app"
   const totalCredits =
     typeof status?.balance?.total === "number" ? status.balance.total : null
 
@@ -145,7 +148,9 @@ export function NodaroCloudCard() {
             {connected
               ? viaEnvKey
                 ? "This instance generates with nodaro.ai models through NODARO_API_KEY in its .env — billed to that account. Remove the key and restart to disconnect."
-                : "This instance generates with nodaro.ai models through your connected account."
+                : viaAppKey
+                  ? "This instance generates with nodaro.ai models through an API key added in this app — billed to that account. Change or remove it under Model providers below."
+                  : "This instance generates with nodaro.ai models through your connected account."
               : "Generate with nodaro.ai models — 1,500 free credits, no credit card. Or set NODARO_API_KEY in .env."}
           </p>
         </div>
@@ -174,9 +179,9 @@ export function NodaroCloudCard() {
               </span>
             )}
           </div>
-          {viaEnvKey ? (
+          {viaEnvKey || viaAppKey ? (
             <span className="shrink-0 text-[11px] font-mono text-gray-500 dark:text-gray-400">
-              via NODARO_API_KEY
+              {viaEnvKey ? "via NODARO_API_KEY" : "via API key"}
             </span>
           ) : (
             <Button

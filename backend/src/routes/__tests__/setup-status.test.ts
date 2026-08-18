@@ -7,7 +7,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect, mockCredential, mockCipherSource } = vi.hoisted(() => ({
   // getNodaroCredential(): null = not connected; {token, source} = connected.
-  mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" } | null>>(),
+  mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" | "app" } | null>>(),
   // encryptionKeySource(): null = no key; else which env var supplies it.
   mockCipherSource: { value: "NODARO_ENCRYPTION_KEY" as "NODARO_ENCRYPTION_KEY" | "SOCIAL_ENCRYPTION_KEY" | null },
   mockConfig: {
@@ -285,6 +285,17 @@ describe("GET /v1/setup/status", () => {
     expect(providers.nodaroCloud).toBe(true)
     expect(providers.ok).toBe(true)
     expect(JSON.stringify(res.json())).not.toContain("ndr_app_x")
+  })
+
+  it("a PASTED nodaro key reports source 'app' — the tile must stay editable", async () => {
+    // The founder's live bug: the credential used to collapse app->​"env",
+    // locking the tile so the key could not be removed or changed.
+    mockCredential.mockResolvedValue({ token: "ndr_pasted", source: "app" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.keys.nodaro).toBe(true)
+    expect(providers.sources.nodaro).toBe("app")
+    expect(providers.nodaroSource).toBe("app")
   })
 
   it("lights the nodaro.ai tile from NODARO_API_KEY and says so", async () => {

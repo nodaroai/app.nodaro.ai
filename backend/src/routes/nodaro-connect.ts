@@ -190,8 +190,9 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
     try {
       const credential = await getNodaroCredential()
       if (!credential) return reply.send({ connected: false })
-      // `source` tells the card whether this is the OAuth connection (which it
-      // can disconnect) or NODARO_API_KEY from .env (which it cannot).
+      // `source` tells the card how to render controls: "oauth" can be
+      // disconnected here; "env" is .env-managed (read-only); "app" is a key
+      // pasted in the app — managed (Change/Remove) on the provider tiles.
       const source = credential.source
       let balance: unknown = null
       try {

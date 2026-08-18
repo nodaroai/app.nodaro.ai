@@ -38,8 +38,9 @@ interface ProvidersCheck {
   readonly ok: boolean
   /** Live Nodaro Cloud connection — a first-class provider, not an env var. */
   readonly nodaroCloud?: boolean
-  /** How nodaro.ai is authenticated: the OAuth connection or NODARO_API_KEY. */
-  readonly nodaroSource?: "oauth" | "env" | null
+  /** How nodaro.ai is authenticated: the OAuth connection, NODARO_API_KEY
+   *  from .env, or an API key pasted in the app ("app" — editable tile). */
+  readonly nodaroSource?: "oauth" | "env" | "app" | null
   /** One entry per provider, nodaro.ai included — the grid renders this. */
   readonly keys: Record<string, boolean>
   /** Where each set key comes from: env | app (pasted here) | oauth | null. */
