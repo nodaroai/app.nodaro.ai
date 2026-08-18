@@ -15,6 +15,7 @@
 
 export type LlmTier = "economy" | "standard" | "premium"
 export type KieApiFormat = "chat-completions" | "messages" | "responses"
+export type LlmVendor = "anthropic" | "google" | "openai" | "xai"
 
 export const LLM_REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const
 export type LlmReasoningEffort = (typeof LLM_REASONING_EFFORTS)[number]
@@ -32,7 +33,7 @@ export interface LlmModelDef {
    *  For messages: the model id sent in the body (e.g. "claude-haiku-4-5-v1messages").
    *  For responses: the model id sent in the body (e.g. "gpt-5-4"). */
   kieSlugOrModel: string
-  vendor: "anthropic" | "google" | "openai"
+  vendor: LlmVendor
   supportsImages: boolean
   maxOutputTokens: number
   /**
@@ -321,7 +322,35 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     supportsTemperature: false,
   },
-  // grok-4.5 deferred — KIE chat endpoint not yet live (2026-07-13); add entry + rate row + docs when it activates.
+  {
+    id: "grok-4.6",
+    displayName: "Grok 4.6",
+    desc: "xAI flagship, strong reasoning",
+    tier: "standard",
+    kieFormat: "responses",
+    // KIE serves Grok on the responses dialect under its own family path —
+    // grok/v1/responses, NOT codex/v1/responses (llm-client derives the path
+    // from `vendor`). Live-verified end-to-end 2026-08-18: array `input`,
+    // `developer` system role, `input_image` URL vision, `text.format`
+    // json_schema enforcement, SSE `response.output_text.delta` stream, and
+    // `credits_consumed` actual-cost capture. (grok-4.5 was deferred 2026-07-13
+    // because none of this was live; 4.6 is its activation.)
+    kieSlugOrModel: "grok-4-6",
+    vendor: "xai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum, each level live-verified (echoed back) 2026-08-18.
+    // No `none`: the endpoint reasons unconditionally (see thinkingDefaultOn).
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    // Live-probed 2026-08-18: `temperature` is silently IGNORED (request echo
+    // stays at the 0.7 default), so never send it — same treatment as GPT-5.5+.
+    supportsTemperature: false,
+    // Reasons with NO reasoning param sent (effort defaults to "low" server-side
+    // — a trivial probe spent 169 of 170 output tokens on reasoning), so every
+    // call needs output headroom, not just xhigh.
+    thinkingDefaultOn: true,
+  },
   {
     id: "claude-sonnet-5",
     displayName: "Claude Sonnet 5",
@@ -407,6 +436,55 @@ export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
   (m) => m.supportsImages && m.structuredOutputMode != null,
 )
 
+/**
+ * Vendor presentation order + labels for model pickers. Every LlmVendor MUST
+ * appear in the order list (guarded by a registry test) so a new vendor can't
+ * ship with its models silently sorted to the end of every menu unlabeled.
+ * Alphabetical on purpose: stable, and no vendor-preference fights.
+ */
+export const LLM_VENDOR_ORDER: readonly LlmVendor[] = ["anthropic", "google", "openai", "xai"]
+export const LLM_VENDOR_LABELS: Record<LlmVendor, string> = {
+  anthropic: "Anthropic",
+  google: "Google",
+  openai: "OpenAI",
+  xai: "xAI",
+}
+
+const TIER_RANK: Record<LlmTier, number> = { economy: 0, standard: 1, premium: 2 }
+
+export interface LlmModelGroup {
+  vendor: LlmVendor
+  /** Display heading for the group (LLM_VENDOR_LABELS[vendor]). */
+  label: string
+  models: LlmModelDef[]
+}
+
+/**
+ * The ONE ordering every LLM model menu renders: grouped by vendor (in
+ * LLM_VENDOR_ORDER), and inside each group sorted economy → standard → premium
+ * (registry order breaks ties, which keeps family generations adjacent).
+ * A flat registry-order dump was genuinely hard to scan at 17 models — every
+ * picker (config panel, quick strips, quick toolbar) derives from this so the
+ * menus can't drift apart. Groups with no models (after `filter`) are omitted.
+ */
+export function groupLlmModelsByVendor(models: readonly LlmModelDef[] = LLM_MODELS): LlmModelGroup[] {
+  const groups: LlmModelGroup[] = []
+  for (const vendor of LLM_VENDOR_ORDER) {
+    const members = models
+      .filter((m) => m.vendor === vendor)
+      .sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier])
+    if (members.length > 0) groups.push({ vendor, label: LLM_VENDOR_LABELS[vendor], models: members })
+  }
+  return groups
+}
+
+/** {@link groupLlmModelsByVendor} flattened — for menus that can't render
+ *  group headers (e.g. the compact node quick strips) but should still read
+ *  vendor-clustered and tier-ordered. */
+export function orderedLlmModels(models: readonly LlmModelDef[] = LLM_MODELS): LlmModelDef[] {
+  return groupLlmModelsByVendor(models).flatMap((g) => g.models)
+}
+
 export type LlmFeature =
   | "ai-writer"
   | "llm-chat"
@@ -475,6 +553,7 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gpt-5.6-luna":      { image: true,  video: false, audio: false },
   "gpt-5.6-terra":     { image: true,  video: false, audio: false },
   "gpt-5.6-sol":       { image: true,  video: false, audio: false },
+  "grok-4.6":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
   "claude-opus-4.8":   { image: true,  video: false, audio: false },
   "claude-opus-5":     { image: true,  video: false, audio: false },

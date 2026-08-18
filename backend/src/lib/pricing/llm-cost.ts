@@ -67,7 +67,11 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "gpt-5.6-luna":      { inputPricePerM: 0.28,  outputPricePerM: 1.68 },
   "gpt-5.6-terra":     { inputPricePerM: 0.70,  outputPricePerM: 4.20 },
   "gpt-5.6-sol":       { inputPricePerM: 1.40,  outputPricePerM: 8.40 },
-  // grok-4.5 deferred — add its rate row when the model lands in the registry.
+  // KIE list price 160/480 KIE-credits per M ($0.005/credit) — 40% of xAI's
+  // official $2/$6 (confirmed 2026-08-18, docs.kie.ai/market/grok/grok-4-6).
+  // Cached input reprices to $0.20/M on KIE's side; the table models the flat
+  // uncached band and `credits_consumed` capture keeps provider_cost honest.
+  "grok-4.6":          { inputPricePerM: 0.80,  outputPricePerM: 2.40 },
   "claude-sonnet-5":   { inputPricePerM: 0.85,  outputPricePerM: 4.275 },
   "claude-opus-4.8":   { inputPricePerM: 2.00,  outputPricePerM: 10.00 },
   // KIE list price 400/2000 KIE-credits per M ($0.005/credit) — ~40% of the

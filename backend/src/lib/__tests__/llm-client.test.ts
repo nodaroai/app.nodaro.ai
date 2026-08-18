@@ -208,6 +208,30 @@ describe("KIE error envelope handling (regression: empty output for Gemini/GPT)"
     expect(calledUrl).not.toContain("/api/v1/responses")
   })
 
+  it("non-stream responses (Grok 4.6) hits the grok family path with the dash slug and no sampling params", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }],
+        usage: { input_tokens: 5, output_tokens: 1 },
+      }),
+    )
+    await llmComplete({
+      modelId: "grok-4.6",
+      system: "be terse",
+      messages: [{ role: "user", content: "hi" }],
+      // Live-probed 2026-08-18: grok's endpoint silently ignores temperature —
+      // the registry strips it, so it must never reach the wire.
+      temperature: 0.2,
+    })
+    const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? ""
+    expect(calledUrl).toBe("https://api.kie.ai/grok/v1/responses")
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as { body: string }).body)
+    expect(body.model).toBe("grok-4-6")
+    expect(body.temperature).toBeUndefined()
+    expect(body.top_p).toBeUndefined()
+  })
+
   it("non-stream responses throws envelope error", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(jsonResponse({ code: 422, msg: "The model is not supported" }))
@@ -267,6 +291,24 @@ describe("KIE error envelope handling (regression: empty output for Gemini/GPT)"
     )
     const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? ""
     expect(calledUrl).toBe("https://api.kie.ai/codex/v1/responses")
+  })
+
+  it("stream responses (Grok 4.6) uses /grok/v1/responses and delivers tokens", async () => {
+    const { llmStream } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        'data: {"type":"response.output_text.delta","delta":"hi"}\n',
+        "data: [DONE]\n",
+      ]),
+    )
+    const tokens: string[] = []
+    await llmStream(
+      { modelId: "grok-4.6", system: "", messages: [{ role: "user", content: "test" }] },
+      (t) => tokens.push(t),
+    )
+    const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? ""
+    expect(calledUrl).toBe("https://api.kie.ai/grok/v1/responses")
+    expect(tokens).toEqual(["hi"])
   })
 
   it("stream chat-completions delivers tokens from valid SSE", async () => {

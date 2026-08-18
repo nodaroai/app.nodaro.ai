@@ -4,7 +4,8 @@
  * Supports three KIE.ai API formats:
  * - chat-completions (Gemini, GPT-5.2): POST /{slug}/v1/chat/completions
  * - messages (Claude models): POST /claude/v1/messages
- * - responses (GPT-5.4): POST /api/v1/responses
+ * - responses (GPT family, Grok): POST /{family}/v1/responses — codex for GPT,
+ *   grok for Grok (see kieResponsesUrl)
  */
 
 import type Anthropic from "@anthropic-ai/sdk"
@@ -767,8 +768,9 @@ function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, 
 
 /**
  * KIE responses-API `text` param for models that natively enforce a JSON
- * schema on the codex/v1/responses endpoint (gpt-5.4/5.5 + the GPT-5.6
- * family — live-verified 2026-07-14, text AND vision inputs; the format is
+ * schema on the {family}/v1/responses endpoints (gpt-5.4/5.5 + the GPT-5.6
+ * family — live-verified 2026-07-14; grok-4.6 — live-verified 2026-08-18;
+ * text AND vision inputs; the format is
  * echoed back and output arrives schema-shaped). Same `strict: false`
  * rationale as {@link kieResponseFormat}; `llmCompleteStructured`'s
  * validate+retry remains the actual guarantee. Returns undefined for models
@@ -1103,11 +1105,30 @@ async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest): Pr
   }
 }
 
-// -- Responses format (GPT-5.4) --
+// -- Responses format (GPT family + Grok) --
+
+/**
+ * KIE serves the responses dialect under a per-family path prefix — the GPT
+ * models live at codex/v1/responses, Grok at grok/v1/responses (live-verified
+ * 2026-08-18; the wrong prefix is a hard 4xx/5xx, not a graceful alias).
+ * Derived from the registry's `vendor` so a future responses-format model on a
+ * new vendor fails loudly HERE instead of silently posting to another family's
+ * endpoint.
+ */
+function kieResponsesUrl(model: LlmModelDef): string {
+  const family =
+    model.vendor === "openai" ? "codex"
+    : model.vendor === "xai" ? "grok"
+    : undefined
+  if (!family) {
+    throw new Error(`llm-client: no KIE responses endpoint family for vendor "${model.vendor}" (model ${model.id})`)
+  }
+  return `${KIE_API_BASE}/${family}/v1/responses`
+}
 
 async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
-  const url = `${KIE_API_BASE}/codex/v1/responses`
-  // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const url = kieResponsesUrl(model)
+  // Responses API models are reasoning models — temperature is unsupported
   const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
@@ -1153,8 +1174,8 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
 async function streamKieResponses(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  const url = `${KIE_API_BASE}/codex/v1/responses`
-  // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const url = kieResponsesUrl(model)
+  // Responses API models are reasoning models — temperature is unsupported
   const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,

@@ -1023,7 +1023,7 @@ export interface AdminLlmModel {
   readonly id: string
   readonly displayName: string
   readonly tier: "economy" | "standard" | "premium"
-  readonly vendor: "anthropic" | "google" | "openai"
+  readonly vendor: "anthropic" | "google" | "openai" | "xai"
   readonly isEnabled: boolean
 }
 

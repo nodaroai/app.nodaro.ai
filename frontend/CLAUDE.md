@@ -77,10 +77,10 @@ Inline AI-powered prompt enhancement for node config panels (gated behind `hasCr
 
 ## LLM Model Select
 
-`LlmModelSelect` — reusable shadcn `Select` dropdown showing models grouped by tier with colored badges:
-- Economy (green) — fast, low cost
-- Standard (blue) — balanced
-- Premium (amber) — highest quality
+`LlmModelSelect` — reusable searchable combobox (Popover + cmdk, same pattern as `ModelSearchSelect`) for picking an LLM model:
+- **Grouped by provider** (Anthropic / Google / OpenAI / xAI) via `groupLlmModelsByVendor` from `@nodaro/shared` — the ONE ordering every LLM menu renders (also the llm-chat quick toolbar's `SelectGroup`s and, flattened via `orderedLlmModels`, the node quick-strip dropdowns). Don't map over `LLM_MODELS` directly in a menu.
+- **Tier-ordered inside each group** (economy → standard → premium) with colored tier badges: Economy (green), Standard (blue), Premium (amber).
+- **Search** — token-AND match over name, id, description, vendor, and tier.
 
 Used in: all LLM config panels (AI Writer, Generate Script, After Effects, Motion Graphics, 3D Title, Lottie Overlay, Prompt Helper, Image-to-Text, QA Check)
 
