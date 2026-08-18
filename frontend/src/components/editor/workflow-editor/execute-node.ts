@@ -224,6 +224,7 @@ import {
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { addCaptionsPreflight } from "./add-captions-preflight";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -6499,13 +6500,14 @@ export function executeNode(
     }
     const d = node.data as AddCaptionsData;
     const text = inputs.prompt ?? "";
-    // Auto-transcribe styles (kinetic factory presets) carry no manual text —
-    // proceed when autoTranscribe is enabled so single-node Run matches the
-    // workflow/DAG path (which transcribes the input video). Plain manual-text
-    // styles still require text.
-    if (!text && !d.autoTranscribe) {
-      toast.error(`Node "${d.label}": no caption text`);
-      return Promise.reject(new Error("No text"));
+    // Mirror of the route's superRefine: text, captions, or auto-transcribe
+    // (opt-OUT, worker semantics — undefined means "transcribe the video").
+    // The old guard read the flag opt-IN against a value nothing ever writes,
+    // which made every style unrunnable from a bare video (#759).
+    const preflightError = addCaptionsPreflight(d, inputs);
+    if (preflightError) {
+      toast.error(preflightError);
+      return Promise.reject(new Error("No caption source"));
     }
     return runProcessingNode(
       node.id,

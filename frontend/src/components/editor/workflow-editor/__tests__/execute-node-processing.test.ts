@@ -1140,16 +1140,33 @@ describe("add-captions", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("rejects when no caption text", async () => {
+  // #759: no text is the NORMAL auto-transcribe request (opt-out, worker
+  // semantics) — a bare video must run, and the api call must OMIT the empty
+  // text so the route's min(1) schema doesn't reject it.
+  it("runs from a bare video with no caption text — auto-transcribe default", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+    })
+    mockAddCaptionsApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("add-captions", {}),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+
+  it("rejects only when auto-transcribe is explicitly OFF and no text exists", async () => {
     mockResolveNodeInputs.mockReturnValue({
       videoUrl: "http://vid.mp4",
     })
     const promise = executeNode(
-      makeNode("add-captions", {}),
+      makeNode("add-captions", { autoTranscribe: false }),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No text")
+    await expect(promise).rejects.toThrow("No caption source")
     expect(mockToastError).toHaveBeenCalled()
   })
 

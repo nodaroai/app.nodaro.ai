@@ -3412,7 +3412,11 @@ export async function audioFxApi(params: {
 }
 
 export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string, opts?: { autoTranscribe?: boolean; transcribeProvider?: string }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, text, style, position, fontSize, color, backgroundColor }
+  // text is OMITTED when empty — the route's schema is `min(1).optional()`,
+  // so sending `text: ""` fails validation even though absent-text is the
+  // normal auto-transcribe request (#759's second half: with the guard fixed,
+  // the empty string still 400'd every run).
+  const body: Record<string, unknown> = { videoUrl, ...(text ? { text } : {}), style, position, fontSize, color, backgroundColor }
   if (userId) {
     body.userId = userId
   }
