@@ -1,6 +1,6 @@
 # Edit Video Pro
 
-> Replace a span of an existing video with newly generated content — a Seedance-2-family reference bridge, seamlessly stitched back into the source. Cloud edition only.
+> Replace a span of an existing video with newly generated content — a Seedance-2-family reference bridge, seamlessly stitched back into the source. Runs on Nodaro Cloud — self-hosted installs run it through their nodaro.ai connection.
 
 ## Overview
 
@@ -8,7 +8,12 @@ Edit Video Pro takes an existing video and regenerates a chosen time window — 
 
 Where [Video Retake](./video-retake.md) targets short (down to 2s), audio-or-video-only fixes on LTX 2.3 Pro, Edit Video Pro always regenerates both audio and video together, supports much longer spans via the same multi-segment chaining [Generate Video Pro](./generate-video-pro.md) uses for long single-shot clips, and requires a minimum 4-second span.
 
-**Cloud edition only.** Edit Video Pro requires a Cloud subscription.
+**Availability.** Native on Nodaro Cloud. On a self-hosted install the node
+appears with a **NODARO** mark and runs through your
+[nodaro.ai connection](../../community-cloud-connect.md) — OAuth Connect or a
+pasted API key — billed to the connected nodaro.ai account. Without a
+connection the node card shows a **Connect nodaro.ai** CTA and a run refuses
+with `503 nodaro_connection_required`.
 
 ## Input handles
 

@@ -14,7 +14,12 @@ In both cases the target voices' identities are applied while the original pacin
 
 **How separation works.** Voice and music are **always separated first** — before recasting, the source is split into an isolated vocal stem and a music/SFX stem. **Preserve Background** does not control *whether* the split happens — only whether the music/instrumental stem is mixed back in under the new voices afterward.
 
-**Cloud edition only.** Voice Changer Pro requires a Cloud subscription.
+**Availability.** Native on Nodaro Cloud. On a self-hosted install the node
+appears with a **NODARO** mark and runs through your
+[nodaro.ai connection](../../community-cloud-connect.md) — OAuth Connect or a
+pasted API key — billed to the connected nodaro.ai account. Without a
+connection the node card shows a **Connect nodaro.ai** CTA and a run refuses
+with `503 nodaro_connection_required`.
 
 ## Configuration
 

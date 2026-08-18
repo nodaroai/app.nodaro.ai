@@ -1,6 +1,6 @@
 # Generate Video Pro
 
-> Long-form video generation. Requests above a single segment's limit are automatically split into multiple Seedance 2 segments and stitched into one seamless clip. Cloud edition only.
+> Long-form video generation. Requests above a single segment's limit are automatically split into multiple Seedance 2 segments and stitched into one seamless clip. Runs on Nodaro Cloud — self-hosted installs run it through their nodaro.ai connection.
 
 ## Overview
 
@@ -10,7 +10,12 @@ You choose the model. Every video model that accepts a start still plus referenc
 
 Below the model's single-segment limit, Generate Video Pro behaves like a normal single-shot run on that model and is priced the same way. Use it when you need one long clip; use [Generate Video](./generate-video.md) for everything else (single shots, video-to-video, first+last frame, or the full multimodal reference/prompt-token surface).
 
-**Cloud edition only.** Generate Video Pro requires a Cloud subscription.
+**Availability.** Native on Nodaro Cloud. On a self-hosted install the node
+appears with a **NODARO** mark and runs through your
+[nodaro.ai connection](../../community-cloud-connect.md) — OAuth Connect or a
+pasted API key — billed to the connected nodaro.ai account. Without a
+connection the node card shows a **Connect nodaro.ai** CTA and a run refuses
+with `503 nodaro_connection_required`.
 
 ## Input handles
 

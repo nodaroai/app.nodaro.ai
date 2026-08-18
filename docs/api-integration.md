@@ -832,7 +832,7 @@ Both require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients.
 
-## 13b. Generate Video Pro run control (Cloud edition)
+## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 
 The segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-video-pro.md)) generates one segment at a time and checkpoints between segments, so a run can be stopped gracefully and continued later:
 
@@ -1279,8 +1279,8 @@ The id to use everywhere a voice is accepted is the clone's
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/voice-changer` | Single-voice re-voicing of an audio track or a talking video (`{ voiceId, audioUrl? \| videoUrl?, model?, stability?, similarityBoost?, style?, useSpeakerBoost?, seed?, removeBackgroundNoise? }`) → job. |
-| `POST` | `/v1/voice-changer-pro` | Multi-speaker recast (**Cloud only**): `orderedVoices` maps detected speaker N to entry N (string id, per-voice settings object, or `null` keep-slot). `output: "video"` (default) renders the finished result; `output: "stems"` returns dry per-track stems for an interactive mix. Pass a prior `analysis` to skip re-detection. → job. |
-| `POST` | `/v1/voice-changer-pro/analyze` | Detect the speakers WITHOUT recasting (**Cloud only**): separates voice from music once and diarizes, returning `speakers` (id, segments, first-appearance, word count, snippet), detected language, and the persisted stem urls. `suggestTitle: true` adds an LLM title. → job. |
+| `POST` | `/v1/voice-changer-pro` | Multi-speaker recast (**Cloud; self-host runs it through the [nodaro.ai connection](./community-cloud-connect.md)**): `orderedVoices` maps detected speaker N to entry N (string id, per-voice settings object, or `null` keep-slot). `output: "video"` (default) renders the finished result; `output: "stems"` returns dry per-track stems for an interactive mix. Pass a prior `analysis` to skip re-detection. → job. |
+| `POST` | `/v1/voice-changer-pro/analyze` | Detect the speakers WITHOUT recasting (**Cloud only** — the interactive analyze/mix/export flow is not relayed to self-host yet): separates voice from music once and diarizes, returning `speakers` (id, segments, first-appearance, word count, snippet), detected language, and the persisted stem urls. `suggestTitle: true` adds an LLM title. → job. |
 | `POST` | `/v1/voice-changer-pro/export` | Render the final video from a mixed track set (**Cloud only**): `{ videoUrl, tracks: [{ url, gain 0–200, muted, kind?: "voice"\|"background" }] (≤16), voiceFx? }`. The video stream is copied, never re-encoded; at least one track must be un-muted. → job. |
 
 Credits: recast charges per **mapped** speaker; analyze and export are

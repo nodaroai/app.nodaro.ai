@@ -301,8 +301,8 @@ Generate video from images, text, or other video using state-of-the-art models.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Generate Video](./ai-video/generate-video.md) | Unified video producer — text-only, image-to-video, first+last frame, reference mode, or video-edit (V2V) driven by which inputs are wired (`VIDEO_GEN_PROVIDERS` catalog); providers include VEO 3.x, Gemini Omni, Kling, Seedance 2, LTX 2.3, and more | Animate images, generate from text, run reference-driven multimodal mode (Seedance 2, VEO 3.x), or edit existing video (Gemini Omni) — one node, all modes |
-| [Generate Video Pro](./ai-video/generate-video-pro.md) | Long-form video — auto-splits requests beyond a single segment's 15s limit into multiple Seedance 2 segments and stitches them into one clip (Cloud edition only) | One continuous clip longer than 15 seconds |
-| [Edit Video Pro](./ai-video/edit-video-pro.md) | Replace a span (min 4s, max 120s) of an existing video with newly generated content — Seedance 2 reference bridge, stitched back into the source (Cloud edition only) | Reshoot or restyle a portion of an existing clip without regenerating the whole thing |
+| [Generate Video Pro](./ai-video/generate-video-pro.md) | Long-form video — auto-splits requests beyond a single segment's 15s limit into multiple Seedance 2 segments and stitches them into one clip (self-host: via your nodaro.ai connection) | One continuous clip longer than 15 seconds |
+| [Edit Video Pro](./ai-video/edit-video-pro.md) | Replace a span (min 4s, max 120s) of an existing video with newly generated content — Seedance 2 reference bridge, stitched back into the source (self-host: via your nodaro.ai connection) | Reshoot or restyle a portion of an existing clip without regenerating the whole thing |
 | [Image to Video](./ai-video/image-to-video.md) (legacy) | Redirects to Generate Video; legacy `image-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Text to Video](./ai-video/text-to-video.md) (legacy) | Redirects to Generate Video; legacy `text-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |
@@ -331,7 +331,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Audio Separation](./ai-audio/audio-separation.md) | Separate any audio into stems (Demucs) | Vocal/instrumental split or full stems on any (non-Suno) audio |
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
 | [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
-| [Voice Changer Pro](./ai-audio/voice-changer-pro.md) | Replace each speaker's voice independently in multi-speaker audio or video | Re-voice multi-speaker recordings with per-speaker voice mapping (Cloud only) |
+| [Voice Changer Pro](./ai-audio/voice-changer-pro.md) | Replace each speaker's voice independently in multi-speaker audio or video | Re-voice multi-speaker recordings with per-speaker voice mapping (self-host: via your nodaro.ai connection) |
 | [Voice Clone](./ai-audio/voice-clone.md) | Clone a voice from a short audio sample | Create a reusable custom voice for TTS, Voice Changer, and Voice Changer Pro |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |
 | [Voice Remix](./ai-audio/voice-remix.md) | Generate voice from natural language description | Create custom voice from text description |
