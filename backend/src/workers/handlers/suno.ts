@@ -119,6 +119,19 @@ async function uploadAllSunoTracks(
 }
 
 /**
+ * Who actually ran this Suno job — written to `jobs.provider` (#753).
+ *
+ * The jobs.provider vocabulary, not the reconcile ProviderKind
+ * (`providerKindForSuno()` returns "kie-suno", which keys the reconcile
+ * probes): "kie" matches the KIE registry id, "nodaro" matches
+ * NODARO_PROVIDER_ID — the same values every router-finalized job records.
+ * REQUIRED on every finalize tail so tsc forces the next completion path
+ * added here to attribute itself; suno.ts finalizes via markJobCompleted
+ * directly (never through job-finalize.ts), so this is the only writer.
+ */
+type SunoProviderUsed = "nodaro" | "kie"
+
+/**
  * Shared tail for every multi-track Suno handler: progress 50→100, persist,
  * commit credits, log. Replaces 8 copies of the same 7-line block.
  */
@@ -127,13 +140,14 @@ async function finalizeSunoJob(
   ctx: JobContext,
   result: SunoTaskResult,
   emptyTracksLabel: string,
+  provider: SunoProviderUsed,
 ): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
   const outputData = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
   if (!outputData) throw new Error(emptyTracksLabel)
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  if (!await markJobCompleted(ctx.jobId, { output_data: outputData })) return
+  if (!await markJobCompleted(ctx.jobId, { output_data: outputData, provider })) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${outputData.audioUrl as string} (${outputData.trackCount as number} tracks)`)
 }
@@ -158,7 +172,7 @@ async function maybeRunSunoOnCloud(
   const result = await runSunoOnCloud(jobType, job.data as Record<string, unknown>, (p) =>
     setJobProgress(job, ctx.jobId, Math.min(45, Math.round(p * 0.45))),
   )
-  await finalizeSunoJob(job, ctx, result, emptyTracksLabel)
+  await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "nodaro")
   return true
 }
 
@@ -204,7 +218,7 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     { start: 5, cap: 45 },
     () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno returned no tracks", "kie")
 }
 
 const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
@@ -233,7 +247,7 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie")
 }
 
 const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
@@ -252,15 +266,16 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks", "kie")
 }
 
 /** Shared tail for suno-lyrics: local KIE result and cloud replay land here identically. */
-async function finalizeSunoLyrics(job: Job, ctx: JobContext, result: SunoLyricsResult): Promise<void> {
+async function finalizeSunoLyrics(job: Job, ctx: JobContext, result: SunoLyricsResult, provider: SunoProviderUsed): Promise<void> {
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { lyrics: result.lyrics, sunoTaskId: result.taskId },
+    provider,
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -281,7 +296,7 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
           .map((l) => ({ text: l.text as string, title: typeof l.title === "string" ? l.title : "" }))
       : []
     if (lyrics.length === 0) throw new Error("nodaro.ai returned no lyrics")
-    return finalizeSunoLyrics(job, ctx, { taskId: cloudTaskId(cloud), lyrics })
+    return finalizeSunoLyrics(job, ctx, { taskId: cloudTaskId(cloud), lyrics }, "nodaro")
   }
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
@@ -290,7 +305,7 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
     { start: 10, cap: 80 },
     () => sunoLyrics({ prompt }, { onTaskCreated }),
   )
-  await finalizeSunoLyrics(job, ctx, result)
+  await finalizeSunoLyrics(job, ctx, result, "kie")
 }
 
 const STEM_FIELDS = [
@@ -310,6 +325,7 @@ async function finalizeSunoSeparate(
   ctx: JobContext,
   result: SunoSeparateResult,
   sepType: SunoSeparateType,
+  provider: SunoProviderUsed,
 ): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -338,7 +354,7 @@ async function finalizeSunoSeparate(
 
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
+  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData, provider })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)
@@ -361,7 +377,7 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
       if (typeof url === "string" && url) stems[field] = url
     }
     if (Object.keys(stems).length === 0) throw new Error("nodaro.ai returned no stems")
-    return finalizeSunoSeparate(job, ctx, { taskId: cloudTaskId(cloud), ...stems }, sepType)
+    return finalizeSunoSeparate(job, ctx, { taskId: cloudTaskId(cloud), ...stems }, sepType, "nodaro")
   }
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
@@ -370,11 +386,11 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
     { start: 5, cap: 45 },
     () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }, { onTaskCreated }),
   )
-  await finalizeSunoSeparate(job, ctx, result, sepType)
+  await finalizeSunoSeparate(job, ctx, result, sepType, "kie")
 }
 
 /** Shared tail for suno-music-video: upload to this instance's R2, thumbnail, persist. */
-async function finalizeSunoMusicVideo(job: Job, ctx: JobContext, result: SunoMusicVideoResult): Promise<void> {
+async function finalizeSunoMusicVideo(job: Job, ctx: JobContext, result: SunoMusicVideoResult, provider: SunoProviderUsed): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: Suno delivered the music video (billed) → skip refund on R2 fail.
   const r2Url = await runPostProcessing(() => uploadToR2(result.videoUrl, ctx.jobId, "video", ctx.jobUserId))
@@ -383,6 +399,7 @@ async function finalizeSunoMusicVideo(job: Job, ctx: JobContext, result: SunoMus
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, sunoTaskId: result.taskId },
+    provider,
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -395,7 +412,7 @@ const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job,
   const cloud = await maybeSunoCloudOutput(job, ctx, "suno-music-video")
   if (cloud) {
     if (typeof cloud.videoUrl !== "string" || !cloud.videoUrl) throw new Error("nodaro.ai returned no music video")
-    return finalizeSunoMusicVideo(job, ctx, { taskId: cloudTaskId(cloud), videoUrl: cloud.videoUrl })
+    return finalizeSunoMusicVideo(job, ctx, { taskId: cloudTaskId(cloud), videoUrl: cloud.videoUrl }, "nodaro")
   }
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
@@ -404,7 +421,7 @@ const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job,
     { start: 5, cap: 45 },
     () => sunoMusicVideo({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
-  await finalizeSunoMusicVideo(job, ctx, result)
+  await finalizeSunoMusicVideo(job, ctx, result, "kie")
 }
 
 const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
@@ -422,7 +439,7 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno mashup returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno mashup returned no tracks", "kie")
 }
 
 const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSection(job, ctx) {
@@ -440,7 +457,7 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
     { start: 5, cap: 45 },
     () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title, fullLyrics, negativeTags }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks", "kie")
 }
 
 const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrumental(job, ctx) {
@@ -457,7 +474,7 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
     { start: 5, cap: 45 },
     () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks", "kie")
 }
 
 const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, ctx) {
@@ -474,11 +491,11 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
     { start: 5, cap: 45 },
     () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks", "kie")
 }
 
 /** Shared tail for suno-convert-wav: upload the wav to this instance's R2, persist. */
-async function finalizeSunoConvertWav(job: Job, ctx: JobContext, result: SunoConvertWavResult): Promise<void> {
+async function finalizeSunoConvertWav(job: Job, ctx: JobContext, result: SunoConvertWavResult, provider: SunoProviderUsed): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: Suno delivered the WAV (billed) → skip refund on R2 fail.
   const r2Url = await runPostProcessing(() => uploadToR2(result.audioUrl, ctx.jobId, "audio", ctx.jobUserId))
@@ -486,6 +503,7 @@ async function finalizeSunoConvertWav(job: Job, ctx: JobContext, result: SunoCon
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTaskId: result.taskId },
+    provider,
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -498,7 +516,7 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
   const cloud = await maybeSunoCloudOutput(job, ctx, "suno-convert-wav")
   if (cloud) {
     if (typeof cloud.audioUrl !== "string" || !cloud.audioUrl) throw new Error("nodaro.ai returned no WAV")
-    return finalizeSunoConvertWav(job, ctx, { taskId: cloudTaskId(cloud), audioUrl: cloud.audioUrl })
+    return finalizeSunoConvertWav(job, ctx, { taskId: cloudTaskId(cloud), audioUrl: cloud.audioUrl }, "nodaro")
   }
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
@@ -507,7 +525,7 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
     { start: 5, cap: 45 },
     () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
-  await finalizeSunoConvertWav(job, ctx, result)
+  await finalizeSunoConvertWav(job, ctx, result, "kie")
 }
 
 const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(job, ctx) {
@@ -535,7 +553,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     { start: 5, cap: 45 },
     () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks")
+  await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks", "kie")
 }
 
 export const sunoHandlers: Record<string, HandlerFn> = {

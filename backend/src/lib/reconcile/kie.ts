@@ -201,7 +201,13 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
       jobId: row.id,
       jobType: "generate-music",
       claimant: opts?.claimant ?? "cron",
-      result: { url: r2Urls[0]!, cost: null, providerUsed: "suno" },
+      // "kie", not "suno": the jobs.provider vocabulary names the SERVING
+      // provider (the registry ids + "elevenlabs-direct"), and this path
+      // only ever recovers KIE-keyed runs — it polls KIE's task API with the
+      // instance's own key. "suno" named the model vendor and split Suno
+      // attribution three ways ("kie"/"nodaro"/"suno") depending on which
+      // machinery completed the job (#753 review).
+      result: { url: r2Urls[0]!, cost: null, providerUsed: "kie" },
       mediaUrl: r2Urls[0]!,
       extraOutputData: {
         ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
