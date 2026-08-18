@@ -3,13 +3,15 @@
 
 ## Overview
 
-The Transcribe node uses ElevenLabs Speech-to-Text to convert audio into a text transcript. It supports automatic language detection or explicit language selection, speaker diarization (identifying who said what), and audio event tagging (labeling non-speech sounds like music, laughter, or applause). The output includes the full transcript text as well as per-segment results with timestamps.
+The Transcribe node converts audio into a text transcript. Three engines are selectable: ElevenLabs Speech-to-Text (the default), Whisper, and Incredibly Fast Whisper (both Replicate-hosted). It supports automatic language detection or explicit language selection, speaker diarization (identifying who said what), and audio event tagging (labeling non-speech sounds like music, laughter, or applause). The output includes the full transcript text as well as per-segment results with timestamps.
+
+On a self-hosted install the chosen engine runs on your own key (`ELEVENLABS_API_KEY` for ElevenLabs STT, `REPLICATE_API_TOKEN` for the Whisper engines). With no key for the chosen engine and a connected nodaro.ai account, the transcription runs through the connection instead; with neither, the node fails with a message naming the key to add.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | `TranscribeProvider` | `"elevenlabs-stt"` | Transcription engine |
+| Provider | `TranscribeProvider` | `"elevenlabs-stt"` | Transcription engine — `elevenlabs-stt`, `whisper`, or `incredibly-fast-whisper` |
 | Language | `string` | `"auto"` | Language code for the audio, or "auto" for automatic detection. Supports 20+ languages |
 | Speaker Diarization | `boolean` | `false` | When enabled, identifies and labels different speakers in the transcript |
 | Tag Audio Events | `boolean` | `false` | When enabled, annotates non-speech audio events (music, laughter, applause, etc.) in the transcript |

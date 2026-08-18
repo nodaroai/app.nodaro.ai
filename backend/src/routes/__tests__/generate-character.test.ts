@@ -874,7 +874,7 @@ describe("POST /v1/generate-character", () => {
         apps_page_video_autoplay: true,
         featured_app_ids: [],
         featured_apps_limit: 20,
-        apps_auto_scroll_seconds: 4,
+        apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null,
       })
 
       // reserveCreditsForJob records the override the route set for THIS call.

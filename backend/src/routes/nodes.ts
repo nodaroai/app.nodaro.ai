@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
-import { CLOUD_ONLY_NODE_TYPES } from "../lib/cloud-only-nodes.js"
+import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "../lib/cloud-only-nodes.js"
+import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
 import { getEnrichedRegistry, findNode } from "../lib/node-registry.js"
 
@@ -43,10 +44,17 @@ export async function nodesRoutes(app: FastifyInstance) {
   app.get("/v1/nodes", async (_req, reply) => {
     // Editions without the Cloud plugin lane must not advertise nodes they
     // cannot execute — this is the discovery contract the SDK, CLI and MCP
-    // agents build against.
-    const data = getEnrichedRegistry().filter(
-      (n) => hasCredits() || !CLOUD_ONLY_NODE_TYPES.has(n.type),
-    )
+    // agents build against. The Nodaro-EXCLUSIVE nodes (4b) are runnable on
+    // a self-host through the nodaro.ai credential, so they list iff the
+    // install is connected — a live read; note the 5-min Cache-Control means
+    // a connect/disconnect lags discovery by up to that long.
+    const connected = hasCredits() ? true : await isNodaroConnected().catch(() => false)
+    const data = getEnrichedRegistry().filter((n) => {
+      if (hasCredits()) return true
+      if (CLOUD_ONLY_NODE_TYPES.has(n.type)) return false
+      if (NODARO_EXCLUSIVE_NODE_TYPES.has(n.type)) return connected
+      return true
+    })
     return reply
       .header("Cache-Control", "public, max-age=300")
       .send({ data })
@@ -62,6 +70,14 @@ export async function nodesRoutes(app: FastifyInstance) {
       return reply.status(404).send({
         error: { code: "not_found", message: `Node type not found: ${parsed.data.type}` },
       })
+    }
+    if (!hasCredits() && NODARO_EXCLUSIVE_NODE_TYPES.has(parsed.data.type)) {
+      const connected = await isNodaroConnected().catch(() => false)
+      if (!connected) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: `Node type not found: ${parsed.data.type}` },
+        })
+      }
     }
     const node = findNode(parsed.data.type)
     if (!node) {

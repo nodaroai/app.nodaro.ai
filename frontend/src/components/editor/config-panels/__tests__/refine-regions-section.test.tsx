@@ -10,10 +10,12 @@
  *    and stores the zipped {index, name, maskUrl} list keyed by that task id.
  *  - A stored segment map whose taskId doesn't match the active result is
  *    STALE — the section offers a fresh Detect instead of rendering it.
- *  - Segment tiles (Grok's maskUrls are ~128×128 RGB cutout previews, not
- *    full-frame masks) toggle grokSelectedSegments; Apply fires grok-2-edit
- *    with the sorted VERBATIM indexes — 0-based in production, so index 0
- *    must survive — through pollImageRefineToNode so the edit lands as a new
+ *  - Selected/hovered segments with a server-recovered `bbox` render an
+ *    on-image OUTLINE (alpha-masked silhouette positioned at the bbox);
+ *    segments without a bbox degrade to a dashed chip with no outline.
+ *  - Chips toggle grokSelectedSegments; Apply fires grok-2-edit with the
+ *    sorted VERBATIM indexes — 0-based in production, so index 0 must
+ *    survive — through pollImageRefineToNode so the edit lands as a new
  *    node result version.
  */
 
@@ -67,9 +69,10 @@ function baseData(overrides: Partial<GenerateImageData> = {}): GenerateImageData
 const SEGMENT_OUTPUT = {
   imageUrl: "https://r2.test/mask-1.png",
   imageUrls: ["https://r2.test/mask-1.png", "https://r2.test/mask-2.png"],
-  // 0-based, mirroring production (contra KIE's docs claiming ≥1).
+  // 0-based, mirroring production (contra KIE's docs claiming ≥1). The
+  // worker attaches a normalized bbox when template-matching succeeded.
   segments: [
-    { index: 0, name: "sky" },
+    { index: 0, name: "sky", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
     { index: 1, name: "person" },
   ],
 }
@@ -95,7 +98,7 @@ describe("RefineRegionsSection", () => {
     expect(screen.queryByText(/Detect regions/)).toBeNull()
   })
 
-  it("detects regions for the active result's task id and stores the zipped segment map", async () => {
+  it("detects regions (passing the source image for placement) and stores the zipped segment map with bboxes", async () => {
     vi.useFakeTimers()
     grokSegmentMapMock.mockResolvedValue({ jobId: "seg-job-1" })
     getJobStatusLeanMock.mockResolvedValue({ status: "completed", output_data: SEGMENT_OUTPUT })
@@ -107,12 +110,13 @@ describe("RefineRegionsSection", () => {
       await vi.advanceTimersByTimeAsync(2000)
     })
 
-    expect(grokSegmentMapMock).toHaveBeenCalledWith("task_grok_123")
+    // The active result URL rides along so the worker can recover bboxes.
+    expect(grokSegmentMapMock).toHaveBeenCalledWith("task_grok_123", "https://r2.test/result.png")
     expect(onUpdate).toHaveBeenCalledWith({
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
           { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
@@ -132,30 +136,52 @@ describe("RefineRegionsSection", () => {
     expect(screen.queryByText("sky")).toBeNull()
   })
 
-  it("renders cutout thumbnail tiles and toggles selection through onUpdate (index 0 included)", () => {
+  it("outlines a selected bbox-placed segment on the preview; bbox-less segments get a dashed chip and no outline", () => {
     const onUpdate = vi.fn()
     const data = baseData({
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png" },
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
           { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
-      grokSelectedSegments: [0],
+      grokSelectedSegments: [0, 1],
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={onUpdate} />)
 
-    // Selected tile renders pressed and shows the cutout preview image.
-    const skyTile = screen.getByRole("button", { name: /sky/ })
-    expect(skyTile.getAttribute("aria-pressed")).toBe("true")
-    expect(skyTile.querySelector("img")?.getAttribute("src")).toBe("https://r2.test/mask-1.png")
+    // sky (has bbox) → outline positioned at the bbox percentages.
+    const outline = screen.getByTestId("region-outline-0")
+    expect(parseFloat(outline.style.left)).toBeCloseTo(10)
+    expect(parseFloat(outline.style.width)).toBeCloseTo(90)
+    // person (no bbox) → selectable but NO outline.
+    expect(screen.queryByTestId("region-outline-1")).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: /person/ }))
-    expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [0, 1] })
+    // Both chips render with the cutout thumbnail; selection toggles work.
+    const skyChip = screen.getByRole("button", { name: /sky/ })
+    expect(skyChip.getAttribute("aria-pressed")).toBe("true")
+    expect(skyChip.querySelector("img")?.getAttribute("src")).toBe("https://r2.test/mask-1.png")
+    fireEvent.click(skyChip)
+    expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [1] })
+  })
 
-    fireEvent.click(skyTile)
-    expect(onUpdate).toHaveBeenCalledWith({ grokSelectedSegments: [] })
+  it("outlines a hovered (unselected) segment while hovered", () => {
+    const data = baseData({
+      grokSegments: {
+        taskId: "task_grok_123",
+        segments: [
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
+        ],
+      },
+      grokSelectedSegments: [],
+    })
+    render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
+
+    expect(screen.queryByTestId("region-outline-0")).toBeNull()
+    fireEvent.mouseEnter(screen.getByRole("button", { name: /sky/ }))
+    expect(screen.getByTestId("region-outline-0")).toBeTruthy()
+    fireEvent.mouseLeave(screen.getByRole("button", { name: /sky/ }))
+    expect(screen.queryByTestId("region-outline-0")).toBeNull()
   })
 
   it("applies a region edit with the sorted VERBATIM indexes (0-based survives) via pollImageRefineToNode", async () => {

@@ -16,8 +16,6 @@
     "paths": {
       "@/*": ["./src/*"],
       "@remotion-pkg/*": ["../packages/remotion/src/*"],
-      "picker-ui-impl": ["./src/lib/picker-ui/stub.tsx"],
-      "picker-ui-impl-styles.css": ["./src/lib/picker-ui/picker-ui-styles.css"],
       "react": ["../node_modules/@types/react"],
       "react-dom": ["../node_modules/@types/react-dom"],
       "react/jsx-runtime": ["../node_modules/@types/react/jsx-runtime"],

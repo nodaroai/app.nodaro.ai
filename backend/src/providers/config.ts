@@ -103,14 +103,21 @@ export async function buildRoutingDecision(
     : capability === "image-generation"
       ? ["kie", "replicate"]
       : ["kie"]
-  // Nodaro Cloud extension — append-only, and only when the provider is
-  // actually registered (i.e. the instance was connected at boot). See
-  // NODARO_CONNECT_CAPABILITIES above.
-  const providerChain =
+  // Nodaro Cloud extension — how the chain extends is the USER'S choice
+  // (4b): scope "exclusives" keeps commodity chains byte-identical to an
+  // unconnected install; scope "all" adds "nodaro" — FIRST when precedence
+  // is "nodaro" ("ignore my other providers"), LAST when "local" (the
+  // legacy semantics: user keys win, the connection fills gaps). Still
+  // gated on the provider actually being registered.
+  const nodaroRegistered =
     NODARO_CONNECT_CAPABILITIES.has(capability) &&
     providerRegistry.getProviderInfo("nodaro") !== null
-      ? [...baseChain, "nodaro"]
-      : baseChain
+  const prefs = settings.nodaro_provider_prefs ?? { scope: "all", precedence: "local" }
+  const providerChain = !nodaroRegistered || prefs.scope === "exclusives"
+    ? baseChain
+    : prefs.precedence === "nodaro"
+      ? ["nodaro", ...baseChain]
+      : [...baseChain, "nodaro"]
   return {
     providerChain,
     markupPercent: settings.cost_markup_percent,

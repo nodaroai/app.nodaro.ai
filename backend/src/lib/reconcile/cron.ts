@@ -8,6 +8,7 @@ import {
   REPLICATE_RECOVER_KINDS,
   ELEVENLABS_RECOVER_KINDS,
   FAL_RECOVER_KINDS,
+  NODARO_CLOUD_RECOVER_KINDS,
   isSyncKind,
   type ProviderKind,
 } from "./types.js"
@@ -51,6 +52,7 @@ const KIE_KINDS = KIE_RECOVER_KINDS
 const REPLICATE_KINDS = REPLICATE_RECOVER_KINDS
 const ELEVENLABS_KINDS = ELEVENLABS_RECOVER_KINDS
 const FAL_KINDS = FAL_RECOVER_KINDS
+const NODARO_CLOUD_KINDS = NODARO_CLOUD_RECOVER_KINDS
 
 function sqlCutoff(): string {
   return new Date(Date.now() - SQL_PREFILTER_BUFFER_MS).toISOString()
@@ -199,6 +201,15 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           reconcile_attempts: row.reconcile_attempts,
           job_type: row.job_type,
           input_data: row.input_data,
+        })
+        result.recovered++
+      } else if (NODARO_CLOUD_KINDS.has(kind)) {
+        const { reconcileNodaroCloudJob } = await import("./nodaro-cloud.js")
+        await reconcileNodaroCloudJob({
+          id: row.id,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
         })
         result.recovered++
       } else {

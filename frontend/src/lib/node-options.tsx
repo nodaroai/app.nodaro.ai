@@ -1497,7 +1497,11 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
 
 /**
  * Returns `NODE_OPTIONS` filtered for the current edition.
- * Cloud-only nodes (`CLOUD_ONLY_NODE_TYPES`) are excluded when `hasCredits()` is false.
+ * Truly Cloud-only nodes (`CLOUD_ONLY_NODE_TYPES`) are excluded when
+ * `hasCredits()` is false. The Nodaro-EXCLUSIVE nodes (4b) list on EVERY
+ * edition — on self-host they run through the nodaro.ai connection and wear
+ * the NODARO mark; unconnected installs see the connect CTA on the card and
+ * a friendly 503 on run, never a silent 404.
  * Use this instead of `NODE_OPTIONS` whenever building a user-visible list.
  */
 export function getNodeOptions(): ReadonlyArray<NodeOption> {

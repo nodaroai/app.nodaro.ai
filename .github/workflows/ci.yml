@@ -85,10 +85,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    env:
-      # Empty when the secret isn't configured — the rich-lane steps below
-      # gate on this (actionlint forbids the secrets context in step `if`s).
-      PICKER_UI_TOKEN: ${{ secrets.NODARO_PACKAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -103,33 +99,19 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
+        id: build-packages
         run: npm run build:packages
-      # Rich-lane install (optional): with a registry token, install the private
-      # @nodaroai/picker-ui so tests + the contract check run the RICH lane.
-      # Without the secret this is a no-op and everything runs the community
-      # stub lane — both are valid, the contract check just gets skipped.
-      - name: Install @nodaroai/picker-ui (rich lane)
-        if: env.PICKER_UI_TOKEN != ''
-        run: |
-          echo "@nodaroai:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${PICKER_UI_TOKEN}" >> .npmrc
-          npm install --no-save @nodaroai/picker-ui@latest
-          rm -f .npmrc
-      - name: Picker-UI contract check (rich lane only)
-        if: hashFiles('node_modules/@nodaroai/picker-ui/dist/index.js') != ''
-        run: npm run typecheck:picker-ui
-        working-directory: frontend
+      # Same reasoning as the shared/prompts suites in Backend Tests: a
+      # workspace-package suite that only runs locally silently rots.
+      # @nodaro/picker-ui's tests assert catalog/registry parity against
+      # @nodaro/prompts + @nodaro/shared — exactly the cross-package drift
+      # shape — so they gate here, inside an existing REQUIRED check.
+      - name: Run @nodaro/picker-ui test suite
+        if: always() && steps.build-packages.outcome == 'success'
+        run: npm run test --workspace=@nodaro/picker-ui
       - name: Run tests with coverage
+        if: always() && steps.build-packages.outcome == 'success'
         run: npm run test:coverage
-        working-directory: frontend
-      # The community lane must stay green too: rerun the picker-adjacent
-      # suites with the stub forced (fast subset — full stub coverage runs
-      # implicitly whenever the token is absent).
-      - name: Stub-lane picker suites
-        if: hashFiles('node_modules/@nodaroai/picker-ui/dist/index.js') != ''
-        env:
-          PICKER_UI_FORCE_STUB: "1"
-        run: npx vitest run src/lib/__tests__ src/components/editor/config-panels/__tests__ src/components/presentation
         working-directory: frontend
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v5

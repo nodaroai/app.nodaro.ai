@@ -62,9 +62,16 @@ export interface GrokSegmentInfo {
    *  expects. Observed 0-based in production (contra KIE's docs). */
   readonly index: number
   readonly name: string
-  /** NOT a full-frame mask: a ~128×128 RGB cutout preview of the region
-   *  (bounding-box crop on white). Render as a thumbnail only. */
+  /** NOT a full-frame mask: a ~128×128 RGBA cutout of the region — the
+   *  segment's own pixels alpha-masked to its shape, cropped to its bounding
+   *  box. Doubles as a chip thumbnail AND (via CSS alpha masking, positioned
+   *  by `bbox`) as the on-image outline silhouette. */
   readonly maskUrl: string
+  /** Where the region sits in the source image (normalized 0..1), recovered
+   *  server-side by template-matching the cutout against the source (Grok
+   *  returns no geometry). Absent when placement wasn't confident — the UI
+   *  then shows the chip without an on-image outline. */
+  readonly bbox?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 }
 
 export interface ManualReferenceImage {
@@ -4628,8 +4635,20 @@ export type WebScrapeNodeData = {
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
-  // execution result — single structured json output (matches backend ActorOutput)
+  // execution result — single structured json output (matches backend ActorOutput).
+  // #765 invariant: this is the last GOOD payload — a failed or empty run
+  // records its outcome below but never overwrites it.
   generatedJson?: unknown
+  // run-state (#765) — all optional so pre-existing workflows load unchanged
+  lastRunOutcome?: "success" | "empty" | "failed"
+  lastRunAt?: number
+  lastRunCount?: number
+  lastRunStartedAt?: number
+  /** Fingerprint of the fetch-shaping fields at run time; a mismatch at
+   *  render time = the STALE state (nothing is deleted). */
+  lastRunFingerprint?: string
+  lastGoodAt?: number
+  lastGoodCount?: number
 }
 
 // --- Video Analysis Node Data ---

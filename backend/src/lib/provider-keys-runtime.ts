@@ -114,16 +114,54 @@ export type ProviderKeysListener = (changed: ReadonlyArray<ProviderKeyId>) => vo
 
 let envKeys: Partial<Record<ProviderKeyId, string>> = {}
 let appKeys: Partial<Record<ProviderKeyId, string>> = {}
+let overrides: Partial<Record<ProviderKeyId, ProviderKeyOverride>> = {}
 const listeners = new Set<ProviderKeysListener>()
 
 const present = (v: string | undefined): v is string => typeof v === "string" && v.trim().length > 0
 
+/**
+ * Operator overrides on top of the two key layers (4b: "disable a provider;
+ * replace an env key"). Persisted as ONE app_settings object
+ * (`provider_key_overrides`, loaded/written by provider-credentials.ts) —
+ * no migration, and the worker inherits it through the same TTL refresh as
+ * the pasted keys.
+ *
+ * - `disabled`: the provider resolves as ABSENT everywhere (registration,
+ *   config getters, chains, coverage counts) while the tiles still see the
+ *   stored key via resolveProviderKeyRaw and render "disabled", not
+ *   "missing". This is what makes an env-managed key (read-only by design)
+ *   controllable from the UI at all.
+ * - `ignoreEnv`: the env layer is skipped so an app-pasted key can REPLACE
+ *   a .env key without editing files or restarting. Cleared when the app
+ *   key is deleted — the env key honestly returns.
+ */
+export interface ProviderKeyOverride {
+  readonly disabled?: boolean
+  readonly ignoreEnv?: boolean
+}
+
 export function resolveProviderKey(id: ProviderKeyId): ResolvedProviderKey | null {
+  const o = overrides[id]
+  if (o?.disabled) return null
+  const env = envKeys[id]
+  if (!o?.ignoreEnv && present(env)) return { value: env, source: "env" }
+  const app = appKeys[id]
+  if (present(app)) return { value: app, source: "app" }
+  return null
+}
+
+/** The key layers WITHOUT overrides — what the tiles render ("disabled",
+ *  never "missing", for a provider that has a key but is switched off). */
+export function resolveProviderKeyRaw(id: ProviderKeyId): ResolvedProviderKey | null {
   const env = envKeys[id]
   if (present(env)) return { value: env, source: "env" }
   const app = appKeys[id]
   if (present(app)) return { value: app, source: "app" }
   return null
+}
+
+export function getProviderKeyOverride(id: ProviderKeyId): ProviderKeyOverride {
+  return overrides[id] ?? {}
 }
 
 function effective(): Record<ProviderKeyId, string | null> {
@@ -183,6 +221,19 @@ export function applyAppSnapshot(values: Partial<Record<ProviderKeyId, string>>)
   return settled.then(() => changed)
 }
 
+/** Replace the overrides layer wholesale (the app_settings object is the
+ *  source of truth). Same notify contract as applyAppSnapshot: resolves,
+ *  once every change listener settled, with the ids whose EFFECTIVE value
+ *  changed — so disabling KIE unregisters it and re-routes immediately. */
+export function setProviderKeyOverrides(
+  values: Partial<Record<ProviderKeyId, ProviderKeyOverride>>,
+): Promise<ReadonlyArray<ProviderKeyId>> {
+  const before = effective()
+  overrides = { ...values }
+  const { changed, settled } = notify(before)
+  return settled.then(() => changed)
+}
+
 /** Fires with the ids whose EFFECTIVE value changed. Returns an unsubscribe. */
 export function subscribeProviderKeys(listener: ProviderKeysListener): () => void {
   listeners.add(listener)
@@ -194,5 +245,6 @@ export function subscribeProviderKeys(listener: ProviderKeysListener): () => voi
 export function _resetProviderKeysRuntimeForTests(): void {
   envKeys = {}
   appKeys = {}
+  overrides = {}
   listeners.clear()
 }

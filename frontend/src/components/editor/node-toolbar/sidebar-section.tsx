@@ -7,6 +7,7 @@
  * Create can no longer collide with Video's.
  */
 import { ChevronRight } from "lucide-react"
+import { NodaroMark, showNodaroMark } from "@/components/nodes/nodaro-exclusive-mark"
 import { cn } from "@/lib/utils"
 import type { SidebarSection as Section } from "@/lib/node-picker-sections"
 import type { SceneNodeType } from "@/types/nodes"
@@ -67,7 +68,8 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
                 <span className="text-[var(--npk-icon)] transition-colors group-hover:text-[var(--npk-accent)]">
                   {node.icon}
                 </span>
-                <span className="text-sm text-[var(--npk-t1)]">{node.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[var(--npk-t1)]">{node.label}</span>
+                {showNodaroMark(node.type) && <NodaroMark />}
               </button>
             ))}
           </div>

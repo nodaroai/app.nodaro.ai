@@ -13,7 +13,7 @@
  */
 
 import { Agent } from "undici"
-import { nodaroCloudFetch, getNodaroConnection, nodaroCloudBase } from "../../lib/nodaro-connect.js"
+import { nodaroCloudFetch, getNodaroCredential, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
 import { r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
 import type { ProgressCallback } from "../provider.interface.js"
@@ -170,12 +170,17 @@ export async function createCloudJob(
 export async function waitForCloudJob(
   jobId: string,
   onProgress?: ProgressCallback,
+  opts: { budgetMs?: number } = {},
 ): Promise<CloudJob> {
   const startedAt = Date.now()
+  // Default stays POLL_BUDGET_MS (~15 min). The exclusive-node relay passes
+  // a bigger budget for gvp/evp-class runs (they legitimately take an hour+),
+  // kept under the orchestrator's 90-min NODE_TIMEOUT_MS.
+  const budgetMs = opts.budgetMs ?? POLL_BUDGET_MS
   let attempt = 0
   let transientFailures = 0
 
-  while (Date.now() - startedAt < POLL_BUDGET_MS) {
+  while (Date.now() - startedAt < budgetMs) {
     if (attempt > 0) {
       await sleep(attempt <= POLL_FAST_ATTEMPTS ? POLL_FAST_MS : POLL_SLOW_MS)
     }
@@ -416,15 +421,20 @@ export async function ensureCloudReachableMediaUrl(url: string | undefined): Pro
 
   const { buffer, mime } = await readOwnMedia(url)
 
-  const conn = await getNodaroConnection()
-  if (!conn?.accessToken) {
+  // getNodaroCredential, NOT getNodaroConnection: the connection object is
+  // the OAuth registration only, so a NODARO_API_KEY-lane install (env or
+  // pasted) could create cloud jobs but died right here on the very first
+  // media re-host with a misleading "not connected" (4b plan, PR 1). The
+  // credential covers every lane and is what nodaroCloudFetch itself uses.
+  const credential = await getNodaroCredential()
+  if (!credential) {
     throw new NodaroCloudError("nodaro.ai is not connected")
   }
   const form = new FormData()
   form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), uploadNameFor(mime))
   const res = await fetch(`${nodaroCloudBase()}/v1/upload`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${conn.accessToken}` },
+    headers: { Authorization: `Bearer ${credential.token}` },
     body: form,
   })
   if (!res.ok) {

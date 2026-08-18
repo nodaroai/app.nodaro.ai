@@ -7,7 +7,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 const { mockConfig, mockSelect, mockCount, mockS3Send, mockPing, mockConnect, mockDisconnect, mockCredential, mockCipherSource } = vi.hoisted(() => ({
   // getNodaroCredential(): null = not connected; {token, source} = connected.
-  mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" } | null>>(),
+  mockCredential: vi.fn<() => Promise<{ token: string; source: "oauth" | "env" | "app" } | null>>(),
   // encryptionKeySource(): null = no key; else which env var supplies it.
   mockCipherSource: { value: "NODARO_ENCRYPTION_KEY" as "NODARO_ENCRYPTION_KEY" | "SOCIAL_ENCRYPTION_KEY" | null },
   mockConfig: {
@@ -287,6 +287,17 @@ describe("GET /v1/setup/status", () => {
     expect(JSON.stringify(res.json())).not.toContain("ndr_app_x")
   })
 
+  it("a PASTED nodaro key reports source 'app' — the tile must stay editable", async () => {
+    // The founder's live bug: the credential used to collapse app->​"env",
+    // locking the tile so the key could not be removed or changed.
+    mockCredential.mockResolvedValue({ token: "ndr_pasted", source: "app" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.keys.nodaro).toBe(true)
+    expect(providers.sources.nodaro).toBe("app")
+    expect(providers.nodaroSource).toBe("app")
+  })
+
   it("lights the nodaro.ai tile from NODARO_API_KEY and says so", async () => {
     mockCredential.mockResolvedValue({ token: "ndr_personal", source: "env" })
     const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
@@ -302,6 +313,48 @@ describe("GET /v1/setup/status", () => {
   // that seed actually ran on the community stack (2026-08-16) a pristine
   // install reported hasUsers=true and told a brand-new self-hoster their
   // login was already DONE. Server-owned accounts must never count.
+  // ── providers.llm — CAPABILITY signal for the "Generate with AI" gate ──
+  // (#752) True when any LLM lane is reachable: KIE (the primary proxy for
+  // every LLM model), direct Anthropic/Google, or the nodaro.ai connection.
+  // The frontend gates the prompt-helper entry points on THIS, not on
+  // hasCredits() — a billing predicate must never stand in for capability.
+  it("providers.llm is false on a keyless, unconnected install", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.providers.llm).toBe(false)
+  })
+
+  it("providers.llm is true with a KIE key alone — the primary LLM lane", async () => {
+    setEnvProviderKeys({ kie: "kie-secret-value" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.providers.llm).toBe(true)
+  })
+
+  it("providers.llm is true with a direct Gemini or Anthropic key", async () => {
+    setEnvProviderKeys({ gemini: "g-key" })
+    let res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.providers.llm).toBe(true)
+
+    setEnvProviderKeys({ anthropic: "a-key" })
+    res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    expect(res.json().checks.providers.llm).toBe(true)
+  })
+
+  it("providers.llm is true from the nodaro.ai connection alone — LLM routes proxy through it", async () => {
+    mockCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.llm).toBe(true)
+    // A media-only key (replicate) does NOT light it — replicate serves no LLM lane.
+  })
+
+  it("providers.llm stays false with only a Replicate key — no LLM lane there", async () => {
+    setEnvProviderKeys({ replicate: "r-key" })
+    const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
+    const providers = res.json().checks.providers
+    expect(providers.ok).toBe(true)
+    expect(providers.llm).toBe(false)
+  })
+
   it("hasUsers is false on a pristine install", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/setup/status" })
     expect(res.json().hasUsers).toBe(false)

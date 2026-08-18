@@ -164,7 +164,7 @@ describe("frontend parity net (source) — llm-chat in remaining §6.2 sites", (
   })
 
   // The variable-suggestion-list TYPE_CATEGORY assertion moved with the editor
-  // into @nodaroai/picker-ui (prompt-editor/__tests__/type-category-parity.test.ts).
+  // into @nodaro/picker-ui (prompt-editor/__tests__/type-category-parity.test.ts).
 
   it("admin/node-defaults: GROUPS nodeTypes array lists 'llm-chat' (LLM-driven group)", () => {
     const src = readSrc("ee/app/(admin)/admin/node-defaults/page.tsx")

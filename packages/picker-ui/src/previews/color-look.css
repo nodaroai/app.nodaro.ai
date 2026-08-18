@@ -1,0 +1,244 @@
+/* ============================================================================
+   Color/Look preview styles.
+   Each preview shows a horizontal 3-stripe swatch of the dominant colors
+   of that look (highlight / mid / shadow). No animations — color/look is
+   a grade, not a motion.
+
+   Stripe order is left → right = bright/highlight → mid → shadow/dark.
+   Sub-categories:
+     - palette         : pure stylistic color grades
+     - film-emulation  : real-world film stock characteristic colors
+   ========================================================================== */
+
+.color-look-preview {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  background: linear-gradient(135deg, #1e2434 0%, #131826 100%);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.color-look-preview__strip {
+  flex: 1 1 0;
+  height: 100%;
+}
+
+/* ============================================================================
+   PALETTE
+   ========================================================================== */
+
+/* Warm — orange / amber / red */
+.color-look-preview--warm .color-look-preview__strip--a { background: #ffd49a; }
+.color-look-preview--warm .color-look-preview__strip--b { background: #f08a3c; }
+.color-look-preview--warm .color-look-preview__strip--c { background: #8a2418; }
+
+/* Cool — cyan / teal / blue */
+.color-look-preview--cool .color-look-preview__strip--a { background: #b8e0e8; }
+.color-look-preview--cool .color-look-preview__strip--b { background: #3a8898; }
+.color-look-preview--cool .color-look-preview__strip--c { background: #142e58; }
+
+/* Teal & orange — Hollywood complementary */
+.color-look-preview--teal-orange .color-look-preview__strip--a { background: #ff9148; }
+.color-look-preview--teal-orange .color-look-preview__strip--b { background: #1a1a1a; }
+.color-look-preview--teal-orange .color-look-preview__strip--c { background: #1f6a78; }
+
+/* Desaturated — muted grays with hint of color */
+.color-look-preview--desaturated .color-look-preview__strip--a { background: #c4c0b8; }
+.color-look-preview--desaturated .color-look-preview__strip--b { background: #807a72; }
+.color-look-preview--desaturated .color-look-preview__strip--c { background: #3a3632; }
+
+/* Monochrome B&W — pure grayscale */
+.color-look-preview--monochrome-bw .color-look-preview__strip--a { background: #f4f4f4; }
+.color-look-preview--monochrome-bw .color-look-preview__strip--b { background: #888888; }
+.color-look-preview--monochrome-bw .color-look-preview__strip--c { background: #0a0a0a; }
+
+/* Sepia — warm brown vintage */
+.color-look-preview--sepia .color-look-preview__strip--a { background: #e8d4a8; }
+.color-look-preview--sepia .color-look-preview__strip--b { background: #a07c48; }
+.color-look-preview--sepia .color-look-preview__strip--c { background: #3a2410; }
+
+/* Pastel — soft pink / soft yellow / soft blue */
+.color-look-preview--pastel .color-look-preview__strip--a { background: #ffd6e0; }
+.color-look-preview--pastel .color-look-preview__strip--b { background: #fff4c0; }
+.color-look-preview--pastel .color-look-preview__strip--c { background: #c8e0ff; }
+
+/* High contrast — pure black / mid / pure white */
+.color-look-preview--high-contrast .color-look-preview__strip--a { background: #ffffff; }
+.color-look-preview--high-contrast .color-look-preview__strip--b { background: #6a6a6a; }
+.color-look-preview--high-contrast .color-look-preview__strip--c { background: #000000; }
+
+/* Vibrant — saturated RGB */
+.color-look-preview--vibrant .color-look-preview__strip--a { background: #ff2848; }
+.color-look-preview--vibrant .color-look-preview__strip--b { background: #18c850; }
+.color-look-preview--vibrant .color-look-preview__strip--c { background: #1a48ff; }
+
+/* ============================================================================
+   FILM EMULATION
+   ========================================================================== */
+
+/* Kodak Portra — peachy skin / warm white / muted blue shadow */
+.color-look-preview--kodak-portra .color-look-preview__strip--a { background: #f8d8c0; }
+.color-look-preview--kodak-portra .color-look-preview__strip--b { background: #e8c4a8; }
+.color-look-preview--kodak-portra .color-look-preview__strip--c { background: #5a6878; }
+
+/* Kodak Ektar — deep red / teal / rich blue */
+.color-look-preview--kodak-ektar .color-look-preview__strip--a { background: #d83828; }
+.color-look-preview--kodak-ektar .color-look-preview__strip--b { background: #1f8898; }
+.color-look-preview--kodak-ektar .color-look-preview__strip--c { background: #1a3478; }
+
+/* Kodak Vision3 — cinematic warm highlight / amber mid / cool deep */
+.color-look-preview--kodak-vision3 .color-look-preview__strip--a { background: #ffe8c0; }
+.color-look-preview--kodak-vision3 .color-look-preview__strip--b { background: #d89860; }
+.color-look-preview--kodak-vision3 .color-look-preview__strip--c { background: #1a283a; }
+
+/* Fuji Pro 400H — cream / soft green / creamy blue */
+.color-look-preview--fuji-pro-400h .color-look-preview__strip--a { background: #f4ecd0; }
+.color-look-preview--fuji-pro-400h .color-look-preview__strip--b { background: #b8d8b0; }
+.color-look-preview--fuji-pro-400h .color-look-preview__strip--c { background: #98b8d0; }
+
+/* Cinestill 800T — red halation / tungsten warm / deep teal night */
+.color-look-preview--cinestill-800t .color-look-preview__strip--a { background: #ff4828; }
+.color-look-preview--cinestill-800t .color-look-preview__strip--b { background: #c87a4a; }
+.color-look-preview--cinestill-800t .color-look-preview__strip--c { background: #0a3848; }
+
+/* Bleach bypass — desaturated bright / metallic gray / crushed dark */
+.color-look-preview--bleach-bypass .color-look-preview__strip--a { background: #d8d4c8; }
+.color-look-preview--bleach-bypass .color-look-preview__strip--b { background: #786c5c; }
+.color-look-preview--bleach-bypass .color-look-preview__strip--c { background: #181410; }
+
+/* Technicolor — saturated red / green / blue separation */
+.color-look-preview--technicolor .color-look-preview__strip--a { background: #e02830; }
+.color-look-preview--technicolor .color-look-preview__strip--b { background: #18a830; }
+.color-look-preview--technicolor .color-look-preview__strip--c { background: #1840c8; }
+
+/* Day-for-night — deep blue night / mid blue / near-black */
+.color-look-preview--day-for-night .color-look-preview__strip--a { background: #4868a8; }
+.color-look-preview--day-for-night .color-look-preview__strip--b { background: #1a3068; }
+.color-look-preview--day-for-night .color-look-preview__strip--c { background: #050a18; }
+
+/* Cross-processed — cyan-shifted highlight / pushed magenta / olive shadow */
+.color-look-preview--cross-processed .color-look-preview__strip--a { background: #80e0d0; }
+.color-look-preview--cross-processed .color-look-preview__strip--b { background: #c84890; }
+.color-look-preview--cross-processed .color-look-preview__strip--c { background: #586028; }
+
+/* === Social presets === */
+
+/* Instagram Warm (Valencia-style) — faded warm highlight / creamy mid / soft tan shadow */
+.color-look-preview--instagram-warm .color-look-preview__strip--a { background: #f8e3c0; }
+.color-look-preview--instagram-warm .color-look-preview__strip--b { background: #e0b48a; }
+.color-look-preview--instagram-warm .color-look-preview__strip--c { background: #8a6048; }
+
+/* TikTok Saturated — punchy magenta / vivid cyan / rich blue */
+.color-look-preview--tiktok-saturated .color-look-preview__strip--a { background: #ff2d70; }
+.color-look-preview--tiktok-saturated .color-look-preview__strip--b { background: #25f4ee; }
+.color-look-preview--tiktok-saturated .color-look-preview__strip--c { background: #2030a8; }
+
+/* YouTube Vlog Flat — natural daylight / neutral mid / clean shadow */
+.color-look-preview--youtube-vlog-flat .color-look-preview__strip--a { background: #ece4d4; }
+.color-look-preview--youtube-vlog-flat .color-look-preview__strip--b { background: #b8a890; }
+.color-look-preview--youtube-vlog-flat .color-look-preview__strip--c { background: #383028; }
+
+/* iPhone HDR — lifted highlight / hyperreal cyan-blue mid / deep but lifted shadow */
+.color-look-preview--iphone-hdr .color-look-preview__strip--a { background: #ffffff; }
+.color-look-preview--iphone-hdr .color-look-preview__strip--b { background: #5ca8e8; }
+.color-look-preview--iphone-hdr .color-look-preview__strip--c { background: #1a2030; }
+
+/* ============================================================================
+   ADDITIONS (audit pass) — film stocks + treatments + retro looks
+   ========================================================================== */
+
+/* Aerochrome — false-colour infrared, foliage shifts to magenta/red */
+.color-look-preview--aerochrome .color-look-preview__strip--a { background: #ff5cae; }
+.color-look-preview--aerochrome .color-look-preview__strip--b { background: #c61f5e; }
+.color-look-preview--aerochrome .color-look-preview__strip--c { background: #1a3a4a; }
+
+/* Agfa ORWO — east-german film, muted earthy palette */
+.color-look-preview--agfa-orwo .color-look-preview__strip--a { background: #d8c8a4; }
+.color-look-preview--agfa-orwo .color-look-preview__strip--b { background: #8a7858; }
+.color-look-preview--agfa-orwo .color-look-preview__strip--c { background: #2a2418; }
+
+/* CineStill 50D — daylight cinema, soft pastel skin / clean blue sky */
+.color-look-preview--cinestill-50d .color-look-preview__strip--a { background: #fbe8d0; }
+.color-look-preview--cinestill-50d .color-look-preview__strip--b { background: #d8a880; }
+.color-look-preview--cinestill-50d .color-look-preview__strip--c { background: #486890; }
+
+/* Eastman Color — '50s Hollywood, saturated reds + warm flesh tones */
+.color-look-preview--eastman-color .color-look-preview__strip--a { background: #f4c898; }
+.color-look-preview--eastman-color .color-look-preview__strip--b { background: #c83828; }
+.color-look-preview--eastman-color .color-look-preview__strip--c { background: #28384a; }
+
+/* Ektachrome 100 — slide film, clean cyan shift, rich saturation */
+.color-look-preview--ektachrome-100 .color-look-preview__strip--a { background: #f0e8d0; }
+.color-look-preview--ektachrome-100 .color-look-preview__strip--b { background: #2890b8; }
+.color-look-preview--ektachrome-100 .color-look-preview__strip--c { background: #102848; }
+
+/* Expired Film — heavy colour shift, magenta cast, low contrast */
+.color-look-preview--expired-film .color-look-preview__strip--a { background: #d8a8b8; }
+.color-look-preview--expired-film .color-look-preview__strip--b { background: #98686a; }
+.color-look-preview--expired-film .color-look-preview__strip--c { background: #38303a; }
+
+/* Faded Matte — milky highlight, lifted blacks, near-zero contrast */
+.color-look-preview--faded-matte .color-look-preview__strip--a { background: #d8cdc4; }
+.color-look-preview--faded-matte .color-look-preview__strip--b { background: #9a8e84; }
+.color-look-preview--faded-matte .color-look-preview__strip--c { background: #4c453e; }
+
+/* Fuji Instax — peachy whites, soft warm mids, blue-tinted shadows */
+.color-look-preview--fuji-instax .color-look-preview__strip--a { background: #fbe4d4; }
+.color-look-preview--fuji-instax .color-look-preview__strip--b { background: #e8b890; }
+.color-look-preview--fuji-instax .color-look-preview__strip--c { background: #586878; }
+
+/* Hand-Tinted — pale b&w base with pop of pink/cyan accent */
+.color-look-preview--hand-tinted .color-look-preview__strip--a { background: #f0e6dc; }
+.color-look-preview--hand-tinted .color-look-preview__strip--b { background: #f088a8; }
+.color-look-preview--hand-tinted .color-look-preview__strip--c { background: #98a8b8; }
+
+/* Kodachrome 64 — punchy reds, deep blacks, golden warmth */
+.color-look-preview--kodachrome-64 .color-look-preview__strip--a { background: #f8d090; }
+.color-look-preview--kodachrome-64 .color-look-preview__strip--b { background: #d83820; }
+.color-look-preview--kodachrome-64 .color-look-preview__strip--c { background: #18181a; }
+
+/* Kodak Tri-X 400 — gritty B&W, full tonal range, contrasty */
+.color-look-preview--kodak-tri-x-400 .color-look-preview__strip--a { background: #ededed; }
+.color-look-preview--kodak-tri-x-400 .color-look-preview__strip--b { background: #6e6e6e; }
+.color-look-preview--kodak-tri-x-400 .color-look-preview__strip--c { background: #0a0a0a; }
+
+/* Lifestyle Warm Magazine — golden, soft, warm magazine spread */
+.color-look-preview--lifestyle-warm-magazine .color-look-preview__strip--a { background: #fde2bd; }
+.color-look-preview--lifestyle-warm-magazine .color-look-preview__strip--b { background: #d8a060; }
+.color-look-preview--lifestyle-warm-magazine .color-look-preview__strip--c { background: #6c4828; }
+
+/* Log Flat — colorist's neutral, very low contrast, near-grey across */
+.color-look-preview--log-flat .color-look-preview__strip--a { background: #b8b6b0; }
+.color-look-preview--log-flat .color-look-preview__strip--b { background: #80807a; }
+.color-look-preview--log-flat .color-look-preview__strip--c { background: #4a4a48; }
+
+/* MTV 90s VHS — neon-saturated, pushed contrast, cassette warmth */
+.color-look-preview--mtv-90s-vhs .color-look-preview__strip--a { background: #ff4cb8; }
+.color-look-preview--mtv-90s-vhs .color-look-preview__strip--b { background: #ffd028; }
+.color-look-preview--mtv-90s-vhs .color-look-preview__strip--c { background: #1828a8; }
+
+/* Polaroid Faded — cream highlight, dusty mid, washed shadow */
+.color-look-preview--polaroid-faded .color-look-preview__strip--a { background: #f0e0c0; }
+.color-look-preview--polaroid-faded .color-look-preview__strip--b { background: #b89880; }
+.color-look-preview--polaroid-faded .color-look-preview__strip--c { background: #585048; }
+
+/* Selective Color — single saturated red against desaturated background */
+.color-look-preview--selective-color .color-look-preview__strip--a { background: #d0d0d0; }
+.color-look-preview--selective-color .color-look-preview__strip--b { background: #ff1a28; }
+.color-look-preview--selective-color .color-look-preview__strip--c { background: #2a2a2a; }
+
+/* Split Toning — warm highlights + cool shadows split */
+.color-look-preview--split-toning .color-look-preview__strip--a { background: #ffd8a8; }
+.color-look-preview--split-toning .color-look-preview__strip--b { background: #807870; }
+.color-look-preview--split-toning .color-look-preview__strip--c { background: #2a486a; }
+
+/* Two-Strip Technicolor — early cinema, only red+green, no blue */
+.color-look-preview--two-strip-technicolor .color-look-preview__strip--a { background: #f0a890; }
+.color-look-preview--two-strip-technicolor .color-look-preview__strip--b { background: #a8a060; }
+.color-look-preview--two-strip-technicolor .color-look-preview__strip--c { background: #386028; }
+
+/* Y2K Saturated — early-2000s pop, pushed cyan + magenta */
+.color-look-preview--y2k-saturated .color-look-preview__strip--a { background: #ff4cb8; }
+.color-look-preview--y2k-saturated .color-look-preview__strip--b { background: #00e8ff; }
+.color-look-preview--y2k-saturated .color-look-preview__strip--c { background: #2810a8; }

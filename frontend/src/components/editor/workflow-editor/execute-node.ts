@@ -87,6 +87,7 @@ import {
   runVideoAudit,
   executeReduce,
 } from "@/lib/api";
+import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
 import { composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
@@ -224,6 +225,7 @@ import {
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { addCaptionsPreflight } from "./add-captions-preflight";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -4645,28 +4647,28 @@ export function executeNode(
     const upstream = inputs.prompt;
     const params = buildWebScrapeParams(d, upstream);
 
-    updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
-    });
+    updateNodeData(node.id, webScrapeRunStartPatch(d));
 
     setUserPromptTemplate(undefined);
     return webScrape(params)
       .then((res) => {
-        updateNodeData(node.id, {
-          executionStatus: "completed",
-          generatedJson: res.json,
-        });
-        guardedToast.success("Web Scrape completed");
+        // #765: the patch records success/empty and KEEPS the previous good
+        // payload on an empty run — the incident was an empty rerun silently
+        // destroying 20 real results. The chain still receives THIS run's
+        // actual output below (honest for the executing graph); only the
+        // stored node payload is protected.
+        const patch = applyWebScrapeResult(res.json);
+        updateNodeData(node.id, patch);
+        guardedToast.success(
+          patch.lastRunOutcome === "empty" ? "Web Scrape completed — 0 results" : "Web Scrape completed",
+        );
         // Return stringified JSON for callers that expect a string — same coercion
         // getPrimaryOutput uses on the backend.
         return res.json === undefined ? "" : JSON.stringify(res.json);
       })
       .catch((err: Error) => {
-        updateNodeData(node.id, {
-          executionStatus: "failed",
-          errorMessage: err.message || "Scrape failed",
-        });
+        // Failed runs record the outcome but never touch generatedJson.
+        updateNodeData(node.id, applyWebScrapeFailure(err.message || "Scrape failed"));
         guardedToast.error(`Web Scrape failed: ${err.message}`);
         throw err;
       });
@@ -6499,13 +6501,14 @@ export function executeNode(
     }
     const d = node.data as AddCaptionsData;
     const text = inputs.prompt ?? "";
-    // Auto-transcribe styles (kinetic factory presets) carry no manual text —
-    // proceed when autoTranscribe is enabled so single-node Run matches the
-    // workflow/DAG path (which transcribes the input video). Plain manual-text
-    // styles still require text.
-    if (!text && !d.autoTranscribe) {
-      toast.error(`Node "${d.label}": no caption text`);
-      return Promise.reject(new Error("No text"));
+    // Mirror of the route's superRefine: text, captions, or auto-transcribe
+    // (opt-OUT, worker semantics — undefined means "transcribe the video").
+    // The old guard read the flag opt-IN against a value nothing ever writes,
+    // which made every style unrunnable from a bare video (#759).
+    const preflightError = addCaptionsPreflight(d, inputs);
+    if (preflightError) {
+      toast.error(preflightError);
+      return Promise.reject(new Error("No caption source"));
     }
     return runProcessingNode(
       node.id,

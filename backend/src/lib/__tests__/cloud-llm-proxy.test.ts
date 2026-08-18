@@ -18,9 +18,11 @@ const env = {
 }
 vi.mock("../config.js", () => ({ config: env }))
 
-const getNodaroConnection = vi.fn()
+const getNodaroCredential = vi.fn()
+const getNodaroProviderPrefs = vi.fn(async () => ({ scope: "all", precedence: "local" }) as { scope: "all" | "exclusives"; precedence: "nodaro" | "local" })
 vi.mock("../nodaro-connect.js", () => ({
-  getNodaroConnection: () => getNodaroConnection(),
+  getNodaroCredential: () => getNodaroCredential(),
+  getNodaroProviderPrefs: () => getNodaroProviderPrefs(),
   nodaroCloudBase: () => "https://cloud.example",
 }))
 
@@ -59,7 +61,26 @@ const req = { body: {}, raw: { on: vi.fn() }, log: { error: vi.fn() } } as never
 describe("shouldProxyLlmToCloud", () => {
   beforeEach(() => {
     env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
-    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    getNodaroProviderPrefs.mockReset().mockResolvedValue({ scope: "all", precedence: "local" })
+  })
+
+  it('scope "exclusives": never proxies — the credential serves only the exclusive nodes', async () => {
+    getNodaroProviderPrefs.mockResolvedValueOnce({ scope: "exclusives", precedence: "local" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    await expect(shouldProxyLlmToCloud()).resolves.toBe(false)
+  })
+
+  it('precedence "nodaro": proxies even when local LLM keys exist — "ignore my other providers"', async () => {
+    getNodaroProviderPrefs.mockResolvedValueOnce({ scope: "all", precedence: "nodaro" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
+    env.KIE_API_KEY = "kie-key"
+    await expect(shouldProxyLlmToCloud()).resolves.toBe(true)
+  })
+
+  it("a KEY-lane credential (env/pasted) proxies too — parity with the media re-host fix", async () => {
+    getNodaroCredential.mockResolvedValue({ token: "ndr_personal", source: "app" })
+    await expect(shouldProxyLlmToCloud()).resolves.toBe(true)
   })
 
   it("is false when ANY local LLM key exists — a keyed install keeps its own path", async () => {
@@ -71,7 +92,7 @@ describe("shouldProxyLlmToCloud", () => {
   })
 
   it("is false with no connection, so a keyless unconnected install still fails locally with its own message", async () => {
-    getNodaroConnection.mockResolvedValue(null)
+    getNodaroCredential.mockResolvedValue(null)
     expect(await shouldProxyLlmToCloud()).toBe(false)
   })
 
@@ -83,7 +104,7 @@ describe("shouldProxyLlmToCloud", () => {
 describe("maybeProxyLlmRouteToCloud", () => {
   beforeEach(() => {
     env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
-    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) =>
       u.includes("localhost") ? "https://cloud/up/x.png" : u,
     )
@@ -167,7 +188,7 @@ describe("maybeProxyLlmRouteToCloud", () => {
 describe("nested media and client disconnect", () => {
   beforeEach(() => {
     env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
-    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) =>
       u.includes("localhost") ? "https://cloud/up/x.png" : u,
     )
@@ -247,7 +268,7 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
 
   beforeEach(() => {
     env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
-    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) => u)
     insertJob.mockReset().mockResolvedValue({ data: { id: "local-job-1" }, error: null })
   })
@@ -381,7 +402,7 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
 describe("route hooks: prepareBody / mapAnswer, and media errors", () => {
   beforeEach(() => {
     env.KIE_API_KEY = ""; env.ANTHROPIC_API_KEY = ""; env.GEMINI_API_KEY = ""
-    getNodaroConnection.mockResolvedValue({ accessToken: "ndr_app_x" })
+    getNodaroCredential.mockResolvedValue({ token: "ndr_app_x", source: "oauth" })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) => u)
     insertJob.mockReset().mockResolvedValue({ data: { id: "local-job-1" }, error: null })
   })

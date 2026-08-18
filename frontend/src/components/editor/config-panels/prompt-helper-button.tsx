@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
-import { hasCredits } from "@/lib/edition"
+import { useLlmAvailability } from "@/hooks/use-llm-availability"
 import { isWizardSupported, type ModelChange } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildPromptHelperNodeContext } from "@/lib/prompt-helper-context"
@@ -36,6 +36,13 @@ export function PromptHelperButton({
   size = "sm",
 }: PromptHelperButtonProps) {
   const [open, setOpen] = useState(false)
+  // Capability, not edition: render wherever the install can actually reach
+  // an LLM (Cloud always; self-host with a KIE/Anthropic/Gemini key or the
+  // nodaro.ai connection). hasCredits() used to stand in here and hid the
+  // button from every Community/Business install where the feature works
+  // fine (#752) — the backend route is registered in every edition and its
+  // creditGuard is a pass-through without credits.
+  const llmAvailable = useLlmAvailability()
   // Use whichever "active node" is set: an explicit `nodeId` prop wins (the
   // field-edit modal passes its own because its Edit trigger stopPropagation's,
   // so the target node may not be selectedNodeId); otherwise fall back to sidebar
@@ -80,7 +87,7 @@ export function PromptHelperButton({
     return targets
   }, [nodeType, targetNodeId, allEdges, allNodes])
 
-  if (!hasCredits()) return null
+  if (!llmAvailable) return null
   if (!isWizardSupported(nodeType)) return null
 
   // Read style from current node data

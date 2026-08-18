@@ -99,7 +99,7 @@ vi.mock("@/lib/app-settings.js", () => ({
     apps_page_video_autoplay: true,
     featured_app_ids: [] as string[],
     featured_apps_limit: 20,
-    apps_auto_scroll_seconds: 4,
+    apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null,
   })),
 }))
 

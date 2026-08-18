@@ -415,6 +415,35 @@ describe("reconcileKieJob", () => {
     expect(failCall).toBeUndefined()
   })
 
+  it("kie-suno music success → finalizes with providerUsed 'kie', matching the worker path (#753)", async () => {
+    mocks.pollSunoTaskMock.mockResolvedValueOnce({
+      taskId: "t-suno-ok",
+      tracks: [
+        { id: "tr1", title: "Track", duration: 30, imageUrl: "", audioUrl: "https://suno.example/a.mp3" },
+      ],
+    })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-suno-ok.mp3")
+    mocks.finalizeMock.mockResolvedValueOnce({ ok: true })
+    const row: KieJobRow = {
+      id: "j-suno-ok",
+      provider_kind: "kie-suno",
+      provider_task_id: "t-suno-ok",
+      reconcile_attempts: 0,
+      job_type: "suno-generate",
+    }
+
+    await reconcileKieJob(row)
+
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "j-suno-ok",
+        // The SERVING provider — the same value the worker's KIE path writes.
+        // "suno" here used to split attribution across three values.
+        result: expect.objectContaining({ providerUsed: "kie" }),
+      }),
+    )
+  })
+
   it("kie-suno music: track upload throws → bumps reconcile_attempts, no finalize, no refund", async () => {
     mocks.pollSunoTaskMock.mockResolvedValueOnce({
       taskId: "t-suno-up",

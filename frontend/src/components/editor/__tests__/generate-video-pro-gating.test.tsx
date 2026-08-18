@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
+import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 
 // Read at module load (before any `vi.resetModules()` runs in the tests
 // below) — mirrors node-toolbar.test.tsx's file-parsing approach. Resolved
@@ -31,13 +31,16 @@ describe("generate-video-pro discovery gating", () => {
   // 20s timeout: vi.resetModules + fresh dynamic imports re-evaluate the whole
   // editor import graph, which since the picker-ui seam includes the full
   // picker/editor surface — slow under a loaded parallel run, not a hang.
-  it("is hidden from BOTH the popup and the sidebar toolbar when the edition has no credits (community/business)", { timeout: 20_000 }, async () => {
+  it("4b: appears on BOTH surfaces even without credits — exclusives relay through nodaro.ai; generative-pipeline stays hidden", { timeout: 20_000 }, async () => {
     vi.doMock("@/lib/edition", () => ({ hasCredits: () => false, isCloud: () => false }))
     const { getNodeOptions: getPopupOptions } = await import("../add-node-popup")
     const { getNodeOptions: getToolbarOptions } = await import("../node-toolbar")
 
-    expect(getPopupOptions().map((o) => o.type)).not.toContain("generate-video-pro")
-    expect(getToolbarOptions().map((o) => o.type)).not.toContain("generate-video-pro")
+    expect(getPopupOptions().map((o) => o.type)).toContain("generate-video-pro")
+    expect(getToolbarOptions().map((o) => o.type)).toContain("generate-video-pro")
+    // The truly cloud-only engine keeps its gate.
+    expect(getPopupOptions().map((o) => o.type)).not.toContain("generative-pipeline")
+    expect(getToolbarOptions().map((o) => o.type)).not.toContain("generative-pipeline")
   })
 
   it("appears in BOTH the popup and the sidebar toolbar when the edition has credits (cloud)", async () => {
@@ -47,16 +50,18 @@ describe("generate-video-pro discovery gating", () => {
 
     expect(getPopupOptions().map((o) => o.type)).toContain("generate-video-pro")
     expect(getToolbarOptions().map((o) => o.type)).toContain("generate-video-pro")
+    expect(getPopupOptions().map((o) => o.type)).toContain("generative-pipeline")
   })
 })
 
-describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => {
-  it("the shared set includes the cloud-only nodes", () => {
-    expect(CLOUD_ONLY_NODE_TYPES.has("voice-changer-pro")).toBe(true)
-    expect(CLOUD_ONLY_NODE_TYPES.has("generate-video-pro")).toBe(true)
-    // video-analysis's implementation moved to @nodaroai/cloud-plugins, so its
-    // node is Cloud-only too (else it would 404 on run under community/business).
-    expect(CLOUD_ONLY_NODE_TYPES.has("video-analysis")).toBe(true)
+describe("both surfaces consume the shared gating module", () => {
+  it("the shared sets carry the 4b split: exclusives relay via nodaro.ai, generative-pipeline stays cloud-only", () => {
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("voice-changer-pro")).toBe(true)
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("generate-video-pro")).toBe(true)
+    expect(NODARO_EXCLUSIVE_NODE_TYPES.has("video-analysis")).toBe(true)
+    expect(CLOUD_ONLY_NODE_TYPES.has("generative-pipeline")).toBe(true)
+    // No overlap — a node is exclusive-relayed OR cloud-only, never both.
+    expect([...NODARO_EXCLUSIVE_NODE_TYPES].filter((t) => CLOUD_ONLY_NODE_TYPES.has(t))).toEqual([])
   })
 
   // Source-text guard: the catalogue and its edition filter now live in one
@@ -78,7 +83,9 @@ describe("both surfaces consume the shared CLOUD_ONLY_NODE_TYPES module", () => 
       path.resolve(process.cwd(), "src/lib/node-options.tsx"),
       "utf8",
     )
-    // The edition gate lives there now, once.
+    // The edition gate lives there now, once. Since the PR-4 surfacing only
+    // the truly cloud-only set is filtered — the exclusive set is consumed
+    // by the mark components, not the catalogue filter.
     expect(NODE_OPTIONS_SRC).toMatch(
       /import \{ CLOUD_ONLY_NODE_TYPES \} from ["']@\/lib\/cloud-only-nodes["']/,
     )

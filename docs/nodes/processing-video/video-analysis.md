@@ -4,6 +4,13 @@
 
 ## Overview
 
+**Availability.** Native on Nodaro Cloud. On a self-hosted install the node
+appears with a **NODARO** mark and runs through your
+[nodaro.ai connection](../../community-cloud-connect.md) — OAuth Connect or a
+pasted API key — billed to the connected nodaro.ai account. Without a
+connection the node card shows a **Connect nodaro.ai** CTA and a run refuses
+with `503 nodaro_connection_required`.
+
 The Video Analysis node ingests a video and returns a structured, scene-segmented
 breakdown built for AI re-creation. It cuts the video at natural boundaries into
 scenes of **at most 8 seconds** (one image/video generation maps to one scene),

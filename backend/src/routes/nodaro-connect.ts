@@ -4,13 +4,19 @@ import { appBaseUrl } from "../lib/deployment-urls.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import {
   clearNodaroConnection,
+  forgetNodaroClient,
   getNodaroConnection,
   getNodaroCredential,
+  getNodaroProviderPrefs,
   nodaroCloudBase,
   nodaroCloudFetch,
   readNodaroConnectionState,
   saveNodaroConnection,
 } from "../lib/nodaro-connect.js"
+import { saveNodaroProviderPrefs } from "../lib/app-settings.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
+import { hasAdmin } from "../lib/config.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 /**
  * Instance-side connect flow (Phase 4a, self-hosted editions only).
@@ -94,6 +100,32 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
       }
 
       let conn = await getNodaroConnection()
+
+      // A kept registration can DIE cloud-side (Connected Instances →
+      // Disconnect revokes it; stale never-consented registrations expire) —
+      // reusing it blindly hands the browser a consent screen that can only
+      // say "Unknown client_id" (hit live 2026-08-18). Probe the PUBLIC
+      // app-info endpoint first: an explicit not-found means re-register
+      // fresh; any transient failure keeps the reuse path (#708's
+      // registration-cap protection stays intact for live clients).
+      if (conn) {
+        try {
+          const probe = await fetch(
+            `${nodaroCloudBase()}/v1/oauth/app-info?client_id=${encodeURIComponent(conn.clientId)}`,
+          )
+          if (probe.status === 404) {
+            req.log.warn(
+              { clientId: conn.clientId },
+              "[nodaro-connect] stored registration no longer exists on the cloud — re-registering",
+            )
+            await forgetNodaroClient()
+            conn = null
+          }
+        } catch {
+          // Cloud unreachable — the register/consent steps will surface it.
+        }
+      }
+
       if (!conn) {
         // One-time self-registration against the cloud DCR.
         let res: Response
@@ -190,8 +222,9 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
     try {
       const credential = await getNodaroCredential()
       if (!credential) return reply.send({ connected: false })
-      // `source` tells the card whether this is the OAuth connection (which it
-      // can disconnect) or NODARO_API_KEY from .env (which it cannot).
+      // `source` tells the card how to render controls: "oauth" can be
+      // disconnected here; "env" is .env-managed (read-only); "app" is a key
+      // pasted in the app — managed (Change/Remove) on the provider tiles.
       const source = credential.source
       let balance: unknown = null
       try {
@@ -200,7 +233,8 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
       } catch {
         // Balance is best-effort — a cloud hiccup must not read as "not connected".
       }
-      return reply.send({ connected: true, source, balance })
+      const prefs = await getNodaroProviderPrefs()
+      return reply.send({ connected: true, source, balance, prefs })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to read Nodaro connection status")
     }
@@ -212,6 +246,51 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
       return reply.send({ ok: true })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to disconnect")
+    }
+  })
+
+  // ── Routing prefs (4b): the post-connect choice, changeable later ──────
+  // scope: "all" (nodaro serves everything) | "exclusives" (only the
+  // exclusive nodes). precedence (meaningful for scope "all"): "nodaro"
+  // ("ignore my other providers") | "local" (user keys first — the legacy
+  // OAuth semantics). Absent row = legacy default, so pre-dialog installs
+  // keep routing unchanged. Write gate mirrors provider-keys: first-party
+  // JWT only, admin where the edition has admins.
+  const prefsSchema = z.object({
+    scope: z.enum(["all", "exclusives"]),
+    precedence: z.enum(["nodaro", "local"]),
+  })
+
+  app.get("/v1/nodaro-connect/prefs", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    return reply.send({ prefs: await getNodaroProviderPrefs() })
+  })
+
+  app.put("/v1/nodaro-connect/prefs", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    if (rejectProgrammaticAuth(req, reply, "Nodaro routing preferences can only be changed from the Nodaro editor, not with an API or app token.")) return
+    if (hasAdmin() && !(await checkIsAdmin(req.userId))) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Only an admin can change routing preferences on this edition" } })
+    }
+    const parsed = prefsSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: 'scope must be "all"|"exclusives" and precedence "nodaro"|"local"' } })
+    }
+    try {
+      // Write + cache-invalidate live in lib/app-settings.ts — the worker
+      // picks the change up on its own cache expiry (≤60s) — routing
+      // prefs, not correctness.
+      await saveNodaroProviderPrefs(parsed.data)
+      req.log.info({ userId: req.userId, ...parsed.data }, "[nodaro-connect] routing prefs set")
+      return reply.send({ prefs: parsed.data })
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to store routing preferences")
     }
   })
 }

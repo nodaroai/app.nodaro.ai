@@ -447,7 +447,7 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
         apps_page_video_autoplay: true,
         featured_app_ids: [],
         featured_apps_limit: 20,
-        apps_auto_scroll_seconds: 4,
+        apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null,
       })
       vi.mocked(reserveCreditsForJob).mockImplementation(async (req: any) => {
         recordedOverrides.push(req.creditReservation?.creditOverride)

@@ -1,0 +1,675 @@
+/* ============================================================================
+   Camera / Film stock preview styles.
+   A shared scene is processed through capture-medium cues: film gate/perfs,
+   grain density, aspect crop, tape scan, instant border, surveillance overlay,
+   and phone frame. The scene stays simple so the medium is the signal.
+   ========================================================================== */
+
+.camera-format-preview {
+  --format-bg: #101827;
+  --format-frame-bg: #0f172a;
+  --format-image-filter: none;
+  --format-image-transform: none;
+  --format-sky: linear-gradient(180deg, #2f6f8f 0%, #1e3b57 100%);
+  --format-ground: linear-gradient(180deg, #4b5363 0%, #1d2634 100%);
+  --format-subject-scale: 1;
+  --format-subject-filter: none;
+  --format-subject-shadow: 0 12px 18px rgba(0, 0, 0, 0.28);
+  --format-grain-opacity: 0.12;
+  --format-grain-size: 3px;
+  --format-vignette-opacity: 0.16;
+  --format-gate-display: none;
+  --format-gate-opacity: 0.72;
+  --format-gate-width: 12%;
+  --format-letterbox-display: none;
+  --format-letterbox-height: 15%;
+  --format-scan-display: none;
+  --format-scan-opacity: 0.48;
+  --format-damage-display: none;
+  --format-timestamp-display: none;
+  --format-phone-display: none;
+
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--format-bg);
+}
+
+.camera-format-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--format-frame-bg);
+}
+
+.camera-format-preview__image {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  filter: var(--format-image-filter);
+  transform: var(--format-image-transform);
+  transform-origin: 50% 50%;
+}
+
+.camera-format-preview__sky,
+.camera-format-preview__ground,
+.camera-format-preview__horizon,
+.camera-format-preview__distant-block,
+.camera-format-preview__subject,
+.camera-format-preview__gate,
+.camera-format-preview__letterbox,
+.camera-format-preview__phone-frame,
+.camera-format-preview__timestamp,
+.camera-format-preview__scan,
+.camera-format-preview__grain,
+.camera-format-preview__damage {
+  position: absolute;
+  pointer-events: none;
+}
+
+.camera-format-preview__sky {
+  inset: 0 0 48%;
+  background: var(--format-sky);
+}
+
+.camera-format-preview__ground {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 53%;
+  background: var(--format-ground);
+}
+
+.camera-format-preview__horizon {
+  left: 0;
+  right: 0;
+  top: 49%;
+  height: 1px;
+  opacity: 0.38;
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.camera-format-preview__distant-block {
+  top: 38%;
+  z-index: 2;
+  width: 16%;
+  height: 12%;
+  border-radius: 999px 999px 2px 2px;
+  opacity: 0.38;
+  background: linear-gradient(180deg, rgba(192, 216, 215, 0.52), rgba(43, 82, 88, 0.48));
+  filter: blur(0.2px);
+}
+
+.camera-format-preview__distant-block--left {
+  left: 15%;
+}
+
+.camera-format-preview__distant-block--right {
+  right: 13%;
+  width: 22%;
+}
+
+.camera-format-preview__subject {
+  left: 50%;
+  bottom: 20%;
+  z-index: 4;
+  width: auto;
+  height: 62%;
+  aspect-ratio: 0.58;
+  filter: var(--format-subject-filter);
+  transform: translateX(-50%) scale(var(--format-subject-scale));
+  transform-origin: 50% 100%;
+}
+
+.camera-format-preview__subject::before,
+.camera-format-preview__subject::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.camera-format-preview__subject::before {
+  top: 0;
+  width: 48%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffd0a4;
+  box-shadow: 0 0 8px rgba(255, 167, 89, 0.38);
+}
+
+.camera-format-preview__subject::after {
+  bottom: 0;
+  width: 100%;
+  height: 64%;
+  border-radius: 40% 40% 9% 9% / 42% 42% 9% 9%;
+  background: linear-gradient(90deg, #7c2d12 0%, #f97316 48%, #9a3412 100%);
+  box-shadow: var(--format-subject-shadow);
+}
+
+.camera-format-preview__gate {
+  display: var(--format-gate-display);
+  top: 0;
+  bottom: 0;
+  z-index: 12;
+  width: var(--format-gate-width);
+  opacity: var(--format-gate-opacity);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78) 0 9%,
+      transparent 9% 17%
+    ),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.56), rgba(0, 0, 0, 0.12));
+  background-size: 42% 100%, 100% 100%;
+  background-repeat: repeat-y, no-repeat;
+  mix-blend-mode: screen;
+}
+
+.camera-format-preview__gate--left {
+  left: 0;
+  background-position: 35% 0, 0 0;
+}
+
+.camera-format-preview__gate--right {
+  right: 0;
+  background-position: 65% 0, 0 0;
+  transform: scaleX(-1);
+}
+
+.camera-format-preview__letterbox {
+  display: var(--format-letterbox-display);
+  left: 0;
+  right: 0;
+  z-index: 13;
+  height: var(--format-letterbox-height);
+  background: #020309;
+}
+
+.camera-format-preview__letterbox--top {
+  top: 0;
+}
+
+.camera-format-preview__letterbox--bottom {
+  bottom: 0;
+}
+
+.camera-format-preview__phone-frame {
+  display: var(--format-phone-display);
+  inset: 6% 28%;
+  z-index: 13;
+  border-radius: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 0 0 999px rgba(2, 6, 23, 0.18),
+    inset 0 0 0 1px rgba(2, 6, 23, 0.35);
+}
+
+.camera-format-preview__phone-frame::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 22%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.7);
+  transform: translateX(-50%);
+}
+
+.camera-format-preview__timestamp {
+  display: var(--format-timestamp-display);
+  top: 7%;
+  right: 8%;
+  z-index: 14;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ff4040;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+.camera-format-preview__timestamp::before {
+  content: "REC 00:14";
+}
+
+.camera-format-preview__scan {
+  display: var(--format-scan-display);
+  inset: 0;
+  z-index: 15;
+  opacity: var(--format-scan-opacity);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.32) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(180deg, transparent 0 42%, rgba(255, 255, 255, 0.18) 48%, transparent 56%);
+  animation: camera-format-scan 4.5s linear infinite;
+}
+
+.camera-format-preview__grain {
+  inset: 0;
+  z-index: 16;
+  opacity: var(--format-grain-opacity);
+  background:
+    repeating-radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.34) 0 0.7px, transparent 0.8px var(--format-grain-size)),
+    repeating-radial-gradient(circle at 74% 58%, rgba(0, 0, 0, 0.28) 0 0.7px, transparent 0.8px calc(var(--format-grain-size) + 1px));
+  mix-blend-mode: overlay;
+}
+
+.camera-format-preview__grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: var(--format-vignette-opacity);
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.82) 100%);
+}
+
+.camera-format-preview__damage {
+  display: var(--format-damage-display);
+  inset: 0;
+  z-index: 17;
+  opacity: 0.62;
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(255, 255, 255, 0.24) 9%, transparent 10% 63%, rgba(0, 0, 0, 0.28) 64%, transparent 65%),
+    repeating-linear-gradient(180deg, transparent 0 12px, rgba(255, 240, 200, 0.08) 12px 13px, transparent 13px 30px);
+}
+
+@keyframes camera-format-scan {
+  0% {
+    background-position: 0 0, 0 -120%;
+  }
+  100% {
+    background-position: 0 0, 0 120%;
+  }
+}
+
+/* Film stocks: gate/perfs and grain density are the signal. */
+.camera-format-preview--35mm-film {
+  --format-bg: #14151b;
+  --format-sky: linear-gradient(180deg, #657f88 0%, #34445a 100%);
+  --format-ground: linear-gradient(180deg, #6a5646 0%, #262534 100%);
+  --format-gate-display: block;
+  --format-gate-opacity: 0.36;
+  --format-gate-width: 10%;
+  --format-grain-opacity: 0.2;
+  --format-grain-size: 3px;
+  --format-vignette-opacity: 0.22;
+}
+
+.camera-format-preview--16mm-film {
+  --format-bg: #1e1d1a;
+  --format-sky: linear-gradient(180deg, #687879 0%, #3d4a45 100%);
+  --format-ground: linear-gradient(180deg, #7a6040 0%, #26251f 100%);
+  --format-image-filter: saturate(0.88) contrast(0.96);
+  --format-gate-display: block;
+  --format-gate-opacity: 0.48;
+  --format-gate-width: 14%;
+  --format-grain-opacity: 0.36;
+  --format-grain-size: 2px;
+  --format-vignette-opacity: 0.28;
+}
+
+.camera-format-preview--super-8 {
+  --format-bg: #4b2e14;
+  --format-sky: linear-gradient(180deg, #98754c 0%, #5a3f26 100%);
+  --format-ground: linear-gradient(180deg, #9a6230 0%, #3b220f 100%);
+  --format-image-filter: sepia(0.28) saturate(1.08);
+  --format-image-transform: scale(1.04) rotate(-0.7deg);
+  --format-gate-display: block;
+  --format-gate-opacity: 0.28;
+  --format-gate-width: 16%;
+  --format-grain-opacity: 0.46;
+  --format-grain-size: 2px;
+  --format-vignette-opacity: 0.5;
+  --format-damage-display: block;
+}
+
+.camera-format-preview--imax-70mm {
+  --format-bg: #0b1723;
+  --format-sky: linear-gradient(180deg, #5fa4c4 0%, #254d75 100%);
+  --format-ground: linear-gradient(180deg, #5b6674 0%, #101b2a 100%);
+  --format-subject-scale: 1.12;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.08;
+}
+
+.camera-format-preview--imax-70mm .camera-format-preview__subject::before {
+  box-shadow: 0 0 4px rgba(255, 240, 220, 0.45);
+}
+
+.camera-format-preview--anamorphic-scope {
+  --format-bg: #08101d;
+  --format-sky: linear-gradient(180deg, #2f6371 0%, #1e334a 100%);
+  --format-ground: linear-gradient(180deg, #5c4f53 0%, #101827 100%);
+  --format-letterbox-display: block;
+  --format-letterbox-height: 17%;
+  --format-grain-opacity: 0.1;
+  --format-vignette-opacity: 0.2;
+}
+
+/* Modern digital: cleaner frame, less grain, controlled contrast. */
+.camera-format-preview--arri-alexa {
+  --format-bg: #121b24;
+  --format-sky: linear-gradient(180deg, #496b78 0%, #253a4d 100%);
+  --format-ground: linear-gradient(180deg, #67615b 0%, #1b2430 100%);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.08;
+}
+
+.camera-format-preview--dslr {
+  --format-bg: #111827;
+  --format-sky: linear-gradient(180deg, #447694 0%, #233c5a 100%);
+  --format-ground: linear-gradient(180deg, #5f6470 0%, #1b2430 100%);
+  --format-subject-scale: 1.05;
+  --format-grain-opacity: 0.06;
+  --format-vignette-opacity: 0.42;
+}
+
+.camera-format-preview--dslr .camera-format-preview__distant-block {
+  filter: blur(1.2px);
+}
+
+/* Vintage / lo-fi: distortion, scanlines, borders. */
+.camera-format-preview--vhs {
+  --format-bg: #07101d;
+  --format-sky: linear-gradient(180deg, #355f84 0%, #172b4a 100%);
+  --format-ground: linear-gradient(180deg, #4a5365 0%, #0e1626 100%);
+  --format-image-filter: saturate(1.36) hue-rotate(-10deg) contrast(1.04);
+  --format-image-transform: skewX(-1.2deg) scale(1.03);
+  --format-scan-display: block;
+  --format-scan-opacity: 0.62;
+  --format-grain-opacity: 0.2;
+  --format-vignette-opacity: 0.2;
+}
+
+.camera-format-preview--vhs .camera-format-preview__subject {
+  box-shadow:
+    -2px 0 0 rgba(255, 0, 100, 0.42),
+    2px 0 0 rgba(0, 200, 255, 0.42);
+}
+
+.camera-format-preview--camcorder {
+  --format-bg: #182032;
+  --format-sky: linear-gradient(180deg, #556c8b 0%, #2d3d58 100%);
+  --format-ground: linear-gradient(180deg, #727279 0%, #24293a 100%);
+  --format-image-filter: blur(0.5px) saturate(0.78) contrast(0.92);
+  --format-scan-display: block;
+  --format-scan-opacity: 0.2;
+  --format-grain-opacity: 0.14;
+  --format-vignette-opacity: 0.24;
+}
+
+.camera-format-preview--polaroid {
+  --format-bg: #f5f1e8;
+  --format-frame-bg: #f5f1e8;
+  --format-sky: linear-gradient(180deg, #7d8f88 0%, #4d5a50 100%);
+  --format-ground: linear-gradient(180deg, #79644d 0%, #2e261e 100%);
+  --format-image-filter: sepia(0.22) saturate(0.96);
+  --format-grain-opacity: 0.08;
+  --format-vignette-opacity: 0.18;
+}
+
+.camera-format-preview--polaroid .camera-format-preview__image {
+  inset: 7% 7% 25%;
+  border-radius: 2px;
+}
+
+.camera-format-preview--polaroid .camera-format-preview__grain {
+  inset: 7% 7% 25%;
+}
+
+.camera-format-preview--security-cam {
+  --format-bg: #111;
+  --format-sky: linear-gradient(180deg, #5b5f5e 0%, #343837 100%);
+  --format-ground: linear-gradient(180deg, #636363 0%, #202020 100%);
+  --format-image-filter: grayscale(1) contrast(1.1) brightness(0.82);
+  --format-scan-display: block;
+  --format-scan-opacity: 0.44;
+  --format-timestamp-display: block;
+  --format-grain-opacity: 0.18;
+  --format-vignette-opacity: 0.24;
+}
+
+.camera-format-preview--bw-film {
+  --format-bg: #141414;
+  --format-sky: linear-gradient(180deg, #a1a1a1 0%, #555 100%);
+  --format-ground: linear-gradient(180deg, #777 0%, #202020 100%);
+  --format-image-filter: grayscale(1) contrast(1.16);
+  --format-gate-display: block;
+  --format-gate-opacity: 0.32;
+  --format-gate-width: 10%;
+  --format-grain-opacity: 0.28;
+  --format-grain-size: 2px;
+  --format-vignette-opacity: 0.26;
+}
+
+.camera-format-preview--bw-film .camera-format-preview__subject::before {
+  background: #e6e6e6;
+  box-shadow: none;
+}
+
+.camera-format-preview--bw-film .camera-format-preview__subject::after {
+  background: linear-gradient(90deg, #222 0%, #9f9f9f 48%, #2c2c2c 100%);
+}
+
+.camera-format-preview--iphone {
+  --format-bg: #07121f;
+  --format-sky: linear-gradient(180deg, #74b5d7 0%, #36698b 100%);
+  --format-ground: linear-gradient(180deg, #6b7180 0%, #152334 100%);
+  --format-image-filter: saturate(1.18) contrast(1.12);
+  --format-phone-display: block;
+  --format-grain-opacity: 0;
+  --format-vignette-opacity: 0.06;
+}
+
+/* ============================================================================
+   ADDITIONS (audit pass) — film stocks, modern cameras, mobile, vintage
+   ========================================================================== */
+
+/* ALEXA 65 — large-format Arri, ultra clean, deep dynamic range */
+.camera-format-preview--alexa-65 {
+  --format-bg: #0e1721;
+  --format-sky: linear-gradient(180deg, #517a8c 0%, #1f3a55 100%);
+  --format-ground: linear-gradient(180deg, #6c5e52 0%, #16202a 100%);
+  --format-subject-scale: 1.14;
+  --format-grain-opacity: 0.03;
+  --format-vignette-opacity: 0.06;
+}
+
+/* Blackmagic Pocket 6K — punchy mid-range cinema, slight green skew */
+.camera-format-preview--blackmagic-pocket-6k {
+  --format-bg: #101a18;
+  --format-sky: linear-gradient(180deg, #4a7e80 0%, #1f3838 100%);
+  --format-ground: linear-gradient(180deg, #5e6048 0%, #16221c 100%);
+  --format-image-filter: saturate(1.08) contrast(1.06);
+  --format-grain-opacity: 0.05;
+  --format-vignette-opacity: 0.1;
+}
+
+/* Canon R5 — clean modern mirrorless, warm skin tones */
+.camera-format-preview--canon-r5 {
+  --format-bg: #131a23;
+  --format-sky: linear-gradient(180deg, #5a8aa6 0%, #28456b 100%);
+  --format-ground: linear-gradient(180deg, #786258 0%, #1f2a36 100%);
+  --format-image-filter: saturate(1.05) contrast(1.02);
+  --format-subject-scale: 1.06;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.1;
+}
+
+/* Daguerreotype — silvered mirror tonality, tarnished edges, super soft */
+.camera-format-preview--daguerreotype {
+  --format-bg: #2a2418;
+  --format-sky: linear-gradient(180deg, #d8d0b8 0%, #807058 100%);
+  --format-ground: linear-gradient(180deg, #8a7a60 0%, #2a2018 100%);
+  --format-image-filter: grayscale(0.85) sepia(0.15) contrast(0.85);
+  --format-image-transform: scale(1.02);
+  --format-grain-opacity: 0.18;
+  --format-grain-size: 1.5px;
+  --format-vignette-opacity: 0.55;
+  --format-damage-display: block;
+}
+
+/* Disposable Camera — overexposed flash, color shift, soft */
+.camera-format-preview--disposable-camera {
+  --format-bg: #221a16;
+  --format-sky: linear-gradient(180deg, #e0a48c 0%, #885a48 100%);
+  --format-ground: linear-gradient(180deg, #9a6850 0%, #2c1d18 100%);
+  --format-image-filter: saturate(1.18) contrast(0.96) brightness(1.1);
+  --format-grain-opacity: 0.32;
+  --format-grain-size: 2.5px;
+  --format-vignette-opacity: 0.42;
+}
+
+/* Drone Aerial — high vantage, hazy distance, wide DR */
+.camera-format-preview--drone-aerial {
+  --format-bg: #0a1928;
+  --format-sky: linear-gradient(180deg, #98c8d8 0%, #4a7898 100%);
+  --format-ground: linear-gradient(180deg, #5a7a6a 0%, #243848 100%);
+  --format-image-filter: saturate(0.98) contrast(0.94);
+  --format-image-transform: scale(0.94);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.16;
+}
+
+/* Fuji Instax — square instant film, milky highlight, lifted shadows */
+.camera-format-preview--fuji-instax {
+  --format-bg: #ece4d4;
+  --format-frame-bg: #fbf6e8;
+  --format-sky: linear-gradient(180deg, #c8e0e0 0%, #98b8b8 100%);
+  --format-ground: linear-gradient(180deg, #c89878 0%, #604838 100%);
+  --format-image-filter: saturate(0.86) contrast(0.84) brightness(1.06);
+  --format-image-transform: scale(0.84);
+  --format-grain-opacity: 0.08;
+  --format-vignette-opacity: 0.18;
+  --format-letterbox-display: block;
+  --format-letterbox-height: 22%;
+}
+
+/* Fuji XT4 — Fujifilm aesthetic, classic chrome warmth */
+.camera-format-preview--fuji-xt4 {
+  --format-bg: #1a1814;
+  --format-sky: linear-gradient(180deg, #8aa8a8 0%, #466068 100%);
+  --format-ground: linear-gradient(180deg, #8a7458 0%, #2a201c 100%);
+  --format-image-filter: saturate(0.94) contrast(1.08) sepia(0.06);
+  --format-grain-opacity: 0.06;
+  --format-vignette-opacity: 0.12;
+}
+
+/* GoPro Action Cam — fisheye distortion, wide DR */
+.camera-format-preview--gopro-action-cam {
+  --format-bg: #0a121c;
+  --format-sky: linear-gradient(180deg, #5ca0c8 0%, #1f486a 100%);
+  --format-ground: linear-gradient(180deg, #6a6868 0%, #181c20 100%);
+  --format-image-filter: saturate(1.18) contrast(1.18);
+  --format-image-transform: scale(1.06);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.42;
+  --format-subject-scale: 0.92;
+}
+
+/* Hasselblad Medium Format — deep tonality, exquisite skin, low grain */
+.camera-format-preview--hasselblad-medium-format {
+  --format-bg: #181a1c;
+  --format-sky: linear-gradient(180deg, #6a90a8 0%, #283e58 100%);
+  --format-ground: linear-gradient(180deg, #8a6e58 0%, #1a232c 100%);
+  --format-image-filter: saturate(0.98) contrast(1.04);
+  --format-subject-scale: 1.08;
+  --format-grain-opacity: 0.05;
+  --format-vignette-opacity: 0.18;
+}
+
+/* Leica M Rangefinder — classic German tonality, painterly contrast */
+.camera-format-preview--leica-m-rangefinder {
+  --format-bg: #111418;
+  --format-sky: linear-gradient(180deg, #587e98 0%, #243e5a 100%);
+  --format-ground: linear-gradient(180deg, #6a5a4a 0%, #1a2028 100%);
+  --format-image-filter: saturate(0.92) contrast(1.1);
+  --format-grain-opacity: 0.1;
+  --format-vignette-opacity: 0.24;
+}
+
+/* Mirrorless A7III — Sony color science, cool slight cyan skew */
+.camera-format-preview--mirrorless-a7iii {
+  --format-bg: #0e151e;
+  --format-sky: linear-gradient(180deg, #5a90b0 0%, #244868 100%);
+  --format-ground: linear-gradient(180deg, #6c7080 0%, #1a232c 100%);
+  --format-image-filter: saturate(1.0) contrast(1.02);
+  --format-subject-scale: 1.04;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.08;
+}
+
+/* RED Komodo — punchy raw cinema, deep saturation */
+.camera-format-preview--red-komodo {
+  --format-bg: #160d12;
+  --format-sky: linear-gradient(180deg, #6a8aa6 0%, #1a3858 100%);
+  --format-ground: linear-gradient(180deg, #8a4838 0%, #1a0e0a 100%);
+  --format-image-filter: saturate(1.18) contrast(1.12);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.12;
+}
+
+/* Sony Venice — high-end full-frame cinema, gentle highlight roll-off */
+.camera-format-preview--sony-venice {
+  --format-bg: #0d161f;
+  --format-sky: linear-gradient(180deg, #4f7894 0%, #233f5a 100%);
+  --format-ground: linear-gradient(180deg, #6a5e4e 0%, #161f2a 100%);
+  --format-image-filter: saturate(1.05) contrast(1.0);
+  --format-subject-scale: 1.08;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.1;
+  --format-letterbox-display: block;
+  --format-letterbox-height: 12%;
+}
+
+/* Tintype Wet Plate — silver/iron-toned, severe contrast, hand-poured edge */
+.camera-format-preview--tintype-wet-plate {
+  --format-bg: #1a1814;
+  --format-sky: linear-gradient(180deg, #aaa098 0%, #4a4a48 100%);
+  --format-ground: linear-gradient(180deg, #5a4a40 0%, #18120c 100%);
+  --format-image-filter: grayscale(0.88) sepia(0.18) contrast(1.18);
+  --format-grain-opacity: 0.22;
+  --format-vignette-opacity: 0.6;
+  --format-damage-display: block;
+}
+
+/* Toy Camera Holga — heavy vignette, light leaks, soft, super saturated */
+.camera-format-preview--toy-camera-holga {
+  --format-bg: #161020;
+  --format-sky: linear-gradient(180deg, #98a8c8 0%, #284060 100%);
+  --format-ground: linear-gradient(180deg, #c8704a 0%, #2a1a14 100%);
+  --format-image-filter: saturate(1.42) contrast(1.18) blur(0.2px);
+  --format-grain-opacity: 0.18;
+  --format-vignette-opacity: 0.65;
+  --format-damage-display: block;
+}
+
+/* Voigtlander — vintage prime, characterful with gentle softness */
+.camera-format-preview--voigtlander {
+  --format-bg: #16161c;
+  --format-sky: linear-gradient(180deg, #6a8090 0%, #2a3a50 100%);
+  --format-ground: linear-gradient(180deg, #6a584a 0%, #1a1a20 100%);
+  --format-image-filter: saturate(0.92) contrast(0.98) blur(0.15px);
+  --format-grain-opacity: 0.12;
+  --format-vignette-opacity: 0.36;
+}
+
+/* Webcam FaceTime — low-res grainy, soft auto-WB, narrow DR */
+.camera-format-preview--webcam-facetime {
+  --format-bg: #0c1018;
+  --format-sky: linear-gradient(180deg, #708898 0%, #38485a 100%);
+  --format-ground: linear-gradient(180deg, #6a6058 0%, #1a1f28 100%);
+  --format-image-filter: saturate(0.84) contrast(0.86) blur(0.4px);
+  --format-grain-opacity: 0.18;
+  --format-grain-size: 4px;
+  --format-vignette-opacity: 0.18;
+}

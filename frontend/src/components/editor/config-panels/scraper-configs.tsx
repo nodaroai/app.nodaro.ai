@@ -1,5 +1,8 @@
 "use client"
 
+import { useState } from "react"
+import { Copy, Download } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -9,8 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
+import {
+  WEB_SCRAPE_PEEK,
+  relativeTime,
+  webScrapeItems,
+  webScrapePeekLine,
+} from "@/components/nodes/web-scrape-run-state"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
@@ -26,7 +37,117 @@ const ACTOR_OPTIONS: ReadonlyArray<ScraperActorId> = [
 // Cleared on actor switch so old values don't resurface when switching back.
 const ACTOR_FIELD_KEYS = ["query", "maxResults", "countryCode", "url", "mode", "target", "resultsLimit"] as const
 
-export function WebScrapeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<WebScrapeNodeData>) {
+/**
+ * The panel gains a Results tab (#765) — the card's count row is the entry
+ * point; a modal would block the graph and expand-in-place breaks a canvas
+ * arranged by hand. Opens on RESULTS once a run has finished, on CONFIG
+ * before that — no new plumbing: the default derives from run state.
+ */
+export function WebScrapeConfig(props: ConfigProps<WebScrapeNodeData>) {
+  const hasRun = props.data.lastRunOutcome !== undefined || props.data.generatedJson !== undefined
+  return (
+    // key: the panel stays mounted across open/close, so defaultValue alone
+    // would freeze on whatever run state existed at FIRST mount — the key
+    // remounts the tabs when run state flips, honoring "opens on Results
+    // once a run has finished".
+    <Tabs key={hasRun ? "has-run" : "no-run"} defaultValue={hasRun ? "results" : "config"} className="flex flex-col gap-3">
+      <TabsList className="grid w-full grid-cols-2 h-8">
+        <TabsTrigger value="config" className="text-xs">Config</TabsTrigger>
+        <TabsTrigger value="results" className="text-xs">Results</TabsTrigger>
+      </TabsList>
+      <TabsContent value="config">
+        <WebScrapeConfigTab {...props} />
+      </TabsContent>
+      <TabsContent value="results">
+        <WebScrapeResultsTab data={props.data} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData }) {
+  const [view, setView] = useState<"list" | "json">("list")
+  const actor: ScraperActorId = data.actor ?? "google-search"
+  const peek = WEB_SCRAPE_PEEK[actor]
+  const items = webScrapeItems(data.generatedJson)
+  const json = data.generatedJson === undefined ? "" : JSON.stringify(data.generatedJson, null, 2)
+  const sizeKb = json ? (new Blob([json]).size / 1024).toFixed(1) : "0"
+
+  if (data.generatedJson === undefined) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        No results yet — run the node to fetch.
+      </p>
+    )
+  }
+
+  const copyJson = () => {
+    void navigator.clipboard.writeText(json).then(
+      () => toast.success("JSON copied"),
+      () => toast.error("Copy failed"),
+    )
+  }
+  const downloadJson = () => {
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "web-scrape-results.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          <Button variant={view === "list" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("list")}>List</Button>
+          <Button variant={view === "json" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("json")}>Raw JSON</Button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={copyJson} title="Copy JSON">
+            <Copy className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={downloadJson} title="Download JSON">
+            <Download className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+      <div className="text-[10px] text-muted-foreground flex items-center justify-between">
+        <span>
+          {items.length} {peek.countNoun}
+          {data.lastGoodAt ? ` · ${relativeTime(data.lastGoodAt)}` : ""}
+        </span>
+        <span>{sizeKb} KB</span>
+      </div>
+      {view === "list" ? (
+        <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto pr-1">
+          {items.map((item, i) => {
+            const sub =
+              actor === "google-search" ? item.url
+              : actor === "rss" ? item.pubDate
+              : undefined
+            return (
+              <div key={i} className="flex flex-col border-b border-border/40 pb-1.5 min-w-0">
+                <div className="flex items-baseline gap-1.5 min-w-0">
+                  <span className="w-[16px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{peek.glyph(item, i)}</span>
+                  <span className="truncate text-xs">{webScrapePeekLine(actor, item)}</span>
+                </div>
+                {typeof sub === "string" && sub && (
+                  <span className="pl-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <pre className="text-[10px] bg-muted/40 rounded-md p-2 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all">{json}</pre>
+      )}
+    </div>
+  )
+}
+
+function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<WebScrapeNodeData>) {
   const actor: ScraperActorId = data.actor ?? "google-search"
 
   const handleActorChange = (v: string) => {

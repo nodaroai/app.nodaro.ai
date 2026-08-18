@@ -33,6 +33,10 @@ function tile(over: Partial<ProviderTile> = {}): ProviderTile {
     source: null,
     state: "missing",
     editable: true,
+    disabled: false,
+    ignoreEnv: false,
+    canReplaceEnv: false,
+    canDisable: false,
     ...over,
   }
 }
@@ -77,7 +81,7 @@ describe("ProviderKeyTile", () => {
   it("is read-only when the key is managed by the environment, and says which variable", () => {
     render(<ProviderKeyTile tile={tile({ present: true, source: "env", state: "set (env)", editable: false })} onChanged={vi.fn()} />)
     expect(screen.queryByRole("button", { name: /paste key|change key/i })).toBeNull()
-    expect(screen.getByText(/remove KIE_API_KEY from \.env to manage it here/i)).toBeInTheDocument()
+    expect(screen.getByText(/remove KIE_API_KEY from \.env \(or use Replace\) to manage it here/i)).toBeInTheDocument()
   })
 
   it("is read-only when nodaro.ai is connected via OAuth", () => {
@@ -114,5 +118,31 @@ describe("ProviderKeyTile", () => {
   it("marks a tile the nodaro.ai connection does not cover", () => {
     render(<ProviderKeyTile tile={tile({ id: "heygen", name: "HeyGen", env: "HEYGEN_API_KEY", cloudCovered: false, powers: "AI Avatar" })} onChanged={vi.fn()} />)
     expect(screen.getByText(/own key needed/i)).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b provider control affordances
+// ---------------------------------------------------------------------------
+describe("4b: Replace .env + Disable", () => {
+  it("an env-managed tile with canReplaceEnv offers REPLACE instead of a dead end", () => {
+    render(
+      <ProviderKeyTile
+        tile={tile({ present: true, source: "env", state: "set (env)", editable: false, canReplaceEnv: true, canDisable: true })}
+        onChanged={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole("button", { name: /replace \.env key/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^disable$/i })).toBeInTheDocument()
+  })
+
+  it("a disabled tile offers ENABLE", () => {
+    render(
+      <ProviderKeyTile
+        tile={tile({ present: true, source: "env", state: "disabled", editable: false, disabled: true, canDisable: true })}
+        onChanged={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole("button", { name: /^enable$/i })).toBeInTheDocument()
   })
 })

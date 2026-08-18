@@ -10,7 +10,9 @@ import {
   PROVIDER_KEY_ENV,
   PROVIDER_KEY_IDS,
   PROVIDER_KEY_META,
+  getProviderKeyOverride,
   resolveProviderKey,
+  resolveProviderKeyRaw,
   type ProviderKeyId,
   type ProviderKeyMeta,
 } from "../lib/provider-keys-runtime.js"
@@ -173,6 +175,20 @@ export async function setupStatusRoutes(app: FastifyInstance) {
     const providerMeta = Object.fromEntries(
       PROVIDER_KEY_IDS.map((id) => [id, { ...PROVIDER_KEY_META[id], env: PROVIDER_KEY_ENV[id] }]),
     ) as Record<ProviderKeyId, ProviderKeyMeta & { env: string }>
+    // Operator overrides (4b): `keys`/`sources` above stay EFFECTIVE (a
+    // disabled provider counts as absent for coverage and routing honesty);
+    // these two maps let the tiles say "disabled", never "missing", and
+    // render the Replace-.env state. rawKeys carries the underlying
+    // presence for exactly that rendering.
+    const providerOverrides = Object.fromEntries(
+      PROVIDER_KEY_IDS.map((id) => {
+        const o = getProviderKeyOverride(id)
+        return [id, { disabled: o.disabled === true, ignoreEnv: o.ignoreEnv === true }]
+      }),
+    ) as Record<ProviderKeyId, { disabled: boolean; ignoreEnv: boolean }>
+    const rawKeys = Object.fromEntries(
+      PROVIDER_KEY_IDS.map((id) => [id, id === "nodaro" ? nodaroCredential !== null || resolveProviderKeyRaw(id) !== null : resolveProviderKeyRaw(id) !== null]),
+    ) as Record<ProviderKeyId, boolean>
     const nodaroConnected = providerKeys.nodaro
     const anyMediaProvider = providerKeys.kie || providerKeys.replicate || nodaroConnected
     const providers = {
@@ -181,9 +197,19 @@ export async function setupStatusRoutes(app: FastifyInstance) {
       nodaroCloud: nodaroConnected,
       // How nodaro.ai is authenticated, so the tile can say CONNECTED vs KEY.
       nodaroSource: nodaroCredential?.source ?? null,
+      // CAPABILITY, not billing: whether any LLM lane is reachable — a KIE
+      // key (the primary proxy for every LLM model), a direct Anthropic or
+      // Google key, or the nodaro.ai connection (the LLM routes proxy
+      // through it). The frontend gates the "Generate with AI" prompt-helper
+      // entry points on this (#752) instead of hasCredits(), which answers
+      // "do we charge for this", never "can this install do this". Derived
+      // from the same live key resolution as `keys` (env + pasted keys).
+      llm: providerKeys.kie || providerKeys.anthropic || providerKeys.gemini || nodaroConnected,
       keys: providerKeys,
       sources: providerSources,
       meta: providerMeta,
+      overrides: providerOverrides,
+      rawKeys,
       ...(anyMediaProvider
         ? {}
         : {

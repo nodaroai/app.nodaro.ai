@@ -1,11 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { invalidateNodaroConnectionCache } from "@/hooks/use-nodaro-connection"
 import { Cloud, Loader2, Unlink } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { NodaroScopeDialog, type NodaroProviderPrefs } from "./nodaro-scope-dialog"
 
 /**
  * "Nodaro Cloud" integration card (community cloud-connect, Phase 4a).
@@ -23,8 +25,10 @@ interface NodaroCloudBalance {
 
 interface NodaroCloudStatus {
   readonly connected: boolean
-  /** "oauth" = the Connect flow (disconnectable here); "env" = NODARO_API_KEY in .env. */
-  readonly source?: "oauth" | "env"
+  /** "oauth" = the Connect flow (disconnectable here); "env" = NODARO_API_KEY
+   *  in .env (read-only here); "app" = an API key pasted on /setup or in
+   *  Model providers below (managed there — Change/Remove). */
+  readonly source?: "oauth" | "env" | "app"
   readonly balance?: NodaroCloudBalance | null
 }
 
@@ -33,6 +37,7 @@ export function NodaroCloudCard() {
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   // Guards the ?nodaro=connected toast against StrictMode double-effects.
   const connectToastShownRef = useRef(false)
 
@@ -66,10 +71,14 @@ export function NodaroCloudCard() {
     // straight back there — step 2 flips done and step 3 lights up.
     if (localStorage.getItem("nodaro_connect_from") === "setup") {
       localStorage.removeItem("nodaro_connect_from")
+      invalidateNodaroConnectionCache()
       window.location.replace("/setup?nodaro=connected")
       return
     }
     toast.success("Connected to nodaro.ai!")
+    // The post-connect choice (4b): a fresh OAuth connection asks how it
+    // should route, same as a pasted key.
+    setScopeDialogOpen(true)
     params.delete("nodaro")
     const query = params.toString()
     window.history.replaceState(
@@ -110,6 +119,7 @@ export function NodaroCloudCard() {
       })
       if (!res.ok) throw new Error(`status ${res.status}`)
       toast.success("Disconnected from nodaro.ai")
+      invalidateNodaroConnectionCache()
       await refresh()
     } catch {
       toast.error("Failed to disconnect")
@@ -122,6 +132,7 @@ export function NodaroCloudCard() {
 
   const connected = status?.connected === true
   const viaEnvKey = connected && status?.source === "env"
+  const viaAppKey = connected && status?.source === "app"
   const totalCredits =
     typeof status?.balance?.total === "number" ? status.balance.total : null
 
@@ -145,7 +156,9 @@ export function NodaroCloudCard() {
             {connected
               ? viaEnvKey
                 ? "This instance generates with nodaro.ai models through NODARO_API_KEY in its .env — billed to that account. Remove the key and restart to disconnect."
-                : "This instance generates with nodaro.ai models through your connected account."
+                : viaAppKey
+                  ? "This instance generates with nodaro.ai models through an API key added in this app — billed to that account. Change or remove it under Model providers below."
+                  : "This instance generates with nodaro.ai models through your connected account."
               : "Generate with nodaro.ai models — 1,500 free credits, no credit card. Or set NODARO_API_KEY in .env."}
           </p>
         </div>
@@ -174,9 +187,9 @@ export function NodaroCloudCard() {
               </span>
             )}
           </div>
-          {viaEnvKey ? (
+          {viaEnvKey || viaAppKey ? (
             <span className="shrink-0 text-[11px] font-mono text-gray-500 dark:text-gray-400">
-              via NODARO_API_KEY
+              {viaEnvKey ? "via NODARO_API_KEY" : "via API key"}
             </span>
           ) : (
             <Button

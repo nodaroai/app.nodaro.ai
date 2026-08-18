@@ -31,6 +31,10 @@ const mocks = vi.hoisted(() => {
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockFsReadFile = vi.fn().mockResolvedValue(Buffer.from("source-audio"))
   const mockIsNodaroConnected = vi.fn().mockResolvedValue(false)
+  // Transcribe ladder (#761): default OFF so every existing local-path test
+  // behaves exactly as before; the ladder describe flips it per-test.
+  const mockShouldRunOnCloud = vi.fn().mockResolvedValue(false)
+  const mockRunJobOnCloud = vi.fn()
   const mockCloudTextToSpeech = vi.fn().mockResolvedValue({ url: "https://cloud.nodaro.ai/a.mp3", cost: null })
   const mockNodaroCloudAudioProvider = vi.fn().mockImplementation(function () {
     return { textToSpeech: mockCloudTextToSpeech }
@@ -83,6 +87,7 @@ const mocks = vi.hoisted(() => {
     mockUpdate,
     mockEq,
     mockIsNodaroConnected,
+    mockShouldRunOnCloud, mockRunJobOnCloud,
     mockCloudTextToSpeech,
     mockNodaroCloudAudioProvider,
     mockSafeFetch,
@@ -127,6 +132,10 @@ vi.mock("../../../lib/nodaro-connect.js", () => ({
 }))
 vi.mock("../../../providers/nodaro/audio.js", () => ({
   NodaroCloudAudioProvider: mocks.mockNodaroCloudAudioProvider,
+}))
+vi.mock("../../../providers/nodaro/run-on-cloud.js", () => ({
+  shouldRunOnCloud: mocks.mockShouldRunOnCloud,
+  runJobOnCloud: mocks.mockRunJobOnCloud,
 }))
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
 
@@ -174,6 +183,7 @@ beforeEach(() => {
   // suite exercises — see the note on the config import above.
   config.ELEVENLABS_API_KEY = "el_test"
   mocks.mockIsNodaroConnected.mockResolvedValue(false)
+  mocks.mockShouldRunOnCloud.mockResolvedValue(false)
   mocks.mockCloudTextToSpeech.mockResolvedValue({ url: "https://cloud.nodaro.ai/a.mp3", cost: null })
   mocks.mockSafeFetch.mockResolvedValue({
     ok: true,
@@ -231,6 +241,7 @@ describe("text-to-speech provider selection (keyless self-host)", () => {
   it("no key + NOT connected — the shared missing-key error, not 'nodaro.ai is not connected'", async () => {
     config.ELEVENLABS_API_KEY = ""
     mocks.mockIsNodaroConnected.mockResolvedValue(false)
+  mocks.mockShouldRunOnCloud.mockResolvedValue(false)
 
     await expect(
       handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never, makeCtx()),
@@ -397,6 +408,62 @@ describe("transcribe handler", () => {
     const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3", language: "fr" })
     await handler(job as never, makeCtx())
     expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr", { diarize: undefined, tagAudioEvents: undefined, onTaskCreated: expect.any(Function) })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Transcribe cloud ladder (#761) — the TTS ladder's sibling. On a keyless
+// connected install the payload replays on the cloud; a keyed install never
+// reaches it; keyless-unconnected keeps the local path's own honest error.
+// ---------------------------------------------------------------------------
+describe("transcribe cloud ladder (#761)", () => {
+  const handler = audioAIHandlers["transcribe"]
+
+  it("keyless + connected: replays the payload on the cloud and persists its output verbatim", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+      text: "cloud transcript",
+      language: "en",
+      segments: [{ start: 0, end: 1, text: "cloud transcript" }],
+    })
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3", provider: "elevenlabs-stt" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockRunJobOnCloud).toHaveBeenCalledWith(
+      "transcribe",
+      expect.objectContaining({ audioUrl: "https://example.com/audio.mp3", provider: "elevenlabs-stt" }),
+      expect.any(Function),
+    )
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({ text: "cloud transcript", language: "en" }),
+    }))
+  })
+
+  it("keyed install never reaches the cloud — byte-identical local path", async () => {
+    // shouldRunOnCloud is the single gate; the handler passes it the key for
+    // the CHOSEN provider so a keyed install resolves false.
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockTranscribe).toHaveBeenCalled()
+  })
+
+  it("an empty cloud result fails loudly instead of completing with no text", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({})
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3" })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow("no transcription")
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("resolves the key per PROVIDER: whisper lanes gate on the Replicate token", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "whisper" })
+    await handler(job as never, makeCtx())
+    // The gate received the REPLICATE token slot (empty in tests), not ElevenLabs'.
+    expect(mocks.mockShouldRunOnCloud).toHaveBeenCalledWith(config.REPLICATE_API_TOKEN)
   })
 })
 

@@ -1,5 +1,0 @@
-/* Picker-UI seam styles — COMMUNITY (stub) lane placeholder.
-   When the private @nodaroai/picker-ui package is installed, vite.config's
-   pickerUiAlias points this import at the package's bundled CSS
-   (dist/index.css — all preview animations). Without it, the stub lane
-   ships no picker CSS on purpose: the fallback renders text tiles only. */

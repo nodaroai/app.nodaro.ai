@@ -109,6 +109,18 @@ export class ConcurrentModificationError extends Error {
 }
 
 /**
+ * The install has no nodaro.ai connection but the request needs one (the
+ * exclusive nodes' 503). Callers render a Connect CTA — see
+ * handleRunSingleNode's toast and the node card's header chip.
+ */
+export class NodaroConnectionRequiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NodaroConnectionRequiredError"
+  }
+}
+
+/**
  * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
  * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
@@ -150,6 +162,12 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.message as string) ?? fallback,
       (errObj.videoCount as number) ?? 0,
       (errObj.flowCount as number) ?? 0,
+    )
+  }
+  if (errObj?.code === "nodaro_connection_required") {
+    throw new NodaroConnectionRequiredError(
+      (errObj.message as string) ??
+        "This node runs on nodaro.ai — connect your install from Integrations.",
     )
   }
   if (errObj?.code === "concurrent_modification") {
@@ -539,10 +557,13 @@ export async function editImage(
 // generation result's `kieTaskId`) instead of an image URL.
 
 /** Start a FREE grok-2 segment-map job. The job's output images are the
- *  region masks; `output_data.segments` carries order-aligned {index, name}. */
-export async function grokSegmentMap(taskId: string): Promise<{ jobId: string }> {
+ *  region cutouts; `output_data.segments` carries order-aligned
+ *  {index, name, bbox?}. Passing the source image URL lets the worker
+ *  recover each region's on-image placement (bbox) by template matching —
+ *  omit it and segments come back without geometry. */
+export async function grokSegmentMap(taskId: string, imageUrl?: string): Promise<{ jobId: string }> {
   return apiJson("/v1/edit-image", {
-    body: { provider: "grok-2-segment", taskId },
+    body: { provider: "grok-2-segment", taskId, ...(imageUrl ? { imageUrl } : {}) },
     workflowId: true,
     label: "Failed to start region detection",
   })
@@ -3412,7 +3433,11 @@ export async function audioFxApi(params: {
 }
 
 export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string, opts?: { autoTranscribe?: boolean; transcribeProvider?: string }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, text, style, position, fontSize, color, backgroundColor }
+  // text is OMITTED when empty — the route's schema is `min(1).optional()`,
+  // so sending `text: ""` fails validation even though absent-text is the
+  // normal auto-transcribe request (#759's second half: with the guard fixed,
+  // the empty string still 400'd every run).
+  const body: Record<string, unknown> = { videoUrl, ...(text ? { text } : {}), style, position, fontSize, color, backgroundColor }
   if (userId) {
     body.userId = userId
   }

@@ -7,6 +7,7 @@
  */
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { NodaroMark, showNodaroMark } from "@/components/nodes/nodaro-exclusive-mark"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { PickerSection } from "@/lib/node-picker-sections"
 import type { SceneNodeType } from "@/types/nodes"
@@ -105,6 +106,7 @@ export function PickerNodeRow({
       >
         {node.label}
       </span>
+      {showNodaroMark(node.type) && <NodaroMark />}
       {badge && (
         <span className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] tracking-[0.5px] text-[var(--npk-dim)] bg-[var(--npk-chip)]">
           {badge}

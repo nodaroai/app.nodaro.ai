@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
-import { config } from "./config.js"
+import { rememberNodaroConnected } from "./nodaro-connect-cache.js"
+import { resolveProviderKey } from "./provider-keys-runtime.js"
 
 /**
  * Community cloud-connect — instance-side connection store (Phase 4a).
@@ -39,19 +40,29 @@ export interface NodaroConnection {
  * cloud provider unregistered on every boot.
  */
 /** How the instance authenticates to the cloud: the OAuth flow's stored
- *  `ndr_app_` token, or a personal API token from NODARO_API_KEY. */
-export type NodaroCredentialSource = "oauth" | "env"
+ *  `ndr_app_` token, or a personal API token — from the environment ("env")
+ *  or pasted on /setup ("app"). The env/app distinction is load-bearing for
+ *  the UI: tiles lock editing for env-managed keys, so reporting a pasted
+ *  key as "env" made it impossible to Remove/Change (#4b review — the
+ *  founder hit it live). */
+export type NodaroCredentialSource = "oauth" | "env" | "app"
 
 export type NodaroConnectionState =
   | { state: "connected"; source: "oauth"; connection: NodaroConnection }
-  | { state: "connected"; source: "env" }
+  | { state: "connected"; source: "env" | "app" }
   | { state: "not-connected" }
   | { state: "unavailable"; reason: string }
 
-/** NODARO_API_KEY, or null when unset/blank. */
-function envApiKey(): string | null {
-  const key = (config.NODARO_API_KEY ?? "").trim()
-  return key.length > 0 ? key : null
+/**
+ * The key-lane credential with its TRUE layer. config.NODARO_API_KEY is a
+ * getter over the same resolution (env first, then app) but erases which
+ * layer answered — read the runtime directly so the source stays honest.
+ */
+function keyLaneApiKey(): { value: string; source: "env" | "app" } | null {
+  const resolved = resolveProviderKey("nodaro")
+  if (!resolved) return null
+  const value = resolved.value.trim()
+  return value.length > 0 ? { value, source: resolved.source } : null
 }
 
 /**
@@ -63,9 +74,21 @@ function envApiKey(): string | null {
  */
 export async function readNodaroConnectionState(): Promise<NodaroConnectionState> {
   const stored = await readStoredConnectionState()
-  if (stored.state === "connected") return stored
-  if (envApiKey()) return { state: "connected", source: "env" }
-  return stored
+  // Both #768 and #777 meet here: the key lane reports its TRUE layer
+  // (env|app — the tile-lock fix), and the resolved state feeds the sync
+  // last-known cache (nodaro-connect-cache.ts) for consumers that cannot
+  // await. An `unavailable` read teaches the cache nothing (could not
+  // read ≠ not connected).
+  const key = keyLaneApiKey()
+  const resolved: NodaroConnectionState =
+    stored.state === "connected"
+      ? stored
+      : key
+        ? { state: "connected", source: key.source }
+        : stored
+  if (resolved.state === "connected") rememberNodaroConnected(true)
+  else if (resolved.state === "not-connected") rememberNodaroConnected(false)
+  return resolved
 }
 
 async function readStoredConnectionState(): Promise<NodaroConnectionState> {
@@ -98,7 +121,9 @@ export async function getNodaroCredential(): Promise<{ token: string; source: No
   const state = await readNodaroConnectionState()
   if (state.state !== "connected") return null
   if (state.source === "oauth") return { token: state.connection.accessToken!, source: "oauth" }
-  return { token: envApiKey()!, source: "env" }
+  const key = keyLaneApiKey()
+  if (!key) return null
+  return { token: key.value, source: key.source }
 }
 
 /**
@@ -187,4 +212,22 @@ function safeParse(s: string): unknown {
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Routing prefs (4b): how the credential participates in provider routing.
+// Stored in app_settings ("nodaro_provider_prefs", written by the
+// post-connect choice dialog); ABSENT = the legacy default — scope "all",
+// precedence "local" — so installs that connected before the dialog existed
+// keep routing byte-identically until they make a choice.
+// ---------------------------------------------------------------------------
+import { getAppSettings, type NodaroProviderPrefs } from "./app-settings.js"
+
+export const LEGACY_NODARO_PREFS: NodaroProviderPrefs = { scope: "all", precedence: "local" }
+
+/** The effective prefs — explicit row, else the legacy default. Rides
+ *  getAppSettings' 60s cache; call sites add no DB reads. */
+export async function getNodaroProviderPrefs(): Promise<NodaroProviderPrefs> {
+  const settings = await getAppSettings().catch(() => null)
+  return settings?.nodaro_provider_prefs ?? LEGACY_NODARO_PREFS
 }

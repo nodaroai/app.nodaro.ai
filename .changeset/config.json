@@ -10,6 +10,7 @@
   "ignore": [
     "nodaro-backend",
     "frontend",
-    "@nodaro/remotion"
+    "@nodaro/remotion",
+    "@nodaro/picker-ui"
   ]
 }

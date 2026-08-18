@@ -229,29 +229,57 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
     await setJobProgress(job, ctx.jobId, 20)
   }
 
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 25, cap: 90 },
-    () =>
-      transcribe(audioUrl, provider, language, {
-        diarize,
-        tagAudioEvents,
-        wordTimestamps,
-        // Persist the Replicate prediction id (whisper paths) so a BullMQ
-        // stall-retry recovers via the replicate reconcile handler instead of
-        // re-billing the transcribe call.
-        onTaskCreated: makeOnTaskCreated(ctx.jobId, "replicate-prediction"),
-      }),
-  )
+  // The same three-way ladder as handleTextToSpeech, for the same reason:
+  // transcription calls a vendor client straight from the worker and never
+  // reaches the capability router, so a keyless-but-connected install could
+  // not be rescued by any capability declaration (#761 — the sibling of the
+  // 2026-08-14 TTS incident). Key resolution is per-PROVIDER: elevenlabs-stt
+  // needs ELEVENLABS_API_KEY, the two whisper lanes need REPLICATE_API_TOKEN.
+  //   1. local key for the chosen provider -> local transcribe(), byte-identical
+  //   2. no key, connected -> replay the payload on the cloud (which holds
+  //      keys for BOTH lanes) and take its output verbatim — same code runs
+  //      there, so the shape is the local shape
+  //   3. no key, not connected -> the local path's own shared missing-key error
+  const localKey = provider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+  let outputData: Record<string, unknown>
+  let actualCost: number | undefined
+  if (await shouldRunOnCloud(localKey)) {
+    const cloud = await runJobOnCloud("transcribe", { ...(job.data as Record<string, unknown>), audioUrl }, async (p) => {
+      await setJobProgress(job, ctx.jobId, Math.min(90, Math.max(25, Math.round(p))))
+    })
+    // Validate rather than trust — an empty payload from a version-skewed
+    // cloud must fail loudly, not complete with no text (suno-lyrics rule).
+    if (typeof cloud.text !== "string") {
+      throw new Error("nodaro.ai returned no transcription")
+    }
+    outputData = cloud
+  } else {
+    const result = await withProgressRamp(
+      job,
+      ctx.jobId,
+      { start: 25, cap: 90 },
+      () =>
+        transcribe(audioUrl, provider, language, {
+          diarize,
+          tagAudioEvents,
+          wordTimestamps,
+          // Persist the Replicate prediction id (whisper paths) so a BullMQ
+          // stall-retry recovers via the replicate reconcile handler instead of
+          // re-billing the transcribe call.
+          onTaskCreated: makeOnTaskCreated(ctx.jobId, "replicate-prediction"),
+        }),
+    )
+    actualCost = result.cost
+    outputData = { text: result.text, language: result.language, segments: result.segments }
+    if (result.words) outputData.words = result.words
+  }
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const outputData: Record<string, unknown> = { text: result.text, language: result.language, segments: result.segments }
-  if (result.words) outputData.words = result.words
   const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, actualCost)
+  console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${(outputData.text as string).length} chars (language: ${String(outputData.language ?? "auto")})`)
 }
 
 const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutubeAudio(job, ctx) {

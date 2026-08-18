@@ -1,4 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import {
+  rememberNodaroConnected,
+  _resetNodaroConnectedCacheForTests,
+} from "../../lib/nodaro-connect-cache.js"
 import {
   MissingProviderKeyError,
   describeEmptyCapability,
@@ -202,5 +206,35 @@ describe("describeEmptyCapability — why nothing served the request", () => {
     expect(describeEmptyCapability("image-generation", "nope", allSet, false)).toBe(
       'Model "nope" is not supported for image-generation by any registered provider',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Connected-aware wording (#761): `cloudCovered` is per-KEY, coverage is
+// per-CODE-PATH. If the install is ALREADY connected and a missing-key error
+// still fired, the connection did not cover THIS path — the message must not
+// send the user to redo the thing they already did.
+// ---------------------------------------------------------------------------
+describe("MissingProviderKeyError — connected-aware wording (#761)", () => {
+  afterEach(() => _resetNodaroConnectedCacheForTests())
+
+  it("not connected (or unknown): a covered key still offers the connection", () => {
+    _resetNodaroConnectedCacheForTests() // null = unknown → optimistic wording
+    expect(new MissingProviderKeyError("ELEVENLABS_API_KEY").message).toContain(
+      "or connect nodaro.ai, which covers it",
+    )
+    rememberNodaroConnected(false)
+    expect(new MissingProviderKeyError("ELEVENLABS_API_KEY").message).toContain(
+      "or connect nodaro.ai, which covers it",
+    )
+  })
+
+  it("already connected: never asks the user to connect again — names the uncovered path instead", () => {
+    rememberNodaroConnected(true)
+    const msg = new MissingProviderKeyError("ELEVENLABS_API_KEY").message
+    expect(msg).not.toContain("or connect nodaro.ai")
+    expect(msg).toContain("doesn't cover this operation")
+    expect(msg).toContain("ELEVENLABS_API_KEY")
+    expect(msg).toContain("Install health")
   })
 })

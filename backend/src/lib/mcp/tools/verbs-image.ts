@@ -747,7 +747,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
 
       const payload: Record<string, unknown> = {
         provider,
-        ...(imageUrl && !isTaskChained ? { imageUrl } : {}),
+        // Task-chained ops key off taskId; grok-2-segment additionally
+        // accepts the source image URL so the worker can recover per-region
+        // bboxes (template matching) into output_data.segments[].bbox.
+        ...(imageUrl && (!isTaskChained || provider === "grok-2-segment") ? { imageUrl } : {}),
         ...(args.kie_task_id ? { taskId: args.kie_task_id } : {}),
         ...(args.mask_indexes?.length ? { maskIndexes: args.mask_indexes } : {}),
         ...(args.upscale_factor ? { upscaleFactor: args.upscale_factor } : {}),

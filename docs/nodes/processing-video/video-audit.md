@@ -6,6 +6,13 @@
 
 ## Overview
 
+**Availability.** Native on Nodaro Cloud. On a self-hosted install the node
+appears with a **NODARO** mark and runs through your
+[nodaro.ai connection](../../community-cloud-connect.md) — OAuth Connect or a
+pasted API key — billed to the connected nodaro.ai account. Without a
+connection the node card shows a **Connect nodaro.ai** CTA and a run refuses
+with `503 nodaro_connection_required`.
+
 The AI Audit node (`video-audit`) is a fix-and-disclose quality pass for a
 [Video Analysis](./video-analysis.md) result. It re-watches the clip and
 cross-checks every claim in the analysis against what is actually in the

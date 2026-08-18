@@ -64,6 +64,13 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "ai-avatar": "/v1/ai-avatar",
   "cinematic-avatar": "/v1/cinematic-avatar",
   "switchx": "/v1/switchx",
+  // Transcription (#761): the enqueue payload (routes/transcribe.ts) is the
+  // validated route body plus jobId/usageLogId, both stripped below. The
+  // audioUrl field re-hosts through URL_FIELD — a local-MinIO or extracted
+  // social-audio URL becomes cloud-reachable before the POST; wordTimestamps
+  // and the whisper/elevenlabs provider choice ride through verbatim (the
+  // cloud holds keys for both lanes).
+  "transcribe": "/v1/transcribe",
 }
 
 
@@ -107,11 +114,19 @@ const PAYLOAD_ADAPTERS: Readonly<
  * If this map ever grows past a handful of hand-checked entries, replace this
  * with a per-type allowlist derived from the route schema.
  */
-const INSTANCE_ONLY_FIELDS = new Set([
+export const INSTANCE_ONLY_FIELDS = new Set([
   "jobId",
   "usageLogId",
   "userId",
   "workflowExecutionId",
+  // Instance-local editor identifiers. The cloud's routes read workflowId
+  // straight into a jobs.workflow_id FK — a LOCAL workflow's uuid does not
+  // exist there, so forwarding it fails the cloud's insert with a sanitized
+  // 500 at CREATE (hit live 2026-08-18: every relayed voice-changer-pro run
+  // died "nodaro.ai: Internal server error"). These ids never mean anything
+  // off-instance — 4a's LLM proxy already stripped its own copies.
+  "workflowId",
+  "nodeId",
   // Billing/tier decisions are the CLOUD's to make for its own account —
   // forwarding ours would either be ignored or, worse, respected.
   "shouldWatermark",
@@ -136,7 +151,7 @@ async function rehostObjectUrlFields(obj: Record<string, unknown>): Promise<Reco
   )
 }
 
-async function rehostIfUrlField(key: string, value: unknown): Promise<unknown> {
+export async function rehostIfUrlField(key: string, value: unknown): Promise<unknown> {
   // A list of objects (cinematic-avatar's `references: [{ type, url }]`)
   // carries its media one level down; the list's own name says nothing
   // about URLs, so look inside regardless of the key.
@@ -171,8 +186,17 @@ export function canRunOnCloud(jobType: string): boolean {
  * call — a connect-after-boot must count, and the read is a cached credential.
  */
 export async function shouldRunOnCloud(localKey: string | null | undefined): Promise<boolean> {
-  if (typeof localKey === "string" && localKey.trim().length > 0) return false
-  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
+  const { isNodaroConnected, getNodaroProviderPrefs } = await import("../../lib/nodaro-connect.js")
+  const prefs = await getNodaroProviderPrefs()
+  // scope "exclusives": the credential serves ONLY the exclusive nodes —
+  // this vendor-direct fallthrough behaves as if it did not exist, even on
+  // a keyless install (the vendor client's own missing-key error is the
+  // honest outcome the user chose).
+  if (prefs.scope === "exclusives") return false
+  const hasLocalKey = typeof localKey === "string" && localKey.trim().length > 0
+  // precedence "nodaro" ("ignore my other providers"): the connection wins
+  // even when a local vendor key exists.
+  if (hasLocalKey && prefs.precedence !== "nodaro") return false
   return isNodaroConnected().catch(() => false)
 }
 

@@ -6,7 +6,7 @@
  * Pure data, no React. Extracted from the app's parameter-picker-registry so
  * THREE consumers share one definition and cannot drift:
  *   1. The app's community fallback registry (chip pickers, no rich previews).
- *   2. `@nodaroai/picker-ui`'s rich registry (attaches preview/Picker renderers).
+ *   2. `@nodaro/picker-ui`'s registry (attaches preview/Picker renderers).
  *   3. Nodaro Cine's builder panels.
  *
  * Renderers (preview components, multi-dim Picker components) deliberately do

@@ -1,7 +1,7 @@
 ---
 node_type: web-scrape
-generated_at: 2026-08-15T21:55:05.748Z
-generated_from: 150c80ac9
+generated_at: 2026-08-18T14:53:18.719Z
+generated_from: 0301f807a
 ---
 
 # Web Scrape
@@ -28,6 +28,13 @@ generated_from: 150c80ac9
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedJson?: unknown`
+- `lastRunOutcome?: "success" | "empty" | "failed"`
+- `lastRunAt?: number`
+- `lastRunCount?: number`
+- `lastRunStartedAt?: number`
+- `lastRunFingerprint?: string`
+- `lastGoodAt?: number`
+- `lastGoodCount?: number`
 
 **Default data:**
 ```json

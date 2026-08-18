@@ -601,3 +601,67 @@ describe("bespoke operations replay on the connected cloud when this install has
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// jobs.provider attribution (#753) — suno.ts finalizes via markJobCompleted
+// directly (never through job-finalize.ts), so it is the only writer of the
+// provider column for Suno jobs. Every finalize tail takes a REQUIRED
+// SunoProviderUsed; these tests pin the value per lane so a new completion
+// path cannot silently leave jobs.provider NULL again.
+// ---------------------------------------------------------------------------
+describe("jobs.provider attribution (#753)", () => {
+  describe("local KIE path records provider: 'kie'", () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ["suno-generate", { prompt: "p" }],                       // finalizeSunoJob
+      ["suno-lyrics", { prompt: "p" }],                         // finalizeSunoLyrics
+      ["suno-separate", { taskId: "t", audioId: "a" }],         // finalizeSunoSeparate
+      ["suno-music-video", { taskId: "t", audioId: "a" }],      // finalizeSunoMusicVideo
+      ["suno-convert-wav", { taskId: "t", audioId: "a" }],      // finalizeSunoConvertWav
+    ]
+    for (const [jobType, data] of cases) {
+      it(`${jobType} completes with provider: "kie"`, async () => {
+        await sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never)
+        expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith(
+          "job-1",
+          expect.objectContaining({ provider: "kie" }),
+        )
+      })
+    }
+  })
+
+  describe("cloud-replay path records provider: 'nodaro'", () => {
+    const originalKieKey = config.KIE_API_KEY
+    beforeEach(() => {
+      config.KIE_API_KEY = ""
+      mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    })
+    afterEach(() => {
+      config.KIE_API_KEY = originalKieKey
+      mocks.mockIsNodaroConnected.mockResolvedValue(false)
+    })
+
+    it("suno-generate (multi-track tail) completes with provider: 'nodaro'", async () => {
+      mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+        sunoTaskId: "cloud-task",
+        sunoTracks: [{ audioUrl: "https://cloud.example.com/track.mp3", id: "c-1", title: "Cloud Song" }],
+      })
+      await sunoHandlers["suno-generate"]!(makeJob("suno-generate", { prompt: "p" }) as never, makeCtx() as never)
+      expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith(
+        "job-1",
+        expect.objectContaining({ provider: "nodaro" }),
+      )
+    })
+
+    it("suno-lyrics (bespoke tail) completes with provider: 'nodaro'", async () => {
+      mocks.mockRunJobOnCloud.mockResolvedValueOnce({
+        sunoTaskId: "cloud-task",
+        lyrics: [{ text: "la la", title: "t" }],
+      })
+      await sunoHandlers["suno-lyrics"]!(makeJob("suno-lyrics", { prompt: "p" }) as never, makeCtx() as never)
+      expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith(
+        "job-1",
+        expect.objectContaining({ provider: "nodaro" }),
+      )
+    })
+  })
+})

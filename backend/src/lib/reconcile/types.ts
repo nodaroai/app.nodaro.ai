@@ -31,6 +31,11 @@ export const PROVIDER_KIND_VALUES = [
   // result and finalizes (or exhausts→refund). Classified async — see
   // FAL_RECOVER_KINDS + the cron/inline dispatch branches.
   "fal-request",
+  // 4b: an exclusive-node job relayed to the connected cloud
+  // (workers/handlers/nodaro-exclusive-relay.ts persists the CLOUD job id
+  // here). reconcileNodaroCloudJob re-polls that cloud job — idempotent, it
+  // never creates a second one.
+  "nodaro-cloud",
   "pre-task",
 ] as const
 
@@ -100,6 +105,13 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // input preprocessing (R2 download, JPEG re-encode for Hailuo, etc.) plenty
   // of headroom before the sync-sweep marks the row failed + refunds.
   "pre-task":                 30 * MIN,
+  // 4b exclusive-node relay. gvp/evp-class cloud runs legitimately take an
+  // hour+, and the relay's own live poll budget is ~85 min — reconcile only
+  // matters when the WORKER died. 75 min is the documented envelope max
+  // (18 attempts × 5-min cadence covers it with headroom); the recover poll
+  // is a one-shot idempotent re-read of the cloud job, never a re-create,
+  // so an early takeover costs one HTTP GET, not a double generation.
+  "nodaro-cloud":             75 * MIN,
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
@@ -196,6 +208,12 @@ export const FAL_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "fal-request",
 ])
 
+/** Kinds recovered via reconcileNodaroCloudJob (4b exclusive-node relay —
+ *  the persisted id is the CLOUD job's id; recovery is one idempotent poll). */
+export const NODARO_CLOUD_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "nodaro-cloud",
+])
+
 /** Every kind with an async recover handler — the provider result can be
  *  re-fetched from the persisted provider_task_id and the job completed. */
 export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
@@ -203,6 +221,7 @@ export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
   ...REPLICATE_RECOVER_KINDS,
   ...ELEVENLABS_RECOVER_KINDS,
   ...FAL_RECOVER_KINDS,
+  ...NODARO_CLOUD_RECOVER_KINDS,
 ])
 
 /**
