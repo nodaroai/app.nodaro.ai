@@ -17,6 +17,7 @@ import { saveNodaroProviderPrefs } from "../lib/app-settings.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { hasAdmin } from "../lib/config.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { unregisterNodaroCloudProvider } from "../providers/nodaro/index.js"
 
 /**
  * Instance-side connect flow (Phase 4a, self-hosted editions only).
@@ -243,6 +244,13 @@ export async function nodaroConnectRoutes(app: FastifyInstance) {
   app.post("/v1/nodaro-connect/disconnect", async (req, reply) => {
     try {
       await clearNodaroConnection()
+      // Symmetry with registration. Without this the provider stays in the
+      // registry with no token behind it, so the router keeps selecting it and
+      // the cloud client throws a raw "nodaro.ai is not connected" instead of
+      // the empty-chain path that explains what to configure. The router's
+      // self-heal can ADD the provider but never removes it, so the stale entry
+      // survived until the process restarted (#771).
+      unregisterNodaroCloudProvider()
       return reply.send({ ok: true })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to disconnect")

@@ -44,6 +44,13 @@ vi.mock("../../lib/config.js", () => ({
 vi.mock("../nodaro/index.js", () => ({
   NODARO_PROVIDER_ID: "nodaro",
   registerNodaroCloudProviderIfConnected: vi.fn(async () => false),
+  unregisterNodaroCloudProvider: nodaroMocks.unregister,
+}))
+
+// The remove-direction self-heal reads the credential before walking a chain
+// that contains the cloud provider — never a real DB read in here.
+vi.mock("../../lib/nodaro-connect.js", () => ({
+  getNodaroCredential: nodaroMocks.getCredential,
 }))
 
 // The pasted-key half of the self-heal: a forced re-read of the encrypted
@@ -51,6 +58,13 @@ vi.mock("../nodaro/index.js", () => ({
 // the re-read found.
 vi.mock("../../lib/provider-credentials.js", () => ({
   refreshProviderCredentialsNow: vi.fn(async () => false),
+}))
+
+const { nodaroMocks } = vi.hoisted(() => ({
+  nodaroMocks: {
+    unregister: vi.fn(),
+    getCredential: vi.fn(async (): Promise<{ token: string } | null> => null),
+  },
 }))
 
 const { configMocks, registryMocks } = vi.hoisted(() => {
@@ -137,6 +151,11 @@ beforeEach(() => {
   configMocks.resolveMarkup.mockReset()
   registryMocks.supportsModel.mockReset()
   registryMocks.getProvider.mockReset()
+  nodaroMocks.unregister.mockReset()
+  nodaroMocks.getCredential.mockReset()
+  // Default: no credential — matches the keyless-install resting state most
+  // tests model; the drop-direction tests override per case.
+  nodaroMocks.getCredential.mockResolvedValue(null)
 
   // Default markup behavior — used by most tests.
   configMocks.applyMarkup.mockImplementation((cost, markup) =>
@@ -578,3 +597,72 @@ describe("chain order is preserved", () => {
     expect(registryMocks.supportsModel).toHaveBeenNthCalledWith(2, "replicate", "image-generation", "m")
   })
 })
+
+describe("stale nodaro registration is dropped at selection time (#771, remove-direction self-heal)", () => {
+  // The disconnect route can only unregister in the API process; routing runs
+  // in the worker and orchestrator too, so the router itself must notice a
+  // registered cloud provider whose credential is gone and drop it BEFORE the
+  // walk — the walk has no per-provider catch, so a selected dead provider
+  // would throw the raw "nodaro.ai is not connected" at the user.
+  const kieGen = () => {
+    const generate = vi.fn().mockResolvedValue({ url: "https://r2/img.png", cost: 0.02 })
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockImplementation((id) =>
+      id === "kie" ? makeProviderInstance({ image: { generateImage: generate } }) : { stale: true },
+    )
+    return generate
+  }
+
+  it("credential gone -> unregisters, rebuilds the chain, and the next provider serves", async () => {
+    nodaroMocks.getCredential.mockResolvedValue(null)
+    kieGen()
+    configMocks.buildRoutingDecision
+      .mockResolvedValueOnce(decision({ chain: ["nodaro", "kie"] }))
+      .mockResolvedValueOnce(decision({ chain: ["kie"] }))
+
+    const result = await generateImage("a dog", "nano-banana")
+
+    expect(nodaroMocks.unregister).toHaveBeenCalledTimes(1)
+    expect(configMocks.buildRoutingDecision).toHaveBeenCalledTimes(2)
+    expect(result.providerUsed).toBe("kie")
+  })
+
+  it("credential present -> the registration stands, no rebuild", async () => {
+    nodaroMocks.getCredential.mockResolvedValue({ token: "ndr_live" })
+    const generate = vi.fn().mockResolvedValue({ url: "https://r2/img.png", cost: 0.01 })
+    registryMocks.supportsModel
+      .mockImplementationOnce(() => false) // nodaro doesn't carry this model
+      .mockImplementationOnce(() => true)
+    registryMocks.getProvider.mockImplementation((id) =>
+      id === "kie" ? makeProviderInstance({ image: { generateImage: generate } }) : { live: true },
+    )
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["nodaro", "kie"] }))
+
+    await generateImage("a dog", "nano-banana")
+
+    expect(nodaroMocks.unregister).not.toHaveBeenCalled()
+    expect(configMocks.buildRoutingDecision).toHaveBeenCalledTimes(1)
+  })
+
+  it("a credential read failure is UNKNOWN, not stale — never unregisters on it", async () => {
+    nodaroMocks.getCredential.mockRejectedValue(new Error("settings store unreachable"))
+    kieGen()
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["nodaro", "kie"] }))
+    registryMocks.supportsModel.mockImplementationOnce(() => false).mockImplementationOnce(() => true)
+
+    await generateImage("a dog", "nano-banana")
+
+    expect(nodaroMocks.unregister).not.toHaveBeenCalled()
+  })
+
+  it("a chain without nodaro never reads the credential at all", async () => {
+    kieGen()
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+
+    await generateImage("a dog", "nano-banana")
+
+    expect(nodaroMocks.getCredential).not.toHaveBeenCalled()
+    expect(nodaroMocks.unregister).not.toHaveBeenCalled()
+  })
+})
+

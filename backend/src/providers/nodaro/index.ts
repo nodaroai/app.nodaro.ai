@@ -98,6 +98,24 @@ export function registerNodaroCloudProvider(): void {
 }
 
 /**
+ * The counterpart to registration — call it whenever the connection is cleared.
+ *
+ * Registration was one-way: `registerNodaroCloudProvider` runs at boot (and via
+ * the router's self-heal) and nothing ever removed the provider again. A
+ * disconnect clears the TOKEN but left the provider registered, so the router
+ * still built a NON-empty chain, selected the cloud provider, and the cloud
+ * client threw a raw "nodaro.ai is not connected" at the user — instead of the
+ * empty-chain path where `describeEmptyCapability` explains what to configure.
+ * The stale entry survived until the process restarted (#771).
+ *
+ * Workers run in-process (see `server.ts`), so removing it here removes it from
+ * the same registry the executing code reads.
+ */
+export function unregisterNodaroCloudProvider(): void {
+  providerRegistry.unregister(NODARO_PROVIDER_ID)
+}
+
+/**
  * Boot-time registration gate: registers the provider ONLY when the instance
  * holds a usable cloud token. Returns whether registration happened.
  *

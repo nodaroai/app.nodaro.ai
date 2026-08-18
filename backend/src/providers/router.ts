@@ -43,9 +43,11 @@ import {
   type RoutingDecision,
 } from "./config.js"
 import {
+  unregisterNodaroCloudProvider,
   registerNodaroCloudProviderIfConnected,
   NODARO_PROVIDER_ID,
 } from "./nodaro/index.js"
+import { getNodaroCredential } from "../lib/nodaro-connect.js"
 import { describeEmptyCapability } from "./provider-keys.js"
 import { config } from "../lib/config.js"
 import { refreshProviderCredentialsNow } from "../lib/provider-credentials.js"
@@ -132,6 +134,33 @@ async function selfHealLateRegistrations(): Promise<boolean> {
   return keysChanged || nodaroRegistered
 }
 
+/**
+ * The REMOVE direction of the self-heal (#771). Registration was one-way:
+ * boot and selfHealLateRegistrations can ADD the nodaro provider, but a
+ * disconnect only cleared the token — the registration outlived it in every
+ * process, and the walk below selected it and threw the raw
+ * "nodaro.ai is not connected" from inside the provider call (no per-provider
+ * catch on the walk, deliberately). The disconnect route unregisters in the
+ * API process, but routing runs in the WORKER and orchestrator processes too
+ * — they can only fix themselves. So: before walking a chain that contains
+ * the cloud provider, verify the credential; gone -> drop the registration
+ * and let the caller rebuild the chain, which then either finds another
+ * provider or takes the honest empty-chain path. A transient read failure is
+ * UNKNOWN, not stale — never unregister on it.
+ */
+async function dropStaleNodaroRegistration(decision: RoutingDecision): Promise<boolean> {
+  if (!decision.providerChain.includes(NODARO_PROVIDER_ID as ProviderUsed)) return false
+  if (!providerRegistry.getProvider(NODARO_PROVIDER_ID)) return false
+  try {
+    if ((await getNodaroCredential()) !== null) return false
+  } catch {
+    return false
+  }
+  unregisterNodaroCloudProvider()
+  console.log("[router] nodaro.ai registration dropped (connection cleared) — rebuilding chain")
+  return true
+}
+
 async function routeAndExecute(
   capability: ProviderCapability,
   model: string,
@@ -139,6 +168,9 @@ async function routeAndExecute(
   executor: (provider: unknown) => Promise<ProviderResult>
 ): Promise<RouteResult> {
   let decision = await buildRoutingDecision(capability, model)
+  if (await dropStaleNodaroRegistration(decision)) {
+    decision = await buildRoutingDecision(capability, model)
+  }
 
   // A keyless community install has NO registered providers, so an empty
   // chain is its resting state — and exactly the state where a cloud

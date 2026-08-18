@@ -10,6 +10,24 @@ import { isCloud } from "@/lib/edition"
 import { NodaroScopeDialog, type NodaroProviderPrefs } from "./nodaro-scope-dialog"
 
 /**
+ * A stored post-connect destination is only ever a same-origin path. Reject
+ * anything that could leave the origin — `//evil.com` and `https://evil.com`
+ * are both valid arguments to location.replace, so a value read back out of
+ * localStorage must be checked before it is used as a redirect target.
+ */
+export function isSafeReturnPath(value: string | null): value is string {
+  // Backslash too: browsers normalize "\" to "/" when resolving URLs, so
+  // "/\evil.com" becomes protocol-relative "//evil.com" — same bypass as
+  // the double slash, spelled differently.
+  return (
+    typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/\\")
+  )
+}
+
+/**
  * "Nodaro Cloud" integration card (community cloud-connect, Phase 4a).
  *
  * Self-hosted editions only (renders null on cloud). Talks exclusively to the
@@ -40,6 +58,9 @@ export function NodaroCloudCard() {
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   // Guards the ?nodaro=connected toast against StrictMode double-effects.
   const connectToastShownRef = useRef(false)
+  /** Editor path held until the routing-choice dialog closes (see the
+   *  ?nodaro=connected effect) — navigating first would skip the dialog. */
+  const pendingEditorReturnRef = useRef<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -69,11 +90,25 @@ export function NodaroCloudCard() {
     connectToastShownRef.current = true
     // Guided-setup continuity: when the connect started from /setup, bounce
     // straight back there — step 2 flips done and step 3 lights up.
-    if (localStorage.getItem("nodaro_connect_from") === "setup") {
-      localStorage.removeItem("nodaro_connect_from")
-      invalidateNodaroConnectionCache()
+    const from = localStorage.getItem("nodaro_connect_from")
+    const storedReturn = localStorage.getItem("nodaro_connect_return")
+    // Consume both markers unconditionally: a value nothing routes on used to
+    // linger in localStorage forever (#771 review).
+    localStorage.removeItem("nodaro_connect_from")
+    localStorage.removeItem("nodaro_connect_return")
+    invalidateNodaroConnectionCache()
+    if (from === "setup") {
       window.location.replace("/setup?nodaro=connected")
       return
+    }
+    // Connected from the editor: return to the workflow the run stopped in —
+    // but only AFTER the 4b routing-choice dialog ("dialog on both lanes" is
+    // a founder decision; navigating first would skip it). The path is held
+    // and applied when the dialog closes. Same-origin relative paths only —
+    // the target comes from storage, so anything else would be an open
+    // redirect (see isSafeReturnPath).
+    if (from === "editor" && isSafeReturnPath(storedReturn)) {
+      pendingEditorReturnRef.current = storedReturn
     }
     toast.success("Connected to nodaro.ai!")
     // The post-connect choice (4b): a fresh OAuth connection asks how it
@@ -218,6 +253,21 @@ export function NodaroCloudCard() {
           Connect
         </Button>
       )}
+      {/* The 4b routing choice. Rendered HERE too — the setup page has its
+          own mount, but a connect that lands on /integrations (or one that
+          returns to the editor) opens it from this card. On close, a held
+          editor return-path is applied so the interrupted run is one click
+          away — after the choice, never instead of it. */}
+      <NodaroScopeDialog
+        open={scopeDialogOpen}
+        onClose={() => {
+          setScopeDialogOpen(false)
+          const back = pendingEditorReturnRef.current
+          pendingEditorReturnRef.current = null
+          if (back) window.location.replace(back)
+          else void refresh()
+        }}
+      />
     </div>
   )
 }
