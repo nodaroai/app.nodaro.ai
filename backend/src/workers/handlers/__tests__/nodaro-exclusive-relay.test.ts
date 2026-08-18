@@ -57,8 +57,13 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
   NodaroCloudError: class NodaroCloudError extends Error {},
 }))
 vi.mock("../../../lib/nodaro-connect.js", () => ({ nodaroCloudFetch: mocks.nodaroCloudFetch }))
-vi.mock("../../../providers/nodaro/run-on-cloud.js", () => ({
-  INSTANCE_ONLY_FIELDS: new Set(["jobId", "usageLogId", "userId", "workflowId", "nodeId"]),
+vi.mock("../../../providers/nodaro/run-on-cloud.js", async (importOriginal) => ({
+  // The REAL module, with only the network-touching rehost mocked. The strip
+  // set must be the real one: a hand-copied Set here once carried names the
+  // real set lacked, so the strip test passed while production forwarded a
+  // LOCAL workflowId to the cloud's jobs.workflow_id FK — every relayed run
+  // 500'd at create (live, 2026-08-18).
+  ...(await importOriginal<typeof import("../../../providers/nodaro/run-on-cloud.js")>()),
   rehostIfUrlField: mocks.rehostIfUrlField,
 }))
 
@@ -118,6 +123,8 @@ describe("relay to the cloud", () => {
         jobId: "job-1",
         usageLogId: "u-1",
         userId: "00000000-0000-4000-8000-000000000001", // local Supabase id must never ride to the cloud
+        workflowId: "5d6ce6a1-90d9-434b-898f-59745a56bf74", // local editor ids — the cloud's
+        nodeId: "node_1", // jobs.workflow_id FK rejects them (live 500, 2026-08-18)
         __internalFlag: true,
         videoUrl: "http://localhost:9000/v.mp4",
         instructions: "remove the boom mic",

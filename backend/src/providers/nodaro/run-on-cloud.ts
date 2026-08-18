@@ -119,6 +119,14 @@ export const INSTANCE_ONLY_FIELDS = new Set([
   "usageLogId",
   "userId",
   "workflowExecutionId",
+  // Instance-local editor identifiers. The cloud's routes read workflowId
+  // straight into a jobs.workflow_id FK — a LOCAL workflow's uuid does not
+  // exist there, so forwarding it fails the cloud's insert with a sanitized
+  // 500 at CREATE (hit live 2026-08-18: every relayed voice-changer-pro run
+  // died "nodaro.ai: Internal server error"). These ids never mean anything
+  // off-instance — 4a's LLM proxy already stripped its own copies.
+  "workflowId",
+  "nodeId",
   // Billing/tier decisions are the CLOUD's to make for its own account —
   // forwarding ours would either be ignored or, worse, respected.
   "shouldWatermark",

@@ -23,7 +23,7 @@ vi.mock("../../../lib/nodaro-connect.js", () => ({
   getNodaroProviderPrefs: () => mockPrefs(),
 }))
 
-const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType, shouldRunOnCloud } = await import("../run-on-cloud.js")
+const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType, shouldRunOnCloud, INSTANCE_ONLY_FIELDS } = await import("../run-on-cloud.js")
 
 describe("runJobOnCloud", () => {
   beforeEach(() => {
@@ -371,5 +371,17 @@ describe("payload adapters — for job types whose enqueued shape isn't the rout
     // Absent stays absent — the cloud's default matches the worker's.
     await runJobOnCloud("suno-separate", { taskId: "t", audioId: "a" })
     expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/separate", { taskId: "t", audioId: "a" })
+  })
+})
+
+
+describe("INSTANCE_ONLY_FIELDS — instance-local identifiers never leave the instance", () => {
+  it("strips the editor ids whose values only resolve locally", () => {
+    // workflowId/nodeId: the cloud reads workflowId into a jobs.workflow_id
+    // FK — a local workflow's uuid fails that insert with a sanitized 500 at
+    // CREATE (live 2026-08-18, every relayed voice-changer-pro run).
+    for (const name of ["jobId", "usageLogId", "userId", "workflowExecutionId", "workflowId", "nodeId"]) {
+      expect(INSTANCE_ONLY_FIELDS.has(name), name).toBe(true)
+    }
   })
 })
