@@ -39,6 +39,8 @@ import { isFeatureEnabled, hasCredits, isMultiUser } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
+import { useUpdateCheck } from "@/hooks/use-update-check"
+import { UpdateDialog } from "@/components/layout/update-dialog"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { otherNodaroApps } from "@/lib/nodaro-apps"
 import {
@@ -210,6 +212,8 @@ export function AppSidebar({
   const { isCollapsed, setCollapsed } = useSidebar()
   const { data: creditBalance } = useUserCredits(user?.id)
   const [mounted, setMounted] = useState(false)
+  const updateInfo = useUpdateCheck()
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
@@ -674,12 +678,35 @@ export function AppSidebar({
             {!isCollapsed && <ThemeToggle />}
           </div>
 
-          {/* Version */}
+          {/* Version — with the red update dot when a newer release exists
+              (founder design, versioning spec 2026-08-19). The endpoint owns
+              the policy: on cloud / opted-out installs updateAvailable is
+              always false and this stays a plain label. */}
           <div className="text-center">
-            <span className="text-xs text-muted-foreground">
-              {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
-            </span>
+            {updateInfo?.updateAvailable ? (
+              <button
+                type="button"
+                onClick={() => setUpdateDialogOpen(true)}
+                className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                title={`Update available: ${updateInfo.latest?.version ?? ""}`}
+              >
+                <span
+                  aria-hidden
+                  className="absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                />
+                <span className="underline decoration-dotted underline-offset-2">
+                  {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+                </span>
+              </button>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+              </span>
+            )}
           </div>
+          {updateInfo?.updateAvailable && updateInfo.latest && (
+            <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} info={updateInfo} />
+          )}
         </div>
       </aside>
     </TooltipProvider>

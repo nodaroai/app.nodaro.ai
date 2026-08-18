@@ -206,6 +206,7 @@ import { adminClientAppsRoutes } from "./ee/routes/admin-client-apps.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { onboardingRoutes } from "./routes/onboarding.js"
 import { setupStatusRoutes } from "./routes/setup-status.js"
+import { versionRoutes } from "./routes/version.js"
 import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
@@ -557,6 +558,7 @@ export async function buildApp() {
   // (operators there have the admin panel; no reason to expose config-presence
   // booleans on a public SaaS endpoint).
   if (!isCloud()) await app.register(setupStatusRoutes)
+  await app.register(versionRoutes)
   // 4b: the Nodaro-exclusive nodes' relay routes. ONLY when the private
   // plugin lane is absent — on cloud @nodaroai/cloud-plugins registers the
   // SAME wire paths and a double registration is a Fastify boot crash.

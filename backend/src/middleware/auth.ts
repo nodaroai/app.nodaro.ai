@@ -120,6 +120,8 @@ export function invalidateAuthCache(userId: string): void {
 
 const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { path: "/health" },
+  // Version + update availability — presence data only, same class as /health.
+  { path: "/v1/version" },
   // Self-host install health screen (route registers only when !isCloud()).
   // Public BY DESIGN: a broken Supabase config breaks login itself, so the
   // screen that diagnoses it cannot require a session. Booleans only.

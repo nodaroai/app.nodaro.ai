@@ -182,8 +182,11 @@ behavior you may depend on. There is no downgrade path (migrations are
 forward-only): take a backup before majors and restore it if you need to
 go back.
 
-The running version is shown in the app sidebar and at `/health`; each
-release appears on the GitHub Releases page with its changelog.
+The running version is shown in the app sidebar and at `/health`. When a
+newer release exists, a red dot appears next to the version — click it for
+the changelog and the exact upgrade commands. The check is one anonymous
+request a day to GitHub's API; set `NODARO_UPDATE_CHECK=off` in `.env` to
+disable it entirely (air-gapped installs).
 
 ## Troubleshooting
 
