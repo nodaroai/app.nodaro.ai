@@ -31,12 +31,12 @@ const SEVERITY_VARIANT: Record<AppReport["severity"], string> = {
  *  trigger. Priority: the resolved app beats the raw surface — an app run's
  *  jobs are orchestrated, so the two never actually compete. */
 function reportSource(r: AppReport): { label: string; detail?: string } {
-  const appSlug = r.job?.app_slug ?? r.app_slug
+  const appSlug = r.job?.app_slug ?? r.execution?.app_slug ?? r.app_slug
   if (appSlug) return { label: `app: ${appSlug}` }
   if (r.job?.source) return { label: r.job.source, detail: r.job.source_detail ?? undefined }
-  if (r.job?.execution_trigger) {
-    const trigger = r.job.execution_trigger
-    if (trigger === "mcp") return { label: "mcp", detail: r.job.mcp_client ?? undefined }
+  const trigger = r.job?.execution_trigger ?? r.execution?.trigger_type
+  if (trigger) {
+    if (trigger === "mcp") return { label: "mcp", detail: r.job?.mcp_client ?? r.execution?.mcp_client ?? undefined }
     return { label: trigger === "manual" ? "workflow" : `workflow: ${trigger}` }
   }
   return { label: "—" }
@@ -208,7 +208,9 @@ export default function AdminAppReportsPage() {
                             {r.job?.status && <DetailItem label="Job status" value={r.job.status} />}
                             {r.job?.model_identifier && <DetailItem label="Model" value={r.job.model_identifier} mono />}
                             {r.job?.provider && <DetailItem label="Provider" value={r.job.provider} mono />}
-                            {r.job?.workflow_execution_id && <DetailItem label="Execution" value={r.job.workflow_execution_id} mono />}
+                            {(r.job?.workflow_execution_id ?? r.execution_id) && (
+                              <DetailItem label="Execution" value={(r.job?.workflow_execution_id ?? r.execution_id) as string} mono />
+                            )}
                           </div>
                           {r.job?.error_message && (
                             <p className="mb-2 rounded border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-500">

@@ -203,9 +203,6 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-nodaro-minio-secret}
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:-nodaro-assets}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-http://localhost:3000/storage/nodaro-assets}
-      # Host path of this folder — lets the setup screen show users WHERE the
-      # .env lives. Set by the shell running compose; harmless if empty.
-      NODARO_INSTALL_DIR: ${PWD:-}
       # Which Nodaro cloud this instance connects to (OAuth + generation).
       # Empty = the code default (https://app.nodaro.ai). Override in .env for
       # staging soaks: NODARO_CLOUD_URL=https://next.nodaro.ai

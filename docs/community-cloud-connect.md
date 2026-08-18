@@ -55,6 +55,10 @@ the route back to your own provider — local keys win.
    up) and approve. The instance registers itself with its own OAuth
    credential; the requested scopes are exactly what generation needs
    (`assets:write workflows:execute jobs:read credits:read`).
+   If that browser is already signed in to nodaro.ai, the screen names the
+   account it is about to connect — this is a **cloud** account, unrelated
+   to the operator login you created for the instance itself. Click **Use
+   a different account** to connect a different one.
 3. You land back on your instance with the connection active. The card
    shows your live cloud balance. The connection is **per instance**, not
    per user — whoever clicks Connect binds the whole install to their

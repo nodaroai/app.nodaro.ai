@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Loader2, ShieldCheck, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { createClient } from "@/lib/supabase"
 import { getOAuthAppInfo, oauthAuthorize, type OAuthAppInfo } from "@/lib/api"
 import { McpConsentNotice } from "@/components/oauth/McpConsentNotice"
 import { toast } from "sonner"
@@ -26,6 +27,17 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "presets:read": "Read your saved presets",
 }
 
+/**
+ * Where to come back to after a login/account switch. Built from
+ * pathname+search on purpose: the login page only honours a RELATIVE
+ * `return_to` (`startsWith("/") && !startsWith("//")`), so an absolute URL
+ * would be dropped and strand the user in /projects with the consent screen
+ * lost — the 2026-08-14 community-connect bug.
+ */
+function consentReturnTo(): string {
+  return window.location.pathname + window.location.search
+}
+
 export default function OAuthAuthorizePage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -43,6 +55,7 @@ export default function OAuthAuthorizePage() {
   const [appInfo, setAppInfo] = useState<OAuthAppInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [switching, setSwitching] = useState(false)
 
   // Validate required params
   const missingParam = !clientId
@@ -68,8 +81,7 @@ export default function OAuthAuthorizePage() {
   useEffect(() => {
     if (authLoading) return
     if (!user && !missingParam) {
-      const returnTo = window.location.pathname + window.location.search
-      navigate(`/login?return_to=${encodeURIComponent(returnTo)}`)
+      navigate(`/login?return_to=${encodeURIComponent(consentReturnTo())}`)
     }
   }, [user, authLoading, navigate, missingParam])
 
@@ -84,6 +96,47 @@ export default function OAuthAuthorizePage() {
   function handleCancel() {
     if (!redirectUri) return
     window.location.href = buildErrorRedirect("access_denied", "User cancelled")
+  }
+
+  /**
+   * Grant from a different account. Whoever is already signed in on this
+   * browser is the account the code gets minted for, and the consent screen
+   * used to neither say which one that was nor offer a way out — a
+   * self-hoster connecting an instance had no choice but to grant from
+   * whatever session Chrome happened to hold.
+   *
+   * Signs out FIRST and navigates explicitly afterwards: the !user effect
+   * above would also fire (same destination, so it is idempotent), but
+   * awaiting keeps the order deterministic instead of racing
+   * onAuthStateChange mid-navigation. useAuth().signOut() is deliberately
+   * NOT used — it hard-navigates to a bare /login and loses the consent
+   * context.
+   *
+   * scope: "local" on purpose — the auth-js default is GLOBAL, which revokes
+   * every session the account holds and would log the user out of their phone
+   * and other machines just for switching accounts in this browser. (The
+   * shared .nodaro.ai session cookie still signs this browser's other Nodaro
+   * apps out — intended: this browser really is changing account.)
+   *
+   * Failure handling: auth-js reports sign-out failure by RESOLVING
+   * { error }, not throwing, and it removes the local session even then — so
+   * every path falls through to login below, which re-checks the session. The
+   * catch only covers unexpected crashes (navigator-lock timeout, storage).
+   */
+  async function handleSwitchAccount() {
+    setSwitching(true)
+    const returnTo = consentReturnTo()
+    try {
+      await createClient().auth.signOut({ scope: "local" })
+    } catch {
+      // Unexpected crash — still go to login rather than stranding the
+      // operator on a dead consent screen.
+    } finally {
+      // Re-arm the buttons even if navigation is blocked or bounces back;
+      // otherwise the screen sticks at "Signing out…" with Allow/Cancel dead.
+      setSwitching(false)
+    }
+    navigate(`/login?return_to=${encodeURIComponent(returnTo)}`)
   }
 
   async function handleAllow() {
@@ -193,12 +246,29 @@ export default function OAuthAuthorizePage() {
           </ul>
         </div>
 
+        {user?.email && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-muted/50 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">
+              Connecting as{" "}
+              <span className="font-medium text-foreground">{user.email}</span>
+            </span>
+            <button
+              type="button"
+              onClick={handleSwitchAccount}
+              disabled={submitting || switching}
+              className="font-medium text-primary hover:underline disabled:opacity-50"
+            >
+              {switching ? "Signing out…" : "Use a different account"}
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2">
-          <Button onClick={handleAllow} disabled={submitting}>
+          <Button onClick={handleAllow} disabled={submitting || switching}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Allow
           </Button>
-          <Button variant="outline" onClick={handleCancel} disabled={submitting}>
+          <Button variant="outline" onClick={handleCancel} disabled={submitting || switching}>
             Cancel
           </Button>
         </div>

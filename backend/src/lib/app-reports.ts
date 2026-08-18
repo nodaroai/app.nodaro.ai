@@ -27,6 +27,7 @@ export interface AppReportInput {
   readonly payload?: Record<string, unknown>
   readonly userId?: string | null
   readonly jobId?: string | null
+  readonly executionId?: string | null
 }
 
 export async function insertAppReport(input: AppReportInput): Promise<boolean> {
@@ -40,9 +41,11 @@ export async function insertAppReport(input: AppReportInput): Promise<boolean> {
       payload: input.payload ?? {},
       user_id: input.userId ?? null,
       job_id: input.jobId ?? null,
+      execution_id: input.executionId ?? null,
     })
     if (error) {
-      // 23505 = the (kind, job_id) unique index — an already-reported job.
+      // 23505 = the (kind, job_id) / (kind, execution_id) unique indexes — an
+      // already-reported job or execution.
       if (error.code !== "23505") console.warn(`[app-reports] insert failed: ${error.message}`)
       return false
     }

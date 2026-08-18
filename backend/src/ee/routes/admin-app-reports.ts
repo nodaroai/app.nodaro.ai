@@ -53,7 +53,12 @@ async function enrichReports(rows: Array<Record<string, unknown>>): Promise<Arra
 
   // Orchestrated jobs: the caller lives on the execution (trigger type + mcp
   // client), and an app_runs row means the run came from a published app.
-  const executionIds = [...new Set((jobs ?? []).map((j: any) => j.workflow_execution_id).filter(Boolean))] as string[]
+  // Execution-keyed reports (kind execution-failure) carry execution_id on the
+  // report row itself — resolve those through the same lookups.
+  const executionIds = [...new Set([
+    ...(jobs ?? []).map((j: any) => j.workflow_execution_id),
+    ...rows.map((r) => r.execution_id),
+  ].filter(Boolean))] as string[]
   const [{ data: executions }, { data: appRuns }] = executionIds.length > 0
     ? await Promise.all([
         (supabase.from("workflow_executions") as any).select("id, trigger_type, mcp_client").in("id", executionIds) as Promise<{ data: any[] | null }>,
@@ -89,11 +94,22 @@ async function enrichReports(rows: Array<Record<string, unknown>>): Promise<Arra
     }),
   )
 
-  return rows.map((r) => ({
-    ...r,
-    user_email: r.user_id ? ((userMap.get(r.user_id) as string | undefined) ?? null) : null,
-    job: r.job_id ? (jobMap.get(r.job_id) ?? null) : null,
-  }))
+  return rows.map((r) => {
+    const reportExecution = r.execution_id ? executionMap.get(r.execution_id) : undefined
+    const reportAppId = r.execution_id ? appRunMap.get(r.execution_id) : undefined
+    return {
+      ...r,
+      user_email: r.user_id ? ((userMap.get(r.user_id) as string | undefined) ?? null) : null,
+      job: r.job_id ? (jobMap.get(r.job_id) ?? null) : null,
+      execution: reportExecution
+        ? {
+            trigger_type: (reportExecution as any).trigger_type ?? null,
+            mcp_client: (reportExecution as any).mcp_client ?? null,
+            app_slug: reportAppId ? ((appSlugMap.get(reportAppId) as string | undefined) ?? null) : null,
+          }
+        : null,
+    }
+  })
 }
 
 export async function adminAppReportsRoutes(app: FastifyInstance): Promise<void> {

@@ -70,7 +70,11 @@ The seven steps in plain English:
    `/oauth/authorize` page with `client_id`, `redirect_uri`, `scope`,
    and `state` in the query string.
 3. **Nodaro renders the consent screen** (after a login if needed),
-   showing the app's name, logo, and the requested scopes.
+   showing the app's name, logo, and the requested scopes. It also names
+   the signed-in account the token will belong to — the browser's current
+   session — and offers **Use a different account**, which signs out and
+   returns to the same consent URL so the grant can be made from another
+   account.
 4. **User clicks Allow.** The frontend POSTs to `/v1/oauth/authorize`
    (authenticated as the user) and receives a one-shot authorization
    `code`.

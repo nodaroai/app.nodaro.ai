@@ -33,16 +33,29 @@ function shouldReportErrorKey(key: string): boolean {
   return true
 }
 
-function reportServerError(
+function requestContext(req: FastifyRequest): { route: string; path: string; userId: string | null } {
+  const path = (req.url ?? "").split("?")[0]
+  return {
+    path,
+    route: req.routeOptions?.url ?? path,
+    userId: (req as { userId?: string }).userId ?? null,
+  }
+}
+
+/** Throttle-checked, fail-safe report of one HTTP incident into `app_reports`. */
+function fileHttpReport(
   req: FastifyRequest,
-  message: string,
-  via: "route-catch" | "uncaught" | "sanitizer-net",
-  err?: unknown,
+  opts: {
+    kind: string
+    severity: "info" | "warning" | "error"
+    title: string
+    throttleKey: string
+    payload: Record<string, unknown>
+  },
 ): void {
   try {
-    const path = (req.url ?? "").split("?")[0]
-    const route = req.routeOptions?.url ?? path
-    if (!shouldReportErrorKey(`${req.method} ${route} :: ${message.slice(0, 160)}`)) return
+    if (!shouldReportErrorKey(`${opts.kind} ${opts.throttleKey}`)) return
+    const { route, path, userId } = requestContext(req)
     // Lazy import: app-reports pulls in the Supabase client at module load, and
     // http-errors is imported by app.ts + nearly every route — keep this module
     // dependency-free so importing it never requires a configured environment.
@@ -50,24 +63,46 @@ function reportServerError(
       .then(({ insertAppReport }) =>
         insertAppReport({
           node: "http-error-net",
-          kind: "internal-error",
-          severity: "error",
-          title: `${req.method} ${route} — ${message}`,
+          kind: opts.kind,
+          severity: opts.severity,
+          title: opts.title,
           payload: {
             method: req.method,
             route,
             path,
-            message,
-            via,
-            ...(err instanceof Error && err.stack ? { stack: err.stack.slice(0, 2000) } : {}),
             ...(typeof req.headers?.origin === "string" ? { origin: req.headers.origin } : {}),
+            ...opts.payload,
           },
-          userId: (req as { userId?: string }).userId ?? null,
+          userId,
         }),
       )
       .catch(() => {})
   } catch {
-    // Telemetry must never break the error-response path it observes.
+    // Telemetry must never break the response path it observes.
+  }
+}
+
+function reportServerError(
+  req: FastifyRequest,
+  message: string,
+  via: "route-catch" | "uncaught" | "sanitizer-net",
+  err?: unknown,
+): void {
+  try {
+    const { route } = requestContext(req)
+    fileHttpReport(req, {
+      kind: "internal-error",
+      severity: "error",
+      title: `${req.method} ${route} — ${message}`,
+      throttleKey: `${req.method} ${route} :: ${message.slice(0, 160)}`,
+      payload: {
+        message,
+        via,
+        ...(err instanceof Error && err.stack ? { stack: err.stack.slice(0, 2000) } : {}),
+      },
+    })
+  } catch {
+    // see fileHttpReport
   }
 }
 
@@ -127,6 +162,53 @@ export function registerErrorTelemetry(app: FastifyInstance): void {
   })
 }
 
+/** Statuses the onSend net inspects. 500 for the sanitize+report flow; the
+ *  rest are observe-only product-failure telemetry (never rewritten). */
+const TELEMETRY_STATUSES = new Set([400, 402, 500, 503])
+
+/** Observe-only telemetry for structured client-visible failures: credit
+ *  walls, parameter rejects that never reach a provider, and missing-price
+ *  misconfig. Reports into `app_reports`, response bytes untouched. */
+function reportStructuredFailure(
+  req: FastifyRequest,
+  statusCode: number,
+  body: { error?: { code?: string; message?: string; issues?: unknown }; required?: unknown; balance?: unknown },
+): void {
+  const code = body.error?.code
+  const message = body.error?.message ?? ""
+  const { route, userId } = requestContext(req)
+
+  if (statusCode === 402 && code === "insufficient_credits") {
+    // Keyed per user: the interesting fact is WHO keeps hitting the wall.
+    fileHttpReport(req, {
+      kind: "insufficient-credits",
+      severity: "info",
+      title: `Insufficient credits: ${req.method} ${route}`,
+      throttleKey: `${req.method} ${route} :: ${userId ?? "anon"}`,
+      payload: { message, required: body.required ?? null, balance: body.balance ?? null },
+    })
+  } else if (statusCode === 400 && code === "validation_error") {
+    // Wrong parameters that never reach the provider — from our own UI these
+    // are OUR bugs (the recurring stale-enum / Zod-reject class).
+    fileHttpReport(req, {
+      kind: "validation-reject",
+      severity: "warning",
+      title: `${req.method} ${route} — invalid parameters: ${message.slice(0, 200)}`,
+      throttleKey: `${req.method} ${route} :: ${message.slice(0, 160)}`,
+      payload: { message, issues: body.error?.issues ?? null },
+    })
+  } else if (statusCode === 503 && code === "price_not_configured") {
+    // Hard-fail pricing policy tripped — ops-critical config gap.
+    fileHttpReport(req, {
+      kind: "price-not-configured",
+      severity: "error",
+      title: `Price not configured: ${req.method} ${route} — ${message.slice(0, 200)}`,
+      throttleKey: `${req.method} ${route} :: ${message.slice(0, 160)}`,
+      payload: { message },
+    })
+  }
+}
+
 /**
  * Global backstop: an `onSend` hook that rewrites the body of ANY `internal_error`
  * 500 response to the generic message (logging the original server-side first),
@@ -134,28 +216,34 @@ export function registerErrorTelemetry(app: FastifyInstance): void {
  * logged it). This guarantees no route — present or future — can leak a raw error
  * message in an `internal_error` body just by forgetting the helper.
  *
- * Scope is deliberately narrow so nothing else is touched:
- *  - only `statusCode === 500`
- *  - only bodies shaped `{ error: { code: "internal_error", ... } }`
- * Structured errors (402 insufficient_credits, 403 forbidden, 409 name_taken, …)
- * have different codes/statuses and pass straight through untouched. SSE responses
- * write to `reply.raw` and bypass `onSend` entirely, so streams are unaffected.
+ * Rewriting is deliberately narrow: only `statusCode === 500` bodies shaped
+ * `{ error: { code: "internal_error", ... } }` are ever modified. The same hook
+ * ALSO observes (never rewrites) 402 insufficient_credits, 400 validation_error
+ * and 503 price_not_configured bodies for `app_reports` telemetry — see
+ * `reportStructuredFailure`. Every other structured error (403 `forbidden`,
+ * 409 `name_taken`, …) passes straight through untouched. SSE responses write
+ * to `reply.raw` and bypass `onSend` entirely, so streams are unaffected.
  */
 export function registerInternalErrorSanitizer(app: FastifyInstance): void {
   app.addHook("onSend", async (req, reply, payload) => {
-    if (reply.statusCode !== 500) return payload
-    if (sanitizedReplies.has(reply)) return payload
+    if (!TELEMETRY_STATUSES.has(reply.statusCode)) return payload
     if (typeof payload !== "string") return payload
 
-    let body: { error?: { code?: string; message?: string } }
+    let body: { error?: { code?: string; message?: string; issues?: unknown }; required?: unknown; balance?: unknown }
     try {
       body = JSON.parse(payload)
     } catch {
       return payload // not JSON — leave as-is
     }
-    if (!body || typeof body !== "object" || body.error?.code !== "internal_error") {
+    if (!body || typeof body !== "object") return payload
+
+    if (reply.statusCode !== 500) {
+      reportStructuredFailure(req, reply.statusCode, body)
       return payload
     }
+
+    if (sanitizedReplies.has(reply)) return payload
+    if (body.error?.code !== "internal_error") return payload
 
     const raw = body.error.message
     if (raw && raw !== GENERIC_INTERNAL_MESSAGE) {
