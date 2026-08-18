@@ -1,5 +1,23 @@
 import { supabase } from "./supabase.js"
 
+/**
+ * How the nodaro.ai credential participates in routing (4b, founder
+ * decisions 2026-08-18). Written by the post-connect choice dialog; absent
+ * row = legacy behavior (scope "all", precedence "local") so existing
+ * connected installs keep routing exactly as before until they choose.
+ *
+ * - scope "all": nodaro serves every capability it covers.
+ *   precedence "nodaro"  -> nodaro FIRST — "ignore my other providers".
+ *   precedence "local"   -> local keys first, nodaro fills the gaps
+ *                           (the pre-4b OAuth semantics).
+ * - scope "exclusives": nodaro serves ONLY the exclusive nodes; commodity
+ *   capabilities behave as if the credential did not exist.
+ */
+export interface NodaroProviderPrefs {
+  scope: "all" | "exclusives"
+  precedence: "nodaro" | "local"
+}
+
 export interface AppSettings {
   ai_provider: "replicate" | "kie"
   cost_markup_percent: number
@@ -15,6 +33,8 @@ export interface AppSettings {
   featured_app_ids: string[]
   featured_apps_limit: number
   apps_auto_scroll_seconds: number
+  /** null = no explicit choice stored — callers apply the legacy default. */
+  nodaro_provider_prefs: NodaroProviderPrefs | null
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -52,7 +72,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 }
+    return { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null }
   }
 
   const settings: AppSettings = {
@@ -64,6 +84,7 @@ async function refreshSettings(): Promise<AppSettings> {
     featured_app_ids: [],
     featured_apps_limit: 20,
     apps_auto_scroll_seconds: 4,
+    nodaro_provider_prefs: null,
   }
 
   for (const row of data ?? []) {
@@ -89,6 +110,14 @@ async function refreshSettings(): Promise<AppSettings> {
       settings.featured_apps_limit = row.value
     } else if (row.key === "apps_auto_scroll_seconds" && typeof row.value === "number") {
       settings.apps_auto_scroll_seconds = row.value
+    } else if (row.key === "nodaro_provider_prefs" && row.value && typeof row.value === "object" && !Array.isArray(row.value)) {
+      const v = row.value as { scope?: unknown; precedence?: unknown }
+      if (
+        (v.scope === "all" || v.scope === "exclusives") &&
+        (v.precedence === "nodaro" || v.precedence === "local")
+      ) {
+        settings.nodaro_provider_prefs = { scope: v.scope, precedence: v.precedence }
+      }
     }
   }
 
@@ -115,4 +144,19 @@ export function calculateDisplayCost(providerCost: number, markupPercent: number
 export function invalidateSettingsCache(): void {
   cachedSettings = null
   cacheTimestamp = 0
+}
+
+/**
+ * Persist the nodaro.ai routing prefs (4b). Lives here — not in the route —
+ * because app_settings is instance-global config that genuinely requires the
+ * service-role client, and lib/ is the sanctioned home for those writes
+ * (routes are tenant-scope linted). Invalidates this process's settings
+ * cache; the worker converges on its own ≤60s cache expiry.
+ */
+export async function saveNodaroProviderPrefs(prefs: NodaroProviderPrefs): Promise<void> {
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: "nodaro_provider_prefs", value: prefs }, { onConflict: "key" })
+  if (error) throw new Error(error.message)
+  invalidateSettingsCache()
 }

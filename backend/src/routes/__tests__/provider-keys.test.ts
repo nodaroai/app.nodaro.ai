@@ -13,9 +13,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockSet, mockClear, mockIsAdmin, mockEdition } = vi.hoisted(() => ({
+const { mockSet, mockClear, mockSetOverride, mockIsAdmin, mockEdition } = vi.hoisted(() => ({
   mockSet: vi.fn(),
   mockClear: vi.fn(),
+  mockSetOverride: vi.fn(),
   mockIsAdmin: vi.fn(async () => false),
   mockEdition: { hasAdmin: false },
 }))
@@ -23,6 +24,7 @@ const { mockSet, mockClear, mockIsAdmin, mockEdition } = vi.hoisted(() => ({
 vi.mock("../../lib/provider-credentials.js", () => ({
   setProviderCredential: mockSet,
   clearProviderCredential: mockClear,
+  setProviderOverride: mockSetOverride,
   listProviderCredentialStates: vi.fn(() =>
     PROVIDER_KEY_IDS.map((id) => {
       const r = resolveProviderKey(id)
@@ -44,6 +46,7 @@ import {
   applyAppSnapshot,
   resolveProviderKey,
   setEnvProviderKeys,
+  setProviderKeyOverrides,
   _resetProviderKeysRuntimeForTests,
 } from "../../lib/provider-keys-runtime.js"
 
@@ -66,6 +69,7 @@ function build(auth: { userId?: string; apiToken?: boolean; appAuthorization?: b
 beforeEach(() => {
   mockSet.mockReset().mockResolvedValue(undefined)
   mockClear.mockReset().mockResolvedValue(undefined)
+  mockSetOverride.mockReset().mockResolvedValue(undefined)
   mockIsAdmin.mockReset().mockResolvedValue(false)
   mockEdition.hasAdmin = false
   _resetProviderKeysRuntimeForTests()
@@ -106,7 +110,7 @@ describe("PUT /v1/setup/provider-keys/:id", () => {
     const res = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie", payload: { value: "kie_new_123" } })
     expect(res.statusCode).toBe(200)
     expect(mockSet).toHaveBeenCalledWith("kie", "kie_new_123", "user-1")
-    expect(res.json()).toEqual({ id: "kie", set: true, source: "app" })
+    expect(res.json()).toEqual({ id: "kie", set: true, source: "app", disabled: false, ignoreEnv: false })
     expect(res.body).not.toContain("kie_new_123")
   })
 
@@ -164,7 +168,7 @@ describe("DELETE /v1/setup/provider-keys/:id", () => {
     const res = await app.inject({ method: "DELETE", url: "/v1/setup/provider-keys/fal" })
     expect(res.statusCode).toBe(200)
     expect(mockClear).toHaveBeenCalledWith("fal")
-    expect(res.json()).toEqual({ id: "fal", set: false, source: null })
+    expect(res.json()).toEqual({ id: "fal", set: false, source: null, disabled: false, ignoreEnv: false })
   })
 
   it("cannot clear a key that comes from the environment", async () => {
@@ -173,5 +177,65 @@ describe("DELETE /v1/setup/provider-keys/:id", () => {
     const res = await app.inject({ method: "DELETE", url: "/v1/setup/provider-keys/fal" })
     expect(res.statusCode).toBe(409)
     expect(mockClear).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b provider control: disable any provider (env keys included) + Replace .env
+// ---------------------------------------------------------------------------
+describe("PUT /v1/setup/provider-keys/:id/disabled", () => {
+  it("toggles the provider off and on — the one control that works on env-managed keys", async () => {
+    setEnvProviderKeys({ kie: "kie-env-key" })
+    await build()
+    const off = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie/disabled", payload: { disabled: true } })
+    expect(off.statusCode).toBe(200)
+    expect(mockSetOverride).toHaveBeenCalledWith("kie", { disabled: true })
+    const on = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie/disabled", payload: { disabled: false } })
+    expect(on.statusCode).toBe(200)
+    expect(mockSetOverride).toHaveBeenCalledWith("kie", { disabled: false })
+  })
+
+  it("validates the body and the provider id", async () => {
+    await build()
+    expect((await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie/disabled", payload: { disabled: "yes" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/nope/disabled", payload: { disabled: true } })).statusCode).toBe(404)
+  })
+
+  it("is first-party only, like every other key write", async () => {
+    await build({ userId: "user-1", apiToken: true })
+    const res = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie/disabled", payload: { disabled: true } })
+    expect(res.statusCode).toBe(403)
+    expect(mockSetOverride).not.toHaveBeenCalled()
+  })
+})
+
+describe("Replace .env key (PUT with ignoreEnv) — the 409 stops being a dead end", () => {
+  it("a plain paste over an env key still 409s (the default is unchanged)", async () => {
+    setEnvProviderKeys({ kie: "kie-env-key" })
+    await build()
+    const res = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie", payload: { value: "new-key" } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("managed_by_env")
+    expect(mockSet).not.toHaveBeenCalled()
+  })
+
+  it("ignoreEnv:true stores the app key AND sets the override — no .env edit, no restart", async () => {
+    setEnvProviderKeys({ kie: "kie-env-key" })
+    await build()
+    const res = await app.inject({ method: "PUT", url: "/v1/setup/provider-keys/kie", payload: { value: "new-key", ignoreEnv: true } })
+    expect(res.statusCode).toBe(200)
+    expect(mockSet).toHaveBeenCalledWith("kie", "new-key", "user-1")
+    expect(mockSetOverride).toHaveBeenCalledWith("kie", { ignoreEnv: true })
+  })
+
+  it("deleting the app key clears ignoreEnv — the env key honestly returns", async () => {
+    setEnvProviderKeys({ kie: "kie-env-key" })
+    await setProviderKeyOverrides({ kie: { ignoreEnv: true } })
+    await applyAppSnapshot({ kie: "app-key" })
+    await build()
+    const res = await app.inject({ method: "DELETE", url: "/v1/setup/provider-keys/kie" })
+    expect(res.statusCode).toBe(200)
+    expect(mockClear).toHaveBeenCalledWith("kie")
+    expect(mockSetOverride).toHaveBeenCalledWith("kie", { ignoreEnv: false })
   })
 })

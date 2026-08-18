@@ -213,3 +213,21 @@ function safeParse(s: string): unknown {
     return null
   }
 }
+
+// ---------------------------------------------------------------------------
+// Routing prefs (4b): how the credential participates in provider routing.
+// Stored in app_settings ("nodaro_provider_prefs", written by the
+// post-connect choice dialog); ABSENT = the legacy default — scope "all",
+// precedence "local" — so installs that connected before the dialog existed
+// keep routing byte-identically until they make a choice.
+// ---------------------------------------------------------------------------
+import { getAppSettings, type NodaroProviderPrefs } from "./app-settings.js"
+
+export const LEGACY_NODARO_PREFS: NodaroProviderPrefs = { scope: "all", precedence: "local" }
+
+/** The effective prefs — explicit row, else the legacy default. Rides
+ *  getAppSettings' 60s cache; call sites add no DB reads. */
+export async function getNodaroProviderPrefs(): Promise<NodaroProviderPrefs> {
+  const settings = await getAppSettings().catch(() => null)
+  return settings?.nodaro_provider_prefs ?? LEGACY_NODARO_PREFS
+}

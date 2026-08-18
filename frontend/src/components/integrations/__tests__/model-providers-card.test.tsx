@@ -108,14 +108,18 @@ describe("ModelProvidersCard", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
-  it("keeps an env-managed key read-only and names the variable", async () => {
+  it("an env-managed key is no longer a dead end: Replace .env + Disable, never plain Change (4b)", async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, statusBody({ keys: { replicate: true }, sources: { replicate: "env" } })))
     renderCard()
     await screen.findByText("Replicate")
     const row = screen.getByText("Replicate").closest("div.flex-col") as HTMLElement
     expect(within(row).getByText("set (env)")).toBeInTheDocument()
-    expect(within(row).getByText(/Set by the environment/)).toBeInTheDocument()
-    expect(within(row).queryByRole("button", { name: /paste key|change key/i })).toBeNull()
+    // The old read-only caption is replaced by real affordances: an explicit
+    // Replace action (paste-with-ignoreEnv) and the disable toggle. A plain
+    // Change/Paste stays absent — env still wins unless replaced explicitly.
+    expect(within(row).getByRole("button", { name: /replace \.env key/i })).toBeInTheDocument()
+    expect(within(row).getByRole("button", { name: /^disable$/i })).toBeInTheDocument()
+    expect(within(row).queryByRole("button", { name: /^(paste key|change key)$/i })).toBeNull()
   })
 
   it("says so when the instance has no encryption key", async () => {

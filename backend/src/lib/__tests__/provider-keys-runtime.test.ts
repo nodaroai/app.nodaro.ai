@@ -13,8 +13,11 @@ import {
   PROVIDER_KEY_META,
   applyAppSnapshot,
   envVarFor,
+  getProviderKeyOverride,
   providerIdFor,
   resolveProviderKey,
+  resolveProviderKeyRaw,
+  setProviderKeyOverrides,
   setEnvProviderKeys,
   setEnvProviderKey,
   subscribeProviderKeys,
@@ -162,5 +165,51 @@ describe("subscribeProviderKeys", () => {
       offs.forEach((off) => off())
       errSpy.mockRestore()
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b overrides layer: disable + ignoreEnv on top of the two key layers
+// ---------------------------------------------------------------------------
+describe("provider overrides (4b)", () => {
+  it("disabled: effective resolution is ABSENT, the raw layers still show the key (tiles say 'disabled', never 'missing')", async () => {
+    setEnvProviderKeys({ kie: "kie-env" })
+    await setProviderKeyOverrides({ kie: { disabled: true } })
+    expect(resolveProviderKey("kie")).toBeNull()
+    expect(resolveProviderKeyRaw("kie")).toEqual({ value: "kie-env", source: "env" })
+    expect(getProviderKeyOverride("kie")).toEqual({ disabled: true })
+  })
+
+  it("ignoreEnv: the env layer is skipped so an app key REPLACES a .env key", async () => {
+    setEnvProviderKeys({ kie: "kie-env" })
+    await applyAppSnapshot({ kie: "kie-app" })
+    expect(resolveProviderKey("kie")).toEqual({ value: "kie-env", source: "env" }) // env wins normally
+    await setProviderKeyOverrides({ kie: { ignoreEnv: true } })
+    expect(resolveProviderKey("kie")).toEqual({ value: "kie-app", source: "app" })
+    // Raw stays layer-honest: env is still the top raw layer.
+    expect(resolveProviderKeyRaw("kie")).toEqual({ value: "kie-env", source: "env" })
+  })
+
+  it("ignoreEnv with no app key resolves ABSENT — the override never invents a credential", async () => {
+    setEnvProviderKeys({ kie: "kie-env" })
+    await setProviderKeyOverrides({ kie: { ignoreEnv: true } })
+    expect(resolveProviderKey("kie")).toBeNull()
+  })
+
+  it("setProviderKeyOverrides notifies with the ids whose EFFECTIVE value changed — disable re-routes immediately", async () => {
+    setEnvProviderKeys({ kie: "kie-env", fal: "fal-env" })
+    const seen: string[][] = []
+    const unsubscribe = subscribeProviderKeys((changed) => {
+      seen.push([...changed])
+    })
+    const changed = await setProviderKeyOverrides({ kie: { disabled: true } })
+    expect(changed).toEqual(["kie"]) // fal untouched
+    expect(seen).toEqual([["kie"]])
+    // Re-enabling notifies again; an override write that changes nothing does not.
+    await setProviderKeyOverrides({})
+    expect(seen).toEqual([["kie"], ["kie"]])
+    await setProviderKeyOverrides({})
+    expect(seen).toEqual([["kie"], ["kie"]])
+    unsubscribe()
   })
 })

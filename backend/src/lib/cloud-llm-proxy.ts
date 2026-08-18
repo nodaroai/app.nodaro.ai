@@ -36,7 +36,7 @@
 
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { config } from "./config.js"
-import { getNodaroConnection, nodaroCloudBase } from "./nodaro-connect.js"
+import { getNodaroCredential, getNodaroProviderPrefs, nodaroCloudBase } from "./nodaro-connect.js"
 import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
 import { insertJob } from "./insert-job.js"
 import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request-helpers.js"
@@ -48,9 +48,17 @@ import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request
  * an install holding ANY of the three keeps its own path untouched.
  */
 export async function shouldProxyLlmToCloud(): Promise<boolean> {
-  if (config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY) return false
-  const conn = await getNodaroConnection().catch(() => null)
-  return Boolean(conn?.accessToken)
+  const prefs = await getNodaroProviderPrefs()
+  // scope "exclusives": LLM calls behave as if the credential did not exist.
+  if (prefs.scope === "exclusives") return false
+  const hasLocalLane = Boolean(config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY)
+  // precedence "nodaro": every LLM call goes through the connection, local
+  // keys or not — the "ignore my other providers" choice.
+  if (hasLocalLane && prefs.precedence !== "nodaro") return false
+  // getNodaroCredential, not getNodaroConnection: the key lane (env/pasted
+  // NODARO_API_KEY) must proxy too — same parity fix as the media re-host.
+  const credential = await getNodaroCredential().catch(() => null)
+  return credential !== null
 }
 
 /**
@@ -207,8 +215,8 @@ export async function maybeProxyLlmRouteToCloud(
 ): Promise<boolean> {
   if (!(await shouldProxyLlmToCloud())) return false
 
-  const conn = await getNodaroConnection()
-  if (!conn?.accessToken) return false
+  const credential = await getNodaroCredential()
+  if (!credential) return false
 
   try {
     const stripped = stripInstanceLocalKeys(req.body)
@@ -222,7 +230,7 @@ export async function maybeProxyLlmRouteToCloud(
     const res = await fetch(`${nodaroCloudBase()}${cloudPath}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${conn.accessToken}`,
+        Authorization: `Bearer ${credential.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body ?? {}),
@@ -268,8 +276,8 @@ export async function maybeProxyLlmStreamToCloud(
 ): Promise<boolean> {
   if (!(await shouldProxyLlmToCloud())) return false
 
-  const conn = await getNodaroConnection()
-  if (!conn?.accessToken) return false
+  const credential = await getNodaroCredential()
+  if (!credential) return false
 
   try {
     const body = await rehostBodyMedia(stripInstanceLocalKeys(req.body))
@@ -280,7 +288,7 @@ export async function maybeProxyLlmStreamToCloud(
     const res = await fetch(`${nodaroCloudBase()}${cloudPath}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${conn.accessToken}`,
+        Authorization: `Bearer ${credential.token}`,
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },

@@ -1,9 +1,12 @@
 "use client"
 
+import { useState } from "react"
+
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { ProviderTile } from "@/lib/provider-tiles"
+import { NodaroScopeDialog } from "./nodaro-scope-dialog"
 import { useProviderKeyEditor } from "@/lib/use-provider-key-editor"
 
 /**
@@ -19,6 +22,7 @@ interface Props {
 
 export function ProviderKeyRow({ tile, onChanged }: Props) {
   const editor = useProviderKeyEditor(tile.id, onChanged)
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   const { phase, value, error, busy } = editor
   const inputId = `integrations-provider-key-${tile.id}`
   const editing = phase === "editing" || phase === "saving"
@@ -45,12 +49,17 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
         </p>
       )}
 
-      {tile.editable ? (
+      {tile.editable || tile.canReplaceEnv || tile.canDisable ? (
         editing ? (
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              void editor.save()
+              // Replace-.env (4b): a plain save over an env-managed key would 409.
+              void (tile.canReplaceEnv ? editor.saveReplacingEnv() : editor.save()).then((ok) => {
+                // A freshly pasted nodaro key is a new connection — ask how
+                // it should route (the 4b post-connect choice).
+                if (ok && tile.id === "nodaro") setScopeDialogOpen(true)
+              })
             }}
             className="flex flex-wrap items-center gap-2"
           >
@@ -78,9 +87,23 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
           </form>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={editor.startEditing} className="h-7 text-xs">
-              {tile.present ? "Change key" : "Paste key"}
-            </Button>
+            {(tile.editable || tile.canReplaceEnv) && (
+              <Button type="button" size="sm" variant="outline" onClick={editor.startEditing} className="h-7 text-xs">
+                {tile.canReplaceEnv ? "Replace .env key" : tile.present ? "Change key" : "Paste key"}
+              </Button>
+            )}
+            {tile.canDisable && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void editor.setDisabled(!tile.disabled)}
+                className={tile.disabled ? "h-7 text-xs text-emerald-600 hover:text-emerald-700" : "h-7 text-xs text-gray-500"}
+              >
+                {phase === "toggling" ? "…" : tile.disabled ? "Enable" : "Disable"}
+              </Button>
+            )}
             {tile.present && tile.source === "app" && (
               <Button
                 type="button"
@@ -100,7 +123,7 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
         )
       ) : tile.source === "env" ? (
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          Set by the environment — remove <span className="font-mono">{tile.env}</span> from .env to manage it here.
+          Set by the environment — remove <span className="font-mono">{tile.env}</span> from .env (or use Replace) to manage it here.
         </p>
       ) : tile.id === "nodaro" && tile.source === "oauth" ? (
         <p className="text-[11px] text-gray-500 dark:text-gray-400">Connected above — disconnect there to use a personal API key instead.</p>
@@ -111,11 +134,22 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
           {error}
         </p>
       )}
+      {tile.id === "nodaro" && (
+        <NodaroScopeDialog open={scopeDialogOpen} onClose={() => setScopeDialogOpen(false)} />
+      )}
     </div>
   )
 }
 
 function StateBadge({ tile }: { readonly tile: ProviderTile }) {
+  if (tile.disabled && tile.present) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+        disabled
+      </span>
+    )
+  }
   if (tile.present) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">

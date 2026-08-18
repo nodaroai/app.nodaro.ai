@@ -263,8 +263,10 @@ describe("POST /v1/motion-graphics/generate — engine=lottie (async enqueue)", 
     expect(validateMotionGraphicsPlan).not.toHaveBeenCalled()
     expect(CreditsService.commitCredits).not.toHaveBeenCalled()
     // The route never updates the job to a terminal status — only inserts it.
+    // (app_settings is the 4b routing-prefs READ inside shouldProxyLlmToCloud,
+    // not a job write.)
     const fromCalls = vi.mocked(supabase.from).mock.calls
-    expect(fromCalls.every(([table]) => table === "jobs")).toBe(true)
+    expect(fromCalls.every(([table]) => table === "jobs" || table === "app_settings")).toBe(true)
   })
 
   it("forwards previousSids to the enqueued payload", async () => {

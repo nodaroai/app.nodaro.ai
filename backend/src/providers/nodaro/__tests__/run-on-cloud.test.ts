@@ -17,8 +17,10 @@ vi.mock("../client.js", () => ({
   NodaroCloudError: class NodaroCloudError extends Error {},
 }))
 const isNodaroConnected = vi.fn(async () => false)
+const mockPrefs = vi.fn(async () => ({ scope: "all", precedence: "local" }) as { scope: "all" | "exclusives"; precedence: "nodaro" | "local" })
 vi.mock("../../../lib/nodaro-connect.js", () => ({
   isNodaroConnected: () => isNodaroConnected(),
+  getNodaroProviderPrefs: () => mockPrefs(),
 }))
 
 const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType, shouldRunOnCloud } = await import("../run-on-cloud.js")
@@ -176,6 +178,23 @@ describe("shouldRunOnCloud — the one rule for the connection fallthrough", () 
       throw new Error("db down")
     })
     await expect(shouldRunOnCloud(undefined)).resolves.toBe(false)
+  })
+
+  // ── 4b prefs: the fallthrough is the user's choice ──────────────────────
+  it('scope "exclusives": the credential serves only the exclusive nodes — this path acts unconnected', async () => {
+    mockPrefs.mockResolvedValueOnce({ scope: "exclusives", precedence: "local" })
+    await expect(shouldRunOnCloud(undefined)).resolves.toBe(false)
+    expect(isNodaroConnected).not.toHaveBeenCalled()
+  })
+
+  it('precedence "nodaro" ("ignore my other providers"): the connection wins even over a local key', async () => {
+    mockPrefs.mockResolvedValueOnce({ scope: "all", precedence: "nodaro" })
+    await expect(shouldRunOnCloud("hg_live_key")).resolves.toBe(true)
+  })
+
+  it('precedence "local" (legacy default): a local key still wins — pinned above, restated with explicit prefs', async () => {
+    mockPrefs.mockResolvedValueOnce({ scope: "all", precedence: "local" })
+    await expect(shouldRunOnCloud("hg_live_key")).resolves.toBe(false)
   })
 })
 

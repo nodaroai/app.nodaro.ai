@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { ProviderTile } from "@/lib/provider-tiles"
 import { useProviderKeyEditor } from "@/lib/use-provider-key-editor"
 
@@ -23,10 +24,13 @@ interface Props {
   readonly onChanged: () => void
 }
 
+import { NodaroScopeDialog } from "@/components/integrations/nodaro-scope-dialog"
+
 export function ProviderKeyTile({ tile, onChanged }: Props) {
   const editor = useProviderKeyEditor(tile.id, onChanged)
   const { phase, value, error, busy } = editor
   const inputId = `provider-key-${tile.id}`
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   const stateColor = tile.present ? "#166534" : FAINT
 
   return (
@@ -70,15 +74,27 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
         </span>
       )}
 
-      {tile.editable ? (
-        phase === "idle" || phase === "removing" ? (
+      {tile.editable || tile.canReplaceEnv || tile.canDisable ? (
+        phase === "idle" || phase === "removing" || phase === "toggling" ? (
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <button type="button" onClick={editor.startEditing} style={linkButton}>
-              {tile.present ? "CHANGE KEY →" : "PASTE KEY →"}
-            </button>
+            {(tile.editable || tile.canReplaceEnv) && (
+              <button type="button" onClick={editor.startEditing} style={linkButton}>
+                {tile.canReplaceEnv ? "REPLACE .ENV KEY →" : tile.present ? "CHANGE KEY →" : "PASTE KEY →"}
+              </button>
+            )}
             {tile.present && tile.source === "app" && (
               <button type="button" onClick={() => void editor.remove()} disabled={busy} style={{ ...linkButton, color: "#b60a43" }}>
                 {phase === "removing" ? "REMOVING…" : "REMOVE"}
+              </button>
+            )}
+            {tile.canDisable && (
+              <button
+                type="button"
+                onClick={() => void editor.setDisabled(!tile.disabled)}
+                disabled={busy}
+                style={{ ...linkButton, color: tile.disabled ? "#16a34a" : MUTED }}
+              >
+                {tile.disabled ? "ENABLE" : "DISABLE"}
               </button>
             )}
             {tile.whereToGet && !tile.present && (
@@ -89,7 +105,13 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              void editor.save()
+              // Replace-.env (4b): pasting over an env-managed key needs the
+              // explicit ignoreEnv action — a plain save would 409.
+              void (tile.canReplaceEnv ? editor.saveReplacingEnv() : editor.save()).then((ok) => {
+                // The post-connect choice (4b): a freshly pasted nodaro key
+                // is a new connection — ask how it should route.
+                if (ok && tile.id === "nodaro") setScopeDialogOpen(true)
+              })
             }}
             style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
           >
@@ -140,7 +162,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
         )
       ) : tile.source === "env" ? (
         <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
-          set by the environment — remove {tile.env} from .env to manage it here
+          set by the environment — remove {tile.env} from .env (or use Replace) to manage it here
         </span>
       ) : null}
 
@@ -148,6 +170,9 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
         <span role="alert" style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43" }}>
           {error}
         </span>
+      )}
+      {tile.id === "nodaro" && (
+        <NodaroScopeDialog open={scopeDialogOpen} onClose={() => setScopeDialogOpen(false)} />
       )}
     </div>
   )

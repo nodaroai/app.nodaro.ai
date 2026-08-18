@@ -178,8 +178,17 @@ export function canRunOnCloud(jobType: string): boolean {
  * call — a connect-after-boot must count, and the read is a cached credential.
  */
 export async function shouldRunOnCloud(localKey: string | null | undefined): Promise<boolean> {
-  if (typeof localKey === "string" && localKey.trim().length > 0) return false
-  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
+  const { isNodaroConnected, getNodaroProviderPrefs } = await import("../../lib/nodaro-connect.js")
+  const prefs = await getNodaroProviderPrefs()
+  // scope "exclusives": the credential serves ONLY the exclusive nodes —
+  // this vendor-direct fallthrough behaves as if it did not exist, even on
+  // a keyless install (the vendor client's own missing-key error is the
+  // honest outcome the user chose).
+  if (prefs.scope === "exclusives") return false
+  const hasLocalKey = typeof localKey === "string" && localKey.trim().length > 0
+  // precedence "nodaro" ("ignore my other providers"): the connection wins
+  // even when a local vendor key exists.
+  if (hasLocalKey && prefs.precedence !== "nodaro") return false
   return isNodaroConnected().catch(() => false)
 }
 

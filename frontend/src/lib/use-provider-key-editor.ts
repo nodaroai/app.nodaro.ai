@@ -12,7 +12,7 @@ import { getAuthHeaders } from "@/lib/api"
  * missing and the source.
  */
 
-export type ProviderKeyPhase = "idle" | "editing" | "saving" | "removing"
+export type ProviderKeyPhase = "idle" | "editing" | "saving" | "removing" | "toggling"
 
 export interface ProviderKeyEditor {
   readonly phase: ProviderKeyPhase
@@ -23,15 +23,19 @@ export interface ProviderKeyEditor {
   readonly setValue: (value: string) => void
   readonly startEditing: () => void
   readonly cancel: () => void
-  readonly save: () => Promise<void>
+  readonly save: () => Promise<boolean>
   readonly remove: () => Promise<void>
+  /** Replace-.env (4b): store the pasted key AND skip the env layer. */
+  readonly saveReplacingEnv: () => Promise<boolean>
+  /** Disable/enable the provider without touching its key (env keys too). */
+  readonly setDisabled: (disabled: boolean) => Promise<void>
 }
 
 export function useProviderKeyEditor(providerId: string, onChanged: () => void): ProviderKeyEditor {
   const [phase, setPhase] = useState<ProviderKeyPhase>("idle")
   const [value, setValue] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const busy = phase === "saving" || phase === "removing"
+  const busy = phase === "saving" || phase === "removing" || phase === "toggling"
 
   async function request(method: "PUT" | "DELETE", body?: unknown): Promise<boolean> {
     setError(null)
@@ -54,18 +58,43 @@ export function useProviderKeyEditor(providerId: string, onChanged: () => void):
     }
   }
 
-  async function save(): Promise<void> {
+  async function saveWith(body: Record<string, unknown>): Promise<boolean> {
     const trimmed = value.trim()
     if (!trimmed) {
       setError("Paste a key first")
-      return
+      return false
     }
     setPhase("saving")
-    const ok = await request("PUT", { value: trimmed })
+    const ok = await request("PUT", { ...body, value: trimmed })
     // Drop the plaintext either way; the tile shows set/missing, never the value.
     setValue("")
     setPhase(ok ? "idle" : "editing")
     if (ok) onChanged()
+    return ok
+  }
+
+  const save = (): Promise<boolean> => saveWith({})
+  /** The explicit "Replace .env key" action — bypasses the managed_by_env 409. */
+  const saveReplacingEnv = (): Promise<boolean> => saveWith({ ignoreEnv: true })
+
+  async function setDisabled(disabled: boolean): Promise<void> {
+    setPhase("toggling")
+    setError(null)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/v1/setup/provider-keys/${providerId}/disabled`, {
+        method: "PUT",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({ disabled }),
+      })
+      const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+      if (!res.ok) setError(json?.error?.message ?? `Could not ${disabled ? "disable" : "enable"} the provider (${res.status})`)
+      else onChanged()
+    } catch {
+      setError("Could not reach this server — check that it is running")
+    } finally {
+      setPhase("idle")
+    }
   }
 
   async function remove(): Promise<void> {
@@ -92,5 +121,7 @@ export function useProviderKeyEditor(providerId: string, onChanged: () => void):
     },
     save,
     remove,
+    saveReplacingEnv,
+    setDisabled,
   }
 }

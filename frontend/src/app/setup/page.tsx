@@ -10,6 +10,7 @@ import {
   type ProviderSource,
 } from "@/lib/provider-tiles"
 import { ProviderKeyTile } from "./provider-key-tile"
+import { NodaroScopeDialog } from "@/components/integrations/nodaro-scope-dialog"
 import { Link } from "react-router-dom"
 
 /**
@@ -47,6 +48,10 @@ interface ProvidersCheck {
   readonly sources?: Record<string, ProviderSource>
   /** Labels, env var, what it powers, and whether nodaro.ai covers it. */
   readonly meta?: Record<string, ProviderMeta>
+  /** 4b operator overrides — disabled/replace-.env, per provider. */
+  readonly overrides?: Record<string, { disabled?: boolean; ignoreEnv?: boolean }>
+  /** Raw key presence (before overrides) — a disabled tile still shows its key. */
+  readonly rawKeys?: Record<string, boolean>
   readonly hint?: string
 }
 
@@ -340,6 +345,18 @@ const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .e
 
 export default function SetupPage() {
   const [status, setStatus] = useState<SetupStatus | null>(null)
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
+  // The post-connect choice (4b): an OAuth Connect that started from /setup
+  // bounces back to /setup?nodaro=connected — ask how the new connection
+  // should route, exactly like the Integrations landing.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("nodaro") !== "connected") return
+    setScopeDialogOpen(true)
+    params.delete("nodaro")
+    const query = params.toString()
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`)
+  }, [])
   const [apiDown, setApiDown] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [checkedAt, setCheckedAt] = useState<Date | null>(null)
@@ -411,6 +428,8 @@ export default function SetupPage() {
     keys: status?.checks.providers.keys ?? PROVIDER_PLACEHOLDER_KEYS,
     sources: status?.checks.providers.sources,
     meta: status?.checks.providers.meta,
+    overrides: status?.checks.providers.overrides,
+    rawKeys: status?.checks.providers.rawKeys,
   })
   const coverage = cloudCoverageSummary(tiles)
   // Core keys unlock model families; the node-specific ones (HeyGen, Beeble,
@@ -1175,6 +1194,7 @@ export default function SetupPage() {
             )
           })()}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+            <NodaroScopeDialog open={scopeDialogOpen} onClose={() => setScopeDialogOpen(false)} />
             {tileGroups.core.map((tile) => (
               <ProviderKeyTile key={tile.id} tile={tile} onChanged={() => void refresh()} />
             ))}

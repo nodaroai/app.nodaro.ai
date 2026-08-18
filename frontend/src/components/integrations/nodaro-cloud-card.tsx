@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { NodaroScopeDialog, type NodaroProviderPrefs } from "./nodaro-scope-dialog"
 
 /**
  * "Nodaro Cloud" integration card (community cloud-connect, Phase 4a).
@@ -35,6 +36,7 @@ export function NodaroCloudCard() {
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   // Guards the ?nodaro=connected toast against StrictMode double-effects.
   const connectToastShownRef = useRef(false)
 
@@ -72,6 +74,9 @@ export function NodaroCloudCard() {
       return
     }
     toast.success("Connected to nodaro.ai!")
+    // The post-connect choice (4b): a fresh OAuth connection asks how it
+    // should route, same as a pasted key.
+    setScopeDialogOpen(true)
     params.delete("nodaro")
     const query = params.toString()
     window.history.replaceState(

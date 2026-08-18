@@ -4,12 +4,30 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockSettings } = vi.hoisted(() => {
+const { mockSettings, mockRegistryInfo } = vi.hoisted(() => {
   const mockSettings = {
     ai_provider: "kie" as "kie" | "replicate",
     cost_markup_percent: 50,
+    nodaro_provider_prefs: null as null | { scope: "all" | "exclusives"; precedence: "nodaro" | "local" },
   }
-  return { mockSettings }
+  // null = nodaro NOT registered (unconnected); an object = registered.
+  const mockRegistryInfo = { value: null as null | { id: string } }
+  return { mockSettings, mockRegistryInfo }
+})
+
+vi.mock("../registry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../registry.js")>()
+  return {
+    ...actual,
+    providerRegistry: new Proxy(actual.providerRegistry, {
+      get(target, prop, receiver) {
+        if (prop === "getProviderInfo") {
+          return (id: string) => (id === "nodaro" ? mockRegistryInfo.value : Reflect.get(target, prop, receiver).call(target, id))
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    }),
+  }
 })
 
 vi.mock("@/lib/app-settings.js", () => ({
@@ -35,6 +53,11 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("buildRoutingDecision", () => {
+  beforeEach(() => {
+    mockSettings.nodaro_provider_prefs = null
+    mockRegistryInfo.value = null
+  })
+
   beforeEach(() => {
     mockSettings.ai_provider = "kie"
     mockSettings.cost_markup_percent = 50
@@ -105,7 +128,7 @@ describe("resolveMarkup", () => {
       providerChain: ["kie"],
       markupPercent: 50,
       activeProvider: "kie",
-      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 },
+      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null },
     }
     expect(resolveMarkup(kieDecision, "kie")).toBe(50)
     // With replicate disabled, even replicate providerUsed returns the same KIE markup
@@ -129,5 +152,45 @@ describe("web-scrape credit costs", () => {
     // nodes because getNodeModelIdentifier returns the bare node type.
     const { STATIC_CREDIT_COSTS } = await import("../../ee/billing/credits.js")
     expect(STATIC_CREDIT_COSTS["web-scrape"]).toBe(20)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b: the nodaro chain extension is the USER'S choice (scope + precedence)
+// ---------------------------------------------------------------------------
+describe("buildRoutingDecision — nodaro prefs (4b)", () => {
+  beforeEach(() => {
+    mockSettings.nodaro_provider_prefs = null
+    mockRegistryInfo.value = { id: "nodaro" } // connected/registered
+  })
+
+  it("legacy default (no stored prefs) keeps the pre-4b semantics: nodaro LAST", async () => {
+    const d = await buildRoutingDecision("image-generation", "nano-banana")
+    expect(d.providerChain).toEqual(["kie", "replicate", "nodaro"])
+  })
+
+  it('scope "all" + precedence "local": user keys first, nodaro fills gaps', async () => {
+    mockSettings.nodaro_provider_prefs = { scope: "all", precedence: "local" }
+    const d = await buildRoutingDecision("image-generation", "nano-banana")
+    expect(d.providerChain).toEqual(["kie", "replicate", "nodaro"])
+  })
+
+  it('scope "all" + precedence "nodaro": "ignore my other providers" — nodaro FIRST', async () => {
+    mockSettings.nodaro_provider_prefs = { scope: "all", precedence: "nodaro" }
+    const d = await buildRoutingDecision("image-generation", "nano-banana")
+    expect(d.providerChain).toEqual(["nodaro", "kie", "replicate"])
+  })
+
+  it('scope "exclusives": commodity chains are byte-identical to an unconnected install', async () => {
+    mockSettings.nodaro_provider_prefs = { scope: "exclusives", precedence: "nodaro" }
+    const d = await buildRoutingDecision("image-generation", "nano-banana")
+    expect(d.providerChain).toEqual(["kie", "replicate"])
+  })
+
+  it("an unregistered nodaro provider ignores prefs entirely", async () => {
+    mockRegistryInfo.value = null
+    mockSettings.nodaro_provider_prefs = { scope: "all", precedence: "nodaro" }
+    const d = await buildRoutingDecision("image-generation", "nano-banana")
+    expect(d.providerChain).toEqual(["kie", "replicate"])
   })
 })

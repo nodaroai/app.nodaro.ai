@@ -28,6 +28,8 @@ interface ProvidersStatus {
   readonly keys: Record<string, boolean>
   readonly sources?: Record<string, ProviderSource>
   readonly meta?: Record<string, ProviderMeta>
+  readonly overrides?: Record<string, { disabled?: boolean; ignoreEnv?: boolean }>
+  readonly rawKeys?: Record<string, boolean>
 }
 
 interface EncryptionStatus {
@@ -68,7 +70,7 @@ export function ModelProvidersCard() {
   if (isCloud()) return null
 
   const providers = status?.checks.providers
-  const tiles: ProviderTile[] = providers ? providerTiles({ keys: providers.keys, sources: providers.sources, meta: providers.meta }) : []
+  const tiles: ProviderTile[] = providers ? providerTiles({ keys: providers.keys, sources: providers.sources, meta: providers.meta, overrides: providers.overrides, rawKeys: providers.rawKeys }) : []
   const { core, nodeSpecific } = groupProviderTiles(tiles)
   const coverage = cloudCoverageSummary(tiles)
   const connected = providers?.nodaroCloud === true

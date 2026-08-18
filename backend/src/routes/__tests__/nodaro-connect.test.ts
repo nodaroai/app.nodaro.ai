@@ -19,6 +19,7 @@ const { mockGetConnection, mockReadState, mockSave, mockFetch, mockCredential } 
 }))
 
 vi.mock("../../lib/nodaro-connect.js", () => ({
+  getNodaroProviderPrefs: async () => ({ scope: "all", precedence: "local" }),
   clearNodaroConnection: vi.fn(),
   getNodaroConnection: mockGetConnection,
   readNodaroConnectionState: mockReadState,
