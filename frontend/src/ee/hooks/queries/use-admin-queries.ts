@@ -961,6 +961,23 @@ export function usePatchPickerGapMutation() {
 
 // --- App Reports (generic diagnostic inbox) ---
 
+/** Originating-job context resolved server-side (all best-effort / nullable):
+ *  jobs provenance (`source`/`source_detail`, migration 282), the execution's
+ *  trigger + MCP client for orchestrated jobs, and the published app's slug
+ *  when the run came from an app. */
+export interface AppReportJobInfo {
+  readonly status: string | null
+  readonly model_identifier: string | null
+  readonly provider: string | null
+  readonly error_message: string | null
+  readonly source: string | null
+  readonly source_detail: string | null
+  readonly workflow_execution_id: string | null
+  readonly execution_trigger: string | null
+  readonly mcp_client: string | null
+  readonly app_slug: string | null
+}
+
 export interface AppReport {
   readonly id: string
   readonly app_slug: string | null
@@ -970,7 +987,9 @@ export interface AppReport {
   readonly title: string
   readonly payload: Record<string, unknown>
   readonly user_id: string | null
+  readonly user_email: string | null
   readonly job_id: string | null
+  readonly job: AppReportJobInfo | null
   readonly status: "new" | "reviewed" | "resolved" | "dismissed"
   readonly created_at: string
 }

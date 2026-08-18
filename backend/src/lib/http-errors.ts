@@ -4,6 +4,74 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 const GENERIC_INTERNAL_MESSAGE = "Internal server error"
 
 /**
+ * Server-error telemetry: every 5xx the API produces — an uncaught route throw,
+ * a `sendInternalError` call, or a body the sanitizer net had to genericize —
+ * also drops a `kind: "internal-error"` row into `app_reports`, so real user-
+ * facing failures surface in /admin/app-reports instead of living only in
+ * container logs. Best-effort by contract (insertAppReport swallows failures)
+ * and throttled per (method, route, message) so an error storm on one endpoint
+ * produces one report per window, not thousands of rows.
+ */
+const ERROR_REPORT_THROTTLE_MS = 5 * 60_000
+const recentErrorReports = new Map<string, number>()
+
+/** Test hook — clears the in-process throttle window. */
+export function __resetHttpErrorTelemetry(): void {
+  recentErrorReports.clear()
+}
+
+function shouldReportErrorKey(key: string): boolean {
+  const now = Date.now()
+  const last = recentErrorReports.get(key)
+  if (last !== undefined && now - last < ERROR_REPORT_THROTTLE_MS) return false
+  recentErrorReports.set(key, now)
+  if (recentErrorReports.size > 500) {
+    for (const [k, ts] of recentErrorReports) {
+      if (now - ts >= ERROR_REPORT_THROTTLE_MS) recentErrorReports.delete(k)
+    }
+  }
+  return true
+}
+
+function reportServerError(
+  req: FastifyRequest,
+  message: string,
+  via: "route-catch" | "uncaught" | "sanitizer-net",
+  err?: unknown,
+): void {
+  try {
+    const path = (req.url ?? "").split("?")[0]
+    const route = req.routeOptions?.url ?? path
+    if (!shouldReportErrorKey(`${req.method} ${route} :: ${message.slice(0, 160)}`)) return
+    // Lazy import: app-reports pulls in the Supabase client at module load, and
+    // http-errors is imported by app.ts + nearly every route — keep this module
+    // dependency-free so importing it never requires a configured environment.
+    void import("./app-reports.js")
+      .then(({ insertAppReport }) =>
+        insertAppReport({
+          node: "http-error-net",
+          kind: "internal-error",
+          severity: "error",
+          title: `${req.method} ${route} — ${message}`,
+          payload: {
+            method: req.method,
+            route,
+            path,
+            message,
+            via,
+            ...(err instanceof Error && err.stack ? { stack: err.stack.slice(0, 2000) } : {}),
+            ...(typeof req.headers?.origin === "string" ? { origin: req.headers.origin } : {}),
+          },
+          userId: (req as { userId?: string }).userId ?? null,
+        }),
+      )
+      .catch(() => {})
+  } catch {
+    // Telemetry must never break the error-response path it observes.
+  }
+}
+
+/**
  * Replies produced by `sendInternalError` are recorded here so the `onSend`
  * net below leaves their message untouched. We key on the reply OBJECT (not the
  * message text) because a raw DB leak and an intentional friendly message are
@@ -36,9 +104,26 @@ export function sendInternalError(
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
   req.log.error({ err }, clientMessage)
+  reportServerError(req, err instanceof Error ? err.message : clientMessage, "route-catch", err)
   sanitizedReplies.add(reply)
   return reply.status(500).send({
     error: { code: "internal_error", message: clientMessage },
+  })
+}
+
+/**
+ * Error telemetry for UNCAUGHT route errors: Fastify's default error handler
+ * turns a thrown error into a 500 without passing through `sendInternalError`
+ * or matching the sanitizer net's body shape, so without this hook those
+ * failures never reach `app_reports`. `onError` observes the error (with its
+ * stack) and cannot modify the reply, so response behavior is untouched.
+ * Register alongside `registerInternalErrorSanitizer` in app.ts.
+ */
+export function registerErrorTelemetry(app: FastifyInstance): void {
+  app.addHook("onError", async (req, _reply, error) => {
+    const status = (error as { statusCode?: number }).statusCode ?? 500
+    if (status < 500) return // 4xx = client errors (validation, auth) — not telemetry
+    reportServerError(req, error.message || "Unknown error", "uncaught", error)
   })
 }
 
@@ -77,6 +162,9 @@ export function registerInternalErrorSanitizer(app: FastifyInstance): void {
       // Keep full diagnostics in the logs; strip them from the wire.
       req.log.error({ rawMessage: raw, path: req.url }, "sanitized internal_error response body")
     }
+    // Marked replies were already reported at the sendInternalError site; this
+    // covers routes that composed an internal_error 500 by hand.
+    reportServerError(req, raw ?? GENERIC_INTERNAL_MESSAGE, "sanitizer-net")
     body.error.message = GENERIC_INTERNAL_MESSAGE
 
     const out = JSON.stringify(body)

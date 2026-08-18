@@ -26,21 +26,48 @@ const SEVERITY_VARIANT: Record<AppReport["severity"], string> = {
   error: "text-red-500",
 }
 
+/** Where the failing work originated: a published app run, a direct-job calling
+ *  surface (jobs.source: mcp / web / cli / sdk / api / …), or a workflow run's
+ *  trigger. Priority: the resolved app beats the raw surface — an app run's
+ *  jobs are orchestrated, so the two never actually compete. */
+function reportSource(r: AppReport): { label: string; detail?: string } {
+  const appSlug = r.job?.app_slug ?? r.app_slug
+  if (appSlug) return { label: `app: ${appSlug}` }
+  if (r.job?.source) return { label: r.job.source, detail: r.job.source_detail ?? undefined }
+  if (r.job?.execution_trigger) {
+    const trigger = r.job.execution_trigger
+    if (trigger === "mcp") return { label: "mcp", detail: r.job.mcp_client ?? undefined }
+    return { label: trigger === "manual" ? "workflow" : `workflow: ${trigger}` }
+  }
+  return { label: "—" }
+}
+
+function DetailItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <p className="min-w-0 truncate" title={value}>
+      <span className="text-muted-foreground">{label}: </span>
+      <span className={mono ? "font-mono" : undefined}>{value}</span>
+    </p>
+  )
+}
+
 function reportsMarkdown(rows: AppReport[], total: number, filters: Record<string, string>): string {
   const sections = rows.map((r) => {
+    const source = reportSource(r)
     const meta = [
-      `app: ${r.app_slug ?? "—"}`,
+      `source: ${source.label}${source.detail ? ` (${source.detail})` : ""}`,
       `node: ${r.node}`,
       `severity: ${r.severity}`,
       `status: ${r.status}`,
       `created: ${r.created_at}`,
       ...(r.job_id ? [`job: ${r.job_id}`] : []),
-      ...(r.user_id ? [`user: ${r.user_id}`] : []),
+      ...(r.user_email || r.user_id ? [`user: ${r.user_email ?? r.user_id}`] : []),
     ].join(" · ")
     return [
       `## [${r.kind}] ${r.title}`,
       "",
       meta,
+      ...(r.job?.error_message ? ["", `Job error: ${r.job.error_message}`] : []),
       "",
       "```json",
       JSON.stringify(r.payload, null, 2),
@@ -100,7 +127,7 @@ export default function AdminAppReportsPage() {
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="w-44">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Kind</label>
-          <Input placeholder="missing-picker…" value={kind === "all" ? "" : kind} onChange={(e) => { setKind(e.target.value || "all"); setOffset(0) }} className="text-sm" />
+          <Input placeholder="missing-picker, internal-error…" value={kind === "all" ? "" : kind} onChange={(e) => { setKind(e.target.value || "all"); setOffset(0) }} className="text-sm" />
         </div>
         <div className="w-36">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">App</label>
@@ -134,7 +161,8 @@ export default function AdminAppReportsPage() {
               <tr>
                 <th className="w-8" />
                 <th className="text-left px-3 py-2 font-medium">Created</th>
-                <th className="text-left px-3 py-2 font-medium">App</th>
+                <th className="text-left px-3 py-2 font-medium">Source</th>
+                <th className="text-left px-3 py-2 font-medium">User</th>
                 <th className="text-left px-3 py-2 font-medium">Node</th>
                 <th className="text-left px-3 py-2 font-medium">Kind</th>
                 <th className="text-left px-3 py-2 font-medium">Title</th>
@@ -146,12 +174,16 @@ export default function AdminAppReportsPage() {
               {reports.map((r) => {
                 const isOpen = expanded === r.id
                 const imageUrl = typeof r.payload?.imageUrl === "string" ? r.payload.imageUrl : null
+                const source = reportSource(r)
                 return (
                   <Fragment key={r.id}>
                     <tr className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setExpanded(isOpen ? null : r.id)}>
                       <td className="pl-2">{isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-xs font-mono">{r.app_slug ?? "—"}</td>
+                      <td className="px-3 py-2 text-xs font-mono whitespace-nowrap" title={source.detail}>{source.label}</td>
+                      <td className="px-3 py-2 text-xs max-w-[180px] truncate" title={r.user_email ?? r.user_id ?? undefined}>
+                        {r.user_email ?? (r.user_id ? `${r.user_id.slice(0, 8)}…` : "—")}
+                      </td>
                       <td className="px-3 py-2 text-xs font-mono">{r.node}</td>
                       <td className="px-3 py-2"><Badge variant="outline" className={`text-xs ${SEVERITY_VARIANT[r.severity]}`}>{r.kind}</Badge></td>
                       <td className="px-3 py-2 max-w-[340px] truncate">{r.title}</td>
@@ -167,7 +199,22 @@ export default function AdminAppReportsPage() {
                     {isOpen && (
                       <tr className="border-t bg-muted/20">
                         <td />
-                        <td colSpan={7} className="px-3 py-3">
+                        <td colSpan={8} className="px-3 py-3">
+                          <div className="mb-2 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2 xl:grid-cols-3">
+                            <DetailItem label="User" value={r.user_email ?? "—"} />
+                            {r.user_id && <DetailItem label="User ID" value={r.user_id} mono />}
+                            <DetailItem label="Source" value={`${source.label}${source.detail ? ` (${source.detail})` : ""}`} />
+                            {r.job_id && <DetailItem label="Job" value={r.job_id} mono />}
+                            {r.job?.status && <DetailItem label="Job status" value={r.job.status} />}
+                            {r.job?.model_identifier && <DetailItem label="Model" value={r.job.model_identifier} mono />}
+                            {r.job?.provider && <DetailItem label="Provider" value={r.job.provider} mono />}
+                            {r.job?.workflow_execution_id && <DetailItem label="Execution" value={r.job.workflow_execution_id} mono />}
+                          </div>
+                          {r.job?.error_message && (
+                            <p className="mb-2 rounded border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-500">
+                              {r.job.error_message}
+                            </p>
+                          )}
                           <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
                             {imageUrl && (
                               <a href={imageUrl} target="_blank" rel="noreferrer" className="shrink-0">
@@ -179,9 +226,6 @@ export default function AdminAppReportsPage() {
                               {JSON.stringify(r.payload, null, 2)}
                             </pre>
                           </div>
-                          <p className="mt-2 text-[11px] text-muted-foreground">
-                            {r.job_id ? `job ${r.job_id}` : ""}{r.job_id && r.user_id ? " · " : ""}{r.user_id ? `user ${r.user_id}` : ""}
-                          </p>
                         </td>
                       </tr>
                     )}
@@ -189,7 +233,7 @@ export default function AdminAppReportsPage() {
                 )
               })}
               {reports.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No reports found.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No reports found.</td></tr>
               )}
             </tbody>
           </table>

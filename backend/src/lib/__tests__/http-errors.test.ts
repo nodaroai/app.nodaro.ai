@@ -1,7 +1,21 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
 import type { FastifyReply, FastifyRequest } from "fastify"
-import { sendInternalError, registerInternalErrorSanitizer } from "../http-errors.js"
+
+vi.mock("../app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
+
+import { insertAppReport } from "../app-reports.js"
+import {
+  sendInternalError,
+  registerInternalErrorSanitizer,
+  registerErrorTelemetry,
+  __resetHttpErrorTelemetry,
+} from "../http-errors.js"
+
+beforeEach(() => {
+  vi.mocked(insertAppReport).mockClear()
+  __resetHttpErrorTelemetry()
+})
 
 function makeReply() {
   const reply = {
@@ -21,7 +35,14 @@ function makeReply() {
 
 function makeReq() {
   const error = vi.fn()
-  const req = { log: { error } } as unknown as FastifyRequest
+  const req = {
+    log: { error },
+    method: "POST",
+    url: "/v1/things?secret=1",
+    routeOptions: { url: "/v1/things" },
+    headers: {},
+    userId: "00000000-0000-4000-8000-000000000042",
+  } as unknown as FastifyRequest
   return { req, error }
 }
 
@@ -161,6 +182,112 @@ describe("registerInternalErrorSanitizer (onSend net)", () => {
     const res = await app.inject({ method: "GET", url: "/ok" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ ok: true })
+    await app.close()
+  })
+})
+
+describe("server-error telemetry → app_reports", () => {
+  /** Reporting goes through a lazy dynamic import — flush it before asserting. */
+  const flushReports = () => vi.waitFor(() => expect(insertAppReport).toHaveBeenCalled())
+
+  it("sendInternalError files an internal-error report with route, user, raw message and stack", async () => {
+    const reply = makeReply()
+    const { req } = makeReq()
+    const err = new Error("relation jobs does not exist")
+    sendInternalError(reply as unknown as FastifyReply, req, err, "Failed to create job")
+
+    await flushReports()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+    const report = vi.mocked(insertAppReport).mock.calls[0][0]
+    expect(report.node).toBe("http-error-net")
+    expect(report.kind).toBe("internal-error")
+    expect(report.severity).toBe("error")
+    expect(report.title).toBe("POST /v1/things — relation jobs does not exist")
+    expect(report.userId).toBe("00000000-0000-4000-8000-000000000042")
+    expect(report.payload).toMatchObject({
+      method: "POST",
+      route: "/v1/things",
+      path: "/v1/things", // query string stripped
+      via: "route-catch",
+    })
+    expect(String(report.payload?.stack)).toContain("relation jobs does not exist")
+  })
+
+  it("throttles repeats of the same (method, route, message) into one report", async () => {
+    const reply = makeReply()
+    const { req } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new Error("boom"))
+    sendInternalError(reply as unknown as FastifyReply, req, new Error("boom"))
+    await flushReports()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+
+    sendInternalError(reply as unknown as FastifyReply, req, new Error("different failure"))
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(2))
+  })
+
+  it("registerErrorTelemetry reports UNCAUGHT route throws without altering the response", async () => {
+    const app = Fastify()
+    registerErrorTelemetry(app)
+    app.get("/explodes", async () => {
+      throw new Error("undefined is not a function")
+    })
+    await app.ready()
+
+    const res = await app.inject({ method: "GET", url: "/explodes" })
+    expect(res.statusCode).toBe(500)
+    // Fastify's default 500 body stays exactly as it was — telemetry observes only.
+    expect(res.body).not.toContain("app_reports")
+
+    await flushReports()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+    const report = vi.mocked(insertAppReport).mock.calls[0][0]
+    expect(report.kind).toBe("internal-error")
+    expect(report.payload).toMatchObject({ via: "uncaught", route: "/explodes", method: "GET" })
+    expect(String(report.payload?.stack)).toContain("undefined is not a function")
+    await app.close()
+  })
+
+  it("ignores 4xx errors (validation/auth are not server-error telemetry)", async () => {
+    const app = Fastify()
+    registerErrorTelemetry(app)
+    app.get("/teapot", async () => {
+      const err = new Error("short and stout") as Error & { statusCode: number }
+      err.statusCode = 418
+      throw err
+    })
+    await app.ready()
+
+    const res = await app.inject({ method: "GET", url: "/teapot" })
+    expect(res.statusCode).toBe(418)
+    // Negative case: give the (would-be) async report a beat to land, then assert silence.
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(insertAppReport).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("the sanitizer net reports hand-composed internal_error 500s, but not marked (helper) replies twice", async () => {
+    const app = Fastify()
+    registerInternalErrorSanitizer(app)
+    app.get("/leak", async (_req, reply) =>
+      reply.status(500).send({ error: { code: "internal_error", message: 'column "x" does not exist' } }),
+    )
+    app.get("/helper", async (req, reply) =>
+      sendInternalError(reply, req, new Error("raw db detail"), "Failed to create job"),
+    )
+    await app.ready()
+
+    await app.inject({ method: "GET", url: "/leak" })
+    await flushReports()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(insertAppReport).mock.calls[0][0].payload).toMatchObject({
+      via: "sanitizer-net",
+      message: 'column "x" does not exist',
+    })
+
+    await app.inject({ method: "GET", url: "/helper" })
+    // exactly one MORE report — from sendInternalError, not a second from the net
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(insertAppReport).mock.calls[1][0].payload).toMatchObject({ via: "route-catch" })
     await app.close()
   })
 })

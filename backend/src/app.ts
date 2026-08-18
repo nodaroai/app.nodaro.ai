@@ -213,7 +213,7 @@ import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
-import { registerInternalErrorSanitizer } from "./lib/http-errors.js"
+import { registerInternalErrorSanitizer, registerErrorTelemetry } from "./lib/http-errors.js"
 
 /**
  * Rate-limit key derivation.
@@ -281,6 +281,12 @@ export async function buildApp() {
   // Guarantees no route can leak a raw DB/provider message just by forgetting
   // the helper. Registered early so it applies to every route below.
   registerInternalErrorSanitizer(app)
+
+  // Server-error telemetry: uncaught route throws (Fastify default handler
+  // path) are reported into `app_reports` (kind "internal-error") so they
+  // surface at /admin/app-reports; sendInternalError + the sanitizer net
+  // report their own paths. Observability only — never alters a response.
+  registerErrorTelemetry(app)
 
   // Claude.ai MCP UI iframes get a per-instance sandbox subdomain on
   // claudemcpcontent.com. Origins look like

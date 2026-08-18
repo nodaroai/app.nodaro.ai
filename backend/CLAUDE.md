@@ -43,6 +43,8 @@ app.post("/v1/my-route", async (req, reply) => {
 
 `sendInternalError(reply, req, err, clientMessage)` logs `err` (with stack) via `req.log.error`, sends `{ error: { code: "internal_error", message: clientMessage } }`, and marks the reply (via a `WeakSet`) so the net leaves the curated message intact. **`clientMessage` is sent verbatim** — keep it generic (`"Failed to <operation>"`); never interpolate a raw `.message`, table/column, or RPC name (pass those as the `err` arg to be logged, not shown).
 
+**Server-error telemetry (same file):** every 5xx the API produces — an uncaught route throw (`registerErrorTelemetry`'s `onError` hook, registered in `app.ts`), a `sendInternalError` call, or a hand-composed body the net genericized — ALSO files a `kind: "internal-error"` row into `app_reports` (node `http-error-net`, with route pattern, userId, raw message + stack in the payload), surfacing at `/admin/app-reports`. Best-effort + throttled per (method, route, message) at one report / 5 min, and wrapped so telemetry can never break the error-response path. Observability only — never alters a response body.
+
 **Scope / non-goals:**
 - The net only touches `statusCode === 500` + `code === "internal_error"`. Structured errors (402 `insufficient_credits`, 403 `forbidden`, 409 `name_taken`, …) have different codes/statuses and pass through untouched — keep sending those explicitly via `reply.status(...).send(...)`.
 - SSE writes to `reply.raw` and bypasses `onSend`; SSE errors use the `error` event, not this path.
