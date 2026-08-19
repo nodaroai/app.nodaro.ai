@@ -100,6 +100,12 @@ const WILDCARD_REEXPORT_LINE_PATTERN = /^\s*export\s*\*\s*from\s*["'][^"']+["']/
 const ALLOWLIST = new Set([
   "packages/shared/src/monetization.ts",
   "packages/shared/src/__tests__/utilities.test.ts", // calculateMonetizationMarkup/calculateMonetizedCost describe blocks
+  // Migration comments whose $ figures are SANCTIONED public prices: KIE's own
+  // published list rate (273) and our public credit price across the
+  // re-denomination (289, 295). Reviewed 2026-08-20.
+  "supabase/migrations/273_gemini_36_flash_video_analysis_pricing.sql",
+  "supabase/migrations/289_credit_redenomination_scale_x10.sql",
+  "supabase/migrations/295_free_grant_default_1500.sql",
 ])
 
 function walk(dir) {
@@ -119,7 +125,7 @@ function walk(dir) {
   })
 }
 
-function isPricingRelevantLine(line) {
+function isPricingRelevantLine(line, { skipBareMarkup = false } = {}) {
   if (RATE_PATTERN.test(line)) return "provider-rate pattern (a \"$X/unit\" figure)"
   if (DOLLAR_RANGE_PATTERN.test(line)) return "provider-rate range (a \"$X-Y\" figure span)"
   const dollarFigures = line.match(DOLLAR_FIGURE_PATTERN)
@@ -127,7 +133,12 @@ function isPricingRelevantLine(line) {
   if (RATE_FIELD_PATTERN.test(line)) return "per-unit rate field identifier (inputPricePerM-class, $-less)"
   if (MEASURED_METHODOLOGY_PATTERN.test(line)) return "measured-rate methodology marker (all-caps MEASURED)"
   if (LIVE_BILLING_PATTERN.test(line)) return "\"live ... billing\" methodology phrase"
-  if (MARKUP_PATTERN.test(line)) return "\"markup\" identifier/mention"
+  // Bare "markup" is a leak marker only where the word has zero legitimate use
+  // (packages/*, changelogs). Migrations legitimately carry the SANCTIONED
+  // mechanism — cost_markup_percent, p_markup_amount, "0% markup" notes — so
+  // they skip this rule and rely on the $-shape / margin-context / MEASURED
+  // rules, which are the ones that caught the real migration leak (279).
+  if (!skipBareMarkup && MARKUP_PATTERN.test(line)) return "\"markup\" identifier/mention"
   if (MARGIN_PATTERN.test(line) && FINANCIAL_CONTEXT_PATTERN.test(line)) return "\"margin\" mention in financial context"
   return null
 }
@@ -166,16 +177,32 @@ try {
 } catch {
   // no .changeset dir in this checkout — nothing pending to scan
 }
+// Migration COMMENTS are published prose too — a 2026-08 reprice migration
+// carried the same margin/measurement analysis the changelog gate exists for
+// (found in the release-zip audit, second pass). Seeded credit VALUES are
+// sanctioned; the $-shape and margin-context patterns don't match bare
+// integers, so scanning the whole file is safe.
+try {
+  for (const entry of readdirSync("supabase/migrations", { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".sql")) {
+      PROSE_FILES.push(`supabase/migrations/${entry.name}`)
+    }
+  }
+} catch {
+  // no migrations dir in this checkout
+}
 for (const file of PROSE_FILES) {
+  if (ALLOWLIST.has(file)) continue
   let content
   try {
     content = readFileSync(file, "utf8")
   } catch {
     continue // changelog may not exist yet for a new package
   }
+  const isMigration = file.startsWith("supabase/migrations/")
   content.split("\n").forEach((line, i) => {
-    const reason = isPricingRelevantLine(line)
-    if (reason) offenders.push(`${file}:${i + 1}: ${reason} — published prose (changelog/changeset)\n    ${line.trim()}`)
+    const reason = isPricingRelevantLine(line, { skipBareMarkup: isMigration })
+    if (reason) offenders.push(`${file}:${i + 1}: ${reason} — published prose (changelog/changeset/migration)\n    ${line.trim()}`)
   })
 }
 
