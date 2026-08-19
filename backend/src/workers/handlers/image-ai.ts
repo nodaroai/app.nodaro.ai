@@ -220,13 +220,22 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
         fetchBuffer(imageUrl),
         ...cutoutUrls.map(fetchBuffer),
       ])
-      const boxes = await locateGrokSegments(sourceBuf, cutoutBufs)
+      const located = await locateGrokSegments(sourceBuf, cutoutBufs)
       segmentsOut = result.segments.map((seg, i) => {
-        const b = boxes[i]
-        return b ? { ...seg, bbox: { x: b.x, y: b.y, w: b.w, h: b.h } } : seg
+        const hit = located[i]
+        return hit
+          ? {
+              ...seg,
+              bbox: { x: hit.bbox.x, y: hit.bbox.y, w: hit.bbox.w, h: hit.bbox.h },
+              // Content box inside the cutout tile — the tile has transparent
+              // aspect-fit padding, so the UI must map only this sub-rect
+              // onto the bbox when masking, or the outline renders shrunken.
+              tile: hit.tile,
+            }
+          : seg
       })
       console.log(
-        `[worker] grok-2-segment placement: located ${boxes.filter(Boolean).length}/${boxes.length} regions`
+        `[worker] grok-2-segment placement: located ${located.filter(Boolean).length}/${located.length} regions`
       )
     } catch (err) {
       console.warn(

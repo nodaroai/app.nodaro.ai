@@ -70,9 +70,10 @@ const SEGMENT_OUTPUT = {
   imageUrl: "https://r2.test/mask-1.png",
   imageUrls: ["https://r2.test/mask-1.png", "https://r2.test/mask-2.png"],
   // 0-based, mirroring production (contra KIE's docs claiming ≥1). The
-  // worker attaches a normalized bbox when template-matching succeeded.
+  // worker attaches a normalized bbox when template-matching succeeded, plus
+  // `tile` — the content sub-rect inside the padded cutout tile.
   segments: [
-    { index: 0, name: "sky", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
+    { index: 0, name: "sky", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 }, tile: { x: 0, y: 0.3, w: 1, h: 0.4 } },
     { index: 1, name: "person" },
   ],
 }
@@ -116,7 +117,13 @@ describe("RefineRegionsSection", () => {
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
+          {
+            index: 0,
+            name: "sky",
+            maskUrl: "https://r2.test/mask-1.png",
+            bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 },
+            tile: { x: 0, y: 0.3, w: 1, h: 0.4 },
+          },
           { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
@@ -142,7 +149,14 @@ describe("RefineRegionsSection", () => {
       grokSegments: {
         taskId: "task_grok_123",
         segments: [
-          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
+          {
+            index: 0,
+            name: "sky",
+            maskUrl: "https://r2.test/mask-1.png",
+            bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 },
+            // Wide content in a square tile: vertically centered slab.
+            tile: { x: 0, y: 0.3, w: 1, h: 0.4 },
+          },
           { index: 1, name: "person", maskUrl: "https://r2.test/mask-2.png" },
         ],
       },
@@ -154,6 +168,15 @@ describe("RefineRegionsSection", () => {
     const outline = screen.getByTestId("region-outline-0")
     expect(parseFloat(outline.style.left)).toBeCloseTo(10)
     expect(parseFloat(outline.style.width)).toBeCloseTo(90)
+    // The mask surface maps the tile's CONTENT sub-rect onto the bbox: the
+    // whole tile over-extends so its padding falls outside the box. Without
+    // this the silhouette renders at 40% height, floating centered (the
+    // "regions draw too small" bug).
+    const frame = screen.getByTestId("region-tile-frame-0")
+    expect(parseFloat(frame.style.width)).toBeCloseTo(100) // 1 / tile.w
+    expect(parseFloat(frame.style.height)).toBeCloseTo(250) // 1 / tile.h
+    expect(parseFloat(frame.style.top)).toBeCloseTo(-75) // -tile.y / tile.h
+    expect(parseFloat(frame.style.left)).toBeCloseTo(0)
     // person (no bbox) → selectable but NO outline.
     expect(screen.queryByTestId("region-outline-1")).toBeNull()
 
@@ -180,6 +203,10 @@ describe("RefineRegionsSection", () => {
     expect(screen.queryByTestId("region-outline-0")).toBeNull()
     fireEvent.mouseEnter(screen.getByRole("button", { name: /sky/ }))
     expect(screen.getByTestId("region-outline-0")).toBeTruthy()
+    // Maps stored before `tile` shipped: mask surface falls back to the
+    // whole tile (inset 0) instead of the content mapping.
+    const frame = screen.getByTestId("region-tile-frame-0")
+    expect(frame.style.inset).toBe("0")
     fireEvent.mouseLeave(screen.getByRole("button", { name: /sky/ }))
     expect(screen.queryByTestId("region-outline-0")).toBeNull()
   })

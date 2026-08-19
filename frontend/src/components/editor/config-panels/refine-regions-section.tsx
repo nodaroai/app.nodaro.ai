@@ -22,9 +22,11 @@ import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/type
  * (the region's own pixels, alpha-masked to its shape, cropped to its
  * bounding box) with NO geometry. The backend recovers each cutout's
  * placement by template-matching it against the source image and persists a
- * normalized `bbox` per segment (see backend/src/lib/grok-segment-placement.ts).
- * Here the cutout's ALPHA channel becomes a CSS mask positioned at that bbox —
- * a shape-accurate silhouette outline. Segments without a confident placement
+ * normalized `bbox` per segment plus `tile`, the content sub-rect inside the
+ * padded tile (see backend/src/lib/grok-segment-placement.ts). Here the
+ * cutout's ALPHA channel becomes a CSS mask positioned at that bbox, with the
+ * tile's aspect-fit padding mapped OUTSIDE the box (tileFrameStyle) — a
+ * shape-accurate silhouette outline. Segments without a confident placement
  * degrade to chips without an on-image outline.
  *
  * Segment `index` values pass through verbatim (0-based in production). Only
@@ -56,10 +58,22 @@ interface RefineRegionsSectionProps {
   readonly onUpdate: (updates: Partial<GenerateImageData>) => void
 }
 
-/** Zip the job's order-aligned cutout URLs + {index,name,bbox?} into GrokSegmentInfo[]. */
+/** Validate an {x,y,w,h} box coming off the wire. */
+function readBox(raw: unknown): { x: number; y: number; w: number; h: number } | undefined {
+  const b = raw as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | undefined
+  return b &&
+    typeof b.x === "number" &&
+    typeof b.y === "number" &&
+    typeof b.w === "number" &&
+    typeof b.h === "number"
+    ? { x: b.x, y: b.y, w: b.w, h: b.h }
+    : undefined
+}
+
+/** Zip the job's order-aligned cutout URLs + {index,name,bbox?,tile?} into GrokSegmentInfo[]. */
 function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
   const meta = Array.isArray(od.segments)
-    ? (od.segments as { index?: unknown; name?: unknown; bbox?: unknown }[])
+    ? (od.segments as { index?: unknown; name?: unknown; bbox?: unknown; tile?: unknown }[])
     : []
   const primary = typeof od.imageUrl === "string" ? [od.imageUrl] : []
   const urls = Array.isArray(od.imageUrls)
@@ -68,26 +82,41 @@ function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
   const count = Math.min(meta.length, urls.length)
   const out: GrokSegmentInfo[] = []
   for (let i = 0; i < count; i++) {
-    const rawBox = meta[i].bbox as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | undefined
-    const bbox =
-      rawBox &&
-      typeof rawBox.x === "number" &&
-      typeof rawBox.y === "number" &&
-      typeof rawBox.w === "number" &&
-      typeof rawBox.h === "number"
-        ? { x: rawBox.x, y: rawBox.y, w: rawBox.w, h: rawBox.h }
-        : undefined
+    const bbox = readBox(meta[i].bbox)
+    const tile = readBox(meta[i].tile)
     out.push({
       index: typeof meta[i].index === "number" ? (meta[i].index as number) : i,
       name: typeof meta[i].name === "string" ? (meta[i].name as string) : `Region ${i + 1}`,
       maskUrl: urls[i],
       ...(bbox ? { bbox } : {}),
+      ...(tile ? { tile } : {}),
     })
   }
   return out
 }
 
 const pct = (n: number) => `${(n * 100).toFixed(2)}%`
+
+/**
+ * The cutout tile carries transparent aspect-fit PADDING around the actual
+ * region content, but `bbox` describes the CONTENT box. Stretching the whole
+ * tile over the bbox therefore draws the silhouette shrunken (by the padding
+ * ratio) and centered — the "regions render too small / off" bug. This frame
+ * over-extends the mask surface so the tile's content sub-rect (`tile`)
+ * lands exactly on the bbox; the padding maps outside it, where the mask is
+ * transparent anyway. Maps stored before `tile` shipped fall back to the
+ * whole tile (pre-existing behavior until a free re-detect).
+ */
+function tileFrameStyle(tile: GrokSegmentInfo["tile"]): React.CSSProperties {
+  if (!tile || tile.w <= 0 || tile.h <= 0) return { position: "absolute", inset: 0 }
+  return {
+    position: "absolute",
+    left: `${((-tile.x / tile.w) * 100).toFixed(2)}%`,
+    top: `${((-tile.y / tile.h) * 100).toFixed(2)}%`,
+    width: `${((1 / tile.w) * 100).toFixed(2)}%`,
+    height: `${((1 / tile.h) * 100).toFixed(2)}%`,
+  }
+}
 
 /**
  * Shape-accurate OUTLINE ring: two layers of the same alpha mask — one
@@ -259,8 +288,11 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     className="absolute pointer-events-none"
                     style={{ left: pct(box.x), top: pct(box.y), width: pct(box.w), height: pct(box.h) }}
                   >
-                    <div style={ringStyle(seg, color)} />
-                    <div style={fillStyle(seg, color, emphasized ? 0.3 : 0.16)} />
+                    {/* Maps the tile's content sub-rect onto the bbox — see tileFrameStyle. */}
+                    <div data-testid={`region-tile-frame-${seg.index}`} style={tileFrameStyle(seg.tile)}>
+                      <div style={ringStyle(seg, color)} />
+                      <div style={fillStyle(seg, color, emphasized ? 0.3 : 0.16)} />
+                    </div>
                   </div>
                 )
               })}
