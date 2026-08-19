@@ -51,13 +51,21 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
-          if ! node backend/scripts/next-app-version.mjs --json > /tmp/release.json; then
-            code=$?
-            if [ "$code" = "2" ]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "No commits since the last tag — nothing to release."
-              exit 0
-            fi
+          # `if ! cmd; then code=$?` captures the NEGATED status (always 0), so
+          # the exit-2 "nothing to release" path fell through without writing
+          # skip=true and the tag step ran with an empty name (re-run of the
+          # v1.25.0 release: "fatal: '' is not a valid tag name"). Capture the
+          # real code.
+          set +e
+          node backend/scripts/next-app-version.mjs --json > /tmp/release.json
+          code=$?
+          set -e
+          if [ "$code" = "2" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No commits since the last tag — nothing to release."
+            exit 0
+          fi
+          if [ "$code" != "0" ]; then
             exit "$code"
           fi
           node backend/scripts/next-app-version.mjs --notes > /tmp/notes.md
@@ -126,7 +134,13 @@ jobs:
           # header for exactly this command.
           git -c http.https://github.com/.extraheader= push public "${{ steps.ver.outputs.next }}"
           git remote remove public
-          gh release create "${{ steps.ver.outputs.next }}" \
-            --repo nodaroai/app.nodaro.ai \
-            --title "${{ steps.ver.outputs.next }}" \
-            --notes-file /tmp/notes.md
+          # Re-runnable: a retry after a partial failure must not die on the
+          # release that already exists.
+          if gh release view "${{ steps.ver.outputs.next }}" --repo nodaroai/app.nodaro.ai >/dev/null 2>&1; then
+            echo "release ${{ steps.ver.outputs.next }} already exists on the public mirror — nothing to create."
+          else
+            gh release create "${{ steps.ver.outputs.next }}" \
+              --repo nodaroai/app.nodaro.ai \
+              --title "${{ steps.ver.outputs.next }}" \
+              --notes-file /tmp/notes.md
+          fi
