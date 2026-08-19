@@ -8,11 +8,9 @@
 // tsc-visible import — by `backend/src/lib/private-plugins/load.ts` (see
 // that file's header comment for why):
 //
-//   - VCP (Stage 1): the voice-changer-pro engine (diarization, per-speaker
-//     stem building, voice-map resolution, and the worker handler that drove
-//     them).
-//   - S8: the surround-continuation color-science/compositing engine
-//     (per-channel Reinhard color transfer, half-carry seam geometry) — the
+//   - VCP (Stage 1): the voice-changer-pro engine and the worker handler
+//     that drove it.
+//   - S8: the surround-continuation compositing engine — the
 //     worker handler and route stay in this repo (`workers/handlers/
 //     surround.ts`, `routes/generate-surround-continuation.ts`), but the two
 //     IP-sensitive functions it calls into (`buildSurroundComposite`,

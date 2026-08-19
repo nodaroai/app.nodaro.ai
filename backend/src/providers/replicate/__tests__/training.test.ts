@@ -19,8 +19,8 @@ import { replicate } from "../client.js"
 import { createCharacterTraining, characterModelDestination } from "../training.js"
 
 const CHAR = "abcd1234-0000-0000-0000-00000000beef"
-// Owner is derived from the token account (mocked below as "asafna2").
-const OWNER = "asafna2"
+// Owner is derived from the token account (mocked below as "acme-tokens").
+const OWNER = "acme-tokens"
 const DEST = `${OWNER}/char-${CHAR}`
 
 /** Build an ApiError-shaped rejection (training.ts reads err.response.status). */

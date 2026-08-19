@@ -8,9 +8,8 @@
  * formulas derived from it.
  *
  * Moved out of `packages/shared` (published Apache-2.0 on npm — an
- * irrevocable grant) per the 2026-07-06 public-flip IP audit, S5: provider
+ * irrevocable grant) per the IP-placement audit (S5): provider
  * rate cards and margin-derivation math must not ship in the published
- * package. See plan.nodaro.ai `specs/superpowers/2026-07-06-public-flip-ip-audit.md`.
  *
  * ─── Derivation notes ───────────────────────────────────────────────────────
  * "avatar-iv" 720p is CONFIRMED against an actual production run; rounded

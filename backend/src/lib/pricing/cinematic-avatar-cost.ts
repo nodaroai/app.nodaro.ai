@@ -65,7 +65,7 @@ export function cinematicUsdCost(
  *
  * Formula: usdToCredits(cinematicUsdCost(resolution, durationSec))
  *
- * This is the at-cost base-credit value (1 credit = $0.02, CREDIT_BASE_USD).
+ * This is the base-credit value (CREDIT_BASE_USD per credit).
  * It is deliberately MINIMAL — there is NO *1.5 safety factor — because the
  * admin cost-markup (~25% default) is applied to this stored value AGAIN at
  * RESERVE time by getModelCreditCostFromDB (reserved = ceil(hold * 1.25)).

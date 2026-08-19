@@ -30,8 +30,8 @@ const characterModelName = (characterId: string): string => `char-${characterId}
 // The destination-model owner is DERIVED from the prod token's own Replicate
 // account (cached per process), never hardcoded: a token can ALWAYS create
 // models under its own account, so this can't 403-mismatch a hand-set owner
-// (the bug that broke training — token `asafna2` had no write access to a
-// hardcoded `nodaroai`). A user token yields its username; an org token yields
+// (the bug that broke training — the prod token's account had no write access
+// to a hardcoded org owner). A user token yields its username; an org token yields
 // the org. Swapping the prod token relocates the namespace automatically.
 let cachedModelOwner: string | undefined
 async function getModelOwner(): Promise<string> {

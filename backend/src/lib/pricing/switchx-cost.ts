@@ -5,8 +5,7 @@
 // block tier and commit it verbatim, so a clip snaps to the exact number of
 // blocks Beeble bills (ceil(frames/30)) — no tier over-charge.
 //
-// AT-COST: this is a straight pass-through of Beeble's published per-block
-// rate (zero platform margin baked in here) — the admin panel's global
+// A straight pass-through of Beeble's published per-block rate — the admin panel's global
 // cost_markup_percent is applied on top, same as every other provider.
 //
 // Moved out of `packages/shared` (published Apache-2.0 on npm — an
@@ -17,7 +16,7 @@
 import { SWITCHX_BLOCK_FRAMES, pickSwitchXFrameTier, usdToCredits } from "@nodaro/shared"
 
 /**
- * Beeble's per-30-frame-block rate in USD, at cost.
+ * Beeble's published per-30-frame-block rate in USD.
  *
  * PROVENANCE: derived from the credit values this module shipped with
  * (720p = 5 cr, 1080p = 15 cr at CREDIT_BASE_USD = $0.02), which the header

@@ -22,8 +22,8 @@ const MAX_REF_VIDEOS = 3
 export const MINIMAX_H3_FREE_INPUT_IMAGES = 5
 
 /**
- * BASE (0%-markup) credits per chargeable input image: 11 KIE cr × 2.5
- * credits-per-KIE-credit — the same at-cost conversion the per-second
+ * BASE credits per chargeable input image: 11 KIE cr × 2.5
+ * credits-per-KIE-credit — the same credit conversion the per-second
  * composites use (Nodaro = ceil(KIE / 4) × 10 ≈ KIE × 2.5).
  */
 const EXTRA_IMAGE_BASE_CREDITS = 27.5
