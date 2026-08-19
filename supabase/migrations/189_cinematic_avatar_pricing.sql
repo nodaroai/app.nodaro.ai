@@ -4,7 +4,7 @@
 -- Format: cinematic-avatar:<resolution>:<durationSec>s
 -- Durations: 4..15s (user parameter, known at submit — no bucketing).
 --
--- Hold formula applies a 1.5× safety factor over the base credit value so the
+-- Hold formula applies padding over the base credit value so the
 -- hold is always ≥ the actual metered charge after runtime markup.
 -- The actual charge is computed at job completion from the provider's real
 -- cost (Math.ceil(durationSec) × rate); commit_credits refunds any surplus.

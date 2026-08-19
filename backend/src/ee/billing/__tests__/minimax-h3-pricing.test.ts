@@ -3,7 +3,7 @@ import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 // KIE 36.5 cr/s @2K (docs.kie.ai/market/minimax-h3, 2026-08-01) and 22.5 cr/s
 // @768P (resolution lever added 2026-08-03; verified on kie.ai/minimax-h3).
-// Nodaro credits = ceil(rate × duration / 4) × 10 — at cost, like Seedance-2.
+// Nodaro credits = ceil(rate × duration / 4) × 10 — same conversion as Seedance-2.
 // Bare ids are the 2K rate (byte-identical to the pre-lever rows so existing
 // workflows/overrides keep their ids); ":768p" appends the cheaper tier.
 describe("minimax-h3 static credits — per-second at the 2K (bare) rate", () => {

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
 );
 
 -- Initial settings.
--- Default markup is 0 (at-cost). Cloud operators set their own markup in the
+-- Default markup is 0. Cloud operators set their own markup in the
 -- admin webapp (writes app_settings.cost_markup_percent); this seed only ever
 -- applies on a fresh database (ON CONFLICT DO NOTHING).
 INSERT INTO public.app_settings (key, value) VALUES

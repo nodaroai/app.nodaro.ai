@@ -2,7 +2,7 @@
  * AI Avatar (HeyGen) provider-cost formulas — CORE (not ee/): the HeyGen
  * provider integration (`providers/heygen/video.ts`) needs the real USD cost
  * regardless of edition, and `ee/billing/credits.ts` needs it to seed the
- * at-cost credit-hold table. Everything NON-monetary (engine/resolution
+ * base credit-hold table. Everything NON-monetary (engine/resolution
  * types, duration buckets, the credit-id builder) stays in
  * `@nodaro/shared` — this file holds only the provider-$ rate table and the
  * formulas derived from it.
@@ -62,12 +62,12 @@ export function aiAvatarUsdCost(
 }
 
 /**
- * Credit hold (the STORED 0%-base reserve) for a given (engine, resolution, bucket).
+ * Credit hold (the STORED base reserve) for a given (engine, resolution, bucket).
  *
  * Formula: usdToCredits(aiAvatarUsdCost(engine, resolution, bucketSec))
  *
- * This is the at-cost base-credit value (1 credit = $0.02, CREDIT_BASE_USD).
- * It is deliberately MINIMAL — there is NO *1.5 safety factor — because:
+ * This is the base-credit value (CREDIT_BASE_USD per credit).
+ * It is deliberately minimal — no extra padding — because:
  *
  *   1. The admin cost-markup (~25% default) is applied to this stored value
  *      AGAIN at RESERVE time by getModelCreditCostFromDB

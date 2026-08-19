@@ -173,21 +173,42 @@ export interface PluginImageGenResult {
 }
 
 /**
- * Mirrors the description-mode subset of `SunoGenerateParams`
- * (`providers/kie/suno-client.ts`). Deliberately NOT custom mode: Suno's
- * custom mode redefines `prompt` as LYRICS, while a film-score brief is a
- * description — so the wrapper pins description mode and `durationSec` is
- * ADVISORY only (Suno's duration hint is custom-mode-gated; the caller cuts
- * the track to exact length with its own ffmpeg). ADDITIVE (2026-08-04, gvp
- * keyframes music post-mux).
+ * Mirrors `SunoGenerateParams` (`providers/kie/suno-client.ts`) for the two
+ * modes the plugin lanes use. ADDITIVE (2026-08-04, gvp keyframes music
+ * post-mux); CUSTOM MODE added 2026-08-19.
+ *
+ * DESCRIPTION MODE (no `title`) is the original lane: `prompt` is a brief, the
+ * model invents the song, and `durationSec` is advisory only (Suno's duration
+ * is custom-mode-gated; the caller cuts to exact length with ffmpeg).
+ *
+ * CUSTOM MODE (a `title` is supplied) changes what the fields MEAN: `prompt`
+ * becomes the EXACT LYRICS, `style` carries the musical description, and
+ * `duration` is honoured (V5_5). Measured on a scat-ensemble recast: in
+ * description mode with `instrumental: false`, Suno reads our prose as the
+ * song's SUBJECT — a brief describing "singers swaying and tapping feet" came
+ * back singing "step-step sway on through … feet go tap" in English. A source
+ * whose vocal is non-lexical (scat, vocables, a wordless hook) can only be
+ * reproduced by handing those syllables over as lyrics, which is what custom
+ * mode is for.
  */
 export interface PluginMusicGenOptions {
-  /** Style tags rides alongside the brief ("cinematic orchestral, 120 BPM"). */
+  /** Style tags riding alongside the brief ("cinematic orchestral, 120 BPM").
+   *  In custom mode this is Suno's `style` — the musical description, ≤1000
+   *  chars on V4_5+/V5/V5_5 (the wrapper trims). */
   style?: string
   /** Default TRUE — scores ride instrumental; voices live in the video. */
   instrumental?: boolean
-  /** Advisory target seconds (see interface doc — the caller cuts to length). */
+  /** Advisory target seconds — EXCEPT in custom mode on V5_5, where it is the
+   *  provider's own `duration` (clamped to the documented 10–360s) and the
+   *  track is actually generated that long. */
   durationSec?: number
+  /**
+   * SUPPLYING A TITLE SELECTS CUSTOM MODE (≤80 chars, trimmed not rejected —
+   * a title is metadata and losing a track over it would be absurd). Custom
+   * mode additionally REQUIRES `style`; a title without one falls back to
+   * description mode rather than sending a request the provider will refuse.
+   */
+  title?: string
   onTaskCreated?: (taskId: string) => void | Promise<void>
 }
 

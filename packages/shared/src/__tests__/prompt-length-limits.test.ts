@@ -102,9 +102,13 @@ describe("per-model prompt length limits", () => {
   })
 
   describe("Suno per-version caps", () => {
-    it("prompt: 500 non-custom; 3000 V4 custom; 5000 V4.5+/V5 custom", () => {
-      expect(getMaxSunoPromptChars("V4", false)).toBe(500)
-      expect(getMaxSunoPromptChars("V5", false)).toBe(500)
+    // Non-custom was 500 until 2026-08-19 — six times under the provider's
+    // documented 3000, and the route truncates rather than rejects, so a
+    // 950-char recast score brief reached Suno cut to exactly 500 mid-word.
+    it("prompt: 3000 non-custom (all models); 3000 V4 custom; 5000 V4.5+/V5 custom", () => {
+      expect(getMaxSunoPromptChars("V4", false)).toBe(3000)
+      expect(getMaxSunoPromptChars("V5", false)).toBe(3000)
+      expect(getMaxSunoPromptChars("V5_5", false)).toBe(3000)
       expect(getMaxSunoPromptChars("V4", true)).toBe(3000)
       expect(getMaxSunoPromptChars("V4_5", true)).toBe(5000)
       expect(getMaxSunoPromptChars("V5", true)).toBe(5000)

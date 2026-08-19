@@ -2,7 +2,7 @@
  * Canonical provider-cost formula for Replicate Flux 2 image models — CORE
  * (not ee/): `providers/replicate/image.ts` needs the real USD cost
  * regardless of edition, and `ee/billing/credits.ts` needs it to seed the
- * at-cost credit-reservation table. The model-id enum and UI resolution
+ * base credit-reservation table. The model-id enum and UI resolution
  * options stay in `@nodaro/shared` (`flux2-pricing.ts`) — this file holds
  * only the provider-$ rate table and the formulas derived from it.
  *
@@ -31,7 +31,7 @@ export function flux2CostUsd(model: Flux2Model, outputMP: number, refCount = 0):
   return r.base + r.perOutMP * outputMP + r.perRefMP * outputMP * Math.max(0, refCount)
 }
 
-/** 0%-base credits for the reservation table (markup applied once at lookup).
+/** base credits for the reservation table (markup applied once at lookup).
  *
  * The milli-credit float guard this function used to inline now lives in
  * `usdToCredits` (`@nodaro/shared`), so every provider-cost family rounds

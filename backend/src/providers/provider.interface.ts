@@ -11,7 +11,7 @@ export interface ProviderResult {
    *  legacy lip-sync, whisper transcribe). When true, commit recomputes the
    *  charge from `cost` and trues-up. When false/undefined (the default for all
    *  fixed/composite-priced providers), commit charges the RESERVED tier —
-   *  markup is applied once at reserve over the 0%-base price. See the pricing-
+   *  markup is applied once at reserve over the base price. See the pricing-
    *  convention design (decision A). */
   meteredCost?: boolean
   kieTaskId?: string  // KIE task ID for chained operations (VEO/Runway extend-upscale; Grok task-chained edit/segment)

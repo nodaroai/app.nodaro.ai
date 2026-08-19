@@ -20,7 +20,7 @@ describe("cinematicUsdCost", () => {
   })
 })
 
-describe("cinematicHoldCredits — minimal-safe at-cost formula (NO *1.5)", () => {
+describe("cinematicHoldCredits — minimal base hold formula", () => {
   it("uses usdToCredits(usd)", () => {
     // 720p 10s → $1.50 → ceil(75) = 75
     expect(cinematicHoldCredits("720p", 10)).toBe(750)

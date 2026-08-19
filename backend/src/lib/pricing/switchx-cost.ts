@@ -20,7 +20,7 @@ import { SWITCHX_BLOCK_FRAMES, pickSwitchXFrameTier, usdToCredits } from "@nodar
  *
  * PROVENANCE: derived from the credit values this module shipped with
  * (720p = 5 cr, 1080p = 15 cr at CREDIT_BASE_USD = $0.02), which the header
- * above documents as a straight at-cost pass-through of Beeble's published
+ * above documents as a straight pass-through of Beeble's published
  * rate. It is NOT quoted from an invoice or from developer.beeble.ai/pricing.
  * Confirm against the published rate before re-deriving anything from it.
  *

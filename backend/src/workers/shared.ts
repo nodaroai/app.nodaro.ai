@@ -279,7 +279,7 @@ export async function commitJobCredits(
    * GPU-time: face-swap, legacy lip-sync, whisper transcribe) recompute the
    * charge from `providerCostUsd` and true-up. Every fixed/composite-priced
    * provider commits the RESERVED tier (markup already applied once at reserve
-   * over the 0%-base price) — `reserved == committed`, no spurious refund, and
+   * over the base price) — `reserved == committed`, no spurious refund, and
    * no under-charge from a flat/GPU-time `result.cost`. Default false.
    */
   metered = false,
