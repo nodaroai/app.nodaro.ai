@@ -129,6 +129,29 @@ then `docker compose -f docker-compose.community.yml up -d`. A key set in
 You pay providers directly; the Community edition has no credit system, no
 Nodaro fees, and no watermark.
 
+## Editing video
+
+Any video result has an **Edit video** action that opens the NodarCut editor.
+The editor page loads from `freecut.nodaro.ai`; **your video does not go with
+it** — the app reads the file from your own storage and hands the bytes to the
+editor inside your browser, and the editing and export happen there.
+
+It works out of the box on `http://localhost:3000`. If you serve this install
+on another origin — a LAN address, or a domain behind a reverse proxy — the
+browser refuses to embed the editor and the panel explains why. Two ways
+forward:
+
+- **Ask us to allow your origin** — open an issue with the URL you serve on.
+- **Run your own editor.** [FreeCut](https://github.com/nodaroai/freecut) is
+  public and MIT-licensed and ships a Dockerfile. Point this install at it:
+
+```bash
+FREECUT_URL=https://freecut.example.internal
+```
+
+Restart the stack and the editor follows — no rebuild. Set `FREECUT_URL=off`
+to remove the Edit-video action entirely.
+
 ## Before exposing the stack to a network
 
 The compose defaults are designed for local play and are public knowledge.

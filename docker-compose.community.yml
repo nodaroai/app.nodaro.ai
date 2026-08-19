@@ -207,6 +207,14 @@ services:
       # Empty = the code default (https://app.nodaro.ai). Override in .env for
       # staging soaks: NODARO_CLOUD_URL=https://next.nodaro.ai
       NODARO_CLOUD_URL: ${NODARO_CLOUD_URL:-}
+      # The embedded video editor. Empty = the hosted one (freecut.nodaro.ai),
+      # which accepts being embedded from localhost — so the quickstart install
+      # gets a working editor with nothing to set. Serving this install on any
+      # other origin (a LAN address, a domain behind a proxy) is refused by the
+      # editor's frame-ancestors: ask us to allow that origin, or run your own
+      # FreeCut (github.com/nodaroai/freecut — public, MIT) and point here at it.
+      # `off` removes the Edit-video action entirely.
+      FREECUT_URL: ${FREECUT_URL:-}
       # nodaro.ai as a provider like the others: a personal API token from
       # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
       NODARO_API_KEY: ${NODARO_API_KEY:-}
