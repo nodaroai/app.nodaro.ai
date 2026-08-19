@@ -102,6 +102,7 @@ import { studioWorkflowUrl } from "@/lib/studio";
 import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config";
+import { ConnectProviderWatcher } from "./connect-provider-watcher"
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
@@ -1504,6 +1505,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           />
         </Suspense>
       )}
+      <ConnectProviderWatcher />
     </div>
     </NavigateWithGuardContext.Provider>
   );

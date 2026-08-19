@@ -1,0 +1,123 @@
+# App release: automatic semver from conventional commits (spec:
+# plan repo specs/2026-08-19-community-versioning-updates.md).
+#
+# Why a TAG and not a version-bump commit: a bot commit on main diverges dev
+# (the next dev→main PR conflicts on it), and a changesets-style bump PR lags
+# one release behind. A tag on the merge commit does neither — and it is what
+# makes the published image tags immutable: before this, community-image
+# re-pushed `:v1.23.0` on every main push for six months (5,882 commits under
+# one number), so pinning was a false promise.
+#
+# Flow per push to main:
+#   compute next version (backend/scripts/next-app-version.mjs)
+#     -> tag internal main
+#     -> trigger the public mirror now (its schedule is nightly-only) and wait
+#        for the SHA to reach the public repo
+#     -> push the tag + create the GitHub Release on the PUBLIC mirror — that
+#        is where self-hosters watch, and where the in-app update check reads
+#     -> community-image.yml runs AFTER this (workflow_run) so the image is
+#        built from a tagged commit and stamped with APP_VERSION.
+name: App Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # push the version tag (internal)
+  actions: write # dispatch mirror-to-public outside its nightly schedule
+
+concurrency:
+  group: app-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag + publish release
+    # Internal only — the mirror must never tag itself.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — the version is derived from commits since the last tag
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Compute next version
+        id: ver
+        run: |
+          set -euo pipefail
+          if ! node backend/scripts/next-app-version.mjs --json > /tmp/release.json; then
+            code=$?
+            if [ "$code" = "2" ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "No commits since the last tag — nothing to release."
+              exit 0
+            fi
+            exit "$code"
+          fi
+          node backend/scripts/next-app-version.mjs --notes > /tmp/notes.md
+          next=$(node -p "require('/tmp/release.json').next")
+          bump=$(node -p "require('/tmp/release.json').bump")
+          {
+            echo "skip=false"
+            echo "next=$next"
+            echo "bump=$bump"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $next ($bump)"
+
+      - name: Tag internal main
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          git tag "${{ steps.ver.outputs.next }}" "$GITHUB_SHA"
+          git push origin "${{ steps.ver.outputs.next }}"
+
+      - name: Trigger the public mirror now
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run mirror-to-public.yml --ref main
+
+      - name: Wait for the SHA to reach the public mirror
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TOK" ]; then
+            echo "PUBLIC_MIRROR_TOKEN not set — internal tag exists; public release skipped." >&2
+            echo "public=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          for _ in $(seq 1 60); do
+            sha=$(curl -sf -H "Authorization: Bearer $TOK" \
+              "https://api.github.com/repos/nodaroai/app.nodaro.ai/commits/main" \
+              | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).sha" 2>/dev/null || echo "")
+            if [ "$sha" = "$GITHUB_SHA" ]; then
+              echo "public mirror carries $sha"
+              echo "public=true" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "public mirror did not reach $GITHUB_SHA within 30 min — release the public half manually (push tag + gh release create) or re-run this workflow." >&2
+          exit 1
+
+      - name: Push tag + create Release on the public mirror
+        if: steps.ver.outputs.skip != 'true' && env.public == 'true'
+        env:
+          TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+          GH_TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          git remote add public "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
+          git push public "${{ steps.ver.outputs.next }}"
+          gh release create "${{ steps.ver.outputs.next }}" \
+            --repo nodaroai/app.nodaro.ai \
+            --title "${{ steps.ver.outputs.next }}" \
+            --notes-file /tmp/notes.md

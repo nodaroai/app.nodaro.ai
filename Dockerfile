@@ -169,6 +169,12 @@ ARG VITE_PLATFORM_OWNER_EMAIL
 ARG VITE_DELTA_SAVES
 # Image reference-prompt format ("hybrid" | "legacy"); empty = legacy in prod.
 ARG VITE_IMAGE_REFERENCE_FORMAT
+# The release version stamped on this image (community-image.yml passes the
+# vX.Y.Z tag app-release put on the commit). Per-image and build-time on
+# purpose — a version is a property of the build, unlike the runtime-
+# overridable API/Supabase trio. Empty (local/dev builds) falls back to
+# package.json in code.
+ARG VITE_APP_VERSION
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
@@ -183,6 +189,7 @@ ENV VITE_DELTA_SAVES=$VITE_DELTA_SAVES
 ENV VITE_CLARITY_ID=$VITE_CLARITY_ID
 ENV VITE_PLATFORM_OWNER_EMAIL=$VITE_PLATFORM_OWNER_EMAIL
 ENV VITE_IMAGE_REFERENCE_FORMAT=$VITE_IMAGE_REFERENCE_FORMAT
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
 
 WORKDIR /app/frontend
 # Skip the `prebuild` lifecycle hook (would re-run tsup for shared+client
@@ -374,6 +381,10 @@ RUN groupadd --gid 1000 node || true \
     && useradd --uid 1000 --gid node --shell /bin/bash --create-home node || true
 
 ENV NODE_ENV=production
+# Release version for /health, /v1/setup/status and the update check —
+# same value the frontend baked as VITE_APP_VERSION.
+ARG APP_VERSION
+ENV APP_VERSION=$APP_VERSION
 
 WORKDIR /app
 

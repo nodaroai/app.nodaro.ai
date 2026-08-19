@@ -35,6 +35,14 @@ async function makeSource(): Promise<Buffer> {
       <!-- "boat": small white triangle far right -->
       <polygon points="480,250 512,250 496,215" fill="#f8fafc"/>
       <rect x="478" y="250" width="36" height="8" fill="#334155"/>
+      <!-- "distant buoy": TINY (production sailboat scale — ~3% of width;
+           at a 160px search raster this is a ~6px template). Deliberately
+           NOT another white triangle — masked NCC can't tell twin shapes
+           with identical interiors apart, and that's not the failure mode
+           under test (resolution starvation is). -->
+      <circle cx="565" cy="106" r="11" fill="#dc2626"/>
+      <rect x="554" y="104" width="22" height="5" fill="#fde68a"/>
+      <rect x="562" y="92" width="5" height="14" fill="#0f172a"/>
       <!-- "ground": textured band along the bottom -->
       <rect x="0" y="300" width="${W}" height="60" fill="#365314"/>
       <circle cx="60" cy="320" r="9" fill="#84cc16"/>
@@ -72,25 +80,34 @@ function iou(a: NormalizedBBox, b: { x: number; y: number; w: number; h: number 
 }
 
 describe("locateGrokSegments", () => {
-  it("recovers the placement of bbox cutouts (large and small) with IoU > 0.5", async () => {
+  it("recovers the placement of bbox cutouts — large, small, and TINY (production sailboat scale) — with IoU > 0.55", async () => {
     const source = await makeSource()
     const towerBox = { left: 88, top: 52, width: 80, height: 216 }
     const boatBox = { left: 470, top: 208, width: 52, height: 56 }
-    const cutouts = [await makeCutout(source, towerBox), await makeCutout(source, boatBox)]
+    // The regression from production (2026-08-18): a ~3%-of-width segment got
+    // a confidently WRONG placement because the coarse raster reduced it to
+    // ~6px of template. Must either place it right or return null — this
+    // asserts it places right.
+    const tinyBox = { left: 548, top: 92, width: 34, height: 38 }
+    const cutouts = [
+      await makeCutout(source, towerBox),
+      await makeCutout(source, boatBox),
+      await makeCutout(source, tinyBox),
+    ]
 
     const boxes = await locateGrokSegments(source, cutouts)
-    expect(boxes).toHaveLength(2)
+    expect(boxes).toHaveLength(3)
 
-    const expected = [towerBox, boatBox].map((b) => ({
+    const expected = [towerBox, boatBox, tinyBox].map((b) => ({
       x: b.left / W,
       y: b.top / H,
       w: b.width / W,
       h: b.height / H,
     }))
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const found = boxes[i]
       expect(found, `segment ${i} should be placed`).not.toBeNull()
-      expect(iou(found!, expected[i]), `segment ${i} IoU`).toBeGreaterThan(0.5)
+      expect(iou(found!, expected[i]), `segment ${i} IoU`).toBeGreaterThan(0.55)
     }
   }, 30_000)
 

@@ -157,6 +157,42 @@ Every bundled service can be swapped for a managed one in `.env`:
 - **Cloudflare R2**: set the four `R2_*` account values and clear
   `R2_ENDPOINT` / `R2_FORCE_PATH_STYLE`.
 
+## Updating
+
+Every release publishes the image under four kinds of tag:
+
+| Tag | Meaning |
+|---|---|
+| `vX.Y.Z` (e.g. `v2.0.0`) | Immutable — exactly one build, never re-pointed. Pin this for byte-stable deploys. |
+| `vX.Y` | Floats across patches of one minor. |
+| `vX` | Floats across a whole major — features and fixes arrive, breaking changes never do. |
+| `latest` | Tracks every release, majors included. |
+
+To update, pull and restart — database migrations apply themselves on boot:
+
+```bash
+docker compose -f docker-compose.community.yml pull nodaro
+docker compose -f docker-compose.community.yml up -d nodaro
+```
+
+Before a **major** version (the first number changed), read the release
+notes at https://github.com/nodaroai/app.nodaro.ai/releases first — majors
+are the only releases allowed to change env vars, compose topology, or
+behavior you may depend on. There is no downgrade path (migrations are
+forward-only): take a backup before majors and restore it if you need to
+go back:
+
+```bash
+tools/community-backup.sh              # everything the stack cannot regenerate, one archive
+tools/community-restore.sh <archive>   # the road back — DESTRUCTIVE, asks for confirmation
+```
+
+The running version is shown in the app sidebar and at `/health`. When a
+newer release exists, a red dot appears next to the version — click it for
+the changelog and the exact upgrade commands. The check is one anonymous
+request a day to GitHub's API; set `NODARO_UPDATE_CHECK=off` in `.env` to
+disable it entirely (air-gapped installs).
+
 ## Troubleshooting
 
 - **Something red on /setup**: each failing card carries a hint naming the

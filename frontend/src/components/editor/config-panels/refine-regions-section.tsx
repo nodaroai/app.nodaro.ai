@@ -89,14 +89,38 @@ function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
 
 const pct = (n: number) => `${(n * 100).toFixed(2)}%`
 
-/** Shape-accurate silhouette: a colored div alpha-masked by the cutout. */
-function silhouetteStyle(seg: GrokSegmentInfo, color: string, opacity: number, dx: number, dy: number): React.CSSProperties {
+/**
+ * Shape-accurate OUTLINE ring: two layers of the same alpha mask — one
+ * dilated by a constant few px (calc), one exact — composited with
+ * `exclude`/`xor` so only the rim of the shape shows color. A ring keeps the
+ * image visible (the earlier offset-stack approach read as a solid sticker).
+ */
+function ringStyle(seg: GrokSegmentInfo, color: string): React.CSSProperties {
+  const m = `url("${seg.maskUrl}")`
+  return {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: color,
+    WebkitMaskImage: `${m}, ${m}`,
+    maskImage: `${m}, ${m}`,
+    WebkitMaskSize: "calc(100% + 6px) calc(100% + 6px), 100% 100%",
+    maskSize: "calc(100% + 6px) calc(100% + 6px), 100% 100%",
+    WebkitMaskPosition: "center, center",
+    maskPosition: "center, center",
+    WebkitMaskRepeat: "no-repeat, no-repeat",
+    maskRepeat: "no-repeat, no-repeat",
+    WebkitMaskComposite: "xor",
+    maskComposite: "exclude",
+  }
+}
+
+/** Soft interior fill so region coverage stays readable under the ring. */
+function fillStyle(seg: GrokSegmentInfo, color: string, opacity: number): React.CSSProperties {
   return {
     position: "absolute",
     inset: 0,
     backgroundColor: color,
     opacity,
-    transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
     WebkitMaskImage: `url("${seg.maskUrl}")`,
     maskImage: `url("${seg.maskUrl}")`,
     WebkitMaskSize: "100% 100%",
@@ -235,12 +259,8 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     className="absolute pointer-events-none"
                     style={{ left: pct(box.x), top: pct(box.y), width: pct(box.w), height: pct(box.h) }}
                   >
-                    {/* Sticker outline: 4 offset silhouette copies + a soft fill,
-                        all shaped by the cutout's alpha channel. */}
-                    {[[-2, 0], [2, 0], [0, -2], [0, 2]].map(([dx, dy]) => (
-                      <div key={`${dx},${dy}`} style={silhouetteStyle(seg, color, 0.95, dx, dy)} />
-                    ))}
-                    <div style={silhouetteStyle(seg, color, emphasized ? 0.4 : 0.25, 0, 0)} />
+                    <div style={ringStyle(seg, color)} />
+                    <div style={fillStyle(seg, color, emphasized ? 0.3 : 0.16)} />
                   </div>
                 )
               })}
