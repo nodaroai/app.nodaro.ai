@@ -214,6 +214,22 @@ export function AppSidebar({
   const [mounted, setMounted] = useState(false)
   const updateInfo = useUpdateCheck()
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
+  // Cloud "what's new" (founder request 2026-08-19): the same dialog minus
+  // the backup/upgrade steps. Auto-opens ONCE per release — except on a
+  // browser's very first visit, where it only stamps (a brand-new user has
+  // no "new" to catch up on). hasCredits() is build-constant, so the two
+  // branches below are stable per build.
+  const whatsNewMode = hasCredits()
+  const latestVersion = updateInfo?.latest?.version
+  useEffect(() => {
+    if (!whatsNewMode || !latestVersion) return
+    const KEY = "nodaro-whatsnew-seen"
+    const seen = localStorage.getItem(KEY)
+    if (seen === latestVersion) return
+    localStorage.setItem(KEY, latestVersion)
+    if (seen !== null) setUpdateDialogOpen(true)
+  }, [whatsNewMode, latestVersion])
+  const showVersionIndicator = whatsNewMode ? Boolean(updateInfo?.latest) : Boolean(updateInfo?.updateAvailable)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
@@ -678,22 +694,30 @@ export function AppSidebar({
             {!isCollapsed && <ThemeToggle />}
           </div>
 
-          {/* Version — with the red update dot when a newer release exists
-              (founder design, versioning spec 2026-08-19). The endpoint owns
-              the policy: on cloud / opted-out installs updateAvailable is
-              always false and this stays a plain label. */}
+          {/* Version row (founder design 2026-08-19). Self-host: a RED dot
+              when a newer release exists — action needed. Cloud: the label is
+              always clickable when a release is known and opens the
+              "what's new" changelog (no dot: nothing to act on; the dialog
+              also auto-opens once per fresh release). The endpoint owns the
+              policy — updateAvailable is never true on cloud. */}
           <div className="text-center">
-            {updateInfo?.updateAvailable ? (
+            {showVersionIndicator ? (
               <button
                 type="button"
                 onClick={() => setUpdateDialogOpen(true)}
                 className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                title={`Update available: ${updateInfo.latest?.version ?? ""}`}
+                title={
+                  whatsNewMode
+                    ? `What's new in ${updateInfo?.latest?.version ?? ""}`
+                    : `Update available: ${updateInfo?.latest?.version ?? ""}`
+                }
               >
-                <span
-                  aria-hidden
-                  className="absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
-                />
+                {!whatsNewMode && (
+                  <span
+                    aria-hidden
+                    className="absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                  />
+                )}
                 <span className="underline decoration-dotted underline-offset-2">
                   {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
                 </span>
@@ -704,8 +728,13 @@ export function AppSidebar({
               </span>
             )}
           </div>
-          {updateInfo?.updateAvailable && updateInfo.latest && (
-            <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} info={updateInfo} />
+          {updateInfo?.latest && showVersionIndicator && (
+            <UpdateDialog
+              open={updateDialogOpen}
+              onOpenChange={setUpdateDialogOpen}
+              info={updateInfo}
+              mode={whatsNewMode ? "whats-new" : "upgrade"}
+            />
           )}
         </div>
       </aside>

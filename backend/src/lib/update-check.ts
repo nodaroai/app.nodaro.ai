@@ -12,8 +12,9 @@ import { getAppVersion } from "./app-version.js"
  *
  * Privacy: one anonymous HTTPS request to api.github.com, at most once per
  * CACHE_TTL_MS per process. Nothing about the install rides along. Opt out
- * with NODARO_UPDATE_CHECK=off. Never runs on cloud (we ARE the newest
- * version there by definition).
+ * with NODARO_UPDATE_CHECK=off. On cloud `latest` still flows (it feeds the
+ * "what's new" dialog) but updateAvailable is always false — we ARE the
+ * newest version there by definition.
  */
 
 const RELEASES_URL = "https://api.github.com/repos/nodaroai/app.nodaro.ai/releases?per_page=20"
@@ -38,7 +39,6 @@ let cached: { at: number; latest: LatestRelease | null } | null = null
 let inflight: Promise<LatestRelease | null> | null = null
 
 export function updateCheckEnabled(): boolean {
-  if (isCloud()) return false
   return (process.env.NODARO_UPDATE_CHECK ?? "").trim().toLowerCase() !== "off"
 }
 
@@ -124,7 +124,11 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
   return {
     current,
     latest,
-    updateAvailable: latest !== null && isNewer(current, latest.version),
+    // Cloud always RUNS the newest deploy, so there is never an update to
+    // offer — but `latest` still flows: the founder-requested "what's new"
+    // dialog shows cloud users the changelog of what just shipped
+    // (2026-08-19). Self-host keeps the red-dot semantics.
+    updateAvailable: !isCloud() && latest !== null && isNewer(current, latest.version),
   }
 }
 

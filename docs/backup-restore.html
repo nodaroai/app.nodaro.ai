@@ -1,0 +1,166 @@
+---
+permalink: /backup-restore
+title: Backup & Restore
+description: One command each way — and the only downgrade path.
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backup &amp; Restore — Nodaro Docs</title>
+<meta name="description" content="One command each way — and the only downgrade path.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Founder comp: "Backup and Restore.dc.html" (2026-08-19). Accent aligned
+     to the site brand #ff0073 (comp used #ff2d84 — one variable to flip). */
+  :root {
+    --accent: #ff0073;
+    --accent-soft: rgba(255, 0, 115, 0.07);
+    --accent-border: rgba(255, 0, 115, 0.35);
+    --bg: #08080a;
+    --ink: #e9e9ec;
+    --dim: #a8a8b0;
+    --faint: #8a8a92;
+    --line: rgba(255,255,255,0.08);
+    --line-soft: rgba(255,255,255,0.06);
+    --card: rgba(255,255,255,0.02);
+    --code-bg: rgba(255,255,255,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .page {
+    min-height: 100vh;
+    background: radial-gradient(1100px 500px at 18% -12%, #17131a 0%, #08080a 62%);
+    padding: 52px 24px 100px;
+  }
+  .col { max-width: 860px; margin: 0 auto; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a.quiet { color: var(--faint); font-size: 13.5px; }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  code { font-size: 0.9em; color: var(--ink); background: var(--code-bg); padding: 2px 6px; border-radius: 5px; }
+  .crumbs { margin-top: 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .crumb-hot { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .crumb-dot { width: 4px; height: 4px; border-radius: 50%; background: #4a4a52; }
+  .crumb { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  h1 { font-size: 46px; line-height: 1.06; letter-spacing: -0.025em; font-weight: 700; margin-top: 12px; }
+  .lede { font-size: 18px; line-height: 1.6; color: var(--dim); margin-top: 16px; max-width: 60ch; }
+  .lede strong { color: #fff; }
+  .sec { margin-top: 56px; display: flex; align-items: baseline; gap: 14px; }
+  .sec .n { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); }
+  .sec h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.015em; }
+  .p { font-size: 16px; line-height: 1.6; color: var(--dim); margin-top: 12px; max-width: 64ch; }
+  .p strong { color: #fff; }
+  .tbl { margin-top: 20px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card); }
+  .tbl .hd, .tbl .row { display: grid; grid-template-columns: 230px 1fr; gap: 16px; padding: 14px 20px; align-items: start; }
+  .tbl .hd { padding: 12px 20px; border-bottom: 1px solid var(--line); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  .tbl .row { border-bottom: 1px solid var(--line-soft); }
+  .tbl .row:last-child { border-bottom: none; }
+  .tbl .k { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; color: #fff; }
+  .tbl .v { font-size: 14.5px; line-height: 1.6; color: var(--dim); }
+  .tbl .v strong { color: #fff; }
+  .note { font-size: 14.5px; color: var(--faint); margin-top: 14px; }
+  .warn { margin-top: 18px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: 12px; padding: 16px 18px; font-size: 15px; line-height: 1.6; color: var(--dim); }
+  .warn strong { color: #fff; }
+  pre.block { margin-top: 16px; border-radius: 12px; background: rgba(255,255,255,0.045); border: 1px solid var(--line-soft); padding: 14px 18px; font-size: 13px; line-height: 1.9; color: #dcdce2; overflow-x: auto; white-space: pre; }
+  pre.block .c { color: #6f6f78; }
+  .opt { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin-top: 14px; font-size: 14.5px; color: var(--dim); align-items: baseline; }
+  .opt code { white-space: nowrap; }
+  ol.steps { margin-top: 16px; list-style: none; display: grid; gap: 10px; }
+  ol.steps li { display: flex; gap: 14px; align-items: flex-start; font-size: 15px; line-height: 1.6; color: var(--dim); }
+  ol.steps li strong { color: #fff; }
+  ol.steps .b { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); color: var(--faint); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  dl.faq { margin-top: 18px; display: grid; gap: 16px; }
+  dl.faq dt { font-size: 15.5px; font-weight: 700; color: #fff; }
+  dl.faq dd { font-size: 15px; line-height: 1.6; color: var(--dim); margin-top: 4px; }
+  .foot { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 8px; font-size: 14px; }
+  @media (max-width: 640px) {
+    h1 { font-size: 34px; }
+    .tbl .hd, .tbl .row { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="page"><div class="col">
+
+  <a class="quiet" href="./">← Nodaro Docs</a>
+
+  <div class="crumbs">
+    <div class="crumb-hot">Community Edition</div>
+    <div class="crumb-dot"></div>
+    <div class="crumb">Deployment guide</div>
+  </div>
+
+  <h1>Backup &amp; restore</h1>
+  <p class="lede">One command each way. The backup is also the <strong>only downgrade path</strong> — database migrations are forward-only, so &ldquo;going back a version&rdquo; means restoring the backup you took before upgrading.</p>
+
+  <div class="sec"><div class="n">01</div><h2>What a backup contains</h2></div>
+  <p class="p"><code>tools/community-backup.sh</code> produces a single <code>tar.gz</code> holding everything your stack cannot regenerate.</p>
+
+  <div class="tbl">
+    <div class="hd"><div>Inside the archive</div><div>What it is</div></div>
+    <div class="row"><div class="k">db.dump</div><div class="v">Postgres — workflows, users, jobs, asset metadata (pg_dump, custom format)</div></div>
+    <div class="row"><div class="k">minio-data.tar</div><div class="v">Your generated media — images, videos, audio</div></div>
+    <div class="row"><div class="k">encryption-key</div><div class="v">The instance key that encrypts provider keys and social tokens. <strong>A database restore without it gives you rows nobody can read.</strong></div></div>
+    <div class="row"><div class="k">env</div><div class="v">Your <code>.env</code> — provider keys and secrets</div></div>
+    <div class="row"><div class="k">manifest.json</div><div class="v">App version + timestamp, read by the restore script</div></div>
+  </div>
+  <p class="note">Redis is deliberately absent — it holds only ephemeral job state.</p>
+
+  <div class="warn"><strong>The archive is a credential.</strong> It contains your <code>.env</code> and the encryption key. The script chmods it <code>600</code>; keep it that way, and store it like a password.</div>
+
+  <div class="sec"><div class="n">02</div><h2>Taking a backup</h2></div>
+  <p class="p">From your install directory (where <code>docker-compose.community.yml</code> lives), with the stack <strong>running</strong>:</p>
+  <pre class="block">tools/community-backup.sh
+<span class="c"># -&gt; ./backups/nodaro-backup-&lt;date&gt;-v&lt;version&gt;.tar.gz</span></pre>
+  <div class="opt">
+    <code>tools/community-backup.sh /path/to/backups</code><span>a different output directory</span>
+    <code>COMPOSE_FILE=my-compose.yml tools/community-backup.sh</code><span>a non-default compose file</span>
+  </div>
+  <p class="p">For a guaranteed-consistent media snapshot, stop the app first (<code>docker compose -f docker-compose.community.yml stop nodaro</code>) — media written <em>while</em> the dump runs may miss the archive; the database dump is always consistent either way.</p>
+  <p class="p"><strong>When to back up:</strong> before every <strong>major</strong>-version upgrade (the first number changed), and on whatever schedule your data deserves. A cron line works as-is:</p>
+  <pre class="block">0 3 * * * cd /path/to/install &amp;&amp; tools/community-backup.sh &gt;&gt; backup.log 2&gt;&amp;1</pre>
+
+  <div class="sec"><div class="n">03</div><h2>Restoring</h2></div>
+  <pre class="block">tools/community-restore.sh backups/nodaro-backup-&lt;date&gt;-v&lt;version&gt;.tar.gz</pre>
+  <p class="p">The script:</p>
+  <ol class="steps">
+    <li><span class="b">1</span><span>Stops the app and the database clients (<code>auth</code>, <code>rest</code>) — their live connections would block the restore.</span></li>
+    <li><span class="b">2</span><span>Restores Postgres and <strong>verifies it functionally</strong> — it does not trust exit codes; some harmless supabase-image noise is expected and printed.</span></li>
+    <li><span class="b">3</span><span>Restores the media store, the encryption key, and your <code>.env</code> (an existing <code>.env</code> is saved aside first).</span></li>
+    <li><span class="b">4</span><span>Restarts everything.</span></li>
+  </ol>
+  <div class="warn"><strong>It is destructive.</strong> It replaces the database and media with the archive&rsquo;s contents — so it asks you to type <code>RESTORE</code> before touching anything.</div>
+  <p class="p">When it finishes, open <code>http://localhost:3000/setup</code> — every card should be green.</p>
+
+  <div class="sec"><div class="n">04</div><h2>Downgrading a version</h2></div>
+  <p class="p">There is no migration rollback. To go back:</p>
+  <ol class="steps">
+    <li><span class="b">1</span><span>Restore the backup taken <strong>before</strong> the upgrade (above).</span></li>
+    <li><span class="b">2</span><span>Pin the older image tag in <code>docker-compose.community.yml</code> (e.g. <code>ghcr.io/nodaroai/nodaro-community:v1.25.1</code> — exact <code>vX.Y.Z</code> tags are immutable) and run <code>docker compose up -d nodaro</code>.</span></li>
+  </ol>
+
+  <div class="sec"><div class="n">05</div><h2>Troubleshooting</h2></div>
+  <dl class="faq">
+    <div><dt>&ldquo;the db service is not running&rdquo;</dt><dd>Start the stack first: <code>docker compose -f docker-compose.community.yml up -d</code>.</dd></div>
+    <div><dt>Provider keys show <code>missing</code> after a restore</dt><dd>The database was restored without its matching <code>encryption-key</code> (or with a different one). Restore from an archive that has the key, or re-enter the keys on <code>/setup</code>.</dd></div>
+    <div><dt>Restore verification failed</dt><dd>The script refuses to leave a half-restored database silently; re-run the restore. If it fails repeatedly, the archive may be truncated — check its size against the original.</dd></div>
+  </dl>
+
+  <div class="foot">
+    <a href="https://github.com/nodaroai/app.nodaro.ai/releases" target="_blank" rel="noreferrer">All releases on GitHub ↗</a>
+    <a href="./community-edition-quickstart">Community Edition Quickstart</a>
+    <a href="./deployment">Deployment guide</a>
+  </div>
+
+</div></div>
+</body>
+</html>
