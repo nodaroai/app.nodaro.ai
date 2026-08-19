@@ -41,7 +41,6 @@ interface FailedJobRow {
   user_id: string | null
   provider: string | null
   provider_kind: string | null
-  model_identifier: string | null
   source: string | null
   source_detail: string | null
   completed_at: string | null
@@ -78,7 +77,7 @@ function modelOf(inputData: Record<string, unknown> | null): string | null {
 }
 
 function jobReportBasics(job: FailedJobRow) {
-  const model = job.model_identifier ?? modelOf(job.input_data)
+  const model = modelOf(job.input_data)
   const jobType = typeof job.input_data?.type === "string" ? job.input_data.type : null
   const origin = typeof job.input_data?.origin === "string" ? job.input_data.origin : null
   return { model, jobType, origin }
@@ -132,7 +131,11 @@ export function failureReportFor(job: FailedJobRow): Parameters<typeof insertApp
 export async function sweepFailedJobs(): Promise<{ scanned: number; reported: number }> {
   const since = new Date(Date.now() - LOOKBACK_HOURS * 3_600_000).toISOString()
   const { data, error } = await (supabase.from("jobs") as any)
-    .select("id, error_message, user_id, provider, provider_kind, model_identifier, source, source_detail, completed_at, input_data")
+    // NB: jobs has NO model_identifier column — selecting it made PostgREST
+    // reject the whole query and this sweep silently scanned nothing from the
+    // day it shipped (prod: "column jobs.model_identifier does not exist").
+    // The model id lives inside input_data (see modelOf).
+    .select("id, error_message, user_id, provider, provider_kind, source, source_detail, completed_at, input_data")
     .eq("status", "failed")
     .gte("completed_at", since)
     .order("completed_at", { ascending: false })

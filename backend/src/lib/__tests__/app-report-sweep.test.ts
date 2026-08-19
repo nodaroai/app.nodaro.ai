@@ -26,7 +26,6 @@ const REJECTED = {
   user_id: "u1",
   provider: null,
   provider_kind: "kie-image",
-  model_identifier: null,
   source: null,
   source_detail: null,
   completed_at: "2026-07-18T00:00:00Z",
@@ -181,7 +180,7 @@ describe("report builders", () => {
     const report = failureReportFor({
       ...TIMEOUT,
       provider: "elevenlabs",
-      model_identifier: "eleven-v3",
+      input_data: { type: "text-to-speech", provider: "eleven-v3" },
       source: "mcp",
       source_detail: "Claude",
     })
