@@ -203,7 +203,10 @@ WORKDIR /app/frontend
 # in both /app/node_modules and /app/frontend/node_modules), which tsc
 # treats as distinct types. Vite's resolver dedupes correctly. Type
 # errors are caught by CI's typecheck job, not the Docker build.
-RUN npx vite build
+# 4GB heap: the editor bundle outgrew Node's default (~2GB on CI runners) —
+# the vite build OOM'd ("Reached heap limit") on two PR runs in two days
+# (#780, #790), each time passing on rerun. Flake class closed at the root.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npx vite build
 
 # ── Stage 5: Production runtime deps ──────────────────────────────────
 # Re-run `npm ci` with --omit=dev so the runner only ships production
