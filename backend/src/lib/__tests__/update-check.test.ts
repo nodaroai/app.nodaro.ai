@@ -40,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   delete process.env.NODARO_UPDATE_CHECK
+  delete process.env.RAILWAY_GIT_COMMIT_SHA
 })
 
 describe("isNewer", () => {
@@ -53,6 +54,44 @@ describe("isNewer", () => {
   it("a local -dev build never nags about itself", () => {
     expect(isNewer("1.23.0-dev.abc123", "v1.23.0")).toBe(false)
     expect(isNewer("0.0.0-dev", "v2.0.0")).toBe(true)
+  })
+})
+
+describe("deployed-SHA version resolution (the cloud label fix)", () => {
+  const tagsPayload = [
+    { name: "v1.27.0", commit: { sha: "deadbeef27" } },
+    { name: "@nodaro/sdk@9.9.9", commit: { sha: "deadbeef27" } }, // npm tag on the same sha must never win
+    { name: "v1.26.1", commit: { sha: "cafebabe26" } },
+  ]
+
+  it("cloud: the running SHA's release tag becomes `current` — the label stops lying", async () => {
+    editionMock.isCloud.mockReturnValue(true)
+    process.env.RAILWAY_GIT_COMMIT_SHA = "deadbeef27"
+    fetchMock.mockImplementation(async (url: unknown) =>
+      String(url).includes("/tags")
+        ? { ok: true, json: async () => tagsPayload }
+        : { ok: true, json: async () => [release("v1.27.0")] },
+    )
+    const status = await getUpdateStatus()
+    expect(status.current).toBe("1.27.0")
+    expect(status.updateAvailable).toBe(false)
+  })
+
+  it("an untagged SHA (staging runs dev commits) keeps the fallback and never throws", async () => {
+    process.env.RAILWAY_GIT_COMMIT_SHA = "not-a-release-sha"
+    fetchMock.mockImplementation(async (url: unknown) =>
+      String(url).includes("/tags")
+        ? { ok: true, json: async () => tagsPayload }
+        : { ok: true, json: async () => [release("v1.27.0")] },
+    )
+    const status = await getUpdateStatus()
+    expect(status.current).toBe("1.23.0")
+  })
+
+  it("no RAILWAY_GIT_COMMIT_SHA (self-host) -> no tags request at all", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => [release("v1.24.0")] })
+    await getUpdateStatus()
+    expect(fetchMock.mock.calls.every((c) => !String(c[0]).includes("/tags"))).toBe(true)
   })
 })
 

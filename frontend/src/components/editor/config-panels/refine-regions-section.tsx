@@ -351,14 +351,22 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
               )}
             </button>
           )}
-          {segments && noneLocated && (
+          {/* ALWAYS offered while a map exists — placement quality improves
+              server-side over time, and a stored map keeps its old geometry
+              until re-detected. Gating this on noneLocated stranded every map
+              that had (wrong) outlines with no way to recompute them. */}
+          {segments && (
             <button
               type="button"
               onClick={handleDetect}
               disabled={detecting}
               className="self-start text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
             >
-              {detecting ? "Re-detecting…" : "Outlines unavailable for this map — re-detect (free)"}
+              {detecting
+                ? "Re-detecting…"
+                : noneLocated
+                  ? "Outlines unavailable for this map — re-detect (free)"
+                  : "Re-detect regions (free)"}
             </button>
           )}
           {detectError && <p className="text-[10px] text-destructive">{detectError}</p>}
