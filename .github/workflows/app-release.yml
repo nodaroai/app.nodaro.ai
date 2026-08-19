@@ -119,7 +119,12 @@ jobs:
           # masks registered secret values in logs, and the remote is removed
           # right after so it never outlives the step (review 2026-08-19).
           git remote add public "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
-          git push public "${{ steps.ver.outputs.next }}"
+          # actions/checkout installs a github.com extraheader that OVERRIDES
+          # URL-embedded credentials — without clearing it for this one push,
+          # git authenticates as github-actions[bot] and the public repo
+          # answers 403 (first three live runs all died here). -c empties the
+          # header for exactly this command.
+          git -c http.https://github.com/.extraheader= push public "${{ steps.ver.outputs.next }}"
           git remote remove public
           gh release create "${{ steps.ver.outputs.next }}" \
             --repo nodaroai/app.nodaro.ai \
