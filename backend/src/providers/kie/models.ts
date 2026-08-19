@@ -195,6 +195,23 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     imageParam: "task_id",
     extraParams: {},
   },
+  // grok-2's de-facto i2i: the grok-imagine-2 family has NO image input on
+  // its t2i endpoint (schema-verified 2026-08-19), but segment-map ALSO
+  // accepts an arbitrary `image_url` and mints a task id that image-edit
+  // consumes — a two-step reference chain (segment is FREE, so the total is
+  // the edit's 4 KIE credits). Reached via the T2I_TO_I2I_VARIANT auto-route
+  // when refs are attached to grok-2; the chain lives in
+  // image.ts::grok2ReferenceChain. Single reference only.
+  // NB: deliberately NO imageParam — the caller-facing input is an image
+  // URL (the chain mints its own task id internally), so it must NOT join
+  // TASK_CHAINED_EDIT_PROVIDERS' imageParam:"task_id" invariant.
+  "grok-2-i2i": {
+    model: "grok-imagine-image-2-0/image-edit",
+    credits: 4,
+    cost: 0.02,
+    inputType: "image-to-image",
+    extraParams: {},
+  },
 
   // GPT Image family
   // GPT Image 1.5 — Supported aspect_ratio: "1:1", "3:2", "2:3" ONLY. Quality: "medium", "high"

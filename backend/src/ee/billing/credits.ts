@@ -346,7 +346,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz-image-upscale:8K": 100,
   "grok-upscale": 25,
   // Grok Imagine 2 task-chained ops (prior grok-2 task_id, not an image URL)
-  "grok-2-edit": 10,              // prompt/region edit ($0.02)
+  "grok-2-edit": 10,
+  "grok-2-i2i": 10, // segment(free) + edit chain — same provider cost as t2i              // prompt/region edit ($0.02)
   "grok-2-segment": 0,            // segment map is FREE upstream
   // ── Image-to-Image ──
   "flux-i2i": 60,                 // (1K default)

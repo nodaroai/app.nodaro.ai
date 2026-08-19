@@ -364,6 +364,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "gpt-image",
   "gpt-image-2",
   "grok",
+  "grok-2",
   "qwen",
   "seedream",
   "seedream-5-lite",
@@ -374,6 +375,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana-edit",
   "gpt-image-i2i",
   "gpt-image-2-i2i",
+  "grok-2-i2i",
   "flux-i2i",
   "flux-pro-i2i",
   "flux-kontext",
@@ -412,6 +414,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "gpt-image": "gpt-image-i2i",
   "gpt-image-2": "gpt-image-2-i2i",
   "grok": "grok-i2i",
+  // grok-2's t2i takes NO image input; its "i2i" is the segment-map(image_url)
+  // → image-edit(task_id) chain in the KIE provider (single reference).
+  "grok-2": "grok-2-i2i",
   "qwen": "qwen-i2i",
   "seedream": "seedream-edit",
   "seedream-5-lite": "seedream-5-lite-i2i",
@@ -437,6 +442,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana-2": 4,
   "nano-banana-2-lite": 10,
   "wan-2.7": 9,
+  // grok-2 reference chain consumes exactly one image (segment-map input).
+  "grok-2-i2i": 1,
   // Image-to-image (multi-source array)
   "nano-banana-edit": 8,
   "gpt-image-i2i": 16,
@@ -592,6 +599,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-pro-i2i",
   "gpt-image-i2i",
   "gpt-image-2-i2i",
+  "grok-2-i2i",
   "ideogram-edit",
   "ideogram-remix",
   "ideogram-reframe",

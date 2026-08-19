@@ -240,6 +240,55 @@ describe("KIE image generation — request body snapshots", () => {
     // The task id must surface — grok-2's edit/segment chain consumes it.
     expect(result.kieTaskId).toBe("task_grok_imagine_image_2_0_123")
   })
+
+  it("grok-2 with a reference runs the segment-map(image_url) → image-edit(task_id) chain (grok-2-i2i)", async () => {
+    // The t2i endpoint takes NO image input (schema-verified 2026-08-19) —
+    // refs must flow through the FREE segment step that mints a task id and
+    // the edit step that consumes it. Verified live against KIE.
+    runKieTaskSpy
+      .mockResolvedValueOnce({
+        resultJson: {},
+        taskId: "task_grok_segment_arb_1",
+      })
+      .mockResolvedValueOnce({
+        resultJson: { resultUrls: ["https://kie.test/ref-edit.png"] },
+        providerMs: 9000,
+        taskId: "task_grok_edit_from_ref_1",
+      })
+    const result = await provider.generateImage(
+      "make it a snowy winter scene",
+      ["https://cdn.test/reference.png", "https://cdn.test/ignored-extra.png"],
+      "grok-2",
+    )
+    expect(runKieTaskSpy).toHaveBeenCalledTimes(2)
+    const [segModel, segBody] = runKieTaskSpy.mock.calls[0] as [string, Record<string, unknown>]
+    const [editModel, editBody] = runKieTaskSpy.mock.calls[1] as [string, Record<string, unknown>]
+    expect({ segModel, segBody, editModel, editBody }).toMatchInlineSnapshot(`
+      {
+        "editBody": {
+          "prompt": "make it a snowy winter scene",
+          "task_id": "task_grok_segment_arb_1",
+        },
+        "editModel": "grok-imagine-image-2-0/image-edit",
+        "segBody": {
+          "image_url": "https://cdn.test/reference.png",
+        },
+        "segModel": "grok-imagine-image-2-0/segment-map",
+      }
+    `)
+    expect(result.url).toBe("https://kie.test/ref-edit.png")
+    // The EDIT task id is the chainable one (Refine Regions on the result).
+    expect(result.kieTaskId).toBe("task_grok_edit_from_ref_1")
+    // segment (free) + edit ($0.02) — same total as plain grok-2 t2i.
+    expect(result.cost).toBeCloseTo(0.02)
+  })
+
+  it("grok-2-i2i requested directly without references is a hard error, never a silent t2i", async () => {
+    await expect(provider.generateImage("a robot", undefined, "grok-2-i2i")).rejects.toThrow(
+      /reference image/,
+    )
+    expect(runKieTaskSpy).not.toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------

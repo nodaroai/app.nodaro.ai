@@ -70,7 +70,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding | Same as Nano Banana |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **20 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
-| grok-2 | Grok Imagine 2 | Latest Grok (Imagine Image 2.0) — expressive, high-contrast imagery, priced the same as Grok v1. Generations can chain into the **free** Grok segment map and region-targeted edits (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)). Text-to-image only — reference images are not supported. | 1:1, 16:9, 9:16, 3:2, 2:3 |
+| grok-2 | Grok Imagine 2 | Latest Grok (Imagine Image 2.0) — expressive, high-contrast imagery, priced the same as Grok v1. Generations can chain into the **free** Grok segment map and region-targeted edits (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)). Attach ONE reference image and it auto-routes through Grok's segment-map → image-edit chain (`grok-2-i2i`, same 10-credit price) — the result preserves the reference's composition while applying your prompt. Extra references beyond the first are ignored. | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | flux | Flux | Photorealistic, highest quality output | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
 | flux-flex | Flux Flex | Flexible Flux, fast generation | Same as Flux |
 | flux-kontext | Flux Kontext | Context-aware generation and editing | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9 |
