@@ -106,10 +106,11 @@ describe("getUpdateStatus", () => {
     expect(updateCheckEnabled()).toBe(false)
   })
 
-  it("cloud makes no request at all — we ARE the newest version there", async () => {
+  it("cloud: latest still flows (the what's-new dialog reads it) but updateAvailable is ALWAYS false", async () => {
     editionMock.isCloud.mockReturnValue(true)
+    fetchMock.mockResolvedValue({ ok: true, json: async () => [release("v9.0.0")] })
     const status = await getUpdateStatus()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(status.latest?.version).toBe("v9.0.0")
     expect(status.updateAvailable).toBe(false)
   })
 
