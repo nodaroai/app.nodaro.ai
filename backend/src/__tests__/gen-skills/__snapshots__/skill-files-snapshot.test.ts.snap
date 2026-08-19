@@ -147,6 +147,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 - \`duration\`
 - \`instrumental\`
 - \`lyrics\`
+- \`title\`
 - \`genre\`
 - \`mood\`",
   "node-data-shape": "**Type:** \`generate-music\`

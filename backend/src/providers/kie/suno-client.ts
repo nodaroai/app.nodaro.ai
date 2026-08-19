@@ -522,17 +522,30 @@ export async function sunoGenerate(
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const model = params.model ?? "V5_5"
+  const customMode = params.customMode ?? false
+  const instrumental = params.instrumental ?? false
+
+  // THE LYRICS ARE THE PROMPT (2026-08-19). KIE's generate endpoint has no
+  // `lyrics` field at all — its body is prompt / style / title / customMode /
+  // instrumental / model / … and the docs are explicit: in custom mode with
+  // `instrumental: false`, "`style`, `title`, and `prompt` are required (with
+  // prompt used as the exact lyrics)". We were sending `lyrics` as its own
+  // key, which the API ignores, while `prompt` carried a DESCRIPTION — so a
+  // caller who supplied real lyrics got a song invented from the description
+  // instead (field-measured: scat syllables in `lyrics` came back as an
+  // English song about a wooden table). Map it: in a sung custom-mode call the
+  // lyrics ARE the prompt, and no phantom key is sent in any mode.
+  const sungLyrics = customMode && !instrumental ? params.lyrics?.trim() : undefined
 
   // Build request body
   const body: Record<string, unknown> = {
-    prompt: params.prompt,
+    prompt: sungLyrics || params.prompt,
     model,
-    customMode: params.customMode ?? false,
-    instrumental: params.instrumental ?? false,
+    customMode,
+    instrumental,
     callBackUrl: "https://callback.placeholder",
   }
 
-  if (params.lyrics) body.lyrics = params.lyrics
   if (params.style) body.style = params.style
   if (params.title) body.title = params.title
   if (params.negativeStyle) body.negative_style = params.negativeStyle

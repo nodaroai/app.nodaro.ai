@@ -475,6 +475,53 @@ describe("generate_music verb", () => {
     expect(received.body?.model).toBe("V5")
     expect(received.body?.lyrics).toBe("verse one")
     expect(received.body?.style).toBe("indie pop")
+    // WORDS TO SING ⇒ CUSTOM MODE (2026-08-19): lyrics only reach Suno there
+    // (in description mode the model invents its own words and `duration` is
+    // ignored), and custom mode requires a title — defaulted when absent.
+    expect(received.body?.customMode).toBe(true)
+    expect(received.body?.title).toBe("Untitled")
+  })
+
+  it("lyrics + title + duration ride custom mode; duration is raised to the route's 10s floor", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-custom" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_music", {
+      prompt: "acoustic world-jazz, upright bass, hand percussion",
+      model: "suno-v5-5",
+      lyrics: "[Intro]\nPa ra pa pa pri pa",
+      title: "Studio Session",
+      duration: 6,
+    })
+
+    expect(received.body?.customMode).toBe(true)
+    expect(received.body?.title).toBe("Studio Session")
+    expect(received.body?.duration).toBe(10)
+    // No genre/mood given → the prompt itself is the style (custom mode requires one).
+    expect(received.body?.style).toBe("acoustic world-jazz, upright bass, hand percussion")
+  })
+
+  it("an INSTRUMENTAL request stays in description mode even with lyrics — there is no voice to sing them", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-inst" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_music", { prompt: "solo piano", model: "suno-v5-5", lyrics: "[Verse]\nignored", instrumental: true })
+
+    expect(received.body?.customMode).toBeUndefined()
+    expect(received.body?.title).toBeUndefined()
+  })
+
+  it("no lyrics: description mode as before, and a caller-supplied title still rides", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-desc" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_music", { prompt: "lofi beat", model: "suno-v5-5", title: "Night Study" })
+
+    expect(received.body?.customMode).toBeUndefined()
+    expect(received.body?.title).toBe("Night Study")
   })
 
   it("dispatches model=suno (v4) to /v1/suno/generate with model=V4", async () => {

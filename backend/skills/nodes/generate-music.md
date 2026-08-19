@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-08-15T21:55:06.816Z
-generated_from: 150c80ac9
+generated_at: 2026-08-19T22:58:18.900Z
+generated_from: 7cb24d4c9
 ---
 
 # generate-music
@@ -66,6 +66,7 @@ generated_from: 150c80ac9
 - `duration`
 - `instrumental`
 - `lyrics`
+- `title`
 - `genre`
 - `mood`
 <!-- AUTO-GEN:END mcp-call -->
