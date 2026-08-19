@@ -211,6 +211,32 @@ describe("RefineRegionsSection", () => {
     expect(screen.queryByTestId("region-outline-0")).toBeNull()
   })
 
+  it("offers Re-detect even when the stored map HAS outlines (stored geometry only upgrades by re-detecting)", async () => {
+    vi.useFakeTimers()
+    grokSegmentMapMock.mockResolvedValue({ jobId: "seg-job-2" })
+    getJobStatusLeanMock.mockResolvedValue({ status: "completed", output_data: SEGMENT_OUTPUT })
+    const onUpdate = vi.fn()
+    const data = baseData({
+      grokSegments: {
+        taskId: "task_grok_123",
+        segments: [
+          { index: 0, name: "sky", maskUrl: "https://r2.test/mask-1.png", bbox: { x: 0.1, y: 0, w: 0.9, h: 0.4 } },
+        ],
+      },
+    })
+    render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={onUpdate} />)
+
+    // The regression: with located segments present, NO re-detect affordance
+    // existed at all — old (wrong) placements were stranded forever.
+    const redetect = screen.getByRole("button", { name: /Re-detect regions/ })
+    fireEvent.click(redetect)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    expect(grokSegmentMapMock).toHaveBeenCalledWith("task_grok_123", "https://r2.test/result.png")
+    expect(onUpdate).toHaveBeenCalled()
+  })
+
   it("applies a region edit with the sorted VERBATIM indexes (0-based survives) via pollImageRefineToNode", async () => {
     const data = baseData({
       grokSegments: {
