@@ -180,6 +180,26 @@ export class KieImageProvider
       }
     }
 
+    // grok-2's t2i endpoint has NO image input at all (schema-verified
+    // 2026-08-19) — refs arrive as "grok-2-i2i" via the route's
+    // T2I_TO_I2I_VARIANT swap (the grok-2 fallback here covers callers that
+    // bypass the route swap) and are consumed by a two-step chain: the FREE
+    // segment-map endpoint accepts an arbitrary image_url and mints a task
+    // id, which image-edit consumes. Verified live: the edit preserves the
+    // reference's composition — true i2i behavior.
+    if (referenceImageUrls?.length && provider === "grok-2") {
+      provider = "grok-2-i2i"
+    }
+    if (provider === "grok-2-i2i") {
+      if (!referenceImageUrls?.length) {
+        throw createSanitizedError(
+          "grok-2-i2i requires a reference image",
+          "Image generation"
+        )
+      }
+      return this.grok2ReferenceChain(prompt, referenceImageUrls, reconcileOpts)
+    }
+
     console.log(
       `[KIE.ai] Generating image with ${modelConfig.model}: "${prompt}"`
     )
@@ -357,6 +377,87 @@ export class KieImageProvider
       url: imageUrl,
       ...(extraUrls.length ? { extraUrls } : {}),
       cost: modelConfig.cost,
+      ...(kieTaskId && { kieTaskId }),
+      ...(providerMs !== undefined && { providerMs }),
+    }
+  }
+
+  /**
+   * grok-2 reference chain: segment-map(image_url) → image-edit(task_id).
+   * The FREE segment step mints a grok task id from an ARBITRARY hosted
+   * image; the edit step then applies the prompt to it — the grok-imagine-2
+   * family's only reference-image path (its t2i takes no image input).
+   * Single reference; extras are dropped with a log line (the UI warns via
+   * REF_IMAGE_MAX_LIMITS["grok-2-i2i"] = 1). Only the PAID edit call carries
+   * reconcileOpts — registering the free segment task would make a crash
+   * mid-chain reconcile against a task whose result has no image.
+   */
+  private async grok2ReferenceChain(
+    prompt: string,
+    referenceImageUrls: string[],
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult> {
+    const segConfig = KIE_IMAGE_MODELS["grok-2-segment"]
+    const editConfig = KIE_IMAGE_MODELS["grok-2-i2i"]
+    if (referenceImageUrls.length > 1) {
+      console.log(
+        `[KIE.ai] grok-2 reference chain consumes ONE reference — dropping ${referenceImageUrls.length - 1} extra`
+      )
+    }
+    console.log(
+      `[KIE.ai] grok-2 reference chain: segmenting reference ${referenceImageUrls[0]}`
+    )
+    const seg = await runKieTask(
+      segConfig.model,
+      { image_url: referenceImageUrls[0] },
+      undefined,
+      undefined,
+      undefined,
+    )
+    const segTaskId = ("taskId" in seg && typeof seg.taskId === "string") ? seg.taskId : undefined
+    if (!segTaskId) {
+      throw createSanitizedError(
+        "reference segmentation returned no task id",
+        "Image generation"
+      )
+    }
+    console.log(`[KIE.ai] grok-2 reference chain: editing via task ${segTaskId}`)
+    const result = await runKieTask(
+      editConfig.model,
+      { prompt, task_id: segTaskId },
+      undefined,
+      undefined,
+      reconcileOpts,
+    )
+    const imageUrl = result.resultJson.resultUrls?.[0]
+    if (!imageUrl) {
+      throw createSanitizedError(
+        "image task succeeded but no URL in resultUrls",
+        "Image generation"
+      )
+    }
+    const cost = segConfig.cost + editConfig.cost
+    console.log(`[KIE.ai] grok-2 reference chain completed: ${imageUrl} (cost: $${cost.toFixed(4)})`)
+    const rawInfo = "rawRecordInfo" in result ? result.rawRecordInfo : undefined
+    logCreditAudit({
+      modelKey: "grok-2-i2i",
+      expectedKieCredits: segConfig.credits + editConfig.credits,
+      modelConfig: { provider: "grok-2-i2i" },
+      rawResponseSample: rawInfo,
+      actualKieCredits: extractCreditFields(rawInfo)?.credits as number | undefined,
+      notes: "image-generation (grok-2 reference chain)",
+    })
+    const providerMs = ("providerMs" in result && typeof result.providerMs === "number")
+      ? result.providerMs
+      : undefined
+    // The EDIT task id is the chainable one — Refine Regions / grok-2-edit /
+    // grok-upscale can all consume the result downstream.
+    const kieTaskId = ("taskId" in result && typeof result.taskId === "string")
+      ? result.taskId
+      : undefined
+    return {
+      url: imageUrl,
+      cost,
       ...(kieTaskId && { kieTaskId }),
       ...(providerMs !== undefined && { providerMs }),
     }

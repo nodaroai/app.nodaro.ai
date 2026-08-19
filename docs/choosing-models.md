@@ -54,6 +54,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Grok Imagine | xAI | Premium | 10 | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
 | Grok Imagine (I2I) | xAI | Premium | 10 | i2i | Image-to-image with Grok. |
 | Grok Imagine 2 | xAI | Premium | 10 | t2i | Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits). |
+| Grok Imagine 2 (reference) | xAI | Premium | 10 | i2i | grok-2 guided by ONE reference image via the segment-map → image-edit chain — preserves the reference's composition while applying the prompt. |
 | Grok Imagine 2 Edit | xAI | Premium | 10 | edit | Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions. |
 | Imagen 4 Fast | Google | Premium | 10 | t2i | Cheaper / quicker Imagen 4 tier. |
 | Nano Banana 2 Lite | Google | Premium | 10 | t2i, i2i | Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing. |

@@ -886,6 +886,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description:
       "Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits).",
     useCases: ["stylized", "expressive", "general"],
+    // Refs auto-route to grok-2-i2i (segment-map → image-edit chain); ONE
+    // reference (REF_IMAGE_MAX_LIMITS).
+    features: ["reference-image"],
     aspectRatios: GROK_RATIOS,
     pricing: [{ identifier: "grok-2", credits: 10 }],
   },
@@ -900,6 +903,22 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       "Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions.",
     useCases: ["edit", "region-edit"],
     pricing: [{ identifier: "grok-2-edit", credits: 10 }],
+  },
+  // Auto-selected when references are attached to grok-2 (T2I_TO_I2I_VARIANT):
+  // the t2i endpoint takes no image, so the FREE segment-map mints a task id
+  // from the reference URL and image-edit consumes it. Single reference.
+  "grok-2-i2i": {
+    id: "grok-2-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "xAI",
+    label: "Grok Imagine 2 (reference)",
+    series: "Grok",
+    description:
+      "grok-2 guided by ONE reference image via the segment-map → image-edit chain — preserves the reference's composition while applying the prompt.",
+    useCases: ["restyle", "edit", "reference"],
+    features: ["reference-image"],
+    pricing: [{ identifier: "grok-2-i2i", credits: 10 }],
   },
   "grok-2-segment": {
     id: "grok-2-segment",
