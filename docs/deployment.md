@@ -493,7 +493,20 @@ prefix in your bucket lifecycle rule.
 
 ## 8. Backups
 
-Three things are stateful:
+**Compose (community quickstart) installs — one command each way:**
+
+```bash
+tools/community-backup.sh              # -> backups/nodaro-backup-<date>-<version>.tar.gz
+tools/community-restore.sh <archive>   # DESTRUCTIVE; asks for confirmation
+```
+
+The backup holds the Postgres dump, the MinIO media, the instance
+encryption key and `.env` — everything the stack cannot regenerate.
+Restore is also the **downgrade path**: migrations are forward-only, so
+going back a version means restoring the backup taken before the upgrade.
+Take one before every major-version update.
+
+**Managed deployments** — three things are stateful:
 
 - **Supabase Postgres** — workflows, profiles, jobs, assets metadata.
   Use Supabase's Point-in-Time Recovery (paid plans) or run regular

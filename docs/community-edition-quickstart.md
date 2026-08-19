@@ -180,7 +180,12 @@ notes at https://github.com/nodaroai/app.nodaro.ai/releases first — majors
 are the only releases allowed to change env vars, compose topology, or
 behavior you may depend on. There is no downgrade path (migrations are
 forward-only): take a backup before majors and restore it if you need to
-go back.
+go back:
+
+```bash
+tools/community-backup.sh              # everything the stack cannot regenerate, one archive
+tools/community-restore.sh <archive>   # the road back — DESTRUCTIVE, asks for confirmation
+```
 
 The running version is shown in the app sidebar and at `/health`. When a
 newer release exists, a red dot appears next to the version — click it for
