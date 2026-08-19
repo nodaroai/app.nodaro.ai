@@ -1,5 +1,19 @@
 # @nodaro/shared
 
+## 2.8.0
+
+### Minor Changes
+
+- 5fa889d: **@nodaro/shared**
+
+  - LLM catalog gains `gemini-3.7-flash` (KIE `gemini-3-7-flash-openai` chat-completions + direct `gemini-3.7-flash`; economy tier; reasoning low|high on KIE, full ladder direct; 8192 output cap at the KIE-safe intersection). Not yet offered as a video-analysis picker tier — registered for internal model routing (the smart-family A/B lever).
+
+- 6a06b17: Add the `grok-4.6` LLM (KIE responses dialect on the grok family path, vendor `xai`, standard tier, vision + structured output + reasoning efforts low–xhigh, live-verified 2026-08-18) and the vendor-grouping helpers every LLM model menu now renders from: `LLM_VENDOR_ORDER`, `LLM_VENDOR_LABELS`, `groupLlmModelsByVendor`, `orderedLlmModels`, plus the `LlmVendor`/`LlmModelGroup` types.
+
+### Patch Changes
+
+- db9274a: gemini-3.7-flash: explicit image-only modality caps. Video/audio are deliberately withheld (full caps would auto-enroll the model in `VIDEO_ANALYSIS_LLM_MODELS` and force a video-analysis tier/pricing decision that is deferred while the smart-family A/B routes it internally), so the Generate Text reference gate now reads a stated capability instead of the unknown-model fallback. Guarded by a registry test.
+
 ## 2.7.0
 
 ### Minor Changes
