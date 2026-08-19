@@ -7,7 +7,7 @@
 --
 --   volcengine-lipsync (KIE) — same rate class as kling-avatar
 --
--- At-cost (0% markup, matching kling-avatar + the per-second lip-sync family):
+-- Base values (matching kling-avatar + the per-second lip-sync family):
 -- 2 credits/sec. The lip-sync worker sets no meteredCost, so the reserved bucket
 -- is committed verbatim as the charge. The bare row is the back-compat default
 -- (300s ceiling) used when no audioDurationSec is supplied.

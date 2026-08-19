@@ -1013,7 +1013,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "omnihuman-1-5:60s": 4050,
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro (Replicate, video-input dubbing).
   // Billed per second of output; bucketed like kling-avatar via buildLipSyncCreditId.
-  // At-cost (0% markup): credits. lip-sync
+  // Base (markup applies at read time): credits. lip-sync
   // sets no meteredCost, so the worker commits the reserved bucket as the charge.
   "heygen-lipsync-precision": 10010,      // bare = 300s ceiling
   "heygen-lipsync-precision:15s": 510,    // 15s ×
@@ -1028,7 +1028,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "lipsync-2-pro:120s": 5000,             // 120s ×
   "lipsync-2-pro:300s": 12490,            // 300s × — 5-min ceiling
   // Sync Lipsync v3 (fal.ai). /min, billed per output second
-  // bucketed via buildLipSyncCreditId. At-cost (0% markup): credits =
+  // bucketed via buildLipSyncCreditId. Base: credits =
   // . lip-sync sets no meteredCost, so the
   // reserved bucket is committed verbatim as the charge.
   "sync-lipsync-v3": 20000,               // bare = 300s ceiling
@@ -1039,7 +1039,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sync-lipsync-v3:300s": 20000,          // 300s × — 5-min ceiling
   // Volcengine video-to-video lip sync (KIE). (/sec) — identical
   // to kling-avatar — billed per output second, bucketed via buildLipSyncCreditId.
-  // At-cost (matches kling-avatar + the per-second lip-sync family): credits =
+  // Base (matches kling-avatar + the per-second lip-sync family): credits =
   // = 2 cr/sec. lip-sync sets no meteredCost, so
   // the reserved bucket is committed verbatim as the charge.
   "volcengine-lipsync": 6000,             // bare = 300s ceiling
@@ -1370,7 +1370,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 17 ids: bare (= 240f/1080p worst-case) + 8 block tiers (30/60/90/120/150/
   // 180/210/240, SWITCHX_FRAME_TIERS) × 2 resolutions (720/1080p). ANCHORED to
   // Beeble's published rate 2026-06-26 (developer.beeble.ai/pricing): metered per
-  // 30-frame block — 720p f, 1080p f — committed verbatim. AT-COST
+  // 30-frame block — 720p f, 1080p f — committed verbatim. BASE
   // (no platform margin): block credits = blockUSD / @720p, 15 @1080p.
   // Tiers are 30-frame multiples so each snaps to the exact block Beeble bills
   // (ceil(frames/30)). Mirrors migration 241 rows (credit-pricing-migration-sync).

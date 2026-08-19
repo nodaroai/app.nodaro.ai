@@ -7,7 +7,7 @@
 --
 --   sync-lipsync-v3 (fal-ai/sync-lipsync/v3) — billed per second of output.
 --
--- At-cost (0% markup), bucketed to the durations below. The lip-sync worker sets
+-- Base values, bucketed to the durations below. The lip-sync worker sets
 -- no meteredCost, so the reserved bucket is committed verbatim as the charge. The
 -- bare row is the back-compat default (300s ceiling) used when no audioDurationSec
 -- is supplied.
