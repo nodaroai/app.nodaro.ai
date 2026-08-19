@@ -53,7 +53,7 @@ describe("aiAvatarUsdCost", () => {
   })
 })
 
-describe("aiAvatarHoldCredits — minimal-safe at-cost formula (NO *1.5)", () => {
+describe("aiAvatarHoldCredits — minimal base hold formula", () => {
   it("is usdToCredits(usd) for avatar-iv:720p:30s", () => {
     // $0.06 * 30 = $1.80 → 1.80/0.02 = 90
     expect(aiAvatarHoldCredits("avatar-iv", "720p", 30)).toBe(900)
@@ -133,7 +133,7 @@ describe("aiAvatarHoldCredits — minimal-safe at-cost formula (NO *1.5)", () =>
 
 describe("REGRESSION: user-reported audio over-reservation", () => {
   it("a ~15s audio ai-avatar (probed) reserves the 15s bucket, NOT the 900s one", () => {
-    // Before the fix: audio mode → 900s bucket × *1.5 hold → a reservation
+    // Before the fix: audio mode → 900s bucket × the old padded hold → a reservation
     // ~90x the clip's real cost. After: probe 15s → bucket 15s.
     // Asserted RELATIVE to the 900s bucket rather than as an absolute credit
     // count, so this states the actual invariant (the right bucket was chosen)

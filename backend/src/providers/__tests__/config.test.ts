@@ -139,7 +139,7 @@ describe("resolveMarkup", () => {
 describe("web-scrape credit costs", () => {
   it("has all 5 static composite entries", async () => {
     const { STATIC_CREDIT_COSTS } = await import("../../ee/billing/credits.js")
-    // 0%-base from current Apify per-result rates (markup applied once at runtime).
+    // base from current Apify per-result rates (markup applied once at runtime).
     expect(STATIC_CREDIT_COSTS["web-scrape:google-search"]).toBe(30)
     expect(STATIC_CREDIT_COSTS["web-scrape:content-crawler"]).toBe(10)
     expect(STATIC_CREDIT_COSTS["web-scrape:content-crawler:site"]).toBe(50)

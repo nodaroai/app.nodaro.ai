@@ -13,7 +13,7 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
-// These are 0%-base credits (markup is applied once at lookup via getAppSettings).
+// These are base credits (markup is applied once at lookup via getAppSettings).
 const FLUX2_STATIC: Record<string, number> = {}
 for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
   for (const mp of FLUX2_RES_MP) {
@@ -29,7 +29,7 @@ for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
 // getModelCreditCostFromDB applies the admin markup (configurable) to this stored value
 // at RESERVE time, and the reserve buckets UP (true clip ≤ bucket ceiling), so
 // reserved ≥ metered-actual already (they're EQUAL at the bucket ceiling, where
-// both derive from the same base). The old *1.5 double-buffered
+// both derive from the same base). The old padded hold double-buffered
 // on top of the runtime markup — the user-reported over-reservation. The actual
 // charge is recomputed at job completion by commitJobCredits/computeActualCredits
 // from the provider's real USD cost; commit_credits refunds any surplus.
@@ -417,7 +417,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "grok-i2v:15s": 100,
   // ── Grok Imagine Video 1.5 (KIE) — per-second billing, 480p/720p, image-to-video. ──
   // KIE 14.5 cr/s @480p, 25 cr/s @720p, +2 cr/image (always 1 image → +2 in every tier).
-  // Nodaro = ceil(KIE_total / 4) — priced at cost, like Seedance-2. Base = 8s/480p.
+  // Nodaro = ceil(KIE_total / 4) — same conversion as Seedance-2. Base = 8s/480p.
   "grok-imagine-video-1.5": 295,
   // 480p (KIE 14.5 cr/s + 2)
   "grok-imagine-video-1.5:1s:480p": 50,
@@ -737,7 +737,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-5:30s:1080p-ref":  5140,
   // ── MiniMax Hailuo 3 — per-second billing at two resolution rates ──
   // KIE 36.5 cr/s @2K (default) and 22.5 cr/s @768P (lever added 2026-08-03);
-  // Nodaro = ceil(rate × duration / 4) × 10 (at cost, like Seedance-2). One
+  // Nodaro = ceil(rate × duration / 4) × 10 (same conversion as Seedance-2). One
   // seeded tier per allowed second (4-15s); bare ids are the 2K rate
   // (byte-identical to the pre-lever rows), ":768p" appends the cheaper tier.
   // Reference-video runs bill unit × (input + output) seconds AT THE SELECTED
@@ -1066,7 +1066,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-sfx": 3,           // 0.24 cr/sec * ~5s
   // Replicate disabled
   // "tangoflux": 4, // Replicate SFX, estimated
-  "suno": 30,                     // (V4 default) — 0%-base
+  "suno": 30,                     // (V4 default) — base
   "suno-v5": 30,                  // (V5)
   "suno-v5_5": 30,                // (V5.5)
   "suno-generate": 30,            // (V4 default)
@@ -1074,7 +1074,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-extend": 30,
   "suno-lyrics": 10,
   "suno-separate": 40,            // matches model_pricing (mig 059); held by re-baseline (unclear)
-  "suno-separate-stem": 130,      // 0%-base
+  "suno-separate-stem": 130,      // base
   "audio-separation": 30,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
   "audio-separation:best": 80,    // htdemucs_ft (~4× compute), fixed reserved tier
   "audio-separation:stems": 60,   // htdemucs_6s (6-stem, heavier than base) — conservative estimate, tune via audit-credits
@@ -1120,11 +1120,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
   "prompt-helper": 7,            // standard
   "prompt-helper:economy": 1,
-  "prompt-helper:premium": 7,    // 0%-base (Opus 4.7)
-  "ai-writer": 4,                // standard (0%-base)
+  "prompt-helper:premium": 7,    // base (Opus 4.7)
+  "ai-writer": 4,                // standard (base)
   "ai-writer:economy": 1,
   "ai-writer:premium": 2,        // Opus 4.7
-  "llm-chat": 2,                 // standard (0%-base)
+  "llm-chat": 2,                 // standard (base)
   "llm-chat:economy": 1,
   "llm-chat:premium": 6,         // Opus 4.7
   "translate": 10,                // internal utility (replicate i2i prompt translation)

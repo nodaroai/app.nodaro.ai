@@ -2,7 +2,7 @@
 -- image-to-video / text-to-video nodes and the reference-audio lip-sync surface.
 -- Fixed 2K output (no resolution lever): pricing is per-second only, one seeded
 -- tier per allowed duration (4-15s). KIE rate: 36.5 KIE cr/s (docs.kie.ai/market/
--- minimax-h3, verified 2026-08-01). Formula (at cost, like Seedance-2):
+-- minimax-h3, verified 2026-08-01). Formula (same conversion as Seedance-2):
 --   Nodaro credits = ceil(36.5 × duration / 4) × 10
 -- Reference-video runs bill unit × (input + output) seconds and input images
 -- beyond the first 5 add 11 KIE cr (27.5 credits) each — both reserved via the

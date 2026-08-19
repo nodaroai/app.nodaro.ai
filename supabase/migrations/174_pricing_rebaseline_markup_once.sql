@@ -1,7 +1,7 @@
 -- 174: Pricing-convention re-baseline (markup is a runtime dial).
 --
 -- Strips the previously-baked markup from every markup-baked model_pricing row down to
--- the true 0%-base credit value. The markup is now applied
+-- the true base credit value. The markup is now applied
 -- exactly once, at reserve, by getModelCreditCostFromDB. Combined with the
 -- commit-reserved change in workers/shared.ts (commit charges the reserved tier
 -- unless meteredCost=true), this makes reserved == committed for every fixed/
@@ -10,7 +10,7 @@
 --
 -- MUST ship atomically with the STATIC_CREDIT_COSTS edits + the commit-reserved
 -- code (else markup-baked rows double-charge during the window). Only the 175
--- markup-baked / double-rounded ids change; already-0%-base rows (seedance-2
+-- markup-baked / double-rounded ids change; already-base rows (seedance-2
 -- matrix, MMAudio, kling-avatar ladder) are untouched. The 156 "unclear"
 -- LLM/FFmpeg/voice rows already commit-reserved and are a separate pricing pass.
 --

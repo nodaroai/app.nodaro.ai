@@ -3,7 +3,7 @@ import { SWITCHX_BLOCK_FRAMES, usdToCredits } from "@nodaro/shared"
 import { switchXHoldCredits, SWITCHX_BLOCK_USD } from "../switchx-cost.js"
 
 describe("switchXHoldCredits", () => {
-  it("holds at-cost block credits: 15/block @1080p, 5/block @720p", () => {
+  it("holds base block credits: 15/block @1080p, 5/block @720p", () => {
     expect(switchXHoldCredits(30, 1080)).toBe(150) // 1 block
     expect(switchXHoldCredits(30, 720)).toBe(50)
     expect(switchXHoldCredits(150, 1080)).toBe(750) // 5 blocks (a ~5s clip)

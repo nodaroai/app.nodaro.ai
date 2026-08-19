@@ -4,16 +4,16 @@
 -- credits for a clip that actually cost ≈40 credits. Three compounding
 -- causes, all in the RESERVE (the metered commit was already refund-only):
 --   1. Audio mode reserved the 900s TOP bucket (audio length unknown at reserve).
---   2. The stored hold baked a *1.5 safety factor ON TOP of the admin
+--   2. The stored hold baked extra padding ON TOP of the admin
 --      markup that getModelCreditCostFromDB re-applies at reserve time
 --      (redundant double-buffer).
 --   3. Coarse low-end buckets (old min 30s) over-reserved short clips.
 --
 -- This migration:
---   • Re-seeds every ai-avatar id with the MINIMAL at-cost hold value
---     (NO *1.5 safety factor). The runtime markup + bucket-up still guarantee
+--   • Re-seeds every ai-avatar id with the MINIMAL base hold value
+--     (no extra padding). The runtime markup + bucket-up still guarantee
 --     reserved >= metered-actual (equal at each bucket ceiling, where both
---     derive from the same at-cost base).
+--     derive from the same base).
 --   • Adds the 18 NEW fine-grained low-end buckets (5s/10s/15s) per engine×res,
 --     bringing ai-avatar from 42 → 60 ids (2 engines × 3 res × 10 buckets:
 --     5/10/15/30/60/120/240/360/600/900s). Audio mode now buckets by the
@@ -24,10 +24,10 @@
 -- A missing id causes a hard 503 `price_not_configured` at runtime, so ALL ids
 -- must be present here AND in STATIC_CREDIT_COSTS (credits.ts).
 -- ON CONFLICT DO UPDATE both inserts new low-end rows AND lowers the existing
--- coarse rows from the redundant *1.5 value to the at-cost value.
+-- coarse rows from the old padded value to the base value.
 
 -- ════════════════════════════════════════════════════════════════════════════
--- AI Avatar — 60 ids (rate × bucket duration, at-cost)
+-- AI Avatar — 60 ids (rate × bucket duration)
 -- ════════════════════════════════════════════════════════════════════════════
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) VALUES
   -- ── avatar-iv · 720p ──────────────────────────────────
@@ -99,7 +99,7 @@ INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) 
 ON CONFLICT (model_identifier) DO UPDATE SET credit_cost = EXCLUDED.credit_cost;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- Cinematic Avatar — 24 ids (rate × exact duration, at-cost)
+-- Cinematic Avatar — 24 ids (rate × exact duration)
 -- ════════════════════════════════════════════════════════════════════════════
 INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category) VALUES
   -- ── 720p ────────────────

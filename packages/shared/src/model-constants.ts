@@ -5,7 +5,7 @@
 import { z } from "zod"
 import { MODEL_CATALOG } from "./model-catalog.js"
 
-/** Base USD cost per 1 Nodaro credit, at cost. Used for cost→credit conversion. */
+/** Base USD value of 1 Nodaro credit. Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.002
 
 /** Max characters for the (assembled) prompt accepted by the image-generation routes
