@@ -72,6 +72,12 @@ export interface GrokSegmentInfo {
    *  returns no geometry). Absent when placement wasn't confident — the UI
    *  then shows the chip without an on-image outline. */
   readonly bbox?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
+  /** Content box INSIDE the cutout tile (normalized to tile dims) — the tile
+   *  carries transparent aspect-fit padding, so the outline mask must map
+   *  only this sub-rect onto `bbox`, or the silhouette renders shrunken and
+   *  centered (the 2026-08-19 "regions draw too small" bug). Absent on maps
+   *  detected before this shipped; renderers fall back to the whole tile. */
+  readonly tile?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 }
 
 export interface ManualReferenceImage {

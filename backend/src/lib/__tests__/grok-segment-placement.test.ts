@@ -55,14 +55,20 @@ async function makeSource(): Promise<Buffer> {
 
 /**
  * Manufacture a Grok-style cutout: crop `box` from the source, apply an
- * alpha shape (full box by default), aspect-fit into a 128×128 clear tile.
+ * alpha shape (full box by default, or an SVG path in box-local coords),
+ * aspect-fit into a 128×128 clear tile.
  */
 async function makeCutout(
   source: Buffer,
   box: { left: number; top: number; width: number; height: number },
+  shapePath?: string,
 ): Promise<Buffer> {
-  const crop = await sharp(source).extract(box).ensureAlpha().png().toBuffer()
-  return sharp(crop)
+  let crop = sharp(source).extract(box).ensureAlpha()
+  if (shapePath) {
+    const maskSvg = `<svg width="${box.width}" height="${box.height}" xmlns="http://www.w3.org/2000/svg"><path d="${shapePath}" fill="#fff"/></svg>`
+    crop = sharp(await crop.composite([{ input: Buffer.from(maskSvg), blend: "dest-in" }]).png().toBuffer())
+  }
+  return crop
     .resize({ width: 128, height: 128, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer()
@@ -95,8 +101,8 @@ describe("locateGrokSegments", () => {
       await makeCutout(source, tinyBox),
     ]
 
-    const boxes = await locateGrokSegments(source, cutouts)
-    expect(boxes).toHaveLength(3)
+    const located = await locateGrokSegments(source, cutouts)
+    expect(located).toHaveLength(3)
 
     const expected = [towerBox, boatBox, tinyBox].map((b) => ({
       x: b.left / W,
@@ -105,10 +111,62 @@ describe("locateGrokSegments", () => {
       h: b.height / H,
     }))
     for (let i = 0; i < 3; i++) {
-      const found = boxes[i]
+      const found = located[i]
       expect(found, `segment ${i} should be placed`).not.toBeNull()
-      expect(iou(found!, expected[i]), `segment ${i} IoU`).toBeGreaterThan(0.55)
+      expect(iou(found!.bbox, expected[i]), `segment ${i} IoU`).toBeGreaterThan(0.55)
     }
+
+    // The tower tile: 80×216 contain-fit into 128×128 → content ≈47×128,
+    // horizontally centered. The reported tile content box must reflect that
+    // (it's what lets the UI skip the transparent padding when masking).
+    const towerTile = located[0]!.tile
+    expect(towerTile.y).toBeLessThan(0.03)
+    expect(towerTile.h).toBeGreaterThan(0.97)
+    expect(towerTile.w).toBeCloseTo(47 / 128, 1)
+    expect(towerTile.x).toBeCloseTo((128 - 47) / 2 / 128, 1)
+  }, 30_000)
+
+  it("does not shrink a large SMOOTH segment to a self-similar patch of itself (production 2026-08-19: sky came back tiny)", async () => {
+    // A near-featureless gradient is scale-invariant under ZNCC — a small
+    // window of sky correlates ~1.0 exactly like the true full placement, so
+    // a raw argmax picks arbitrarily. The area tie-break must resolve this
+    // toward the placement that explains the whole segment.
+    const skylinePts = "0,168 80,150 160,178 240,144 320,174 400,132 480,170 560,146 640,164"
+    const skylinePath = skylinePts
+      .split(" ")
+      .map((p, i) => `${i === 0 ? "M" : "L"}${p.replace(",", " ")}`)
+      .join(" ")
+    const svg = `
+      <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0b1d3a"/>
+            <stop offset="1" stop-color="#f9d9a0"/>
+          </linearGradient>
+        </defs>
+        <rect width="${W}" height="${H}" fill="url(#sky)"/>
+        <!-- jagged mountain silhouette + textured ground below the sky -->
+        <path d="${skylinePath} L640 360 L0 360 Z" fill="#1f2937"/>
+        <circle cx="120" cy="260" r="18" fill="#374151"/>
+        <circle cx="380" cy="290" r="24" fill="#4b5563"/>
+        <rect x="500" y="240" width="60" height="40" fill="#111827"/>
+      </svg>`
+    const source = await sharp(Buffer.from(svg)).png().toBuffer()
+
+    // Sky segment: full-width band from the top down to the deepest skyline
+    // valley (y=178), alpha-masked to the region ABOVE the skyline.
+    const skyBox = { left: 0, top: 0, width: 640, height: 178 }
+    const skyShape = `${skylinePath} L640 0 L0 0 Z`
+    const cutout = await makeCutout(source, skyBox, skyShape)
+
+    const [found] = await locateGrokSegments(source, [cutout])
+    expect(found).not.toBeNull()
+    const truth = { x: 0, y: 0, w: 1, h: 178 / H }
+    expect(found!.bbox.w, "sky must span (near) full width, not a shrunken patch").toBeGreaterThan(0.8)
+    expect(iou(found!.bbox, truth)).toBeGreaterThan(0.55)
+    // Wide content in a square tile → vertically centered slab in tile coords.
+    expect(found!.tile.w).toBeGreaterThan(0.95)
+    expect(found!.tile.h).toBeLessThan(0.4)
   }, 30_000)
 
   it("returns null for a cutout that isn't in the image (never a confident wrong answer)", async () => {
@@ -119,8 +177,8 @@ describe("locateGrokSegments", () => {
     })
       .png()
       .toBuffer()
-    const boxes = await locateGrokSegments(source, [foreign])
-    expect(boxes[0]).toBeNull()
+    const located = await locateGrokSegments(source, [foreign])
+    expect(located[0]).toBeNull()
   }, 30_000)
 
   it("returns null for a fully transparent cutout", async () => {
@@ -130,7 +188,7 @@ describe("locateGrokSegments", () => {
     })
       .png()
       .toBuffer()
-    const boxes = await locateGrokSegments(source, [empty])
-    expect(boxes[0]).toBeNull()
+    const located = await locateGrokSegments(source, [empty])
+    expect(located[0]).toBeNull()
   }, 30_000)
 })
