@@ -157,6 +157,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    # A hang, not a failure: this job wedged indefinitely 5 times in 2 days
+    # (45-57 min each, always passing on a plain rerun — issue #801). Normal
+    # duration is ~12-15 min; 25 makes a hang self-terminate instead of
+    # eating an hour of a PR's life.
+    timeout-minutes: 25
     env:
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: test-key

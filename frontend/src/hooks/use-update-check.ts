@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { APP_VERSION } from "@/lib/version"
 
 /**
  * The sidebar red dot's data: GET /v1/version, at most once a day per
@@ -31,6 +32,13 @@ function readStored(): { at: number; info: UpdateInfo } | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as { at?: number; info?: UpdateInfo }
     if (typeof parsed.at !== "number" || !parsed.info) return null
+    // A stamp recorded by a DIFFERENT running version is void: right after an
+    // upgrade the old stamp still says updateAvailable for the version now
+    // running, and the dot would stay lit for up to a day (review finding,
+    // 2026-08-19). Frontend and backend bake the same APP_VERSION build-arg,
+    // so the comparison is exact on published images (and both fall back to
+    // package.json in dev).
+    if (parsed.info.current.replace(/^v/, "") !== APP_VERSION.replace(/^v/, "")) return null
     return { at: parsed.at, info: parsed.info }
   } catch {
     return null

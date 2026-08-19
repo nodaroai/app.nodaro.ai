@@ -10,6 +10,11 @@
  */
 
 import { describe, it, expect } from "vitest"
+
+// Per-test 90s ceiling: matched-resolution scanning is legitimately heavier
+// than the old coarse-raster scan (v4), and CI runners run ~3x slower than a
+// laptop — the old 30s tripwire flaked at 34s on CI while the suite is ~7s
+// locally. Watch the suite duration in CI logs for real perf regressions.
 import sharp from "sharp"
 import { locateGrokSegments, type NormalizedBBox } from "../grok-segment-placement.js"
 
@@ -124,7 +129,7 @@ describe("locateGrokSegments", () => {
     expect(towerTile.h).toBeGreaterThan(0.97)
     expect(towerTile.w).toBeCloseTo(47 / 128, 1)
     expect(towerTile.x).toBeCloseTo((128 - 47) / 2 / 128, 1)
-  }, 30_000)
+  }, 90_000)
 
   it("does not shrink a large SMOOTH segment to a self-similar patch of itself (production 2026-08-19: sky came back tiny)", async () => {
     // A near-featureless gradient is scale-invariant under ZNCC — a small
@@ -167,7 +172,77 @@ describe("locateGrokSegments", () => {
     // Wide content in a square tile → vertically centered slab in tile coords.
     expect(found!.tile.w).toBeGreaterThan(0.95)
     expect(found!.tile.h).toBeLessThan(0.4)
-  }, 30_000)
+  }, 90_000)
+
+  it("places a fine-TEXTURE segment at true size (production 2026-08-19: ocean/grass collapsed to specks)", async () => {
+    // High-frequency texture aliases differently through the two resample
+    // paths (source→raster vs source→crop→128-tile), so without the common
+    // blur + native-resolution matching the TRUE placement decorrelates and
+    // some tiny self-similar window wins instead. Seeded noise, no
+    // Math.random — fixtures must be deterministic.
+    // Spatially-correlated noise (~4px grain), like real grass/ocean — pure
+    // 1px white noise would be legitimately unplaceable (any downsample
+    // destroys it), while structured texture must survive.
+    const rng = (seed: number) => () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0
+      return seed / 0xffffffff
+    }
+    const noiseField = (seed: number, gw: number, gh: number) => {
+      const r = rng(seed)
+      const g = new Float32Array(gw * gh)
+      for (let i = 0; i < g.length; i++) g[i] = r()
+      return (u: number, v: number) => {
+        const fx = Math.min(gw - 1.001, u * (gw - 1))
+        const fy = Math.min(gh - 1.001, v * (gh - 1))
+        const x0 = Math.floor(fx), y0 = Math.floor(fy)
+        const wx = fx - x0, wy = fy - y0
+        return (
+          g[y0 * gw + x0] * (1 - wx) * (1 - wy) +
+          g[y0 * gw + x0 + 1] * wx * (1 - wy) +
+          g[(y0 + 1) * gw + x0] * (1 - wx) * wy +
+          g[(y0 + 1) * gw + x0 + 1] * wx * wy
+        )
+      }
+    }
+    // Two octaves, like real texture — a coarse structure layer that
+    // survives resampling plus fine grain that doesn't.
+    const seaC = noiseField(11, 40, 22)
+    const seaF = noiseField(7, 160, 90)
+    const sea = (u: number, v: number) => 0.6 * seaC(u, v) + 0.4 * seaF(u, v)
+    const grassC = noiseField(99, 20, 9)
+    const grassF = noiseField(1234, 75, 28)
+    const grass = (u: number, v: number) => 0.6 * grassC(u, v) + 0.4 * grassF(u, v)
+    const grassBox = { left: 0, top: 250, width: 300, height: 110 }
+    const raw = Buffer.alloc(W * H * 3)
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 3
+        const inGrass =
+          x >= grassBox.left && x < grassBox.left + grassBox.width &&
+          y >= grassBox.top && y < grassBox.top + grassBox.height
+        if (inGrass) {
+          const n = grass((x - grassBox.left) / grassBox.width, (y - grassBox.top) / grassBox.height)
+          raw[i] = 70 + Math.round(n * 70)
+          raw[i + 1] = 120 + Math.round(n * 100)
+          raw[i + 2] = 40 + Math.round(n * 40)
+        } else {
+          const base = 90 + Math.round((y / H) * 90)
+          const n = Math.round(sea(x / W, y / H) * 24)
+          raw[i] = base + n
+          raw[i + 1] = base + 10 + n
+          raw[i + 2] = 140 + Math.round(n / 2)
+        }
+      }
+    }
+    const source = await sharp(raw, { raw: { width: W, height: H, channels: 3 } }).png().toBuffer()
+    const cutout = await makeCutout(source, grassBox)
+
+    const [found] = await locateGrokSegments(source, [cutout])
+    expect(found).not.toBeNull()
+    const truth = { x: 0, y: 250 / H, w: 300 / W, h: 110 / H }
+    expect(iou(found!.bbox, truth)).toBeGreaterThan(0.55)
+    expect(found!.bbox.w, "textured segment must keep its true size").toBeGreaterThan(truth.w * 0.8)
+  }, 90_000)
 
   it("returns null for a cutout that isn't in the image (never a confident wrong answer)", async () => {
     const source = await makeSource()
@@ -179,7 +254,7 @@ describe("locateGrokSegments", () => {
       .toBuffer()
     const located = await locateGrokSegments(source, [foreign])
     expect(located[0]).toBeNull()
-  }, 30_000)
+  }, 90_000)
 
   it("returns null for a fully transparent cutout", async () => {
     const source = await makeSource()
@@ -190,5 +265,5 @@ describe("locateGrokSegments", () => {
       .toBuffer()
     const located = await locateGrokSegments(source, [empty])
     expect(located[0]).toBeNull()
-  }, 30_000)
+  }, 90_000)
 })

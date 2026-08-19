@@ -51,6 +51,20 @@ describe("useUpdateCheck", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it("a stamp recorded by a DIFFERENT running version is void — no day-long lit dot after upgrading", async () => {
+    // The stored info says an update is available — but it was computed when
+    // an older version ran. The hook must drop it and refetch.
+    localStorage.setItem(
+      "nodaro-update-check",
+      JSON.stringify({ at: Date.now(), info: { ...INFO, current: "0.9.0" } }),
+    )
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ...INFO, updateAvailable: false }) })
+    const { result } = renderHook(() => useUpdateCheck())
+    await waitFor(() => expect(result.current).not.toBeNull())
+    expect(result.current?.updateAvailable).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it("a stale localStorage stamp refetches", async () => {
     localStorage.setItem(
       "nodaro-update-check",

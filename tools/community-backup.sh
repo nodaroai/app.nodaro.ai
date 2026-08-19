@@ -85,8 +85,13 @@ MANIFEST
 
 ARCHIVE="$OUT_DIR/$NAME.tar.gz"
 tar -czf "$ARCHIVE" -C "$WORK" .
+# The archive holds .env (provider keys) and the instance encryption key —
+# it IS a credential. Owner-only by default.
+chmod 600 "$ARCHIVE"
 SIZE=$(du -h "$ARCHIVE" | cut -f1)
 
 echo ""
 echo "Backup complete: $ARCHIVE ($SIZE)"
+echo "NOTE: this archive contains your .env and the instance encryption key —"
+echo "      treat it like a password (it is chmod 600; keep it that way)."
 echo "Restore with:    tools/community-restore.sh $ARCHIVE"
