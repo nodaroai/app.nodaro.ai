@@ -21,7 +21,7 @@
 --   gemini-3.1-pro (pro)           2→6 · 3→8 · 7→20 · 11→33
 --   mixed / mixed-fast             3→10 · 4→13 · 9→35 · 14→57
 --
--- Every pricing constant is UNCHANGED — the safety margin, the credit cost
+-- Every pricing constant is UNCHANGED — the padding term, the credit cost
 -- basis, the ingestion rate, and the per-window output estimate all stay as
 -- they were. Only the roll count entered the formula, so the whole delta is
 -- compute that was always being spent. The safety margin is the lever if these
