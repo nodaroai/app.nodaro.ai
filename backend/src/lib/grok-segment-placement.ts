@@ -11,23 +11,33 @@ import sharp from "sharp"
  * cutout's luma against the source's luma, scanned over scale + translation
  * (no rotation — cutouts are axis-aligned crops of the same render).
  *
- * Scale selection is the treacherous part: on SMOOTH content (sky, sea, a
- * wall) a small-scale window ties the true placement at ~1.0 correlation —
- * a gradient resampled is still a gradient — so the raw argmax can shrink a
- * huge segment to a tiny self-similar patch of itself. The solver therefore
- * rescores every per-scale winner on the finest raster under IDENTICAL
- * sampling and resolves near-ties toward the LARGER area: the cutout is a
- * bbox crop, so among equal correlations the biggest placement is the one
- * that explains the whole segment rather than a patch of it. Structured
- * content decorrelates hard at the wrong scale, so the tie-break never fires
- * there.
+ * Two hard-won rules shape the design (validated against real production
+ * segment maps, not just synthetic fixtures):
+ *
+ * 1. MATCH AT THE TILE'S NATIVE RESOLUTION. A big segment's template holds at
+ *    most ~128px of detail; correlating it upsampled against a fine source
+ *    raster destroys fine texture (ocean sparkle, grass) exactly at the TRUE
+ *    placement, while some tiny self-similar window elsewhere scores ~1.0 —
+ *    which is how an ocean band collapsed to a speck in the sky. Each scale
+ *    candidate therefore searches on the raster whose template size stays
+ *    closest to the template's own resolution.
+ *
+ * 2. THE SILHOUETTE IS EVIDENCE. Interior luma alone can't tell white sails
+ *    from a white lighthouse, and smooth content ties every scale at ~1.0 (a
+ *    gradient resampled is still a gradient). The score therefore combines
+ *    interior NCC (over an eroded mask — the alpha edge band is unreliable)
+ *    with an EDGE-ALIGNMENT term: at the true placement the mask boundary
+ *    (including interior holes) coincides with real image edges. Remaining
+ *    near-ties resolve toward the LARGER area — the placement that explains
+ *    the whole segment rather than a self-similar patch of it.
  *
  * Output bboxes are normalized [0..1] in source-image coordinates, paired
  * with the cutout's content box INSIDE its tile (`tile`) — the tile carries
  * transparent aspect-fit padding, so renderers must map only that sub-rect
  * onto the bbox or the silhouette draws shrunken and centered. A segment
- * whose best correlation stays below MIN_SCORE returns null (caller degrades
- * to a non-overlaid chip) — wrong outlines are worse than missing ones.
+ * whose best combined score stays below MIN_SCORE returns null (caller
+ * degrades to a non-overlaid chip) — wrong outlines are worse than missing
+ * ones.
  */
 
 export interface NormalizedBBox {
@@ -35,7 +45,7 @@ export interface NormalizedBBox {
   y: number
   w: number
   h: number
-  /** Best masked ZNCC score (0..1-ish; 1 = perfect). */
+  /** Best combined placement score (0..1-ish; 1 = perfect). */
   score: number
 }
 
@@ -50,22 +60,17 @@ export interface LocatedSegment {
 }
 
 /**
- * Below this correlation the placement is considered unreliable. The cutout
- * content is the source image's OWN pixels, so a true placement scores near
- * 1.0 at adequate resolution — a high floor turns "confidently wrong" (the
- * production sailboat incident) into "no outline", which is the right
- * degradation.
+ * Below this combined score the placement is considered unreliable. On the
+ * real-image validation set, correct placements score 0.79-0.89 and wrong
+ * ones ≤ ~0.66 — 0.7 splits the distributions. Segments that genuinely
+ * can't be solved from a 128px tile (a sail thinner than 2% of the frame)
+ * must fall to null, never to a confident sliver.
  */
-const MIN_SCORE = 0.55
-/**
- * Search raster widths. The raster for each scale candidate is chosen so the
- * template keeps ≥ MIN_TEMPLATE_PX of detail — a ~3%-of-width segment (the
- * production sailboat) is a ~6px smear at 160 but a ~26px template at 640.
- * Small templates are cheap to slide even on the big raster (cost ∝
- * positions × template pixels), so this stays within budget.
- */
+const MIN_SCORE = 0.7
+/** Search raster widths; each scale candidate picks the one closest to the
+ *  template's native resolution (see header rule 1). */
 const RASTER_WIDTHS = [160, 320, 640] as const
-/** Minimum template long side (px) for a scale candidate's raster choice. */
+/** Minimum template long side (px) for a raster to be feasible. */
 const MIN_TEMPLATE_PX = 20
 /** Scale candidates scanned across the plausible bbox-width range. */
 const SCALE_STEPS = 16
@@ -73,19 +78,17 @@ const SCALE_STEPS = 16
 const REFINE_SCALES = [0.88, 0.94, 1.06, 1.14] as const
 /** Max hill-climb iterations per finalist (covers the ~30% coarse grid gap). */
 const REFINE_ITERATIONS = 4
-/** Per-scale winners that survive the rescore ranking and get refined. */
+/** Per-scale winners that survive ranking and get the refine pass. */
 const BEAM_WIDTH = 8
-/** Beam members this far below the rescore leader are hopeless — skip them. */
+/** Beam members this far below the leader are hopeless — skip them. */
 const BEAM_SCORE_SLACK = 0.25
-/**
- * Finalists within this margin of the best rescored score are treated as
- * ties and resolved toward the LARGER area (the smooth-content shrink fix).
- */
+/** Finalists within this margin of the best score are ties → LARGER area wins. */
 const SCALE_TIE_EPS = 0.02
-/** Masked-sample budget per offset for the finest-raster rescore pass. */
-const RESCORE_SAMPLE_TARGET = 4000
-/** Rescore position window (px on the finest raster). */
-const RESCORE_PAD_PX = 4
+/** Interior-NCC vs edge-alignment weights in the combined score. */
+const W_NCC = 0.8
+const W_EDGE = 0.2
+/** Neutral edge score used when a template has no usable boundary ring. */
+const EDGE_NEUTRAL = 1 / 3
 /** Alpha threshold for "this cutout pixel belongs to the segment". */
 const ALPHA_ON = 128
 /** Safety valve: skip placement for degenerate/empty cutouts. */
@@ -93,14 +96,20 @@ const MIN_CONTENT_PX = 6
 
 interface Raster {
   luma: Float32Array
+  /** |dx|+|dy| gradient magnitude of luma (edge-alignment evidence). */
+  grad: Float32Array
+  meanGrad: number
   width: number
   height: number
 }
 
-interface Template extends Raster {
-  /** 0/1 membership per pixel (from cutout alpha). */
+interface Template extends Omit<Raster, "grad" | "meanGrad"> {
+  /** 0/1 membership per pixel (eroded — interior evidence only). */
   mask: Uint8Array
   maskCount: number
+  /** Boundary band removed by erosion (incl. interior holes) — shape evidence. */
+  ring: Uint8Array
+  ringCount: number
 }
 
 interface TrimmedTemplate {
@@ -113,14 +122,34 @@ interface TrimmedTemplate {
 }
 
 async function toLumaRaster(input: Buffer, targetWidth: number): Promise<Raster> {
+  // The light blur is load-bearing: the template's pixels reached their tile
+  // via a DIFFERENT downsample path than the raster (source→crop→128-tile vs
+  // source→raster), so high-frequency texture (grass, ocean sparkle) aliases
+  // differently on each side and decorrelates at the TRUE placement. A small
+  // common blur (template side gets the same, in resampleTemplate) washes
+  // the path difference out while keeping structure.
   const { data, info } = await sharp(input)
     .resize({ width: targetWidth })
     .greyscale()
+    .blur(1)
     .raw()
     .toBuffer({ resolveWithObject: true })
-  const luma = new Float32Array(info.width * info.height)
+  const { width: w, height: h } = info
+  const luma = new Float32Array(w * h)
   for (let i = 0; i < luma.length; i++) luma[i] = data[i]
-  return { luma, width: info.width, height: info.height }
+  const grad = new Float32Array(w * h)
+  let gradSum = 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      const dx = x + 1 < w ? luma[i + 1] - luma[i] : 0
+      const dy = y + 1 < h ? luma[i + w] - luma[i] : 0
+      const g = Math.abs(dx) + Math.abs(dy)
+      grad[i] = g
+      gradSum += g
+    }
+  }
+  return { luma, grad, meanGrad: Math.max(1e-3, gradSum / (w * h)), width: w, height: h }
 }
 
 /** Alpha-trim the cutout tile to its content bbox; return luma + mask. */
@@ -194,14 +223,13 @@ function erodeOnce(mask: Uint8Array, tw: number, th: number) {
 }
 
 /**
- * Bilinear resample of a masked template to (tw, th), then erode the mask's
- * boundary band. The cutout's alpha edge is unreliable evidence — it's
- * anti-aliased, threshold-quantized, and (when upsampled) blocky by the
- * scale factor — so at the TRUE placement the edge band samples background
- * pixels and depresses the score, while a self-similar interior impostor
- * pays nothing. Eroding ~the uncertainty band restores the fair comparison
- * (this is what let a sky segment's true placement lose to patches of
- * itself). Erosion stops early rather than starve a small mask.
+ * Bilinear resample of a masked template to (tw, th), then split the mask
+ * into an eroded INTERIOR (luma evidence — the alpha edge band is
+ * anti-aliased, threshold-quantized, and blocky when upsampled, so at the
+ * true placement it samples background and depresses NCC while self-similar
+ * impostors pay nothing) and the removed boundary RING (shape evidence for
+ * the edge-alignment term). Erosion stops early rather than starve a small
+ * mask; a mask with no OFF pixels (full-rect cutout) gets a one-step ring.
  */
 function resampleTemplate(t: { luma: Float32Array; mask: Uint8Array; width: number; height: number }, tw: number, th: number): Template {
   const luma = new Float32Array(tw * th)
@@ -231,9 +259,29 @@ function resampleTemplate(t: { luma: Float32Array; mask: Uint8Array; width: numb
       if (on) maskCount++
     }
   }
-  // Erode away the boundary-uncertainty band: ~1 source-template px, scaled
-  // by the resample factor (upsampled masks have proportionally wider blocky
-  // edges), capped, and never below one step.
+  // Match the rasters' common blur (see toLumaRaster): two 3-tap separable
+  // smoothing passes ≈ a σ~1 gaussian. Mask/ring stay crisp.
+  for (let pass = 0; pass < 2; pass++) {
+    const src = Float32Array.from(luma)
+    for (let y = 0; y < th; y++) {
+      const row = y * tw
+      for (let x = 0; x < tw; x++) {
+        const l = x > 0 ? src[row + x - 1] : src[row + x]
+        const r = x < tw - 1 ? src[row + x + 1] : src[row + x]
+        luma[row + x] = 0.25 * l + 0.5 * src[row + x] + 0.25 * r
+      }
+    }
+    const src2 = Float32Array.from(luma)
+    for (let y = 0; y < th; y++) {
+      for (let x = 0; x < tw; x++) {
+        const u = y > 0 ? src2[(y - 1) * tw + x] : src2[y * tw + x]
+        const d = y < th - 1 ? src2[(y + 1) * tw + x] : src2[y * tw + x]
+        luma[y * tw + x] = 0.25 * u + 0.5 * src2[y * tw + x] + 0.25 * d
+      }
+    }
+  }
+  // Boundary-uncertainty band: ~1 source-template px scaled by the resample
+  // factor, capped, never below one step.
   const radius = Math.min(8, Math.max(1, Math.round(tw / t.width) + 1))
   const floor = Math.max(MIN_CONTENT_PX * 4, Math.floor(maskCount * 0.3))
   let erodedMask = mask
@@ -244,7 +292,27 @@ function resampleTemplate(t: { luma: Float32Array; mask: Uint8Array; width: numb
     erodedMask = next.mask
     erodedCount = next.count
   }
-  return { luma, mask: erodedMask, maskCount: erodedCount, width: tw, height: th }
+  const ring = new Uint8Array(tw * th)
+  let ringCount = 0
+  if (erodedCount < maskCount) {
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i] && !erodedMask[i]) {
+        ring[i] = 1
+        ringCount++
+      }
+    }
+  } else {
+    // Nothing eroded (full-rect mask under OOB-as-ON) — take one step just
+    // for the ring so edge evidence still exists where a real boundary does.
+    const one = erodeOnce(mask, tw, th)
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i] && !one.mask[i]) {
+        ring[i] = 1
+        ringCount++
+      }
+    }
+  }
+  return { luma, mask: erodedMask, maskCount: erodedCount, width: tw, height: th, ring, ringCount }
 }
 
 interface Placement {
@@ -253,6 +321,8 @@ interface Placement {
   tw: number
   th: number
   score: number
+  /** Masked template pixels the NCC was computed over. */
+  samples: number
 }
 
 /**
@@ -329,31 +399,70 @@ function bestMatch(
       // dot already subtracts tMean; subtracting iMean * Σ(t−tMean) = 0, so
       // dot IS the masked covariance numerator.
       const score = dot / Math.sqrt(iVar * tVar)
-      if (!best || score > best.score) best = { x: ox, y: oy, tw, th, score }
+      if (!best || score > best.score) best = { x: ox, y: oy, tw, th, score, samples: sampledCount }
     }
   }
   return best
 }
 
+/**
+ * Edge-alignment at a placement: mean source gradient along the template's
+ * boundary ring, relative to the raster's global mean gradient, squashed to
+ * (0..1). ~1/3 on featureless ground, higher when the silhouette lies on
+ * real edges. Neutral when the template has no usable ring.
+ */
+function edgeAlignAt(img: Raster, tpl: Template, ox: number, oy: number): number {
+  if (tpl.ringCount < 4) return EDGE_NEUTRAL
+  const { width: tw, height: th, ring } = tpl
+  let sum = 0
+  for (let y = 0; y < th; y++) {
+    const irow = (oy + y) * img.width + ox
+    const trow = y * tw
+    for (let x = 0; x < tw; x++) {
+      if (ring[trow + x]) sum += img.grad[irow + x]
+    }
+  }
+  const align = sum / tpl.ringCount / img.meanGrad
+  return align / (align + 2)
+}
+
+const combineScore = (ncc: number, edge: number) => W_NCC * ncc + W_EDGE * edge
+
 interface NormalizedPlacement extends NormalizedBBox {
-  /** Raster the winning match ran on (refinement upsamples from here). */
   rasterIndex: number
 }
 
-/** Smallest raster on which a bbox-width fraction keeps template detail. */
-function rasterIndexFor(rasters: readonly Raster[], widthFraction: number, aspect: number): number {
+/**
+ * Raster whose template rendering stays closest to the template's NATIVE
+ * resolution (header rule 1), among rasters where the template both fits and
+ * keeps ≥ MIN_TEMPLATE_PX of detail. Falls back to the finest raster.
+ */
+function rasterIndexFor(
+  rasters: readonly Raster[],
+  widthFraction: number,
+  aspect: number,
+  templateWidth: number,
+): number {
+  let bestI = rasters.length - 1
+  let bestD = Infinity
   for (let i = 0; i < rasters.length; i++) {
     const tw = widthFraction * rasters[i].width
     const th = tw / aspect
-    if (Math.max(tw, th) >= MIN_TEMPLATE_PX) return i
+    if (Math.max(tw, th) < MIN_TEMPLATE_PX) continue
+    if (tw > rasters[i].width || th > rasters[i].height + 1) continue
+    const d = Math.abs(Math.log(tw / templateWidth))
+    if (d < bestD) {
+      bestD = d
+      bestI = i
+    }
   }
-  return rasters.length - 1
+  return bestI
 }
 
 /**
- * Run one (scale, raster) candidate; returns a normalized placement.
- * `around` (center fractions) windows the search to ±REFINE_PAD_PX of the
- * expected top-left on the chosen raster.
+ * Run one (scale, raster) candidate; returns a normalized placement scored
+ * by the COMBINED metric. `around` (center fractions) windows the search to
+ * ±REFINE_PAD_PX of the expected top-left on the chosen raster.
  */
 const REFINE_PAD_PX = 10
 
@@ -364,7 +473,7 @@ function matchAtScale(
   widthFraction: number,
   around?: { cx: number; cy: number },
 ): NormalizedPlacement | null {
-  const ri = rasterIndexFor(rasters, widthFraction, aspect)
+  const ri = rasterIndexFor(rasters, widthFraction, aspect, template.width)
   const raster = rasters[ri]
   const tw = Math.max(3, Math.round(widthFraction * raster.width))
   let th = Math.max(2, Math.round(tw / aspect))
@@ -372,6 +481,12 @@ function matchAtScale(
   // most important one to keep (the shrink bug lives at the top of the range).
   if (th === raster.height + 1) th = raster.height
   if (tw > raster.width || th > raster.height) return null
+  // Below the detail floor even on the finest raster, a match is a coin flip
+  // (a 10px sliver of anything correlates with anything — how "white sails"
+  // once landed on a white lighthouse). The SHORT side must hold detail too,
+  // or a tall 8px-wide sliver sneaks through on its height alone. Refuse the
+  // scale; null beats wrong.
+  if (Math.max(tw, th) < MIN_TEMPLATE_PX || Math.min(tw, th) < MIN_TEMPLATE_PX / 2) return null
   const tpl = resampleTemplate(template, tw, th)
   const win = around
     ? {
@@ -381,57 +496,29 @@ function matchAtScale(
         y1: Math.ceil(around.cy * raster.height - th / 2 + REFINE_PAD_PX),
       }
     : undefined
-  // Full-frame scans run cheap (stride-2/sample-2); the windowed refinement
-  // pass runs at full precision and recovers the coarse grid's ±stride error.
-  const hit = bestMatch(raster, tpl, win, around ? undefined : { stride: 2, sample: 2 })
+  // Full-frame scans run strided; big templates (matched-resolution keeps
+  // them near 128px even on fine rasters, where positions × mask pixels
+  // explode) stride/sample harder — the refine window (±REFINE_PAD_PX ≥
+  // stride) then recovers the coarse grid's error at (near-)full precision.
+  const big = tpl.maskCount > 8000
+  const hit = bestMatch(
+    raster,
+    tpl,
+    win,
+    around ? { sample: big ? 2 : 1 } : { stride: big ? 4 : 2, sample: big ? 3 : 2 },
+  )
   if (!hit) return null
+  const edge = edgeAlignAt(raster, tpl, hit.x, hit.y)
+  // Small-sample shrinkage: an NCC over n pixels has ~1/√n of null-noise
+  // headroom, which is exactly how tiny windows of texture soup outscore
+  // large true placements. Charge it back.
+  const ncc = hit.score - 1 / Math.sqrt(hit.samples)
   return {
     x: hit.x / raster.width,
     y: hit.y / raster.height,
     w: hit.tw / raster.width,
     h: hit.th / raster.height,
-    score: hit.score,
-    rasterIndex: ri,
-  }
-}
-
-/**
- * Re-evaluate a placement on the FINEST raster with a capped sample budget.
- * Coarse scores aren't comparable across scales (different rasters, strided
- * sampling, small-template noise); this puts every candidate on one basis
- * and doubles as a sub-pixel-ish position polish. Position may nudge within
- * ±RESCORE_PAD_PX; scale is held fixed.
- */
-function rescorePlacement(
-  rasters: readonly Raster[],
-  template: TrimmedTemplate,
-  aspect: number,
-  p: NormalizedPlacement,
-): NormalizedPlacement | null {
-  const ri = rasters.length - 1
-  const raster = rasters[ri]
-  const tw = Math.max(3, Math.round(p.w * raster.width))
-  let th = Math.max(2, Math.round(tw / aspect))
-  if (th === raster.height + 1) th = raster.height
-  if (tw > raster.width || th > raster.height) return null
-  const tpl = resampleTemplate(template, tw, th)
-  const sample = Math.max(1, Math.ceil(Math.sqrt(tpl.maskCount / RESCORE_SAMPLE_TARGET)))
-  const cx = p.x + p.w / 2
-  const cy = p.y + p.h / 2
-  const win = {
-    x0: Math.floor(cx * raster.width - tw / 2 - RESCORE_PAD_PX),
-    y0: Math.floor(cy * raster.height - th / 2 - RESCORE_PAD_PX),
-    x1: Math.ceil(cx * raster.width - tw / 2 + RESCORE_PAD_PX),
-    y1: Math.ceil(cy * raster.height - th / 2 + RESCORE_PAD_PX),
-  }
-  const hit = bestMatch(raster, tpl, win, { sample })
-  if (!hit) return null
-  return {
-    x: hit.x / raster.width,
-    y: hit.y / raster.height,
-    w: hit.tw / raster.width,
-    h: hit.th / raster.height,
-    score: hit.score,
+    score: combineScore(ncc, edge),
     rasterIndex: ri,
   }
 }
@@ -439,12 +526,13 @@ function rescorePlacement(
 /**
  * Locate one cutout in the source.
  *
- * 1. Coarse: best placement per scale step (strided scan, per-scale raster).
- * 2. Rescore every per-scale winner on the finest raster — the coarse argmax
- *    across scales is not trustworthy (see the header comment).
- * 3. Refine the top BEAM_WIDTH candidates with an iterative scale+position
- *    hill-climb, then rescore each finalist on the same basis.
- * 4. Pick by rescored score, resolving near-ties toward the LARGER area.
+ * 1. Coarse: best placement per scale step (strided scan on the
+ *    resolution-matched raster), scored NCC + edge.
+ * 2. Beam: top scorers PLUS the largest-area viable candidates — on smooth
+ *    content every scale ties near 1.0 and fp noise orders them, so the true
+ *    (largest) placement must be guaranteed a seat.
+ * 3. Iterative scale+position hill-climb per beam member.
+ * 4. Pick by combined score, resolving near-ties toward the LARGER area.
  */
 function locateOne(
   rasters: readonly Raster[],
@@ -464,18 +552,10 @@ function locateOne(
     if (hit) coarse.push(hit)
   }
   if (coarse.length === 0) return null
+  coarse.sort((a, b) => b.score - a.score)
+  if (coarse[0].score < MIN_SCORE * 0.7) return null
 
-  const rescored = coarse
-    .map((c) => rescorePlacement(rasters, template, aspect, c))
-    .filter((c): c is NormalizedPlacement => c !== null)
-    .sort((a, b) => b.score - a.score)
-  if (rescored.length === 0 || rescored[0].score < MIN_SCORE * 0.7) return null
-
-  // Score-ranked beam, PLUS the largest-area viable candidates: on smooth
-  // content every scale ties near 1.0 and fp noise orders them, so the true
-  // (largest) placement must be guaranteed a seat for the area tie-break to
-  // ever see it.
-  const eligible = rescored.filter((c) => c.score >= rescored[0].score - BEAM_SCORE_SLACK)
+  const eligible = coarse.filter((c) => c.score >= coarse[0].score - BEAM_SCORE_SLACK)
   const byArea = [...eligible].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 2)
   const beam = [...new Set([...eligible.slice(0, BEAM_WIDTH), ...byArea])]
 
@@ -504,8 +584,7 @@ function locateOne(
       }
       if (!improved) break
     }
-    const final = rescorePlacement(rasters, template, aspect, best)
-    if (final) finalists.push(final)
+    finalists.push(best)
   }
   if (finalists.length === 0) return null
 
@@ -538,7 +617,9 @@ export async function locateGrokSegments(
   cutouts: readonly Buffer[],
   opts?: { budgetMs?: number },
 ): Promise<(LocatedSegment | null)[]> {
-  const deadline = Date.now() + (opts?.budgetMs ?? 45_000)
+  // Matched-resolution scanning costs ~1.5s/segment on a laptop; prod worker
+  // CPUs run slower, and running out mid-batch nulls the remaining segments.
+  const deadline = Date.now() + (opts?.budgetMs ?? 90_000)
   const rasters: Raster[] = []
   for (const w of RASTER_WIDTHS) rasters.push(await toLumaRaster(sourceImage, w))
   const out: (LocatedSegment | null)[] = []
