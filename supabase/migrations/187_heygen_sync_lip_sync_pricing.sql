@@ -7,7 +7,7 @@
 --   heygen-lipsync-precision  (heygen/lipsync-precision)
 --   lipsync-2-pro             (sync/lipsync-2-pro)
 --
--- At-cost (0% markup), bucketed to the durations below.
+-- Base values, bucketed to the durations below.
 -- The lip-sync worker sets no meteredCost, so the reserved bucket is committed
 -- verbatim as the charge. Bare rows are the back-compat default (300s ceiling)
 -- used when no audioDurationSec is supplied.
