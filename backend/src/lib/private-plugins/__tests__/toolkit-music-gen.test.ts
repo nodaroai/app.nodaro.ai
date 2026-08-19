@@ -1,10 +1,12 @@
 /**
  * `tk.providers.generateMusic` — the gvp keyframes music lane's toolkit
  * member (ADDITIVE 2026-08-04). Wraps `sunoGenerate` from
- * `providers/kie/suno-client.ts` reduced to ONE track: DESCRIPTION mode
- * pinned (custom mode redefines `prompt` as lyrics — wrong lane for a score
- * brief), instrumental defaulted ON, no duration hint sent (custom-mode-gated
- * upstream; the plugin cuts to length itself), first track wins.
+ * `providers/kie/suno-client.ts` reduced to ONE track. TWO MODES: without a
+ * title it is DESCRIPTION mode (a brief; the model invents the song; the
+ * duration hint is custom-mode-gated upstream so it is never sent), and with
+ * a title AND style it is CUSTOM mode (2026-08-19) — `prompt` becomes the
+ * exact LYRICS, `style` the musical description, and `duration` is honoured
+ * on V5_5. Instrumental defaults ON either way; the first track wins.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
@@ -24,7 +26,7 @@ describe("tk.providers.generateMusic", () => {
     id: "t1", audioUrl: "https://suno/track-1.mp3", duration: 187.4, ...over,
   })
 
-  it("pins description mode + V5_5, defaults instrumental ON, forwards the style tags, and NEVER sends a duration hint", async () => {
+  it("without a title: description mode + V5_5, instrumental ON, style forwarded, and NO duration hint", async () => {
     mockSunoGenerate.mockResolvedValue({ taskId: "suno-task-1", tracks: [track()] })
     const tk = buildToolkit()
     const res = await tk.providers.generateMusic!("tense cinematic chase score", {
@@ -43,6 +45,67 @@ describe("tk.providers.generateMusic", () => {
     expect(params.duration).toBeUndefined()
     expect(reconcile).toBeUndefined() // no onTaskCreated → no reconcileOpts at all
     expect(res).toEqual({ url: "https://suno/track-1.mp3", durationSec: 187.4, taskId: "suno-task-1" })
+  })
+
+  /**
+   * CUSTOM MODE (2026-08-19). Description mode with vocals makes Suno invent
+   * lyrics ABOUT the brief — a scat ensemble briefed with "singers swaying
+   * and tapping feet" sang "step-step sway on through … feet go tap". The
+   * source's own syllables can only be reproduced as LYRICS, which is what
+   * custom mode is for; it also unlocks the provider's duration.
+   */
+  it("a title + style selects CUSTOM mode: prompt is the lyrics, style carries the description, duration is sent", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "suno-custom", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("[Intro]\nPa ra pa pa pri pa\n\n[Verse]\nto pe pe pari pore", {
+      style: "acoustic world-jazz, ~100 bpm feel, upright bass and hand percussion",
+      title: "Studio Session — Opening Scat",
+      instrumental: false,
+      durationSec: 26.4,
+    })
+    expect(mockSunoGenerate.mock.calls[0]![0]).toEqual({
+      prompt: "[Intro]\nPa ra pa pa pri pa\n\n[Verse]\nto pe pe pari pore",
+      model: "V5_5",
+      customMode: true,
+      instrumental: false,
+      style: "acoustic world-jazz, ~100 bpm feel, upright bass and hand percussion",
+      title: "Studio Session — Opening Scat",
+      duration: 26, // rounded, inside the documented 10–360 window
+    })
+  })
+
+  it("custom mode trims to the provider's ceilings rather than failing the render (style 1000, title 80, lyrics 5000)", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("L".repeat(5200), {
+      style: "s".repeat(1200),
+      title: "T".repeat(140),
+      instrumental: false,
+    })
+    const sent = mockSunoGenerate.mock.calls[0]![0]
+    expect(sent.prompt).toHaveLength(5000)
+    expect(sent.style).toHaveLength(1000)
+    expect(sent.title).toHaveLength(80)
+  })
+
+  it("duration is clamped into the provider's 10–360s window", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    const opts = { style: "s", title: "t", instrumental: false }
+    await tk.providers.generateMusic!("lyrics", { ...opts, durationSec: 4 })
+    expect(mockSunoGenerate.mock.calls[0]![0].duration).toBe(10)
+    await tk.providers.generateMusic!("lyrics", { ...opts, durationSec: 999 })
+    expect(mockSunoGenerate.mock.calls[1]![0].duration).toBe(360)
+  })
+
+  it("a title WITHOUT a style stays in description mode — custom mode requires both, and a refused request is worse than a plainer one", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("a brief", { title: "Some Title", durationSec: 30 })
+    const sent = mockSunoGenerate.mock.calls[0]![0]
+    expect(sent.customMode).toBe(false)
+    expect(sent.title).toBeUndefined()
+    expect(sent.duration).toBeUndefined()
   })
 
   it("instrumental: false is honored, and the FIRST track wins when Suno returns two takes", async () => {

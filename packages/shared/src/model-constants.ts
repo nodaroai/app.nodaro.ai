@@ -232,16 +232,25 @@ export function getMaxTtsChars(provider: string | undefined): number {
  * Suno per-version field caps (from docs.kie.ai/suno-api/generate-music). The old
  * flat {@link SUNO_TEXT_MAX} (3000) was simultaneously too low for V4.5+/V5
  * prompts (5000) and too high for `style` (1000) and `title` (80).
- *   - prompt / lyrics: 500 in non-custom mode (all versions); in custom mode
+ *   - prompt / lyrics: 3000 in non-custom mode (all versions); in custom mode
  *     3000 for V4/V3.5 and 5000 for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5.
  *   - style: 200 for V4/V3.5, 1000 for V4.5+.
  *   - title: 80 (all versions).
  */
 export const SUNO_TITLE_MAX = 80
 
-/** Max Suno `prompt` (= lyrics in custom mode) length for a model version. */
+/**
+ * Max Suno `prompt` (= lyrics in custom mode) length for a model version.
+ *
+ * NON-CUSTOM WAS 500 UNTIL 2026-08-19 — six times under the provider's
+ * documented 3000, and the route TRUNCATES to this number instead of
+ * rejecting, so everything past it vanished without a trace. Field evidence:
+ * a 950-character recast score brief (instruments, vocal, the source's own
+ * scat syllables, the arrangement's arc) reached Suno as exactly 500
+ * characters, cut mid-word.
+ */
 export function getMaxSunoPromptChars(model: string | undefined, customMode: boolean): number {
-  if (!customMode) return 500
+  if (!customMode) return 3000
   return model === "V4" || model === "V3_5" ? 3000 : 5000
 }
 

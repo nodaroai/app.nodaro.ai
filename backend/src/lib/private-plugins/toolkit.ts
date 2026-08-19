@@ -216,30 +216,61 @@ async function pluginGenerateImage(
   return { url: result.url, taskId: result.kieTaskId }
 }
 
+/** Suno's documented ceilings for the model this wrapper pins (V5_5, custom
+ *  mode): style 1000, title 80, lyrics/prompt 5000, duration 10–360s
+ *  (docs.kie.ai/suno-api/generate-music). Trimmed rather than rejected — the
+ *  caller is a render pipeline mid-flight, and a track trimmed by a character
+ *  beats a run that dies on a validation error. */
+const SUNO_CUSTOM_STYLE_MAX = 1000
+const SUNO_CUSTOM_TITLE_MAX = 80
+const SUNO_CUSTOM_LYRICS_MAX = 5000
+const SUNO_DURATION_MIN = 10
+const SUNO_DURATION_MAX = 360
+
 /**
  * `tk.providers.generateMusic` — wraps `sunoGenerate`
  * (`providers/kie/suno-client.ts`) reduced to ONE track for the gvp
- * keyframes music lane (ADDITIVE 2026-08-04). DESCRIPTION mode pinned:
- * Suno's custom mode redefines `prompt` as lyrics, so a score BRIEF must
- * ride non-custom — which also gates away the provider's duration hint
- * (custom-mode-only per the send-gate in sunoGenerate); `durationSec` is
- * therefore advisory and the plugin cuts to exact length itself.
- * Instrumental defaults ON (voices live in the video; the score is post-
- * muxed under them). Suno returns up to two takes — the first track wins;
- * an empty result throws so the caller's non-fatal music guard can degrade
- * to a silent mux rather than shipping a broken URL.
+ * keyframes music lane (ADDITIVE 2026-08-04). Instrumental defaults ON
+ * (voices live in the video; the score is post-muxed under them). Suno
+ * returns up to two takes — the first track wins; an empty result throws so
+ * the caller's non-fatal music guard can degrade to a silent mux rather than
+ * shipping a broken URL.
+ *
+ * TWO MODES (custom added 2026-08-19). Without a `title` this is the original
+ * DESCRIPTION mode: `prompt` is a brief, the model invents the song, and the
+ * provider ignores `duration`. With a `title` AND `style` it is CUSTOM mode,
+ * where `prompt` is the EXACT LYRICS, `style` is the musical description, and
+ * `duration` is honoured (V5_5 only, per the send-gate in sunoGenerate).
+ *
+ * WHY IT MATTERS: description mode with `instrumental: false` makes Suno
+ * invent lyrics ABOUT the brief — a scat-ensemble recast briefed with
+ * "singers swaying and tapping feet" came back singing "step-step sway on
+ * through … feet go tap" in English. Non-lexical vocals (scat, vocables) can
+ * only be reproduced by handing the syllables over as lyrics.
+ *
+ * A title WITHOUT a style stays in description mode: custom mode requires
+ * both, and sending a request the provider will refuse would turn a
+ * best-effort score into a failed one.
  */
 async function pluginGenerateMusic(
   prompt: string,
   options?: PluginMusicGenOptions,
 ): Promise<PluginMusicGenResult> {
+  const style = options?.style?.trim()
+  const title = options?.title?.trim()
+  const custom = !!(title && style)
+  const duration = options?.durationSec
   const result = await sunoGenerate(
     {
-      prompt,
+      prompt: custom ? prompt.slice(0, SUNO_CUSTOM_LYRICS_MAX) : prompt,
       model: "V5_5",
-      customMode: false,
+      customMode: custom,
       instrumental: options?.instrumental !== false,
-      ...(options?.style ? { style: options.style } : {}),
+      ...(style ? { style: custom ? style.slice(0, SUNO_CUSTOM_STYLE_MAX) : style } : {}),
+      ...(custom && title ? { title: title.slice(0, SUNO_CUSTOM_TITLE_MAX) } : {}),
+      ...(custom && typeof duration === "number" && Number.isFinite(duration)
+        ? { duration: Math.min(SUNO_DURATION_MAX, Math.max(SUNO_DURATION_MIN, Math.round(duration))) }
+        : {}),
     },
     toReconcileOpts(options),
   )
