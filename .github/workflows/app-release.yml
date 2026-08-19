@@ -115,8 +115,12 @@ jobs:
           GH_TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
         run: |
           set -euo pipefail
+          # The token rides in the remote URL for this one push; Actions
+          # masks registered secret values in logs, and the remote is removed
+          # right after so it never outlives the step (review 2026-08-19).
           git remote add public "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
           git push public "${{ steps.ver.outputs.next }}"
+          git remote remove public
           gh release create "${{ steps.ver.outputs.next }}" \
             --repo nodaroai/app.nodaro.ai \
             --title "${{ steps.ver.outputs.next }}" \
