@@ -157,10 +157,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    # A hang, not a failure: this job wedged indefinitely 5 times in 2 days
-    # (45-57 min each, always passing on a plain rerun — issue #801). Normal
-    # duration is ~12-15 min; 25 makes a hang self-terminate instead of
-    # eating an hour of a PR's life.
+    # Hang guard (issue #801): the job wedged 48-83 min five times in two days.
+    # Every one of those was the runner's apt mirror stalling inside the old
+    # `apt-get install ffmpeg` step — vitest was never reached — so that step
+    # is now a pinned static download (below) and the cap only has to catch a
+    # genuine test hang. Normal duration is ~12 min (≈9 of it vitest); 25 makes
+    # a real hang self-terminate instead of eating an hour of a PR's life.
     timeout-minutes: 25
     env:
       SUPABASE_URL: https://test.supabase.co
@@ -177,8 +179,19 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
-      - name: Install ffmpeg (real-ffmpeg e2e tests — assemble-narrated-video, trim-edge-frames)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      # ffmpeg for the real-ffmpeg e2e tests (assemble-narrated-video,
+      # trim-edge-frames): the production-pinned static build, installed by
+      # the SAME script the Dockerfile and the characterize job use — NOT apt.
+      # `sudo apt-get update && apt-get install ffmpeg` on the bare runner was
+      # the actual cause of issue #801's "Backend Tests hang": the apt mirror
+      # stalled inside that step for 48-83 min (PRs #798/#790/#800, attempt 1)
+      # and 19 min (PR #813, which then blew the 25-min cap mid-vitest), and
+      # even a healthy run spent 7+ min there. The static tarball is one
+      # sha256-verified GitHub-release download (seconds), and it is the
+      # ffmpeg production actually ships (apt gave 6.1.1; prod is 8.1.x), so
+      # these tests now exercise the binary that runs in the image.
+      - name: Install the production-pinned ffmpeg (via tools/install-pinned-ffmpeg.sh)
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
       - name: Pin npm 11
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
