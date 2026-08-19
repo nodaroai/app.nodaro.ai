@@ -42,6 +42,11 @@ jobs:
         env:
           TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
           GH_TOK: ${{ github.token }}
+          # Private-marker gate input (see publish-to-public.sh): newline-separated
+          # strings that must never publish. The nightly path HARD-REQUIRES the list
+          # so a lost secret fails loudly instead of silently skipping the gate.
+          PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
+          MIRROR_REQUIRE_MARKERS: "1"
         run: |
           # actions/checkout persists a github.com-wide Authorization header using
           # GITHUB_TOKEN (scoped to THIS/internal repo). It overrides our per-URL

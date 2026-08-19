@@ -6,8 +6,7 @@
 // Provider rate cards, margin math, and measured-rate methodology belong in
 // backend/src/lib/pricing/ (core) or backend/src/ee/billing/ (ee), never here.
 //
-// See: plan.nodaro.ai specs/superpowers/2026-07-06-public-flip-ip-audit.md
-// (section C) + 2026-07-06-vcp-private-extraction-execution-spec.md (S5).
+// See the internal IP-placement audit (S5) for the full rationale.
 //
 // Run locally: node tools/check-pricing-leaks.mjs
 
@@ -20,7 +19,7 @@ const SKIP_DIRS = new Set(["node_modules", "dist", "build"])
 
 // Provider-rate shape: a dollar figure immediately followed by a per-unit
 // slash — the exact leak shape found (and removed, S5) in
-// ai-avatar-pricing.ts ("$0.06/s"), flux2-pricing.ts ("$0.015/MP"),
+// ai-avatar-pricing.ts ("$N.NN/s"), flux2-pricing.ts ("$N.NNN/MP"),
 // switchx-pricing.ts, and the measured-rate comments in llm-models.ts /
 // video-analysis-pricing.ts. Deliberately does NOT match a bare "$0.02" —
 // CREDIT_BASE_USD (the public credit<->dollar conversion rate) is a
@@ -30,7 +29,7 @@ const RATE_PATTERN = /\$\d+(\.\d+)?\s*\/\s*[A-Za-z][A-Za-z-]*/
 // Rate TABLE shape: 2+ dollar figures (with a decimal, to dodge regex
 // backreferences like "$1"/"$2" in .replace(/(...)/, "$1 $2")) on the same
 // line — the leak shape found (and removed, S5) in flux2-pricing.ts's header
-// comment ("base $0.015, perOutMP $0.015, perRefMP $0.015"), which uses
+// comment (base / perOutMP / perRefMP dollar figures on one line), which uses
 // commas, not slashes, between figures. A single, isolated "$0.02" (the
 // sanctioned CREDIT_BASE_USD mention, "1 credit = $0.02") never repeats on
 // one line, so this is a safe complement to RATE_PATTERN above.
@@ -38,7 +37,7 @@ const DOLLAR_FIGURE_PATTERN = /\$\d+\.\d+/g
 
 // Rate RANGE shape: a dollar figure, a dash (hyphen/en/em), then a second
 // figure whose own "$" is optional — the leak shape found (and removed, S5
-// review round) in pipeline-defaults.ts ("video regen is $0.05-0.20/attempt"),
+// review round) in pipeline-defaults.ts (a "$N.NN-N.NN/attempt" range),
 // which RATE_PATTERN misses (the "/unit" follows the second, $-less figure)
 // and DOLLAR_FIGURE_PATTERN misses (only ONE of the two figures carries the
 // "$"). At least one side must have a decimal, dodging "$1-$2"
@@ -46,7 +45,7 @@ const DOLLAR_FIGURE_PATTERN = /\$\d+\.\d+/g
 const DOLLAR_RANGE_PATTERN = /\$\d+\.\d+\s*[-–—]\s*\$?\d+(\.\d+)?|\$\d+(\.\d+)?\s*[-–—]\s*\$?\d+\.\d+/
 
 // Per-unit rate FIELD IDENTIFIERS with no "$" at all — the leak shape of
-// llm-models.ts's `inputPricePerM: 0.15` / `outputPricePerM: 0.90` (the
+// llm-models.ts's `inputPricePerM` / `outputPricePerM` fields (the
 // audit's headline example): the identifier itself declares a provider
 // per-unit rate, so it's flagged wherever it appears (interface declaration,
 // data literal, or prose). The prefix set (input|output|price|rate|cost) is
@@ -147,8 +146,41 @@ for (const root of ROOTS) {
   }
 }
 
+// ── Published prose: package changelogs + pending changesets ─────────────────
+// Changeset descriptions compile verbatim into packages/*/CHANGELOG.md and into
+// the GitHub release bodies the changesets action creates — all world-readable.
+// A 2026-08 release entry carried a full internal margin/measurement analysis
+// this way: the guard scanned only packages/*/src, so published PROSE was an
+// open channel. Same line patterns as src; write changeset descriptions as if
+// they were public release notes, because they are.
+const PROSE_FILES = []
+for (const pkg of ["shared", "prompts", "client", "cli"]) {
+  PROSE_FILES.push(`packages/${pkg}/CHANGELOG.md`)
+}
+try {
+  for (const entry of readdirSync(".changeset", { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md") {
+      PROSE_FILES.push(`.changeset/${entry.name}`)
+    }
+  }
+} catch {
+  // no .changeset dir in this checkout — nothing pending to scan
+}
+for (const file of PROSE_FILES) {
+  let content
+  try {
+    content = readFileSync(file, "utf8")
+  } catch {
+    continue // changelog may not exist yet for a new package
+  }
+  content.split("\n").forEach((line, i) => {
+    const reason = isPricingRelevantLine(line)
+    if (reason) offenders.push(`${file}:${i + 1}: ${reason} — published prose (changelog/changeset)\n    ${line.trim()}`)
+  })
+}
+
 if (offenders.length > 0) {
-  console.error("Pricing-leak lint FAILED — provider-$ figures or margin/markup content found under packages/*/src")
+  console.error("Pricing-leak lint FAILED — provider-$ figures or margin/markup content found in published surfaces")
   console.error("(these packages are published npm artifacts; every release is an irrevocable grant):\n")
   for (const o of offenders) console.error(`  ${o}\n`)
   console.error("Move provider rates / margin math to backend/src/lib/pricing/ (core) or backend/src/ee/billing/ (ee).")
@@ -156,5 +188,5 @@ if (offenders.length > 0) {
   console.error("the ALLOWLIST in tools/check-pricing-leaks.mjs with a comment explaining why.")
   process.exit(1)
 } else {
-  console.log("Pricing-leak lint passed — no provider-$ or margin/markup content under packages/*/src.")
+  console.log("Pricing-leak lint passed — no provider-$ or margin/markup content in packages/*/src, changelogs, or pending changesets.")
 }

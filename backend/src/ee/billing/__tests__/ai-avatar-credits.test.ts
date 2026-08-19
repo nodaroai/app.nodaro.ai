@@ -10,7 +10,7 @@
  * - CREDIT_COSTS["ai-avatar"] is defined (node-type resolver for workflow estimation).
  * - The RESERVED amount (markup applied to the stored hold at reserve) is >= the
  *   metered actual at the bucket ceiling (refund-only guarantee). The stored hold
- *   is the at-cost 0%-base value; getModelCreditCostFromDB applies the admin
+ *   is the base value; getModelCreditCostFromDB applies the admin
  *   markup to it at reserve time, so the comparison must mark up BOTH sides.
  * - All 60 ids are present (2 engines × 3 resolutions × 10 buckets).
  */
@@ -22,7 +22,7 @@ import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits, aiAvatarUsdCost } from
 
 
 // Runtime reserve: getModelCreditCostFromDB applies the admin markup to the
-// STORED hold value (which is the at-cost 0%-base aiAvatarHoldCredits).
+// STORED hold value (the base aiAvatarHoldCredits).
 function reservedFromHold(hold: number, markupPct: number): number {
   return markupPct > 0 ? Math.ceil(hold * (1 + markupPct / 100)) : hold
 }

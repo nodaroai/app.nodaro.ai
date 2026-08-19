@@ -9,7 +9,7 @@
  * Also asserts:
  * - CREDIT_COSTS["cinematic-avatar"] is defined (node-type resolver for workflow estimation).
  * - The RESERVED amount (markup applied to the stored hold at reserve) is >= the
- *   metered actual (refund-only guarantee). The stored hold is the at-cost 0%-base
+ *   metered actual (refund-only guarantee). The stored hold is the base
  *   value; getModelCreditCostFromDB applies the admin markup to it at reserve time,
  *   so the comparison must mark up BOTH sides.
  * - All 24 ids are present (2 resolutions × 12 durations 4..15s).

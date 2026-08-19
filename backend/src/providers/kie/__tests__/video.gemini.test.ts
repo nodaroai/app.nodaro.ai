@@ -519,7 +519,7 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
   })
 })
 
-// Gemini Omni Video — per-tier wholesale cost (the under-charge fix: the provider must
+// Gemini Omni Video — per-tier provider cost (the under-charge fix: the provider must
 // report the ACTUAL tier cost so the credit-commit charges that tier, not the flat cheapest).
 describe("KieVideoProvider — gemini-omni-video per-tier cost", () => {
   it("T2V 720p/1080p reports per-duration cost (not the flat cheapest)", async () => {

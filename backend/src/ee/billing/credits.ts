@@ -25,7 +25,7 @@ for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
 
 // ── AI Avatar (HeyGen) duration-bucketed reserve holds ──
 // 60 ids: 2 engines × 3 resolutions × 10 buckets (5/10/15/30/60/120/240/360/600/900s).
-// The stored value is the at-cost 0%-base credit amount — NO *1.5 safety factor
+// The stored value is the base credit amount; the admin-configured markup applies at read time.
 // getModelCreditCostFromDB applies the admin markup (configurable) to this stored value
 // at RESERVE time, and the reserve buckets UP (true clip ≤ bucket ceiling), so
 // reserved ≥ metered-actual already (they're EQUAL at the bucket ceiling, where
@@ -47,7 +47,7 @@ for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]
 // ── Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) exact-duration holds ──
 // 24 ids: 2 resolutions × 12 durations (4..15s). Duration is a USER PARAMETER
 // (known at submit), so the reserve id encodes the EXACT requested duration —
-// no bucketing. The stored value is the at-cost 0%-base credit amount. NO *1.5
+// no bucketing. The stored value is the base credit amount;
 // the admin markup is applied to this stored value at RESERVE time, so the
 // reserved tier equals the metered actual (same exact duration, same base).
 // A missing id causes a hard 503 `price_not_configured` at runtime.
@@ -550,8 +550,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Seedance 2.5 — per-second billing, resolution × video-ref, 4-30s ──
   // KIE rates (kie.ai/model/bytedance/seedance-2-5, 2026-08-08), KIE cr/s:
   //   480p 28 no-video-ref / 17 with-video-ref; 720p 63 / 38; 1080p 114 / 68.5
-  //   (1080p tier added 2026-08-17 — probe-verified; 4k/2k/1440p still rejected).
-  // Nodaro = ceil(rate x duration / 4) x 10 — the same at-cost conversion the
+  //   (1080p tier added 2026-08-17; 4k/2k/1440p still rejected).
+  // Nodaro = ceil(rate x duration / 4) x 10 — the same credit conversion the
   // rest of the Seedance 2 family and minimax-h3 use.
   //
   // ONE TIER PER SECOND (4-30), not the 2.0 family's 4/8/12/15 ladder: the tier

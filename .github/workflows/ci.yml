@@ -374,12 +374,12 @@ jobs:
           persist-credentials: false
       - name: Ensure internal planning docs are not committed
         run: |
-          # Internal design/planning docs live in the private plan.nodaro.ai
+          # Internal design/planning docs live in the private planning
           # repo, not here. A curated public subset is in docs/design/. This
           # guard keeps them from being re-added to the public repo.
           offenders="$(git ls-files 'specs/' 'docs/superpowers/')"
           if [ -n "$offenders" ]; then
-            echo "::error::Internal planning docs must not be committed to the public repo. Move them to the private plan.nodaro.ai repo; curated public design notes belong in docs/design/."
+            echo "::error::Internal planning docs must not be committed to the public repo. Move them to the private planning repo; curated public design notes belong in docs/design/."
             echo "$offenders"
             exit 1
           fi
@@ -409,7 +409,7 @@ jobs:
     # IRREVOCABLE grant (npm tarballs can't be un-published). This guards
     # against provider-$ rate figures and platform-margin/markup derivation
     # content leaking into a future release. See the 2026-07-06 public-flip
-    # IP audit (S5) in plan.nodaro.ai.
+    # IP audit (S5).
     name: Check Pricing Leaks
     runs-on: ubuntu-latest
     needs: [frontend-tests, backend-tests, typecheck]

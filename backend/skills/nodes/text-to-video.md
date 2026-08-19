@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-08-17T17:45:08.588Z
-generated_from: 677ae6a7a
+generated_at: 2026-08-19T19:18:06.567Z
+generated_from: 9af042e0f
 ---
 
 # Text to Video
@@ -155,8 +155,7 @@ precise subject → action details → scene/environment → lighting & color to
 - More than 4 referenced people gets unstable: group people into composite images of ≤4 first (image generation), then reference those composites.
 - Repeated extension degrades quality: prefer high-definition reference assets and avoid stacking many continuations.
 
-**Auto-path formula (community-sourced enrichment — apiyi.com Seedance 2.0 prompt guide,
-higgsfield.ai 4K breakdown; captured 2026-08-09)**
+**Auto-path formula (community-sourced enrichment; captured 2026-08-09)**
 - Six steps IN ORDER, 60-100 words total (longer measurably degrades): Subject → Action → Environment → Camera → Style → Constraints.
 - ONE primary camera instruction per shot. Compound moves chain with "then": "camera slow tracking then subtle rise" — never two competing verbs. The 8 reliable camera types: push-in, pull-out, pan, tracking, orbit/arc, aerial, handheld, locked-off.
 - SEPARATE camera movement from subject movement — the single biggest quality lever: "The dancer spins slowly. Camera holds fixed framing." — never "spinning camera around a dancing person".

@@ -69,6 +69,22 @@ jobs:
             exit "$code"
           fi
           node backend/scripts/next-app-version.mjs --notes > /tmp/notes.md
+          # Notes gate: the notes are built from raw commit subjects and land
+          # verbatim on the PUBLIC release page. Block provider-$ shapes and
+          # margin/measurement language before anything publishes — reword the
+          # offending commit subject (follow-up commit) and re-run on failure.
+          # Mirrors tools/check-pricing-leaks.mjs: $-shapes and hard phrases always;
+          # margin/markup/wholesale only with financial context on the same line
+          # ("sidebar margin", "HTML markup" subjects must not block a release);
+          # MEASURED is case-sensitive (lowercase "measured duration" is benign).
+          BAD=0
+          grep -nEi '\$[0-9]+(\.[0-9]+)?[[:space:]]*/[[:space:]]*[A-Za-z]|\$[0-9]+\.[0-9]+.*\$[0-9]+\.[0-9]+|at-cost|below cost|contracted rate' /tmp/notes.md && BAD=1
+          grep -nE '\bMEASURED\b' /tmp/notes.md && BAD=1
+          grep -nEi '\b(margin|markup|wholesale)\b' /tmp/notes.md | grep -Ei '\$|cost|credit|provider|price|rate|billing' && BAD=1
+          if [ "$BAD" = "1" ]; then
+            echo "::error::release notes carry provider-economics language (matches above) — reword the commit subject(s) and re-run."
+            exit 1
+          fi
           next=$(node -p "require('/tmp/release.json').next")
           bump=$(node -p "require('/tmp/release.json').bump")
           {

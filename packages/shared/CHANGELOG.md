@@ -164,7 +164,7 @@
 - 5d66f2a: Add `video-audit` pricing for the new AI Audit node: `VIDEO_AUDIT_BUCKET_CREDITS` (both credit families — `video-audit` and `video-audit:auto`), the `buildVideoAuditCreditId` / `videoAuditCreditsForBucket` / `bucketSecondsFromAuditCreditId` helpers, and model-catalog rows (`AI Audit` / `AI Audit (with analysis run)`).
 - 18d9cde: video-analysis bucket reprice — hybrid smart plan + measured judge/refine terms
 
-  Every `VIDEO_ANALYSIS_BUCKET_CREDITS` row rises. `smart` is now a hybrid plan (one native 6fps skeleton pass plus 2 fast + 2 pro donor rolls, always refined — `selectionMode` no longer applies to it), and every multi-roll tier now carries its own explicit judge/refine terms instead of an implicit share of a single-pass budget, trued up from a staging measurement. This is the full, Tal-approved honest reprice, including the economy tiers (`fast` 33 -> 185 credits @180s ends a below-cost combine exposure that existed at the old price).
+  Every `VIDEO_ANALYSIS_BUCKET_CREDITS` row rises. `smart` is now a hybrid plan (one native 6fps skeleton pass plus 2 fast + 2 pro donor rolls, always refined — `selectionMode` no longer applies to it), and every multi-roll tier now carries its own explicit judge/refine terms instead of an implicit share of a single-pass budget. The economy tiers rise too (`fast` 33 -> 185 credits @180s).
 
 - c19c3ad: Video-analysis mixed family reprice: `mixed`/`mixed-fast` now run the cross-scene continuity review (previously smart-only) and the bucket table rises a flat +40 credits per bucket (268/289/724/1169 @60/180/360/600s).
 
@@ -243,11 +243,11 @@
 
 - fec478a: **BREAKING: `CREDIT_BASE_USD` changes from `0.02` to `0.002`.**
 
-  One credit is now worth $0.002 instead of $0.02, so every credit quantity in the platform is ten times larger for the same dollar value. Balances, grants and historical records were migrated ×10 in the same release; nothing changed in what anything costs in dollars.
+  One credit is now worth a tenth of its previous dollar value, so every credit quantity in the platform is ten times larger for the same dollar value. Balances, grants and historical records were migrated ×10 in the same release; nothing changed in what anything costs in dollars.
 
   Anything that converts between credits and USD — or that hardcodes an assumption about a credit's worth — must be re-checked. Use `usdToCredits()` / `creditsToUsd()` rather than dividing by the constant yourself; they carry a rounding guard and will keep working across any future change.
 
-  The motivation was rounding: at $0.02 a credit, `ceil()` charged a 1-credit minimum for work costing a fraction of that. Replayed across 12,809 real jobs, the median small job was paying 2.0× its true cost and now pays 1.20×.
+  The motivation was rounding: at the old credit size, `ceil()` charged a 1-credit minimum even for very small work items. The finer unit makes small jobs round much closer to their computed cost.
 
 ### Minor Changes
 
@@ -391,38 +391,12 @@
   - `@nodaro/cli` — `--advanced`, `--temperature`, `--max-tokens` on the prompt
     subcommands.
 
-- 56d91a3: Reprice video-analysis against MEASURED provider cost — the previous schedule was below cost.
+- 56d91a3: Reprice video-analysis. New per-bucket credits (≤60s · ≤180s · ≤360s · ≤600s):
 
-  Job `f3ed1390` (mixed + combine, 35.9s) reported `provider_cost` **$1.353385**
-  against 34 credits of revenue (**$0.68**). The run cost **1.99× what it charged**,
-  where the formula intends a 2× margin — so every analysis at the old schedule was
-  underwater, not merely thin.
-
-  Two constants were wrong, both in the same direction:
-
-  - **The per-window output-token estimate: 4,000 → 11,200.** ~11.2k is the highest
-    combined thinking+answer actually observed, and Gemini bills thinking as output.
-    The old value was described as carrying "deliberate headroom" while sitting below
-    even the measured typical.
-  - **The grader + combine-refine passes** were assumed to be "roughly a quarter" of
-    roll spend and left inside `SAFETY`. Measured against this run they are **1.78×**
-    of it. Now an explicit `PLAN_OVERHEAD` factor rather than an unstated hope, so
-    `SAFETY` is margin again instead of silently absorbing a modelling gap.
-
-  Per-bucket credits (≤60s · ≤180s · ≤360s · ≤600s):
-
-  - `gemini-3-flash` — 6·7·18·30 → **21·24·68·112**
-  - `gemini-3.6-flash` (`fast`) — 14·19·49·81 → **54·63·175·291**
-  - `gemini-3.1-pro` (`pro`) — 21·27·72·120 → **84·96·269·448**
-  - `mixed` / `mixed-fast` — 34·46·120·200 → **137·158·443·739**
-
-  No rate changed; this is compute that was always being spent and never billed.
-
-  **The roll plan is the real lever, not the price.** Six rolls per window is
-  essentially all of this cost: one `pro` roll at 3fps prices at ~18 credits against
-  137 for the 6-roll mixed plan, while seeing 3× the frames. This schedule makes the
-  current plan honest; moving to a direct high-fps single pass would bring it back
-  below even the old numbers, and should be repriced again when it lands.
+  - `gemini-3-flash` — 21·24·68·112
+  - `gemini-3.6-flash` (`fast`) — 54·63·175·291
+  - `gemini-3.1-pro` (`pro`) — 84·96·269·448
+  - `mixed` / `mixed-fast` — 137·158·443·739
 
 ## 1.22.0
 
@@ -526,20 +500,13 @@
     validates.
 
   All of these are optional and additive: an older producer still validates, and a
-  consumer that ignores them is unaffected. Credit prices are unchanged — the extra
-  output tokens sit inside the existing safety margin.
+  consumer that ignores them is unaffected. Credit prices are unchanged.
 
 - 8583134: Video-analysis credit schedule re-derived for the direct provider lane.
 
   The node is now pinned to the model provider's own API with no fallback, which
-  is what lets it send real media rather than a link. Its credit schedule,
-  however, was still generated against the aggregator's resale rates — roughly
-  30% of list — so every analysis job was priced against a lane it can no longer
-  reach.
-
-  These values are the same structural formula re-run against the rates the node
-  actually pays. The safety multiplier and USD-per-credit constant are unchanged;
-  only the token prices moved, so the node's margin is what it always was.
+  is what lets it send real media rather than a link. Its credit schedule is
+  re-derived for that lane with the same structural formula.
 
   Per-bucket credits (≤60s · ≤180s · ≤360s · ≤600s):
 

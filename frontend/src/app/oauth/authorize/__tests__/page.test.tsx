@@ -18,7 +18,7 @@ vi.mock("react-router-dom", () => ({
 }))
 
 vi.mock("@/hooks/use-auth", () => ({
-  useAuth: () => ({ user: { id: "u1", email: "asafna2@gmail.com" }, loading: false }),
+  useAuth: () => ({ user: { id: "u1", email: "user@example.com" }, loading: false }),
 }))
 
 vi.mock("@/lib/supabase", () => ({
@@ -46,7 +46,7 @@ beforeEach(() => {
 describe("OAuth consent screen — which account is granting", () => {
   it("names the signed-in account the code will be minted for", async () => {
     render(<OAuthAuthorizePage />)
-    expect(await screen.findByText(/asafna2@gmail\.com/)).toBeInTheDocument()
+    expect(await screen.findByText(/user@example\.com/)).toBeInTheDocument()
   })
 
   it("signs out and returns to the SAME consent URL when switching account", async () => {

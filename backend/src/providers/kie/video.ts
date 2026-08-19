@@ -788,7 +788,7 @@ async function runGeminiOmni(
   }
   // Snap once; the value feeds both the KIE payload and the per-tier cost below.
   const snappedDuration = snapToAllowedDuration(duration ?? 8, modelConfig.allowedDurations ?? [4, 6, 8, 10])
-  // Report the ACTUAL per-tier wholesale cost (resolution band × duration, or flat for V2V)
+  // Report the ACTUAL per-tier provider cost (resolution band × duration, or flat for V2V)
   // so the credit-commit charges the right tier instead of the flat cheapest-tier cost.
   const tierCostUsd = geminiOmniTierCostUsd(resolution, snappedDuration, videoConnected)
   const geminiInput: Record<string, unknown> = {
