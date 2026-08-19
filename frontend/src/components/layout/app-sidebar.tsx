@@ -220,6 +220,11 @@ export function AppSidebar({
   // no "new" to catch up on). hasCredits() is build-constant, so the two
   // branches below are stable per build.
   const whatsNewMode = hasCredits()
+  // The label prefers the SERVER-resolved version: on cloud the frontend
+  // build bakes no version (Railway passes none) and the baked fallback sat
+  // at 1.23.0 beside "What's new in v1.27.0" (founder report 2026-08-19).
+  // /v1/version resolves the deployed SHA to its release tag server-side.
+  const displayVersion = updateInfo?.current?.replace(/^v/, "") || APP_VERSION
   const latestVersion = updateInfo?.latest?.version
   useEffect(() => {
     if (!whatsNewMode || !latestVersion) return
@@ -719,12 +724,12 @@ export function AppSidebar({
                   />
                 )}
                 <span className="underline decoration-dotted underline-offset-2">
-                  {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+                  {isCollapsed ? `v${displayVersion.split(".").slice(0, 2).join(".")}` : `v${displayVersion}`}
                 </span>
               </button>
             ) : (
               <span className="text-xs text-muted-foreground">
-                {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+                {isCollapsed ? `v${displayVersion.split(".").slice(0, 2).join(".")}` : `v${displayVersion}`}
               </span>
             )}
           </div>

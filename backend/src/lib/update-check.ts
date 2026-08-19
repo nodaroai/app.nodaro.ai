@@ -18,6 +18,7 @@ import { getAppVersion } from "./app-version.js"
  */
 
 const RELEASES_URL = "https://api.github.com/repos/nodaroai/app.nodaro.ai/releases?per_page=20"
+const TAGS_URL = "https://api.github.com/repos/nodaroai/app.nodaro.ai/tags?per_page=50"
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const HIGHLIGHT_MAX_CHARS = 1200
 const APP_TAG = /^v(\d+)\.(\d+)\.(\d+)$/
@@ -37,6 +38,47 @@ export interface UpdateStatus {
 
 let cached: { at: number; latest: LatestRelease | null } | null = null
 let inflight: Promise<LatestRelease | null> | null = null
+
+/**
+ * Cloud runs whatever commit Railway deployed, and Railway injects that SHA
+ * (RAILWAY_GIT_COMMIT_SHA) but no version — so the label showed the stale
+ * package.json fallback ("v1.23.0" beside "What's new in v1.27.0", founder
+ * report 2026-08-19). Every production commit on main carries its release
+ * tag, so one daily tags-API read maps the running SHA to its exact
+ * version. No match (staging runs untagged dev commits) -> null, callers
+ * keep the fallback.
+ */
+let shaVersionCached: { at: number; version: string | null } | null = null
+let shaInflight: Promise<string | null> | null = null
+
+async function resolveVersionFromDeployedSha(): Promise<string | null> {
+  const sha = process.env.RAILWAY_GIT_COMMIT_SHA?.trim()
+  if (!sha) return null
+  const now = Date.now()
+  if (shaVersionCached && now - shaVersionCached.at < CACHE_TTL_MS) return shaVersionCached.version
+  if (!shaInflight) {
+    shaInflight = (async () => {
+      try {
+        const res = await fetch(TAGS_URL, {
+          headers: { Accept: "application/vnd.github+json" },
+          signal: AbortSignal.timeout(8_000),
+        })
+        if (!res.ok) return null
+        const tags = (await res.json()) as Array<{ name?: string; commit?: { sha?: string } }>
+        if (!Array.isArray(tags)) return null
+        const hit = tags.find((t) => t.commit?.sha === sha && t.name && APP_TAG.test(t.name))
+        return hit?.name ?? null
+      } catch {
+        return null
+      }
+    })().then((version) => {
+      shaVersionCached = { at: Date.now(), version }
+      shaInflight = null
+      return version
+    })
+  }
+  return shaInflight
+}
 
 export function updateCheckEnabled(): boolean {
   return (process.env.NODARO_UPDATE_CHECK ?? "").trim().toLowerCase() !== "off"
@@ -103,9 +145,15 @@ async function fetchLatestAppRelease(): Promise<LatestRelease | null> {
  * — a GitHub hiccup must never surface as anything at all.
  */
 export async function getUpdateStatus(): Promise<UpdateStatus> {
-  const current = getAppVersion()
+  let current = getAppVersion()
   if (!updateCheckEnabled()) {
     return { current, latest: null, updateAvailable: false }
+  }
+  // Image-baked env wins; otherwise try the deployed-SHA -> tag match
+  // before settling for the package.json fallback.
+  if (!process.env.APP_VERSION?.trim()) {
+    const fromSha = await resolveVersionFromDeployedSha()
+    if (fromSha) current = fromSha.replace(/^v/, "")
   }
   const now = Date.now()
   if (!cached || now - cached.at >= CACHE_TTL_MS) {
@@ -135,4 +183,6 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
 export function _resetUpdateCheckForTests(): void {
   cached = null
   inflight = null
+  shaVersionCached = null
+  shaInflight = null
 }
