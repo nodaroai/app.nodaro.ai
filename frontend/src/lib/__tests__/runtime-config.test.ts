@@ -42,11 +42,15 @@ describe("no direct reads of the three runtime-configurable VITE_* values", () =
     }
     return out
   }
-  it("every VITE_API_URL / VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY read goes through runtime-config.ts", () => {
+  // FREECUT_URL joined the set in #767 for the same reason as the trio: the
+  // published image is built once, and a direct import.meta.env read would
+  // silently bypass the /config.js override an operator set to point at their
+  // own editor — the exact failure the runtime layer exists to prevent.
+  it("every runtime-overridable VITE_* read goes through runtime-config.ts", () => {
     const offenders = walk(SRC)
       .filter((f) => !f.endsWith(join("lib", "runtime-config.ts")))
       .filter((f) => /import\.meta\.env\.VITE_(API_URL|SUPABASE_URL|SUPABASE_ANON_KEY)\b/.test(readFileSync(f, "utf8")))
       .map((f) => f.slice(SRC.length + 1))
-    expect(offenders, `read the baked value directly (use runtimeApiUrl / runtimeSupabaseUrl / runtimeSupabaseAnonKey): ${offenders.join(", ")}`).toEqual([])
+    expect(offenders, `read the baked value directly (use runtimeApiUrl / runtimeSupabaseUrl / runtimeSupabaseAnonKey / runtimeFreecutUrl): ${offenders.join(", ")}`).toEqual([])
   })
 })

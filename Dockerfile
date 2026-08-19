@@ -157,6 +157,10 @@ ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_API_URL
 ARG VITE_EDITION
+# Deliberately without a default. The fallback now lives in the app
+# (frontend/src/lib/runtime-config.ts -> DEFAULT_FREECUT_URL), so the published
+# image stops baking a developer laptop's dev server, and an install repoints
+# the editor at RUNTIME via FREECUT_URL instead of rebuilding (#767).
 ARG VITE_FREECUT_URL
 ARG VITE_AUDIOMASS_URL
 ARG VITE_STUDIO_URL
@@ -602,10 +606,10 @@ if [ -z "$FRONTEND_SUPABASE_URL_EFFECTIVE" ] && [ -n "$PUBLIC_URL" ]; then
     http://localhost:3000/supabase*|http://127.0.0.1:3000/supabase*) FRONTEND_SUPABASE_URL_EFFECTIVE="${PUBLIC_URL%/}/supabase" ;;
   esac
 fi
-if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" \
   node -e '
     const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
-    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY) }
+    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY), freecutUrl: pick(process.env.RUNTIME_FREECUT_URL) }
     for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
     require("fs").writeFileSync("/app/frontend/dist/config.js", "window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
     console.log("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")

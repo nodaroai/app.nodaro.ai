@@ -36,6 +36,7 @@ import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
+import { runtimeFreecutUrl } from "@/lib/runtime-config"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -2761,7 +2762,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ inlinePromptMode: enabled })
   },
 
-  openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } }),
+  // Gated here rather than at each of the ten node components that offer the
+  // action: an install with no editor configured (VITE_FREECUT_URL=off) must
+  // not open a shell around a frame that cannot load. One choke point means a
+  // new node offering "Edit video" is covered without being told (#767).
+  openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => {
+    if (!runtimeFreecutUrl()) return
+    set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } })
+  },
   closeFreeCut: () => set({ freecutEdit: null }),
 
   openImageEdit: (nodeId, imageUrl, designStateUrl) => set({ imageEdit: { nodeId, imageUrl, designStateUrl } }),
