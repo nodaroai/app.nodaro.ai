@@ -5,7 +5,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
  * Per-field Edit ⇄ Final toggle state, backed by the node's
  * `data.__promptFinalView` array (the field keys currently in final mode).
  *
- * State model (spec: `specs/prompt-field-final-view.md` §State model):
+ * State model:
  *  - Absent/empty list ⇒ every field in edit mode (the default).
  *  - Written via the normal `updateNodeData` path → persists with the workflow
  *    and survives reload.

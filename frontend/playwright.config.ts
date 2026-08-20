@@ -2,8 +2,7 @@
  * Playwright configuration for the Nodaro frontend.
  *
  * This is the FIRST Playwright config in the repo — bootstrapped as part of
- * Task D4 of the Film Director skill (`specs/features/2026-05-14-nodaro-film-
- * director-implementation-plan.md`). Keep it minimal: tests under
+ * Added alongside the Film Director skill. Keep it minimal: tests under
  * `playwright/tests/`, single chromium project, default to the Vite dev
  * server URL.
  *

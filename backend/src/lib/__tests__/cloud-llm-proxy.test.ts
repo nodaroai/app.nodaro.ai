@@ -258,9 +258,9 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
     strategyId: "pick-best-llm",
     strategyConfig: { criteria: "Pick the highest-quality result." },
     inputs: ["a", "b"],
-    workflowId: "9adc452f-ed39-4dcb-b3a2-e0454003e257",
+    workflowId: "11111111-2222-3333-4444-555555555555",
     nodeId: "node_4",
-    userId: "3d5da08c-ec5e-43ae-80d3-29b53f126abf",
+    userId: "66666666-7777-8888-9999-aaaaaaaaaaaa",
     forcePrivate: true,
   }
   const orchestratorReq = () =>
@@ -283,7 +283,7 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
     // Non-objects pass through; the caller's body is never mutated.
     expect(stripInstanceLocalKeys(null)).toBeNull()
     expect(stripInstanceLocalKeys(["x"])).toEqual(["x"])
-    expect(orchestratorBody.workflowId).toBe("9adc452f-ed39-4dcb-b3a2-e0454003e257")
+    expect(orchestratorBody.workflowId).toBe("11111111-2222-3333-4444-555555555555")
   })
 
   it("the cloud never sees the local workflowId / nodeId / userId — the rest of the body travels intact", async () => {

@@ -399,6 +399,12 @@ jobs:
       - name: Check core does not import from ee/
         run: node tools/check-ee-imports.mjs
       - name: Check for private-extraction symbol leaks
+        # The symbol list is a repo secret, not a tracked file — a cleartext
+        # deny-list of proprietary names IS the map of what was extracted.
+        # Absent (forks / public mirror CI) the check skips loudly; the mirror
+        # publish path hard-requires it.
+        env:
+          PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
         run: node tools/check-private-leaks.mjs
       - name: Check no provider key is frozen at construction/import (keys are live)
         run: node tools/check-provider-key-captures.mjs
@@ -422,6 +428,24 @@ jobs:
           node-version: 22
       - name: Check packages/*/src for provider-$ / margin-markup leaks
         run: node tools/check-pricing-leaks.mjs
+
+  check-billing-dumps:
+    # Provider-billing extracts (backend/scripts/*.mts output: per-task provider
+    # charges, per-model volume, our provider unit rate) must never be tracked —
+    # they ship inside every public release tarball. One sat committed from
+    # 2026-07-30 until the v1.29.6 artifact audit. Detection is by JSON shape,
+    # so a rename or a new script still trips it.
+    name: Check Billing Dumps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check for tracked provider-billing extracts
+        run: node tools/check-billing-dumps.mjs
 
   backend-boot-smoke:
     # Catches startup crashes that vitest masks (e.g. ERR_MODULE_NOT_FOUND from
@@ -536,7 +560,7 @@ jobs:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.repository == 'nodaroai/app.nodaro.ai-internal' && github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, i18n-completeness, backend-boot-smoke]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, i18n-completeness, backend-boot-smoke]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

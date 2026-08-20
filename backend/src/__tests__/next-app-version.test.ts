@@ -1,5 +1,5 @@
 /**
- * The version engine (specs/2026-08-19-community-versioning-updates.md in the
+ * The version engine (the versioning spec in the
  * plan repo): bumps derive from conventional commits so no human has to
  * remember — package.json sat at 1.23.0 for six months while 5,882 commits
  * shipped. Pure-function coverage; the git plumbing is exercised by the

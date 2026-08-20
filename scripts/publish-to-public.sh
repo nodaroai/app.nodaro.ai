@@ -25,6 +25,7 @@ echo "== leak gates (each excludes tools/ so it never self-trips) =="
 node tools/check-private-leaks.mjs
 node tools/check-pricing-leaks.mjs
 node tools/check-ee-imports.mjs
+node tools/check-billing-dumps.mjs
 if command -v gitleaks >/dev/null; then
   # Scoped to THIS branch's history, not the default --all refs. The gate's
   # contract is "nothing secret reaches public", and only $BRANCH is being

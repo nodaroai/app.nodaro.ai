@@ -1,7 +1,7 @@
 -- Restore 16 model_pricing rows that drifted from the intended prices.
 --
 -- Adjudicated 2026-07-30 (credit re-denomination Phase 0 parity baseline —
--- plan repo: specs/audits/credit-redenomination/A2-parity-baseline.md).
+-- recorded in the internal parity baseline).
 -- The DB wins at runtime (getModelCreditBaseCost takes credit_cost verbatim),
 -- so these rows were LIVE mispricing:
 --

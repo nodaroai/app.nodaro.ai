@@ -1,5 +1,5 @@
 /**
- * Featured entity starter catalog (north-star §6 ③ — the "Featured" tab of each
+ * Featured entity starter catalog (the "Featured" tab of each
  * entity Library).
  *
  * These are app-provided starter presets: a curated visual description per

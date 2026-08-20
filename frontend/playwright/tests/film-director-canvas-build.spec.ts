@@ -2,8 +2,7 @@
  * Visual regression for Film Director canvas animations (D1+D2+D3).
  *
  * Covers the three live-build animations that the Film Director skill relies
- * on (spec §5.4 Pattern A-prime in `specs/features/nodaro-film-director-
- * skill.md`):
+ * on:
  *
  *   D1 — `useNodeInsertAnimation`  (300 ms opacity 0→1 + scale 0.85→1)
  *        — `frontend/src/components/editor/workflow-editor/use-node-insert-animation.ts`

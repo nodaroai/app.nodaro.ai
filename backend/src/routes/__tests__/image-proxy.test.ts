@@ -8,7 +8,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 vi.mock("@/lib/config.js", () => ({
   config: {
     EDITION: "cloud",
-    R2_PUBLIC_URL: "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev",
+    R2_PUBLIC_URL: "https://pub-test.r2.dev",
   },
   isCloud: () => true,
   hasCredits: () => true,
@@ -92,7 +92,7 @@ describe("GET /v1/image-proxy", () => {
     // distinguish the hostname boundary. Fix compares parsed origin.
     const res = await app.inject({
       method: "GET",
-      url: "/v1/image-proxy?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev.evil.com/payload.exe&download=1",
+      url: "/v1/image-proxy?url=https://pub-test.r2.dev.evil.com/payload.exe&download=1",
     })
 
     expect(res.statusCode).toBe(403)
@@ -126,7 +126,7 @@ describe("GET /v1/image-proxy", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/v1/image-proxy?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png&download=1",
+      url: "/v1/image-proxy?url=https://pub-test.r2.dev/images/test.png&download=1",
     })
 
     expect(res.statusCode).toBe(200)
@@ -151,7 +151,7 @@ describe("GET /v1/image-proxy", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/v1/image-proxy?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/videos/clip.mp4&download=1",
+      url: "/v1/image-proxy?url=https://pub-test.r2.dev/videos/clip.mp4&download=1",
     })
 
     expect(res.statusCode).toBe(200)

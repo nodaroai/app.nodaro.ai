@@ -1050,7 +1050,7 @@ const TARGET_FILM_WORKFLOW = {
   description:
     "Realistic Stage 1–8 Nodaro Film Director run. Two-character seaside " +
     "drama with 8 shots, full lip-sync, score, and SFX. Used for §5.4 " +
-    "size auditing — see specs/features/mcp-tool-audit-2026-05-14.md.",
+    "size auditing.",
   project_id: "proj_film_abc123",
   updated_at: "2026-05-14T13:00:00.000Z",
   nodes,
@@ -1071,7 +1071,7 @@ describe("Film Director workflow size (Spec §5.4, Task F2)", () => {
     const sizeKB = json.length / 1024
     // Use process.stdout.write so the measurement appears even when vitest
     // suppresses test-body console.log. This is a one-line report intended
-    // for the human auditor — see specs/features/mcp-tool-audit-2026-05-14.md.
+    // for the human auditor.
     process.stdout.write(
       `\n[Spec §5.4 / F2] Film Director workflow measurement:\n` +
         `  Nodes:                          ${nodes.length}\n` +

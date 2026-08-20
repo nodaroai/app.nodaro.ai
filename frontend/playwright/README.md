@@ -1,6 +1,6 @@
 # Playwright tests — Nodaro frontend
 
-End-to-end / visual-regression tests for the workflow editor canvas. Bootstrapped as part of Task D4 of the Film Director skill (see `specs/features/2026-05-14-nodaro-film-director-implementation-plan.md`).
+End-to-end / visual-regression tests for the workflow editor canvas. Bootstrapped alongside the Film Director skill.
 
 ## Layout
 

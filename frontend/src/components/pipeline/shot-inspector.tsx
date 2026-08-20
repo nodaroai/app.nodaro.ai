@@ -5,7 +5,7 @@ import { pipelinesApi } from "@/lib/pipelines-api"
 /**
  * Phase 3 — Focus composer.
  *
- * The north-star §6 ④ Focus view: see every scene's shots and direct them.
+ * Focus view: see every scene's shots and direct them.
  * Renders the Scene Director's plan from `scene_node_data` and lets the user
  * edit the per-shot creative levers (motion, duration, dialogue) inline — saved
  * via `pipelinesApi.editShot` (the per-shot edit route field-merges into
@@ -320,7 +320,7 @@ function ShotCard({
           className="mt-0.5 w-full resize-none rounded border bg-card p-1 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
         />
       </label>
-      {/* Per-shot style override (north-star §6): inject a look into this one
+      {/* Per-shot style override: inject a look into this one
           shot's keyframe prompt, overriding the film-wide Style for it. */}
       <select
         value=""
