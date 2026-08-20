@@ -45,3 +45,14 @@ supabase/.temp/
 # Merge / patch backup artifacts (never commit these)
 *.orig
 *.rej
+
+# Provider-billing analysis artifacts (backend/scripts/*.mts inputs+outputs).
+# These are REAL production billing extracts — per-task provider ids, per-model
+# volume, and our provider unit rate. Generate them locally when auditing; they
+# must never be committed (backend/kie-per-task.json shipped in every release
+# tarball from 2026-07-30 until this rule). check-billing-dumps.mjs enforces it.
+kie-per-task.json
+kie-actual.json
+per-second-rates.json
+observed-costs.json
+a2-sheet.json
