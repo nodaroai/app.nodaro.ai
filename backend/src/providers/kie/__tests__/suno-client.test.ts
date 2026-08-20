@@ -147,6 +147,51 @@ describe("sunoGenerate — create-task body shape", () => {
     expect(body.instrumental).toBe(true)
   })
 
+  /**
+   * THE LYRICS ARE THE PROMPT. KIE documents, for custom mode with
+   * `instrumental: false`: "style, title, and prompt are required (with prompt
+   * used as the exact lyrics)". We used to send a `lyrics` key the API has no
+   * field for, while `prompt` carried a description — so supplied lyrics were
+   * silently discarded and the model invented its own words.
+   */
+  it("custom mode + vocals: the LYRICS become the prompt, and no phantom `lyrics` key is sent", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() =>
+      sunoGenerate({
+        prompt: "acoustic world-jazz, upright bass, hand percussion",
+        lyrics: "[Intro]\nPa ra pa pa pri pa\n\n[Verse]\nto pe pe pari pore",
+        style: "acoustic world-jazz, ~100 bpm feel",
+        title: "Studio Session",
+        customMode: true,
+        instrumental: false,
+      }),
+    )
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.prompt).toBe("[Intro]\nPa ra pa pa pri pa\n\n[Verse]\nto pe pe pari pore")
+    expect(body.lyrics).toBeUndefined()
+    expect(body.style).toBe("acoustic world-jazz, ~100 bpm feel")
+    expect(body.title).toBe("Studio Session")
+    expect(body.customMode).toBe(true)
+  })
+
+  it("custom mode + INSTRUMENTAL keeps the description as the prompt — there is no vocal to sing words", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() =>
+      sunoGenerate({ prompt: "solo piano, sparse", lyrics: "[Verse]\nignored", style: "s", title: "t", customMode: true, instrumental: true }),
+    )
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.prompt).toBe("solo piano, sparse")
+    expect(body.lyrics).toBeUndefined()
+  })
+
   it("forwards optional camelCase → snake_case mapped fields", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
@@ -167,7 +212,12 @@ describe("sunoGenerate — create-task body shape", () => {
     )
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.lyrics).toBe("la la la")
+    // `lyrics` is NOT a KIE field (2026-08-19) — the endpoint takes prompt /
+    // style / title / customMode / instrumental / …, and in custom mode the
+    // lyrics ARE the prompt. In description mode (this call) they are dropped
+    // rather than sent as a key the API ignores.
+    expect(body.lyrics).toBeUndefined()
+    expect(body.prompt).toBe("p")
     expect(body.style).toBe("pop")
     expect(body.title).toBe("Song")
     expect(body.negative_style).toBe("metal")

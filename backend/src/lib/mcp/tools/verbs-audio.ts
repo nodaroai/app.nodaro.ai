@@ -105,7 +105,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
-        lyrics: z.string().max(2000).optional(),
+        lyrics: z.string().max(2000).optional().describe(
+          "The exact words to sing, with [Intro]/[Verse]/[Chorus] structure " +
+          "tags on their own lines. Supplying them switches Suno to custom " +
+          "mode, where they are sung as written (and `duration` starts " +
+          "working); without them the model invents its own words from the " +
+          "prompt.",
+        ),
+        title: z.string().max(80).optional().describe(
+          "Song title. Custom mode requires one — supplying lyrics without a " +
+          "title falls back to \"Untitled\".",
+        ),
         genre: z.string().optional(),
         mood: z.string().optional(),
       },
@@ -202,15 +212,37 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const isSuno = modelId === "suno" || modelId === "suno-v5" || modelId === "suno-v5-5"
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
       const sunoVersion = modelId === "suno-v5-5" ? "V5_5" : modelId === "suno-v5" ? "V5" : "V4"
+      // Fold mcp's generic `genre` + `mood` into suno's `style` (same intent)
+      // — previously `mood` was silently dropped on the suno path. In custom
+      // mode `style` is REQUIRED, so the prompt itself stands in when the
+      // caller gave neither: the prompt is a musical description either way.
+      const sunoStyle = [genre, mood].filter(Boolean).join(", ") || undefined
+      // WORDS TO SING ⇒ CUSTOM MODE (2026-08-19). Lyrics only reach Suno in
+      // custom mode (there they ARE the prompt); in the default description
+      // mode the model invents its own words and ignores `duration` — which
+      // is what this verb did with every `lyrics` it was ever given. Custom
+      // mode additionally requires a style and a title, so both are supplied.
+      const sunoCustom = isSuno && !!lyrics?.trim() && instrumental !== true
       const payload = isSuno
         ? {
             prompt,
             model: sunoVersion,
             instrumental,
-            lyrics,
-            // Fold mcp's generic `genre` + `mood` into suno's `style` (same
-            // intent) — previously `mood` was silently dropped on the suno path.
-            style: [genre, mood].filter(Boolean).join(", ") || undefined,
+            ...(sunoCustom
+              ? {
+                  customMode: true,
+                  lyrics,
+                  title: (effective.title as string | undefined)?.trim() || "Untitled",
+                  style: sunoStyle ?? prompt,
+                  // Honoured only in custom mode on V5_5 — and the route's
+                  // floor is 10s, so a shorter ask is raised rather than
+                  // rejected.
+                  ...(duration ? { duration: Math.max(10, Math.round(duration)) } : {}),
+                }
+              : {
+                  ...(effective.title ? { title: (effective.title as string).trim() } : {}),
+                  style: sunoStyle,
+                }),
             mcp_client: session.clientName,
             userId: session.userId,
           }
