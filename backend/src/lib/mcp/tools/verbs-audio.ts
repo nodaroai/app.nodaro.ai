@@ -217,12 +217,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // mode `style` is REQUIRED, so the prompt itself stands in when the
       // caller gave neither: the prompt is a musical description either way.
       const sunoStyle = [genre, mood].filter(Boolean).join(", ") || undefined
-      // WORDS TO SING ⇒ CUSTOM MODE (2026-08-19). Lyrics only reach Suno in
-      // custom mode (there they ARE the prompt); in the default description
-      // mode the model invents its own words and ignores `duration` — which
-      // is what this verb did with every `lyrics` it was ever given. Custom
-      // mode additionally requires a style and a title, so both are supplied.
-      const sunoCustom = isSuno && !!lyrics?.trim() && instrumental !== true
+      const callerTitle = (effective.title as string | undefined)?.trim()
+      // CUSTOM MODE — the only mode where lyrics are sung as written, `style`
+      // is a field of its own, and `duration` is honoured (V5_5). Two ways in,
+      // and the asymmetry is deliberate:
+      //   - WITH VOCALS, only actual lyrics qualify. In custom mode the prompt
+      //     IS what gets sung, so switching a lyric-less request would have
+      //     the model singing the description aloud.
+      //   - INSTRUMENTAL has no voice to put words in, so a title or a
+      //     requested length is enough (2026-08-20): a caller asking for 22
+      //     seconds of score used to get 142 because description mode drops
+      //     `duration` on the floor. Plain instrumental calls that ask for
+      //     neither stay exactly as they were.
+      // Custom mode requires a style and a title, so both are always supplied.
+      const sunoCustom = isSuno && (
+        instrumental === true
+          ? (!!callerTitle || typeof duration === "number")
+          : !!lyrics?.trim()
+      )
       const payload = isSuno
         ? {
             prompt,
@@ -231,8 +243,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             ...(sunoCustom
               ? {
                   customMode: true,
-                  lyrics,
-                  title: (effective.title as string | undefined)?.trim() || "Untitled",
+                  // Lyrics belong to a voice — never sent on an instrumental
+                  // request, where they would be a field the track cannot use.
+                  ...(instrumental === true ? {} : { lyrics }),
+                  title: callerTitle || "Untitled",
                   style: sunoStyle ?? prompt,
                   // Honoured only in custom mode on V5_5 — and the route's
                   // floor is 10s, so a shorter ask is raised rather than
@@ -240,7 +254,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                   ...(duration ? { duration: Math.max(10, Math.round(duration)) } : {}),
                 }
               : {
-                  ...(effective.title ? { title: (effective.title as string).trim() } : {}),
+                  ...(callerTitle ? { title: callerTitle } : {}),
                   style: sunoStyle,
                 }),
             mcp_client: session.clientName,
