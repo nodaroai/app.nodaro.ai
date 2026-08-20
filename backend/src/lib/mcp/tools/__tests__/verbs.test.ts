@@ -502,12 +502,32 @@ describe("generate_music verb", () => {
     expect(received.body?.style).toBe("acoustic world-jazz, upright bass, hand percussion")
   })
 
-  it("an INSTRUMENTAL request stays in description mode even with lyrics — there is no voice to sing them", async () => {
+  /**
+   * INSTRUMENTAL + A LENGTH OR A TITLE ⇒ CUSTOM MODE (2026-08-20). Description
+   * mode drops `duration`, so a 22-second score request returned 142 seconds.
+   * There is no voice on an instrumental track, so no lyrics ride and nothing
+   * can be sung by accident.
+   */
+  it("an INSTRUMENTAL request with a duration goes custom — the length is the whole reason — and never carries lyrics", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-inst" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
 
-    await callTool(server, "generate_music", { prompt: "solo piano", model: "suno-v5-5", lyrics: "[Verse]\nignored", instrumental: true })
+    await callTool(server, "generate_music", { prompt: "solo piano, sparse", model: "suno-v5-5", lyrics: "[Verse]\nignored", instrumental: true, duration: 22 })
+
+    expect(received.body?.customMode).toBe(true)
+    expect(received.body?.duration).toBe(22)
+    expect(received.body?.title).toBe("Untitled")
+    expect(received.body?.style).toBe("solo piano, sparse")
+    expect(received.body?.lyrics).toBeUndefined()
+  })
+
+  it("a plain instrumental request — no title, no duration — is unchanged: description mode", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-plain" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_music", { prompt: "ambient drone", model: "suno-v5-5", instrumental: true })
 
     expect(received.body?.customMode).toBeUndefined()
     expect(received.body?.title).toBeUndefined()
