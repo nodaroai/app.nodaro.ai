@@ -1,16 +1,10 @@
 -- video-analysis schedule re-derived: smart tier re-based, measured constants trued-up.
 --
--- The smart tier's frame-sampling rate moved 24 -> 6 fps after a 43-run
--- measurement campaign (2026-07-31) found 6 fps equal on content quality
--- (visual density, audio layers, subtitle capture) and strictly better on
--- cast stability, at well under half the provider spend. 24 fps was also
--- silently hitting a provider-side media-token clamp past ~57s of footage,
--- so part of the modelled input spend was never actually billed by the
--- provider. At the same time the analyzer's system-prompt and per-window
--- output-token figures were re-measured directly from provider usage
--- metadata (the prompt had grown ~27% across doctrine additions since the
--- last measurement; dense-edit clips emit more output than the reference
--- clip the old figure came from).
+-- The smart tier's frame-sampling rate moved 24 -> 6 fps: 6 fps proved equal
+-- on content quality (visual density, audio layers, subtitle capture) and
+-- better on cast stability, at a much lower sampling cost. The analyzer's
+-- system-prompt and per-window output-token figures were trued up at the
+-- same time.
 --
 -- Net effect, per bucket:
 --

@@ -2,123 +2,60 @@
 // Forbids private-extraction implementation symbols from leaking back into
 // this public repo's tracked files.
 //
-// Context: two private extractions moved code out of this repo and into the
-// proprietary `@nodaroai/cloud-plugins` package (private repo
-// `nodaroai/nodaro-cloud-plugins`), loaded at runtime — never via a static,
-// tsc-visible import — by `backend/src/lib/private-plugins/load.ts` (see
-// that file's header comment for why):
+// Context: proprietary engines were moved out of this repo into the
+// `@nodaroai/cloud-plugins` package, loaded at runtime — never via a static,
+// tsc-visible import — by `backend/src/lib/private-plugins/load.ts` (see that
+// file's header comment for why). This repo knows those engines only through
+// the structural `PluginToolkit`/`PluginEngines` contract; it never references
+// their internal symbol names again. A hit in the tracked tree means an
+// extracted implementation detail crept back in — a revert, a stale doc, a
+// copy-pasted comment, a test fixture pulled from the wrong branch.
 //
-//   - VCP (Stage 1): the voice-changer-pro engine and the worker handler
-//     that drove it.
-//   - S8: the surround-continuation compositing engine — the
-//     worker handler and route stay in this repo (`workers/handlers/
-//     surround.ts`, `routes/generate-surround-continuation.ts`), but the two
-//     IP-sensitive functions it calls into (`buildSurroundComposite`,
-//     `harmonizeSurround`) are now reached only through the additive
-//     `engines` capability (`backend/src/lib/private-plugins/types.ts`'s
-//     `PluginSurroundEngine`).
+// THE SYMBOL LIST IS NOT IN THIS FILE. A deny-list of proprietary function,
+// constant, and prose names IS the map of what was extracted — published in
+// cleartext it hands over the private engines' module layout, the algorithm
+// names, and the formula constants, which is exactly what the extraction was
+// meant to protect (found in the v1.29.6 artifact audit). The list lives in
+// the internal repo secret PRIVATE_LEAK_SYMBOLS (newline-separated, exported
+// by the CI/mirror workflows) or an untracked local `.leak-symbols` file, the
+// same arrangement the marker gate in scripts/publish-to-public.sh uses.
+// Symbol VALUES are never echoed — only the offending file:line is printed.
 //
-// This repo now only knows about either plugin through the structural
-// `PluginToolkit`/`PluginEngines` contract (`backend/src/lib/private-plugins/
-// types.ts`); it never references these symbol names again.
+// Without a list this check SKIPS (and says so) rather than passing silently;
+// the mirror hard-requires it via PRIVATE_LEAK_REQUIRE_SYMBOLS=1, so the
+// publish path can never lose the gate unnoticed.
 //
-// A hit anywhere in the tracked tree means the extracted implementation
-// detail crept back in — a revert, a stale doc, a copy-pasted comment, a test
-// fixture pulled from the wrong branch, etc.
+// tools/ is excluded from the scan: a pattern necessarily resembles what it
+// matches, so scanning tools/ would make the check self-trip.
 //
-// tools/ is excluded from the scan: this script's own pattern list is,
-// necessarily, the literal symbol names being searched for, so scanning
-// tools/ would make the check self-trip on every run.
-//
-// Run locally: node tools/check-private-leaks.mjs
+// Run locally: PRIVATE_LEAK_SYMBOLS="$(cat .leak-symbols)" node tools/check-private-leaks.mjs
+//   (ask a maintainer for the list, or export the repo secret in CI)
 
 import { execFileSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 
-const SYMBOLS = [
-  // VCP
-  "handleVoiceChangerPro",
-  "runVoiceChangerPro",
-  "buildSpeakerStemFilter",
-  "directDiarize",
-  "groupWordsIntoSpeakerSegments",
-  "resolveSpeakerVoiceMap",
-  // S8 (surround)
-  "Reinhard",
-  "BASE_FEATHER",
-  "RESIDUAL_THRESHOLD",
-  "seamGeometry",
-  // S9 (film-studio prompts) — unlike VCP/S8, S9 moved DATA (prompt string
-  // VALUES), not code symbols; the constants that used to hold those strings
-  // were deleted from ee/pipelines/llms/** entirely (replaced by
-  // getPipelinePrompt(PIPELINE_PROMPT_KEYS.x) calls). These names guard
-  // against the constant declarations reappearing anywhere in the tracked
-  // tree (a revert, a stale doc, a copy-pasted comment). 20 of the 25 moved
-  // constant names are listed — the 21st distinct name, bare `SYSTEM_PROMPT`
-  // (shared by 5 of the 25: character-image-critic.ts, location-image-critic.ts,
-  // video-critic.ts, storyboard-cohesion-critic.ts, chat-refine-postmerge.ts),
-  // is DELIBERATELY excluded: it already collides with two unrelated,
-  // legitimate constants elsewhere in this repo
-  // (providers/script/script-generator.ts, services/reduce-strategies/
-  // pick-best-llm.ts), so adding it here would false-positive on every run.
-  "DETECTION_SYSTEM_PROMPT",
-  "SHOWRUNNER_SYSTEM_PROMPT",
-  "SCENE_DIRECTOR_SYSTEM_PROMPT",
-  "EDITOR_SYSTEM",
-  "SCENE_REFINER_SYSTEM_PROMPT",
-  "SCRIPT_CRITIC_SYSTEM_PROMPT",
-  "CAST_COVERAGE_SYSTEM_PROMPT",
-  "LOCATIONS_COVERAGE_SYSTEM_PROMPT",
-  "SHOT_LIST_CRITIC_SYSTEM_PROMPT",
-  "IMAGE_CRITIC_SYSTEM",
-  "VOICE_MATCHER_SYSTEM_PROMPT_BASE",
-  "SYSTEM_PROMPT_BASE",
-  "ADD_BROLL_SYSTEM",
-  "ANCHOR_SCENE_STYLE_SYSTEM",
-  "AUDIT_PROMPT_SYSTEM",
-  "BRIDGE_TO_NEXT_SCENE_SYSTEM",
-  "GENERATE_MOTION_SYSTEM",
-  "IMPROVE_PROMPT_SYSTEM",
-  "OPTIMIZE_FOR_MODEL_SYSTEM",
-  "VALIDATE_MATCH_CUT_SYSTEM",
-  // video-analysis: the whole node implementation (route + windowed multimodal
-  // LLM handler + segmentation/merge/checkpoint pipeline + prompt builders +
-  // the analysis doctrine) moved to @nodaroai/cloud-plugins
-  // (in the plugin repo). This repo keeps ONLY the public wire
-  // contract (@nodaro/shared schemas/pricing), the node UI, the orchestration
-  // glue keyed on the "video-analysis" node-type string, the MCP verb, and the
-  // credit formula (lib/pricing/video-analysis-cost.ts — public by the
-  // 2026-07-06 IP audit). These implementation symbols must never reappear
-  // here. NOTE: `VIDEO_ANALYSIS_TMP_PREFIX` is DELIBERATELY excluded — the
-  // core cleanup-cron reaper legitimately re-declares that literal (a
-  // documented sync-twin of the plugin's constant).
-  "handleVideoAnalysis",
-  "analyzeWindowViaKie",
-  "segmentAndUploadWindows",
-  "recutWindowFromSource",
-  "mergeWindowResults",
-  "computeWindowPlan",
-  "buildVideoAnalysisSystemPrompt",
-  "buildVideoAnalysisUserText",
-  "stripFocusCloseTag",
-  "vaTmpKeys",
-  "readVaState",
-  "writeVaState",
-  "deleteVaTmp",
-  "VaDurationError",
-  "resolveVideoAnalysisIdentifier",
-  "probeVideoAnalysisDurationPreHandler",
-  // The $-derived cost formula + measured-rate constants (moved private
-  // alongside the node). The PRICES stay public (VIDEO_ANALYSIS_BUCKET_CREDITS
-  // in @nodaro/shared); the FORMULA that generates them lives in the plugin.
-  // These two constant names are distinctive markers of that formula reverting
-  // into public. `videoAnalysisBucketCredits` is DELIBERATELY excluded — the
-  // NAME still legitimately appears in comments/docs/applied SQL migrations.
-  "VIDEO_ANALYSIS_SYSTEM_PROMPT_TOKENS",
-  "OUTPUT_TOKENS_PER_WINDOW",
-  // A distinctive line from the analysis doctrine (guards the doctrine PROSE
-  // reappearing, since it moved as a bundled string, not a named constant).
-  "second unit to reshoot",
-]
+
+function loadSymbols() {
+  const fromEnv = process.env.PRIVATE_LEAK_SYMBOLS
+  if (fromEnv && fromEnv.trim()) return fromEnv.split("\n").map((l) => l.trim()).filter(Boolean)
+  try {
+    return readFileSync(".leak-symbols", "utf8").split("\n").map((l) => l.trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+const SYMBOLS = loadSymbols()
+
+if (SYMBOLS.length === 0) {
+  if (process.env.PRIVATE_LEAK_REQUIRE_SYMBOLS === "1") {
+    console.error("check-private-leaks: PRIVATE_LEAK_REQUIRE_SYMBOLS=1 but no symbol list —")
+    console.error("set the PRIVATE_LEAK_SYMBOLS secret (or provide a local .leak-symbols file).")
+    process.exit(1)
+  }
+  console.log("check-private-leaks: SKIPPED — no symbol list available (set PRIVATE_LEAK_SYMBOLS).")
+  process.exit(0)
+}
 
 const PATTERN = SYMBOLS.join("|")
 

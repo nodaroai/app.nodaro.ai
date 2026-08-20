@@ -35,7 +35,7 @@ import { ReelPipeline } from "@/components/pipeline/reel-pipeline"
 
 type NarrationLine = { type: string; text: string }
 
-// Phase 3 — the autonomy dial (north-star §6: "Composer ⇄ AI Director").
+// The autonomy dial — Composer ⇄ AI Director.
 // One control that decides how much the engine does on its own vs how much the
 // user directs, by mapping to the pipeline's `mode` + gate config.
 type Autonomy = "director_ai" | "copilot" | "director_me"

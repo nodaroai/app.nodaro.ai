@@ -11,7 +11,6 @@
  * tab is selected by default.
  *
  * The full happy-path is documented at:
- *   `specs/features/location-studio-pr1-implementation-plan.md` (Task 36)
  *
  * Once the test-helper infrastructure can seed a workflow with a location
  * node + a stubbed `/v1/locations/:id/generate` route, replace the stub

@@ -25,7 +25,7 @@ vi.mock("@/lib/config.js", () => ({
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
-    R2_PUBLIC_URL: "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev",
+    R2_PUBLIC_URL: "https://pub-test.r2.dev",
   },
   isCloud: () => true,
   hasCredits: () => true,
@@ -139,7 +139,7 @@ describe("GET /v1/download", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
+      url: "/v1/download?url=https://pub-test.r2.dev/images/test.png",
     })
 
     expect(res.statusCode).toBe(200)
@@ -148,7 +148,7 @@ describe("GET /v1/download", () => {
     expect(res.headers["content-disposition"]).toContain("test.png")
     expect(res.body).toContain("fake-image-data")
     expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
-      "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
+      "https://pub-test.r2.dev/images/test.png",
       { timeoutMs: 120_000 },
     )
   })
@@ -162,7 +162,7 @@ describe("GET /v1/download", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/broken.png",
+      url: "/v1/download?url=https://pub-test.r2.dev/images/broken.png",
     })
 
     expect(res.statusCode).toBe(502)
@@ -176,7 +176,7 @@ describe("GET /v1/download", () => {
 
     const res = await app.inject({
       method: "GET",
-      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
+      url: "/v1/download?url=https://pub-test.r2.dev/images/test.png",
     })
 
     expect(res.statusCode).toBe(502)
@@ -199,9 +199,9 @@ describe("GET /v1/download", () => {
   it("rejects a look-alike hostname that shares a string prefix with R2_PUBLIC_URL", async () => {
     const res = await app.inject({
       method: "GET",
-      // Prefix matches "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev"
+      // Prefix matches "https://pub-test.r2.dev"
       // but hostname is attacker-controlled. Must 403.
-      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev.evil.com/payload.exe",
+      url: "/v1/download?url=https://pub-test.r2.dev.evil.com/payload.exe",
     })
 
     expect(res.statusCode).toBe(403)
@@ -212,7 +212,7 @@ describe("GET /v1/download", () => {
   it("rejects a URL whose query string embeds the R2 origin", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/v1/download?url=https://evil.example.com/?x=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images",
+      url: "/v1/download?url=https://evil.example.com/?x=https://pub-test.r2.dev/images",
     })
 
     expect(res.statusCode).toBe(403)

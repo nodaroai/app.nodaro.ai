@@ -36,7 +36,7 @@ The repo is a single npm workspaces monorepo. Top-level folders:
 | `scripts/` | Repo-level utilities (architecture graph generator, audits, etc.). |
 | `.changeset/` | Pending version-bump intents for `@nodaro/shared` + `@nodaro/sdk`. |
 
-> Some source-code comments reference design docs by a `specs/…` path. Those design docs live in Nodaro's private planning repo; a curated public subset is published under `docs/design/`.
+> Design notes for key features are published under `docs/design/`.
 
 The root `CLAUDE.md` is the canonical "house rules" file — coding
 standards, the Provider Enum Sync checklist, and the New Node

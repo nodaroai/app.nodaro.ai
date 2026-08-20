@@ -4,7 +4,7 @@
  *
  * Source of truth is the last `v*` git tag on the current branch — never
  * package.json (which sat at 1.23.0 for six months while 5,882 commits
- * shipped; see specs/2026-08-19-community-versioning-updates.md in the plan
+ * shipped; see the versioning spec in the plan
  * repo). Bump rule, derived so no human has to remember:
  *   - any commit subject with a `!` before the colon, or a BREAKING CHANGE
  *     footer  -> major

@@ -17,8 +17,8 @@
 --
 -- Bounded by `created_at < now() - interval '1 hour'` so we only touch rows
 -- that are demonstrably stuck (more than 1 hour past creation with no
--- terminal-state UPDATE). Job 88681ab8-a5b9-4bf1-80ea-0bd64813b363 and similar
--- rows from before this fix shipped will be swept by the next cron tick.
+-- terminal-state UPDATE). Rows from before this fix shipped will be swept
+-- by the next cron tick.
 --
 -- Idempotent: filters on `provider_call_started_at IS NULL` so re-running the
 -- migration (or running it after some rows have already been backfilled) is a

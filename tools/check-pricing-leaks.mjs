@@ -205,6 +205,41 @@ try {
 } catch {
   // no migrations dir in this checkout
 }
+// Comment blocks WRAP. "43-run\n// measurement campaign" is the same
+// disclosure as the one-line spelling, but a line-at-a-time regex never sees
+// it — that is exactly how a measurement-methodology line survived in
+// migration 294 with the rule already in place (v1.29.6 artifact audit). So
+// each file is ALSO tested as one de-wrapped string: comment markers and
+// newlines collapsed to single spaces. Only the PHRASE rules run on that view
+// — the per-line shape rules ("2+ dollar figures on one line") would be
+// meaningless once every line is joined.
+const PHRASE_RULES = [
+  [BELOW_COST_PATTERN, "under-cost admission (wrapped across lines)"],
+  [MEASUREMENT_METHOD_PATTERN, "measurement-methodology phrase (wrapped across lines)"],
+  [RATE_PATTERN, "provider-rate pattern (wrapped across lines)"],
+  [LIVE_BILLING_PATTERN, "\"live ... billing\" methodology phrase (wrapped across lines)"],
+]
+
+function dewrap(content) {
+  return content
+    .split("\n")
+    .map((line) => line.replace(/^\s*(\/\/+|--|\*|#)\s?/, ""))
+    .join(" ")
+    .replace(/\s+/g, " ")
+}
+
+function scanDewrapped(file, content, offenders) {
+  const joined = dewrap(content)
+  for (const [pattern, reason] of PHRASE_RULES) {
+    const m = joined.match(pattern)
+    // Only report what the per-line pass would have MISSED — otherwise every
+    // single-line hit is reported twice.
+    if (m && !content.split("\n").some((line) => pattern.test(line))) {
+      offenders.push(`${file}: ${reason}\n    …${m[0]}…`)
+    }
+  }
+}
+
 for (const file of PROSE_FILES) {
   if (ALLOWLIST.has(file)) continue
   let content
@@ -218,6 +253,7 @@ for (const file of PROSE_FILES) {
     const reason = isPricingRelevantLine(line, { skipBareMarkup: isMigration })
     if (reason) offenders.push(`${file}:${i + 1}: ${reason} — published prose (changelog/changeset/migration)\n    ${line.trim()}`)
   })
+  scanDewrapped(file, content, offenders)
 }
 
 if (offenders.length > 0) {

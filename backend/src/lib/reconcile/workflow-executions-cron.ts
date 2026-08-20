@@ -10,7 +10,7 @@
  *
  * Recovery latency: at most TICK_INTERVAL_MS + BACKOFF_FROM_START_MS.
  *
- * See `specs/stuck-execution-prevention-plan.md` for the broader design.
+ * See the stuck-execution prevention design for the broader picture.
  */
 import { supabase } from "../supabase.js"
 import { orchestrationQueue } from "../orchestration-queue.js"

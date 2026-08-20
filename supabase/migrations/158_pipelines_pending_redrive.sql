@@ -5,7 +5,7 @@
 -- A re-drive requested mid-drive (user approves an entity, a stage auto-advances,
 -- a retry fires) is therefore dropped, and once the active drive finishes nothing
 -- re-triggers the pipeline — it stalls at `status='running'` with no error.
--- See specs/stuck-execution-prevention-plan.md "Phase 4".
+-- See the stuck-execution prevention design.
 --
 -- This column is the latch: `enqueuePipelineRun` stamps it before `add()`; the
 -- pipeline-worker (`driveWithRedriveLatch`) clears it before each drive and loops

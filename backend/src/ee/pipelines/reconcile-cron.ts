@@ -19,7 +19,7 @@
  * Mirrors the per-stage resume_count accounting in `resume.ts` so we
  * respect the same cap (`MAX_RESUME = 3`).
  *
- * See `specs/stuck-execution-prevention-plan.md` for the broader design.
+ * See the stuck-execution prevention design for the broader picture.
  */
 import { supabase } from "../../lib/supabase.js"
 import { pipelineOrchestrationQueue, enqueuePipelineRun } from "./queue.js"

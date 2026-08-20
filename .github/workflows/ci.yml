@@ -399,6 +399,12 @@ jobs:
       - name: Check core does not import from ee/
         run: node tools/check-ee-imports.mjs
       - name: Check for private-extraction symbol leaks
+        # The symbol list is a repo secret, not a tracked file — a cleartext
+        # deny-list of proprietary names IS the map of what was extracted.
+        # Absent (forks / public mirror CI) the check skips loudly; the mirror
+        # publish path hard-requires it.
+        env:
+          PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
         run: node tools/check-private-leaks.mjs
       - name: Check no provider key is frozen at construction/import (keys are live)
         run: node tools/check-provider-key-captures.mjs

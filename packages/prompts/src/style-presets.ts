@@ -1,7 +1,7 @@
 import type { StyleDirectives } from "@nodaro/shared"
 
 /**
- * Style Gallery presets (north-star §6 ①).
+ * Style Gallery presets.
  *
  * Each preset is a named "look" the user picks at Start. Picking one sets the
  * pipeline's `style_directives`, which the Showrunner folds into the plan's

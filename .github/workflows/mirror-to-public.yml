@@ -47,6 +47,11 @@ jobs:
           # so a lost secret fails loudly instead of silently skipping the gate.
           PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
           MIRROR_REQUIRE_MARKERS: "1"
+          # Private-symbol deny-list (see tools/check-private-leaks.mjs) — also
+          # secret-held, and hard-required here so the publish path can never
+          # lose the gate by losing the secret.
+          PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
+          PRIVATE_LEAK_REQUIRE_SYMBOLS: "1"
         run: |
           # actions/checkout persists a github.com-wide Authorization header using
           # GITHUB_TOKEN (scoped to THIS/internal repo). It overrides our per-URL
