@@ -72,8 +72,8 @@ const LIVE_BILLING_PATTERN = /\blive\s+(\S+\s+)?billing\b/i
 // wrote the spaced form.
 const BELOW_COST_PATTERN = /\bbelow[\s-]cost\b/i
 // Measurement METHODOLOGY, lowercase forms the all-caps MEASURED rule misses:
-// a staging/production measurement, "a 43-run measurement", "measured at 61
-// production jobs". How we derive rates is never-public even when the rate is not quoted.
+// a staging/production measurement, an "N-run measurement", a "measured at
+// <N> production jobs" claim. How we derive rates is never-public even when the rate is not quoted.
 const MEASUREMENT_METHOD_PATTERN = /\b(staging|production)\s+measurement\b|\b\d+-run\s+measurement\b|\bmeasured\s+at\s+\d+\b/i
 
 // "markup" has zero legitimate non-pricing usage in this codebase (verified
@@ -205,7 +205,7 @@ try {
 } catch {
   // no migrations dir in this checkout
 }
-// Comment blocks WRAP. "43-run\n// measurement campaign" is the same
+// Comment blocks WRAP. A phrase split as "<N>-run\n// measurement campaign" is the same
 // disclosure as the one-line spelling, but a line-at-a-time regex never sees
 // it — that is exactly how a measurement-methodology line survived in
 // migration 294 with the rule already in place (v1.29.6 artifact audit). So
