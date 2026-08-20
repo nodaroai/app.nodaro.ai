@@ -484,7 +484,7 @@ function computePreferredSplit(
  *  the per-join surcharge bounded. The engine cuts EXACTLY what this bills —
  *  transport and formula read the same clamped value. */
 export const CONTEXT_TAIL_MIN_SEC = SEEDANCE_2_CONTINUATION_REF_SEC
-// Raised 5→15 (Tal 2026-07-22, testing lever) — the plugin route Zod + handler
+// Raised 5→15 (product decision 2026-07-22, testing lever) — the plugin route Zod + handler
 // transport clamp move together to the same [2,15]. Billing stays exact: the
 // engine cuts what this bills. A long tail eats the KIE video-ref budget, so
 // it's a testing knob, not a default (default stays 2s).

@@ -157,7 +157,7 @@ describe("bare video-analysis node-type credit id", () => {
     // 24 and the schedule regenerated ~47% lower at the ceiling bucket, and 300
     // wrote 2064: the V1 hybrid-smart reprice (task A3) moved `smart` to a
     // multi-roll plan (native skeleton + donor rolls, always refined) and
-    // trued up every tier's judge/refine terms from staging measurement).
+    // trued up every tier's judge/refine terms).
     expect(ceiling).toBe(2064)
   })
 

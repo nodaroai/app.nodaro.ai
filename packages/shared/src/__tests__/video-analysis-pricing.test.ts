@@ -15,7 +15,7 @@ import {
 
 // The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
 // formula are PRIVATE, in @nodaroai/cloud-plugins
-// (src/plugins/video-analysis/cost.ts) — its tests (the worked-example
+// (in the plugin repo) — its tests (the worked-example
 // bucket-credit values and the cross-check against VIDEO_ANALYSIS_BUCKET_CREDITS
 // below) live in that private package's __tests__/cost.test.ts. This file
 // covers only the NON-monetary duration-bucketing, window-batching, and
@@ -121,7 +121,7 @@ describe("video-analysis-pricing", () => {
   })
 
   // Full drift-detection against the live $-formula lives in the PRIVATE
-  // plugin repo (src/plugins/video-analysis/__tests__/cost.test.ts) — the
+  // plugin repo — the
   // formula moved there in 2026-07 and the app-side test was deleted with it,
   // so nothing in THIS repo can recompute these numbers. This is a lightweight
   // shape check that the precomputed table covers every legal id.

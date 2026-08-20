@@ -28,7 +28,7 @@ export function anomalyToleranceCredits(): number {
  * The base conversion goes through `usdToCredits`, which carries the
  * milli-credit float guard. The previous bare `Math.ceil(cost / base)`
  * over-charged a full credit whenever IEEE-754 division landed just above an
- * integer — measured at 61 production jobs (55 lip-sync, 4 image-to-video,
+ * integer — observed across production jobs (lip-sync, image-to-video,
  * 2 generate-character), always in the customer's disfavour.
  */
 export async function computeActualCredits(providerCostUsd: number, modelIdentifier?: string): Promise<number> {

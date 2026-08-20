@@ -1,16 +1,13 @@
 -- video-analysis schedule re-derived: V1 hybrid-smart reprice (task A3).
 --
--- V1 true-up of task P6's provisional judge/refine/frame-judge constants,
--- re-derived from a 2026-08-03 staging measurement and approved by Tal (the
--- $-derived formula and its constants stay private in the cloud-plugins
--- repo, never in this app repo or its public package). `smart` is now a
+-- V1 true-up of the earlier provisional judge/refine/frame-judge constants
+-- (the formula and its constants stay private in the cloud-plugins repo,
+-- never in this app repo or its public package). `smart` is now a
 -- HYBRID plan — one native 6fps skeleton pass plus 2 fast + 2 pro donor
 -- rolls, always refined (`selectionMode` does not apply to `smart`; it
 -- always refines) — and every multi-roll tier now carries its own explicit
 -- judge/refine terms instead of an implicit share of a single-pass budget.
--- This is the full, honest reprice Tal approved, including the economy
--- tiers: `fast` 33 -> 185 @180s ends a below-cost combine exposure that
--- existed at the old price.
+-- The economy tiers rise too: `fast` 33 -> 185 @180s.
 --
 -- Net effect, per bucket (every row rises):
 --

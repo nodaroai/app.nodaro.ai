@@ -30,10 +30,9 @@
  * so there's no reason to widen it. Still structurally compatible with the
  * plugin repo's `string` version at the call boundary (a narrower type is
  * always assignable to the wider one). (2) `PromptTable`'s doc comment names
- * this repo's `ee/pipelines/llms/prompt-registry.ts` as "here" and the plugin
- * repo's `src/plugins/film-studio-prompts/prompt-keys.ts` as "the plugin
- * repo" — the plugin repo's copy of that same comment necessarily flips
- * those two references, same vantage-point pattern as this header comment.
+ * this repo's `ee/pipelines/llms/prompt-registry.ts` as "here" and its
+ * counterpart as "the plugin repo" — the plugin repo's copy of that same
+ * comment necessarily flips those two references, same vantage-point pattern as this header comment.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
@@ -1312,8 +1311,8 @@ export interface PluginEngines {
 
 /**
  * Combine-videos boundary matcher (2026-07-24 — the smart-cut cut-point
- * algorithms moved private; Tal: "it is important that the smart algorithm
- * will stay private"). `combineVideos` calls this per boundary with its
+ * algorithms moved private, deliberately — the smart algorithm stays
+ * proprietary). `combineVideos` calls this per boundary with its
  * LOCAL normalized clip paths; the returned trims are DROP COUNTS the
  * caller applies via its own frame-trim plan. Absent engine
  * (community/business, or a plugin-version lag on cloud) → the app degrades
@@ -1336,7 +1335,7 @@ export interface PluginSmartCutEngine {
   }>
 }
 
-/** Mirrors the public surface of `services/surround/index.ts` (moved to the private repo's `src/plugins/surround/`). */
+/** Mirrors the public surface of `services/surround/index.ts` (moved to the plugin repo). */
 export interface PluginSurroundEngine {
   buildSurroundComposite(opts: {
     referenceImageUrl: string
@@ -1364,8 +1363,8 @@ export interface PluginSurroundEngine {
  * Additive (S9). A plugin whose entire contribution is DATA — no routes,
  * no handlers, no pricing — implements ONLY this member. Keys are the
  * PIPELINE_PROMPT_KEYS constants (mirrored in both repos — see
- * `ee/pipelines/llms/prompt-registry.ts` here /
- * `src/plugins/film-studio-prompts/prompt-keys.ts` in the plugin repo). Values
+ * `ee/pipelines/llms/prompt-registry.ts` here / its counterpart in the
+ * plugin repo). Values
  * are the exact doctrine string — no functions, no per-request
  * interpolation; callers substitute any placeholders (e.g.
  * "{{current_plan_json}}") themselves after lookup. Merged additively across

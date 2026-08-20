@@ -1,9 +1,7 @@
 /**
  * CONTENT-POLICY REWRITE-ONCE — plain generate-video route (Task A2, 2026-08-03).
  *
- * SIBLING of the private plugin repo's copy at
- * `nodaro-cloud-plugins/src/plugins/generate-video-pro/engine/content-policy.ts`
- * (Task P5, same date). That repo cannot import app code and this repo cannot
+ * SIBLING of the private plugin repo's own copy (Task P5, same date). That repo cannot import app code and this repo cannot
  * import it back (see `backend/CLAUDE.md`'s "Private Plugins" section), so
  * `REWRITE_SYSTEM` below is a HAND-SYNCED VERBATIM duplicate of the plugin's
  * prompt string — edit BOTH copies together; nothing enforces the sync but

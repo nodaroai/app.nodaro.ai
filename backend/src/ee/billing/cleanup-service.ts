@@ -8,7 +8,7 @@ import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared"
  * R2 prefix under which the video-analysis worker writes its transient
  * intermediates (`<prefix>/<jobId>/{source.mp4,window-<k>.mp4,state.json}`).
  * The WRITER now lives in the private `@nodaroai/cloud-plugins` package
- * (`src/plugins/video-analysis/pipeline/state.ts`), which this public repo
+ * (in the plugin repo), which this public repo
  * cannot import — so this reaper carries its own copy of the literal.
  *
  * SYNC NOTE: keep this in lockstep with the plugin's `VIDEO_ANALYSIS_TMP_PREFIX`

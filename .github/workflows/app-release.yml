@@ -78,7 +78,7 @@ jobs:
           # ("sidebar margin", "HTML markup" subjects must not block a release);
           # MEASURED is case-sensitive (lowercase "measured duration" is benign).
           BAD=0
-          grep -nEi '\$[0-9]+(\.[0-9]+)?[[:space:]]*/[[:space:]]*[A-Za-z]|\$[0-9]+\.[0-9]+.*\$[0-9]+\.[0-9]+|at[-]cost|below cost|contracted rate' /tmp/notes.md && BAD=1
+          grep -nEi '\$[0-9]+(\.[0-9]+)?[[:space:]]*/[[:space:]]*[A-Za-z]|\$[0-9]+\.[0-9]+.*\$[0-9]+\.[0-9]+|at[-]cost|below[ -]cost|contracted rate|staging measurement|[0-9]+-run measurement' /tmp/notes.md && BAD=1
           grep -nE '\bMEASURED\b' /tmp/notes.md && BAD=1
           grep -nEi '\b(margin|markup|wholesale)\b' /tmp/notes.md | grep -Ei '\$|cost|credit|provider|price|rate|billing' && BAD=1
           if [ "$BAD" = "1" ]; then

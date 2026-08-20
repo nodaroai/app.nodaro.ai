@@ -83,7 +83,7 @@ const SYMBOLS = [
   // video-analysis: the whole node implementation (route + windowed multimodal
   // LLM handler + segmentation/merge/checkpoint pipeline + prompt builders +
   // the analysis doctrine) moved to @nodaroai/cloud-plugins
-  // (src/plugins/video-analysis/). This repo keeps ONLY the public wire
+  // (in the plugin repo). This repo keeps ONLY the public wire
   // contract (@nodaro/shared schemas/pricing), the node UI, the orchestration
   // glue keyed on the "video-analysis" node-type string, the MCP verb, and the
   // credit formula (lib/pricing/video-analysis-cost.ts — public by the

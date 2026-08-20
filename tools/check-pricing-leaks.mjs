@@ -64,6 +64,18 @@ const RATE_FIELD_PATTERN = /(input|output|price|rate|cost)\w*Per(M|Sec|Second|To
 const MEASURED_METHODOLOGY_PATTERN = /\bMEASURED\b/
 const LIVE_BILLING_PATTERN = /\blive\s+(\S+\s+)?billing\b/i
 
+// The "below <cost>" phrase (either spelling) — an explicit admission that a
+// price sat under
+// what the provider bills. Both spellings: the hyphenated form is the one the
+// v1.29.3 artifact audit found in THREE places (including the published
+// @nodaro/shared source) precisely because the earlier sweeps and gates only
+// wrote the spaced form.
+const BELOW_COST_PATTERN = /\bbelow[\s-]cost\b/i
+// Measurement METHODOLOGY, lowercase forms the all-caps MEASURED rule misses:
+// a staging/production measurement, "a 43-run measurement", "measured at 61
+// production jobs". How we derive rates is never-public even when the rate is not quoted.
+const MEASUREMENT_METHOD_PATTERN = /\b(staging|production)\s+measurement\b|\b\d+-run\s+measurement\b|\bmeasured\s+at\s+\d+\b/i
+
 // "markup" has zero legitimate non-pricing usage in this codebase (verified
 // at S5) — any occurrence is either the sanctioned creator-monetization
 // formula (ALLOWLIST below) or a genuine leak of Nodaro's own cost-markup
@@ -133,6 +145,8 @@ function isPricingRelevantLine(line, { skipBareMarkup = false } = {}) {
   if (RATE_FIELD_PATTERN.test(line)) return "per-unit rate field identifier (inputPricePerM-class, $-less)"
   if (MEASURED_METHODOLOGY_PATTERN.test(line)) return "measured-rate methodology marker (all-caps MEASURED)"
   if (LIVE_BILLING_PATTERN.test(line)) return "\"live ... billing\" methodology phrase"
+  if (BELOW_COST_PATTERN.test(line)) return "under-cost admission (the \"below <cost>\" phrase, either spelling)"
+  if (MEASUREMENT_METHOD_PATTERN.test(line)) return "measurement-methodology phrase (staging/N-run/measured-at-N)"
   // Bare "markup" is a leak marker only where the word has zero legitimate use
   // (packages/*, changelogs). Migrations legitimately carry the SANCTIONED
   // mechanism — cost_markup_percent, p_markup_amount, "0% markup" notes — so
