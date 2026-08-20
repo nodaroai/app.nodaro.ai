@@ -2,8 +2,8 @@
 -- lever (768P | 2K, default 2K) to all three endpoints (text/image/reference-
 -- to-video) per docs.kie.ai/market/minimax-h3, verified 2026-08-03.
 -- KIE rates: 2K = 36.5 KIE cr/s (unchanged — the existing bare duration rows
--- from migration 298 stay the 2K tier), 768P = 22.5 KIE cr/s. Formula (at
--- cost, like Seedance-2 and the 2K rows):
+-- from migration 298 stay the 2K tier), 768P = 22.5 KIE cr/s. Formula (same
+-- conversion as Seedance-2 and the 2K rows):
 --   Nodaro credits = ceil(22.5 × duration / 4) × 10
 -- Reference-video runs bill unit × (input + output) seconds AT THE SELECTED
 -- resolution's rate, and input images beyond the first 5 add 11 KIE cr (27.5

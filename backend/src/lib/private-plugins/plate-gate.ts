@@ -12,9 +12,9 @@
  *                 (Topaz `topaz-image-upscale` is factor-based — see
  *                 providers/kie/models.ts `upscale_factor: "2"`).
  *   2. alignment: the result downscaled back to source size must match the
- *                 source at >= PLATE_ALIGN_MIN_PSNR_DB (probe evidence: real
- *                 Topaz plates score 40-44 dB; any crop/shift collapses well
- *                 below 30).
+ *                 source at >= PLATE_ALIGN_MIN_PSNR_DB — a real 2x upscale
+ *                 round-trips comfortably above the floor, while any crop or
+ *                 shift collapses well below it.
  *
  * Pure buffer-in verification — the toolkit wrapper owns fetching/hosting.
  */

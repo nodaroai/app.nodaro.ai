@@ -1,6 +1,6 @@
 /**
  * The version engine (the versioning spec in the
- * plan repo): bumps derive from conventional commits so no human has to
+ * versioning spec): bumps derive from conventional commits so no human has to
  * remember — package.json sat at 1.23.0 for six months while 5,882 commits
  * shipped. Pure-function coverage; the git plumbing is exercised by the
  * release workflow itself.

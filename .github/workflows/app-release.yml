@@ -1,5 +1,5 @@
 # App release: automatic semver from conventional commits (spec:
-# plan repo specs/2026-08-19-community-versioning-updates.md).
+# the versioning spec).
 #
 # Why a TAG and not a version-bump commit: a bot commit on main diverges dev
 # (the next dev→main PR conflicts on it), and a changesets-style bump PR lags

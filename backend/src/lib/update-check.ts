@@ -3,7 +3,7 @@ import { getAppVersion } from "./app-version.js"
 
 /**
  * "Is a newer release out?" — the backend half of the sidebar's red dot
- * (versioning spec, plan repo 2026-08-19).
+ * (versioning spec, 2026-08-19).
  *
  * Reads the PUBLIC mirror's releases and picks the newest `vX.Y.Z` tag.
  * NEVER `releases/latest`: the repo also hosts the npm package releases
