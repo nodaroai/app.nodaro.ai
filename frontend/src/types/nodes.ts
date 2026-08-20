@@ -3282,11 +3282,10 @@ export type CombineVideosData = {
    *  closest pair (drops the duplicated frame). Replaces the fixed trims
    *  when enabled. */
   smartCutEnabled?: boolean
-  /** Cut-point algorithm: "best-pair" (default — the single most-similar
-   *  pair) or a replay-diagonal preroll mode — keep-next cuts where the
-   *  next clip's re-enactment of the previous tail STARTS (the overlap
-   *  plays from the next clip), keep-prev where it ENDS (the previous
-   *  clip's original frames are kept). Windows + fallback are shared. */
+  /** Cut-point algorithm. `best-pair` is the default; the
+   *  preroll variants differ in which side of an overlap survives —
+   *  keep-next favors the incoming clip, keep-prev the outgoing one.
+   *  Windows and the fixed-trims fallback are shared by every mode. */
   smartCutMode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next"
   smartCutFramesPrev?: number
   smartCutFramesNext?: number

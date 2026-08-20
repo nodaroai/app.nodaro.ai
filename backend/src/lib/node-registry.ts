@@ -920,7 +920,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     capabilities: ["dual-output-handles", "vlm-based"],
   },
 
-  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos with transitions, audio handling, boundary trims, and PSNR smart cut (best-pair or replay-diagonal preroll modes).", outputType: "video", inputSchema: { fields: [
+  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos with transitions, audio handling, boundary trims, and smart cut.", outputType: "video", inputSchema: { fields: [
     { key: "videoUrls", type: "video-url-array", required: true },
     { key: "transition", type: "text" },
     { key: "transitionDuration", type: "number" },

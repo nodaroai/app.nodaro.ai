@@ -34,11 +34,10 @@ const combineVideosBody = z.object({
    *  M frames of the next and cut at the closest pair (replaces the fixed
    *  boundary trims). */
   smartCutEnabled: z.boolean().optional().default(false),
-  /** Cut-point algorithm: "best-pair" (default, the classic global-best
-   *  single-pair match) or a replay-diagonal preroll mode — keep-next cuts
-   *  at the detected replay's start (the overlap plays from the NEXT clip),
-   *  keep-prev at its end (the PREV clip's original frames are kept). All
-   *  modes share the windows below and the fixed-trims fallback. */
+  /** Cut-point algorithm. `best-pair` is the default; the
+   *  preroll variants differ in which side of an overlap survives —
+   *  keep-next favors the incoming clip, keep-prev the outgoing one.
+   *  Windows and the fixed-trims fallback are shared by every mode. */
   smartCutMode: z.enum(["best-pair", "preroll-keep-prev", "preroll-keep-next"]).optional().default("best-pair"),
   smartCutFramesPrev: z.number().int().min(1).max(24).optional().default(8),
   smartCutFramesNext: z.number().int().min(1).max(24).optional().default(8),
