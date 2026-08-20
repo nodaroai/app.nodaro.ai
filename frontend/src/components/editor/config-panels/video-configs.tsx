@@ -3660,9 +3660,8 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fail-safe (CLAUDE.md pitfall 5 pattern): the preroll smart-cut modes model
-  // the LAST-FRAME transport's pixel replay diagonal — under a KEYFRAME overlap
-  // anchor the re-enactment is semantic (no pixel twins), so the engine gates
+  // Fail-safe (CLAUDE.md pitfall 5 pattern): the preroll smart-cut modes need
+  // the LAST-FRAME transport — under a KEYFRAME overlap anchor the engine gates
   // them off and warns. Snap a stale preroll value back to legacy so the panel
   // never shows a mode the run won't actually use.
   const keyframeAnchored = data.overlapAnchor === true && (data.overlapAnchorMode ?? "keyframe") === "keyframe"
@@ -4163,7 +4162,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </div>
       )}
 
-      {/* SMART-CUT AUDIO — gray-band rescue; only meaningful under a pre-roll mode. */}
+      {/* SMART-CUT AUDIO — only meaningful under a pre-roll mode. */}
       {(data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next") && (
         <div className="flex items-center gap-2 px-1">
           <input

@@ -34,11 +34,9 @@ interface CombineOptions {
     readonly enabled: boolean
     readonly framesFromPrev: number
     readonly framesFromNext: number
-    /** Cut-point ALGORITHM (default "best-pair" — the classic single-pair
-     *  argmax, byte-identical to pre-mode behavior). The preroll modes
-     *  detect the replay DIAGONAL continuation clips carry and cut at the
-     *  run's start (keep-next) or end (keep-prev) — see smart-cut.ts. Same
-     *  windows, same matched:false → fixed-trims fallback in every mode. */
+    /** Cut-point algorithm — see smart-cut.ts. `best-pair` is the default
+     *  and is byte-identical to pre-mode behavior. Same windows, same
+     *  matched:false → fixed-trims fallback in every mode. */
     readonly mode?: SmartCutMode
     /** Per-boundary override (length = clips − 1). When present, boundary k
      *  runs the PSNR matcher ONLY if `boundaryMask[k]` is true; a false entry

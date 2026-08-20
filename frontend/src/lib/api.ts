@@ -3042,8 +3042,7 @@ export async function combineVideos(
   smartCutEnabled?: boolean,
   smartCutFramesPrev?: number,
   smartCutFramesNext?: number,
-  /** Cut-point algorithm — "best-pair" (default) or a replay-diagonal
-   *  preroll mode; only consulted when smartCutEnabled. */
+  /** Cut-point algorithm; only consulted when smartCutEnabled. */
   smartCutMode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next",
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }

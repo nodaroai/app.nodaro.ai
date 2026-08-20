@@ -782,7 +782,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           ),
         smart_cut_mode: z.enum(["best-pair", "preroll-keep-prev", "preroll-keep-next"]).optional()
           .describe(
-            "Smart-cut cut-point algorithm (default 'best-pair': the classic single most-similar pair). The preroll modes detect the replay DIAGONAL continuation clips carry (the next clip re-enacting the previous clip's last frames) and cut at the replay's start ('preroll-keep-next': the overlap plays from the next clip) or end ('preroll-keep-prev': the previous clip's original frames are kept). Same search windows and fixed-trims fallback in every mode.",
+            "Smart-cut cut-point algorithm. Default 'best-pair'. The preroll variants differ in which side of an overlap survives: 'preroll-keep-next' favors the incoming clip, 'preroll-keep-prev' the outgoing one. Same search windows and fixed-trims fallback in every mode.",
           ),
         smart_cut_frames_prev: z.number().int().min(1).max(24).optional()
           .describe("Smart-cut search window at each clip's END (frames, default 8)"),

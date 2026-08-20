@@ -143,7 +143,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `assemble-narrated-video` | Assemble Narrated Video | processing | Fit N ordered (clip, voice) blocks into one MP4: center short voice, slow-to-fit long voice, never crop audio | `video`:video, `audio`:audio | `video`:video | NO |
 | `audio-fx` | Audio FX | processing | Apply creative audio effects (FFmpeg) — scenario reverbs (Room, Bathroom, Car, Hall, Concert Hall, Church, Cave, Arena, Outdoor), Telephone, Megaphone, Echo, or Custom (delay + EQ) | `in`:audio | `audio`:audio | NO |
 | `combine-audio` | Combine Audio | processing | Concatenate audio tracks end-to-end in order, with optional per-segment trim | `in`:audio | `audio`:audio | NO |
-| `combine-videos` | Combine Videos | processing | Concatenate multiple videos with transitions, audio handling, boundary trims, and PSNR smart cut (best-pair or replay-diagonal preroll modes) | `in`:video | `video`:video | NO |
+| `combine-videos` | Combine Videos | processing | Concatenate multiple videos with transitions, audio handling, boundary trims, and smart cut | `in`:video | `video`:video | NO |
 | `composite` | Composite | processing | Multi-layer video compositor (up to 4 layers) with per-layer positioning, scale, blending, and opacity | `video1`:video, `video2`:video, `video3`:video, `video4`:video | `composition`:composition | NO |
 | `extract-audio` | Extract Audio | processing | Demux the audio track from a video to a standalone MP3 | `in`:video | `audio`:audio | NO |
 | `extract-frame` | Extract Frame | processing | Extract a single frame as an image | `in`:video | `image`:image | NO |
