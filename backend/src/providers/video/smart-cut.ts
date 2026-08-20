@@ -1,7 +1,6 @@
 /**
  * Smart cut — TYPES + matcher REGISTRY only. The boundary-matching
- * ALGORITHMS (the "best-pair" argmax and the replay-diagonal preroll
- * modes) are Nodaro Cloud IP: they live in the private plugins package
+ * ALGORITHMS are Nodaro Cloud IP: they live in the private plugins package
  * (`engines.smartCut`) and register here at worker boot
  * (`workers/video-worker.ts`, right where `engines.surround` is consumed).
  *
@@ -14,12 +13,10 @@
  * available in every edition.
  */
 
-/** Cut-point ALGORITHM: "best-pair" (default — the single most-similar
- *  pair) or a replay-diagonal preroll mode — keep-next cuts where the next
- *  clip's re-enactment of the previous tail STARTS (the overlap plays from
- *  the next clip), keep-prev where it ENDS (the previous clip's original
- *  frames are kept). Same windows and matched:false → fixed-trims fallback
- *  in every mode. */
+/** Cut-point algorithm to use. `best-pair` is the default; the preroll
+ *  variants differ in which side of an overlap survives — keep-next favors
+ *  the incoming clip, keep-prev the outgoing one. Same windows, and the
+ *  same matched:false → fixed-trims fallback, in every mode. */
 export type SmartCutMode = "best-pair" | "preroll-keep-prev" | "preroll-keep-next"
 
 export interface SmartCutBoundary {
@@ -30,8 +27,8 @@ export interface SmartCutBoundary {
   /** Frames to drop from the START of the next clip — the matched twin is
    *  dropped too, so this is ≥ 1 whenever matched. */
   readonly trimStartFrames: number
-  /** PSNR (dB) of the best pair found. >30 ≈ visually identical,
-   *  Infinity = pixel-identical, <20 ≈ unrelated frames. */
+  /** Similarity score for the chosen cut, in dB. Higher is a closer
+   *  match; Infinity means the frames are identical. */
   readonly psnr: number
   /** True → apply the trims. False = no genuine match; the trims here are
    *  informational and the caller should use its fixed/default trims. */

@@ -164,7 +164,7 @@
 - 5d66f2a: Add `video-audit` pricing for the new AI Audit node: `VIDEO_AUDIT_BUCKET_CREDITS` (both credit families — `video-audit` and `video-audit:auto`), the `buildVideoAuditCreditId` / `videoAuditCreditsForBucket` / `bucketSecondsFromAuditCreditId` helpers, and model-catalog rows (`AI Audit` / `AI Audit (with analysis run)`).
 - 18d9cde: video-analysis bucket reprice — hybrid smart plan + measured judge/refine terms
 
-  Every `VIDEO_ANALYSIS_BUCKET_CREDITS` row rises. `smart` is now a hybrid plan (one native 6fps skeleton pass plus 2 fast + 2 pro donor rolls, always refined — `selectionMode` no longer applies to it), and every multi-roll tier now carries its own explicit judge/refine terms instead of an implicit share of a single-pass budget. The economy tiers rise too (`fast` 33 -> 185 credits @180s).
+  Every `VIDEO_ANALYSIS_BUCKET_CREDITS` row rises. `smart` is now a multi-roll plan that always refines its merged result (`selectionMode` no longer applies to it), and every multi-roll tier now carries its own explicit judge/refine terms instead of an implicit share of a single-pass budget. The economy tiers rise too (`fast` 33 -> 185 credits @180s).
 
 - c19c3ad: Video-analysis mixed family reprice: `mixed`/`mixed-fast` now run the cross-scene continuity review (previously smart-only) and the bucket table rises a flat +40 credits per bucket (268/289/724/1169 @60/180/360/600s).
 

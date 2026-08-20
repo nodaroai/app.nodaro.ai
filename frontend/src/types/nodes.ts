@@ -1967,17 +1967,14 @@ export interface GenerateVideoProNodeData {
    *  default) or the very last frame (no re-enactment). */
   overlapAnchorMode?: "keyframe" | "last-frame"
   /** Smart-cut mode (experimental A/B, last-frame overlap): "legacy-8x8"
-   *  (default) or a pre-roll-aware diagonal cut — keep-next (seam in the
-   *  overlap) / keep-prev (keep prev's original). */
+   *  (default), or a pre-roll-aware variant favoring the incoming
+   *  (keep-next) or outgoing (keep-prev) clip. */
   smartCutMode?: "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next"
-  /** Ride the audio-resemble channel in the pre-roll cut (gray-band rescue). */
+  /** Use the audio track as an additional matching signal in the pre-roll cut. */
   smartCutAudio?: boolean
-  /** Best-pair search windows: how many frames from the END of the previous
-   *  segment and the START of the next the PSNR matcher compares. Absent =
-   *  the engine's 8/8 default (byte-identical to before these existed).
-   *  Wider windows catch a continuation that re-enacts a longer tail —
-   *  recast pins 24/24 for exactly that. Applies to the best-pair
-   *  ("legacy-8x8") mode; the pre-roll modes run their own diagonal search. */
+  /** Search windows: how many frames on each side of a boundary the engine
+   *  considers when placing the cut. Absent = the engine's default
+   *  (byte-identical to before these existed); recast pins 24/24. */
   smartCutFramesPrev?: number
   smartCutFramesNext?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"

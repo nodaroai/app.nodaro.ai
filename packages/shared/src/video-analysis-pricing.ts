@@ -70,11 +70,10 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // generator. This is the V1 true-up of the earlier provisional
 // judge/refine/frame-judge constants (the constants themselves, like the rest
 // of the formula, stay private in the plugin repo — never in this public
-// package). `smart` is now
-// a HYBRID plan — one native 6fps skeleton pass plus 2 fast + 2 pro donor
-// rolls, always refined (`selectionMode` does not apply to `smart`; it always
-// refines) — and every multi-roll tier now carries its own explicit
-// judge/refine terms instead of an implicit share of a single-pass budget.
+// package). `smart` is now a multi-roll plan that always refines its merged
+// result (`selectionMode` does not apply to it), and every multi-roll tier
+// now carries its own explicit judge/refine terms instead of an implicit
+// share of a single-pass budget.
 // The economy tiers rise too (fast 33->185 @180s).
 // Net effect, per bucket (every row rises):
 //
@@ -110,9 +109,8 @@ export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   "video-analysis:mixed:180s": 289,
   "video-analysis:mixed:360s": 724,
   "video-analysis:mixed:600s": 1169,
-  // SMART — the accuracy tier, and since the 2026-08-03 hybrid re-plan a
-  // multi-roll plan like the others: one native 6fps skeleton pass plus 2
-  // fast + 2 pro donor rolls, always refined (`selectionMode` does not apply
+  // SMART — the accuracy tier, and since the 2026-08-03 re-plan a multi-roll
+  // plan like the others, always refined (`selectionMode` does not apply
   // here — smart always refines; it never offers a cheaper "choose" path).
   // Priced above the economy tiers because it genuinely costs more to run;
   // the only tier whose accuracy is validated against a hand-counted edit
@@ -186,7 +184,7 @@ export function videoAnalysisNumWindows(bucketSec: number): number {
  * `buildVideoAnalysisCreditId`.
  *
  * Values pasted verbatim from the plugin generator's output
- * (`scripts/gen-va-buckets.mjs`) at `@nodaroai/cloud-plugins` v0.102.0 —
+ * (the plugin repo's bucket generator) —
  * never hand computed. The plugin's cost test cross-checks every row.
  */
 export const VIDEO_AUDIT_BUCKET_CREDITS: Record<string, number> = {

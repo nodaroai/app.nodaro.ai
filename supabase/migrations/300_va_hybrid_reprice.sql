@@ -2,11 +2,10 @@
 --
 -- V1 true-up of the earlier provisional judge/refine/frame-judge constants
 -- (the formula and its constants stay private in the cloud-plugins repo,
--- never in this app repo or its public package). `smart` is now a
--- HYBRID plan — one native 6fps skeleton pass plus 2 fast + 2 pro donor
--- rolls, always refined (`selectionMode` does not apply to `smart`; it
--- always refines) — and every multi-roll tier now carries its own explicit
--- judge/refine terms instead of an implicit share of a single-pass budget.
+-- never in this app repo or its public package). `smart` is now a multi-roll
+-- plan that always refines its merged result (`selectionMode` does not apply
+-- to it), and every multi-roll tier now carries its own explicit judge/refine
+-- terms instead of an implicit share of a single-pass budget.
 -- The economy tiers rise too: `fast` 33 -> 185 @180s.
 --
 -- Net effect, per bucket (every row rises):

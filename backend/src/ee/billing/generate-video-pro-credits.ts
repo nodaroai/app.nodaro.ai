@@ -146,8 +146,7 @@ const ANCHORS_PER_SEGMENT = 2
  * base model's documented `aspectRatios`, never a hand-kept ratio list, so
  * widening GPT Image 2 moves price and generation together.
  *
- * TWIN: `resolveAnchorModel` in the plugin repo's
- * `plugins/generate-video-pro/engine/keyframes.ts` — same predicate, same
+ * TWIN: the anchor-model resolver in the plugin repo — same predicate, same
  * fallback, and the plugin resolves `"adaptive"`/absent to `"16:9"` before
  * sending. A mismatch is a mispriced run, so keep them in lock-step.
  *

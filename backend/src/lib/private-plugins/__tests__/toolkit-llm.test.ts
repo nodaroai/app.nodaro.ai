@@ -5,9 +5,8 @@
  * History (2026-07-27): `PluginLlmMultimodalRequest` grew `temperature`/`topP`
  * but never `reasoningEffort`, while its text-only sibling had carried one all
  * along. The omission was invisible — no type error, no runtime error, just
- * every video-analysis roll silently riding the vendor default. Measured on the
- * real transport: `low` = 0 thinking tokens, unset = ~4.1k, `high` = ~4.7k,
- * with entity-slot recall 33% / 40% / 90% respectively.
+ * every video-analysis roll silently riding the vendor default, at a
+ * measurable cost to recall.
  *
  * The failure mode is a field that EXISTS on the contract and is DROPPED by the
  * adapter, so these tests assert the forwarded object key-by-key rather than
