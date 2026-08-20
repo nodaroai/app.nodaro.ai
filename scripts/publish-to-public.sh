@@ -26,6 +26,7 @@ node tools/check-private-leaks.mjs
 node tools/check-pricing-leaks.mjs
 node tools/check-ee-imports.mjs
 node tools/check-billing-dumps.mjs
+node tools/check-public-surface.mjs
 if command -v gitleaks >/dev/null; then
   # Scoped to THIS branch's history, not the default --all refs. The gate's
   # contract is "nothing secret reaches public", and only $BRANCH is being

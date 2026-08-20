@@ -5,7 +5,7 @@
  * model_pricing): basis classification, provider-$ authority, old credits,
  * new credits at the target base, delta vs mechanical x10, and flags.
  *
- * Policy (adjudicated 2026-07-30, plan repo A2-adjudications.md):
+ * Policy (adjudicated 2026-07-30):
  *   - public identifiers re-derive to the base value at the new base
  *   - platform-compute (FFmpeg/utility) keeps the same $ (x10 credits)
  *   - worst-case reserve ceilings keep the same $ (x10) — they are holds,

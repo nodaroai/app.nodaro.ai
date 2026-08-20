@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-command backup of a community compose install (versioning spec,
-# plan repo 2026-08-19). Produces a single tar.gz holding everything the
+# versioning spec, 2026-08-19). Produces a single tar.gz holding everything the
 # stack cannot regenerate:
 #
 #   db.dump           - Postgres (pg_dump custom format: workflows, users,

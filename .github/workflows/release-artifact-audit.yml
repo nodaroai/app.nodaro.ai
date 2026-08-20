@@ -1,0 +1,102 @@
+# Audits the ARTIFACT people actually download, not the tree we think we shipped.
+#
+# Every earlier check runs against a working tree on a branch. The thing users
+# get is the tarball GitHub builds from a tag on the PUBLIC mirror, and four
+# consecutive manual audits of that tarball each found content the tree-side
+# checks had passed. The difference was never the content — it was that nobody
+# re-ran the checks against the published bytes.
+#
+# So: download the published tarball for the newest public release, unpack it,
+# and run the leak checks inside it. A failure here means something reached the
+# public artifact, which is the only place that ultimately matters.
+name: release-artifact-audit
+on:
+  schedule:
+    - cron: '17 5 * * *'    # daily, after the nightly mirror
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to audit (default: newest vX.Y.Z on the mirror)'
+        required: false
+permissions: { contents: read, issues: write }
+concurrency:
+  group: release-artifact-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+
+      - name: Resolve the tag to audit
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED:-}" ]; then
+            TAG="$REQUESTED"
+          else
+            # Newest vX.Y.Z on the PUBLIC mirror — npm package releases share the
+            # repo and must not be picked up, hence the strict filter.
+            TAG=$(gh api "repos/nodaroai/app.nodaro.ai/releases?per_page=30" \
+              --jq '[.[] | select(.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | .[0].tag_name')
+          fi
+          [ -n "$TAG" ] || { echo "::error::could not resolve a release tag to audit"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "auditing $TAG"
+
+      - name: Download and unpack the published tarball
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/artifact
+          curl -fsSL "https://github.com/nodaroai/app.nodaro.ai/archive/refs/tags/${TAG}.tar.gz" -o /tmp/artifact.tgz
+          tar -xzf /tmp/artifact.tgz -C /tmp/artifact
+          ROOT=$(find /tmp/artifact -maxdepth 1 -mindepth 1 -type d | head -1)
+          echo "ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "unpacked $(find "$ROOT" -type f | wc -l) files"
+
+      - name: Run the leak checks INSIDE the published artifact
+        env:
+          # The symbol deny-list is secret-held; without it that one check skips
+          # loudly rather than passing silently, so require it here.
+          PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
+          PRIVATE_LEAK_REQUIRE_SYMBOLS: "1"
+        run: |
+          set -euo pipefail
+          cd "$ARTIFACT_ROOT"
+          # The checks read `git ls-files`; a tarball has no git metadata, so
+          # give it one whose index is exactly the shipped file set.
+          git init -q && git add -A
+          FAIL=0
+          for check in check-public-surface check-pricing-leaks check-billing-dumps check-private-leaks check-ee-imports; do
+            echo "── $check"
+            node "tools/${check}.mjs" || FAIL=1
+          done
+          exit $FAIL
+
+      - name: Open an issue when the published artifact is dirty
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create artifact-audit --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "published release artifact failed the leak audit" --force 2>/dev/null || true
+          OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label artifact-audit --state open --json number --jq '.[0].number // empty')
+          BODY=$(printf 'The published artifact for **%s** failed the leak checks: %s\n\nThis is the tarball users download, so treat the content as disclosed and fix forward — old tags cannot be rewritten. Close this once a later release audits clean.' "$TAG" "$RUN_URL")
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label artifact-audit \
+              --title "Published release artifact failed the leak audit ($TAG)" --body "$BODY"
+          fi
