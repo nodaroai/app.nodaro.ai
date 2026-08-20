@@ -60,7 +60,7 @@ const STATIC_STYLE_FONT_DEFAULT = 32
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
   // Fail-safe (CLAUDE.md pitfall-5 pattern): the manual trim fields are
-  // HIDDEN under the smart methods (Tal, 2026-07-24 — manual and smart are
+  // HIDDEN under the smart methods (2026-07-24 — manual and smart are
   // ALTERNATIVE boundary-cut methods, not layers), so custom manual values
   // lingering from older workflows would invisibly steer the
   // unmatched-boundary fallback. Clear them — the backend's documented
@@ -163,7 +163,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         )}
       </div>
 
-      {/* BOUNDARY CUT METHOD (Tal, 2026-07-24): ONE selector so Manual and
+      {/* BOUNDARY CUT METHOD (2026-07-24): ONE selector so Manual and
           the smart algorithms read as ALTERNATIVES, not layers. Manual =
           exact frame trims (available in every edition). The smart methods
           are Cloud-only (the algorithms live in the private plugins

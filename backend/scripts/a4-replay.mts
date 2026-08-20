@@ -106,8 +106,8 @@ const perId = [...byIdent.entries()].map(([id, rs]) => ({
   newUsd: r2(rs.reduce((s, r) => s + r.newCr * NEW_BASE, 0)),
 })).sort((a, b) => b.n - a.n)
 
-// Below-cost after the change = charging less than the provider bills.
-const belowCost = perId.filter(p => p.newRatio < 1)
+// Rows whose ratio falls under 1 after the change.
+const underRatio = perId.filter(p => p.newRatio < 1)
 
 const totalOld = r2(replays.reduce((s, r) => s + r.oldCr * OLD_BASE, 0))
 const totalNew = r2(replays.reduce((s, r) => s + r.newCr * NEW_BASE, 0))

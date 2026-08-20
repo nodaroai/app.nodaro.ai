@@ -1864,7 +1864,7 @@ export type GenerateVideoNodeData =
 
 /** Content-policy rewrite disclosure entry (Task A4, 2026-08-03). Mirrors the
  *  plugin repo's `ContentPolicyRewriteEntry` shape byte-for-byte
- *  (`src/plugins/generate-video-pro/engine/content-policy.ts`) — duplicated
+ *  (in the plugin repo) — duplicated
  *  here rather than imported (no cross-repo type sharing), same as the two
  *  independently-maintained rewrite system prompts. */
 export type ContentPolicyRewriteEntry = { segment: number; original: string; rewritten: string }

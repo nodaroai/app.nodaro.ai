@@ -62,7 +62,7 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 // The credit numbers ARE the precomputed VIDEO_ANALYSIS_BUCKET_CREDITS table in
 // @nodaro/shared (the public prices). The $-derived formula + measured-rate
 // constants that GENERATE them are private, in @nodaroai/cloud-plugins
-// (src/plugins/video-analysis/cost.ts), with a CI cross-check against this same
+// (in the plugin repo), with a CI cross-check against this same
 // shared table so the numbers can't silently drift.
 // Per model: a bare id `video-analysis:<model>` (= the 600s unknown-duration
 // ceiling) + one composite per bucket `video-analysis:<model>:<bucket>s`.

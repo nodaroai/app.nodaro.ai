@@ -1,8 +1,7 @@
 /**
  * smart-cut tests — the matcher REGISTRY only. The boundary-matching
- * ALGORITHMS moved to the private plugins package (2026-07-24, Tal: "it is
- * important that the smart algorithm will stay private"); their tests live
- * there (`src/plugins/smart-cut/__tests__/`). What stays public — and
+ * ALGORITHMS moved to the private plugins package (2026-07-24 — the smart
+ * algorithm stays proprietary); their tests live there. What stays public — and
  * tested here — is the registration seam `combineVideos` resolves through,
  * and the degrade contract when no engine is present.
  */

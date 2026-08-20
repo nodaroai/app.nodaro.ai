@@ -274,9 +274,8 @@ describe("runSceneDirector", () => {
   it("passes the registry-resolved system prompt (for the sceneDirector key) to callLLM", async () => {
     // The Method 3/8/10 mode-selection heuristic + provider-availability
     // caveat doctrine text this test used to pin byte-for-byte now lives in
-    // the plugin repo (S9 move) — ported there as
-    // nodaro-cloud-plugins/src/plugins/film-studio-prompts/__tests__/
-    // doctrine-content.test.ts's 11-assertion scene-director check. Here we
+    // the plugin repo (S9 move) — ported there as that repo's own
+    // 11-assertion scene-director doctrine check. Here we
     // assert the WIRING instead: the exact string the registry holds for
     // PIPELINE_PROMPT_KEYS.sceneDirector flows through to callLLM unmodified.
     ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({

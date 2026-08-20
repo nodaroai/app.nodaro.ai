@@ -53,8 +53,8 @@ export function __resetPipelinePromptRegistryForTests(): void {
 
 /**
  * Single source of truth for registry keys — both repos import/mirror this
- * list (app side: this file; plugin side: src/plugins/film-studio-prompts/
- * prompt-keys.ts, hand-synced like contract.ts). Prevents typo drift between
+ * list (app side: this file; plugin side: its counterpart there,
+ * hand-synced like contract.ts). Prevents typo drift between
  * the 25 `getPipelinePrompt(...)` call sites and the plugin's `prompts()`
  * export — a key that exists on only one side fails loudly (unavailable
  * error / dead key) rather than silently.

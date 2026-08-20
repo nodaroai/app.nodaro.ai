@@ -9,14 +9,12 @@
  * `buildVideoAnalysisCreditId` + `/v1/credits/model-cost`) all derive from
  * these.
  *
- * The measured-rate constants and the $-derived `videoAnalysisBucketCredits`
- * formula that GENERATE these numbers live PRIVATELY in the
- * `@nodaroai/cloud-plugins` package (`src/plugins/video-analysis/cost.ts`) —
- * never in this public repo. They were first moved out of this package
- * (published Apache-2.0 on npm) per the 2026-07-06 public-flip IP audit S5,
- * then out of the app repo entirely alongside the rest of the video-analysis
- * node. A cross-check test in that private package guards this table so the
- * public numbers can't silently drift from the formula.
+ * The rate constants and the formula that GENERATE these numbers live
+ * PRIVATELY in the `@nodaroai/cloud-plugins` package — never in this public
+ * repo. They were first moved out of this package (published Apache-2.0 on
+ * npm), then out of the app repo entirely alongside the rest of the
+ * video-analysis node. A cross-check test in that private package guards
+ * this table so the public numbers can't silently drift from the formula.
  *
  * `VIDEO_ANALYSIS_BUCKET_CREDITS` below is the precomputed OUTPUT of that
  * private formula for every (model × bucket) combination — a plain credit
@@ -24,9 +22,8 @@
  * `VIDEO_CLIP_CREDITS` uses in `film-pricing.ts`. It is what the frontend's
  * client-side cost preview (`estimateNodeCredits` in
  * workflow-editor/types.ts) reads instead of calling the formula directly.
- * The formula's own test in `@nodaroai/cloud-plugins`
- * (`src/plugins/video-analysis/__tests__/cost.test.ts`) cross-checks this table
- * against it and fails on drift. There is deliberately NO app-side formula to
+ * The formula's own test in `@nodaroai/cloud-plugins` cross-checks this
+ * table against it and fails on drift. There is deliberately NO app-side formula to
  * check against — it was moved private in 2026-07 and the old backend test
  * went with it.
  *
@@ -65,27 +62,21 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // not 110). The plugin's cost test now covers sentinels as well, so this class
 // of drift fails CI instead of shipping.
 // REGENERATED 2026-07-31 with the smart-tier re-base (formula inputs moved in
-// the plugin: sampling 24→6 fps after a 43-run measurement found 6 equal on
-// content and strictly better on cast stability; the system-prompt and
-// per-window output-token constants trued-up to directly measured values).
-// Net effect: smart drops 27–47% per bucket — the 24 fps token spend was also
-// partly paying for media tokens the provider clamped and never counted — and
-// the economy rows tick up 3–6% from the prompt-token true-up.
+// the plugin: sampling 24→6 fps, which proved equal on content and better on
+// cast stability; system-prompt and per-window output-token constants updated).
+// Net effect: smart drops 27–47% per bucket, and the economy rows tick up 3–6%.
 //
-// REGENERATED 2026-08-03 — V1 hybrid-smart reprice (task A3), from the
-// plugin's own generator (`scripts/gen-va-buckets.mjs`) at
-// nodaroai/nodaro-cloud-plugins commit eef077d (branch fix/va-cost-trueup).
-// This is the V1 true-up of task P6's provisional judge/refine/frame-judge
-// constants, re-derived from a 2026-08-03 staging measurement and approved by
-// Tal (the constants themselves, like the rest of the $-derived formula, stay
-// private in the plugin repo — never in this public package). `smart` is now
+// REGENERATED 2026-08-03 — V1 hybrid-smart reprice, from the plugin's own
+// generator. This is the V1 true-up of the earlier provisional
+// judge/refine/frame-judge constants (the constants themselves, like the rest
+// of the formula, stay private in the plugin repo — never in this public
+// package). `smart` is now
 // a HYBRID plan — one native 6fps skeleton pass plus 2 fast + 2 pro donor
 // rolls, always refined (`selectionMode` does not apply to `smart`; it always
 // refines) — and every multi-roll tier now carries its own explicit
 // judge/refine terms instead of an implicit share of a single-pass budget.
-// This is the full, honest reprice Tal approved, including the economy tiers
-// (fast 33->185 @180s ends a below-cost combine exposure that existed at the
-// old price). Net effect, per bucket (every row rises):
+// The economy tiers rise too (fast 33->185 @180s).
+// Net effect, per bucket (every row rises):
 //
 //   gemini-3-flash    60s   24->180   180s   33->185   360s   86-> 514   600s  143-> 846
 //   gemini-3.6-flash  60s   65->203   180s   92->218   360s  237-> 598   600s  395-> 986
@@ -168,7 +159,7 @@ export function videoAnalysisNumWindows(bucketSec: number): number {
  * Precomputed credit cost for the `video-audit` node ("AI Audit") — the same
  * pattern as `VIDEO_ANALYSIS_BUCKET_CREDITS` above: the OUTPUT of the private
  * `videoAuditBucketCredits` formula in `@nodaroai/cloud-plugins`
- * (`src/plugins/video-analysis/cost.ts`), a plain lookup table never a
+ * (in the plugin repo), a plain lookup table never a
  * formula, cross-checked against that package's own cost test. Shares the
  * SAME duration-bucket ladder as video-analysis (`VIDEO_ANALYSIS_DURATION_BUCKETS`
  * / `pickVideoAnalysisBucket`) — the audit re-watches the same clip, so it

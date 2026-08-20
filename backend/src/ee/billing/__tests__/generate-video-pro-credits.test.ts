@@ -133,7 +133,7 @@ describe("computeGenerateVideoProPricing — golden table (seedance-2 @ 720p unl
     })
     expect(r4.tailSec).toBe(4)
     expect(r4.reserveBase).toBe(2013)
-    // Window raised to [2,15] (Tal 2026-07-22): 9 now passes through unclamped.
+    // Window raised to [2,15] (2026-07-22): 9 now passes through unclamped.
     const r9 = await computeGenerateVideoProPricing({
       provider: "seedance-2", resolution: "720p", durationSec: 16, tailSec: 9,
     })
