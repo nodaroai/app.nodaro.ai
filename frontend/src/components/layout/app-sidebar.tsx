@@ -214,10 +214,11 @@ export function AppSidebar({
   const [mounted, setMounted] = useState(false)
   const updateInfo = useUpdateCheck()
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
-  // Cloud "what's new" (founder request 2026-08-19): the same dialog minus
-  // the backup/upgrade steps. Auto-opens ONCE per release — except on a
-  // browser's very first visit, where it only stamps (a brand-new user has
-  // no "new" to catch up on). hasCredits() is build-constant, so the two
+  // Cloud "what's new": the same dialog minus the backup/upgrade steps.
+  // It NEVER opens on its own — interrupting someone who just came to work
+  // with a changelog they did not ask for is an annoyance, not a feature
+  // (founder, 2026-08-20). A new release only lights the version label; the
+  // dialog opens on click. hasCredits() is build-constant, so the two
   // branches below are stable per build.
   const whatsNewMode = hasCredits()
   // The label prefers the SERVER-resolved version: on cloud the frontend
@@ -226,13 +227,29 @@ export function AppSidebar({
   // /v1/version resolves the deployed SHA to its release tag server-side.
   const displayVersion = updateInfo?.current?.replace(/^v/, "") || APP_VERSION
   const latestVersion = updateInfo?.latest?.version
+  // Has this browser already SEEN this release's notes? Drives the quiet dot
+  // next to the version label — never an auto-open. A browser whose very
+  // first visit lands on a release starts "seen": a brand-new user has no
+  // catching up to do.
+  const [whatsNewSeen, setWhatsNewSeen] = useState(true)
   useEffect(() => {
     if (!whatsNewMode || !latestVersion) return
     const KEY = "nodaro-whatsnew-seen"
     const seen = localStorage.getItem(KEY)
-    if (seen === latestVersion) return
-    localStorage.setItem(KEY, latestVersion)
-    if (seen !== null) setUpdateDialogOpen(true)
+    if (seen === null) {
+      localStorage.setItem(KEY, latestVersion)
+      return
+    }
+    setWhatsNewSeen(seen === latestVersion)
+  }, [whatsNewMode, latestVersion])
+  const markWhatsNewSeen = useCallback(() => {
+    if (!whatsNewMode || !latestVersion) return
+    try {
+      localStorage.setItem("nodaro-whatsnew-seen", latestVersion)
+    } catch {
+      // storage blocked — the dot simply returns next load
+    }
+    setWhatsNewSeen(true)
   }, [whatsNewMode, latestVersion])
   const showVersionIndicator = whatsNewMode ? Boolean(updateInfo?.latest) : Boolean(updateInfo?.updateAvailable)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
@@ -699,17 +716,20 @@ export function AppSidebar({
             {!isCollapsed && <ThemeToggle />}
           </div>
 
-          {/* Version row (founder design 2026-08-19). Self-host: a RED dot
-              when a newer release exists — action needed. Cloud: the label is
-              always clickable when a release is known and opens the
-              "what's new" changelog (no dot: nothing to act on; the dialog
-              also auto-opens once per fresh release). The endpoint owns the
-              policy — updateAvailable is never true on cloud. */}
+          {/* Version row. Self-host: a RED dot when a newer release exists —
+              action needed. Cloud: the label is clickable whenever a release
+              is known and opens the "what's new" changelog; an unread release
+              gets a quiet accent dot, never a dialog that opens itself. The
+              endpoint owns the policy — updateAvailable is never true on
+              cloud. */}
           <div className="text-center">
             {showVersionIndicator ? (
               <button
                 type="button"
-                onClick={() => setUpdateDialogOpen(true)}
+                onClick={() => {
+                  markWhatsNewSeen()
+                  setUpdateDialogOpen(true)
+                }}
                 className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 title={
                   whatsNewMode
@@ -717,10 +737,14 @@ export function AppSidebar({
                     : `Update available: ${updateInfo?.latest?.version ?? ""}`
                 }
               >
-                {!whatsNewMode && (
+                {(whatsNewMode ? !whatsNewSeen : true) && (
                   <span
                     aria-hidden
-                    className="absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                    className={
+                      whatsNewMode
+                        ? "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
+                        : "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                    }
                   />
                 )}
                 <span className="underline decoration-dotted underline-offset-2">
