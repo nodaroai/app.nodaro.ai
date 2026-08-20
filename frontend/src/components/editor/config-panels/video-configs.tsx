@@ -3874,10 +3874,9 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="gvp-planner-model">Planner model</Label>
         {/* Placeholder MUST name the model the ENGINE actually defaults to when
-            plannerModel is unset — the default lives in the private planner
-            engine, not here (nothing on this path sends it). It moves to
-            claude-opus-5 with nodaro-cloud-plugins#119 + the CLOUD_PLUGINS_VERSION
-            bump; flip this string and the doc in the same PR, not before. */}
+            plannerModel is unset — that default lives engine-side, not here
+            (nothing on this path sends it). When the engine default changes,
+            flip this string and the doc in the same PR, not before. */}
         <Select value={data.plannerModel ?? "claude-opus-4.7"} onValueChange={(v) => onUpdate({ plannerModel: v })}>
           <SelectTrigger id="gvp-planner-model" className="h-9 text-sm">
             <SelectValue />

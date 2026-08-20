@@ -1543,9 +1543,8 @@ export const SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC = 1.8
  * credit formulas bill per continuation join. Clears the provider floor
  * above with margin while staying short enough to keep the model focused on
  * continuing the boundary motion instead of re-staging the whole clip.
- * Guarded ≥ floor by model-constants tests; the private-plugin twin
- * (nodaro-cloud-plugins chain.ts TAIL_SEC / bridge-math.ts MIN_REF) is
- * guarded by that repo's r2v-ref-floor.test.ts — keep the two in sync.
+ * Guarded ≥ floor by model-constants tests; the plugin repo carries a twin
+ * constant guarded by its own tests — keep the two in sync.
  */
 export const SEEDANCE_2_CONTINUATION_REF_SEC = 2
 

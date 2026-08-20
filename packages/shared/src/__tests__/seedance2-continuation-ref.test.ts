@@ -11,9 +11,8 @@ import {
  *  job dbf95612 — the original 1.0s tails made every generate-video-pro
  *  continuation segment fail deterministically). Everything this platform
  *  sends as a Seedance-2 video reference cuts SEEDANCE_2_CONTINUATION_REF_SEC
- *  seconds; do NOT "optimize" it back below the floor. The private-plugin
- *  twin constants (nodaro-cloud-plugins chain.ts TAIL_SEC / bridge-math.ts
- *  MIN_REF) are guarded by that repo's r2v-ref-floor.test.ts — keep in sync. */
+ *  seconds; do NOT "optimize" it back below the floor. The plugin repo
+ *  carries twin constants guarded by its own tests — keep the two in sync. */
 describe("seedance-2 continuation-reference floor (do not regress)", () => {
   it("the platform's continuation-ref length clears KIE's r2v minimum", () => {
     expect(SEEDANCE_2_CONTINUATION_REF_SEC).toBeGreaterThanOrEqual(SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC)

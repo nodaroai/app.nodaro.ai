@@ -256,11 +256,8 @@ export interface PluginProvidersToolkit {
   ): Promise<PluginVideoGenResult>
   /**
    * Mirrors `videoUpscale` (`providers/router.ts`) — Topaz/VEO video
-   * enhancement. Added for the gvp tail-restoration lever: upscaling a
-   * continuation tail before it rides as `@video_1` resets the boundary's
-   * detail loop (2026-08-02 arm-U probe: +76% through-clip detail at 480p).
-   * Returns the provider's hosted result URL; the caller re-hosts under its
-   * own deterministic key.
+   * enhancement. Returns the provider's hosted result URL; the caller
+   * re-hosts under its own deterministic key.
    */
   videoUpscale(
     videoUrl: string,
@@ -270,11 +267,9 @@ export interface PluginProvidersToolkit {
   /**
    * Mirrors `imageUpscale` (`toolkit.ts` composition over
    * `providers/router.ts#editImage`) — Topaz image enhancement at a FIXED 2x
-   * factor. Added for the gvp identity-plate lever (stage 3, 2026-08-02): the
-   * boundary anchor frame Topaz-2x'd rides as an extra "person identity" ref.
-   * The wrapper VERIFIES the result is the exact same frame (2x dims + pixel
-   * alignment, `plate-gate.ts`) and re-hosts the verified bytes on R2, so the
-   * returned URL is durable and gate-passed; a gate failure rejects.
+   * factor. The wrapper VERIFIES the result is the same frame (2x dims +
+   * pixel alignment, `plate-gate.ts`) and re-hosts the verified bytes on R2,
+   * so the returned URL is durable and gate-passed; a gate failure rejects.
    */
   imageUpscale(
     imageUrl: string,
@@ -1154,8 +1149,7 @@ export interface PluginLlmMultimodalRequest {
   /** Reasoning depth. Present on the text-only `PluginLlmRequest` since the
    *  toolkit's first version; its absence HERE meant a multimodal caller could
    *  never request thinking, silently riding the vendor default no matter what
-   *  it passed (video-analysis rolls, measured 2026-07-27: `low` = 0 thinking
-   *  tokens, unset = ~4.1k, `high` = ~4.7k, and slot recall 33% / 40% / 90%).
+   *  it passed — which measurably cost analysis quality on the rolls.
    *  Same loose-string rationale as the text variant — `effectiveReasoningEffort`
    *  ignores anything off the ladder, so an unknown value degrades to the vendor
    *  default rather than a 400. */
@@ -1176,10 +1170,10 @@ export interface PluginLlmMultimodalRequest {
    * tokens — the media fail-open guard. Additive-optional.
    *
    * Set it whenever this request carries media the answer depends on and the
-   * call may reach the proxied lane. Measured 2026-07-31: 3 of 7 KIE calls
-   * carrying a freshly-uploaded video reported prompt tokens equal to the
-   * system prompt alone and answered about a video that does not exist. Only
-   * the caller knows how much media it sent, so it supplies the floor —
+   * call may reach the proxied lane, where a call can silently lose its media
+   * and answer about a video it never saw — detectable because the reported
+   * prompt tokens come back at system-prompt size. Only the caller knows how
+   * much media it sent, so it supplies the floor —
    * typically `systemPromptTokens + durationSec * (a conservative
    * tokens-per-second)`. See `LlmRequest.minPromptTokens` in llm-client.ts.
    */

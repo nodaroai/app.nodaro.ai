@@ -9,7 +9,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, buildSurroundFillPrompt, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import { buildSurroundFillPrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 

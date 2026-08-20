@@ -396,7 +396,6 @@ export {
   TILT_CARRIED_FRACTION,
   isTiltDirection,
   defaultCarriedFraction,
-  buildSurroundFillPrompt,
   type SurroundDirection,
 } from "./surround.js"
 

@@ -11,8 +11,7 @@
 -- analysis; `video-audit:auto` has no analysis wired, so the node auto-runs
 -- a fast analysis first (hence the higher price).
 --
--- Values are the cloud-plugins generator's outputs (scripts/gen-va-buckets.mjs
--- @ v0.102.0) — never hand computed. These rows were pre-seeded live on
+-- Values are the plugin repo generator's outputs — never hand computed. These rows were pre-seeded live on
 -- 2026-08-04 (ahead of this migration landing) so `/admin/models` and MCP
 -- discovery weren't blocked on the app-repo release; this migration formalizes
 -- them as a tracked, idempotent upsert so a fresh environment (staging reset,
