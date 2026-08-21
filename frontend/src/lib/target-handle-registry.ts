@@ -38,6 +38,8 @@ import {
   isValidVideoUpscaleConnection,
   isValidExtendVideoConnection,
   isValidLipSyncConnection,
+  isValidStillToVideoConnection,
+  isValidSlideshowConnection,
   isValidSpeechToVideoConnection,
   isValidMotionTransferConnection,
   isValidAiAvatarConnection,
@@ -625,6 +627,15 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "image", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].image, accepts: (s) => isValidLipSyncConnection("image", s) },
     { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].video, accepts: (s) => isValidLipSyncConnection("video", s) },
     { handleId: "audio", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].audio, accepts: (s) => isValidLipSyncConnection("audio", s) },
+  ],
+  "still-to-video": [
+    { handleId: "image", label: VIDEO_PRODUCER_HANDLE_LABELS["still-to-video"].image, accepts: (s) => isValidStillToVideoConnection("image", s) },
+    { handleId: "audio", label: VIDEO_PRODUCER_HANDLE_LABELS["still-to-video"].audio, accepts: (s) => isValidStillToVideoConnection("audio", s) },
+  ],
+  "slideshow": [
+    { handleId: "images",     label: VIDEO_PRODUCER_HANDLE_LABELS["slideshow"].images,     accepts: (s) => isValidSlideshowConnection("images", s) },
+    { handleId: "audio",      label: VIDEO_PRODUCER_HANDLE_LABELS["slideshow"].audio,      accepts: (s) => isValidSlideshowConnection("audio", s) },
+    { handleId: "transition", label: VIDEO_PRODUCER_HANDLE_LABELS["slideshow"].transition, accepts: (s) => isValidSlideshowConnection("transition", s) },
   ],
   "speech-to-video": [
     { handleId: "image",          label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].image,          accepts: (s) => isValidSpeechToVideoConnection("image",          s, isVisualPickerType) },

@@ -29,6 +29,8 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "llm-chat": "Generate Text",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
+  "still-to-video": "Still to Video",
+  "slideshow": "Slideshow",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
   "trim-audio": "Trim Audio",

@@ -3356,6 +3356,58 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
   })
 }
 
+export async function stillToVideoApi(
+  imageUrl: string,
+  audioUrl: string,
+  motion: string,
+  intensity: number,
+  resolution: string,
+  aspectRatio: string,
+  fps: number,
+  fit: string,
+  padColor: string,
+  userId?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl, audioUrl, motion, intensity, resolution, aspectRatio, fps, fit, padColor }
+  if (userId) {
+    body.userId = userId
+  }
+  return apiJson("/v1/still-to-video", {
+    body,
+    workflowId: true,
+    label: "Failed to start still-to-video",
+  })
+}
+
+export async function slideshowApi(
+  imageUrls: string[],
+  audioUrl: string | undefined,
+  perImageDuration: number,
+  transition: string,
+  transitionDuration: number,
+  motion: string,
+  intensity: number,
+  resolution: string,
+  aspectRatio: string,
+  fps: number,
+  fit: string,
+  padColor: string,
+  userId?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrls, perImageDuration, transition, transitionDuration, motion, intensity, resolution, aspectRatio, fps, fit, padColor }
+  if (audioUrl) {
+    body.audioUrl = audioUrl
+  }
+  if (userId) {
+    body.userId = userId
+  }
+  return apiJson("/v1/slideshow", {
+    body,
+    workflowId: true,
+    label: "Failed to start slideshow",
+  })
+}
+
 export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
   if (userId) {

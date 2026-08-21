@@ -36,6 +36,58 @@ describe("media resource", () => {
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ videoUrl: "https://x/v.mp4", startTime: 5, endTime: 20 })
   })
 
+  it("stillToVideo() POSTs /v1/still-to-video with image + audio + levers", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-stv" }))
+    const c = make(fetchMock)
+    const out = await c.media.stillToVideo({
+      imageUrl: "https://x/still.png",
+      audioUrl: "https://x/track.mp3",
+      motion: "ken-burns",
+      intensity: 4,
+      resolution: "1080p",
+      aspectRatio: "16:9",
+      fps: 30,
+      fit: "contain",
+      padColor: "#101010",
+    })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/still-to-video")
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      imageUrl: "https://x/still.png",
+      audioUrl: "https://x/track.mp3",
+      motion: "ken-burns",
+      intensity: 4,
+      resolution: "1080p",
+      aspectRatio: "16:9",
+      fps: 30,
+      fit: "contain",
+      padColor: "#101010",
+    })
+    expect(out.jobId).toBe("j-stv")
+  })
+
+  it("slideshow() POSTs /v1/slideshow with images + levers", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-slides" }))
+    const c = make(fetchMock)
+    const out = await c.media.slideshow({
+      imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
+      audioUrl: "https://x/track.mp3",
+      imageDurations: [10, null, null],
+      transition: "dissolve",
+      transitionDuration: 0.5,
+      motion: "alternate",
+    })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/slideshow")
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
+      audioUrl: "https://x/track.mp3",
+      imageDurations: [10, null, null],
+      transition: "dissolve",
+      transitionDuration: 0.5,
+      motion: "alternate",
+    })
+    expect(out.jobId).toBe("j-slides")
+  })
+
   it("trimAudio() POSTs /v1/trim-audio", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j3" }))
     const c = make(fetchMock)

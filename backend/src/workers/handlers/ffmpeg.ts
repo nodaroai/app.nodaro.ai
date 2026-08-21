@@ -27,6 +27,8 @@ import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
+import { stillToVideo } from "../../providers/video/still-to-video.js"
+import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { syntheticCaptionsFromText } from "../../providers/audio/captions-mappers.js"
 import {
@@ -757,6 +759,121 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleStillToVideo: HandlerFn = async function handleStillToVideo(job, ctx) {
+  const { imageUrl, audioUrl, motion, intensity, resolution, aspectRatio, fps, fit, padColor } = job.data as {
+    jobId: string
+    imageUrl: string
+    audioUrl: string
+    motion: "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "ken-burns"
+    intensity: number
+    resolution: "720p" | "1080p" | "4K"
+    aspectRatio: "16:9" | "9:16" | "1:1" | "4:3"
+    fps: number
+    fit: "cover" | "contain"
+    padColor: string
+  }
+  console.log(`[worker] still-to-video ${ctx.jobId}: motion=${motion} ${resolution} ${aspectRatio} ${fps}fps fit=${fit}`)
+
+  // Stamp pickup immediately — the node UI shows "Queued" until progress
+  // crosses 3, so queue time and processing time read as distinct states.
+  await setJobProgress(job, ctx.jobId, 3)
+
+  // Real frame-based progress: the total frame count is already known
+  // (frames = ceil(audioDuration * fps) — the same math zoompan's d needs),
+  // so encode progress walks 5 → 90 from ffmpeg's actual frame counter.
+  // Throttled to ≥5% steps; fire-and-forget so a slow DB write never
+  // serializes the encode (setJobProgress best-effort-catches its own
+  // failures; the .catch guards the BullMQ updateProgress rejection).
+  let lastPct = 5
+  const result = await stillToVideo({
+    imageUrl,
+    audioUrl,
+    motion,
+    intensity,
+    resolution,
+    aspectRatio,
+    fps,
+    fit,
+    padColor,
+    onProgress: (frame, totalFrames) => {
+      const pct = Math.min(90, 5 + Math.round((frame / totalFrames) * 85))
+      if (pct >= lastPct + 5) {
+        lastPct = pct
+        void setJobProgress(job, ctx.jobId, pct).catch(() => {})
+      }
+    },
+  })
+  await setJobProgress(job, ctx.jobId, 95)
+
+  // durationSeconds rides output_data so the node footer can show the
+  // resolved length (the "hero fact" — there is no duration field to read).
+  await completeFfmpegVideoJob(result.outputPath, ctx, { durationSeconds: result.durationSeconds })
+}
+
+const handleSlideshow: HandlerFn = async function handleSlideshow(job, ctx) {
+  const { imageUrls, audioUrl, imageDurations, perImageDuration, transition, transitionDuration, motion, intensity, resolution, aspectRatio, fps, fit, padColor } = job.data as {
+    jobId: string
+    imageUrls: string[]
+    audioUrl?: string
+    imageDurations?: Array<number | null>
+    perImageDuration: number
+    transition: string
+    transitionDuration: number
+    motion: "none" | "zoom-in" | "zoom-out" | "ken-burns" | "alternate"
+    intensity: number
+    resolution: "720p" | "1080p" | "4K"
+    aspectRatio: "16:9" | "9:16" | "1:1" | "4:3"
+    fps: number
+    fit: "cover" | "contain"
+    padColor: string
+  }
+  console.log(`[worker] slideshow ${ctx.jobId}: ${imageUrls.length} images, transition=${transition}, motion=${motion}`)
+  await setJobProgress(job, ctx.jobId, 3)
+
+  // Progress mirrors the real pipeline: segments 5→70, concat 70→88, mux 88→95.
+  let lastPct = 3
+  const report = (pct: number) => {
+    const clamped = Math.min(95, Math.round(pct))
+    if (clamped >= lastPct + 2) {
+      lastPct = clamped
+      void setJobProgress(job, ctx.jobId, clamped).catch(() => {})
+    }
+  }
+  const result = await slideshow({
+    imageUrls,
+    audioUrl,
+    imageDurations,
+    perImageDuration,
+    transition,
+    transitionDuration,
+    motion,
+    intensity,
+    resolution,
+    aspectRatio,
+    fps,
+    fit,
+    padColor,
+    onProgress: (phase, done, total) => {
+      if (phase === "segments") report(5 + (done / total) * 65)
+      else if (phase === "concat") report(70 + (done / Math.max(1, total)) * 18)
+      else report(88 + done * 7)
+    },
+  })
+  await setJobProgress(job, ctx.jobId, 95)
+
+  // Disclosure fields ride output_data: the Case-C scale factor must be
+  // surfaced on the node, and appliedTransition tells the truth after the
+  // picker-vocabulary mapping / clamping.
+  await completeFfmpegVideoJob(result.outputPath, ctx, {
+    durationSeconds: result.durationSeconds,
+    slideCount: result.slideCount,
+    appliedTransition: result.appliedTransition,
+    ...(result.scaleFactor !== null ? { scaleFactor: result.scaleFactor } : {}),
+    ...(result.transitionClamped ? { transitionClamped: true } : {}),
+    ...(result.silent ? { silent: true } : {}),
+  })
+}
+
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "assemble-narrated-video": handleAssembleNarratedVideo,
@@ -768,6 +885,8 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "speed-ramp": handleSpeedRamp,
   "loop-video": handleLoopVideo,
   "fade-video": handleFadeVideo,
+  "still-to-video": handleStillToVideo,
+  "slideshow": handleSlideshow,
   "resize-video": handleResizeVideo,
   "adjust-volume": handleAdjustVolume,
   "audio-fx": handleAudioFx,

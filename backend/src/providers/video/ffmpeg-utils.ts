@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
@@ -115,6 +115,75 @@ export async function runFfmpegCapture(
           )
         } else {
           resolve({ stdout, stderr })
+        }
+      })
+    })
+  } finally {
+    release()
+  }
+}
+
+/**
+ * Same contract (FIFO semaphore + hard timeout) as `runFfmpeg`, but streams
+ * per-frame progress while encoding: spawns ffmpeg with `-progress pipe:1`
+ * and calls `onFrame(n)` for every `frame=N` line it emits on stdout.
+ *
+ * Used by renders whose total frame count is known up front (still-to-video
+ * computes `frames = ceil(audioDuration * fps)` for zoompan anyway), so the
+ * caller can surface REAL percent progress instead of coarse milestones.
+ *
+ * Unlike `runFfmpeg`, this uses `spawn` — execFile's built-in `timeout`
+ * option doesn't exist there, so the watchdog kill is explicit (mirrors
+ * youtube-video.ts): a hung ffmpeg must not hold its semaphore slot past
+ * the ceiling and starve the FIFO queue.
+ */
+export async function runFfmpegWithProgress(
+  args: readonly string[],
+  onFrame?: (frame: number) => void,
+  timeoutMs?: number,
+): Promise<void> {
+  const release = await acquireFfmpegSlot()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("ffmpeg", ["-progress", "pipe:1", "-nostats", ...args], {
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+
+      let timedOut = false
+      const watchdog = setTimeout(() => {
+        timedOut = true
+        proc.kill("SIGKILL")
+      }, timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS)
+
+      // Keep only the stderr tail — that's where ffmpeg writes its real error.
+      let stderrTail = ""
+      proc.stderr.on("data", (chunk: Buffer) => {
+        stderrTail = (stderrTail + chunk.toString()).slice(-8192)
+      })
+
+      let lineBuf = ""
+      proc.stdout.on("data", (chunk: Buffer) => {
+        lineBuf += chunk.toString()
+        const lines = lineBuf.split("\n")
+        lineBuf = lines.pop() ?? ""
+        for (const line of lines) {
+          const m = /^frame=(\d+)/.exec(line.trim())
+          if (m && onFrame) onFrame(parseInt(m[1]!, 10))
+        }
+      })
+
+      proc.on("error", (err) => {
+        clearTimeout(watchdog)
+        reject(new Error(`ffmpeg failed to spawn: ${err.message}`))
+      })
+      proc.on("close", (code) => {
+        clearTimeout(watchdog)
+        if (timedOut) {
+          reject(new Error(`ffmpeg timed out after ${timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS}ms`))
+        } else if (code === 0) {
+          resolve()
+        } else {
+          reject(new Error(`ffmpeg failed: ${stderrTail || `exit code ${code}`}`))
         }
       })
     })

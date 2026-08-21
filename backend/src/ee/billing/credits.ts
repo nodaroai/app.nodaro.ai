@@ -1275,6 +1275,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp:smooth": 50, // motion-compensated interpolation (minterpolate) — 5-20x slower than fast
   "loop-video": 10,
   "fade-video": 10,
+  // Still to Video — one still + one audio → MP4 via local ffmpeg (no
+  // provider cost). Deliberately ZERO credits: the free bridge from a still
+  // into the video pipeline. The 0-cost reservation path still creates a
+  // usage log; the guard still enforces storage/kill-switch/dedup.
+  "still-to-video": 0,
+  // Slideshow — N stills + one optional audio track → MP4 via local ffmpeg
+  // (no provider cost). Zero credits, same rationale and guard behavior as
+  // still-to-video.
+  "slideshow": 0,
   "transcode-video": 10,
   "audio-isolation": 80,          // alias for elevenlabs-isolation
   "text-to-dialogue": 40,

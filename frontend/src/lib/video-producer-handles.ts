@@ -123,6 +123,48 @@ export function isValidLipSyncConnection(
   }
 }
 
+// ─── still-to-video ────────────────────────────────────────────────────
+// Inputs: image (the still), audio (sets the output length). Source: video.
+// Local-ffmpeg node — no provider, no prompt, no cinematography.
+export function isValidStillToVideoConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "image":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
+    case "audio":
+      return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
+// ─── slideshow ─────────────────────────────────────────────────────────
+// Inputs: images (ordered set — image producers, lists via the Bundle edge,
+// group/collect image lanes), audio (optional, sets the length), transition
+// (optional, the transition PARAMETER node only). Source: video.
+export function isValidSlideshowConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "images":
+      return (
+        ACCEPTS_IMAGE_OR_DYN(sourceType) ||
+        sourceType === "group" ||
+        sourceType === "collect" ||
+        sourceType === "reference-sheet"
+      )
+    case "audio":
+      return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    case "transition":
+      return sourceType === "transition"
+    default:
+      return false
+  }
+}
+
 // ─── speech-to-video ───────────────────────────────────────────────────
 // Inputs: cinematography, image (portrait), audio, prompt (text or picker).
 // Source: video.
@@ -267,6 +309,8 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "video-upscale":    { video: "Video" },
   "extend-video":     { video: "Video", cinematography: "Cinematography", prompt: "Prompt" },
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
+  "still-to-video":   { image: "Still image", audio: "Audio" },
+  "slideshow":        { images: "Images", audio: "Audio", transition: "Transition" },
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
   "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
   "ai-avatar":        { image: "Image", script: "Script", audio: "Audio", video: "Video" },

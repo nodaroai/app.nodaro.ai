@@ -149,6 +149,8 @@ nodaro media download <url> [--max-height 720] [--section 30-90] --watch
 nodaro media metadata <url>
 nodaro media trim-video --video <url> --start 12 --end 48 --watch
 nodaro media trim-audio --video <url> --format wav --watch
+nodaro media still-to-video --image <url> --audio <url> --motion ken-burns --watch
+nodaro media slideshow --images <url1> <url2> <url3> --audio <url> --transition dissolve --watch
 nodaro media save <url> [--type video] --watch
 
 # Audio — separation, isolation, fx, mix, level, combine

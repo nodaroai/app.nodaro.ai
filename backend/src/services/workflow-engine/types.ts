@@ -203,6 +203,10 @@ export interface SimpleEdge {
 // ---------------------------------------------------------------------------
 
 export interface ResolvedInputs {
+  /** Slideshow: transition pick from a wired transition PARAMETER node
+   *  (value routing, not a prompt hint — the suno-voice personaId precedent).
+   *  Resolved to the combine/xfade vocabulary in the payload builder. */
+  transition?: string
   prompt?: string
   /** Highest-precedence prompt for list fan-out — set per-item by
    *  overrideInputWithListItem; consumed as computeNodePrompt's `override` so a

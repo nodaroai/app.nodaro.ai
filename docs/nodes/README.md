@@ -11,7 +11,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 
 ## Quick Reference
 
-- **Total Nodes:** 181 creatable from the picker
+- **Total Nodes:** 183 creatable from the picker
 - **Tabs:** 9  ·  **Families:** 46
 
 ---
@@ -45,7 +45,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Add Your Own** | Upload Video |
-| **Create** | Generate Video · Generate Video Pro · Music Video |
+| **Create** | Generate Video · Generate Video Pro · Music Video · Still to Video · Slideshow |
 | **Story & Script** | Story → Video · Scene · Generate Script |
 | **Animate & Perform** | AI Avatar · Cinematic Avatar · Lip Sync · Speech to Video · Motion Transfer · Face Swap |
 | **Continue & Restyle** | Extend Video · Edit Video Pro · Retake Video · Video to Video · Relight & Switch |
@@ -372,6 +372,8 @@ FFmpeg-based video manipulation.
 |------|-------------|-------------|
 | [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with ~50 FFmpeg `xfade` transitions: cuts, fades, dips, wipes, slides, irises, slices, reveals, covers, blurs, and zooms |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
+| [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
+| [Slideshow](./processing-video/slideshow.md) | 2–100 images over one optional audio track → MP4, zero credits | Ordered stills with per-slide motion + transitions; audio-anchored timing (equal split / pinned rows / disclosed proportional scale), silent without audio |
 | [Resize Video](./processing-video/resize-video.md) | Crop, pad, or stretch to target aspect ratio | Reformat video dimensions for different platforms |
 | [Social Media Format](./processing-video/social-media-format.md) | Auto-format for platform specifications | Prepare video for Instagram, TikTok, YouTube, etc. |
 | [Trim Video](./processing-video/trim-video.md) | Cut video to start/end times | Extract specific sections from longer video |

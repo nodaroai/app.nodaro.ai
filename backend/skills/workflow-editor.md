@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-08-15T21:55:05.596Z
-generated_from: 150c80ac9
+generated_at: 2026-08-21T00:36:15.733Z
+generated_from: 23b00a372
 ---
 
 ---
@@ -182,6 +182,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `schedule-trigger` — Schedule Trigger
 - `selector` — Selector
 - `setting` — Setting
+- `slideshow` — Slideshow
 - `social-media-format` — Social Media Format
 - `sort-list` — Sort List
 - `speech-to-video` — Speech to Video
@@ -189,6 +190,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `split-media` — Split into Chunks
 - `split-text` — Split Text
 - `sticky-note` — Sticky Note
+- `still-to-video` — Still to Video
 - `style` — Style
 - `style-guide` — Style Guide
 - `styling` — Styling

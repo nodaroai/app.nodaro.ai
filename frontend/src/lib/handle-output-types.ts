@@ -53,6 +53,8 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "face": { faceRef: "face" },
   "face-swap": { video: "video" },
   "fade-video": { video: "video" },
+  "still-to-video": { video: "video" },
+  "slideshow": { video: "video" },
   "filter-list": { out: "list" },
   "forced-alignment": { data: "look" },
   "generate-image": { image: "image" },

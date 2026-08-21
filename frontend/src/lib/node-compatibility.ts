@@ -153,6 +153,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   "prompt", "audio", "audio-style", "ref-audio", "voice", "transcript",
   // Suno mashup ordered audio inputs (Batch 2).
   "audio1", "audio2",
+  // Slideshow ordered image set (fed by lists via the Bundle edge, direct
+  // image producers, or group/collect image lanes) + its transition-pick
+  // input (the transition PARAMETER node only).
+  "images", "transition",
   // llm-chat secondary inputs (Batch 3).
   "references", "system-prompt",
   // Processing handles (Batch 4, non-ffmpeg-overlapping). `text` is

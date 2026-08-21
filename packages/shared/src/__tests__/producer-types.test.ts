@@ -23,6 +23,17 @@ describe("producer-types", () => {
     DYNAMIC_PRODUCER_TYPES,
   } as const
 
+  // still-to-video (still image + audio → MP4 via local FFmpeg) has a video
+  // OUTPUT handle — absent from this set, every downstream video input would
+  // hard-reject its edges (the "cannot connect the outputs" bug class).
+  it("registers still-to-video as a video producer", () => {
+    expect(VIDEO_PRODUCER_TYPES.has("still-to-video")).toBe(true)
+  })
+
+  it("registers slideshow as a video producer (still-to-video's N-image companion)", () => {
+    expect(VIDEO_PRODUCER_TYPES.has("slideshow")).toBe(true)
+  })
+
   it("registers voice-changer-pro as an audio producer (its default output)", () => {
     expect(AUDIO_PRODUCER_TYPES.has("voice-changer-pro")).toBe(true)
   })

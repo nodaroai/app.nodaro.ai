@@ -504,6 +504,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   }
   if (
     type === "merge-video-audio" ||
+    type === "still-to-video" ||
+    type === "slideshow" ||
     type === "add-captions" ||
     type === "resize-video" ||
     type === "trim-video" ||
@@ -946,6 +948,8 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "face-swap",
   "suno-music-video",
   "merge-video-audio",
+  "still-to-video",
+  "slideshow",
   "add-captions",
   "resize-video",
   "social-media-format",

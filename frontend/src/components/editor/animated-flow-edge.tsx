@@ -78,6 +78,9 @@ const MULTI_INPUT_TARGET_TYPES = new Set([
   "mix-audio", "combine-audio", "suno-mashup",
   // Video combiners
   "combine-videos",
+  // Slideshow: N ordered images in one node (the Bundle edge is the
+  // list → images lane; same mechanism as combine-videos' clips)
+  "slideshow",
   // Manual edit / composite accept multiple inputs
   "manual-edit", "composite",
   // Text combiners
