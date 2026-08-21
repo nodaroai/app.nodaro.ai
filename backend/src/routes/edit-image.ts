@@ -12,7 +12,7 @@ import { IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING,
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-const editImageBody = z.object({
+export const editImageBody = z.object({
   // imageUrl is required for every provider EXCEPT the task-chained Grok ops
   // (grok-upscale / grok-2-edit / grok-2-segment), which take a prior Grok
   // generation's task_id instead of an image URL. The refinement below
@@ -28,7 +28,7 @@ const editImageBody = z.object({
   taskId: z.string().min(1).max(200).optional(),
   // Generous ceiling; per-model truncation happens in the assembler (warn-don't-block).
   prompt: z.string().max(PROMPT_HARD_CEILING).optional(),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).optional(),
   targetResolution: z.enum(["2K", "4K", "8K"]).optional(),

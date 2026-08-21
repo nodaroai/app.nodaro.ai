@@ -110,7 +110,7 @@ export const generateImageBody = z.object({
   // the provider's verified cap (getMaxImagePromptChars) and the editor warns the
   // user first (warn-don't-block). Per-model enforcement lives in the assembler.
   prompt: z.string().min(0).max(PROMPT_HARD_CEILING),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   // ─── WI-1b structured inputs (all optional; ADDITIVE) ────────────────────
   // When ANY of these is present, the route is in "structured mode": it
