@@ -42,7 +42,7 @@ export const generateVideoBody = z.object({
   last_frame_image: safeUrlSchema.optional(),  // LTX image_to_video end-frame URL (snake_case)
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(PROMPT_HARD_CEILING).optional(),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(VIDEO_GEN_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),

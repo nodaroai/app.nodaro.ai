@@ -28,12 +28,12 @@ import { sendInternalError } from "../lib/http-errors.js"
 // generation; LTX 2.3 Pro is a Replicate model that takes a raw videoUrl. Both
 // fields are optional at the schema level and conditionally required inside
 // the handler so each provider's required input set is enforced precisely.
-const extendVideoBody = z.object({
+export const extendVideoBody = z.object({
   kieTaskId: z.string().min(1).optional(), // Required for veo-extend / runway-extend
   videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for veo-extend / runway-extend; optional for LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(EXTEND_VIDEO_PROVIDERS),
   model: z.enum(["fast", "quality"]).optional(), // VEO only
   seeds: z.number().int().min(10000).max(99999).optional(), // VEO only

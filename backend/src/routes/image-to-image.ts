@@ -18,11 +18,11 @@ import {
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
 
-const imageToImageBody = z.object({
+export const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
   // Generous ceiling; per-model truncation happens in the assembler (warn-don't-block).
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   // MODIFY_IMAGE_PROVIDERS = IMAGE_I2I_PROVIDERS + nano-banana-edit (the KIE
   // i2i path handles it — see providers/kie/image.ts). Using the wider set
   // lets the MCP modify_image tool pass nano-banana-edit without a 400; it's

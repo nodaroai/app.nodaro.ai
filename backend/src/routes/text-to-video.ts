@@ -16,7 +16,7 @@ import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),

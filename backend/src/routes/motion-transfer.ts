@@ -28,12 +28,12 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING, buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
-const motionTransferBody = z.object({
+export const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
   videoUrl: safeUrlSchema,
   prompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["480p", "580p", "720p", "1080p"]).default("720p"),
   provider: z.enum(MOTION_TRANSFER_PROVIDERS).default("kling"),
