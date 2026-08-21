@@ -157,6 +157,8 @@ import {
   SpeedRampConfig,
   LoopVideoConfig,
   FadeVideoConfig,
+  StillToVideoConfig,
+  SlideshowConfig,
   TranscodeVideoConfig,
   ManualEditConfig,
   VideoComposerConfig,
@@ -349,6 +351,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "speed-ramp": "Adjust Speed",
   "loop-video": "Loop Video",
   "fade-video": "Fade In/Out",
+  "still-to-video": "Still to Video",
+  "slideshow": "Slideshow",
   "transcode-video": "Transcode Video",
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
@@ -421,7 +425,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "combine-videos", "assemble-narrated-video", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "assemble-narrated-video", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -647,6 +651,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "speed-ramp": return <SpeedRampConfig {...configProps} />
     case "loop-video": return <LoopVideoConfig {...configProps} />
     case "fade-video": return <FadeVideoConfig {...configProps} />
+    case "still-to-video": return <StillToVideoConfig {...configProps} />
+    case "slideshow": return <SlideshowConfig {...configProps} />
     case "transcode-video": return <TranscodeVideoConfig {...configProps} />
     case "manual-edit": return <ManualEditConfig {...configProps} />
     case "combine-text": return <CombineTextConfig {...configProps} />

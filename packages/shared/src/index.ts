@@ -859,6 +859,8 @@ export * from "./reduce-strategy-registry.js"
 export {
   COMBINE_TRANSITIONS,
   COMBINE_TRANSITION_IDS,
+  PICKER_TO_COMBINE_TRANSITION,
+  resolveSlideshowTransition,
   COMBINE_TRANSITION_GROUP_ORDER,
   COMBINE_TRANSITION_GROUP_LABELS,
   getCombineTransition,

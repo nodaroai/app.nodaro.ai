@@ -245,13 +245,19 @@ nodaro voice clones list [--json]
 nodaro voice clones create --name <name> --audio <url>|--file <path> [--json]   # clone from an uploaded URL or a local audio file
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, image collage, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, still-to-video, slideshow, image collage, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
 nodaro media metadata <url> [--json]                     # probe duration/dimensions/title WITHOUT downloading
 nodaro media trim-video --video <url> --start <sec> --end <sec>|--keep-first <sec>|--keep-last <sec> [--watch] [--poll-interval <ms>] [--json]
 nodaro media trim-audio --video <url>|--audio <url> [--start <sec>] [--end <sec>] [--format mp3|wav|aac] [--watch] [--poll-interval <ms>] [--json]
+nodaro media still-to-video --image <url> --audio <url> [--motion none|zoom-in|zoom-out|pan-left|pan-right|ken-burns] [--intensity <1-10>] [--resolution 720p|1080p|4K] [--aspect-ratio <W:H>] [--fps 24|30] [--fit cover|contain] [--pad-color <hex>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # one still + one audio → MP4, local FFmpeg, 0 credits. Length = the audio's length
+                                                         # (no duration flag by design). --motion animates the still.
+nodaro media slideshow --images <url...> [--audio <url>] [--durations "10,auto,auto"] [--per-image <sec>] [--transition <id>] [--transition-duration <sec>] [--motion none|zoom-in|zoom-out|ken-burns|alternate] [--intensity <1-10>] [--resolution 720p|1080p|4K] [--aspect-ratio <W:H>] [--fps 24|30] [--fit cover|contain] [--pad-color <hex>] [--watch] [--json]
+                                                         # 2-100 images + optional audio → MP4 slideshow, 0 credits. Audio wired = it sets the
+                                                         # length (pins scale proportionally, disclosed); no audio = silent, N × per-image.
 nodaro media collage <imageUrls...> [--sizes <0-3,...>] [--layout smart|grid] [--resolution 2K|4K] [--aspect-ratio <W:H>] [--gap <px>] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
                                                          # composite 2–30 images into one large image. --sizes gives per-image RELATIVE size
                                                          # hints aligned by position (0 auto, 1 big ≈2× linear, 2 medium, 3 small ≈½ — smart layout only).

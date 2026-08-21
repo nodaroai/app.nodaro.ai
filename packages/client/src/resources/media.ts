@@ -160,6 +160,56 @@ export class MediaResource {
   }
 
   /**
+   * Turn one still image + one audio track into an MP4
+   * (`POST /v1/still-to-video`) — locally rendered (FFmpeg), no AI model,
+   * zero credits. The output duration IS the audio's duration; there is no
+   * duration field. Optional `motion` animates the still (zoom / pan /
+   * ken-burns) at `intensity` 1–10. `fit: "contain"` letterboxes with
+   * `padColor` instead of cropping. Poll `jobs.get(jobId)`.
+   */
+  stillToVideo(input: {
+    imageUrl: string
+    audioUrl: string
+    motion?: "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "ken-burns"
+    intensity?: number
+    resolution?: "720p" | "1080p" | "4K"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3"
+    fps?: 24 | 30
+    fit?: "cover" | "contain"
+    padColor?: string
+  }): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/still-to-video", { body: input })
+  }
+
+  /**
+   * Turn 2–100 images + one optional audio track into an MP4 slideshow
+   * (`POST /v1/slideshow`) — locally rendered (FFmpeg), zero credits. With
+   * audio, the output duration IS the audio's duration (equal split unless
+   * `imageDurations` pins rows — null entries = auto; mismatched pinned sums
+   * scale proportionally and the factor is disclosed in the job output).
+   * Without audio: N × `perImageDuration`, silent output. Transitions
+   * consume the outgoing slide, so totals stay exact. For a single image use
+   * `stillToVideo`. Poll `jobs.get(jobId)`.
+   */
+  slideshow(input: {
+    imageUrls: string[]
+    audioUrl?: string
+    imageDurations?: Array<number | null>
+    perImageDuration?: number
+    transition?: string
+    transitionDuration?: number
+    motion?: "none" | "zoom-in" | "zoom-out" | "ken-burns" | "alternate"
+    intensity?: number
+    resolution?: "720p" | "1080p" | "4K"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3"
+    fps?: 24 | 30
+    fit?: "cover" | "contain"
+    padColor?: string
+  }): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/slideshow", { body: input })
+  }
+
+  /**
    * Probe a social video's metadata (`POST /v1/video-metadata`) — duration,
    * dimensions, title, live status — WITHOUT downloading it. A direct read, not a
    * job. Use it to decide whether to trim before importing.

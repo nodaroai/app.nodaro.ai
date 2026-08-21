@@ -6,7 +6,7 @@
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
-import { collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput } from "@nodaro/shared"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -4614,6 +4614,50 @@ export function buildPayload(
         fadeOut: data.fadeOut ?? true,
         fadeOutDuration: data.fadeOutDuration ?? 0.5,
         color: data.color ?? "black",
+        usageLogId,
+      })
+
+    case "slideshow": {
+      // Zero-credit local ffmpeg render. Images arrive ACCUMULATED (the
+      // image-collage lane: multi-edge + list "all" expansion, wire order
+      // preserved); the transition TYPE comes from a wired transition
+      // parameter node (resolved to the xfade vocabulary — unwired = cut).
+      const slideshowImages = (resolvedInputs.imageUrls as string[] | undefined) ?? []
+      return ffmpegResult("slideshow", {
+        jobId,
+        imageUrls: slideshowImages,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        imageDurations: data.imageDurations,
+        perImageDuration: data.perImageDuration ?? 3,
+        transition: resolveSlideshowTransition(
+          (resolvedInputs.transition as string | undefined) ?? (data.transition as string | undefined),
+        ),
+        transitionDuration: data.transitionDuration ?? 0.5,
+        motion: data.motion ?? "none",
+        intensity: data.intensity ?? 3,
+        resolution: data.resolution ?? "1080p",
+        aspectRatio: data.aspectRatio ?? "16:9",
+        fps: data.fps ?? 30,
+        fit: data.fit ?? "cover",
+        padColor: data.padColor ?? "#000000",
+        usageLogId,
+      })
+    }
+
+    case "still-to-video":
+      // Zero-credit local ffmpeg render — duration comes from the audio
+      // (resolved by the worker via ffprobe; there is no duration field).
+      return ffmpegResult("still-to-video", {
+        jobId,
+        imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        motion: data.motion ?? "none",
+        intensity: data.intensity ?? 3,
+        resolution: data.resolution ?? "1080p",
+        aspectRatio: data.aspectRatio ?? "16:9",
+        fps: data.fps ?? 30,
+        fit: data.fit ?? "cover",
+        padColor: data.padColor ?? "#000000",
         usageLogId,
       })
 

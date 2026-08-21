@@ -1296,6 +1296,8 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |
 | `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
+| `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |
+| `POST` | `/v1/slideshow` | 2–100 images + one optional audio track → MP4 slideshow, local FFmpeg, **0 credits** (`{ imageUrls[], audioUrl?, imageDurations?[] (null=auto), perImageDuration?, transition?, transitionDuration?, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; with audio the duration IS the audio's — pinned-row mismatches scale proportionally, disclosed in output) → job. |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |
 
 ### Social connections & publishing

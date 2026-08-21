@@ -3925,6 +3925,53 @@ export type FadeVideoData = {
   activeResultIndex?: number
 }
 
+export type StillToVideoData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  motion: "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "ken-burns"
+  intensity: number
+  resolution: "720p" | "1080p" | "4K"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3"
+  fps: 24 | 30
+  fit: "cover" | "contain"
+  padColor: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type SlideshowData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  perImageDuration: number
+  transitionDuration: number
+  motion: "none" | "zoom-in" | "zoom-out" | "ken-burns" | "alternate"
+  intensity: number
+  resolution: "720p" | "1080p" | "4K"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3"
+  fps: 24 | 30
+  fit: "cover" | "contain"
+  padColor: string
+  // Post-run disclosure (lifted from output_data): the Case-C proportional
+  // scale factor MUST be surfaced on the node, and appliedTransition tells
+  // the truth after the picker-vocabulary mapping.
+  lastScaleFactor?: number
+  lastAppliedTransition?: string
+  lastSlideCount?: number
+  lastSilent?: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type TranscodeVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -5476,6 +5523,8 @@ export type SceneNodeData =
   | ImageCollageData
   | AssembleNarratedVideoData
   | MergeVideoAudioData
+  | StillToVideoData
+  | SlideshowData
   | AddCaptionsData
   | ResizeVideoData
   | SocialMediaFormatData
@@ -5661,6 +5710,8 @@ export type SceneNodeType =
   | "image-collage"
   | "assemble-narrated-video"
   | "merge-video-audio"
+  | "still-to-video"
+  | "slideshow"
   | "add-captions"
   | "resize-video"
   | "social-media-format"
@@ -7237,6 +7288,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {}, fieldMappings: {} },
+  },
+  {
+    type: "still-to-video",
+    label: "Still to Video",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["image", "audio"],
+    outputs: ["video"],
+    defaultData: { label: "Still to Video", motion: "none", intensity: 3, resolution: "1080p", aspectRatio: "16:9", fps: 30, fit: "cover", padColor: "#000000", fieldMappings: {} } as StillToVideoData,
+  },
+  {
+    type: "slideshow",
+    label: "Slideshow",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["images", "audio", "transition"],
+    outputs: ["video"],
+    defaultData: { label: "Slideshow", perImageDuration: 3, transitionDuration: 0.5, motion: "none", intensity: 3, resolution: "1080p", aspectRatio: "16:9", fps: 30, fit: "cover", padColor: "#000000", fieldMappings: {} } as SlideshowData,
   },
   {
     type: "add-captions",

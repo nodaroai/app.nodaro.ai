@@ -9,6 +9,8 @@ const mocks = {
   saveToStorage: vi.fn(),
   trimVideo: vi.fn(),
   trimAudio: vi.fn(),
+  stillToVideo: vi.fn(),
+  slideshow: vi.fn(),
   videoMetadata: vi.fn(),
   imageCollage: vi.fn(),
   jobsGet: vi.fn(),
@@ -21,6 +23,8 @@ vi.mock("../../client.js", () => ({
       downloadVideoProgress: mocks.downloadVideoProgress,
       saveToStorage: mocks.saveToStorage,
       trimVideo: mocks.trimVideo,
+      stillToVideo: mocks.stillToVideo,
+      slideshow: mocks.slideshow,
       trimAudio: mocks.trimAudio,
       videoMetadata: mocks.videoMetadata,
       imageCollage: mocks.imageCollage,
@@ -145,6 +149,61 @@ describe("media trim commands", () => {
     await expect(runCmd("media", "trim-video", "--video", "https://x/v.mp4")).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("range"))
     expect(mocks.trimVideo).not.toHaveBeenCalled()
+  })
+
+  it("still-to-video maps image + audio + motion levers (defaults included)", async () => {
+    mocks.stillToVideo.mockResolvedValueOnce({ jobId: "j-stv" })
+    await runCmd(
+      "media", "still-to-video",
+      "--image", "https://x/still.png",
+      "--audio", "https://x/track.mp3",
+      "--motion", "ken-burns",
+      "--intensity", "4",
+      "--fit", "contain",
+      "--pad-color", "#101010",
+      "--json",
+    )
+    expect(mocks.stillToVideo).toHaveBeenCalledWith({
+      imageUrl: "https://x/still.png",
+      audioUrl: "https://x/track.mp3",
+      motion: "ken-burns",
+      intensity: 4,
+      // commander applies the declared defaults for the unset levers
+      resolution: "1080p",
+      aspectRatio: "16:9",
+      fit: "contain",
+      padColor: "#101010",
+    })
+  })
+
+  it("slideshow maps variadic images + auto durations", async () => {
+    mocks.slideshow.mockResolvedValueOnce({ jobId: "j-sl" })
+    await runCmd(
+      "media", "slideshow",
+      "--images", "https://x/a.png", "https://x/b.png", "https://x/c.png",
+      "--audio", "https://x/t.mp3",
+      "--durations", "10,auto,auto",
+      "--json",
+    )
+    expect(mocks.slideshow).toHaveBeenCalledWith({
+      imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
+      audioUrl: "https://x/t.mp3",
+      imageDurations: [10, null, null],
+      // commander fills the declared defaults
+      transition: "cut",
+      motion: "none",
+      resolution: "1080p",
+      aspectRatio: "16:9",
+      fit: "cover",
+    })
+  })
+
+  it("slideshow refuses a single image and points at still-to-video", async () => {
+    await expect(
+      runCmd("media", "slideshow", "--images", "https://x/a.png"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("still-to-video"))
+    expect(mocks.slideshow).not.toHaveBeenCalled()
   })
 
   it("trim-audio maps source + format", async () => {

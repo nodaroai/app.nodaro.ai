@@ -79,6 +79,12 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "cinematic-avatar",
   // Assemble Narrated Video: fits N (clip, voice) blocks into one MP4 → video.
   "assemble-narrated-video",
+  // Still to Video: one still image + one audio track → MP4 (local FFmpeg,
+  // no provider). Emits generatedVideoUrl like every other ffmpeg video node.
+  "still-to-video",
+  // Slideshow: 2-100 stills + one optional audio track → MP4 (local FFmpeg,
+  // no provider). Same contract; images arrive via the image-collage lane.
+  "slideshow",
 ])
 
 /**

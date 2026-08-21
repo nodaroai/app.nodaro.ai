@@ -138,6 +138,8 @@ import { RenderVideoNode } from "./render-video-node";
 import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
 import { FadeVideoNode } from "./fade-video-node";
+import { StillToVideoNode } from "./still-to-video-node";
+import { SlideshowNode } from "./slideshow-node";
 import { TranscodeVideoNode } from "./transcode-video-node";
 import { ManualEditNode } from "./manual-edit-node";
 import { LipSyncNode } from "./lip-sync-node";
@@ -329,6 +331,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "speed-ramp": SpeedRampNode,
   "loop-video": LoopVideoNode,
   "fade-video": FadeVideoNode,
+  "still-to-video": StillToVideoNode,
+  "slideshow": SlideshowNode,
   "transcode-video": TranscodeVideoNode,
   "manual-edit": ManualEditNode,
   "video-upscale": VideoUpscaleNode,

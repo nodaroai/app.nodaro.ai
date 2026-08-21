@@ -2986,6 +2986,55 @@ trimAudio(input: {
 Trim (and extract) audio from a video or audio source (`POST /v1/trim-audio`)
 to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
 
+#### `stillToVideo(input)`
+
+```ts
+stillToVideo(input: {
+  imageUrl: string
+  audioUrl: string
+  motion?: "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "ken-burns"
+  intensity?: number
+  resolution?: "720p" | "1080p" | "4K"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3"
+  fps?: 24 | 30
+  fit?: "cover" | "contain"
+  padColor?: string
+}): Promise<{ jobId: string }>
+```
+
+Turn one still image + one audio track into an MP4
+(`POST /v1/still-to-video`) — locally rendered (FFmpeg), no AI model,
+**zero credits**. The output duration is the audio's duration; there is no
+duration field. `motion` (default `none`) animates the still at `intensity`
+1–10; `fit: "contain"` letterboxes with `padColor` instead of cropping.
+
+#### `slideshow(input)`
+
+```ts
+slideshow(input: {
+  imageUrls: string[]
+  audioUrl?: string
+  imageDurations?: Array<number | null>
+  perImageDuration?: number
+  transition?: string
+  transitionDuration?: number
+  motion?: "none" | "zoom-in" | "zoom-out" | "ken-burns" | "alternate"
+  intensity?: number
+  resolution?: "720p" | "1080p" | "4K"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3"
+  fps?: 24 | 30
+  fit?: "cover" | "contain"
+  padColor?: string
+}): Promise<{ jobId: string }>
+```
+
+Turn 2–100 images + one optional audio track into an MP4 slideshow
+(`POST /v1/slideshow`) — locally rendered (FFmpeg), **zero credits**. With
+audio, the output duration is the audio's duration (equal split unless
+`imageDurations` pins rows — `null` = auto; mismatched pinned sums scale
+proportionally, disclosed in the job output). Without audio: N ×
+`perImageDuration`, silent output. For a single image use `stillToVideo`.
+
 #### `saveToStorage(input)`
 
 ```ts

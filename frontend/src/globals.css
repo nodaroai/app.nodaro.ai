@@ -629,6 +629,28 @@ html, body {
   50% { height: 80%; }
 }
 
+/* ── Still to Video — canvas motion preview (mirrors the render presets) ── */
+@keyframes stv-ken-burns {
+  0%, 100% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.16) translate(-2.5%, -2%); }
+}
+@keyframes stv-zoom-in {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.18); }
+}
+@keyframes stv-zoom-out {
+  0% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes stv-pan-left {
+  0% { transform: scale(1.12) translateX(3%); }
+  100% { transform: scale(1.12) translateX(-3%); }
+}
+@keyframes stv-pan-right {
+  0% { transform: scale(1.12) translateX(-3%); }
+  100% { transform: scale(1.12) translateX(3%); }
+}
+
 /* ── Tag textarea highlight backdrop ────────────────────────── */
 .tag-textarea-container {
   position: relative;

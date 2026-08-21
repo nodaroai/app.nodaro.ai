@@ -27,7 +27,7 @@ function parseSection(raw: string): { sectionStartSec: number; sectionEndSec: nu
 
 export function mediaCommand(): Command {
   const cmd = new Command("media").description(
-    "media ingestion + compositing — pull a social video into storage, trim video/audio, collage images, save a URL to storage, probe metadata",
+    "media ingestion + compositing — pull a social video into storage, trim video/audio, still-to-video, slideshow, collage images, save a URL to storage, probe metadata",
   )
 
   cmd
@@ -161,6 +161,112 @@ Examples:
             ...(opts.keepLast !== undefined ? { keepLastSeconds: opts.keepLast } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "trim video" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("still-to-video")
+    .description("one still image + one audio track -> MP4 (local FFmpeg, zero credits; length = the audio's length)")
+    .requiredOption("--image <url>", "still image URL")
+    .requiredOption("--audio <url>", "audio URL - sets the output length (no duration option by design)")
+    .option("--motion <preset>", "none|zoom-in|zoom-out|pan-left|pan-right|ken-burns", "none")
+    .option("--intensity <1-10>", "motion strength (ignored for none)", (v) => parseInt(v, 10))
+    .option("--resolution <res>", "720p|1080p|4K", "1080p")
+    .option("--aspect-ratio <ratio>", "16:9|9:16|1:1|4:3", "16:9")
+    .option("--fps <fps>", "24|30", (v) => parseInt(v, 10))
+    .option("--fit <mode>", "cover (crop to fill) | contain (letterbox)", "cover")
+    .option("--pad-color <hex>", "letterbox color when --fit contain (#RRGGBB)")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media still-to-video --image https://.../cover.png --audio https://.../track.mp3 --watch
+  $ nodaro media still-to-video --image https://.../photo.png --audio https://.../vo.wav --motion ken-burns --intensity 4 --watch`)
+    .action(
+      async (
+        opts: { image: string; audio: string; motion?: string; intensity?: number; resolution?: string; aspectRatio?: string; fps?: number; fit?: string; padColor?: string } & WatchOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.media.stillToVideo({
+            imageUrl: opts.image,
+            audioUrl: opts.audio,
+            ...(opts.motion !== undefined ? { motion: opts.motion as "none" } : {}),
+            ...(opts.intensity !== undefined ? { intensity: opts.intensity } : {}),
+            ...(opts.resolution !== undefined ? { resolution: opts.resolution as "1080p" } : {}),
+            ...(opts.aspectRatio !== undefined ? { aspectRatio: opts.aspectRatio as "16:9" } : {}),
+            ...(opts.fps !== undefined ? { fps: opts.fps as 30 } : {}),
+            ...(opts.fit !== undefined ? { fit: opts.fit as "cover" } : {}),
+            ...(opts.padColor !== undefined ? { padColor: opts.padColor } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "still to video" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("slideshow")
+    .description("2-100 images + one optional audio track -> MP4 slideshow (local FFmpeg, zero credits)")
+    .requiredOption("--images <urls...>", "2-100 image URLs, in slide order")
+    .option("--audio <url>", "audio URL - wired, it sets the output length (never cropped)")
+    .option("--durations <secs>", 'comma-separated per-slide seconds; use "auto" for unpinned rows (e.g. "10,4,auto,auto")')
+    .option("--per-image <sec>", "seconds per slide when NO audio is wired (default 3)", parseFloat)
+    .option("--transition <id>", "xfade id or transition-picker id (cut, fade, dissolve, dip-to-black, ...); unknown -> cut", "cut")
+    .option("--transition-duration <sec>", "seconds (default 0.5)", parseFloat)
+    .option("--motion <preset>", "none|zoom-in|zoom-out|ken-burns|alternate", "none")
+    .option("--intensity <1-10>", "motion strength", (v) => parseInt(v, 10))
+    .option("--resolution <res>", "720p|1080p|4K", "1080p")
+    .option("--aspect-ratio <ratio>", "16:9|9:16|1:1|4:3", "16:9")
+    .option("--fps <fps>", "24|30", (v) => parseInt(v, 10))
+    .option("--fit <mode>", "cover|contain", "cover")
+    .option("--pad-color <hex>", "letterbox color when --fit contain (#RRGGBB)")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media slideshow --images https://.../a.png https://.../b.png https://.../c.png --audio https://.../track.mp3 --transition dissolve --watch
+  $ nodaro media slideshow --images https://.../a.png https://.../b.png --per-image 2.5 --motion alternate --watch`)
+    .action(
+      async (
+        opts: { images: string[]; audio?: string; durations?: string; perImage?: number; transition?: string; transitionDuration?: number; motion?: string; intensity?: number; resolution?: string; aspectRatio?: string; fps?: number; fit?: string; padColor?: string } & WatchOpts,
+      ) => {
+        try {
+          if (opts.images.length < 2) {
+            warn("Slideshow needs at least 2 images. For a single still, use: nodaro media still-to-video")
+            process.exit(1)
+          }
+          const imageDurations = opts.durations
+            ? opts.durations.split(",").map((d) => {
+                const t = d.trim().toLowerCase()
+                return t === "auto" || t === "" ? null : parseFloat(t)
+              })
+            : undefined
+          const client = buildClient(opts.profile)
+          const result = await client.media.slideshow({
+            imageUrls: opts.images,
+            ...(opts.audio !== undefined ? { audioUrl: opts.audio } : {}),
+            ...(imageDurations !== undefined ? { imageDurations } : {}),
+            ...(opts.perImage !== undefined ? { perImageDuration: opts.perImage } : {}),
+            ...(opts.transition !== undefined ? { transition: opts.transition } : {}),
+            ...(opts.transitionDuration !== undefined ? { transitionDuration: opts.transitionDuration } : {}),
+            ...(opts.motion !== undefined ? { motion: opts.motion as "none" } : {}),
+            ...(opts.intensity !== undefined ? { intensity: opts.intensity } : {}),
+            ...(opts.resolution !== undefined ? { resolution: opts.resolution as "1080p" } : {}),
+            ...(opts.aspectRatio !== undefined ? { aspectRatio: opts.aspectRatio as "16:9" } : {}),
+            ...(opts.fps !== undefined ? { fps: opts.fps as 30 } : {}),
+            ...(opts.fit !== undefined ? { fit: opts.fit as "cover" } : {}),
+            ...(opts.padColor !== undefined ? { padColor: opts.padColor } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "slideshow" })
         } catch (err) {
           handleError(err)
         }

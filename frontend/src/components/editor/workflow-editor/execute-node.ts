@@ -62,6 +62,8 @@ import {
   speedRampApi,
   loopVideoApi,
   fadeVideoApi,
+  stillToVideoApi,
+  slideshowApi,
   resizeVideoApi,
   socialMediaFormatApi,
   adjustVolumeApi,
@@ -89,7 +91,8 @@ import {
 } from "@/lib/api";
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
+import {
+  resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
 import { composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
@@ -166,6 +169,8 @@ import type {
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
+  StillToVideoData,
+  SlideshowData,
   ResizeVideoData,
   AdjustVolumeData,
   AudioFxData,
@@ -6369,6 +6374,85 @@ export function executeNode(
       "generatedVideoUrl",
       "Fade In/Out",
       ctx,
+    );
+  }
+
+  if (node.type === "still-to-video") {
+    const d = node.data as StillToVideoData;
+    const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
+    const audioUrl = inputs.audioUrl;
+    if (!imageUrl) {
+      toast.error(`Node "${d.label}": no image input`);
+      return Promise.reject(new Error("No image"));
+    }
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input — the audio sets the output length`);
+      return Promise.reject(new Error("No audio"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        stillToVideoApi(
+          imageUrl,
+          audioUrl,
+          d.motion ?? "none",
+          d.intensity ?? 3,
+          d.resolution ?? "1080p",
+          d.aspectRatio ?? "16:9",
+          d.fps ?? 30,
+          d.fit ?? "cover",
+          d.padColor ?? "#000000",
+          ctx.userId,
+        ),
+      "generatedVideoUrl",
+      "Still to Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "slideshow") {
+    const d = node.data as SlideshowData;
+    const imageUrls = (inputs.imageUrls as string[] | undefined) ?? [];
+    if (imageUrls.length < 2) {
+      toast.error(
+        imageUrls.length === 1
+          ? `Node "${d.label}": slideshow needs at least 2 images — for a single still, use Still to Video`
+          : `Node "${d.label}": no images wired — feed a List (Bundle edge) or connect 2–100 image nodes`,
+      );
+      return Promise.reject(new Error("Not enough images"));
+    }
+    if (imageUrls.length > 100) {
+      toast.error(`Node "${d.label}": ${imageUrls.length} images — the cap is 100. Trim the set upstream.`);
+      return Promise.reject(new Error("Too many images"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        slideshowApi(
+          imageUrls,
+          inputs.audioUrl,
+          d.perImageDuration ?? 3,
+          resolveSlideshowTransition((inputs.transition as string | undefined) ?? "cut"),
+          d.transitionDuration ?? 0.5,
+          d.motion ?? "none",
+          d.intensity ?? 3,
+          d.resolution ?? "1080p",
+          d.aspectRatio ?? "16:9",
+          d.fps ?? 30,
+          d.fit ?? "cover",
+          d.padColor ?? "#000000",
+          ctx.userId,
+        ),
+      "generatedVideoUrl",
+      "Slideshow",
+      ctx,
+      (outputData) => ({
+        // Disclosure fields — the Case-C factor must be visible ON THE NODE.
+        ...(outputData.scaleFactor !== undefined ? { lastScaleFactor: outputData.scaleFactor as number } : {}),
+        ...(outputData.appliedTransition !== undefined ? { lastAppliedTransition: outputData.appliedTransition as string } : {}),
+        ...(outputData.slideCount !== undefined ? { lastSlideCount: outputData.slideCount as number } : {}),
+        ...(outputData.silent !== undefined ? { lastSilent: outputData.silent as boolean } : {}),
+      }),
     );
   }
 

@@ -2021,6 +2021,240 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── still_to_video ──
+  // FFmpeg-only bridge from a still into the video pipeline: one image + one
+  // audio track → MP4. No AI model, no GPU, ZERO credits. The output duration
+  // IS the audio's duration — there is no duration parameter by design.
+  server.registerTool(
+    "still_to_video",
+    {
+      title: "Still to Video",
+      description:
+        "Turn ONE still image + ONE audio track into an MP4 — locally " +
+        "rendered (FFmpeg), no AI model, ZERO credits. The output length is " +
+        "exactly the audio's length; there is no duration parameter.\n\n" +
+        "Use this for narrated slides (generated image + voiceover), music " +
+        "visualizers (cover art + track), or photo moments inside a longer " +
+        "edit — anywhere a still must become video WITHOUT spending " +
+        "video-model credits. For AI motion/animation of the image, use " +
+        "`animate_image` instead.\n\n" +
+        "**Inputs:**\n" +
+        "  • Image — `image_url` OR `image_asset_id`.\n" +
+        "  • Audio — `audio_url` OR `audio_asset_id` (sets the length).\n\n" +
+        "**Levers:**\n" +
+        "  • `motion` — none (default, fast) / zoom-in / zoom-out / " +
+        "pan-left / pan-right / ken-burns; `intensity` 1–10 (default 3).\n" +
+        "  • `resolution` 720p / 1080p (default) / 4K — 4K with motion is " +
+        "the slow path.\n" +
+        "  • `aspect_ratio` 16:9 (default) / 9:16 / 1:1 / 4:3; `fps` 24 / " +
+        "30 (default).\n" +
+        "  • `fit` — cover (default, crops to fill) / contain (letterboxes " +
+        "with `pad_color`, default #000000).\n\n" +
+        "Returns a job_id; widget renders the video.",
+      inputSchema: {
+        image_url: z.string().url().optional(),
+        image_asset_id: z.string().optional(),
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        motion: z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right", "ken-burns"]).optional(),
+        intensity: z.number().int().min(1).max(10).optional().describe("Motion strength 1-10 (default 3). Ignored when motion is none."),
+        resolution: z.enum(["720p", "1080p", "4K"]).optional(),
+        aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3"]).optional(),
+        fps: z.union([z.literal(24), z.literal(30)]).optional(),
+        fit: z.enum(["cover", "contain"]).optional(),
+        pad_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Letterbox color when fit=contain (default #000000)."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v4/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({
+              assetId: args.image_asset_id,
+              userId: session.userId,
+              expectedKind: "image",
+            })
+          : null)
+      if (!imageUrl) {
+        return {
+          content: [{ type: "text", text: "Pass image_url or image_asset_id." }],
+          isError: true,
+        }
+      }
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({
+              assetId: args.audio_asset_id,
+              userId: session.userId,
+              expectedKind: "audio",
+            })
+          : null)
+      if (!audioUrl) {
+        return {
+          content: [{ type: "text", text: "Pass audio_url or audio_asset_id — the audio sets the output length." }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        audioUrl,
+        ...(args.motion !== undefined ? { motion: args.motion } : {}),
+        ...(args.intensity !== undefined ? { intensity: args.intensity } : {}),
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(args.fps !== undefined ? { fps: args.fps } : {}),
+        ...(args.fit !== undefined ? { fit: args.fit } : {}),
+        ...(args.pad_color !== undefined ? { padColor: args.pad_color } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/still-to-video",
+        payload,
+        label: "still to video",
+        widgetKind: "video",
+        widgetData: { prompt: "(still to video)", model: "still-to-video" },
+      })
+    },
+  )
+
+  // ── slideshow ──
+  // N stills over one optional audio track → MP4, FFmpeg-only, ZERO credits.
+  // The N-image companion of still_to_video: use THAT for exactly one image.
+  server.registerTool(
+    "slideshow",
+    {
+      title: "Slideshow",
+      description:
+        "Turn 2–100 images + ONE optional audio track into an MP4 slideshow " +
+        "— locally rendered (FFmpeg), no AI model, ZERO credits.\n\n" +
+        "Timing: with audio, the output duration IS the audio's duration " +
+        "(never cropped — slides split it equally unless `image_durations` " +
+        "pins rows; pinned sums that mismatch the audio scale proportionally " +
+        "and the factor is disclosed in the job's output). Without audio, " +
+        "each slide runs `per_image_duration` seconds and the output is " +
+        "silent. Transitions consume time from the outgoing slide, so the " +
+        "total stays exact.\n\n" +
+        "For a SINGLE image use `still_to_video`. For AI motion between " +
+        "images use `generate_video` / `animate_image`.\n\n" +
+        "**Levers:** `transition` (xfade vocabulary or a transition-picker " +
+        "id — e.g. cut, fade, dissolve, dip-to-black, wipe-left; unknown " +
+        "values fall back to cut) + `transition_duration`; `motion` none / " +
+        "zoom-in / zoom-out / ken-burns / alternate (flips zoom per slide) " +
+        "with `intensity` 1–10; `resolution`, `aspect_ratio`, `fps`, `fit` / " +
+        "`pad_color`.\n\n" +
+        "Returns a job_id; widget renders the video.",
+      inputSchema: {
+        image_urls: z.array(z.string().url()).min(2).max(100).optional(),
+        image_asset_ids: z.array(z.string()).min(2).max(100).optional(),
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        image_durations: z
+          .array(z.number().min(0.1).max(600).nullable())
+          .max(100)
+          .optional()
+          .describe("Per-slide pinned seconds, one entry per image; null = auto. With audio, mismatched sums scale proportionally (disclosed)."),
+        per_image_duration: z.number().min(0.5).max(60).optional().describe("Seconds per slide when NO audio is wired (default 3)."),
+        transition: z.string().max(64).optional(),
+        transition_duration: z.number().min(0).max(5).optional(),
+        motion: z.enum(["none", "zoom-in", "zoom-out", "ken-burns", "alternate"]).optional(),
+        intensity: z.number().int().min(1).max(10).optional(),
+        resolution: z.enum(["720p", "1080p", "4K"]).optional(),
+        aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3"]).optional(),
+        fps: z.union([z.literal(24), z.literal(30)]).optional(),
+        fit: z.enum(["cover", "contain"]).optional(),
+        pad_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v4/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      let imageUrls = args.image_urls ?? []
+      if (imageUrls.length === 0 && args.image_asset_ids) {
+        const resolved: string[] = []
+        // Sequential on purpose — up to 100 asset lookups must not stampede.
+        for (const assetId of args.image_asset_ids) {
+          const url = await resolveAssetId({ assetId, userId: session.userId, expectedKind: "image" })
+          if (!url) {
+            return { content: [{ type: "text", text: `Unknown image asset: ${assetId}` }], isError: true }
+          }
+          resolved.push(url)
+        }
+        imageUrls = resolved
+      }
+      if (imageUrls.length < 2) {
+        return {
+          content: [{ type: "text", text: "Slideshow needs 2–100 images (image_urls or image_asset_ids). For a single still, use still_to_video." }],
+          isError: true,
+        }
+      }
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      const payload: Record<string, unknown> = {
+        imageUrls,
+        ...(audioUrl ? { audioUrl } : {}),
+        ...(args.image_durations !== undefined ? { imageDurations: args.image_durations } : {}),
+        ...(args.per_image_duration !== undefined ? { perImageDuration: args.per_image_duration } : {}),
+        ...(args.transition !== undefined ? { transition: args.transition } : {}),
+        ...(args.transition_duration !== undefined ? { transitionDuration: args.transition_duration } : {}),
+        ...(args.motion !== undefined ? { motion: args.motion } : {}),
+        ...(args.intensity !== undefined ? { intensity: args.intensity } : {}),
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(args.fps !== undefined ? { fps: args.fps } : {}),
+        ...(args.fit !== undefined ? { fit: args.fit } : {}),
+        ...(args.pad_color !== undefined ? { padColor: args.pad_color } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/slideshow",
+        payload,
+        label: "slideshow",
+        widgetKind: "video",
+        widgetData: { prompt: `(slideshow · ${imageUrls.length} images)`, model: "slideshow" },
+      })
+    },
+  )
+
   // ── motion_transfer ──
   // Drives a character image with the motion of a driver video. KIE provides
   // multiple providers; default `kling` matches the route default.

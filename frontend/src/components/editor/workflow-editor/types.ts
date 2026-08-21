@@ -565,6 +565,8 @@ export const EXECUTABLE_TYPES = new Set([
   "assemble-narrated-video",
   "image-collage",
   "merge-video-audio",
+  "still-to-video",
+  "slideshow",
   "trim-audio",
   "split-media",
   "extract-audio",

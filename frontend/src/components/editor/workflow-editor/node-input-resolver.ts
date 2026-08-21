@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
@@ -588,6 +588,9 @@ export const VIDEO_OUTPUT_NODE_TYPES = new Set(
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
 export interface FrontendResolvedInputs {
+  /** Slideshow: transition pick from a wired transition PARAMETER node
+   *  (value routing — the suno-voice personaId precedent). */
+  transition?: string;
   prompt?: string;
   /** Negative prompt wired via the `negative` typed handle (Generate Video).
    *  Without this, text-prompt sources wired to the Negative handle silently
@@ -789,7 +792,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
-  "video-upscale", "video-composer", "merge-video-audio",
+  "video-upscale", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
   "video-sfx", "remove-audio", "assemble-narrated-video",
@@ -1154,7 +1157,18 @@ export function resolveNodeInputs(
           ? (resolvedSourceHandle === "rest"
               ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
               : ((srcData.__pickedResults as string[] | undefined) ?? (srcData.pickedResults as string[] | undefined)))
-          : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+          : (() => {
+              const fromState = (srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData);
+              if (fromState && fromState.length > 0) return fromState;
+              // Data-only list-family sources (rows typed straight into the
+              // table, node never "ran"): an explicit edge mode (Bundle) must
+              // still see every row — slideshow/image-collage accumulate from
+              // it. Without this, a data list under Bundle degraded to its
+              // first row via the single-value fallback.
+              return FAN_OUT_EACH_TYPES.has(src.type ?? "")
+                ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+                : fromState;
+            })();
 
     // Fan-in targets (reduce): consume the entire upstream list as a single
     // `inputs.inputs` array regardless of edgeOutputMode — reduce strategies
@@ -1216,7 +1230,7 @@ export function resolveNodeInputs(
           }
           continue;
         }
-        if (node.type === "image-collage") {
+        if (node.type === "image-collage" || node.type === "slideshow") {
           // A List of image URLs (edgeMode "all") spreads into imageUrls[].
           // Every spread item carries the LIST node's id, so they all share
           // the list's size hint (imageSizeBySource is keyed by source id).
@@ -1339,6 +1353,16 @@ export function resolveNodeInputs(
     if (!output) {
       output = extractNodeOutput(src, resolvedSourceHandle ?? undefined);
     }
+    // Slideshow's transition input consumes the transition PARAMETER node as a
+    // VALUE — parameter nodes produce no `output` here (they resolve at
+    // field-mapping time), so this must run BEFORE the empty-output skip. The
+    // suno-voice → personaId trap: the routing branch below existed, but this
+    // guard swallowed the edge and the pick silently degraded to cut.
+    if (node.type === "slideshow" && src.type === "transition") {
+      const pick = getParameterValue(src.data as Record<string, unknown>, "transition");
+      if (pick) inputs.transition = pick;
+      continue;
+    }
     if (!output) continue;
 
     // Image Collage accumulates EVERY connected image into imageUrls[] — the
@@ -1347,6 +1371,27 @@ export function resolveNodeInputs(
     // image URL here regardless of source type. MUST precede reference-sheet /
     // source-type routing so the accumulation wins.
     if (node.type === "image-collage") {
+      inputs.imageUrls = [...(inputs.imageUrls ?? []), output];
+      inputs.imageUrlsWithSourceIds = [
+        ...(inputs.imageUrlsWithSourceIds ?? []),
+        { nodeId: src.id, url: output },
+      ];
+      continue;
+    }
+
+    // Slideshow: images ACCUMULATE (the image-collage lane) — but its `audio`
+    // and `transition` handles route by handle id first, and a transition
+    // PARAMETER node's pick lands as inputs.transition (value routing — the
+    // suno-voice → personaId precedent, not a prompt hint).
+    if (node.type === "slideshow") {
+      if (srcEdge?.targetHandle === "audio") {
+        inputs.audioUrl = output;
+        continue;
+      }
+      if (srcEdge?.targetHandle === "transition" || src.type === "transition") {
+        inputs.transition = output;
+        continue;
+      }
       inputs.imageUrls = [...(inputs.imageUrls ?? []), output];
       inputs.imageUrlsWithSourceIds = [
         ...(inputs.imageUrlsWithSourceIds ?? []),
@@ -1818,7 +1863,7 @@ export function resolveNodeInputs(
       // The character node's "image" handle emits a PLAIN portrait — no entity
       // id and no identity injection. Both guards below skip it.
       const isPlainImageHandle = srcEdge?.sourceHandle === "image";
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video") {
         inputs.imageUrl = output;
       } else {
         inputs.referenceImageUrls = [
@@ -1874,7 +1919,7 @@ export function resolveNodeInputs(
       // consumer can field-map a specific variant via a `"bucket[idx]"`
       // string in its `fieldMappings`; otherwise the helper falls back to
       // the anchor image. See `injectLocationContext` above for details.
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video") {
         inputs.imageUrl = output;
       } else if (isPlainImageHandle) {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];

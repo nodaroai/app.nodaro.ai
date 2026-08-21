@@ -74,7 +74,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-create",
     label: "Create",
     tab: "video",
-    types: ["generate-video", "generate-video-pro", "suno-music-video"],
+    types: ["generate-video", "generate-video-pro", "suno-music-video", "still-to-video", "slideshow"],
   },
   {
     id: "video-story-script",

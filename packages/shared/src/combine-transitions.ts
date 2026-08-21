@@ -480,3 +480,41 @@ export function resolveXfadeName(id: string): string | null {
   }
   return entry.xfade
 }
+
+/**
+ * Map a `transition` PARAMETER-NODE pick (the @nodaro/prompts creative
+ * catalog — prose-hint transitions for AI video prompts) onto the ffmpeg
+ * xfade vocabulary above. The two vocabularies are deliberately different
+ * (the picker describes shots, this table describes blends); only the
+ * visually-faithful subset maps — everything else falls back to `cut`.
+ *
+ * Consumed by the slideshow node (its transition TYPE comes from a wired
+ * transition parameter node; unwired defaults to cut). Kept here — not in
+ * @nodaro/prompts — because the dependency points prompts → shared, and the
+ * ids are plain strings on both sides.
+ */
+export const PICKER_TO_COMBINE_TRANSITION: Readonly<Record<string, string>> = {
+  "none": "cut",
+  "auto": "dissolve", // an explicitly wired "auto" wants A blend — the classic slideshow default
+  "cross-dissolve": "dissolve",
+  "fade-to-black": "dip-to-black",
+  "fade-to-white": "dip-to-white",
+  "iris": "circle-open",
+  "wipe": "wipe-left",
+  "pixelate-reform": "pixelize",
+  "dissolve-to-mist": "hblur",
+  "match-cut": "cut",
+  "smash-cut": "cut",
+  "freeze-frame-jump": "cut",
+}
+
+/**
+ * Resolve ANY transition string a slideshow may receive — a combine id
+ * (already valid), a picker id (mapped), or anything else (→ cut).
+ */
+export function resolveSlideshowTransition(value: string | undefined | null): string {
+  if (!value) return "cut"
+  if (COMBINE_TRANSITION_IDS.includes(value)) return value
+  return PICKER_TO_COMBINE_TRANSITION[value] ?? "cut"
+}
+

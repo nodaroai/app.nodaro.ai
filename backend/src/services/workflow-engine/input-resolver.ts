@@ -11,7 +11,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
-import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle } from "@nodaro/shared"
+import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -351,6 +351,18 @@ export function resolveNodeInputs(
     // appends their hint to the prompt. Short-circuit the edge here so we
     // don't overwrite `inputs.prompt` with the parameter hint, which would
     // silently erase the consumer's manual prompt.
+    // Slideshow's transition input consumes the transition PARAMETER node as a
+    // VALUE, not a prompt hint — and parameter nodes produce no `output` here
+    // (they're normally resolved at field-mapping time), so this must run
+    // BEFORE the parameter short-circuit below. The suno-voice → personaId
+    // trap: the routing branch existed, but the empty-output guard skipped the
+    // edge and the pick silently degraded to the default.
+    if (targetNode.type === "slideshow" && sourceNode.type === "transition") {
+      const pick = getParameterValue(sourceNode.data, "transition")
+      if (pick) inputs.transition = pick
+      continue
+    }
+
     if (!output && PARAMETER_NODE_TYPES.has(sourceNode.type)) continue
 
     if (!output) continue
@@ -1034,7 +1046,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
  *  list element through routeOutput, which re-checks edge.targetHandle so a
  *  list wired to either handle lands in the right array instead of being
  *  joined into a single comma-separated string. */
-const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage", "assemble-narrated-video"])
+const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage", "assemble-narrated-video", "slideshow"])
 
 /** Target node types that consume an upstream list as a single fan-in input.
  *  The resolver collects all upstream items into `inputs.inputs` and skips
@@ -1172,6 +1184,24 @@ function routeOutput(
   // an image producer (frontend handle `accepts` gate + reference-sheet sheet
   // handle), so `output` is an image URL here regardless of source type. MUST
   // precede reference-sheet / source-type routing so the accumulation wins.
+  // --- Slideshow: images ACCUMULATE (the image-collage lane) — but its
+  // `audio` and `transition` handles route by handle id first. A transition
+  // PARAMETER node's pick lands as inputs.transition (the suno-voice →
+  // personaId precedent: value routing, not prompt-hint routing).
+  if (targetType === "slideshow") {
+    if (edge.targetHandle === "audio") {
+      inputs.audioUrl = output
+      return
+    }
+    if (edge.targetHandle === "transition" || srcType === "transition") {
+      inputs.transition = output
+      return
+    }
+    inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
+    inputs.imageUrlsWithSourceIds = [...(inputs.imageUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
+    return
+  }
+
   if (targetType === "image-collage") {
     inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
     // Lockstep sibling of imageUrls — the payload builder aligns the node's
@@ -1649,9 +1679,9 @@ function routeOutput(
     return
   }
 
-  // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer / ai-avatar image mode) ---
+  // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer / ai-avatar image mode / still-to-video's still) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer" || targetType === "ai-avatar") {
+    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer" || targetType === "ai-avatar" || targetType === "still-to-video") {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
