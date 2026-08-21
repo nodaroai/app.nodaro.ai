@@ -1,5 +1,25 @@
 # @nodaro/sdk
 
+## 1.18.0
+
+### Minor Changes
+
+- b49a7ff: Slideshow: `client.media.slideshow({ imageUrls, audioUrl?, imageDurations?, ... })` and `nodaro media slideshow` — 2–100 images + one optional audio track → MP4 via `POST /v1/slideshow`, locally rendered (FFmpeg), zero credits. Audio-anchored timing (equal split / pinned rows with disclosed proportional scaling); silent output without audio. Shared adds `PICKER_TO_COMBINE_TRANSITION` + `resolveSlideshowTransition` (transition-picker → xfade vocabulary mapping).
+- b49a7ff: Still to Video: `client.media.stillToVideo({ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? })` and `nodaro media still-to-video` — one still image + one audio track → MP4 via `POST /v1/still-to-video`, locally rendered (FFmpeg), zero credits. The output duration is the audio's duration (no duration field); optional motion presets (zoom / pan / ken-burns) with intensity 1–10.
+
+### Patch Changes
+
+- Updated dependencies [1606089]
+- Updated dependencies [ff52285]
+- Updated dependencies [d964b4d]
+- Updated dependencies [776e7f5]
+- Updated dependencies [b49a7ff]
+- Updated dependencies [6b8cfab]
+- Updated dependencies [3488681]
+- Updated dependencies [823b629]
+  - @nodaro/prompts@1.7.3
+  - @nodaro/shared@2.9.0
+
 ## 1.17.0
 
 ### Minor Changes

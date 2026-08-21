@@ -1,5 +1,20 @@
 # @nodaro/shared
 
+## 2.9.0
+
+### Minor Changes
+
+- b49a7ff: Slideshow: `client.media.slideshow({ imageUrls, audioUrl?, imageDurations?, ... })` and `nodaro media slideshow` — 2–100 images + one optional audio track → MP4 via `POST /v1/slideshow`, locally rendered (FFmpeg), zero credits. Audio-anchored timing (equal split / pinned rows with disclosed proportional scaling); silent output without audio. Shared adds `PICKER_TO_COMBINE_TRANSITION` + `resolveSlideshowTransition` (transition-picker → xfade vocabulary mapping).
+- 3488681: The surround fill-prompt builder moves out of this package. `SURROUND_DIRECTIONS`, the carried-fraction defaults, `isTiltDirection`, and `defaultCarriedFraction` are unchanged; `buildSurroundFillPrompt` is no longer exported (it was never part of the SDK surface).
+
+### Patch Changes
+
+- ff52285: Comment tidy-up in the featured-entity catalog and style presets.
+- d964b4d: grok-2 reference-image support: attaching a reference auto-routes to the new `grok-2-i2i` chain (segment-map mints a task id from the reference URL, image-edit consumes it) — `T2I_TO_I2I_VARIANT`, `MODELS_WITH_REFERENCE_IMAGE_SUPPORT`, `REF_IMAGE_MAX_LIMITS` (single reference), and a `grok-2-i2i` catalog entry.
+- 776e7f5: Comment tidy-up in credit constants and estimators.
+- 6b8cfab: Suno's non-custom prompt cap is 3000, not 500. `getMaxSunoPromptChars(model, false)` returned 500 — six times under the provider's documented limit — and the suno route truncates rather than rejects, so a 950-character score brief reached Suno cut to exactly 500 characters mid-word, with nothing in the job record to show it.
+- 823b629: Comment tidy-up in the video-analysis pricing table.
+
 ## 2.8.0
 
 ### Minor Changes
