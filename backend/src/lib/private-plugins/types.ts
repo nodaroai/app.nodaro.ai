@@ -625,6 +625,51 @@ export interface PluginStorageToolkit {
 // ============================================================================
 
 export interface PluginJobsToolkit {
+  /** Narrow idempotency replay lookup for revisioned Recast rescores. */
+  findJobByIdempotencyKey(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<{
+    id: string
+    status: string
+    input_data: Record<string, unknown> | null
+    output_data: Record<string, unknown> | null
+    error_message: string | null
+  } | null>
+  /**
+   * Atomically claims the selected Recast audio revision for one live child.
+   * The database resolves initial audio from the selected GVP row, repairs a
+   * stale terminal pending child, and refuses a genuinely live competitor.
+   */
+  claimRecastRescore(args: {
+    recastId: string
+    childJobId: string
+    userId: string
+    gvpJobId: string
+    expectedAudioRevision: string
+    pendingRescore: Record<string, unknown>
+  }): Promise<Record<string, unknown>>
+  /** Clears `audio.pendingRescore` only when it still belongs to this child. */
+  clearRecastRescoreClaim(args: {
+    recastId: string
+    childJobId: string
+    userId: string
+  }): Promise<boolean>
+  /**
+   * Atomically publishes the policy-compliant delivery/current Music state,
+   * replaces the terminal manifest, clears the matching claim, and completes
+   * the still-live child.
+   */
+  publishRecastRescore(args: {
+    recastId: string
+    childJobId: string
+    userId: string
+    gvpJobId: string
+    expectedAudioRevision: string
+    resultUrl: string
+    audio: Record<string, unknown>
+    rescore: Record<string, unknown>
+  }): Promise<boolean>
   /** `output` is the job's OUTPUT PAYLOAD (`{ videoUrl, pro: checkpoint }`),
    *  NOT jobs-table columns — the toolkit read-merges it into `output_data`
    *  and completes via the core CAS (`workers/shared.ts` `markJobCompleted`).

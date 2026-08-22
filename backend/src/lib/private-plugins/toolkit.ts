@@ -444,6 +444,94 @@ async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown>
   return (data?.output_data as Record<string, unknown> | null) ?? null
 }
 
+/** Stable V2 transport retries must resolve before stale-revision checks. */
+async function findJobByIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): Promise<{
+  id: string
+  status: string
+  input_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+} | null> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id,status,input_data,output_data,error_message")
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (error) {
+    throw new Error(`Failed to read idempotent job: ${error.message}`)
+  }
+  if (!data) return null
+  return {
+    id: data.id as string,
+    status: data.status as string,
+    input_data: (data.input_data as Record<string, unknown> | null) ?? null,
+    output_data: (data.output_data as Record<string, unknown> | null) ?? null,
+    error_message: (data.error_message as string | null) ?? null,
+  }
+}
+
+async function claimRecastRescore(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+  gvpJobId: string
+  expectedAudioRevision: string
+  pendingRescore: Record<string, unknown>
+}): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.rpc("claim_recast_rescore", {
+    p_recast_id: args.recastId,
+    p_child_job_id: args.childJobId,
+    p_user_id: args.userId,
+    p_gvp_job_id: args.gvpJobId,
+    p_expected_audio_revision: args.expectedAudioRevision,
+    p_pending_rescore: args.pendingRescore,
+  })
+  if (error) throw new Error(`claim_recast_rescore failed: ${error.message}`)
+  return (data ?? { ok: false, reason: "unknown" }) as Record<string, unknown>
+}
+
+async function clearRecastRescoreClaim(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc("clear_recast_rescore_claim", {
+    p_recast_id: args.recastId,
+    p_child_job_id: args.childJobId,
+    p_user_id: args.userId,
+  })
+  if (error) throw new Error(`clear_recast_rescore_claim failed: ${error.message}`)
+  return data === true
+}
+
+async function publishRecastRescore(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+  gvpJobId: string
+  expectedAudioRevision: string
+  resultUrl: string
+  audio: Record<string, unknown>
+  rescore: Record<string, unknown>
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc("publish_recast_rescore", {
+    p_recast_id: args.recastId,
+    p_child_job_id: args.childJobId,
+    p_user_id: args.userId,
+    p_gvp_job_id: args.gvpJobId,
+    p_expected_audio_revision: args.expectedAudioRevision,
+    p_result_url: args.resultUrl,
+    p_audio: args.audio,
+    p_rescore: args.rescore,
+  })
+  if (error) throw new Error(`publish_recast_rescore failed: ${error.message}`)
+  return data === true
+}
+
 /**
  * `tk.jobs.markJobCompleted` — plugins pass the job's OUTPUT PAYLOAD
  * (`{ videoUrl, pro: checkpoint }`), NOT jobs-table columns. This wrapper
@@ -801,6 +889,10 @@ export function buildToolkit(): PluginToolkit {
       storeImportedImageBuffer,
     },
     jobs: {
+      findJobByIdempotencyKey,
+      claimRecastRescore,
+      clearRecastRescoreClaim,
+      publishRecastRescore,
       markJobCompleted: pluginMarkJobCompleted,
       setJobProgress,
       withProgressRamp,
