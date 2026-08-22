@@ -38,7 +38,9 @@ import { createHash } from "node:crypto"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const BACKEND_ROOT = resolve(__dirname, "..")
-const ROUTES_DIR = join(BACKEND_ROOT, "src", "routes")
+// Core routes AND enterprise routes — ee/routes was invisible to this scanner
+// until the organizations work made the gap obvious.
+const ROUTE_DIRS = [join(BACKEND_ROOT, "src", "routes"), join(BACKEND_ROOT, "src", "ee", "routes")]
 const BASELINE_PATH = join(__dirname, "tenant-scope-baseline.json")
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,16 @@ const TENANT_TABLES = new Set([
   "assets",
   "published_apps",
   "folders",
+  // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
+  // the require* helpers rather than user_id; the routes PR teaches this
+  // scanner those forms before any route under ee/routes/orgs lands.
+  "organizations",
+  "organization_members",
+  "workspaces",
+  "workspace_members",
+  "workspace_join_codes",
+  "invitations",
+  "organization_audit_log",
 ])
 
 // ---------------------------------------------------------------------------
@@ -78,8 +90,10 @@ const TENANT_TABLES = new Set([
 
 const ALLOWED_PATHS = [
   // Admin routes authorize on req.userRole === "admin"; ownership scoping
-  // doesn't apply.
+  // doesn't apply. Same rule for the enterprise admin routes.
   /^src\/routes\/admin.*\.ts$/,
+  /^src\/ee\/routes\/admin.*\.ts$/,
+  /^src\/ee\/routes\/__tests__\//,
 
   // Stripe webhook: signature-verified, operates on stripe_customers /
   // subscriptions / transactions linked via stripe_*_id, not user_id.
@@ -273,7 +287,7 @@ function loadBaseline() {
 // ---------------------------------------------------------------------------
 
 const updateBaseline = process.argv.includes("--update-baseline")
-const files = walkTs(ROUTES_DIR).sort()
+const files = ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)).sort()
 const { entries: baselineEntries } = loadBaseline()
 const consumed = new Set()
 
@@ -282,7 +296,10 @@ const newFailureFiles = new Set()
 const currentEntries = []
 
 for (const file of files) {
-  const rel = relative(BACKEND_ROOT, file)
+  // Forward slashes regardless of platform: ALLOWED_PATHS and the baseline
+  // keys are written with "/" (a Windows checkout used to report every
+  // baseline entry as new).
+  const rel = relative(BACKEND_ROOT, file).replace(/\\/g, "/")
   if (isAllowed(rel)) continue
   const findings = scan(file)
   for (const f of findings) {

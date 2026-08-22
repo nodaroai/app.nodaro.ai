@@ -164,7 +164,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
 
     // Verify creator owns this app
     const { data: appRow } = await supabase
-      .from("published_apps")
+      .from("published_apps") // tenant-scope-ignore: ownership verified post-fetch (404 below)
       .select("creator_id")
       .eq("id", appId)
       .is("deleted_at", null)

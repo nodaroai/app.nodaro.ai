@@ -954,3 +954,6 @@ export * from "./smart-cut-windows.js"
 
 export * from "./entity-asset-types.js"
 export * from "./hint-graph-types.js"
+
+// --- Organizations (second tenancy axis): wire contract only — enums, settings request schemas, error codes ---
+export * from "./organizations/index.js"
