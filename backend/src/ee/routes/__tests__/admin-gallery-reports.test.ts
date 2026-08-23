@@ -99,6 +99,33 @@ describe("GET /v1/admin/gallery-reports", () => {
     expect(res.json().limit).toBe(50)
   })
 
+  it("redacts private remux bases from joined job data", async () => {
+    const reports = [{
+      id: "r1",
+      status: "pending",
+      job_id: "j1",
+      jobs: {
+        id: "j1",
+        input_data: { unscoredUrl: "https://private.example/input.mp4" },
+        output_data: {
+          videoUrl: "https://public.example/final.mp4",
+          pro: { unscoredUrl: "https://private.example/base.mp4" },
+        },
+      },
+    }]
+    const mockRange = vi.fn().mockResolvedValue({ data: reports, count: 1, error: null })
+    const mockOrder = vi.fn().mockReturnValue({ range: mockRange })
+    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/admin/gallery-reports?userId=admin-1" })
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.stringify(res.json())).toContain("https://public.example/final.mp4")
+    expect(JSON.stringify(res.json())).not.toContain("unscoredUrl")
+    expect(JSON.stringify(res.json())).not.toContain("private.example")
+  })
+
   it("applies status filter", async () => {
     const mockEq = vi.fn().mockResolvedValue({ data: [], count: 0, error: null })
     const mockRange = vi.fn().mockReturnValue({ eq: mockEq })

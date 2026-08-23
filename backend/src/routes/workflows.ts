@@ -11,7 +11,7 @@ import type { Scope } from "../lib/scopes.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
+import { sendNotFound } from "../lib/scoped-delete.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -27,6 +27,7 @@ import {
   getListedAppSlugs,
   inferAppSlugFromSettings,
 } from "../lib/client-app-stamp.js"
+import { deleteWorkflowWithPrivateMedia } from "../lib/workflow-delete.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -931,17 +932,20 @@ export async function workflowRoutes(app: FastifyInstance) {
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
     if (!params) return
 
-    // Owner-scoped: a foreign id matches nothing. Say so (404) — the same
-    // answer GET/PATCH give — instead of a `success` that deleted nothing.
-    const { data, error } = await supabase
-      .from("workflows")
-      .delete()
-      .eq("id", params.id)
-      .eq("user_id", userId)
-      .select("id")
-
-    if (error) return sendInternalError(reply, req, error, "Failed to delete workflow")
-    if (deletedNothing(data)) return sendNotFound(reply, "Workflow not found")
+    // Owner-scoped and atomic. The RPC preserves a server-only cleanup
+    // manifest for private Recast remux bases before the workflow -> jobs ->
+    // recast_audio_bases cascade erases their database pointers.
+    let deleted: boolean
+    try {
+      deleted = await deleteWorkflowWithPrivateMedia({
+        workflowId: params.id,
+        userId,
+        logger: req.log,
+      })
+    } catch (error) {
+      return sendInternalError(reply, req, error, "Failed to delete workflow")
+    }
+    if (!deleted) return sendNotFound(reply, "Workflow not found")
     return { success: true }
   })
 

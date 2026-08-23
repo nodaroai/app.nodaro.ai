@@ -6,6 +6,8 @@ import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
+import { redactPrivateJobData } from "../lib/public-job-data.js"
+import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -162,13 +164,16 @@ export interface PublicJob {
  * (internal implementation detail; the user only knows the model id
  * they picked, which is preserved in input_data).
  *
- * Admins (req.userRole === 'admin') see the full record including
- * provider, provider_cost, display_cost, and credits_actual.
+ * Admins (req.userRole === 'admin') see the cost/provider fields, but the
+ * private Recast remux base is server-only for every caller.
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
-  // Admin users: return full data
+  const publicJob = redactPrivateJobData(job)
+
+  // Admin users retain operational and cost fields after server-only data is
+  // removed. Returning the original row here would leak Recast's remux base.
   if (isAdmin) {
-    return job
+    return publicJob
   }
 
   // Regular users: strip ALL USD-denominated cost fields. Credits stay
@@ -182,12 +187,12 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
     credits_actual: _creditsActual,
     reconcile_attempts: _reconcileAttempts,
     ...rest
-  } = job as JobRecord & { reconcile_attempts?: number | null }
+  } = publicJob as JobRecord & { reconcile_attempts?: number | null }
 
   // Recovery visibility (audit UX): expose a boolean instead of the raw
   // internal counter — a processing row the reconcile system has touched is
   // self-healing, not just slow.
-  if (job.status === "processing" && ((_reconcileAttempts as number | null) ?? 0) > 0) {
+  if (publicJob.status === "processing" && ((_reconcileAttempts as number | null) ?? 0) > 0) {
     ;(rest as Record<string, unknown>).recovering = true
   }
 
@@ -254,7 +259,7 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    return { jobs: data ?? [] }
+    return { jobs: redactPrivateJobData(data ?? []) }
   })
 
   app.get<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
@@ -295,7 +300,7 @@ export async function jobRoutes(app: FastifyInstance) {
   // Lean status poll for the per-node 3s poll path. Same auth + ownership
   // semantics as GET /v1/jobs/:id (admins read any job, non-admins only
   // their own) but selects only the fields a poller needs. No cost/provider
-  // columns are returned, so no sanitization is required.
+  // columns are returned. Server-only JSON fields are still redacted below.
   app.get<{ Params: { id: string } }>("/v1/jobs/:id/status", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
@@ -331,14 +336,14 @@ export async function jobRoutes(app: FastifyInstance) {
     // Recovery visibility (audit UX): a processing row the reconcile system
     // has touched is being self-healed, not just slow — let pollers say so.
     const { reconcile_attempts: attempts, ...rest } = job as Record<string, unknown>
-    return {
+    return redactPrivateJobData({
       data: {
         ...rest,
         ...(job.status === "processing" && ((attempts as number | null) ?? 0) > 0
           ? { recovering: true }
           : {}),
       },
-    }
+    })
   })
 
   app.get<{
@@ -460,7 +465,7 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    return { data: jobs ?? [] }
+    return { data: redactPrivateJobData(jobs ?? []) }
   })
 
   app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
@@ -473,18 +478,14 @@ export async function jobRoutes(app: FastifyInstance) {
     const { id } = req.params
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    let query = supabase
-      .from("jobs")
-      .delete()
-      .eq("id", id)
-
-    if (!isAdmin) {
-      query = query.eq("user_id", req.userId)
-    }
-
-    const { error } = await query
-
-    if (error) {
+    try {
+      await deleteJobWithPrivateMedia({
+        jobId: id,
+        actorUserId: req.userId,
+        isAdmin,
+        logger: req.log,
+      })
+    } catch (error) {
       return sendInternalError(reply, req, error, "Failed to delete job")
     }
 

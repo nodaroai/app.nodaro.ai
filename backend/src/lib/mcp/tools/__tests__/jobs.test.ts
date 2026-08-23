@@ -79,6 +79,40 @@ describe("list_jobs tool", () => {
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("list_jobs")
   })
+
+  it("redacts private remux bases from nested job data", async () => {
+    mockListJobs([
+      {
+        id: "j1",
+        status: "completed",
+        job_type: "generate-video",
+        created_at: "2026-04-01T00:00:00Z",
+        input_data: { nested: { unscoredUrl: "https://private.example/input.mp4" } },
+        output_data: {
+          pro: {
+            unscoredUrl: "https://private.example/base.mp4",
+            finalUrl: "https://public.example/final.mp4",
+          },
+        },
+      },
+    ])
+    const server = buildServer()
+    registerJobs({
+      server,
+      session: newSession({
+        userId: "u1",
+        scopes: ["jobs:read"] as Scope[],
+        clientName: "Claude",
+      }),
+      fastify: Fastify(),
+    })
+
+    const result = await callTool(server, "list_jobs", { limit: 10 })
+
+    expect(result.content[0]?.text).toContain("https://public.example/final.mp4")
+    expect(result.content[0]?.text).not.toContain("unscoredUrl")
+    expect(result.content[0]?.text).not.toContain("private.example")
+  })
 })
 
 describe("get_job tool", () => {
@@ -130,6 +164,39 @@ describe("get_job tool", () => {
     expect(result.isError).toBeUndefined()
     expect(result.content[0]?.text).toContain('"retryable": false')
     expect(result.content[0]?.text).toMatch(/Content policy violation/)
+  })
+
+  it("redacts private remux bases from input and output data", async () => {
+    mockGetJob({
+      id: "33333333-3333-4333-8333-333333333333",
+      user_id: "u1",
+      status: "completed",
+      input_data: { unscoredUrl: "https://private.example/input.mp4" },
+      output_data: {
+        pro: {
+          unscoredUrl: "https://private.example/base.mp4",
+          finalUrl: "https://public.example/final.mp4",
+        },
+      },
+    })
+    const server = buildServer()
+    registerJobs({
+      server,
+      session: newSession({
+        userId: "u1",
+        scopes: ["jobs:read"] as Scope[],
+        clientName: "Claude",
+      }),
+      fastify: Fastify(),
+    })
+
+    const result = await callTool(server, "get_job", {
+      job_id: "33333333-3333-4333-8333-333333333333",
+    })
+
+    expect(result.content[0]?.text).toContain("https://public.example/final.mp4")
+    expect(result.content[0]?.text).not.toContain("unscoredUrl")
+    expect(result.content[0]?.text).not.toContain("private.example")
   })
 
   it("returns isError when job not found", async () => {

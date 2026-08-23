@@ -56,28 +56,37 @@ export interface MediaDeleteResult {
 }
 
 /**
- * `output_data` keys that hold a single output URL, across every job type that
+ * `output_data` paths that hold a single output URL, across every job type that
  * writes them: imageUrl/videoUrl/audioUrl are the standard worker outputs
  * (workers/shared.ts — the same three keys the gallery/job-history extractors
  * and the library referrer check read); vocalsUrl/backgroundUrl/unmappedUrl are
  * the voice-changer-pro analyze/recast stem outputs (cloud-plugins
  * voice-changer-pro/handler.ts) — row-less, so path (b) is their only owner
- * proof. One `.eq()` per key, NEVER a hand-built `.or()` string: PostgREST does
+ * proof. Recast adds its nested initial/current audio-layer paths. One `.eq()`
+ * per path, NEVER a hand-built `.or()` string: PostgREST does
  * not quote values inside an `.or()` filter and URLs contain reserved chars
  * (`:` `.` `,`) that corrupt it; `.eq()` arguments are encoded safely.
  */
-const JOB_OUTPUT_URL_KEYS = [
-  "imageUrl",
-  "videoUrl",
-  "audioUrl",
-  "vocalsUrl",
-  "backgroundUrl",
-  "unmappedUrl",
+const JOB_OUTPUT_URL_PATHS = [
+  "output_data->>imageUrl",
+  "output_data->>videoUrl",
+  "output_data->>audioUrl",
+  "output_data->>vocalsUrl",
+  "output_data->>backgroundUrl",
+  "output_data->>unmappedUrl",
+  // Recast's initial derivatives live on the GVP checkpoint; a published
+  // rescore copies its current derivatives onto the Recast/child output.
+  // Both are row-less generated files, so this nested proof is what makes the
+  // conversion deletion manifest actionable instead of reporting not-owned.
+  "output_data->pro->audio->layers->music->>url",
+  "output_data->pro->audio->layers->video->>url",
+  "output_data->audio->layers->music->>url",
+  "output_data->audio->layers->video->>url",
 ] as const
 
 /**
  * True when a job owned by `userId` references `url` in its `output_data`,
- * under any known url-bearing key. Array-shaped outputs (voice-changer-pro
+ * under any known URL-bearing path. Array-shaped outputs (voice-changer-pro
  * `voiceStems: [{ speakerId, url }]`) are matched with a jsonb containment
  * filter — `.contains()` sends the pattern as a JSON document, so the url's
  * reserved characters are safe (same reason as the per-key `.eq()`s).
@@ -91,12 +100,12 @@ async function jobOutputOwnershipProof(
 ): Promise<"proven" | "no-proof" | "error"> {
   let sawError = false
 
-  for (const key of JOB_OUTPUT_URL_KEYS) {
+  for (const path of JOB_OUTPUT_URL_PATHS) {
     const { count, error } = await supabase
       .from("jobs")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq(`output_data->>${key}`, url)
+      .eq(path, url)
     if (error) {
       sawError = true
       continue

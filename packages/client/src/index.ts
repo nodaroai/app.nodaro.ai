@@ -73,6 +73,17 @@ export {
   type EstimateRecastInput,
   type RecastEstimate,
   type RecastRunSnapshot,
+  type RecastAudioLayerName,
+  type RecastAudioMixControl,
+  type RecastAudioMix,
+  type RecastAudioManifestV1,
+  type RecastAudioSectionReplacement,
+  type RecastRescoreReplacement,
+  type RecastRescoreOperation,
+  type EstimateRecastRescoreInput,
+  type RecastRescoreRequestV2,
+  type RecastRescoreQuote,
+  type RecastRescoreResponse,
   type ResolveRecastGateInput,
 } from "./resources/recast.js"
 export type {

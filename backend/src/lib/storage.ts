@@ -457,11 +457,17 @@ export async function getR2ObjectSize(key: string): Promise<number> {
 
 export function r2KeyFromOurUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL) return null
-  const prefix = config.R2_PUBLIC_URL.endsWith("/")
-    ? config.R2_PUBLIC_URL
-    : config.R2_PUBLIC_URL + "/"
-  if (!url.startsWith(prefix)) return null
-  return url.slice(prefix.length)
+  try {
+    const base = new URL(config.R2_PUBLIC_URL)
+    const candidate = new URL(url)
+    if (candidate.origin !== base.origin) return null
+    const prefix = base.pathname.endsWith("/") ? base.pathname : `${base.pathname}/`
+    if (!candidate.pathname.startsWith(prefix)) return null
+    const key = candidate.pathname.slice(prefix.length)
+    return key || null
+  } catch {
+    return null
+  }
 }
 
 function extractExtensionFromUrl(url: string): string | null {

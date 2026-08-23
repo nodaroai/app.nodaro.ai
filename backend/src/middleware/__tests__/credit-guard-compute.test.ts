@@ -189,6 +189,34 @@ describe("creditGuard with computeCredits", () => {
     await app.close()
   })
 
+  it("uses the service margin override for the resolved model", async () => {
+    mockGetAppSettings.mockResolvedValue({
+      cost_markup_percent: 50,
+      service_margin_percent: { "recast-rescore": 25 },
+    })
+
+    // The service override replaces the global 50% markup:
+    // base 4 + 25% → ceil(4 * 1.25) = 5.
+    const app = await buildApp(() => "recast-rescore", () => 4)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "u1" },
+    })
+
+    expect(mockCheckCreditsWithProfile).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ tier: "standard" }),
+      "recast-rescore",
+      undefined,
+      5,
+      { webFreeMode: false, communityInstance: false },
+    )
+
+    await app.close()
+  })
+
   it("does not pass creditOverride when computeCredits is omitted", async () => {
     const app = await buildApp(() => "some-model")
 

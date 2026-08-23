@@ -580,8 +580,10 @@ const { data: job } = await client.jobs.get(jobId)
 ```
 
 The returned `Job` uses snake_case fields to match the wire format. Sensitive
-fields (`provider`, `provider_cost`, `credits_actual`) are stripped server-side
-for non-admin callers.
+fields (`provider`, `provider_cost`, `display_cost`, `credits_actual`) are
+stripped server-side for non-admin callers. Server-only values inside job JSON,
+including Recast's private pre-watermark remux base, are removed recursively
+for every caller, including administrators.
 
 #### `getStatus(id)`
 
@@ -591,7 +593,8 @@ getStatus(id: string): Promise<{ data: JobStatusResult }>
 
 Returns the lean status of a job — id, status, progress, output_data, and
 error_message (`GET /v1/jobs/:id/status`). Far less wire + CPU cost than
-`get()` because it skips `input_data` JSONB and the public sanitize pass.
+`get()` because it skips `input_data` JSONB and cost/provider columns. Its
+`output_data` still receives the server-only JSON redaction described above.
 Intended for poll loops. Same auth and ownership semantics as `get()`.
 
 ```ts
@@ -691,6 +694,8 @@ exactly as written**, so only import work you own. Free.
 estimate(input: EstimateRecastInput): Promise<RecastEstimate>        // quote credits, free
 create(input: CreateRecastInput): Promise<{ recastId: string }>      // buys the plan
 get(recastId: string): Promise<RecastRunSnapshot>                    // poll status + pending interactive step
+estimateRescore(recastId: string, input: EstimateRecastRescoreInput): Promise<RecastRescoreQuote>
+rescore(recastId: string, input: RecastRescoreRequestV2): Promise<RecastRescoreResponse>
 start(recastId: string, opts?): Promise<{ gvpJobId?: string }>       // render a planned run (idempotent)
 resolveGate(recastId: string, input: ResolveRecastGateInput): Promise<Record<string, unknown>>
 ```
@@ -702,6 +707,54 @@ interactive runs the platform advances every non-gate step server-side; poll
 `resolveGate` — the pick itself is free. Gates only open for gate kinds the
 run's `create` declared in `clientCapabilities` (e.g. `["sheet-gate"]`);
 undeclared kinds are decided automatically.
+
+For a completed take, `get()` may also return
+`capabilities.audioLayers: 1` and a server-authored
+`RecastAudioManifestV1`. Its `present` object is the logical lane set;
+`layers` contains the CORS-ready preview files that actually exist;
+`bakedEffectiveGain` describes the current download; and
+`pendingRescore` identifies a durable in-flight operation. Do not synthesize a
+revision or infer baked contents from a missing preview derivative.
+
+Use `estimateRescore()` before `rescore()` and pass the same complete desired
+operation to both. The paid call additionally requires a UUID `requestId`; reuse
+it only for an identical transport retry:
+
+```ts
+const status = await client.recast.get(recastId)
+const revision = status.audio?.revision
+if (status.capabilities?.audioLayers === 1 && revision) {
+  const operation = {
+    expectedAudioRevision: revision,
+    mix: {
+      music: { gain: 60, muted: false },
+      video: { gain: 85, muted: false },
+    },
+  } satisfies EstimateRecastRescoreInput
+
+  const quote = await client.recast.estimateRescore(recastId, operation)
+  if (!quote.noOp) {
+    const result = await client.recast.rescore(recastId, {
+      ...operation,
+      requestId: crypto.randomUUID(),
+    })
+    // Poll get(recastId); status.audio.pendingRescore is reload-safe.
+    console.log(result)
+  }
+}
+```
+
+An operation may contain a mix, one Music replacement (`audioUrl` or
+`sections`), or a replacement plus its desired mix. `RecastRescoreResponse` is
+either `{ recastId, jobId }` or the job-free no-op response
+`{ recastId, noOp: true, audioRevision }`. See
+[API integration §13c](./api-integration.md#revisioned-audio-layers) for manifest
+semantics, validation, compatibility, and `400` / `409` errors.
+
+For a revisioned replacement, normally send the complete desired `mix`. Omitting
+it is a narrow compatibility path and succeeds only for the exact fixed legacy
+bake (bed Music 35 + Video 100, or replace Music 100); otherwise the server
+returns `409 legacy_mix_mismatch`.
 
 ---
 

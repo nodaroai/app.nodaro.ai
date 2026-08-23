@@ -32,6 +32,7 @@ import {
   GetTaskRequestSchema,
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
+import { redactPrivateJobData } from "../public-job-data.js"
 
 export interface Task {
   taskId: string
@@ -325,7 +326,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       return {
         taskId: jobId,
         status: data.status,
-        output: data.output_data ?? null,
+        output: redactPrivateJobData(data.output_data ?? null),
         error: data.error_message ?? null,
       }
     }
