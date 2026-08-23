@@ -5,6 +5,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
 import { isCloud } from "@/lib/edition"
+import { isValidUuid } from "@/lib/uuid"
 import {
   Tooltip,
   TooltipContent,
@@ -82,8 +83,13 @@ interface GeneratedResultLike {
  * Walk all nodes in the workflow store and collect every jobId
  * from generatedResults, generatedVideoResults, and dialogue audio results.
  */
-function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): readonly string[] {
+export function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): readonly string[] {
   const ids = new Set<string>()
+  // Jobless orchestrator results carry synthetic exec-<node> ids; the route
+  // casts ids to uuid and 500s on them, so keep only real job ids.
+  const add = (jobId: string | undefined) => {
+    if (jobId && isValidUuid(jobId)) ids.add(jobId)
+  }
 
   for (const node of nodes) {
     const data = node.data
@@ -92,7 +98,7 @@ function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): rea
     const results = data.generatedResults as readonly GeneratedResultLike[] | undefined
     if (Array.isArray(results)) {
       for (const r of results) {
-        if (r.jobId) ids.add(r.jobId)
+        add(r.jobId)
       }
     }
 
@@ -100,7 +106,7 @@ function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): rea
     const videoResults = data.generatedVideoResults as readonly GeneratedResultLike[] | undefined
     if (Array.isArray(videoResults)) {
       for (const r of videoResults) {
-        if (r.jobId) ids.add(r.jobId)
+        add(r.jobId)
       }
     }
 
@@ -110,7 +116,7 @@ function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): rea
       for (const line of dialogue) {
         if (Array.isArray(line.generatedAudioResults)) {
           for (const ar of line.generatedAudioResults) {
-            if (ar.jobId) ids.add(ar.jobId)
+            add(ar.jobId)
           }
         }
       }
@@ -118,6 +124,20 @@ function collectJobIds(nodes: readonly { data: Record<string, unknown> }[]): rea
   }
 
   return [...ids]
+}
+
+/**
+ * Whether the Cost tab should render its "No Executions Yet" placeholder.
+ * A failed request must never land here — an error takes priority so the
+ * banner below can render instead of the workflow looking like it never ran.
+ */
+export function shouldShowEmptyState(params: {
+  readonly loading: boolean
+  readonly summary: { readonly total_jobs: number } | undefined
+  readonly error: unknown
+}): boolean {
+  const { loading, summary, error } = params
+  return !loading && error == null && (!summary || summary.total_jobs === 0)
 }
 
 interface CostTabProps {
@@ -132,7 +152,7 @@ export function CostTab({ className = "" }: CostTabProps) {
   const [showDollars, setShowDollars] = useState(!isCloud())
 
   // Empty state - no executions at all (or no job IDs so query is disabled)
-  if (!loading && (!summary || summary.total_jobs === 0)) {
+  if (shouldShowEmptyState({ loading, summary, error })) {
     return (
       <div className={`flex flex-col items-center justify-center h-full bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <BarChart3 className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />

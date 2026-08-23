@@ -22,6 +22,10 @@ import {
   cancelJob,
   cancelAllJobs,
   getWorkflowCostSummary,
+  mergeCostSummaries,
+  COST_SUMMARY_BATCH_SIZE,
+  type CostBreakdownItem,
+  type CostSummary,
   getLibraryAssets,
   deleteLibraryAsset,
   removeLibraryAsset,
@@ -246,6 +250,79 @@ describe("getWorkflowCostSummary", () => {
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body).toEqual({ jobIds: ["j1", "j2"] })
     expect(result).toEqual(payload)
+  })
+
+  const uuid = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`
+  const summary = (o: Partial<CostSummary> = {}): CostSummary =>
+    ({ total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [], ...o })
+  const okJson = (data: unknown) => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) })
+
+  it("issues one request per batch and never drops an id", async () => {
+    sessionWith("tok-cost")
+    const mock = mockFetchJson({ data: summary() })
+    vi.stubGlobal("fetch", mock)
+    const ids = Array.from({ length: 2 * COST_SUMMARY_BATCH_SIZE + 1 }, (_, i) => uuid(i))
+
+    await getWorkflowCostSummary(ids)
+
+    const batches = mock.mock.calls.map((c) => JSON.parse(c[1].body as string).jobIds as string[])
+    expect(batches.map((b) => b.length)).toEqual([COST_SUMMARY_BATCH_SIZE, COST_SUMMARY_BATCH_SIZE, 1])
+    expect(batches.flat()).toEqual(ids)
+  })
+
+  it("sums batch totals so >500 jobs never render an understated figure", async () => {
+    sessionWith("tok-cost")
+    const mock = vi.fn()
+      .mockResolvedValueOnce(okJson({ data: summary({ total_credits: 10, total_cost_usd: 0.5, total_jobs: 500 }) }))
+      .mockResolvedValueOnce(okJson({ data: summary({ total_credits: 4, total_cost_usd: 0.25, total_jobs: 100 }) }))
+    vi.stubGlobal("fetch", mock)
+
+    const { data } = await getWorkflowCostSummary(Array.from({ length: 600 }, (_, i) => uuid(i)))
+
+    expect(data).toMatchObject({ total_jobs: 600, total_credits: 14, total_cost_usd: 0.75 })
+  })
+
+  it("rejects when any batch fails — never a partial total presented as complete", async () => {
+    sessionWith("tok-cost")
+    const errBody = { error: { code: "internal_error", message: "boom" } }
+    const mock = vi.fn()
+      .mockResolvedValueOnce(okJson({ data: summary() }))
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => errBody, text: async () => JSON.stringify(errBody) })
+    vi.stubGlobal("fetch", mock)
+
+    await expect(getWorkflowCostSummary(Array.from({ length: 600 }, (_, i) => uuid(i)))).rejects.toThrow()
+  })
+})
+
+describe("mergeCostSummaries", () => {
+  const row = (o: Partial<CostBreakdownItem>): CostBreakdownItem => ({
+    node_type: "generate-image", model: "flux", runs: 1, successful: 1, failed: 0,
+    total_credits: 0, total_cost_usd: 0, avg_credits_per_run: 0, ...o,
+  })
+  const summary = (breakdown: CostBreakdownItem[]): CostSummary => ({
+    total_credits: breakdown.reduce((n, b) => n + b.total_credits, 0),
+    total_cost_usd: breakdown.reduce((n, b) => n + b.total_cost_usd, 0),
+    total_jobs: breakdown.reduce((n, b) => n + b.runs, 0),
+    breakdown,
+  })
+
+  it("re-aggregates the same (node_type, model) row across batches and recomputes the average", () => {
+    const merged = mergeCostSummaries([
+      summary([row({ runs: 2, successful: 2, total_credits: 10, total_cost_usd: 0.5 })]),
+      summary([row({ runs: 1, successful: 0, failed: 1, total_credits: 2, total_cost_usd: 0.1 })]),
+    ])
+    expect(merged).toEqual({
+      total_credits: 12, total_cost_usd: 0.6, total_jobs: 3,
+      breakdown: [row({ runs: 3, successful: 2, failed: 1, total_credits: 12, total_cost_usd: 0.6, avg_credits_per_run: 4 })],
+    })
+  })
+
+  it("keeps distinct rows separate and sorts by total_credits descending, like the route", () => {
+    const merged = mergeCostSummaries([
+      summary([row({ node_type: "a", total_credits: 1, avg_credits_per_run: 1 })]),
+      summary([row({ node_type: "b", total_credits: 9, avg_credits_per_run: 9 })]),
+    ])
+    expect(merged.breakdown.map((b) => b.node_type)).toEqual(["b", "a"])
   })
 })
 

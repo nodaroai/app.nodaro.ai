@@ -5368,14 +5368,61 @@ export interface CostSummary {
   readonly breakdown: readonly CostBreakdownItem[]
 }
 
+// Route cap per request (z.array(...).max(500)); ids are batched, never truncated.
+export const COST_SUMMARY_BATCH_SIZE = 500
+
+function roundUsd(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000
+}
+
+/** Combine per-batch summaries with the route's own (node_type, model) aggregation. */
+export function mergeCostSummaries(summaries: readonly CostSummary[]): CostSummary {
+  const groups = new Map<string, CostBreakdownItem>()
+  let total_credits = 0
+  let total_cost_usd = 0
+  let total_jobs = 0
+  for (const s of summaries) {
+    total_credits += s.total_credits
+    total_cost_usd += s.total_cost_usd
+    total_jobs += s.total_jobs
+    for (const item of s.breakdown) {
+      const key = `${item.node_type}::${item.model}`
+      const acc = groups.get(key) ?? { ...item, runs: 0, successful: 0, failed: 0, total_credits: 0, total_cost_usd: 0 }
+      groups.set(key, {
+        ...acc,
+        runs: acc.runs + item.runs,
+        successful: acc.successful + item.successful,
+        failed: acc.failed + item.failed,
+        total_credits: acc.total_credits + item.total_credits,
+        total_cost_usd: acc.total_cost_usd + item.total_cost_usd,
+      })
+    }
+  }
+  const breakdown = [...groups.values()]
+    .map((e) => ({
+      ...e,
+      total_cost_usd: roundUsd(e.total_cost_usd),
+      avg_credits_per_run: e.runs > 0 ? Math.round(e.total_credits / e.runs) : 0,
+    }))
+    .sort((a, b) => b.total_credits - a.total_credits)
+  return { total_credits, total_cost_usd: roundUsd(total_cost_usd), total_jobs, breakdown }
+}
+
 export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise<{ data: CostSummary }> {
   if (jobIds.length === 0) {
     return { data: { total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] } }
   }
-  return apiJson("/v1/jobs/cost-summary", {
-    body: { jobIds },
-    label: "Failed to fetch cost summary",
-  })
+  const batchCount = Math.ceil(jobIds.length / COST_SUMMARY_BATCH_SIZE)
+  // Promise.all: one failed batch fails the call — never a partial total.
+  const results = await Promise.all(
+    Array.from({ length: batchCount }, (_, i) =>
+      apiJson<{ data: CostSummary }>("/v1/jobs/cost-summary", {
+        body: { jobIds: jobIds.slice(i * COST_SUMMARY_BATCH_SIZE, (i + 1) * COST_SUMMARY_BATCH_SIZE) },
+        label: "Failed to fetch cost summary",
+      }),
+    ),
+  )
+  return { data: mergeCostSummaries(results.map((r) => r.data)) }
 }
 
 /**
