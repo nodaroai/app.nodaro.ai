@@ -3,6 +3,7 @@ import { resolveEffectiveTier } from "@nodaro/shared"
 import { useNavigate } from "react-router-dom"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
+import { hydrateWorkspaces, resetWorkspaceState } from "@/lib/workspace-context"
 
 export type UserRole = "user" | "admin" | "super_admin"
 
@@ -41,8 +42,19 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
   if (!user) {
     cachedRole = "user"
     cachedTier = "free"
+    // A signed-out browser must not keep pointing at someone's workspace:
+    // the next person to sign in here would inherit the selection, and the
+    // switcher would offer them a school they have never been in.
+    resetWorkspaceState()
     return
   }
+  // Which organizations and workspaces this session belongs to, loaded
+  // alongside role and tier and for the same reason: every request the
+  // client builds from here carries the selected workspace, so a page that
+  // renders before this resolves would send none. Anchored to the session
+  // rather than to a page so a deep link into the editor is covered too.
+  // No-ops on a build without organizations, and never throws.
+  void hydrateWorkspaces()
   const supabase = createClient()
   const { data: profile } = await supabase
     .from("profiles")

@@ -123,6 +123,7 @@ added to `config.ts` without a row here.
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
+| `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |

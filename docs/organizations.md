@@ -43,7 +43,7 @@ fall through; setting a key to `false` is a real value, not "unset".
 | `default_workflow_visibility` | `private` \| `workspace` | The visibility a new workflow gets. |
 | `member_access_to_shared` | `view` \| `edit` | What members may do with a workflow shared to the workspace. |
 | `members_can_create_projects` | boolean | Whether members may create projects in the workspace. |
-| `member_caps_enabled` | boolean | Whether per-member credit caps are enforced. |
+| `member_caps_enabled` | boolean | Whether per-member credit caps apply. **Stored now, not yet enforced** — it takes effect when organization billing is enabled, along with `creditCap` on a workspace member. |
 | `personal_space_enabled` | boolean | Whether members keep a personal (non-workspace) space. |
 | `workspace_admins_can_invite` | boolean | Whether workspace admins may invite new people into the organization. |
 | `collaborators_can_invite` | boolean | Whether an editor collaborator may invite further collaborators. |

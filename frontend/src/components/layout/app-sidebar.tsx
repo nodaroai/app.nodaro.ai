@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { Suspense, lazy, useCallback, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import {
@@ -42,6 +42,18 @@ import { APP_VERSION } from "@/lib/version"
 import { useUpdateCheck } from "@/hooks/use-update-check"
 import { UpdateDialog } from "@/components/layout/update-dialog"
 import { NodaroLogo } from "@/components/nodaro-logo"
+import { hasOrganizations } from "@/lib/edition"
+
+/**
+ * The workspace switcher, lazily loaded and only on a build that has
+ * organizations — the same shape `router.tsx` uses to reach its enterprise
+ * pages, and the only way core code reaches ee UI without a static import.
+ * On every other build the chunk is never requested and the menu is exactly
+ * what it was.
+ */
+const OrgSwitcherSection = hasOrganizations()
+  ? lazy(() => import("@/ee/components/org/org-switcher-section").then((m) => ({ default: m.OrgSwitcherSection })))
+  : null
 import { otherNodaroApps } from "@/lib/nodaro-apps"
 import {
   DropdownMenu,
@@ -366,6 +378,11 @@ export function AppSidebar({
                   </a>
                 </DropdownMenuItem>
               ))}
+              {OrgSwitcherSection && (
+                <Suspense fallback={null}>
+                  <OrgSwitcherSection />
+                </Suspense>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Mobile close button */}
