@@ -20,9 +20,12 @@ export function baseUrl(fallback: string) {
     .string()
     .default(fallback)
     .transform((v) => (v.trim() || fallback).replace(/\/+$/, ""))
+    .refine((v) => /^https?:\/\/[^/?#\s]+/.test(v), {
+      message: "must be an absolute http(s) URL, e.g. https://proxy.example.com",
+    })
 }
 
-const envSchema = z.object({
+export const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   REDIS_URL: z.string().default("redis://localhost:6379"),
@@ -54,8 +57,17 @@ const envSchema = z.object({
    * field entirely, which is why it was hardcoded — but a Supabase-local
    * stack wants "local" and DO Spaces / AWS want a real region ("nyc3",
    * "us-east-1", …) and reject "auto" outright. Default unchanged.
+   *
+   * The trim-to-default matters: zod `.default()` fires only on an UNDEFINED
+   * value, and `.env.example` ships this key blank, so `cp .env.example .env`
+   * would otherwise hand the S3 client `region: ""` — which throws "Region is
+   * missing" from the constructor at import time, taking the whole API down
+   * with a message that never names this variable.
    */
-  R2_REGION: z.string().default("auto"),
+  R2_REGION: z
+    .string()
+    .default("auto")
+    .transform((v) => v.trim() || "auto"),
   /**
    * Canned ACL to stamp on every object this app writes. EMPTY BY DEFAULT,
    * meaning the header is omitted entirely — which is what Cloud sends to R2

@@ -24,6 +24,9 @@ vi.mock("@/lib/config.js", () => ({
     get ELEVENLABS_API_KEY() {
       return cfgState.key
     },
+    // The route builds its URLs from ELEVENLABS_BASE_URL; without it the
+    // fetches under test are issued against "undefined/v2/voices".
+    ELEVENLABS_BASE_URL: "https://api.elevenlabs.io",
   },
 }))
 

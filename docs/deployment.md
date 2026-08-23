@@ -853,9 +853,11 @@ Gemini lanes that power prompt enhancement, script generation, the workflow
 copilot and the pipeline stages are served over the same host. Overriding it
 therefore sends those through your proxy too, which is usually what you want
 (one audit point for everything) but means the proxy must handle more than
-the media API: it needs `/api/v1/...` (task creation and polling),
-`/claude/v1/messages`, and `/<family>/v1/chat/completions` and
-`/<family>/v1/responses`. A proxy that forwards only the media paths will
+the media API: it needs `/api/v1/...` (task creation and polling — this also covers the
+`/api/v1/chat/credit` balance probe), `/claude/v1/messages`,
+`/<family>/v1/chat/completions`, `/<family>/v1/responses`, and
+`/client/v1/userRecord/...` (the per-task credit lookup behind the admin
+credit audit). A proxy that forwards only the media paths will
 leave every LLM-backed feature failing while image and video generation keep
 working — a confusing state worth ruling out first.
 
