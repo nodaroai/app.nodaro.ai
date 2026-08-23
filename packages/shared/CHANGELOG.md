@@ -1,5 +1,24 @@
 # @nodaro/shared
 
+## 2.9.0
+
+### Minor Changes
+
+- c7fde04: Organizations wire contract: role / kind / status enums, settings request schemas, error codes.
+- b49a7ff: Slideshow: `client.media.slideshow({ imageUrls, audioUrl?, imageDurations?, ... })` and `nodaro media slideshow` — 2–100 images + one optional audio track → MP4 via `POST /v1/slideshow`, locally rendered (FFmpeg), zero credits. Audio-anchored timing (equal split / pinned rows with disclosed proportional scaling); silent output without audio. Shared adds `PICKER_TO_COMBINE_TRANSITION` + `resolveSlideshowTransition` (transition-picker → xfade vocabulary mapping).
+- 3488681: The surround fill-prompt builder moves out of this package. `SURROUND_DIRECTIONS`, the carried-fraction defaults, `isTiltDirection`, and `defaultCarriedFraction` are unchanged; `buildSurroundFillPrompt` is no longer exported (it was never part of the SDK surface).
+- 9df6f33: Workflow bundles now carry a `portability` note when they reference media another instance cannot fetch (a private host's own storage), and `workflows.import()` returns an `importReport` describing which media was copied onto the importing instance, which was unreachable, and which was skipped.
+
+### Patch Changes
+
+- ff52285: Comment tidy-up in the featured-entity catalog and style presets.
+- d964b4d: grok-2 reference-image support: attaching a reference auto-routes to the new `grok-2-i2i` chain (segment-map mints a task id from the reference URL, image-edit consumes it) — `T2I_TO_I2I_VARIANT`, `MODELS_WITH_REFERENCE_IMAGE_SUPPORT`, `REF_IMAGE_MAX_LIMITS` (single reference), and a `grok-2-i2i` catalog entry.
+- d1ad395: Organizations wire contract: add the error codes the organization, workspace, membership, invitation and join-code endpoints return (`terms_required`, `not_org_member`, `already_a_member`, `owner_cannot_leave`, `has_active_workspaces`, `invitation_not_found`, `invitation_accepted`, `bulk_invite_cap_exceeded`).
+- 4282945: Add the workspace request-header constant (`WORKSPACE_HEADER`, plus its lower-case form for server-side header lookups) to the organizations wire contract.
+- 776e7f5: Comment tidy-up in credit constants and estimators.
+- 6b8cfab: Suno's non-custom prompt cap is 3000, not 500. `getMaxSunoPromptChars(model, false)` returned 500 — six times under the provider's documented limit — and the suno route truncates rather than rejects, so a 950-character score brief reached Suno cut to exactly 500 characters mid-word, with nothing in the job record to show it.
+- 823b629: Comment tidy-up in the video-analysis pricing table.
+
 ## 2.8.0
 
 ### Minor Changes

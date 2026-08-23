@@ -1,5 +1,24 @@
 # @nodaro/prompts
 
+## 1.7.3
+
+### Patch Changes
+
+- 1606089: Editorial cleanup of a doctrine section header.
+- ff52285: Comment tidy-up in the featured-entity catalog and style presets.
+- Updated dependencies [ff52285]
+- Updated dependencies [d964b4d]
+- Updated dependencies [d1ad395]
+- Updated dependencies [c7fde04]
+- Updated dependencies [4282945]
+- Updated dependencies [776e7f5]
+- Updated dependencies [b49a7ff]
+- Updated dependencies [6b8cfab]
+- Updated dependencies [3488681]
+- Updated dependencies [823b629]
+- Updated dependencies [9df6f33]
+  - @nodaro/shared@2.9.0
+
 ## 1.7.2
 
 ### Patch Changes
