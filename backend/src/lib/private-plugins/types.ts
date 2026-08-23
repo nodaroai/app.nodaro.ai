@@ -1284,6 +1284,151 @@ export interface PluginToolkit {
   http: PluginHttpToolkit
   llm: PluginLlmToolkit
   pipelines: PluginPipelinesToolkit
+  redis: PluginRedisToolkit
+  auth: PluginAuthToolkit
+  /**
+   * The service-role Supabase client, for a plugin that owns tables of its
+   * own and needs a real query surface (filters, ordering, pagination,
+   * writes, RPC) rather than the single insert chain `http.supabase` was
+   * shaped to.
+   *
+   * Declared here with the SAME narrow structural type as `http.supabase`,
+   * deliberately: checking the real postgrest-js client against a structural
+   * `select` signature sends its type-level select-string parser into
+   * unbounded instantiation (TS2589), so this side declares only what its own
+   * tsc can verify against the real client. The plugin side declares the
+   * wider surface it relies on — one runtime client, two true declarations,
+   * the same asymmetry `PluginSupabaseClient` already documents.
+   *
+   * SERVICE ROLE: every query bypasses row-level security. Authorization is
+   * the calling route's job, never the database's.
+   */
+  db: PluginSupabaseClient
+}
+
+// ============================================================================
+// Redis + auth toolkit groups
+// ============================================================================
+
+/**
+ * The app's Redis connection, narrowed to the key-value operations a plugin
+ * needs for caches, counters and rate limits. `url` is exposed because a
+ * plugin may need to hand a connection string to a library of its own
+ * (a sync server's Redis extension, say) rather than issue commands itself.
+ *
+ * Structural mirror of the `ioredis` client in `backend/src/lib/queue.ts`
+ * (`get`/`set`/`del`/`incr`/`expire`/`ttl` are all real members). Values are
+ * plain strings: whatever a plugin caches, it serializes itself.
+ */
+export interface PluginRedisToolkit {
+  url: string
+  kv: {
+    get(key: string): Promise<string | null>
+    /** SET with an optional TTL in seconds (`EX`). */
+    set(key: string, value: string, ttlSeconds?: number): Promise<void>
+    del(...keys: string[]): Promise<number>
+    incr(key: string): Promise<number>
+    expire(key: string, seconds: number): Promise<number>
+    /** Remaining TTL in seconds; negative when absent or unexpiring. */
+    ttl(key: string): Promise<number>
+  }
+}
+
+/**
+ * Platform-role questions. Org and workspace roles are the plugin's own
+ * concern (it owns those tables); this is only about the PLATFORM staff role
+ * on `profiles`, which core owns and caches.
+ */
+export interface PluginAuthToolkit {
+  /** `profiles.role` ∈ (admin, super_admin). */
+  isPlatformAdmin(userId: string): Promise<boolean>
+  /** The raw role, so a plugin can require `super_admin` specifically. */
+  platformRole(userId: string): Promise<string | null>
+}
+
+// ============================================================================
+// Services — capabilities a plugin exposes to CORE SEAMS
+// ============================================================================
+
+/**
+ * The caller's memberships, as the plugin loaded them. Core never interprets
+ * these; it passes them to the plugin's own resolvers. Shapes are structural
+ * mirrors of the organization tables.
+ */
+export interface PluginMemberships {
+  organizations: Array<{
+    orgId: string
+    role: "owner" | "admin" | "member"
+    /** The MEMBER's standing in the organization. */
+    status: "active" | "suspended"
+    /** The ORGANIZATION's own status; only `active` ones grant context. */
+    orgStatus?: "pending" | "active" | "suspended" | "deleted"
+  }>
+  workspaces: Array<{
+    workspaceId: string
+    orgId: string
+    role: "admin" | "member"
+    status: "active" | "suspended"
+  }>
+}
+
+/** What `resolveRequestContext` decided about one request. */
+export interface PluginRequestContextResult {
+  workspaceId?: string
+  orgId?: string
+  /** Present when the request must be refused; core sends it verbatim. */
+  reject?: { status: 400 | 403; code: string; message: string }
+}
+
+export interface PluginRequestContextInput {
+  userId: string
+  /** Raw `X-Nodaro-Workspace` value, if the request carried one. */
+  headerWorkspaceId?: string
+  /** Workspace a personal API token is bound to, if any. */
+  tokenWorkspaceId?: string
+  /**
+   * Identity-establishing routes (`GET /v1/me`, invitation accept, workspace
+   * list) treat a STALE header as absent rather than refusing: a client that
+   * cached a workspace it has since been removed from must still be able to
+   * call the endpoint that would tell it so.
+   */
+  identityRoute: boolean
+}
+
+/**
+ * Organization capabilities the core seams reach through
+ * `getPluginServices().orgs`. Absent (community/business, or a plugin that
+ * predates this member) ⇒ every seam behaves as "no organizations".
+ */
+export interface PluginOrgsService {
+  resolveRequestContext(input: PluginRequestContextInput): Promise<PluginRequestContextResult>
+  loadMemberships(userId: string): Promise<PluginMemberships>
+  invalidateMemberships(userId: string): Promise<void>
+  /** The organizations/workspaces block `GET /v1/me` merges into its payload. */
+  me(userId: string): Promise<{
+    organizations: unknown[]
+    workspaces: unknown[]
+    lastWorkspaceId: string | null
+  }>
+}
+
+/**
+ * One named member per capability a core seam can delegate. Mirrors how
+ * `PluginEngines` grows: additive-only, optional, never removed or narrowed
+ * without a CONTRACT_VERSION bump.
+ *
+ * `engines` are called by core code that keeps its own orchestration and
+ * delegates one computation; `services` are called by core SEAMS that have
+ * no behaviour of their own and no-op when the plugin is absent.
+ */
+export interface PluginServices {
+  orgs?: PluginOrgsService
+  /** Payer/entitlement resolution — narrowed when the billing seam lands. */
+  billing?: unknown
+  /** Model-policy enforcement — narrowed when the policy seam lands. */
+  policy?: unknown
+  /** Live-document writer — narrowed when the collaboration seam lands. */
+  collab?: unknown
 }
 
 // ============================================================================
@@ -1387,6 +1532,14 @@ export interface NodaroPrivatePlugin {
   engines?(tk: PluginToolkit): PluginEngines
   /** See `PromptTable`'s doc comment above for the full contract. */
   prompts?(): PromptTable
+  /**
+   * Additive: capabilities core SEAMS delegate to (see `PluginServices`).
+   * Unlike `engines`, these back a core module that has no behaviour of its
+   * own — when no plugin provides the member, the seam returns its
+   * "feature absent" answer. Merged by the loader with `Object.assign`, last
+   * write wins per named member.
+   */
+  services?(tk: PluginToolkit): Partial<PluginServices>
 }
 
 export interface PrivatePluginsModule {

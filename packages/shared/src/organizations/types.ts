@@ -10,6 +10,18 @@ import { z } from "zod"
  * vocabulary, no access rule. Those are server-side.
  */
 
+/**
+ * Selects which workspace a request LISTS from and CREATES into. It never
+ * authorizes: reading, updating, deleting or running an identified object is
+ * decided by that object's own workspace, so a forgotten or forged header can
+ * neither widen access nor move a charge.
+ *
+ * Fastify lower-cases incoming header keys, hence the second constant — read
+ * `req.headers[WORKSPACE_HEADER_LOWER]`, send `WORKSPACE_HEADER`.
+ */
+export const WORKSPACE_HEADER = "X-Nodaro-Workspace"
+export const WORKSPACE_HEADER_LOWER = "x-nodaro-workspace"
+
 export const ORG_KINDS = ["school", "team"] as const
 export type OrgKind = (typeof ORG_KINDS)[number]
 

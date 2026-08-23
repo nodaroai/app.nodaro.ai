@@ -49,7 +49,7 @@ vi.mock("@/ee/pipelines/llms/prompt-registry.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { loadPrivatePlugins } from "../load.js"
+import { getPluginServices, loadPrivatePlugins } from "../load.js"
 import type { NodaroPrivatePlugin, PluginToolkit } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ describe("loadPrivatePlugins", () => {
 
     const result = await loadPrivatePlugins({ importer, exit })
 
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
     expect(importer).not.toHaveBeenCalled()
     expect(exit).not.toHaveBeenCalled()
   })
@@ -105,7 +105,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
 
     errorSpy.mockRestore()
   })
@@ -120,7 +120,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
 
     warnSpy.mockRestore()
   })
@@ -134,7 +134,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
 
     errorSpy.mockRestore()
   })
@@ -149,7 +149,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
 
     warnSpy.mockRestore()
   })
@@ -247,6 +247,153 @@ describe("loadPrivatePlugins", () => {
     const result = await loadPrivatePlugins({ app: fakeApp, importer, exit })
 
     expect(exit).not.toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} })
+  })
+})
+
+describe("services — the surface core seams delegate to", () => {
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+  })
+
+  it("merges services from every plugin, last write wins per member, and publishes them", async () => {
+    const orgsA = { name: "a" } as never
+    const orgsB = { name: "b" } as never
+    const billing = { resolve: vi.fn() } as never
+    const result = await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          { name: "a", services: () => ({ orgs: orgsA, billing }) },
+          { name: "b", services: () => ({ orgs: orgsB }) },
+        ] as NodaroPrivatePlugin[],
+      }),
+      toolkit: {} as PluginToolkit,
+    })
+    expect(result.services.orgs).toBe(orgsB)
+    expect(result.services.billing).toBe(billing)
+    expect(getPluginServices()).toBe(result.services)
+  })
+
+  it("is an empty object when no plugin provides one", async () => {
+    const result = await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [{ name: "a" }] as NodaroPrivatePlugin[] }),
+      toolkit: {} as PluginToolkit,
+    })
+    expect(result.services).toEqual({})
+    expect(getPluginServices()).toEqual({})
+  })
+
+  it("leaves the published surface empty on community/business", async () => {
+    mockHasCreditsRef.value = false
+    const result = await loadPrivatePlugins({
+      importer: async () => {
+        throw new Error("importer must not be called")
+      },
+      toolkit: {} as PluginToolkit,
+    })
+    expect(result.services).toEqual({})
+    expect(getPluginServices()).toEqual({})
+  })
+})
+
+describe("services — failure and edition paths clear the published surface", () => {
+  const load = (over: Partial<Parameters<typeof loadPrivatePlugins>[0]> = {}) =>
+    loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [{ name: "a", services: () => ({ orgs: { tag: "real" } as never }) }] as NodaroPrivatePlugin[],
+      }),
+      exit: vi.fn() as unknown as (code: number) => never,
+      toolkit: fakeToolkit,
+      ...over,
+    })
+
+  // The suite-wide setup defaults PRIVATE_MODULES=optional (so nothing in the
+  // test run can hit the real exit path by accident); the fatal cases below
+  // need it cleared, exactly as the first describe does.
+  const originalPrivateModules = process.env.PRIVATE_MODULES
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+    delete process.env.PRIVATE_MODULES
+  })
+  afterEach(() => {
+    if (originalPrivateModules === undefined) delete process.env.PRIVATE_MODULES
+    else process.env.PRIVATE_MODULES = originalPrivateModules
+  })
+
+  it("a later community/business load clears services a cloud load published", async () => {
+    await load()
+    expect(getPluginServices().orgs).toBeTruthy()
+    mockHasCreditsRef.value = false
+    await load()
+    expect(getPluginServices(), "a stale surface would let a non-cloud process act on cloud services").toEqual({})
+  })
+
+  it("a later FAILED load clears them too", async () => {
+    await load()
+    expect(getPluginServices().orgs).toBeTruthy()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    await load({
+      importer: async () => {
+        throw new Error("not installed")
+      },
+    })
+    expect(getPluginServices()).toEqual({})
+    errorSpy.mockRestore()
+  })
+
+  it("a plugin whose capability THROWS is a load failure, not an unhandled rejection", async () => {
+    // The whole point of additive-optional members is that a plugin built
+    // against a newer host still loads on an older one. A capability that
+    // throws while being constructed must therefore go through the same
+    // fatal-or-optional path as any other load failure — otherwise the
+    // rejection escapes into app.ts, which awaits with no catch, and the API
+    // server dies at boot past the operator's escape hatch.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const exit = vi.fn() as unknown as (code: number) => never
+    const result = await load({
+      exit,
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          {
+            name: "needy",
+            services: () => {
+              throw new Error("the host does not provide tk.db")
+            },
+          },
+        ] as NodaroPrivatePlugin[],
+      }),
+    })
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(errorSpy.mock.calls.flat().join(" ")).toContain('plugin "needy" failed to initialise')
+    expect(result.services).toEqual({})
+    expect(getPluginServices()).toEqual({})
+    errorSpy.mockRestore()
+  })
+
+  it("PRIVATE_MODULES=optional keeps the escape hatch open for a throwing capability", async () => {
+    process.env.PRIVATE_MODULES = "optional"
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const exit = vi.fn() as unknown as (code: number) => never
+    const result = await load({
+      exit,
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          {
+            name: "needy",
+            services: () => {
+              throw new Error("the host does not provide tk.db")
+            },
+          },
+        ] as NodaroPrivatePlugin[],
+      }),
+    })
+    expect(exit, "optional mode must never take the process down").not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalled()
+    expect(result.services).toEqual({})
+    warnSpy.mockRestore()
   })
 })

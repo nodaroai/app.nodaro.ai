@@ -173,6 +173,41 @@ header already identifies the site, and Nodaro prefers it: it names the product
 automatically when it runs in a browser, so a page never depends on the header
 being allowlisted server-side.
 
+## 4c. Selecting a workspace (Cloud, organizations)
+
+Accounts that belong to an organization can work inside one of its workspaces.
+Send the workspace's id and the request is scoped to it:
+
+```
+X-Nodaro-Workspace: 6f1e6b4c-6a4e-4b7b-9d2a-2f0f0a1d9c34
+```
+
+The header does two things, and only these two: it decides **which workspace a
+list returns** and **where a create lands**. It never grants access. Reading,
+updating, deleting or running something you name by id is decided by that
+object's own workspace, so a forgotten header cannot hide your work and a
+forged one cannot reach anyone else's.
+
+Send it only for a workspace you belong to. Anything else — a workspace you are
+not a member of, one that does not exist, or one whose organization is not
+active — is refused with `403 not_a_member`; a suspended membership with
+`403 member_suspended`; a value that is not a uuid with `400 validation_error`.
+Omit it and you are working in your personal space, exactly as an account with
+no organization always does.
+
+Two exceptions exist so a stale selection can never lock you out: on
+`GET /v1/me` and `GET /v1/workspaces` (and when accepting an invitation) a
+workspace you can no longer select is treated as if you had sent nothing, and
+the call succeeds. Those are the endpoints that tell you which workspaces you
+may select, so clear a cached selection when they stop listing it.
+
+An API token may be bound to one workspace; it then behaves as if it sent this
+header on every request, and an explicit header naming a different workspace
+is refused with `400 token_workspace_mismatch`.
+
+The header has no effect unless organizations are enabled on the instance you
+are calling; self-hosted builds ignore it.
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`

@@ -47,6 +47,9 @@ import {
   requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
+import { config } from "../config.js"
+import { redis } from "../queue.js"
+import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
@@ -962,6 +965,36 @@ export function buildToolkit(): PluginToolkit {
         return estimateSeededPipelineCredits(supabase, input)
       },
       getSnapshot: getPipelineSnapshot,
+    },
+    redis: {
+      url: config.REDIS_URL,
+      kv: {
+        get: (key) => redis.get(key),
+        set: async (key, value, ttlSeconds) => {
+          if (ttlSeconds === undefined) await redis.set(key, value)
+          else await redis.set(key, value, "EX", ttlSeconds)
+        },
+        del: (...keys) => redis.del(...keys),
+        incr: (key) => redis.incr(key),
+        expire: (key, seconds) => redis.expire(key, seconds),
+        ttl: (key) => redis.ttl(key),
+      },
+    },
+    db: supabase,
+    auth: {
+      isPlatformAdmin: checkIsAdmin,
+      // Throws on a lookup failure rather than returning null: null means
+      // "this user holds no platform role", and a plugin gating on a SPECIFIC
+      // role (`=== "super_admin"`) fails closed on that, but one gating the
+      // other way would not. A database outage must not read as an answer.
+      // Uncached, unlike its `isPlatformAdmin` sibling, which goes through
+      // admin-check's 5-minute cache and its invalidation — ask for the
+      // boolean unless the exact role matters.
+      platformRole: async (userId) => {
+        const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle()
+        if (error) throw new Error(`platformRole lookup failed: ${error.message}`)
+        return (data?.role as string | undefined) ?? null
+      },
     },
   }
 }
