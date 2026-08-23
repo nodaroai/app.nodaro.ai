@@ -283,6 +283,13 @@ export async function commitJobCredits(
    * no under-charge from a flat/GPU-time `result.cost`. Default false.
    */
   metered = false,
+  /**
+   * The reservation was a CEILING, not an estimate (the Workflow Copilot
+   * reserves the most a turn may spend and commits the metered actual). A
+   * committed actual below the reservation is then the expected outcome, not
+   * an "overcharge" anomaly — skip that branch; undercharge/zero-cost still log.
+   */
+  ceilingReservation = false,
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
@@ -312,7 +319,8 @@ export async function commitJobCredits(
         CreditsService.commitCredits(usageLogId, actualCredits),
         supabase.from("jobs").update({ credits_actual: actualCredits }).eq("id", jobId),
       ]
-      if (usageLog) {
+      const belowCeiling = ceilingReservation && actualCredits <= usageLog?.credits_used
+      if (usageLog && !belowCeiling) {
         tasks.push(checkAndLogAnomaly({
           jobId,
           userId: usageLog.user_id,

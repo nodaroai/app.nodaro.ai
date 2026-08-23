@@ -23,6 +23,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Embed a published Nodaro MiniApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
+- **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
 

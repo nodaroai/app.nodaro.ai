@@ -1,0 +1,166 @@
+/**
+ * The loop's contract, driven by a scripted fake Anthropic client:
+ * parallel tool results in ONE user message, the caps, the identical-call
+ * short circuit, cancel, and the run proposal ending the turn.
+ */
+import { describe, expect, it, vi, beforeEach } from "vitest"
+import type Anthropic from "@anthropic-ai/sdk"
+
+const { streamMock, dispatchMock } = vi.hoisted(() => ({ streamMock: vi.fn(), dispatchMock: vi.fn() }))
+
+vi.mock("@/lib/anthropic.js", () => ({
+  getAnthropicClient: () => ({ messages: { stream: streamMock } }),
+}))
+
+vi.mock("../tools/registry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../tools/registry.js")>()
+  return { ...actual, dispatchTool: dispatchMock }
+})
+
+const { runAgentLoop } = await import("../agent-loop.js")
+
+/** A text block as the SDK types it (a `TextBlock` carries `citations`). */
+function textBlock(text: string): Anthropic.Messages.ContentBlock {
+  return { type: "text", text, citations: null } as Anthropic.Messages.ContentBlock
+}
+
+/** A stream stub that replays one scripted final message. */
+function scriptStream(final: Partial<Anthropic.Messages.Message>, text = "") {
+  const handlers: Record<string, (chunk: string) => void> = {}
+  return {
+    on: (event: string, handler: (chunk: string) => void) => {
+      handlers[event] = handler
+      return undefined
+    },
+    abort: vi.fn(),
+    finalMessage: async () => {
+      if (text && handlers.text) handlers.text(text)
+      return {
+        id: "msg",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5",
+        content: [],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 100, output_tokens: 50 },
+        ...final,
+      } as Anthropic.Messages.Message
+    },
+  }
+}
+
+const baseInput = () => ({
+  system: "system",
+  tools: [],
+  history: [],
+  userContent: [{ type: "text" as const, text: "hi" }],
+  budget: { limitUsd: 10, reservedCredits: 150 },
+  signal: new AbortController().signal,
+  deps: { ctx: {} as never, invoker: {} as never, addedNodeTypes: new Set<string>() },
+  events: { onToken: vi.fn(), onToolCall: vi.fn(), onIteration: vi.fn() },
+  isCancelRequested: async () => false,
+})
+
+beforeEach(() => {
+  streamMock.mockReset()
+  dispatchMock.mockReset()
+  dispatchMock.mockResolvedValue({ text: "ok", isError: false })
+})
+
+describe("runAgentLoop", () => {
+  it("streams prose and stops at end_turn", async () => {
+    streamMock.mockReturnValue(scriptStream({ content: [textBlock("done")] }, "done"))
+    const input = baseInput()
+    const result = await runAgentLoop(input)
+    expect(result.stopReason).toBe("completed")
+    expect(result.assistantText).toBe("done")
+    expect(input.events.onToken).toHaveBeenCalledWith("done")
+    expect(result.iterations).toBe(1)
+  })
+
+  it("answers EVERY tool_use of one message in a single user message", async () => {
+    streamMock
+      .mockReturnValueOnce(
+        scriptStream({
+          stop_reason: "tool_use",
+          content: [
+            { type: "tool_use", id: "t1", name: "get_graph", input: {} },
+            { type: "tool_use", id: "t2", name: "list_models", input: {} },
+          ],
+        }),
+      )
+      .mockReturnValueOnce(scriptStream({ content: [textBlock("ok")] }))
+
+    const result = await runAgentLoop(baseInput())
+    expect(result.toolCalls).toBe(2)
+    const toolResultMessage = result.messages.find(
+      (m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b) => (b as { type: string }).type === "tool_result"),
+    )
+    const blocks = (toolResultMessage!.content as Array<{ type: string; tool_use_id: string }>).filter(
+      (b) => b.type === "tool_result",
+    )
+    expect(blocks.map((b) => b.tool_use_id)).toEqual(["t1", "t2"])
+  })
+
+  it("short-circuits an identical call instead of running it a fourth time", async () => {
+    const call = () =>
+      scriptStream({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "t", name: "get_graph", input: {} }] })
+    streamMock.mockReturnValue(call())
+    streamMock.mockImplementation(() => call())
+
+    const result = await runAgentLoop(baseInput())
+    expect(result.stopReason).toBe("capped")
+    // 3 real dispatches; every later identical call is answered without running it.
+    expect(dispatchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it("stops when the next call would break the USD budget", async () => {
+    streamMock.mockReturnValue(scriptStream({ content: [textBlock("x")] }))
+    const input = { ...baseInput(), budget: { limitUsd: 0, reservedCredits: 1 } }
+    const result = await runAgentLoop(input)
+    expect(result.stopReason).toBe("budget")
+    expect(streamMock).not.toHaveBeenCalled()
+  })
+
+  it("ends the turn on a run proposal so the user decides", async () => {
+    dispatchMock.mockResolvedValue({ text: "proposed", isError: false, proposal: { addedNodeTypes: ["generate-image"] } })
+    streamMock.mockReturnValue(
+      scriptStream({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "r1", name: "run_workflow", input: {} }] }),
+    )
+    const result = await runAgentLoop(baseInput())
+    expect(result.stopReason).toBe("run_proposed")
+    expect(result.proposal?.addedNodeTypes).toEqual(["generate-image"])
+    // The pending tool_use was answered before stopping — the stored
+    // conversation stays replayable.
+    const last = result.messages[result.messages.length - 1]!
+    expect(last.role).toBe("user")
+  })
+
+  it("returns cancelled when the DB cancel flag is set", async () => {
+    streamMock.mockReturnValue(
+      scriptStream({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "t", name: "get_graph", input: {} }] }),
+    )
+    const result = await runAgentLoop({ ...baseInput(), isCancelRequested: async () => true })
+    expect(result.stopReason).toBe("cancelled")
+    expect(dispatchMock).not.toHaveBeenCalled()
+  })
+
+  it("accounts cache tokens in the turn's cost", async () => {
+    streamMock.mockReturnValue(
+      scriptStream({
+        content: [textBlock("x")],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 100,
+          cache_read_input_tokens: 20_000,
+          cache_creation_input_tokens: 5_000,
+        } as unknown as Anthropic.Messages.Usage,
+      }),
+    )
+    const result = await runAgentLoop(baseInput())
+    expect(result.usage.cacheReadTokens).toBe(20_000)
+    expect(result.usage.cacheWriteTokens).toBe(5_000)
+    expect(result.usage.costUsd).toBeGreaterThan(0)
+  })
+})

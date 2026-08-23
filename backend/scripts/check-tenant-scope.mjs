@@ -52,8 +52,19 @@ const BASELINE_MAX_ENTRIES = 34
 // that user or admins. Adding a new tenant table is a conscious decision.
 // ---------------------------------------------------------------------------
 
+// The column a route uses to address ONE row. Defaults to "id"; a table with
+// a composite primary key names the column identifying the row's owning object
+// instead. Without this the rule silently never fires for such a table — it
+// reads like coverage and provides none.
+const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"]])
+
+function rowKeyMatcher(table) {
+  return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
+}
+
 const TENANT_TABLES = new Set([
   "characters",
+  "workflow_collaborators",
   "objects",
   "creatures",
   "locations",
@@ -242,8 +253,8 @@ function scan(filePath) {
 
     const block = collectChain(lines, i)
 
-    // Is there an id-keyed eq? (literal "id" or 'id')
-    if (!/\.eq\s*\(\s*["']id["']/.test(block)) continue
+    // Is there a row-keyed eq? (literal or single-quoted)
+    if (!rowKeyMatcher(table).test(block)) continue
 
     // Is this a protected operation — update, delete, or single-row read?
     const isProtected =

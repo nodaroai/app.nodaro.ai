@@ -163,6 +163,13 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Kill switch for the in-app Workflow Copilot (cloud). Unset/false = the
+   *  routes answer 503 feature_disabled. Strict parsing like MCP_ENABLED; the
+   *  admin `copilot_enabled` app setting can additionally pause it at runtime. */
+  COPILOT_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Dynamic Client Registration mode. "allowlist" = only allow known MCP clients (Claude/Cursor/etc); "open" = allow any client_name; "off" = DCR disabled entirely (returns 403). */
   MCP_DYNAMIC_REGISTRATION: z.enum(["allowlist", "open", "off"]).default("allowlist"),
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */

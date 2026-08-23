@@ -9,6 +9,7 @@ import {
   ELEVENLABS_RECOVER_KINDS,
   FAL_RECOVER_KINDS,
   NODARO_CLOUD_RECOVER_KINDS,
+  COPILOT_KINDS,
   isSyncKind,
   type ProviderKind,
 } from "./types.js"
@@ -211,6 +212,12 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           reconcile_attempts: row.reconcile_attempts,
           job_type: row.job_type,
         })
+        result.recovered++
+      } else if (COPILOT_KINDS.has(kind)) {
+        // ee/ code, loaded the shim way: a copilot job can only exist on a
+        // credits edition, but the cron runs everywhere.
+        const { reconcileCopilotTurn } = await import("../../ee/copilot/reconcile.js")
+        await reconcileCopilotTurn({ id: row.id, reconcile_attempts: row.reconcile_attempts })
         result.recovered++
       } else {
         // Unknown provider_kind (e.g., a future variant added to types.ts

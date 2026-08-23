@@ -8,6 +8,12 @@ interface RateLimitOptions {
   max: number
   /** Redis key prefix */
   keyPrefix: string
+  /**
+   * Refuse (503) instead of allowing the request when Redis is unreachable.
+   * Default false (read routes should not go dark with the cache). Set on
+   * SPEND routes — an outage must not also remove the limit on spending.
+   */
+  failClosed?: boolean
 }
 
 /**
@@ -43,7 +49,13 @@ export function rateLimiter(opts: RateLimitOptions) {
         })
       }
     } catch {
-      // If Redis is down, allow the request through rather than blocking
+      // If Redis is down, allow the request through rather than blocking —
+      // unless the route opted into failing closed (spend routes).
+      if (opts.failClosed) {
+        return reply.status(503).send({
+          error: { code: "rate_limit_unavailable", message: "Rate limiting is temporarily unavailable. Try again shortly." },
+        })
+      }
     }
   }
 }
