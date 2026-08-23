@@ -1000,3 +1000,26 @@ describe("Suno id passthrough — one source for the pair (#819 review)", () => 
     expect(result.sunoTaskId).toBeUndefined()
   })
 })
+
+describe("resolveNodeInputs — wired parameter pickers beside a wired text-prompt", () => {
+  // The orchestrator seeds EVERY parameter picker with its prompt hint as a
+  // completed state (`orchestrator-worker.ts`: `output: { text: hint }`), so a
+  // picker's output is non-empty by design on every server-side run. The
+  // resolver must still skip the picker's edge — its hint is appended by the
+  // payload-builder's `collectCinematographyHints` from the `look` handle —
+  // and never let it reach `routeOutput`'s `inputs.prompt = output` fallback.
+  // Edge order matters for the defect (last edge wins): the text-prompt edge
+  // is deliberately first so a regression overwrites the user's prompt.
+  it("a wired picker must not overwrite the wired text-prompt", () => {
+    const target = node("t", "generate-image", { prompt: "" })
+    const text = node("txt", "text-prompt", { text: "a knight riding a horse" })
+    const lens = node("lens", "lens", { lens: "cooke-s4" })
+    const edges = [edge("txt", "t", "prompt", "prompt"), edge("lens", "t", "out", "look")]
+    // orchestrator-worker.ts seeds PARAMETER nodes with their prompt hint as output
+    const states: Record<string, NodeExecutionState> = {
+      txt: { status: "completed", output: { text: "a knight riding a horse" } },
+      lens: { status: "completed", output: { text: "shot on a Cooke S4 cinema prime" } },
+    }
+    expect(resolveNodeInputs(target, edges, states, [text, lens, target]).prompt).toBe("a knight riding a horse")
+  })
+})

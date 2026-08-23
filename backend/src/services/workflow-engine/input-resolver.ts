@@ -352,18 +352,26 @@ export function resolveNodeInputs(
     // don't overwrite `inputs.prompt` with the parameter hint, which would
     // silently erase the consumer's manual prompt.
     // Slideshow's transition input consumes the transition PARAMETER node as a
-    // VALUE, not a prompt hint — and parameter nodes produce no `output` here
-    // (they're normally resolved at field-mapping time), so this must run
-    // BEFORE the parameter short-circuit below. The suno-voice → personaId
-    // trap: the routing branch existed, but the empty-output guard skipped the
-    // edge and the pick silently degraded to the default.
+    // VALUE, not a prompt hint, so it must run BEFORE the parameter
+    // short-circuit below. The suno-voice → personaId trap: the routing branch
+    // existed, but an empty-output guard skipped the edge and the pick
+    // silently degraded to the default.
     if (targetNode.type === "slideshow" && sourceNode.type === "transition") {
       const pick = getParameterValue(sourceNode.data, "transition")
       if (pick) inputs.transition = pick
       continue
     }
 
-    if (!output && PARAMETER_NODE_TYPES.has(sourceNode.type)) continue
+    // Unconditional — NOT `!output && …`. Parameter pickers DO carry output on
+    // every server-side run: orchestrator-worker seeds each one with its prompt
+    // hint as a completed state (`output: { text: hint }`) for {Label} ref
+    // resolution, so an output-gated skip is a no-op and the hint falls through
+    // to routeOutput's `inputs.prompt = output` fallback — last edge wins, and
+    // the user's wired text-prompt is silently replaced by "shot on a Cooke S4
+    // cinema prime". Mirrors the frontend resolver's unconditional parameter
+    // skip. `text-prompt` is both a parameter type and a text source, so the
+    // text-source carve-out keeps it routing into `inputs.prompt`.
+    if (PARAMETER_NODE_TYPES.has(sourceNode.type) && !TEXT_SOURCE_NODE_TYPES.has(sourceNode.type)) continue
 
     if (!output) continue
 
