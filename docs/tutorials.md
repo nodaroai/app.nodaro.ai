@@ -86,8 +86,16 @@ install. They are ordinary workflow templates owned by a built-in
 
 Seeding is idempotent: it runs on every boot, creates only what is
 missing, and updates a seeded tutorial only when the shipped version has
-actually changed. Editing your own clone never affects it. Deleting a
-seeded tutorial is not permanent — the next boot puts it back.
+actually changed. Editing your own clone never affects it.
+
+The seeder is self-healing for anything **missing**: delete a seeded
+tutorial's row (or its underlying workflow) and the next boot recreates it.
+It does not, however, override the state of a tutorial you deliberately
+turned **off** — a tutorial deactivated in the database (`is_active =
+false`, typically because the flow needs a provider this install has no key
+or balance for) stays off across content updates, and reactivating it is
+likewise a database change. Before this behaviour existed, every content
+release silently switched such a tutorial back on.
 
 The workflows are seeded from the repo, but the images, videos, and audio
 they display are fetched from Nodaro's CDN, so a walkthrough's media needs

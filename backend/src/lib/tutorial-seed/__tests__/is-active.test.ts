@@ -14,7 +14,7 @@
  * store, because the defect lives in which payload each branch sends — a
  * property no test of the row builder alone would pin.
  */
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // --- template docs on "disk" ------------------------------------------------
 // Controlled per test so a reseed can carry genuinely different content: an
@@ -44,6 +44,7 @@ const store = vi.hoisted(() => ({
   workflow_templates: [] as Row[],
   tutorial_categories: [] as Row[],
   seq: 0,
+  fromCalls: 0,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -54,9 +55,19 @@ vi.mock("../../supabase.js", () => {
     private filters: [string, unknown][] = []
     private op: "select" | "insert" | "update" = "select"
     private payload: Row = {}
+    private projection: string[] | null = null
     constructor(private name: string) {}
 
-    select() { return this }
+    select(cols?: string) {
+      // Production selects "id, workflow_id, markdown_description" — NOT
+      // is_active. Returning whole rows would let a future read of an
+      // unselected column pass here and be `undefined` against real Supabase,
+      // on the exact column this suite exists for.
+      this.projection = cols && cols !== "*"
+        ? cols.split(",").map((c) => c.trim()).filter(Boolean)
+        : null
+      return this
+    }
     limit() { return this }
     eq(col: string, val: unknown) { this.filters.push([col, val]); return this }
     insert(row: Row) { this.op = "insert"; this.payload = row; return this }
@@ -76,7 +87,12 @@ vi.mock("../../supabase.js", () => {
         for (const r of this.matches()) Object.assign(r, this.payload)
         return { data: null, error: null }
       }
-      return { data: this.matches(), error: null }
+      return { data: this.matches().map((r) => this.project(r)), error: null }
+    }
+
+    private project(row: Row): Row {
+      if (!this.projection) return row
+      return Object.fromEntries(this.projection.map((c) => [c, row[c]]))
     }
 
     async maybeSingle() {
@@ -98,7 +114,10 @@ vi.mock("../../supabase.js", () => {
 
   return {
     supabase: {
-      from: (name: string) => new Builder(name),
+      from: (name: string) => {
+        store.fromCalls += 1
+        return new Builder(name)
+      },
       auth: {
         admin: {
           listUsers: async () => ({ data: { users: store.users }, error: null }),
@@ -134,8 +153,25 @@ function doc(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** No retry schedule — a fake store never has a transport failure to wait out. */
-const seed = () => seedTutorialTemplates({ delaysMs: [] })
+/**
+ * No retry schedule — a fake store never has a transport failure to wait out.
+ *
+ * `seedTutorialTemplates` catches everything and reports it through
+ * console.warn, which src/test/setup.ts replaces with a noop. Left alone, a
+ * run that died in the fs mock or the store would be indistinguishable from a
+ * clean run and half these assertions would pass for the wrong reason. So spy
+ * on warn and fail on any swallowed error.
+ */
+async function seed(): Promise<void> {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+  try {
+    await seedTutorialTemplates({ delaysMs: [] })
+    const swallowed = warn.mock.calls.filter((c) => String(c[0]).includes("[tutorial-seed]"))
+    expect(swallowed).toEqual([])
+  } finally {
+    warn.mockRestore()
+  }
+}
 
 const template = () => store.workflow_templates[0]!
 
@@ -149,10 +185,13 @@ describe("tutorial seeder — operator deactivation survives a content reseed", 
     store.tutorial_categories.length = 0
     store.tutorial_categories.push({ id: "cat-basics", slug: "basics" })
     store.seq = 0
+    store.fromCalls = 0
     docs.value = [doc()]
   })
 
-  afterAll(() => {
+  // Per-test, not afterAll: EDITION is a process global and the cloud case
+  // below leaves it set, so anything added between tests would inherit it.
+  afterEach(() => {
     config.EDITION = REAL_EDITION
   })
 
@@ -195,6 +234,21 @@ describe("tutorial seeder — operator deactivation survives a content reseed", 
   it("is a no-op on cloud, where staging and production share one database", async () => {
     config.EDITION = "cloud"
     await seed()
+    // An empty table cannot tell "returned early" from "threw on line one" —
+    // beforeEach already emptied it. The database never being touched can.
+    expect(store.fromCalls).toBe(0)
     expect(store.workflow_templates).toHaveLength(0)
+  })
+
+  it("reads only the columns it selects (the mock cannot mask an unselected read)", async () => {
+    // Production selects "id, workflow_id, markdown_description"; is_active is
+    // deliberately not among them. Pinned so a follow-up that reads
+    // existing.is_active fails here instead of silently being undefined in
+    // production.
+    await seed()
+    docs.value = [doc({ markdownDescription: "v2" })]
+    await seed()
+    expect(store.fromCalls).toBeGreaterThan(0)
+    expect(template().is_active).toBe(true)
   })
 })

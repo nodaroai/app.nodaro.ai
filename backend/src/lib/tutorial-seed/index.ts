@@ -194,6 +194,18 @@ async function seedOne(
   const categoryId = await categoryIdBySlug(doc.tutorialCategorySlug)
   // Everything a content update owns. `is_active` is deliberately absent: see
   // the insert below.
+  //
+  // KNOWN GAP, deliberate and not fixed here: `listed_in` (and the two
+  // tutorial_* columns) are still in this payload, and they are what the ONE
+  // operator lever that actually reaches a seeded row writes — the admin-only
+  // tutorial-flag route, PATCH /v1/admin/workflow-templates/:id/tutorial-flag
+  // in routes/workflow-templates.ts, which gates on the admin role and does
+  // NOT check creator ownership. So an admin who un-lists a tutorial this box
+  // cannot run still gets it re-listed, and their sort order reset, by the
+  // next content release. Same defect class as `is_active`, on the reachable
+  // path. Not folded in because it is a product call, not an oversight: a
+  // content release plausibly SHOULD be able to re-categorise or re-order a
+  // tutorial it ships. Decide it deliberately rather than by omission.
   const row = {
     workflow_id: workflowId,
     creator_id: userId,
@@ -221,12 +233,19 @@ async function seedOne(
   }
 
   if (existing) {
-    // CONTENT ONLY. An operator hides a tutorial (PATCH /v1/templates/:id
-    // `isActive:false`, or the DELETE soft-delete) because the flow cannot run
-    // on THIS installation — no provider balance, no key for that lane. That
-    // is a decision about the deployment; a reworded tutorial carries no
+    // CONTENT ONLY. A tutorial gets hidden because the flow cannot run on THIS
+    // installation — no provider balance, no key for that lane. That is a
+    // decision about the deployment; a reworded tutorial carries no
     // information about it and must not overrule it. Sending `is_active: true`
     // here republished every hidden tutorial on the next content release.
+    //
+    // On the generic template routes (PATCH /v1/templates/:id `isActive:false`
+    // and the DELETE soft-delete) that state is NOT reachable for a seeded
+    // row: both require `creator_id === userId`, and these rows belong to the
+    // never-loginable system account, so both 403. `is_active=false` therefore
+    // arrives from the back office — direct SQL, a support script, or an admin
+    // lever added later. Preserving it is what makes any of those safe, and
+    // costs nothing today.
     const { error } = await supabase.from("workflow_templates").update(row).eq("id", existing.id)
     if (error) throw error
     return "updated"
