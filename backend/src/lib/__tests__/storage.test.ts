@@ -94,6 +94,7 @@ import {
   uploadBufferToR2,
   deleteFromR2,
   batchDeleteFromR2,
+  r2KeyFromOurUrl,
 } from "@/lib/storage.js"
 import {
   updateStorageUsage,
@@ -195,6 +196,20 @@ describe("deleteFromR2", () => {
         Key: "images/old.png",
       }),
     )
+  })
+})
+
+describe("r2KeyFromOurUrl", () => {
+  it("returns only the canonical object path from a signed URL", () => {
+    expect(r2KeyFromOurUrl("https://r2.test.com/videos/base.mp4?X-Signature=secret#preview"))
+      .toBe("videos/base.mp4")
+  })
+
+  it("rejects foreign, prefix-confused, malformed, and empty URLs", () => {
+    expect(r2KeyFromOurUrl("https://foreign.example/videos/base.mp4")).toBeNull()
+    expect(r2KeyFromOurUrl("https://r2.test.com.evil.example/videos/base.mp4")).toBeNull()
+    expect(r2KeyFromOurUrl("not a URL")).toBeNull()
+    expect(r2KeyFromOurUrl("https://r2.test.com/")).toBeNull()
   })
 })
 

@@ -114,11 +114,51 @@ describe("tk.jobs.markJobCompleted — output-payload nesting wrapper", () => {
   })
 
   it("core CAS false (cancelled/terminal) passes through as false — caller skips the credit commit", async () => {
-    mockSingle.mockResolvedValue({ data: { output_data: {} }, error: null })
+    mockSingle
+      .mockResolvedValueOnce({ data: { output_data: {} }, error: null })
+      .mockResolvedValueOnce({
+        data: { status: "cancelled", output_data: {} },
+        error: null,
+      })
     mockCoreMarkJobCompleted.mockResolvedValue(false)
 
     await expect(tk.jobs.markJobCompleted("job-3", { videoUrl: "u" })).resolves.toBe(false)
   })
+
+  it("recognizes an exact completed row when the completion response was lost", async () => {
+    const completedOutput = {
+      pro: { version: 1 },
+      videoUrl: "https://cdn/result.mp4",
+    }
+    mockSingle
+      .mockResolvedValueOnce({
+        data: { output_data: { pro: { version: 0 } } },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { status: "completed", output_data: completedOutput },
+        error: null,
+      })
+    mockCoreMarkJobCompleted.mockResolvedValue(false)
+
+    await expect(tk.jobs.markJobCompleted("job-6", completedOutput)).resolves.toBe(true)
+  })
+
+  it.each(["pending", "queued", "processing"])(
+    "throws when a false completion result leaves the job %s",
+    async (status) => {
+      mockSingle
+        .mockResolvedValueOnce({ data: { output_data: {} }, error: null })
+        .mockResolvedValueOnce({
+          data: { status, output_data: {} },
+          error: null,
+        })
+      mockCoreMarkJobCompleted.mockResolvedValue(false)
+
+      await expect(tk.jobs.markJobCompleted("job-7", { videoUrl: "u" }))
+        .rejects.toThrow(/still live/i)
+    },
+  )
 
   it("read failure THROWS (retryable) instead of returning false — false would silently skip the credit commit for a delivered output", async () => {
     mockSingle.mockResolvedValue({ data: null, error: { message: "connection reset" } })

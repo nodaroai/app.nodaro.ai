@@ -5,12 +5,13 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockHasCreditsRef, mockCheckCreditsWithProfile, mockCheckStorageLimitWithProfile, mockReserveCredits, mockWarmAdminCache } = vi.hoisted(() => {
+const { mockFrom, mockHasCreditsRef, mockCheckCreditsWithProfile, mockCheckStorageLimitWithProfile, mockReserveCredits, mockWarmAdminCache, mockRefundReservedCreditsForJob } = vi.hoisted(() => {
   const mockHasCreditsRef = { value: true }
   const mockCheckCreditsWithProfile = vi.fn()
   const mockCheckStorageLimitWithProfile = vi.fn()
   const mockReserveCredits = vi.fn()
   const mockWarmAdminCache = vi.fn()
+  const mockRefundReservedCreditsForJob = vi.fn().mockResolvedValue(0)
 
   const mockFrom = vi.fn()
 
@@ -21,6 +22,7 @@ const { mockFrom, mockHasCreditsRef, mockCheckCreditsWithProfile, mockCheckStora
     mockCheckStorageLimitWithProfile,
     mockReserveCredits,
     mockWarmAdminCache,
+    mockRefundReservedCreditsForJob,
   }
 })
 
@@ -64,6 +66,10 @@ vi.mock("@/ee/billing/credits.js", () => ({
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: mockWarmAdminCache,
   checkIsAdmin: vi.fn().mockResolvedValue(false),
+}))
+
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  refundReservedCreditsForJob: mockRefundReservedCreditsForJob,
 }))
 
 // ---------------------------------------------------------------------------
@@ -582,6 +588,28 @@ describe("reserveCreditsForJob", () => {
       0,
       { watermarkOverride: undefined, isAppRun: true, skipAutoRecharge: false, webFreeMode: undefined, communityInstance: false },
     )
+  })
+
+  it("refunds a reservation that may have committed before its response was lost", async () => {
+    mockReserveCredits.mockRejectedValueOnce(new Error("connection reset after commit"))
+    const deleteEq = vi.fn().mockResolvedValue({ error: null })
+    mockFrom.mockReturnValue({
+      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+    })
+    const mockReq = {
+      userId: "user-1",
+      url: "/v1/test-route",
+      creditReservation: undefined,
+    } as unknown as Parameters<typeof reserveCreditsForJob>[0]
+    const mockReply = {
+      status: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    } as unknown as Parameters<typeof reserveCreditsForJob>[1]
+
+    await reserveCreditsForJob(mockReq, mockReply, "job-ambiguous", "ffmpeg")
+
+    expect(mockRefundReservedCreditsForJob).toHaveBeenCalledWith("job-ambiguous")
+    expect(deleteEq).toHaveBeenCalledWith("id", "job-ambiguous")
   })
 })
 

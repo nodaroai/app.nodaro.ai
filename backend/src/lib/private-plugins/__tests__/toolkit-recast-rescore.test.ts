@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { rpcMock, maybeSingleMock } = vi.hoisted(() => ({
+const { rpcMock, maybeSingleMock, getAppSettingsMock } = vi.hoisted(() => ({
   rpcMock: vi.fn(),
   maybeSingleMock: vi.fn(),
+  getAppSettingsMock: vi.fn(),
 }))
 
 vi.mock(import("@/lib/config.js"), async (importOriginal) => {
@@ -23,11 +24,36 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+vi.mock("@/lib/app-settings.js", () => ({
+  getAppSettings: getAppSettingsMock,
+}))
+
 import { buildToolkit } from "../toolkit.js"
 
 describe("tk.jobs Recast rescore transactions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    getAppSettingsMock.mockResolvedValue({
+      cost_markup_percent: 25,
+      service_margin_percent: { "recast-rescore": 10 },
+    })
+  })
+
+  it("quotes dynamic Recast credits with the same configured markup as reservation", async () => {
+    await expect(
+      buildToolkit().http.applyCreditMarkup?.("recast-rescore", 32),
+    ).resolves.toBe(36)
+  })
+
+  it("preserves an unmarked-up dynamic total exactly like reservation", async () => {
+    getAppSettingsMock.mockResolvedValue({
+      cost_markup_percent: 0,
+      service_margin_percent: {},
+    })
+
+    await expect(
+      buildToolkit().http.applyCreditMarkup?.("recast-rescore", 2.5),
+    ).resolves.toBe(2.5)
   })
 
   it("finds an idempotent rescore child by owner and stable request key", async () => {
@@ -138,6 +164,74 @@ describe("tk.jobs Recast rescore transactions", () => {
       p_audio: audio,
       p_rescore: rescore,
     })
+  })
+
+  it("publishes a legacy result and completes its child through one RPC", async () => {
+    rpcMock.mockResolvedValue({ data: true, error: null })
+    const rescore = {
+      videoUrl: "https://cdn.test/result.mp4",
+      gvpJobId: "gvp-1",
+      tracks: [{ offsetSec: 0, durationSec: 10, url: "https://cdn.test/raw.mp3" }],
+    }
+
+    await expect(
+      buildToolkit().jobs.publishLegacyRecastRescore({
+        recastId: "recast-1",
+        childJobId: "child-1",
+        userId: "user-1",
+        gvpJobId: "gvp-1",
+        resultUrl: "https://cdn.test/result.mp4",
+        rescore,
+      }),
+    ).resolves.toBe(true)
+    expect(rpcMock).toHaveBeenCalledWith("publish_legacy_recast_rescore", {
+      p_recast_id: "recast-1",
+      p_child_job_id: "child-1",
+      p_user_id: "user-1",
+      p_gvp_job_id: "gvp-1",
+      p_result_url: "https://cdn.test/result.mp4",
+      p_rescore: rescore,
+    })
+  })
+
+  it("retries an exact publication once when the first RPC outcome is ambiguous", async () => {
+    rpcMock
+      .mockResolvedValueOnce({ data: null, error: { message: "connection reset" } })
+      .mockResolvedValueOnce({ data: true, error: null })
+    const args = {
+      recastId: "recast-1",
+      childJobId: "child-1",
+      userId: "user-1",
+      gvpJobId: "gvp-1",
+      expectedAudioRevision: "rev-1",
+      resultUrl: "https://cdn.test/result.mp4",
+      audio: { version: 1, revision: "rev-2" },
+      rescore: { videoUrl: "https://cdn.test/result.mp4", gvpJobId: "gvp-1" },
+    }
+
+    await expect(buildToolkit().jobs.publishRecastRescore(args)).resolves.toBe(true)
+
+    expect(rpcMock).toHaveBeenCalledTimes(2)
+    expect(rpcMock.mock.calls[1]).toEqual(rpcMock.mock.calls[0])
+  })
+
+  it("retries an exact legacy publication once when the first RPC outcome is ambiguous", async () => {
+    rpcMock
+      .mockRejectedValueOnce(new Error("socket closed"))
+      .mockResolvedValueOnce({ data: true, error: null })
+    const args = {
+      recastId: "recast-1",
+      childJobId: "child-1",
+      userId: "user-1",
+      gvpJobId: "gvp-1",
+      resultUrl: "https://cdn.test/result.mp4",
+      rescore: { videoUrl: "https://cdn.test/result.mp4", gvpJobId: "gvp-1" },
+    }
+
+    await expect(buildToolkit().jobs.publishLegacyRecastRescore(args)).resolves.toBe(true)
+
+    expect(rpcMock).toHaveBeenCalledTimes(2)
+    expect(rpcMock.mock.calls[1]).toEqual(rpcMock.mock.calls[0])
   })
 
   it("throws on an RPC error instead of reporting a false CAS loss", async () => {

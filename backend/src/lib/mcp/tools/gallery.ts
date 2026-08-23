@@ -8,6 +8,7 @@ import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
 import { isRetryableFailure } from "./_job-error.js"
+import { redactPrivateJobData } from "../../public-job-data.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -675,7 +676,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // user can `get_asset` whatever they can see in the public gallery.
         // PostgREST .or() parses comma at the top level; nested AND uses
         // and(...). user_id stays unquoted since it's a UUID-shaped string.
-        const { data, error } = await supabase
+        const { data: rawData, error } = await supabase
           .from("jobs")
           .select(
             // display_cost (USD) excluded — MCP surfaces credits only.
@@ -695,12 +696,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             isError: true,
           }
         }
-        if (!data) {
+        if (!rawData) {
           return {
             content: [{ type: "text", text: `Asset ${args.job_id} not found` }],
             isError: true,
           }
         }
+
+        const data = redactPrivateJobData(rawData)
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this

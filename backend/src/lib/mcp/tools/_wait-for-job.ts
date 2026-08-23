@@ -17,6 +17,7 @@
  * the URL is known either way.
  */
 import { supabase } from "../../supabase.js"
+import { redactPrivateJobData } from "../../public-job-data.js"
 
 const POLL_INTERVAL_MS = 1500
 
@@ -71,7 +72,9 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
     const jobType = (data.job_type as string | null) ?? null
 
     if (TERMINAL_STATUSES.has(status)) {
-      const out = (data.output_data ?? {}) as Record<string, unknown>
+      const out = redactPrivateJobData(
+        (data.output_data ?? {}) as Record<string, unknown>,
+      )
       const outputUrl =
         (out.imageUrl as string | undefined) ??
         (out.videoUrl as string | undefined) ??

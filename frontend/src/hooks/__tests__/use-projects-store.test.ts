@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { useProjectsStore } from "../use-projects-store"
 
+const { deleteProjectThroughApi, deleteWorkflowThroughApi } = vi.hoisted(() => ({
+  deleteProjectThroughApi: vi.fn(),
+  deleteWorkflowThroughApi: vi.fn(),
+}))
+
 const FAKE_USER_ID = "user-123"
 const NOW = "2026-01-30T00:00:00.000Z"
-
-let callLog: Array<{ table: string; method: string; args: unknown[] }> = []
 
 function makeChain(resolvedValue: { data: unknown; error: null } | { data: null; error: { message: string } }) {
   const chain: Record<string, unknown> = {}
   const methods = ["select", "insert", "update", "delete", "eq", "single", "order", "or"]
   for (const m of methods) {
-    chain[m] = vi.fn((..._args: unknown[]) => chain)
+    chain[m] = vi.fn(() => chain)
   }
   // Make the chain thenable so await resolves to the value
   chain.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
@@ -43,6 +46,13 @@ let mockSupabase: ReturnType<typeof createMockSupabase>
 
 vi.mock("@/lib/supabase", () => ({
   createClient: () => mockSupabase,
+}))
+
+vi.mock("@/lib/nodaro-client", () => ({
+  nodaroClient: {
+    projects: { delete: deleteProjectThroughApi },
+    workflows: { delete: deleteWorkflowThroughApi },
+  },
 }))
 
 // The list fetchers apply the client-app visibility filter; mock it to a fixed
@@ -82,8 +92,9 @@ function setupMockForCreate(table: string, returnRow: Record<string, unknown>) {
 describe("useProjectsStore", () => {
   beforeEach(() => {
     resetStore()
-    callLog = []
     mockSupabase = createMockSupabase()
+    deleteProjectThroughApi.mockResolvedValue({ success: true })
+    deleteWorkflowThroughApi.mockResolvedValue({ success: true })
   })
 
   describe("projects", () => {
@@ -140,6 +151,7 @@ describe("useProjectsStore", () => {
       expect(state.projects).toHaveLength(0)
       expect(state.folders).toHaveLength(0)
       expect(state.workflowMetas).toHaveLength(0)
+      expect(deleteProjectThroughApi).toHaveBeenCalledWith("p1")
     })
 
     it("updates a project name and description", async () => {
@@ -255,6 +267,7 @@ describe("useProjectsStore", () => {
       await useProjectsStore.getState().deleteWorkflow("w1")
 
       expect(useProjectsStore.getState().workflowMetas).toHaveLength(0)
+      expect(deleteWorkflowThroughApi).toHaveBeenCalledWith("w1")
     })
 
     it("renames a workflow", async () => {

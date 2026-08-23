@@ -591,6 +591,8 @@ export interface PluginStorageToolkit {
   readR2ObjectBuffer(key: string): Promise<Buffer | null>
   /** Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key. */
   deleteFromR2(key: string): Promise<void>
+  /** Host-aware inverse of `r2Url`; rejects foreign/user-owned URLs. */
+  r2KeyFromOurUrl(url: string): string | null
   /**
    * Mirrors `storeImportedImageBuffer` (`lib/media-import.ts`) — the buffer
    * half of the image-import pipeline: sharp decode gate (HEIC→JPEG
@@ -625,6 +627,23 @@ export interface PluginStorageToolkit {
 // ============================================================================
 
 export interface PluginJobsToolkit {
+  /** Persist the pre-watermark Recast remux base outside owner-readable jobs JSON. */
+  storeRecastAudioBase(args: {
+    gvpJobId: string
+    userId: string
+    baseUrl: string
+  }): Promise<void>
+  /** Read the selected GVP run's server-only remux base. */
+  readRecastAudioBase(args: {
+    gvpJobId: string
+    userId: string
+  }): Promise<string | null>
+  /** Remove a base staged for a GVP completion that lost its terminal CAS. */
+  clearRecastAudioBase(args: {
+    gvpJobId: string
+    userId: string
+    baseUrl: string
+  }): Promise<void>
   /** Narrow idempotency replay lookup for revisioned Recast rescores. */
   findJobByIdempotencyKey(
     userId: string,
@@ -654,6 +673,15 @@ export interface PluginJobsToolkit {
     recastId: string
     childJobId: string
     userId: string
+  }): Promise<boolean>
+  /** Atomically publishes a legacy baked result and completes its live child. */
+  publishLegacyRecastRescore(args: {
+    recastId: string
+    childJobId: string
+    userId: string
+    gvpJobId: string
+    resultUrl: string
+    rescore: Record<string, unknown>
   }): Promise<boolean>
   /**
    * Atomically publishes the policy-compliant delivery/current Music state,
@@ -962,6 +990,9 @@ export interface EditVideoProPricing {
 }
 
 export interface PluginHttpToolkit {
+  /** Applies the same configured service/global markup used by creditGuard to
+   *  a dynamic pre-markup total, without checking balance or reserving it. */
+  applyCreditMarkup(modelIdentifier: string, baseCredits: number): Promise<number>
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */

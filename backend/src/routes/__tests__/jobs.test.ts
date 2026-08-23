@@ -28,12 +28,17 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
+vi.mock("@/lib/workflow-delete.js", () => ({
+  deleteJobWithPrivateMedia: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Import under test (after mocks are declared)
 // ---------------------------------------------------------------------------
 
 import { jobRoutes, sanitizeJobForPublic, type JobRecord } from "../jobs.js"
 import { supabase } from "../../lib/supabase.js"
+import { deleteJobWithPrivateMedia } from "../../lib/workflow-delete.js"
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -101,6 +106,32 @@ describe("sanitizeJobForPublic", () => {
     expect("display_cost" in result).toBe(false)
     expect(result.credits).toBe(1)
   })
+
+  it("redacts private remux bases recursively even for administrators", () => {
+    const sensitive = {
+      ...sampleJob,
+      input_data: {
+        unscoredUrl: "https://private.example/child-base.mp4",
+        requested: [{ unscoredUrl: "https://private.example/nested.mp4", gain: 35 }],
+      },
+      output_data: {
+        pro: {
+          unscoredUrl: "https://private.example/gvp-base.mp4",
+          finalUrl: "https://public.example/final.mp4",
+        },
+      },
+    }
+
+    const admin = sanitizeJobForPublic(sensitive, true)
+    const regular = sanitizeJobForPublic(sensitive, false)
+
+    expect(JSON.stringify(admin)).not.toContain("unscoredUrl")
+    expect(JSON.stringify(regular)).not.toContain("unscoredUrl")
+    expect(admin.output_data).toEqual({
+      pro: { finalUrl: "https://public.example/final.mp4" },
+    })
+    expect(regular.input_data).toEqual({ requested: [{ gain: 35 }] })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -114,6 +145,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.mocked(deleteJobWithPrivateMedia).mockResolvedValue(true)
   app = Fastify({ logger: false })
   // Bypass auth — set userId from query for protected routes
   app.addHook("preHandler", async (req) => {
@@ -127,6 +159,33 @@ beforeEach(async () => {
     await jobRoutes(instance)
   })
   await app.ready()
+})
+
+describe("DELETE /v1/jobs/:id", () => {
+  it("uses the atomic private-media cleanup boundary for an owner", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/jobs/job-1?__userId=00000000-0000-4000-8000-000000000001",
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(deleteJobWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "job-1",
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      isAdmin: false,
+    }))
+  })
+
+  it("returns 500 when the atomic job delete fails", async () => {
+    vi.mocked(deleteJobWithPrivateMedia).mockRejectedValue(new Error("database down"))
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/jobs/job-1?__userId=00000000-0000-4000-8000-000000000001",
+    })
+
+    expect(res.statusCode).toBe(500)
+  })
 })
 
 afterEach(async () => {
@@ -209,6 +268,31 @@ describe("GET /v1/jobs/status", () => {
     const a = body.jobs.find((j: { id: string }) => j.id === "job-a")
     expect(a.status).toBe("completed")
     expect(a.output_data).toEqual({ url: "a" })
+  })
+
+  it("never projects a private remux base from output_data", async () => {
+    seedJobs([
+      {
+        id: "job-a",
+        user_id: TEST_USER_ID,
+        status: "completed",
+        output_data: {
+          pro: {
+            unscoredUrl: "https://private.example/base.mp4",
+            finalUrl: "https://public.example/final.mp4",
+          },
+        },
+      },
+    ])
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/status?ids=job-a&__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.stringify(res.json())).not.toContain("unscoredUrl")
+    expect(res.json().jobs[0].output_data.pro.finalUrl).toBe("https://public.example/final.mp4")
   })
 
   it("reports per-job progress — a batch poller must see which jobs are MOVING", async () => {
@@ -346,6 +430,43 @@ describe("GET /v1/jobs/status", () => {
   })
 })
 
+describe("GET /v1/jobs/:id/status", () => {
+  it("redacts private remux bases from the single-job status projection", async () => {
+    const row = {
+      id: "job-a",
+      user_id: TEST_USER_ID,
+      status: "completed",
+      progress: 100,
+      output_data: {
+        pro: {
+          unscoredUrl: "https://private.example/base.mp4",
+          finalUrl: "https://public.example/final.mp4",
+        },
+      },
+      error_message: null,
+      reconcile_attempts: 0,
+    }
+    let chain: Record<string, unknown>
+    chain = new Proxy({}, {
+      get(_target, prop) {
+        if (prop === "single") return vi.fn().mockResolvedValue({ data: row, error: null })
+        return vi.fn().mockReturnValue(chain)
+      },
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/job-a/status?__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.output_data).toEqual({
+      pro: { finalUrl: "https://public.example/final.mp4" },
+    })
+  })
+})
+
 // ---------------------------------------------------------------------------
 // GET /v1/jobs — durable per-character listing
 // ---------------------------------------------------------------------------
@@ -449,5 +570,30 @@ describe("GET /v1/jobs — attachToCharacterId (durable per-character listing)",
 
     expect(res.statusCode).toBe(200)
     expect(res.json().data[0]).not.toHaveProperty("isSceneRender")
+  })
+})
+
+describe("POST /v1/jobs/batch-status", () => {
+  it("redacts private remux bases from the direct status projection", async () => {
+    seedJobs([
+      {
+        id: "job-a",
+        user_id: TEST_USER_ID,
+        status: "completed",
+        output_data: {
+          unscoredUrl: "https://private.example/base.mp4",
+          url: "https://public.example/final.mp4",
+        },
+      },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/batch-status?__userId=${TEST_USER_ID}`,
+      payload: { jobIds: ["job-a"] },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0].output_data).toEqual({ url: "https://public.example/final.mp4" })
   })
 })

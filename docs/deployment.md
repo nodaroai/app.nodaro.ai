@@ -271,6 +271,14 @@ MinIO), set `R2_ENDPOINT` to its S3 API URL, `R2_FORCE_PATH_STYLE=true`
 for most self-hosted servers, and `R2_PUBLIC_URL` to the bucket's
 public URL.
 
+If the Cloud Recast plugin is enabled, its revisioned audio player loads
+audio-only layer files directly in Web Audio. The public storage origin must
+allow anonymous cross-origin `GET` from the Recast web origin (and `HEAD` when
+your player or CDN uses it), expose the headers needed for media reads, and
+honor byte-range requests (`Range` / `206 Partial Content`) so seeking works.
+Configure this on the bucket or CDN, and verify it against an actual generated
+audio-layer URL; API `CORS_ORIGIN` does not configure object-storage CORS.
+
 ### 2e. Start the stack
 
 ```bash
