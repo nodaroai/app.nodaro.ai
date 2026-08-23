@@ -192,6 +192,8 @@ async function seedOne(
   }
 
   const categoryId = await categoryIdBySlug(doc.tutorialCategorySlug)
+  // Everything a content update owns. `is_active` is deliberately absent: see
+  // the insert below.
   const row = {
     workflow_id: workflowId,
     creator_id: userId,
@@ -212,7 +214,6 @@ async function seedOne(
     // The column the UI shows, so the system account's email never surfaces.
     creator_display_name: SYSTEM_NAME,
     node_count: doc.nodes.length,
-    is_active: true,
     listed_in: ["tutorial"],
     // Migration 114's CHECK requires a category whenever 'tutorial' is listed.
     tutorial_category_id: categoryId,
@@ -220,11 +221,18 @@ async function seedOne(
   }
 
   if (existing) {
+    // CONTENT ONLY. An operator hides a tutorial (PATCH /v1/templates/:id
+    // `isActive:false`, or the DELETE soft-delete) because the flow cannot run
+    // on THIS installation — no provider balance, no key for that lane. That
+    // is a decision about the deployment; a reworded tutorial carries no
+    // information about it and must not overrule it. Sending `is_active: true`
+    // here republished every hidden tutorial on the next content release.
     const { error } = await supabase.from("workflow_templates").update(row).eq("id", existing.id)
     if (error) throw error
     return "updated"
   }
-  const { error } = await supabase.from("workflow_templates").insert(row)
+  // A tutorial this installation has never seen starts visible.
+  const { error } = await supabase.from("workflow_templates").insert({ ...row, is_active: true })
   if (error) throw error
   return "created"
 }
