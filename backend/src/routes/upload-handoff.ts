@@ -27,7 +27,7 @@ import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
 import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
-import { s3 } from "../lib/storage.js"
+import { s3, withObjectAcl } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { verifyUploadToken, claimUploadToken } from "./upload-proxy.js"
 
@@ -297,13 +297,13 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
 
       try {
         await s3.send(
-          new PutObjectCommand({
+          new PutObjectCommand(withObjectAcl({
             Bucket: config.R2_BUCKET_NAME,
             Key: payload.key,
             Body: finalBuffer,
             ContentType: finalMime,
             CacheControl: "public, max-age=31536000, immutable",
-          }),
+          })),
         )
       } catch (err) {
         req.log.error({ err }, "[upload-handoff] R2 upload failed")

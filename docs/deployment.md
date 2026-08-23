@@ -147,6 +147,7 @@ added to `config.ts` without a row here.
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
 | `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO | Object storage — see 2d |
 | `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
+| `STORAGE_OBJECT_ACL` | `""` (header omitted) | Canned ACL stamped on every uploaded object. For S3-compatible stores that cannot take a bucket policy — e.g. DO Spaces refuses `PutBucketPolicy` to a bucket-scoped key. See 2d |
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
@@ -279,6 +280,29 @@ defaults to `auto`, which is R2's own value and which MinIO ignores — but
 AWS, DO Spaces (`nyc3`, `fra1`, …) and Supabase-local (`local`) validate
 the region and reject `auto`, so every request fails with an authorization
 or endpoint error that does not mention the region at all.
+
+**Making media publicly readable.** There are two mechanisms, and most
+installs need only the first:
+
+1. **A bucket policy** — the default. On a custom `R2_ENDPOINT` the app
+   creates the bucket at boot and applies an anonymous-read policy to it, so
+   objects are readable without any per-object header. Cloudflare R2 does not
+   need this (its public bucket setting covers it), and Nodaro Cloud
+   deliberately sends no ACL at all.
+2. **`STORAGE_OBJECT_ACL`** — for stores that cannot take a bucket policy.
+   DigitalOcean Spaces is the usual case: it refuses `PutBucketPolicy` to a
+   bucket-scoped key, so per-object ACLs are the only way. Set
+   `STORAGE_OBJECT_ACL=public-read` and every object this app writes carries
+   that ACL.
+
+Leave it empty unless you need mechanism 2. Empty means the header is omitted
+entirely, which is the behaviour every existing install already has — setting
+it on a store that is already public via policy is redundant, and setting it
+on a store whose keys lack `s3:PutObjectAcl` will make every upload fail.
+Accepted values are the standard canned ACLs (`private`, `public-read`,
+`public-read-write`, `authenticated-read`, `aws-exec-read`,
+`bucket-owner-read`, `bucket-owner-full-control`); anything else is rejected
+at boot rather than on the first upload.
 
 If the Cloud Recast plugin is enabled, its revisioned audio player loads
 audio-only layer files directly in Web Audio. The public storage origin must

@@ -57,6 +57,32 @@ const envSchema = z.object({
    */
   R2_REGION: z.string().default("auto"),
   /**
+   * Canned ACL to stamp on every object this app writes. EMPTY BY DEFAULT,
+   * meaning the header is omitted entirely — which is what Cloud sends to R2
+   * today, and what self-host needs too, because public read is already
+   * solved there by the boot-time bucket policy (see storage.ts
+   * buildPublicReadPolicy). A constant "public-read" would change Cloud
+   * behaviour, so this is opt-in.
+   *
+   * It exists for the third shape: S3-compatible stores that refuse
+   * PutBucketPolicy to a bucket-scoped key — DigitalOcean Spaces is the
+   * common one — where per-object ACLs are the only way to make media
+   * readable. Validated here rather than at the store, so a typo is a boot
+   * error instead of a 400 on every upload.
+   */
+  STORAGE_OBJECT_ACL: z
+    .enum([
+      "",
+      "private",
+      "public-read",
+      "public-read-write",
+      "authenticated-read",
+      "aws-exec-read",
+      "bucket-owner-read",
+      "bucket-owner-full-control",
+    ])
+    .default(""),
+  /**
    * Extra hostname to allow in the /v1/download + /v1/image-proxy origin
    * allowlist, in addition to the origin derived from R2_PUBLIC_URL. Use when
    * assets are served from a different host than R2_PUBLIC_URL (e.g. a raw

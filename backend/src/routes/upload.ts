@@ -6,7 +6,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { assetSourceColumns } from "../lib/job-source.js"
-import { s3 } from "../lib/storage.js"
+import { s3, withObjectAcl } from "../lib/storage.js"
 import {
   validateFile,
   checkStorageQuota,
@@ -59,13 +59,13 @@ async function uploadBufferToS3(
   contentType: string,
 ): Promise<string> {
   await s3.send(
-    new PutObjectCommand({
+    new PutObjectCommand(withObjectAcl({
       Bucket: config.R2_BUCKET_NAME,
       Key: key,
       Body: buffer,
       ContentType: contentType,
       CacheControl: "public, max-age=31536000, immutable",
-    }),
+    })),
   )
   return `${config.R2_PUBLIC_URL}/${key}`
 }
