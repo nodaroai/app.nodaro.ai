@@ -93,6 +93,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 vi.mock("@/lib/storage.js", () => ({
+  mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
   uploadFileToR2: mocks.mockUploadFileToR2,
 }))
 

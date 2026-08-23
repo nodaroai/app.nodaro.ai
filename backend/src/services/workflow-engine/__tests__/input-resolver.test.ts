@@ -357,6 +357,40 @@ describe("resolveNodeInputs", () => {
     expect(result.kieTaskId).toBe("task-123")
   })
 
+  it("a frozen Suno source hands over its ACTIVE track's id, not the node-level track 1 (#819)", () => {
+    const target = node("t", "suno-extend")
+    const src = node("s", "suno-generate", {
+      generatedAudioUrl: "https://suno/v1.mp3",
+      sunoTrackId: "track-1",
+      sunoTaskId: "task-9",
+      activeResultIndex: 1,
+      generatedResults: [
+        { url: "https://suno/v0.mp3", sunoTrackId: "track-1", sunoTaskId: "task-9" },
+        { url: "https://suno/v1.mp3", sunoTrackId: "track-2", sunoTaskId: "task-9" },
+      ],
+    })
+    // `s` did not run in this execution: the orchestrator pre-completes it from
+    // its saved data (extractSavedNodeOutput), which carries the audio but no
+    // Suno ids — those come from the node data, active result first.
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://suno/v1.mp3" } },
+    }
+    const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
+    expect(result.sunoTrackId).toBe("track-2")
+    expect(result.sunoTaskId).toBe("task-9")
+  })
+
+  it("a Suno source that ran in THIS execution is read from its output (no selection exists yet)", () => {
+    const target = node("t", "suno-extend")
+    const src = node("s", "suno-generate", { activeResultIndex: 1, generatedResults: [{ url: "old", sunoTrackId: "stale-2" }] })
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://suno.mp3", sunoTrackId: "fresh-1", sunoTaskId: "task-new" } },
+    }
+    const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
+    expect(result.sunoTrackId).toBe("fresh-1")
+    expect(result.sunoTaskId).toBe("task-new")
+  })
+
   it("passes sunoTrackId for suno nodes", () => {
     const target = node("t", "suno-extend")
     const src = node("s", "suno-generate")
@@ -941,5 +975,28 @@ describe("resolveNodeInputs — cinematic-avatar reference handles", () => {
     const result = resolveNodeInputs(target, edges, states, allNodes)
     expect(result.audioUrl).toBe("https://r2/reference.mp3")
     expect(result.refAudioUrl).toBeUndefined()
+  })
+})
+
+describe("Suno id passthrough — one source for the pair (#819 review)", () => {
+  it("a fresh output carrying only a track id is not paired with the stored (earlier run's) task id", () => {
+    const target = node("t", "suno-add-vocals")
+    const src = node("s", "suno-generate", { sunoTrackId: "old-track", sunoTaskId: "old-task" })
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://suno.mp3", sunoTrackId: "fresh-track" } },
+    }
+    const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
+    expect(result.sunoTrackId).toBe("fresh-track")
+    expect(result.sunoTaskId).toBeUndefined()
+  })
+
+  it("a suno-separate source is not a Suno-track source — its ids are not passed on (one set with the canvas)", () => {
+    const target = node("t", "suno-add-vocals")
+    const src = node("s", "suno-separate", { sunoTaskId: "sep-task" })
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://stem.mp3", sunoTaskId: "sep-task" } },
+    }
+    const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
+    expect(result.sunoTaskId).toBeUndefined()
   })
 })

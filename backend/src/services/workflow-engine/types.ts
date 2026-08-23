@@ -45,6 +45,8 @@ export interface NodeOutput {
   thumbnailUrl?: string
   sunoTrackId?: string
   sunoTaskId?: string
+  /** Every Suno track's id + media, in variant order (#819) — `sunoTrackId` alone is always track #1. */
+  sunoTracks?: Array<{ id?: string; title?: string; duration?: number; imageUrl?: string; audioUrl?: string }>
   generatedVoiceId?: string
   alignment?: unknown
   script?: unknown

@@ -567,6 +567,14 @@ export interface PluginStorageToolkit {
     type?: "image" | "video" | "audio",
     trackUserId?: string,
   ): Promise<string>
+  /**
+   * Mirrors `mediaObjectKey` (`lib/storage.ts`) — THE key builder for produced
+   * media (`images/` / `videos/` / `audios/`). Plugins that hand
+   * `uploadBufferToR2` a raw key build it here instead of spelling a prefix
+   * (#754: singular `audio/…` keys split the audio store). Optional: added
+   * 2026-08-23, older loaders simply do not provide it.
+   */
+  mediaObjectKey?(id: string, type: "image" | "video" | "audio", ext?: string): string
   /** Mirrors `runPostProcessing` (`lib/post-processing-error.ts`). */
   runPostProcessing<T>(fn: () => Promise<T>): Promise<T>
   /**

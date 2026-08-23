@@ -81,6 +81,7 @@ vi.mock("@/lib/storage.js", () => ({
   readR2ObjectBuffer: vi.fn(),
   deleteFromR2: vi.fn(),
   r2KeyFromOurUrl: vi.fn(),
+  mediaObjectKey: vi.fn(),
 }))
 
 // Preserve the real node:fs (toolkit.ts now transitively imports

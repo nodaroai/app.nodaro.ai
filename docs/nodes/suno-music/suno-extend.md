@@ -9,7 +9,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Audio ID | string | `""` | Suno audio ID from an upstream Suno node (required). |
+| Audio ID | string | `""` | Suno audio ID (required). Inherited from the connected Suno node's **selected** track — the panel shows "Inherited from *Suno Generate*: `<id>`" under the field, so nothing needs pasting; switch tracks on the source node and Extend follows. A manual value applies only without a connection. |
 | Continue From | number (seconds) | `0` | Timestamp in seconds where the extension begins. |
 | Extension Prompt | string (max 5000) | `""` | Prompt describing the desired continuation. |
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |

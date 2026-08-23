@@ -54,6 +54,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 vi.mock("@/lib/storage.js", () => ({
+  mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
   uploadToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4"),
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/buf.mp4"),
   uploadFileToR2: mocks.mockUploadFileToR2,

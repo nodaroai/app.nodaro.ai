@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useCallback, useEffect } from "react"
+import { findUpstreamSunoIds, type UpstreamSunoIds } from "@/lib/suno-ids"
 import { Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -660,6 +661,10 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
 }
 
 export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoExtendData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -672,8 +677,9 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="audioId" label="Audio ID (from Suno node)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.audioId ?? ""} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder="Suno track ID (auto-filled from connected node)" />
+        <Input value={data.audioId ?? ""} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder={inherited?.trackId ? `Inherited: ${inherited.trackId}` : "Suno track ID — resolved from a connected Suno node at run time"} aria-describedby={inherited?.trackId ? sunoInheritedHintId("track") : undefined} />
       </MappableField>
+      <SunoInheritedHint what="track" manual={data.audioId} inherited={inherited?.trackId} sourceLabel={inherited?.sourceLabel} />
       <MappableField field="continueAt" label="Continue From (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })} placeholder="0" />
       </MappableField>
@@ -803,27 +809,66 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
  * both the FE run and the orchestrator); manual entry unlocks running against
  * a track from an earlier session without re-generating it.
  */
-function SunoIdFields({ taskId, audioId, onUpdate }: {
+function SunoIdFields({ taskId, audioId, inherited, onUpdate }: {
   readonly taskId?: string
   readonly audioId?: string
+  /** What a connected Suno node hands this node at run time (#819). */
+  readonly inherited?: UpstreamSunoIds | null
   readonly onUpdate: (updates: { taskId?: string; audioId?: string }) => void
 }) {
   return (
     <>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">Task ID</label>
-        <Input value={taskId ?? ""} onChange={(e) => onUpdate({ taskId: e.target.value })} placeholder="Suno task ID" />
+        <Input value={taskId ?? ""} onChange={(e) => onUpdate({ taskId: e.target.value })} placeholder={inherited?.taskId ? `Inherited: ${inherited.taskId}` : "Suno task ID"} aria-describedby={inherited?.taskId ? sunoInheritedHintId("task") : undefined} />
+        <SunoInheritedHint what="task" manual={taskId} inherited={inherited?.taskId} sourceLabel={inherited?.sourceLabel} />
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">Audio ID</label>
-        <Input value={audioId ?? ""} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder="Suno audio ID" />
+        <Input value={audioId ?? ""} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder={inherited?.trackId ? `Inherited: ${inherited.trackId}` : "Suno audio ID"} aria-describedby={inherited?.trackId ? sunoInheritedHintId("track") : undefined} />
+        <SunoInheritedHint what="track" manual={audioId} inherited={inherited?.trackId} sourceLabel={inherited?.sourceLabel} />
       </div>
-      <p className="text-[10px] text-muted-foreground">Auto-filled from a connected Suno node — a live connection overrides manual values.</p>
+      {!inherited && (
+        <p className="text-[10px] text-muted-foreground">Resolved from a connected Suno node at run time — a live connection overrides manual values.</p>
+      )}
     </>
   )
 }
 
-export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSeparateData; readonly onUpdate: (updates: Partial<SunoSeparateData>) => void }) {
+/** The hint's DOM id — the manual field points at it via `aria-describedby`, since the inherited id otherwise lives only in a placeholder that vanishes on typing. One Suno panel is mounted at a time. */
+function sunoInheritedHintId(what: "track" | "task"): string {
+  return `suno-inherited-${what}`
+}
+
+/**
+ * The id a connected Suno node hands this node, rendered under the manual
+ * field. A wired Extend/Separate/… used to show an EMPTY required-looking
+ * field while the run resolved the id fine (#819) — the only rational response
+ * was to copy the id by hand. Precedence is unchanged and stated: a live
+ * connection wins over the manual value.
+ */
+export function SunoInheritedHint({ what, manual, inherited, sourceLabel }: {
+  readonly what: "track" | "task"
+  readonly manual?: string
+  readonly inherited?: string
+  readonly sourceLabel?: string
+}) {
+  if (!inherited) return null
+  const from = sourceLabel ? `from ${sourceLabel}` : "from the connected node"
+  return (
+    <p id={sunoInheritedHintId(what)} className="text-[10px] text-muted-foreground" data-testid={`suno-inherited-${what}`}>
+      {manual?.trim()
+        ? <>The connected node&apos;s {what} id <span className="font-mono text-foreground/80">{inherited}</span> takes precedence at run time; the manual value applies only without a connection.</>
+        : <>Inherited {from}: <span className="font-mono text-foreground/80">{inherited}</span> — used at run time, nothing to paste.</>}
+    </p>
+  )
+}
+
+export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<SunoSeparateData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
@@ -836,7 +881,7 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
           </SelectContent>
         </Select>
       </div>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       {data.vocalUrl && (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">Vocal</label>
@@ -953,10 +998,14 @@ export function AudioSeparationConfig({ data, onUpdate }: { readonly data: Audio
   )
 }
 
-export function SunoMusicVideoConfig({ data, onUpdate }: { readonly data: SunoMusicVideoData; readonly onUpdate: (updates: Partial<SunoMusicVideoData>) => void }) {
+export function SunoMusicVideoConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<SunoMusicVideoData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   return (
     <div className="flex flex-col gap-3">
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       {data.generatedVideoUrl && (
         <div className="rounded-md border overflow-hidden">
           <video src={data.generatedVideoUrl} controls className="w-full" />
@@ -1009,6 +1058,10 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoReplaceSectionData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -1021,7 +1074,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Replace a section of an existing track. Connect an audio source.</p>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       <MappableField field="infillStartS" label="Start Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.infillStartS ?? ""} onChange={(e) => onUpdate({ infillStartS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
       </MappableField>
@@ -1113,11 +1166,15 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
   )
 }
 
-export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoAddInstrumentalData>) {
+export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddInstrumentalData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Add instrumental accompaniment to a track. Connect an audio source.</p>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
@@ -1133,11 +1190,15 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
   )
 }
 
-export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoAddVocalsData>) {
+export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddVocalsData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Add vocals to an instrumental track. Connect an audio source.</p>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
@@ -1153,11 +1214,15 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
   )
 }
 
-export function SunoConvertWavConfig({ data, onUpdate }: { readonly data: SunoConvertWavData; readonly onUpdate: (updates: Partial<SunoConvertWavData>) => void }) {
+export function SunoConvertWavConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<SunoConvertWavData> & { nodeId?: string }) {
+  // The ids a connected Suno node will hand this node at run time — shown so a
+  // wired node reads as configured, not empty (#819).
+  const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Convert a Suno track to WAV format. Connect an audio source.</p>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} onUpdate={onUpdate} />
+      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
     </div>
   )
 }

@@ -43,7 +43,7 @@ The four **Advanced** handles appear when you expand **Advanced ▾** on the nod
 
 - `audio` — generated audio URL
 
-The result also carries the Suno **Task ID** and **Track ID**, shown on the node under the player (click to copy). Downstream Suno nodes (Extend, Replace Section, Separate, Music Video, Add Instrumental / Vocals, Convert WAV) pick them up automatically when connected — or paste them into those nodes' Task ID / Audio ID fields to work with a track from an earlier session.
+The result also carries the Suno **Task ID** and **Track ID**, shown on the node under the player (click to copy). Each of the two generated tracks has its own Track ID; the one shown — and the one downstream nodes use — is the track **selected** in the result switcher. Downstream Suno nodes (Extend, Replace Section, Separate, Music Video, Add Instrumental / Vocals, Convert WAV) pick them up automatically when connected and show the inherited value under their ID fields — or paste them in to work with a track from an earlier session.
 
 ## Bottom-strip controls
 

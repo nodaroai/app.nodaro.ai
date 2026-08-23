@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 
 vi.mock("@/lib/storage.js", () => ({
+  mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
   uploadToR2: mocks.mockUploadToR2,
   uploadBufferToR2: mocks.mockUploadBufferToR2,
 }))

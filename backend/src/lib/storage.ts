@@ -112,10 +112,39 @@ const MEDIA_MIME: Record<MediaType, string> = { video: "video/mp4", audio: "audi
 const R2_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 /**
+ * THE key builder for produced media: `<type>s/<id>.<ext>` — `images/`,
+ * `videos/`, `audios/`. Every writer in this repo goes through it, including
+ * the ones that hand `uploadBufferToR2` a raw key: nine call sites spelled
+ * `audio/…` by hand and split the audio store across two prefixes (#754); a
+ * structural test (`__tests__/media-key-prefixes.test.ts`) keeps it that way.
+ * Private cloud plugins reach it as `tk.storage.mediaObjectKey` — until each
+ * adopts it, plugin-minted keys can still carry the singular prefix. Objects
+ * already under `audio/` stay where they are — every one is referenced from
+ * the DB (assets / jobs.output_data), which is what deletion and cleanup key
+ * off — so nothing needs moving; new writes land here.
+ */
+export function mediaObjectKey(id: string, type: MediaType, ext: string = MEDIA_EXT[type]): string {
+  return `${type}s/${id}.${ext}`
+}
+
+/**
+ * Key for a provider-INPUT scratch object — a re-encoded or trimmed copy of
+ * the user's media that only exists so a vendor can fetch it (lip-sync audio
+ * trims, motion-transfer video trims). Not a deliverable, not DB-referenced,
+ * so it must not share the deliverable prefixes above; its own prefix makes
+ * it identifiable for a future age-based sweep (there is none today — these
+ * have always been left behind).
+ */
+export const PROVIDER_INPUT_TMP_PREFIX = "tmp/provider-input/"
+export function tmpObjectKey(name: string, ext: string): string {
+  return `${PROVIDER_INPUT_TMP_PREFIX}${name}.${ext}`
+}
+
+/**
  * Build the R2 object key for a given job and media type.
  */
 function r2Key(jobId: string, type: MediaType): string {
-  return `${type}s/${jobId}.${MEDIA_EXT[type]}`
+  return mediaObjectKey(jobId, type)
 }
 
 /**

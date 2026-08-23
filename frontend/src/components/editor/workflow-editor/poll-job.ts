@@ -4,6 +4,7 @@ import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared"
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
+import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
 import { isInputWarningCode } from "@/lib/input-warning-codes";
 import {
@@ -158,7 +159,12 @@ function handleJobCompleted(
 
   const newResults: GeneratedResult[] =
     variantUrls.length > 1
-      ? buildVariantResults(variantUrls, jobId, { thumbnailUrl, extraFields })
+      ? buildVariantResults(variantUrls, jobId, {
+          thumbnailUrl,
+          extraFields,
+          // Each Suno track carries its OWN id (#819).
+          perVariantFields: sunoVariantFields(job.output_data as Record<string, unknown> | undefined),
+        })
       : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields })];
 
   updateNodeData(nodeId, {

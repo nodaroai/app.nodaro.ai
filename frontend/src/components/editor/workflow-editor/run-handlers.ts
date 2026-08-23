@@ -27,6 +27,7 @@ import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { buildVariantResults } from "./variant-results";
+import { sunoVariantFields } from "@/lib/suno-ids";
 
 // Phase 1 runs at most one whole-workflow stream at a time. We keep its teardown
 // here so a Discard / Run-instead can fully stop the OLD stream (abort its SSE +
@@ -1193,6 +1194,8 @@ interface NodeExecutionState {
     plan?: Record<string, unknown>;
     sunoTrackId?: string;
     sunoTaskId?: string;
+    /** Every Suno track's id (#819) — `sunoTrackId` alone is always track #1. */
+    sunoTracks?: Array<{ id?: string }>;
     kieTaskId?: string;
     thumbnailUrl?: string;
     paramOutputs?: Record<string, string>;
@@ -1389,7 +1392,15 @@ function syncNodeStatesToStore(
           const variantUrls = state.output.imageUrls ?? state.output.audioUrls;
           if (variantUrls && variantUrls.length > 1) {
             const newResults = buildVariantResults(
-              variantUrls, state.jobId ?? `exec-${node.id}`, { existingUrls },
+              variantUrls, state.jobId ?? `exec-${node.id}`, {
+                existingUrls,
+                // Same ids the single-node poll path stamps (#819): the shared
+                // task id on every track, each track's OWN track id.
+                extraFields: state.output.sunoTrackId
+                  ? { sunoTrackId: state.output.sunoTrackId, sunoTaskId: state.output.sunoTaskId }
+                  : undefined,
+                perVariantFields: sunoVariantFields(state.output as Record<string, unknown>),
+              },
             );
             if (newResults.length > 0) {
               updates.generatedResults = [...newResults, ...prev];

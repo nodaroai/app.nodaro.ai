@@ -14,6 +14,7 @@ import type { WebScrapeNodeData } from "@/types/nodes"
 import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import {
   WEB_SCRAPE_PEEK,
+  webScrapeItemLink,
   deriveWebScrapeCardState,
   elapsedLabel,
   relativeTime,
@@ -62,11 +63,30 @@ function useNowTick(mode: "off" | "slow" | "fast"): number {
 }
 
 /** One peek row: 14px glyph slot + one truncated line. */
-function PeekRow({ glyph, text }: { readonly glyph: string; readonly text: string }) {
+function PeekRow({ glyph, text, href }: { readonly glyph: string; readonly text: string; readonly href?: string | null }) {
   return (
     <div className="flex items-baseline gap-1.5 min-w-0">
       <span className="w-[14px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{glyph}</span>
-      <span className="truncate text-[11px] text-foreground/80">{text}</span>
+      {href ? (
+        // A real link on the card (#779). `nodrag` is what keeps a mousedown
+        // from starting a canvas drag (React Flow's drag filter checks the
+        // class); `nopan` likewise; the click stopPropagation keeps the
+        // (synthetic) click from selecting the node. Muted affordance —
+        // #FF0073 stays reserved for actions.
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="nodrag nopan truncate text-[11px] text-foreground/80 hover:underline hover:text-foreground"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          title={href}
+        >
+          {text}
+        </a>
+      ) : (
+        <span className="truncate text-[11px] text-foreground/80">{text}</span>
+      )}
     </div>
   )
 }
@@ -199,7 +219,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
               {state.kind === "success" && (
                 <div className={`flex flex-col gap-1 ${state.stale ? "opacity-50" : ""}`}>
                   {peekItems.map((item, i) => (
-                    <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} />
+                    <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} href={webScrapeItemLink(actor, item)} />
                   ))}
                   {state.count > peekItems.length && (
                     <span className="text-[10px] text-[#FF0073]">View all {state.count}</span>

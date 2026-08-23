@@ -54,6 +54,10 @@ The Web Scrape node retrieves data from external sources using configurable acto
 | Profile or post URL | text | — | Full URL of the profile or post. Use `{}` to inject upstream |
 | Results limit | number | 10 | Maximum posts to return (1–20) |
 
+## Results
+
+After a run, the node card peeks at the first few items and the settings panel's **Results** tab lists them all (with a Raw JSON view, copy and download). Every item links to its source — the search result's page, the feed item, the crawled page, the Instagram post, the TikTok video — and opens in a new tab, so you can judge a result before building on it. Only `http`/`https` addresses become links; anything else a feed returns is shown as text.
+
 ## Inputs & Outputs
 
 **Inputs:** Optional upstream connection (used when injecting a value into a field via `{}`).

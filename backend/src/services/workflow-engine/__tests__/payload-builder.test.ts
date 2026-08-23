@@ -744,7 +744,9 @@ describe("buildPayload", () => {
     })
 
     it("suno-extend", () => {
-      const n = node("n1", "suno-extend", { sunoTrackId: "track-1" })
+      // `audioId` is the manual field; `sunoTrackId` on a consumer is its own
+      // output's id and no longer an input (#819 review).
+      const n = node("n1", "suno-extend", { audioId: "track-1" })
       const result = buildPayload(n, jobId, {})
       expect(result.jobName).toBe("suno-extend")
       expect(result.payload.audioId).toBe("track-1")
@@ -1502,5 +1504,27 @@ describe("reference-board payload", () => {
     const result = buildPayload(n, "job-rb2", {})
     expect(result.payload.prompt).toBe("make a board")
     expect(result.payload.resolution).toBe("4K")
+  })
+})
+
+describe("Suno consumer id precedence (#819 review)", () => {
+  const jobId = "job-1"
+
+  it("suno-extend: a wired track id wins, then the MANUAL audioId — never the node's own self-stamped sunoTrackId", () => {
+    // `sunoTrackId` on a consumer is the id of its OWN last output (stamped after
+    // a run for the next hop). It must not shadow a hand-typed id.
+    const n = node("x", "suno-extend", { audioId: "manual-track", sunoTrackId: "stale-self-output" })
+    expect(buildPayload(n, jobId, {}).payload.audioId).toBe("manual-track")
+    expect(buildPayload(n, jobId, { sunoTrackId: "wired-track" }).payload.audioId).toBe("wired-track")
+  })
+
+  it("suno-add-vocals: same rule for both ids", () => {
+    const n = node("x", "suno-add-vocals", { taskId: "manual-task", audioId: "manual-track", sunoTaskId: "stale-task", sunoTrackId: "stale-track" })
+    const manual = buildPayload(n, jobId, {}).payload
+    expect(manual.taskId).toBe("manual-task")
+    expect(manual.audioId).toBe("manual-track")
+    const wired = buildPayload(n, jobId, { sunoTaskId: "wired-task", sunoTrackId: "wired-track" }).payload
+    expect(wired.taskId).toBe("wired-task")
+    expect(wired.audioId).toBe("wired-track")
   })
 })

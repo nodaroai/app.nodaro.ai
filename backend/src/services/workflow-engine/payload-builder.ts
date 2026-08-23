@@ -4126,10 +4126,17 @@ export function buildPayload(
     }
 
     case "suno-extend": {
+      // Suno consumer ids (here and the cases below): a wired connection, then
+      // the node's MANUAL field — the same two-step rule the canvas applies and
+      // the config panel states. `data.sunoTrackId` / `data.sunoTaskId` on a
+      // consumer are the ids of its OWN last output (stamped after a run for
+      // the next hop), never an input: reading them before the manual field
+      // made a stale self-stamp shadow a hand-typed id on orchestrator runs
+      // (#819 review).
       const sunoExtCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-extend"
       return simpleResult("suno-extend", sunoExtCreditId, {
         jobId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         defaultParamFlag: data.defaultParamFlag ?? true,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         model: data.model,
@@ -4162,8 +4169,8 @@ export function buildPayload(
         separateType === "split_stem" ? "suno-separate-stem" : "suno-separate"
       return simpleResult("suno-separate", separateIdentifier, {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         type: separateType,
         usageLogId,
       })
@@ -4172,8 +4179,8 @@ export function buildPayload(
     case "suno-music-video":
       return simpleResult("suno-music-video", "suno-music-video", {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         usageLogId,
       })
 
@@ -4196,8 +4203,8 @@ export function buildPayload(
     case "suno-replace-section":
       return simpleResult("suno-replace-section", "suno-replace-section", {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         infillStartS: data.infillStartS ?? 0,
         infillEndS: data.infillEndS ?? 30,
         prompt: promptFor("suno-replace-section"),
@@ -4211,8 +4218,8 @@ export function buildPayload(
     case "suno-add-instrumental":
       return simpleResult("suno-add-instrumental", "suno-add-instrumental", {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         model: data.model,
         usageLogId,
       })
@@ -4220,8 +4227,8 @@ export function buildPayload(
     case "suno-add-vocals":
       return simpleResult("suno-add-vocals", "suno-add-vocals", {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         model: data.model,
         usageLogId,
       })
@@ -4229,8 +4236,8 @@ export function buildPayload(
     case "suno-convert-wav":
       return simpleResult("suno-convert-wav", "suno-convert-wav", {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        taskId: resolvedInputs.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.audioId,
         usageLogId,
       })
 

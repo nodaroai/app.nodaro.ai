@@ -891,6 +891,8 @@ export {
   FAN_OUT_EACH_TYPES,
 } from "./producer-types.js"
 
+export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
+
 export {
   VOICE_CHANGER_MODELS,
   VOICE_CHANGER_MODEL_IDS,

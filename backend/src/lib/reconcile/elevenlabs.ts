@@ -1,6 +1,6 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
-import { uploadBufferToR2 } from "../storage.js"
+import { uploadBufferToR2, mediaObjectKey } from "../storage.js"
 import { finalizeJobWithMedia } from "../job-finalize.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
@@ -134,7 +134,7 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
   try {
     const r2Url = await uploadBufferToR2(
       audioBuffer,
-      `audio/${row.id}.mp3`,
+      mediaObjectKey(row.id, "audio", "mp3"),
       "audio/mpeg",
       userId,
     )

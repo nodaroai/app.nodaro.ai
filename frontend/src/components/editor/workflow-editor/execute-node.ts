@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import {
@@ -3906,34 +3907,13 @@ export function executeNode(
     let taskId: string | undefined = inputs.sunoTaskId ?? d.taskId?.trim();
     let audioId: string | undefined = inputs.sunoTrackId ?? d.audioId?.trim();
 
-    // Fallback: walk upstream to find sunoTaskId/sunoTrackId from connected Suno node
+    // Fallback: the same gated, last-wins upstream walk the resolver and the
+    // config panels use (#819) — whatever the panel showed as inherited.
     if (!taskId || !audioId) {
       const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
-      const incomingEdges = allEdges.filter(e => e.target === node.id);
-      for (const edge of incomingEdges) {
-        const srcNode = allNodes.find(n => n.id === edge.source);
-        if (!srcNode) continue;
-        const srcData = srcNode.data as Record<string, unknown>;
-        if (!taskId) {
-          taskId = srcData.sunoTaskId as string | undefined;
-          if (!taskId) {
-            const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
-            const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
-            const activeResult = results?.[activeIndex];
-            taskId = (activeResult?.sunoTaskId ?? undefined) as string | undefined;
-          }
-        }
-        if (!audioId) {
-          audioId = srcData.sunoTrackId as string | undefined;
-          if (!audioId) {
-            const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
-            const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
-            const activeResult = results?.[activeIndex];
-            audioId = (activeResult?.sunoTrackId ?? undefined) as string | undefined;
-          }
-        }
-        if (taskId && audioId) break;
-      }
+      const upstream = findUpstreamSunoIds(node.id, allNodes, allEdges);
+      taskId ??= upstream?.taskId;
+      audioId ??= upstream?.trackId;
     }
     if (!taskId) {
       toast.error(
