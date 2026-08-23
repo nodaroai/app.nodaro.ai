@@ -661,7 +661,13 @@ jobs:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.repository == 'nodaroai/app.nodaro.ai-internal' && github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, i18n-completeness, backend-boot-smoke]
+    # migration-behavior is in this list on purpose and must stay: it is the
+    # only job that applies the migration chain to a real Postgres and asserts
+    # what the tenancy rules DO (RLS, SECURITY DEFINER helpers, the RPCs).
+    # Without it here, a migration whose proof failed still reached production
+    # — the job ran, went red, and nothing downstream cared. Found while
+    # planning the content-scoping migrations, 2026-08-23.
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, i18n-completeness, backend-boot-smoke, migration-behavior]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious
