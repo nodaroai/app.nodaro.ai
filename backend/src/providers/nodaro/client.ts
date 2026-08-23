@@ -16,6 +16,7 @@ import { Agent } from "undici"
 import { nodaroCloudFetch, getNodaroCredential, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
 import { r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
+import { isUnroutableMediaUrl } from "../../lib/media-portability.js"
 import type { ProgressCallback } from "../provider.interface.js"
 
 /** Poll every 2s for the first few attempts, then 4s (spec: 2-4s interval). */
@@ -300,34 +301,9 @@ function isOurMediaUrl(url: string): boolean {
   }
 }
 
-function isCloudUnreachableUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    if (u.protocol !== "http:" && u.protocol !== "https:") return true
-    // Strip IPv6 brackets so ::1 / fc00:: literals compare cleanly.
-    const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase()
-    return (
-      host === "localhost" ||
-      host === "host.docker.internal" ||
-      host.endsWith(".local") ||
-      host.endsWith(".internal") ||
-      !host.includes(".") ||
-      /^127\./.test(host) ||               // whole loopback /8, not just .0.1
-      /^10\./.test(host) ||
-      /^192\.168\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-      /^169\.254\./.test(host) ||          // link-local — cloud metadata lives here
-      /^0\./.test(host) ||
-      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) || // CGNAT 100.64/10
-      host === "::1" ||
-      host === "::" ||
-      /^f[cd][0-9a-f]{2}:/.test(host) ||    // IPv6 unique-local fc00::/7
-      /^fe80:/.test(host)                   // IPv6 link-local
-    )
-  } catch {
-    return true
-  }
-}
+// The host classification lives in lib/media-portability.ts (one list for
+// "can the cloud fetch this?" and the workflow export/import checks, #866).
+const isCloudUnreachableUrl = isUnroutableMediaUrl
 
 /** Ceiling for re-hosted media, matched to the cloud upload route's own cap. */
 const MAX_REHOST_BYTES = 500 * 1_000_000

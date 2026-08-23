@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { KeylessNotice } from "./keyless-notice"
 
 // ---------------------------------------------------------------------------
 // Pure helpers — extracted so tests can cover the filter logic without RTL
@@ -192,12 +193,16 @@ export interface VoicePickerProps {
   /** Called with the full voice object on selection. */
   readonly onSelect: (voice: HeygenVoice) => void
   readonly className?: string
+  /** Keyless state: offer the "Open Integrations" action (default true). A
+   *  presentation surface whose viewer may not be the operator passes false. */
+  readonly showKeysAction?: boolean
 }
 
 export const VoicePicker = memo(function VoicePicker({
   value,
   onSelect,
   className,
+  showKeysAction = true,
 }: VoicePickerProps) {
   // Query definition shared with every other catalog consumer — see
   // heygen-catalog.ts (polls while the server is still filling; an empty
@@ -264,16 +269,14 @@ export const VoicePicker = memo(function VoicePicker({
   // -------------------------------------------------------------------------
   if (voices.length === 0) {
     return (
-      <div
-        className={cn("flex flex-col items-center gap-3 py-10 text-center px-4", className)}
-        data-testid="voice-picker-empty"
-      >
-        <Volume2 className="size-10 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">No HeyGen voices</p>
-        <p className="text-xs text-muted-foreground/70">
-          {keylessCatalogHint("voices")}
-        </p>
-      </div>
+      <KeylessNotice
+        icon={Volume2}
+        title="No HeyGen voices"
+        hint={keylessCatalogHint("voices")}
+        showAction={showKeysAction}
+        className={className}
+        testId="voice-picker-empty"
+      />
     )
   }
 

@@ -21,6 +21,7 @@ import {
   workflowExportSchema,
 } from "../lib/workflow-assets.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
+import { findUnroutableMedia, rehostForeignMedia } from "../lib/media-portability.js"
 import {
   clientAppVisibilityFilter,
   getListedAppSlugs,
@@ -985,6 +986,11 @@ export async function workflowRoutes(app: FastifyInstance) {
       result.assets = assetsResult
     }
 
+    // Media another instance cannot fetch (a private host's own storage,
+    // #866) — listed so the exporter hears it now, not at Run time elsewhere.
+    const unreachableMedia = findUnroutableMedia(result.nodes)
+    if (unreachableMedia.length > 0) result.portability = { unreachableMedia }
+
     return reply.send(result)
   })
 
@@ -1047,9 +1053,31 @@ export async function workflowRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, wfError, "Failed to create workflow")
     }
 
+    // Media the bundle points at elsewhere is copied onto THIS instance's
+    // storage so the workflow runs from local copies (#866) — AFTER the row
+    // exists, so a slow or failed copy degrades to "foreign URLs, reported",
+    // never to a lost import. What could not be copied is in the report.
+    const { nodes: portableNodes, report: importReport } = await rehostForeignMedia(remappedNodes, userId)
+    let finalRow = newWorkflow as Record<string, unknown>
+    if (importReport.rehosted > 0) {
+      const { data: updated, error: updError } = await supabase
+        .from("workflows")
+        .update({ nodes: portableNodes })
+        .eq("id", newWorkflow.id)
+        .eq("user_id", userId)
+        .select(WORKFLOW_FULL_COLS)
+        .single()
+      if (updError || !updated) {
+        req.log.warn({ err: updError, workflowId: newWorkflow.id }, "[workflows/import] media copied but the workflow could not be updated to use the copies")
+        importReport.notes = [...(importReport.notes ?? []), "Media was copied onto this instance, but the workflow could not be updated to use the copies — it still points at the original URLs."]
+      } else {
+        finalRow = updated as Record<string, unknown>
+      }
+    }
+
     return reply
       .status(201)
-      .send({ data: toWorkflowFull(newWorkflow as Record<string, unknown>) })
+      .send({ data: toWorkflowFull(finalRow), importReport })
   })
 
   // Create a child sub-workflow under a parent

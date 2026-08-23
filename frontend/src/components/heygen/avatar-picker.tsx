@@ -40,6 +40,7 @@ import {
 import { useVirtualGrid, rowItems } from "@/hooks/use-virtual-grid"
 import { useLazyMount } from "@/components/audio-player/use-lazy-mount"
 import { cn } from "@/lib/utils"
+import { KeylessNotice } from "./keyless-notice"
 
 // ---------------------------------------------------------------------------
 // Breakpoints — a 2-col grid at narrow, up to 4-col at wider panels.
@@ -211,6 +212,9 @@ export interface AvatarPickerProps {
   readonly onToggle?: (avatar: HeygenAvatar) => void
   /** Multi-select: max number of looks selectable. Default 3. */
   readonly max?: number
+  /** Keyless state: offer the "Open Integrations" action (default true). A
+   *  presentation surface whose viewer may not be the operator passes false. */
+  readonly showKeysAction?: boolean
 }
 
 export const AvatarPicker = memo(function AvatarPicker({
@@ -221,6 +225,7 @@ export const AvatarPicker = memo(function AvatarPicker({
   selected,
   onToggle,
   max = 3,
+  showKeysAction = true,
 }: AvatarPickerProps) {
   // Query definition (key, staleTime, polling while the server is still
   // filling) is shared with every other catalog consumer — see
@@ -324,16 +329,14 @@ export const AvatarPicker = memo(function AvatarPicker({
   // -------------------------------------------------------------------------
   if (avatars.length === 0) {
     return (
-      <div
-        className={cn("flex flex-col items-center gap-3 py-10 text-center px-4", className)}
-        data-testid="avatar-picker-empty"
-      >
-        <User className="size-10 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">No HeyGen avatars</p>
-        <p className="text-xs text-muted-foreground/70">
-          {keylessCatalogHint("avatars")}
-        </p>
-      </div>
+      <KeylessNotice
+        icon={User}
+        title="No HeyGen avatars"
+        hint={keylessCatalogHint("avatars")}
+        showAction={showKeysAction}
+        className={className}
+        testId="avatar-picker-empty"
+      />
     )
   }
 

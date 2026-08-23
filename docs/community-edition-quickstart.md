@@ -210,11 +210,18 @@ tools/community-backup.sh              # everything the stack cannot regenerate,
 tools/community-restore.sh <archive>   # the road back — DESTRUCTIVE, asks for confirmation
 ```
 
-The running version is shown in the app sidebar and at `/health`. When a
-newer release exists, a red dot appears next to the version — click it for
-the changelog and the exact upgrade commands. The check is one anonymous
+On Windows run both from **Git Bash** (not PowerShell, not WSL). The backup
+prints exactly what went into the archive and warns loudly if the encryption
+key is missing; the restore verifies the media, the key and the app before
+it starts anything. Full guide: [Backup & restore](backup-restore.html).
+
+The running version is shown in the app sidebar and at `/health`. Click the
+version for the release notes — of the version you are running, or of the
+newest release when one is available: then a red dot appears next to it and
+the same dialog adds the exact upgrade commands, with the backup step first. The check is one anonymous
 request a day to GitHub's API; set `NODARO_UPDATE_CHECK=off` in `.env` to
-disable it entirely (air-gapped installs).
+disable it entirely (air-gapped installs — the version then shows as plain
+text).
 
 ## Troubleshooting
 

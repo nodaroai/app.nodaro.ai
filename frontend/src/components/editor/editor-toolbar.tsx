@@ -80,6 +80,14 @@ interface ExportedWorkflow {
     objects: DbObject[]
     locations: DbLocation[]
   }
+  /** Media another instance cannot fetch — see `WorkflowPortability` (#866). */
+  portability?: { unreachableMedia: Array<{ nodeId: string; nodeLabel?: string; field: string; url: string }> }
+}
+
+/** "Node A, Node B, …" for a media-ref list — labels first, ids as the fallback, capped. */
+function describeMediaRefNodes(refs: ReadonlyArray<{ nodeId: string; nodeLabel?: string }>, max = 4): string {
+  const names = [...new Set(refs.map((r) => r.nodeLabel || r.nodeId))]
+  return names.slice(0, max).join(", ") + (names.length > max ? ", …" : "")
 }
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
@@ -152,6 +160,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       URL.revokeObjectURL(url)
 
       toast.success(includeAssets ? "Exported workflow with assets" : "Exported workflow template")
+      // The bundle points at media only THIS install can serve (#866) — say
+      // so now, not on someone else's canvas at Run time.
+      const unreachable = workflowData.portability?.unreachableMedia ?? []
+      if (unreachable.length > 0) {
+        const n = unreachable.length
+        toast.warning(
+          `${n} media URL${n === 1 ? "" : "s"} in this bundle point at this install and won't load on another instance: ${describeMediaRefNodes(unreachable)}. Upload that media somewhere public before sharing, or expect those nodes to need new inputs.`,
+          { duration: 12_000 },
+        )
+      }
     } catch (err) {
       toast.error("Export failed: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
@@ -222,7 +240,19 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       // DB-id references on nodes, then inserts a fresh workflow row.
       const created = await importWorkflow({ ...toWorkflowExportPayload(data), projectId: projectId! })
       const assetCount = (data.assets?.characters.length ?? 0) + (data.assets?.objects.length ?? 0) + (data.assets?.locations.length ?? 0)
-      toast.success(assetCount > 0 ? `Imported workflow with ${assetCount} assets` : "Imported workflow")
+      const report = created.importReport
+      const copied = report?.rehosted ? ` · ${report.rehosted} media file${report.rehosted === 1 ? "" : "s"} copied here` : ""
+      toast.success((assetCount > 0 ? `Imported workflow with ${assetCount} assets` : "Imported workflow") + copied)
+      // Media this instance could not fetch stays as-is and those nodes will
+      // not run until it is re-uploaded here (#866).
+      const unreachable = report?.unreachable ?? []
+      if (unreachable.length > 0) {
+        const n = unreachable.length
+        toast.warning(
+          `${n} media URL${n === 1 ? "" : "s"} in this bundle point at a private host this instance can't reach: ${describeMediaRefNodes(unreachable)}. Those nodes need their media uploaded here before they can run.`,
+          { duration: 12_000 },
+        )
+      }
       onNavigate?.(`/projects/${created.projectId}/workflows/${created.id}`)
     } catch (err) {
       toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
@@ -236,6 +266,17 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   // node/edge id remapping and the offset layout are pure client-side work.
   const handleInject = useCallback(async (data: ExportedWorkflow) => {
     if (useWorkflowStore.getState().isReadOnly) return
+    // Inject never goes through the backend import, so nothing is copied
+    // here — but the exporter's own note (#866) still tells us which media
+    // will not load; say so rather than let those nodes fail at Run time.
+    const unreachable = data.portability?.unreachableMedia ?? []
+    if (unreachable.length > 0) {
+      const n = unreachable.length
+      toast.warning(
+        `${n} media URL${n === 1 ? "" : "s"} in this bundle point at a private host this instance can't reach: ${describeMediaRefNodes(unreachable)}. Those nodes need their media uploaded here before they can run.`,
+        { duration: 12_000 },
+      )
+    }
     setImporting(true)
     try {
       let nodesToImport = [...data.nodes]

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { rememberNodaroConnected } from "./nodaro-connect-cache.js"
 import { resolveProviderKey } from "./provider-keys-runtime.js"
+import { decryptSecret, encryptSecret, EncryptionKeyMissingError } from "./instance-cipher.js"
 
 /**
  * Community cloud-connect — instance-side connection store (Phase 4a).
@@ -100,13 +101,120 @@ async function readStoredConnectionState(): Promise<NodaroConnectionState> {
       .maybeSingle()
     if (error) return { state: "unavailable", reason: error.message }
     if (!data?.value) return { state: "not-connected" }
-    const value = typeof data.value === "string" ? safeParse(data.value) : data.value
-    if (!value || typeof value !== "object") return { state: "not-connected" }
-    const conn = value as NodaroConnection
+    // A sealed row the cipher cannot open (key lost, restored without the
+    // app-data volume) throws here and lands in the catch below as
+    // `unavailable` — "could not read", never "not connected".
+    const { conn, legacy } = unsealConnection(data.value)
+    if (!conn) return { state: "not-connected" }
     if (!conn.clientId || !conn.clientSecret || !conn.accessToken) return { state: "not-connected" }
+    // This is the read every status check and boot registration goes
+    // through — the one an install that connected before #864 actually
+    // performs — so the legacy row is re-sealed HERE, not only from the
+    // connect routes. Awaited (its own try/catch; the read never fails
+    // because the write did): a fire-and-forget upsert would race whatever
+    // the caller writes next.
+    if (legacy) await resealLegacyConnection(conn)
     return { state: "connected", source: "oauth", connection: conn }
   } catch (err) {
     return { state: "unavailable", reason: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * Stored shape of the connection row since #864: the registration + tokens
+ * sealed with the instance cipher, the same AES-256-GCM key that guards the
+ * pasted provider keys one table over. Before this the row was plaintext JSON
+ * — a `clientSecret` and a live credit-spending `accessToken` readable by
+ * anyone holding a DB dump, beside provider keys that were ciphertext to them.
+ * `sealed` is the envelope version; the plaintext era is version 1 in spirit
+ * and has no marker at all.
+ */
+interface SealedConnection {
+  readonly sealed: 2
+  readonly ciphertext: string
+}
+
+function isSealed(value: unknown): value is SealedConnection {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as SealedConnection).sealed === 2 &&
+    typeof (value as SealedConnection).ciphertext === "string"
+  )
+}
+
+/**
+ * Decode a stored row value — the sealed envelope OR the legacy plaintext
+ * object (rows written before #864 must keep opening; `legacy` tells the
+ * reader to re-seal them). Throws when a sealed row cannot be opened, with a
+ * reason an operator can act on.
+ */
+function unsealConnection(raw: unknown): { conn: NodaroConnection | null; legacy: boolean } {
+  const value = typeof raw === "string" ? safeParse(raw) : raw
+  if (!value || typeof value !== "object") return { conn: null, legacy: false }
+  if ("sealed" in value) {
+    // Anything that CLAIMS to be sealed is handled here. An envelope from a
+    // newer version, or a damaged one, must surface as unreadable — falling
+    // through to "legacy plaintext" would read as not-connected, and /start
+    // would register a fresh client over the row (#708's cap, again).
+    if (!isSealed(value)) {
+      throw new Error(`unrecognized sealed connection envelope (sealed=${String((value as { sealed: unknown }).sealed)})`)
+    }
+    let plaintext: string
+    try {
+      plaintext = decryptSecret(value.ciphertext)
+    } catch (err) {
+      throw new Error(
+        "the stored nodaro.ai connection cannot be decrypted — the instance encryption key is not the one that " +
+          "wrote it (restored without the app-data volume, or NODARO_ENCRYPTION_KEY changed): " +
+          (err instanceof Error ? err.message : String(err)),
+      )
+    }
+    const inner = safeParse(plaintext)
+    return { conn: inner && typeof inner === "object" ? (inner as NodaroConnection) : null, legacy: false }
+  }
+  return { conn: value as NodaroConnection, legacy: true }
+}
+
+let warnedPlaintextOnce = false
+
+/**
+ * Seal for storage. Without an instance key there is nothing to seal with:
+ * the row is written as before (plaintext) so Connect keeps working on a
+ * misconfigured install, and the condition is logged once — the setup screen
+ * already flags the missing key for the provider-credentials path. A key
+ * that is PRESENT but malformed is a different thing: that throws, the same
+ * way provider-credentials refuses to store under it.
+ */
+function sealConnection(conn: NodaroConnection): SealedConnection | NodaroConnection {
+  try {
+    return { sealed: 2, ciphertext: encryptSecret(JSON.stringify(conn)) }
+  } catch (err) {
+    if (!(err instanceof EncryptionKeyMissingError)) throw err
+    if (!warnedPlaintextOnce) {
+      warnedPlaintextOnce = true
+      console.warn("[nodaro-connect] no instance encryption key — storing the cloud connection unencrypted (set NODARO_ENCRYPTION_KEY)")
+    }
+    return conn
+  }
+}
+
+/**
+ * Lazy migration: re-write a plaintext row sealed, the first time it is read
+ * with a key available. Best-effort — never throws — and AWAITED by callers
+ * so it can't land after a write the caller makes next (disconnect strips
+ * the token; a straggling re-seal of the full row would put it back).
+ */
+async function resealLegacyConnection(conn: NodaroConnection): Promise<void> {
+  try {
+    const sealed = sealConnection(conn)
+    if (sealed === conn) return // no key — nothing to migrate to
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert({ key: NODARO_CONNECT_SETTINGS_KEY, value: sealed }, { onConflict: "key" })
+    if (error) throw new Error(error.message)
+  } catch (err) {
+    console.warn("[nodaro-connect] could not re-seal the legacy connection row:", err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -144,16 +252,23 @@ export async function getNodaroConnection(): Promise<NodaroConnection | null> {
     return null
   }
   if (!data?.value) return null
-  const value = typeof data.value === "string" ? safeParse(data.value) : data.value
-  if (!value || typeof value !== "object") return null
-  const conn = value as NodaroConnection
-  return conn.clientId && conn.clientSecret ? conn : null
+  let decoded: ReturnType<typeof unsealConnection>
+  try {
+    decoded = unsealConnection(data.value)
+  } catch (err) {
+    console.error("[nodaro-connect] connection row cannot be decrypted:", err instanceof Error ? err.message : String(err))
+    return null
+  }
+  const conn = decoded.conn
+  if (!conn || !conn.clientId || !conn.clientSecret) return null
+  if (decoded.legacy) await resealLegacyConnection(conn)
+  return conn
 }
 
 export async function saveNodaroConnection(conn: NodaroConnection): Promise<void> {
   const { error } = await supabase
     .from("app_settings")
-    .upsert({ key: NODARO_CONNECT_SETTINGS_KEY, value: conn }, { onConflict: "key" })
+    .upsert({ key: NODARO_CONNECT_SETTINGS_KEY, value: sealConnection(conn) }, { onConflict: "key" })
   if (error) throw new Error(`Failed to save Nodaro connection: ${error.message}`)
 }
 

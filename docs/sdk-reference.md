@@ -465,18 +465,43 @@ include character/object/location entity data in the bundle.
 const { data: bundle } = await client.workflows.export(workflowId, { assets: true })
 ```
 
+**Portability.** A bundle is only as portable as the media it points at. When
+nodes reference URLs that another instance cannot fetch — typically a
+self-hosted install's own storage on `localhost`, a LAN address, or an
+`.internal` name — the bundle carries a `portability` section listing them:
+
+```ts
+bundle.portability?.unreachableMedia
+// [{ nodeId: "n1", nodeLabel: "Video URL", field: "videoUrl", url: "http://localhost:3000/storage/…" }]
+```
+
+Absent when every media URL is publicly reachable. Such a bundle still imports,
+but those nodes will not run on the other instance until the media is
+re-uploaded there.
+
 #### `import(input)`
 
 ```ts
-import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow }>
+import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow; importReport?: WorkflowImportReport }>
 ```
 
 Imports a `WorkflowExport` bundle into the specified project. Re-creates any
 bundled assets (characters, objects, locations) under your account. Returns the
 full record of the newly created workflow.
 
+Media the bundle references on other hosts is **copied onto this instance's
+storage** where it is reachable (up to 25 distinct files per import; images up
+to 20 MB, video/audio up to 50 MB), so the workflow runs from local copies
+rather than someone else's host. `importReport` says what happened:
+
 ```ts
-const { data: wf } = await client.workflows.import({ ...bundle, projectId })
+const { data: wf, importReport } = await client.workflows.import({ ...bundle, projectId })
+importReport
+// {
+//   rehosted: 3,                                  // copied onto this instance
+//   unreachable: [{ nodeId, nodeLabel, field, url }], // private hosts — left as-is
+//   skipped: [{ nodeId, field, url, reason: "HTTP 404" }],
+// }
 ```
 
 ---

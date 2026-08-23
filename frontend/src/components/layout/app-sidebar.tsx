@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isFeatureEnabled, hasCredits, isMultiUser } from "@/lib/edition"
+import { isFeatureEnabled, hasCredits, isCloud, isMultiUser } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
@@ -214,13 +214,26 @@ export function AppSidebar({
   const [mounted, setMounted] = useState(false)
   const updateInfo = useUpdateCheck()
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
-  // Cloud "what's new": the same dialog minus the backup/upgrade steps.
+  // The version label opens the release dialog on click — in EVERY edition.
   // It NEVER opens on its own — interrupting someone who just came to work
   // with a changelog they did not ask for is an annoyance, not a feature
-  // (founder, 2026-08-20). A new release only lights the version label; the
-  // dialog opens on click. hasCredits() is build-constant, so the two
-  // branches below are stable per build.
-  const whatsNewMode = hasCredits()
+  // (founder, 2026-08-20). A new release only lights the label.
+  //
+  // It used to be clickable on self-host only while an update was pending
+  // (#869): run the newest release and the affordance vanished, so "what is
+  // in the version I am running" had no answer in the UI — while /v1/version
+  // had already fetched the notes. The gate was hasCredits(), which answers
+  // "do we bill", never "should this install see its release notes" (the
+  // #752 lesson). The mode is the install's real state instead:
+  //   updateAvailable → "upgrade"   (self-host, behind: backup + commands)
+  //   cloud           → "whats-new" (just shipped, already live)
+  //   otherwise       → "current"   (self-host, on the newest release)
+  const updateAvailable = Boolean(updateInfo?.updateAvailable)
+  const dialogMode: "upgrade" | "whats-new" | "current" = updateAvailable
+    ? "upgrade"
+    : isCloud()
+      ? "whats-new"
+      : "current"
   // The label prefers the SERVER-resolved version: on cloud the frontend
   // build bakes no version (Railway passes none) and the baked fallback sat
   // at 1.23.0 beside "What's new in v1.27.0" (founder report 2026-08-19).
@@ -230,28 +243,34 @@ export function AppSidebar({
   // Has this browser already SEEN this release's notes? Drives the quiet dot
   // next to the version label — never an auto-open. A browser whose very
   // first visit lands on a release starts "seen": a brand-new user has no
-  // catching up to do.
+  // catching up to do. (A pending update shows its own red dot regardless.)
   const [whatsNewSeen, setWhatsNewSeen] = useState(true)
   useEffect(() => {
-    if (!whatsNewMode || !latestVersion) return
+    if (!latestVersion) return
     const KEY = "nodaro-whatsnew-seen"
-    const seen = localStorage.getItem(KEY)
-    if (seen === null) {
-      localStorage.setItem(KEY, latestVersion)
-      return
+    try {
+      const seen = localStorage.getItem(KEY)
+      if (seen === null) {
+        localStorage.setItem(KEY, latestVersion)
+        return
+      }
+      setWhatsNewSeen(seen === latestVersion)
+    } catch {
+      // storage blocked — no dot; the label itself still opens the dialog
     }
-    setWhatsNewSeen(seen === latestVersion)
-  }, [whatsNewMode, latestVersion])
+  }, [latestVersion])
   const markWhatsNewSeen = useCallback(() => {
-    if (!whatsNewMode || !latestVersion) return
+    if (!latestVersion) return
     try {
       localStorage.setItem("nodaro-whatsnew-seen", latestVersion)
     } catch {
       // storage blocked — the dot simply returns next load
     }
     setWhatsNewSeen(true)
-  }, [whatsNewMode, latestVersion])
-  const showVersionIndicator = whatsNewMode ? Boolean(updateInfo?.latest) : Boolean(updateInfo?.updateAvailable)
+  }, [latestVersion])
+  // Clickable whenever a release is known; plain text only while the check
+  // has not answered or is off (NODARO_UPDATE_CHECK=off — air-gapped installs).
+  const showVersionIndicator = Boolean(updateInfo?.latest)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
@@ -716,12 +735,11 @@ export function AppSidebar({
             {!isCollapsed && <ThemeToggle />}
           </div>
 
-          {/* Version row. Self-host: a RED dot when a newer release exists —
-              action needed. Cloud: the label is clickable whenever a release
-              is known and opens the "what's new" changelog; an unread release
-              gets a quiet accent dot, never a dialog that opens itself. The
-              endpoint owns the policy — updateAvailable is never true on
-              cloud. */}
+          {/* Version row. Clickable whenever a release is known, every
+              edition. A RED dot when a newer release exists — action needed
+              (self-host only: the endpoint owns the policy, updateAvailable
+              is never true on cloud). Otherwise an unread release gets a
+              quiet accent dot. Never a dialog that opens itself. */}
           <div className="text-center">
             {showVersionIndicator ? (
               <button
@@ -732,18 +750,20 @@ export function AppSidebar({
                 }}
                 className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 title={
-                  whatsNewMode
-                    ? `What's new in ${updateInfo?.latest?.version ?? ""}`
-                    : `Update available: ${updateInfo?.latest?.version ?? ""}`
+                  updateAvailable
+                    ? `Update available: ${updateInfo?.latest?.version ?? ""}`
+                    : dialogMode === "current"
+                      ? `What's in ${updateInfo?.latest?.version ?? ""}`
+                      : `What's new in ${updateInfo?.latest?.version ?? ""}`
                 }
               >
-                {(whatsNewMode ? !whatsNewSeen : true) && (
+                {(updateAvailable || !whatsNewSeen) && (
                   <span
                     aria-hidden
                     className={
-                      whatsNewMode
-                        ? "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
-                        : "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                      updateAvailable
+                        ? "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                        : "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
                     }
                   />
                 )}
@@ -762,7 +782,7 @@ export function AppSidebar({
               open={updateDialogOpen}
               onOpenChange={setUpdateDialogOpen}
               info={updateInfo}
-              mode={whatsNewMode ? "whats-new" : "upgrade"}
+              mode={dialogMode}
             />
           )}
         </div>

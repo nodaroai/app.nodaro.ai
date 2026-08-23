@@ -14,6 +14,7 @@ import { AlertCircle, User } from "lucide-react"
 import type { HeygenAvatar } from "@/lib/api"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { keylessCatalogHint, useHeygenAvatars, useHeygenVoices } from "@/components/heygen/heygen-catalog"
+import { KeylessNotice } from "@/components/heygen/keyless-notice"
 import {
   DEFAULT_FILTERS,
   countOwnLooks,
@@ -171,11 +172,12 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
     )
   } else if (looks.length === 0) {
     body = (
-      <div className="flex flex-col items-center justify-center gap-2 px-8 text-center" data-testid="avatar-picker-empty">
-        <User className="size-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">No HeyGen avatars</p>
-        <p className="max-w-md text-xs text-muted-foreground/70">{keylessCatalogHint("avatars")}</p>
-      </div>
+      <KeylessNotice
+        icon={User}
+        title="No HeyGen avatars"
+        hint={keylessCatalogHint("avatars")}
+        testId="avatar-picker-empty"
+      />
     )
   } else if (filtered.length === 0) {
     body = (

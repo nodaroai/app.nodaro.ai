@@ -92,7 +92,7 @@ import {
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
+  resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
 import { composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
@@ -1841,16 +1841,22 @@ export function executeNode(
     // A connected source video routes to image-to-video ONLY for gemini-omni-video
     // (its V2V mode), matching the backend payload-builder's gemini-scoped override.
     // Other providers (e.g. seedance-2) keep the start-frame-only i2v/t2v split.
+    const rawProvider = (node.data as { provider?: string } | undefined)?.provider;
     const hasGeminiVideoRef =
-      (node.data as { provider?: string } | undefined)?.provider === "gemini-omni-video" &&
+      rawProvider === "gemini-omni-video" &&
       Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length);
-    const mode: "image-to-video" | "text-to-video" = (hasImage || hasGeminiVideoRef) ? "image-to-video" : "text-to-video";
+    // Shared with the backend orchestrator: a start frame is i2v; refs alone
+    // are i2v only for a split-id model whose t2v twin cannot carry them
+    // (Grok Imagine 1 — its text endpoint has no image parameter, #861).
+    const hasImageRefs = Boolean((inputs.referenceImageUrls as string[] | undefined)?.length);
+    const mode: "image-to-video" | "text-to-video" = hasGeminiVideoRef
+      ? "image-to-video"
+      : resolveVideoModeForInputs(rawProvider, { hasStartFrame: hasImage, hasImageRefs });
     // Split-id video models (Grok Imagine 1, Wan 2.6/2.7) use a different provider
     // id per mode but are one user-facing model in the unified picker. Remap the
     // stored id to the concrete KIE id for the chosen mode so the i2v/t2v handler,
     // backend route, and credit guard all see a valid id. No-op for single-id
     // providers. Shared with the backend orchestrator (payload-builder.ts).
-    const rawProvider = (node.data as { provider?: string } | undefined)?.provider;
     const resolvedProvider = rawProvider ? resolveVideoProviderForMode(rawProvider, mode) : rawProvider;
     // Re-type to i2v/t2v for dispatch. Both i2v and t2v candidate-field lists
     // include `motionPrompt` (NODE_PROMPT_CANDIDATE_FIELDS), so a generate-video
@@ -2399,7 +2405,14 @@ export function executeNode(
     // whatever is connected; a prompt-only run is a valid t2v fallback, so never
     // hard-fail on a missing start frame.
     const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "") || isMinimaxH3Provider(nodeProvider ?? "")
-    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly) {
+    // Catalog-driven ref-only exemption — the IMAGE arm of the rule the
+    // /v1/generate-video route applies (`hasMultimodalRef`): a provider whose
+    // cap says it carries image references may run on them alone (grok-i2v
+    // via the #861 mode routing; kling-3-omni / happyhorse-ref2v when reached
+    // as i2v). Video/audio-only refs keep the older provider-specific checks.
+    const i2vRefsCarried =
+      (VIDEO_REF_LIMITS_BY_PROVIDER[nodeProvider ?? ""]?.images ?? 0) > 0 && (i2vMergedRefs?.length ?? 0) > 0
+    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
       return Promise.reject(new Error("No start frame image"));

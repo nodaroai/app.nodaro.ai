@@ -3,7 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
@@ -6122,17 +6122,21 @@ export interface ImportedWorkflow {
   updatedAt: string
 }
 
-/** Import a workflow bundle into a project — re-creates bundled assets and returns the new workflow. */
+/**
+ * Import a workflow bundle into a project — re-creates bundled assets and
+ * returns the new workflow. `importReport` (#866) says what happened to the
+ * bundle's media: copied onto this instance, unreachable, or skipped.
+ */
 export async function importWorkflow(
   input: WorkflowExport & { projectId: string },
-): Promise<ImportedWorkflow> {
+): Promise<ImportedWorkflow & { importReport?: WorkflowImportReport }> {
   const { projectId, ...workflow_json } = input
-  const json = await apiRequest<{ data: ImportedWorkflow }>(
+  const json = await apiRequest<{ data: ImportedWorkflow; importReport?: WorkflowImportReport }>(
     `/v1/workflows/import`,
     "Failed to import workflow",
     { method: "POST", body: { projectId, workflow_json } },
   )
-  return json.data
+  return { ...json.data, importReport: json.importReport }
 }
 
 // ---------------------------------------------------------------------------

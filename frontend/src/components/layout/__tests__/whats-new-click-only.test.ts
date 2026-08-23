@@ -65,3 +65,17 @@ describe("what's-new dialog — click-only", () => {
     expect(source).toMatch(/nodaro-whatsnew-seen/)
   })
 })
+
+// #869: the version label is clickable in every edition. It used to be gated
+// on hasCredits() (a billing question) — self-host lost the affordance the
+// moment it was up to date, while /v1/version had already fetched the notes.
+describe("version indicator — edition-agnostic", () => {
+  it("is not gated on hasCredits(); it shows whenever a release is known", () => {
+    expect(source).not.toMatch(/whatsNewMode\s*=\s*hasCredits\(\)/)
+    expect(source).toMatch(/const showVersionIndicator = Boolean\(updateInfo\?\.latest\)/)
+  })
+
+  it("the dialog mode is derived from the install's state, with a 'current' mode for an up-to-date self-host", () => {
+    expect(source).toMatch(/updateAvailable\s*\?\s*"upgrade"\s*:\s*isCloud\(\)\s*\?\s*"whats-new"\s*:\s*"current"/)
+  })
+})

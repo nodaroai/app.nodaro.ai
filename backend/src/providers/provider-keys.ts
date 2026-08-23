@@ -75,18 +75,48 @@ export class MissingProviderKeyError extends Error {
   }
 }
 
+/** The in-app screen where keys are pasted and nodaro.ai is connected. The
+ *  voices hint and the frontend's HeyGen catalog hint name it with the same
+ *  words (#865 found the pair pointing at different screens for one job).
+ *  MissingProviderKeyError and describeEmptyCapability above still say
+ *  "Install health → Provider keys" — the no-login /setup screen — because
+ *  those strings reach API callers and job errors too; unifying them is a
+ *  separate change. */
+const KEYS_SCREEN = "Integrations → Model providers"
+
 /**
  * Why /v1/voices (and the library tab) is limited without a key. Deliberately
  * NOT the MissingProviderKeyError sentence: text-to-speech itself IS covered
- * by the nodaro.ai connection, and the static premade list still works for
- * generation — only previews and the personal voice library need the key, so
- * "not covered by the connection" would be false here. Same render envelope
- * as the shared message: short, names the key, points at Install health.
+ * by the nodaro.ai connection, and the built-in list still works for
+ * generation (previews + descriptions are baked in, #862) — only the personal
+ * voice library and the full catalog need the key, so "not covered by the
+ * connection" would be false here.
+ *
+ * Resolved against the SAME state MissingProviderKeyError reads (#863): the
+ * old constant told an already-connected install to go connect, and never
+ * offered the connection to a keyless one. Two live states (connected / not)
+ * plus a defensive third for a key the connection does not cover — today
+ * PROVIDER_KEY_META says it does, so that branch is latent. Each sentence
+ * ≤200 chars for the picker banner.
  */
 export function describeLimitedVoices(): string {
+  const covered = connectionCovers("ELEVENLABS_API_KEY")
+  const alreadyConnected = isNodaroConnectedCached() === true
+  if (covered && alreadyConnected) {
+    return (
+      "Built-in voice list — speech runs through your nodaro.ai connection. " +
+      `Your voice library and the full ElevenLabs catalog need your own ELEVENLABS_API_KEY (${KEYS_SCREEN}).`
+    )
+  }
+  if (covered) {
+    return (
+      "Built-in voice list. To generate speech, add ELEVENLABS_API_KEY or connect nodaro.ai; " +
+      `your voice library and the full catalog need the key itself. Either one: ${KEYS_SCREEN}.`
+    )
+  }
   return (
-    "Showing a limited built-in voice list — previews and your voice library need " +
-    "ELEVENLABS_API_KEY. Add it in Install health → Provider keys."
+    "Built-in voice list — your voice library and the full ElevenLabs catalog need " +
+    `ELEVENLABS_API_KEY (${KEYS_SCREEN}).`
   )
 }
 

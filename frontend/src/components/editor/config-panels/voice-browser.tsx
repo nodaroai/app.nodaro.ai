@@ -336,7 +336,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
         </div>
 
         {voicesKeyHint && (
-          <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
+          <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
             {voicesKeyHint}
           </p>
         )}

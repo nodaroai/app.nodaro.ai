@@ -110,6 +110,7 @@ export {
   VIDEO_MODE_ALIASES,
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   resolveVideoProviderForMode,
+  resolveVideoModeForInputs,
   isSeedance2Provider,
   MINIMAX_H3_PROVIDERS,
   isMinimaxH3Provider,
@@ -761,6 +762,9 @@ export type {
   WorkflowExportObject,
   WorkflowExportCreature,
   WorkflowExportLocation,
+  WorkflowMediaRef,
+  WorkflowPortability,
+  WorkflowImportReport,
 } from "./workflow-export.js"
 export { stripExportContent } from "./workflow-export.js"
 

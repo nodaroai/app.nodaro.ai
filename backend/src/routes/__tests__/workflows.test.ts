@@ -1103,6 +1103,39 @@ describe("GET /v1/workflows/:id/export", () => {
     expect(body.name).toBe("My Workflow")
     expect(body.assets).toBeUndefined()
     expect(body.exportedAt).toBeDefined()
+    // No media, nothing to warn about — the note is absent, not empty.
+    expect(body.portability).toBeUndefined()
+  })
+
+  it("lists media another instance cannot fetch — a private host's own storage (#866)", async () => {
+    const localMedia = {
+      ...DB_WORKFLOW_FULL,
+      nodes: [
+        { id: "n-yt", type: "youtube-video", data: { label: "Video URL", youtubeUrl: "http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4" } },
+        { id: "n-img", type: "generate-image", data: { imageUrl: "https://cdn.nodaro.ai/images/public.png" } },
+      ],
+    }
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: localMedia, error: null }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.portability).toEqual({
+      unreachableMedia: [
+        { nodeId: "n-yt", nodeLabel: "Video URL", field: "youtubeUrl", url: "http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4" },
+      ],
+    })
+    // The bundle itself is untouched — the note is informative, never a rewrite.
+    expect(body.nodes[0].data.youtubeUrl).toBe("http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4")
   })
 
   it("includes assets when assets=true and entities exist", async () => {
@@ -1280,6 +1313,9 @@ describe("POST /v1/workflows/import", () => {
     expect(body.data.name).toBe("Imported WF")
     expect(body.data.projectId).toBe(TEST_PROJECT_ID)
     expect(body.data.userId).toBe(TEST_USER_ID)
+    // Always present, so a caller can rely on the shape (#866); nothing to
+    // copy here — the bundle carries no media URLs.
+    expect(body.importReport).toEqual({ rehosted: 0, unreachable: [], skipped: [] })
     expect(insertFn).toHaveBeenCalledWith(
       expect.objectContaining({
         project_id: TEST_PROJECT_ID,

@@ -341,6 +341,13 @@ project via export → import.
 **Response:** A JSON string in the `WorkflowExport` format (version 1). Pass
 the full string directly to `import_workflow`.
 
+**Portability note.** When nodes reference media another instance cannot
+fetch — a self-hosted install's own storage on `localhost`, a LAN address, an
+`.internal` name — the bundle carries `portability.unreachableMedia`
+(`{ nodeId, nodeLabel, field, url }` per reference). Such a bundle still
+imports, but those nodes will not run elsewhere until the media is re-uploaded
+there. Absent when every media URL is publicly reachable.
+
 ---
 
 ### `import_workflow`
@@ -350,6 +357,10 @@ imports into the mcp project. If the bundle includes asset data
 (`with_assets: true`), new character, object, and location records are created
 under your account with fresh IDs; node references are remapped automatically.
 
+Media the bundle references on other hosts is copied onto this instance's
+storage where reachable (up to 25 distinct files per import; images up to
+20 MB, video/audio up to 50 MB), so the workflow runs from local copies.
+
 **Scope:** `workflows:write`
 
 **Input:**
@@ -358,7 +369,11 @@ under your account with fresh IDs; node references are remapped automatically.
 |-------|------|-------|
 | `workflow_json` | string | The full JSON string from `export_workflow` |
 
-**Response:** Returns the new workflow's `id` and `name` in structured content.
+**Response:** Returns the new workflow's `id` and `name` in structured content,
+plus `importReport` — `{ rehosted, unreachable[], skipped[] }` — saying which
+media was copied, which points at a private host this instance cannot reach
+(left as-is), and which was skipped with the reason. The text reply repeats the
+same, naming the affected nodes.
 
 ---
 

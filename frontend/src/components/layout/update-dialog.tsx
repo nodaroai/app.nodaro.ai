@@ -7,7 +7,7 @@ import type { UpdateInfo } from "@/hooks/use-update-check"
 
 /**
  * The release dialog behind the sidebar's version indicator — founder design
- * (comp: "Update Dialog.dc.html", 2026-08-19). Two modes, one component:
+ * (comp: "Update Dialog.dc.html", 2026-08-19). Three modes, one component:
  *
  * - "upgrade" (self-host): two columns — the changelog + release/compare
  *   links on the left; the two numbered steps on the right (BACK UP first,
@@ -15,6 +15,10 @@ import type { UpdateInfo } from "@/hooks/use-update-check"
  *   and an "I have a backup from today" acknowledgment.
  * - "whats-new" (cloud): the changelog + release link only — cloud users
  *   never upgrade anything, they just see what shipped.
+ * - "current" (self-host, on the newest release): the same changelog-only
+ *   body, framed as "this is what you are running" — the answer to "what is
+ *   in my version?" that the sidebar used to withhold once you were up to
+ *   date (#869).
  */
 
 const GUIDE_URL = "https://nodaroai.github.io/app.nodaro.ai/backup-restore"
@@ -99,7 +103,7 @@ export function UpdateDialog({
   readonly open: boolean
   readonly onOpenChange: (open: boolean) => void
   readonly info: UpdateInfo
-  readonly mode?: "upgrade" | "whats-new"
+  readonly mode?: "upgrade" | "whats-new" | "current"
 }) {
   const [backedUp, setBackedUp] = useState(false)
   if (!info.latest) return null
@@ -124,12 +128,20 @@ export function UpdateDialog({
           </span>
           <div className="min-w-0 flex-1">
             <DialogTitle className="text-xl font-bold tracking-tight">
-              {upgrade ? `Upgrade to ${latest.version}` : `What's new in ${latest.version}`}
+              {upgrade
+                ? `Upgrade to ${latest.version}`
+                : mode === "current"
+                  ? `What's in ${latest.version}`
+                  : `What's new in ${latest.version}`}
             </DialogTitle>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {upgrade
                 ? `You are running v${V(info.current)} · two steps, about five minutes.`
-                : "Just shipped to nodaro.ai — already live for you."}
+                : mode === "current"
+                  ? V(info.current) === V(latest.version)
+                    ? "You are on the latest release — nothing to do."
+                    : `You are running v${V(info.current)} · newest release is ${latest.version}.`
+                  : "Just shipped to nodaro.ai — already live for you."}
               {isMajor && (
                 <span className="mt-1 block font-medium text-red-500">
                   This is a major release — read the notes before upgrading.
