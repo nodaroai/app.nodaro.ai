@@ -56,3 +56,15 @@ kie-actual.json
 per-second-rates.json
 observed-costs.json
 a2-sheet.json
+
+# Credential files — a belt-and-braces net beside secret-scan.yml/gitleaks.
+# The SAI fork added these after finding a `kie-key.txt` sitting at its repo
+# root: a provider key in a file gitleaks does not recognise as a secret (it is
+# bare, with no assignment or JSON key around it) is one `git add -A` from
+# public history. Globs cost nothing and fail closed.
+# NOTE: *.key would also match TLS/SSH private keys — which is the point.
+*-key.txt
+*_key.txt
+*.key
+*.pem
+*credentials*.json
