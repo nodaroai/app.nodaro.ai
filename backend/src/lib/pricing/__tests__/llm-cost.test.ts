@@ -86,3 +86,20 @@ describe("calculateLlmCost", () => {
     expect(calculateLlmCost("gpt-5.5", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0056, 10)
   })
 })
+
+describe("calculateLlmCost — prompt-cache tokens", () => {
+  it("bills cache writes at 1.25x and cache reads at 0.10x of the input rate (direct lane)", () => {
+    const base = calculateLlmCost("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 0 }, "direct")
+    const write = calculateLlmCost("claude-sonnet-5", { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 1_000_000 }, "direct")
+    const read = calculateLlmCost("claude-sonnet-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 }, "direct")
+    expect(base).toBeGreaterThan(0)
+    expect(write).toBeCloseTo(base * 1.25, 6)
+    expect(read).toBeCloseTo(base * 0.1, 6)
+  })
+
+  it("is unchanged for callers that pass only input/output tokens", () => {
+    const a = calculateLlmCost("claude-sonnet-5", { inputTokens: 1234, outputTokens: 567 }, "direct")
+    const b = calculateLlmCost("claude-sonnet-5", { inputTokens: 1234, outputTokens: 567, cacheWriteTokens: 0, cacheReadTokens: 0 }, "direct")
+    expect(a).toBe(b)
+  })
+})

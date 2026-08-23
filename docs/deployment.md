@@ -392,7 +392,7 @@ seconds.
 | User management UI | no | yes | yes |
 | Credit ledger | no | no | yes |
 | Stripe billing webhooks | no | no | yes |
-| Markup on AI provider cost | no | no | yes |
+| Admin-configurable credit pricing | no | no | yes |
 
 Switch by changing `EDITION=community|business|cloud` and restarting.
 Edition is read at startup; there is no migration cost moving

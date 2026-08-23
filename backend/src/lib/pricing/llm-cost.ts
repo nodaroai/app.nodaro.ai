@@ -139,9 +139,33 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
  * call site keeps its exact previous behaviour. Pass `"direct"` only when the
  * vendor's own API served the call.
  */
+/**
+ * Token usage for one call. The cache fields follow ANTHROPIC's shape and
+ * rates: the three prompt counts are DISJOINT (`input_tokens` excludes the
+ * cached portions) and caching is billed as a multiple of the input rate.
+ * Do not feed OpenAI / Google usage here with cache fields set — both report
+ * cached tokens INSIDE the prompt total and price caching differently; for
+ * those lanes pass `inputTokens` / `outputTokens` only (the pre-existing
+ * behavior), which is what every caller outside the Anthropic direct lane
+ * does.
+ */
+export interface LlmCostUsage {
+  /** Non-cached prompt tokens (Anthropic's `input_tokens` is this portion only). */
+  inputTokens: number
+  outputTokens: number
+  /** Prompt-cache WRITE tokens (`cache_creation_input_tokens`) — billed at 1.25× the input rate. */
+  cacheWriteTokens?: number
+  /** Prompt-cache READ tokens (`cache_read_input_tokens`) — billed at 0.10× the input rate. */
+  cacheReadTokens?: number
+}
+
+/** Anthropic's published multipliers on the input rate for prompt caching. */
+const CACHE_WRITE_INPUT_MULTIPLIER = 1.25
+const CACHE_READ_INPUT_MULTIPLIER = 0.1
+
 export function calculateLlmCost(
   modelOrId: string | LlmModelDef,
-  usage: { inputTokens: number; outputTokens: number },
+  usage: LlmCostUsage,
   lane: LlmServingLane = "kie",
 ): number {
   const id = typeof modelOrId === "string" ? modelOrId : modelOrId.id
@@ -149,12 +173,22 @@ export function calculateLlmCost(
   // under-report of a real spend is worse than a stale-but-nonzero estimate.
   const rate = (lane === "direct" ? LLM_DIRECT_RATES_USD_PER_M[id] : undefined) ?? LLM_MODEL_RATES_USD_PER_M[id]
   if (!rate) return 0
+  const cacheWrite = usage.cacheWriteTokens ?? 0
+  const cacheRead = usage.cacheReadTokens ?? 0
+  // The usage fields are disjoint; the long-context band keys off the WHOLE
+  // prompt (uncached + cached), which is what the vendor's threshold counts.
+  const promptTokens = usage.inputTokens + cacheWrite + cacheRead
   const band =
     rate.longContext && rate.longContextThresholdTokens !== undefined &&
-    usage.inputTokens > rate.longContextThresholdTokens
+    promptTokens > rate.longContextThresholdTokens
       ? rate.longContext
       : rate
-  return (usage.inputTokens * band.inputPricePerM + usage.outputTokens * band.outputPricePerM) / 1_000_000
+  const inputUsd =
+    (usage.inputTokens +
+      cacheWrite * CACHE_WRITE_INPUT_MULTIPLIER +
+      cacheRead * CACHE_READ_INPUT_MULTIPLIER) *
+    band.inputPricePerM
+  return (inputUsd + usage.outputTokens * band.outputPricePerM) / 1_000_000
 }
 
 /** Test/introspection hook: model ids carrying a direct-lane rate row. */

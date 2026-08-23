@@ -37,6 +37,7 @@ void _startProgressEmitter
 import { registerWidgetResources } from "./widgets/registrar.js"
 import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
+import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
 
 interface BuildOpts {
@@ -50,6 +51,30 @@ interface BuildOpts {
    * `userId` from the request body.
    */
   fastify: FastifyInstance
+  /**
+   * Pin the session to one project (in-app Workflow Copilot sessions): the
+   * workflow tools then read and write inside `projectId` instead of the
+   * auto-managed "mcp" project. Must come from an ownership-checked workflow
+   * row — see `McpSession.scopedProjectId`.
+   */
+  projectScope?: { projectId: string }
+}
+
+/**
+ * A project pin is only ever safe when the project belongs to the session's
+ * user. Checked HERE, at the single choke point, so no caller can pin a
+ * session to someone else's project by mistake — `scopedProjectId` is a
+ * narrowing filter downstream, but the pin itself must be authorized.
+ */
+async function assertProjectOwnership(userId: string, projectId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error) throw new Error(`projectScope lookup failed: ${error.message}`)
+  if (!data) throw new Error("projectScope: project not found for this user")
 }
 
 /**
@@ -84,7 +109,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // trusted from the stored preference — see workspace-session.ts. Returns
   // undefined on any build without organizations.
   const workspaceId = await resolveSessionWorkspace(opts.userId)
-  const session = newSession({ ...opts, workspaceId })
+  const { projectScope, ...sessionOpts } = opts
+  if (projectScope) await assertProjectOwnership(opts.userId, projectScope.projectId)
+  const session = newSession({ ...sessionOpts, workspaceId, scopedProjectId: projectScope?.projectId })
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
     {

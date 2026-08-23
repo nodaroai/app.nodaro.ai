@@ -23,6 +23,11 @@ export type StreamEvent =
   | { type: "execution"; data: Record<string, unknown> }
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { code: string; message: string } }
+  // Workflow Copilot turn events — mirrors backend/src/lib/sse.ts verbatim.
+  | { type: "tool_call"; data: { id: string; name: string; label: string; status: "started" | "finished" | "failed"; summary?: string } }
+  | { type: "workflow_updated"; data: Record<string, unknown> }
+  | { type: "run_proposed"; data: Record<string, unknown> }
+  | { type: "usage"; data: Record<string, unknown> }
 
 /**
  * Thrown when the SSE endpoint responds with a non-2xx status. Carries the HTTP

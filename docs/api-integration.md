@@ -985,7 +985,7 @@ Expected validation failures are `400` (`validation_error`,
 `audio_preview_unavailable` means the layer is logically present but its
 browser/ffmpeg-ready derivative is not available for an honest custom mix. A
 stale-revision or in-progress response includes the current revision or live job
-when available. Quoting never reserves credits and still returns the post-markup
+when available. Quoting never reserves credits and still returns the final
 price when the current balance is insufficient; the paid route can return the
 normal `402 insufficient_credits` response.
 

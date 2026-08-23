@@ -29,6 +29,10 @@ async function findOldestMcpProject(userId: string): Promise<string | null> {
 }
 
 export async function ensureMcpProject(session: McpSession): Promise<string> {
+  // An in-app session is pinned to the open workflow's real project (see
+  // `McpSession.scopedProjectId`) — no "mcp" side project is consulted or
+  // created for it. `/mcp` sessions never set this and keep the behavior below.
+  if (session.scopedProjectId) return session.scopedProjectId
   if (session.mcpProjectId) return session.mcpProjectId
 
   const existing = await findOldestMcpProject(session.userId)

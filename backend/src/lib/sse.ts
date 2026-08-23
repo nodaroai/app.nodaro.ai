@@ -13,6 +13,13 @@ export type StreamEvent =
   | { type: "execution"; data: Record<string, unknown> }
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { code: string; message: string } }
+  // Workflow Copilot turn events (ee/copilot). Additive — existing consumers
+  // switch on `type` and ignore what they don't know. Mirrored verbatim in
+  // frontend/src/lib/sse-client.ts.
+  | { type: "tool_call"; data: { id: string; name: string; label: string; status: "started" | "finished" | "failed"; summary?: string } }
+  | { type: "workflow_updated"; data: Record<string, unknown> }
+  | { type: "run_proposed"; data: Record<string, unknown> }
+  | { type: "usage"; data: Record<string, unknown> }
 
 // ---------------------------------------------------------------------------
 // SSE Controller

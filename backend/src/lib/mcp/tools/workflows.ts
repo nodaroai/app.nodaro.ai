@@ -72,6 +72,10 @@ export function registerWorkflows({
   session,
   fastify,
 }: RegisterWorkflowsOpts): void {
+  // An in-app session is pinned to the open workflow's project, where "the
+  // mcp project" would be a misleading place to tell the model to look.
+  const projectNoun = session.scopedProjectId ? "in this project" : "in mcp project"
+
   if (passesGate(session, readGate)) {
     server.registerTool(
       "list_workflows",
@@ -140,7 +144,7 @@ export function registerWorkflows({
         if (error) return err(`Error: ${error.message}`)
         if (!data) return err("Workflow not found")
         if ((data as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err("Workflow not found in mcp project")
+          return err(`Workflow not found ${projectNoun}`)
         }
         return ok(JSON.stringify({ data }, null, 2))
       },
@@ -151,7 +155,7 @@ export function registerWorkflows({
       {
         title: "Get Workflow JSON",
         description:
-          "Get the full React Flow JSON for a workflow in the mcp project. Returns nodes, edges, settings, name, and updated_at for use with update_workflow_json.",
+          "Get the full React Flow JSON for a workflow in the mcp project. Returns nodes, edges, settings, name, updated_at and version (pass it back as expected_version to update_workflow_json).",
         inputSchema: { workflow_id: z.string().uuid() },
         annotations: { readOnlyHint: true },
       },
@@ -159,13 +163,13 @@ export function registerWorkflows({
         const mcpProjectId = await ensureMcpProject(session)
         const { data, error } = await supabase
           .from("workflows")
-          .select("id, project_id, name, nodes, edges, settings, updated_at")
+          .select("id, project_id, name, nodes, edges, settings, updated_at, version")
           .eq("id", args.workflow_id)
           .eq("user_id", session.userId)
           .eq("project_id", mcpProjectId)
           .maybeSingle()
         if (error) return err(`Error: ${error.message}`)
-        if (!data) return err("Workflow not found in mcp project")
+        if (!data) return err(`Workflow not found ${projectNoun}`)
         const row = data as Record<string, unknown>
         return ok(
           JSON.stringify(
@@ -175,6 +179,9 @@ export function registerWorkflows({
               edges: row.edges ?? [],
               settings: row.settings ?? {},
               updated_at: row.updated_at,
+              // The CAS token `update_workflow_json` asks for as `expected_version`
+              // — the doc promised it here long before the read side supplied it.
+              version: row.version,
             },
             null,
             2,
@@ -307,7 +314,7 @@ export function registerWorkflows({
           .maybeSingle()
         if (lookupError) return err(`Error: ${lookupError.message}`)
         if (!existing || (existing as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err("Workflow not found in mcp project")
+          return err(`Workflow not found ${projectNoun}`)
         }
         const { error } = await supabase
           .from("workflows")
@@ -437,7 +444,7 @@ export function registerWorkflows({
               )
             }
           }
-          return err("Workflow not found in mcp project")
+          return err(`Workflow not found ${projectNoun}`)
         }
         const updated = data as Record<string, unknown>
         const changed: string[] = []
@@ -606,7 +613,7 @@ export function registerWorkflows({
           .maybeSingle()
         if (wfErr) return err(`Error: ${wfErr.message}`)
         if (!wfRow || (wfRow as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err("Workflow not found in mcp project")
+          return err(`Workflow not found ${projectNoun}`)
         }
 
         const payload = {

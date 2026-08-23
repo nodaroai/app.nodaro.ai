@@ -510,7 +510,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Check packages/*/src for provider-$ / margin-markup leaks
+      - name: Check packages/*/src, migrations and docs/ for provider-$ / margin-markup leaks
         run: node tools/check-pricing-leaks.mjs
 
   check-public-surface:

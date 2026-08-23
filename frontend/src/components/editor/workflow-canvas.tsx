@@ -857,11 +857,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     getCurrentEdges: () => getEdges(),
     getIsDirty: () => useWorkflowStore.getState().isDirty,
     getLoadedUpdatedAt: () => useWorkflowStore.getState().loadedUpdatedAt,
-    onReconcile: ({ nodes: remoteNodes, edges: remoteEdges, updatedAt, settings }) =>
+    // `version` MUST be forwarded: the store's `loadedVersion` is the CAS token
+    // of the next full save. Dropping it here left the token stale after every
+    // external write (MCP / Copilot / another device), so the user's next save
+    // hit "updated on another device" and autosave paused until a reload.
+    onReconcile: ({ nodes: remoteNodes, edges: remoteEdges, updatedAt, version, settings }) =>
       reconcileFromRemote({
         nodes: remoteNodes as unknown as WorkflowNode[],
         edges: remoteEdges as unknown as WorkflowEdge[],
         updatedAt,
+        ...(typeof version === "number" ? { version } : {}),
         settings,
       }),
     onAppendNodes: (newNodes) => setNodes((nds) => [...nds, ...newNodes]),

@@ -62,7 +62,7 @@ Per 30-frame block: **5 credits at 720p, 15 credits at 1080p.**
 | ≤ 210 frames (~7s) | 35 | 105 |
 | ≤ 240 frames (~8s) | 40 | 120 |
 
-A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 75 credits. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs. The platform's standard markup (if any) is applied at reserve, the same as every other node.
+A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 75 credits. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
 
 ## Best Practices
 

@@ -146,3 +146,30 @@ describe("skill-loaders MCP tools", () => {
     expect(text).not.toContain("# Backend — Claude Code Reference")  // backend/CLAUDE.md
   })
 })
+
+describe("workflow-editor.md sections", () => {
+  it("exposes every named section from the on-disk file", async () => {
+    const { getWorkflowEditorSections, WORKFLOW_EDITOR_CONTENT } = await import("../skill-loaders.js")
+    for (const name of ["shape", "edges", "update-contract", "result-fields", "catalog", "gotchas"] as const) {
+      const text = getWorkflowEditorSections([name])
+      expect(text.length, name).toBeGreaterThan(50)
+      expect(text, name).not.toBe(WORKFLOW_EDITOR_CONTENT)
+      expect(text).not.toContain("<!-- SECTION:")
+    }
+  })
+
+  it("joins a subset in the requested order and leaves the rest out", async () => {
+    const { getWorkflowEditorSections } = await import("../skill-loaders.js")
+    const text = getWorkflowEditorSections(["gotchas", "shape"])
+    expect(text.indexOf("## Common gotchas")).toBeLessThan(text.indexOf("## Workflow JSON shape"))
+    expect(text).not.toContain("update_workflow_json contract")
+  })
+
+  it("teaches the REAL update_workflow_json signature (top-level nodes/edges + expected_version)", async () => {
+    const { getWorkflowEditorSections } = await import("../skill-loaders.js")
+    const text = getWorkflowEditorSections(["update-contract"])
+    expect(text).toContain("expected_version")
+    expect(text).toMatch(/TOP-LEVEL parameters/)
+    expect(text).not.toMatch(/update_workflow_json\(workflow_id, workflow/)
+  })
+})
