@@ -18,9 +18,26 @@ import { OrgApiError, getOrganization, updateOrganization } from "@/ee/lib/orgs-
  * `/org/:slug/settings` — the name, the defaults, and who may join.
  *
  * Every setting here changes what other people can see or do, so each one is
- * labelled by its CONSEQUENCE rather than its key: "What administrators may
- * do with a member's work" beats "admin_access", and someone changing it can
- * tell from the label alone whether they mean to.
+ * asked as a QUESTION about its consequence rather than named by its key:
+ * "What may administrators do with a member's work?" beats "admin_access",
+ * and someone changing it can tell from the label alone whether they mean to.
+ *
+ * Each toggle spells out BOTH answers underneath, and the one currently in
+ * force is the emphasised one. A switch whose label is a statement makes the
+ * reader work out what the off position means; here it is written down. Keep
+ * every setting in this shape — one entry phrased differently reads as a
+ * mistake, and a page of near-identical rows is scanned, not read.
+ *
+ * A setting has THREE states here, not two. `settings` arrives as the RAW
+ * stored jsonb — the API does not resolve it against the kind preset — so a
+ * key the organization never touched is `undefined`, and its real value is
+ * whatever the preset says. Emphasising an answer in that case states
+ * something false: a fresh school follows a preset where members DO keep a
+ * personal space, admins CAN invite, and per-member caps ARE on, while an
+ * unset boolean reads as `false` and would emphasise the opposite of all
+ * three. So an untouched setting emphasises NEITHER answer and says it is
+ * following the default — the same thing the three selects below already do
+ * with their "The default for this kind of organization" placeholder.
  *
  * Only what was actually edited is sent. The server merges a partial patch
  * over what it already holds, so sending the whole object would overwrite a
@@ -28,31 +45,46 @@ import { OrgApiError, getOrganization, updateOrganization } from "@/ee/lib/orgs-
  * this page happened to load.
  */
 
-const BOOLEAN_SETTINGS: Array<{ key: keyof OrgSettings; label: string; help: string }> = [
+interface BooleanSetting {
+  key: keyof OrgSettings
+  /** Asked of the administrator, and answered by the switch beside it. */
+  question: string
+  /** What being on means, in the same voice as the question. */
+  whenYes: string
+  /** What being off means. Never "the opposite of the above" — spell it out. */
+  whenNo: string
+}
+
+const BOOLEAN_SETTINGS: readonly BooleanSetting[] = [
   {
     key: "members_can_create_projects",
-    label: "Members can start their own projects",
-    help: "Off means work happens inside the places you create.",
+    question: "Can members start their own projects?",
+    whenYes: "Members create projects wherever they need them.",
+    whenNo: "Work happens inside the places you create.",
   },
   {
     key: "personal_space_enabled",
-    label: "Members keep a personal space",
-    help: "Their own work, separate from the organization's.",
+    question: "Do members keep a personal space?",
+    whenYes: "Members keep their own work, separate from the organization's.",
+    whenNo: "Everything a member makes belongs to the organization.",
   },
   {
     key: "workspace_admins_can_invite",
-    label: "Workspace admins can invite new people",
-    help: "On lets a teacher add a student without an administrator.",
+    question: "Can workspace administrators invite new people?",
+    whenYes: "A teacher can add a student without asking an administrator.",
+    whenNo: "Only organization administrators bring people in.",
   },
   {
     key: "collaborators_can_invite",
-    label: "Collaborators can invite further collaborators",
-    help: "Off keeps sharing decisions with the person who owns the work.",
+    question: "Can collaborators invite further collaborators?",
+    whenYes: "Anyone given access can pass it on.",
+    whenNo: "Sharing stays with the person who owns the work.",
   },
   {
     key: "member_caps_enabled",
-    label: "Per-member spending limits",
-    help: "Enforced once billing is enabled for organizations.",
+    question: "Are there per-member spending limits?",
+    whenYes: "Each member has their own limit. Takes effect once billing is enabled for organizations.",
+    whenNo: "Members spend from the organization's budget with no individual limit.",
   },
 ]
 
@@ -187,7 +219,7 @@ export default function OrgSettingsPage() {
         <h2 className="font-medium">What people can do</h2>
 
         <div className="space-y-2">
-          <Label htmlFor="admin-access">What administrators may do with a member&apos;s work</Label>
+          <Label htmlFor="admin-access">What may administrators do with a member&apos;s work?</Label>
           <Select
             value={value("admin_access") ?? ""}
             onValueChange={(v) => set("admin_access", v as GrantedAccess)}
@@ -205,7 +237,7 @@ export default function OrgSettingsPage() {
 
         <div className="space-y-2">
           <Label htmlFor="shared-access">
-            What members may do with work shared to a {workspaceWord.toLowerCase()}
+            What may members do with work shared to a {workspaceWord.toLowerCase()}?
           </Label>
           <Select
             value={value("member_access_to_shared") ?? ""}
@@ -223,7 +255,7 @@ export default function OrgSettingsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="default-visibility">Where new work starts</Label>
+          <Label htmlFor="default-visibility">Where does new work start?</Label>
           <Select
             value={value("default_workflow_visibility") ?? ""}
             onValueChange={(v) => set("default_workflow_visibility", v as WorkflowVisibility)}
@@ -239,21 +271,39 @@ export default function OrgSettingsPage() {
           </Select>
         </div>
 
-        {BOOLEAN_SETTINGS.map((setting) => (
-          <div key={setting.key} className="flex items-start justify-between gap-4">
-            <div>
-              <Label htmlFor={`setting-${setting.key}`}>{setting.label}</Label>
-              <p className="text-xs text-muted-foreground">{setting.help}</p>
+        {BOOLEAN_SETTINGS.map((setting) => {
+          // undefined = never set for this organization, so the preset decides
+          // and this page cannot know which way. Emphasise nothing.
+          const chosen = value(setting.key) as boolean | undefined
+          const on = chosen === true
+          const emphasis = (forAnswer: boolean) =>
+            chosen === undefined ? "text-muted-foreground" : chosen === forAnswer ? "text-foreground" : "text-muted-foreground"
+          return (
+            <div key={setting.key} className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor={`setting-${setting.key}`}>{setting.question}</Label>
+                <div className="text-xs">
+                  <p className={emphasis(true)}>
+                    <span className="font-medium">Yes</span> — {setting.whenYes}
+                  </p>
+                  <p className={emphasis(false)}>
+                    <span className="font-medium">No</span> — {setting.whenNo}
+                  </p>
+                  {chosen === undefined && (
+                    <p className="text-foreground">Following the default for this kind of organization.</p>
+                  )}
+                </div>
+              </div>
+              <Switch
+                id={`setting-${setting.key}`}
+                checked={on}
+                onCheckedChange={(next) => set(setting.key, next as never)}
+                disabled={!isActive || save.isPending}
+                aria-label={setting.question}
+              />
             </div>
-            <Switch
-              id={`setting-${setting.key}`}
-              checked={Boolean(value(setting.key))}
-              onCheckedChange={(next) => set(setting.key, next as never)}
-              disabled={!isActive || save.isPending}
-              aria-label={setting.label}
-            />
-          </div>
-        ))}
+          )
+        })}
       </Card>
 
       <Card className="space-y-3 p-6">
