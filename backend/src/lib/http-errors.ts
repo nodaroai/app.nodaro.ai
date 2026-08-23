@@ -15,6 +15,42 @@ const GENERIC_INTERNAL_MESSAGE = "Internal server error"
 const ERROR_REPORT_THROTTLE_MS = 5 * 60_000
 const recentErrorReports = new Map<string, number>()
 
+/**
+ * In-flight telemetry writes.
+ *
+ * The `app_reports` insert below is deliberately NOT awaited by the response
+ * path — best-effort telemetry must never add latency to, or fail, the reply
+ * it observes. That is right in production and a hazard in tests: the write
+ * lands after the request has been answered, so under a slow enough run it
+ * executes while a LATER test is in control of the shared Supabase mock, and
+ * that test sees one extra `.insert()` it never made. It surfaced as a rare
+ * "expected 4 calls, got 5" in generate-character.test.ts, only ever under
+ * full-suite load, and it can reach any route test that both triggers a 500
+ * and counts DB calls.
+ *
+ * Tracking the promise costs nothing at runtime and makes the write
+ * awaitable, so a test boundary can be a real barrier.
+ */
+const inFlightReports = new Set<Promise<unknown>>()
+
+function trackReport(p: Promise<unknown>): void {
+  inFlightReports.add(p)
+  void p.finally(() => inFlightReports.delete(p))
+}
+
+/**
+ * Test hook — settle every best-effort telemetry write started so far.
+ *
+ * Loops because a write can start another turn of the microtask queue (the
+ * lazy `import()` resolves, THEN the insert begins), so one `Promise.all` over
+ * a snapshot is not enough.
+ */
+export async function __flushHttpErrorTelemetry(): Promise<void> {
+  while (inFlightReports.size > 0) {
+    await Promise.allSettled([...inFlightReports])
+  }
+}
+
 /** Test hook — clears the in-process throttle window. */
 export function __resetHttpErrorTelemetry(): void {
   recentErrorReports.clear()
@@ -59,7 +95,8 @@ function fileHttpReport(
     // Lazy import: app-reports pulls in the Supabase client at module load, and
     // http-errors is imported by app.ts + nearly every route — keep this module
     // dependency-free so importing it never requires a configured environment.
-    void import("./app-reports.js")
+    trackReport(
+      import("./app-reports.js")
       .then(({ insertAppReport }) =>
         insertAppReport({
           node: "http-error-net",
@@ -76,7 +113,8 @@ function fileHttpReport(
           userId,
         }),
       )
-      .catch(() => {})
+        .catch(() => {}),
+    )
   } catch {
     // Telemetry must never break the response path it observes.
   }
