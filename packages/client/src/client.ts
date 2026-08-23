@@ -30,6 +30,9 @@ import { RecastResource } from "./resources/recast.js"
 import { CommunityResource } from "./resources/community.js"
 import { TemplatesResource } from "./resources/templates.js"
 import { TutorialsResource } from "./resources/tutorials.js"
+import { OrganizationsResource } from "./resources/organizations.js"
+import { WorkspacesResource } from "./resources/workspaces.js"
+import { WORKSPACE_HEADER, type MeOrganizations } from "@nodaro/shared"
 
 /** Replaced at build time by tsup `define` from package.json. The fallback
  *  keeps `tsx`/vitest runs of the source working, where no define applies. */
@@ -83,6 +86,19 @@ export interface ClientOptions {
    * surfaces could never be told apart.
    */
   clientLabel?: string
+  /**
+   * The workspace every request acts in — sent as `X-Nodaro-Workspace`.
+   *
+   * It selects which workspace a LIST reads from and where a CREATE lands.
+   * It never authorizes: reading, updating, deleting or running an
+   * identified object is decided by that object's own workspace, so a
+   * forgotten header cannot hide work and a forged one cannot reach anyone
+   * else's. Omit it to work in the caller's personal space.
+   *
+   * Prefer {@link NodaroClient.withWorkspace} for anything short-lived — one
+   * client per workspace, no shared mutable selection to get wrong.
+   */
+  workspaceId?: string
 }
 
 interface RequestOptions {
@@ -166,6 +182,10 @@ export class NodaroClient {
   readonly community: CommunityResource
   readonly templates: TemplatesResource
   readonly tutorials: TutorialsResource
+  readonly organizations: OrganizationsResource
+  readonly workspaces: WorkspacesResource
+  /** The workspace this client acts in; undefined = the personal space. */
+  readonly workspaceId: string | undefined
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -173,6 +193,7 @@ export class NodaroClient {
     this.fetchOverride = opts.fetch
     this.timeoutMs = opts.timeoutMs ?? 60_000
     this.clientLabel = opts.clientLabel ?? `sdk/${SDK_VERSION}`
+    this.workspaceId = opts.workspaceId
     // Explicit label = deliberate opt-in, always sent. The default is suppressed
     // in browsers — see the note on CLIENT_HEADER.
     this.sendClientHeader = opts.clientLabel !== undefined || !isBrowser()
@@ -207,6 +228,30 @@ export class NodaroClient {
     this.community = new CommunityResource(this)
     this.templates = new TemplatesResource(this)
     this.tutorials = new TutorialsResource(this)
+    this.organizations = new OrganizationsResource(this)
+    this.workspaces = new WorkspacesResource(this)
+  }
+
+  /**
+   * A client that acts in `workspaceId`, sharing this one's auth and config.
+   *
+   * A NEW client rather than a setter, deliberately. A mutable selection is
+   * the bug this whole axis exists to prevent: two concurrent operations
+   * against one client would race over which workspace they were in, and the
+   * loser would create work in the wrong place with nothing failing. A
+   * per-workspace client cannot be raced.
+   *
+   * Pass `null` for the personal space.
+   */
+  withWorkspace(workspaceId: string | null): NodaroClient {
+    return new NodaroClient({
+      baseUrl: this.baseUrl,
+      auth: this.auth,
+      timeoutMs: this.timeoutMs,
+      ...(this.fetchOverride ? { fetch: this.fetchOverride } : {}),
+      ...(this.sendClientHeader ? { clientLabel: this.clientLabel } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+    })
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
@@ -222,6 +267,9 @@ export class NodaroClient {
     const headers: Record<string, string> = {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(this.sendClientHeader ? { [CLIENT_HEADER]: this.clientLabel } : {}),
+      // Before per-request headers: a resource that needs to reach outside
+      // this client's workspace says so explicitly and wins.
+      ...(this.workspaceId ? { [WORKSPACE_HEADER]: this.workspaceId } : {}),
       ...(options.headers ?? {}),
     }
     if (token) headers["Authorization"] = `Bearer ${token}`
@@ -267,9 +315,17 @@ export class NodaroClient {
    * `GET /v1/me` → the authenticated user's identity (see {@link UserIdentity}).
    * Unwraps the `{ data }` envelope. Throws `UnauthorizedError` (401) when the
    * token is missing/invalid, and the SDK's other typed errors as usual.
+   *
+   * On an instance with organizations it also carries what the caller belongs
+   * to. THREE states, and collapsing them is wrong in a way users feel: the
+   * organization fields ABSENT means this instance has no organizations at
+   * all; present and empty means the account belongs to none; and
+   * `organizationsUnavailable` means the lookup failed — keep whatever
+   * selection you already had rather than concluding the person was removed
+   * from everything.
    */
-  async me(): Promise<UserIdentity> {
-    const res = await this.request<{ data: UserIdentity }>("GET", "/v1/me")
+  async me(): Promise<UserIdentity & MeOrganizations> {
+    const res = await this.request<{ data: UserIdentity & MeOrganizations }>("GET", "/v1/me")
     return res.data
   }
 

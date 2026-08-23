@@ -20,20 +20,25 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
+/**
+ * The documented defaults of the module-level mocks, in ONE place so the
+ * factories below and the per-test re-seed in `beforeEach` cannot disagree.
+ */
+const DEFAULTS = vi.hoisted(() => ({
+  reservation: { usageLogId: "log-1", creditsReserved: 6, watermark: false },
+  queuedJob: { id: "queue-job-1" },
+}))
+
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: {
-    add: vi.fn().mockResolvedValue({ id: "queue-job-1" }),
+    add: vi.fn().mockResolvedValue(DEFAULTS.queuedJob),
   },
   redis: {},
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
-  reserveCreditsForJob: vi.fn().mockResolvedValue({
-    usageLogId: "log-1",
-    creditsReserved: 6,
-    watermark: false,
-  }),
+  reserveCreditsForJob: vi.fn().mockResolvedValue(DEFAULTS.reservation),
 }))
 
 // Per-job creditOverride correction relies on these two dynamic imports inside
@@ -108,8 +113,46 @@ const TEST_CHARACTER_ID = "00000000-0000-4000-8000-000000000099"
 
 let app: FastifyInstance
 
+/**
+ * Re-seed every module-level mock to its documented default.
+ *
+ * `vi.clearAllMocks()` clears call DATA only — implementations and unconsumed
+ * `…Once` queues survive it. So a nested describe that calls
+ * `mockImplementation` (rather than `…Once`) leaks into every test that
+ * follows it, and that was live here: the "per-job credit override" block
+ * replaced `reserveCreditsForJob` with a recorder whose usageLogId counts up
+ * (`log-1`, `log-2`, …) and never put the default back, so every later test
+ * silently ran against that recorder. Nothing asserted usageLogId after it, so
+ * it stayed invisible — the next test to assert one would have failed on a
+ * value that drifts with how many tests ran before it.
+ *
+ * Re-seeding HERE rather than restoring in each nested `afterEach` is the
+ * invariant: no test can inherit another's implementation whatever any block
+ * does, and a new nested override needs no cleanup of its own to be safe.
+ * `mockReset` (not `mockClear`) is what drops a leftover `…Once` too.
+ */
+function resetModuleMocks(): void {
+  vi.mocked(reserveCreditsForJob).mockReset()
+  vi.mocked(reserveCreditsForJob).mockResolvedValue(DEFAULTS.reservation)
+
+  vi.mocked(videoQueue.add).mockReset()
+  vi.mocked(videoQueue.add).mockResolvedValue(DEFAULTS.queuedJob as never)
+
+  mockRefundCredits.mockReset()
+  mockRefundCredits.mockResolvedValue(undefined)
+
+  mockResolveFacetInjections.mockReset()
+  mockResolveFacetInjections.mockImplementation(async () => "")
+
+  // No factory default — the route only reads these when a creditReservation
+  // exists, which the per-job block is alone in setting up.
+  mockGetModelCreditBaseCost.mockReset()
+  mockGetAppSettings.mockReset()
+}
+
 beforeEach(async () => {
   vi.clearAllMocks()
+  resetModuleMocks()
   app = Fastify({ logger: false })
   // Bypass auth — set userId from header
   app.addHook("preHandler", async (req) => {
@@ -942,6 +985,31 @@ describe("POST /v1/generate-character", () => {
 
       expect(res.statusCode).toBe(200)
       expect(recordedOverrides).toEqual([PER_JOB_OVERRIDE])
+    })
+  })
+
+  // Placed immediately AFTER the block above on purpose: that block replaces
+  // reserveCreditsForJob's implementation for its own tests, and this is what
+  // proves the replacement does not outlive it.
+  describe("module-mock isolation", () => {
+    it("starts from the documented reserveCreditsForJob default, whatever an earlier block installed", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "young woman" },
+      })
+
+      expect(res.statusCode).toBe(200)
+      // The factory default is a fixed "log-1". The per-job block's recorder
+      // returns log-<n> from a counter that keeps growing, so inheriting it
+      // shows up here as log-2, log-3, … — a value that drifts with how many
+      // tests ran before this one.
+      const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(enqueued.usageLogId).toBe("log-1")
     })
   })
 })

@@ -1,8 +1,8 @@
 import { z } from "zod"
 import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { mcpInject } from "../internal-request.js"
 import {
   parseJobId,
   errorResult,
@@ -135,12 +135,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         if (args.attach_name) payload.attachName = args.attach_name
       }
       const url = isAsset ? "/v1/generate-character-asset" : "/v1/generate-character"
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -288,12 +285,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         if (args.attach_name) payload.attachName = args.attach_name
       }
       const url = isAsset ? "/v1/generate-location-asset" : "/v1/generate-location"
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -396,12 +390,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         payload.variant = args.variant
       }
       const url = isAsset ? "/v1/generate-object-asset" : "/v1/generate-object"
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -513,12 +504,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         payload.variant = args.variant
       }
       const url = isAsset ? "/v1/generate-creature-asset" : "/v1/generate-creature"
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

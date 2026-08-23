@@ -22,7 +22,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("@/lib/config.js", () => ({
-  config: { ELEVENLABS_API_KEY: "test-eleven-key", EDITION: "cloud" },
+  // ELEVENLABS_BASE_URL: without it the exported const is `undefined` and
+  // every URL assertion below degrades to "undefined/v1/..." on both sides.
+  config: { ELEVENLABS_API_KEY: "test-eleven-key", ELEVENLABS_BASE_URL: "https://api.elevenlabs.io", EDITION: "cloud" },
   hasCredits: () => true,
   isCloud: () => true,
   isCommunity: () => false,
@@ -120,7 +122,7 @@ describe("client — getElevenLabsApiKey", () => {
   it("throws the shared missing-key guidance when ELEVENLABS_API_KEY is unset", async () => {
     vi.resetModules()
     vi.doMock("@/lib/config.js", () => ({
-      config: { ELEVENLABS_API_KEY: undefined, EDITION: "cloud" },
+      config: { ELEVENLABS_API_KEY: undefined, ELEVENLABS_BASE_URL: "https://api.elevenlabs.io", EDITION: "cloud" },
       hasCredits: () => true,
       isCloud: () => true,
       isCommunity: () => false,

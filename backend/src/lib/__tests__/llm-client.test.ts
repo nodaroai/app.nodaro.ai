@@ -3,7 +3,15 @@ import type { LlmContentBlock } from "../llm-client.js"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 
 vi.mock("../config.js", () => ({
-  config: { KIE_API_KEY: "test-kie-key", ANTHROPIC_API_KEY: undefined, NODE_ENV: "test" },
+  // KIE_API_BASE_URL is what providers/kie/client.ts builds KIE_API_BASE from,
+  // and this suite asserts on whole URLs — omit it and every assertion reads
+  // "undefined/codex/v1/responses".
+  config: {
+    KIE_API_KEY: "test-kie-key",
+    KIE_API_BASE_URL: "https://api.kie.ai",
+    ANTHROPIC_API_KEY: undefined,
+    NODE_ENV: "test",
+  },
 }))
 
 vi.mock("../anthropic.js", () => ({

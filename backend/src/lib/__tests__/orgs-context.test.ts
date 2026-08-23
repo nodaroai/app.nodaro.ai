@@ -10,7 +10,7 @@ vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: vi.fn(() =>
 
 import { hasOrganizations } from "@/lib/config.js"
 import { getPluginServices } from "@/lib/private-plugins/load.js"
-import { isIdentityRoute, registerOrgsContextHook } from "../orgs-context.js"
+import { isIdentityRoute, isPlatformAdminRoute, registerOrgsContextHook } from "../orgs-context.js"
 import type { PluginOrgsService } from "../private-plugins/types.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
@@ -51,6 +51,7 @@ async function buildApp(): Promise<FastifyInstance> {
   app.get("/v1/me", echo)
   app.get("/v1/workspaces", echo)
   app.post("/v1/invitations/:token/accept", echo)
+  app.get("/v1/admin/orgs", echo)
   await app.ready()
   return app
 }
@@ -282,6 +283,43 @@ describe("orgs-context — with the plugin", () => {
     expect(res2.statusCode).toBe(200)
     expect(res2.json().memberships).toEqual({ organizations: [], workspaces: [] })
   })
+
+    /**
+     * The concrete lockout: a platform admin who belongs to an organization,
+     * with one of its workspaces selected, suspends that organization. Their
+     * selection stops resolving on the very next request — and the page holding
+     * the button that would undo it is behind an admin route.
+     */
+    it("is never refused for a selection that stopped resolving", async () => {
+      const app = await buildApp()
+      orgs.resolveRequestContext = vi.fn(async () => ({
+        reject: { status: 403 as const, code: "not_a_member", message: "Not a member of that workspace" },
+      }))
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/admin/orgs",
+        headers: { "x-user-id": USER, "x-nodaro-workspace": WS },
+      })
+      expect(res.statusCode).toBe(200)
+      // Nothing to resolve: these routes read across organizations by
+      // definition, so a workspace means nothing to them.
+      expect(orgs.resolveRequestContext).not.toHaveBeenCalled()
+      expect(res.json().workspaceId).toBeNull()
+      await app.close()
+    })
+})
+
+describe("isPlatformAdminRoute", () => {
+  it("covers the admin surface and nothing that merely looks like it", () => {
+    expect(isPlatformAdminRoute("/v1/admin/orgs")).toBe(true)
+    expect(isPlatformAdminRoute("/v1/admin/orgs/:id")).toBe(true)
+    expect(isPlatformAdminRoute("/v1/admin/users/:id/storage")).toBe(true)
+    expect(isPlatformAdminRoute("/v1/workflows/:id")).toBe(false)
+    expect(isPlatformAdminRoute("/v1/adminx/orgs")).toBe(false)
+    expect(isPlatformAdminRoute("/v1/orgs/:id/admin")).toBe(false)
+    // No matched route means no pattern; resolving is then the safe default.
+    expect(isPlatformAdminRoute(undefined)).toBe(false)
+  })
 })
 
 describe("isIdentityRoute", () => {
@@ -290,6 +328,10 @@ describe("isIdentityRoute", () => {
     expect(isIdentityRoute("get", "/v1/me")).toBe(true)
     expect(isIdentityRoute("GET", "/v1/workspaces")).toBe(true)
     expect(isIdentityRoute("POST", "/v1/invitations/:token/accept")).toBe(true)
+    // Public, so an invitee reads it signed out — but the SDK sends auth AND
+    // its workspace on every request, and a caller with a stale selection is
+    // exactly who needs this to answer.
+    expect(isIdentityRoute("GET", "/v1/invitations/by-token/:token")).toBe(true)
     // Raw URLs are NOT patterns — these are what a crafted request would
     // present, and none of them may match.
     for (const url of [

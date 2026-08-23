@@ -24,7 +24,7 @@ export type RegisterVerbsOpts = RegisterOpts
  *  2. Resolve `*_asset_id` to URLs via {@link resolveAssetId} when applicable.
  *  3. Compose Path-1 structured fields onto the free-text prompt where the
  *     route accepts a `prompt`.
- *  4. Hit the existing `/v1/...` route via `fastify.inject()` with the
+ *  4. Hit the existing `/v1/...` route via `mcpInject()` with the
  *     internal-orchestrator-secret header so the auth middleware accepts
  *     `userId` from the body.
  *  5. Tag the job with `mcp_client` so trigger badges + admin views show

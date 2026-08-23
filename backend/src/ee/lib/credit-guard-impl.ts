@@ -93,7 +93,7 @@ export function creditGuardImpl(
     let computedCreditOverride: number | undefined
     if (opts?.computeCredits) {
       try {
-        const baseCredits = await opts.computeCredits(req.body)
+        const baseCredits = await opts.computeCredits(req.body, req)
         const settings = await getAppSettings()
         const markupPercent = effectiveMarkupPercent(settings, modelIdentifier)
         computedCreditOverride =

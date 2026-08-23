@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("@/lib/config.js", () => ({
-  config: { KIE_API_KEY: "test-key", NODE_ENV: "test" },
+  config: { KIE_API_KEY: "test-key", KIE_API_BASE_URL: "https://api.kie.ai", NODE_ENV: "test" },
 }))
 
 import { sleep, pollKieTask } from "../client.js"

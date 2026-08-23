@@ -1,12 +1,36 @@
 import type {
+  InvitationDelivery,
+  InvitationPreview,
+  InvitationState,
+  InvitationView,
+  JoinCodeView,
   MemberStatus,
+  OrganizationView,
   OrgKind,
+  OrgAuditEntry,
+  OrgMemberView,
+  OrgPage as Page,
   OrgRole,
   OrgSettings,
-  OrgStatus,
+  WorkspaceMemberView,
   WorkspaceRole,
   WorkspaceSettings,
+  WorkspaceView,
 } from "@nodaro/shared"
+
+export type {
+  InvitationDelivery,
+  OrgAuditEntry,
+  InvitationPreview,
+  InvitationState,
+  InvitationView,
+  JoinCodeView,
+  OrganizationView,
+  OrgMemberView,
+  Page,
+  WorkspaceMemberView,
+  WorkspaceView,
+}
 import { getAuthHeaders } from "@/lib/api"
 
 /**
@@ -72,21 +96,6 @@ async function publicRequest<T>(path: string): Promise<T> {
 // Organizations
 // ---------------------------------------------------------------------------
 
-export interface OrganizationView {
-  id: string
-  slug: string
-  name: string
-  kind: OrgKind
-  status: OrgStatus
-  ownerUserId: string
-  settings: OrgSettings
-  termsAcceptedAt: string | null
-  createdAt: string
-  updatedAt: string
-  role?: OrgRole
-  memberStatus?: MemberStatus
-}
-
 export interface CreateOrgInput {
   name: string
   kind: OrgKind
@@ -110,21 +119,6 @@ export const leaveOrganization = (id: string) =>
 // ---------------------------------------------------------------------------
 // Members
 // ---------------------------------------------------------------------------
-
-export interface OrgMemberView {
-  userId: string
-  role: OrgRole
-  status: MemberStatus
-  joinedAt: string
-  email: string | null
-  displayName: string | null
-  avatarUrl: string | null
-}
-
-export interface Page<T> {
-  data: T[]
-  nextCursor: string | null
-}
 
 /** Paged reads return the envelope itself — the cursor is part of the answer. */
 async function requestPage<T>(path: string): Promise<Page<T>> {
@@ -151,22 +145,6 @@ export const removeOrgMember = (orgId: string, userId: string) =>
 // Workspaces
 // ---------------------------------------------------------------------------
 
-export interface WorkspaceView {
-  id: string
-  orgId: string
-  name: string
-  slug: string
-  description: string | null
-  settings: WorkspaceSettings
-  defaultProjectId: string | null
-  archived: boolean
-  archivedAt: string | null
-  createdAt: string
-  updatedAt: string
-  role?: WorkspaceRole
-  memberStatus?: MemberStatus
-}
-
 export const listOrgWorkspaces = (orgId: string, includeArchived = false) =>
   request<WorkspaceView[]>(`/v1/orgs/${orgId}/workspaces${includeArchived ? "?includeArchived=true" : ""}`)
 export const getWorkspace = (id: string) => request<WorkspaceView>(`/v1/workspaces/${id}`)
@@ -180,17 +158,6 @@ export const updateWorkspace = (
 ) => request<WorkspaceView>(`/v1/workspaces/${id}`, { method: "PATCH", body })
 export const setWorkspaceArchived = (id: string, archived: boolean) =>
   request<WorkspaceView>(`/v1/workspaces/${id}/${archived ? "archive" : "unarchive"}`, { method: "POST" })
-
-export interface WorkspaceMemberView {
-  userId: string
-  role: WorkspaceRole
-  displayName: string | null
-  avatarUrl: string | null
-  addedAt: string
-  /** Workspace admins only. */
-  status?: MemberStatus
-  creditCap?: number | null
-}
 
 export const listWorkspaceMembers = (id: string, opts: { cursor?: string; limit?: number } = {}) =>
   requestPage<WorkspaceMemberView>(`/v1/workspaces/${id}/members${query(opts)}`)
@@ -208,35 +175,6 @@ export const removeWorkspaceMember = (id: string, userId: string) =>
 // Invitations
 // ---------------------------------------------------------------------------
 
-export type InvitationState = "open" | "accepted" | "revoked" | "expired"
-
-export interface InvitationView {
-  id: string
-  orgId: string
-  workspaceId: string | null
-  email: string
-  orgRole: OrgRole
-  workspaceRole: WorkspaceRole | null
-  invitedBy: string | null
-  state: InvitationState
-  expiresAt: string
-  acceptedAt: string | null
-  revokedAt: string | null
-  createdAt: string
-}
-
-/**
- * One row per address. `link` is present whenever the address was NOT
- * emailed — an install without a mail provider, or a delivery that failed —
- * and the UI must surface it, or the invitation exists and nobody can reach
- * it.
- */
-export interface InvitationDelivery {
-  email: string
-  status: "sent" | "link_only" | "failed"
-  link?: string
-}
-
 export const createInvitations = (
   orgId: string,
   body: { emails: string[]; orgRole?: "admin" | "member"; workspaceId?: string; workspaceRole?: WorkspaceRole },
@@ -252,18 +190,6 @@ export const revokeInvitation = (id: string) =>
 export const resendInvitation = (id: string) =>
   request<InvitationDelivery & { id: string }>(`/v1/invitations/${id}/resend`, { method: "POST" })
 
-/** What an invitee sees before signing in. The address comes back masked. */
-export interface InvitationPreview {
-  orgName: string
-  kind: OrgKind
-  vocabulary: Record<string, string>
-  inviterName: string | null
-  workspaceName: string | null
-  email: string
-  expiresAt: string
-  state: InvitationState
-}
-
 export const previewInvitation = (token: string) =>
   publicRequest<InvitationPreview>(`/v1/invitations/by-token/${encodeURIComponent(token)}`)
 
@@ -273,15 +199,21 @@ export const acceptInvitation = (token: string) =>
   })
 
 // ---------------------------------------------------------------------------
-// Join codes
+// Audit
 // ---------------------------------------------------------------------------
 
-export interface JoinCodeView {
-  code: string
-  enabled: boolean
-  rotatedAt: string
-  rotatedBy: string | null
-}
+/**
+ * Readable while the organization is SUSPENDED, deliberately: the record of
+ * what happened is exactly what someone needs when things have gone wrong,
+ * and locking it behind an active status would hide it at the only moment it
+ * matters.
+ */
+export const listOrgAudit = (orgId: string, opts: { cursor?: string; limit?: number } = {}) =>
+  requestPage<OrgAuditEntry>(`/v1/orgs/${orgId}/audit${query(opts)}`)
+
+// ---------------------------------------------------------------------------
+// Join codes
+// ---------------------------------------------------------------------------
 
 export const getJoinCode = (workspaceId: string) => request<JoinCodeView | null>(`/v1/workspaces/${workspaceId}/join-code`)
 export const actOnJoinCode = (workspaceId: string, action: "rotate" | "enable" | "disable") =>

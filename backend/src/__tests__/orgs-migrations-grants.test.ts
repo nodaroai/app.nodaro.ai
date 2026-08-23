@@ -28,6 +28,16 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: ["accept_invitation", "join_workspace_by_code"],
   },
+  // Content scoping, part a: columns, indexes, an RLS-locked table and one
+  // trigger function. `reject_self_collaborator` IS a definer, but the
+  // classification covers non-trigger definers only (a trigger function is
+  // reached through its table's grants, not its own), so both lists are empty;
+  // the entry exists so the on-disk-vs-classified check stays exact. Its
+  // search_path pin is asserted like every other definer's.
+  "335_orgs_content_columns.sql": {
+    authenticated: [],
+    serviceRole: [],
+  },
 }
 
 const orgMigrations = readdirSync(MIGRATIONS_DIR)
@@ -39,7 +49,21 @@ interface DefinerFn {
   args: string
   returnsTrigger: boolean
   pinsSearchPath: boolean
+  namesTempSchema: boolean
 }
+
+/**
+ * Migrations whose definers pin `search_path = public` without naming
+ * `pg_temp`. Left unnamed, the temp schema is searched FIRST for relation
+ * names, so a caller who can create a temporary table shadows any table the
+ * function reads. These two were applied to production before the rule; they
+ * can only be hardened by a later CREATE OR REPLACE, not by an edit. The set
+ * may only shrink — a new migration belongs nowhere in it.
+ */
+const TEMP_SCHEMA_EXCEPTIONS: ReadonlySet<string> = new Set([
+  "332_orgs_foundations.sql",
+  "333_orgs_invitation_rpcs.sql",
+])
 
 function definers(sql: string): DefinerFn[] {
   return sql
@@ -53,6 +77,7 @@ function definers(sql: string): DefinerFn[] {
         returnsTrigger: /RETURNS\s+trigger/i.test(header),
         definer: /SECURITY DEFINER/i.test(header),
         pinsSearchPath: /SET search_path = public/.test(header),
+        namesTempSchema: /SET search_path = public\s*,\s*pg_temp/.test(header),
       }
     })
     .filter((f) => f.definer)
@@ -84,6 +109,13 @@ describe("organizations migrations — every SECURITY DEFINER function has expli
 
     it("every SECURITY DEFINER function pins search_path", () => {
       expect(fns.filter((f) => !f.pinsSearchPath).map((f) => f.name)).toEqual([])
+    })
+
+    it("every SECURITY DEFINER function names pg_temp, so no temp table can shadow its reads", () => {
+      const offenders = TEMP_SCHEMA_EXCEPTIONS.has(file)
+        ? []
+        : fns.filter((f) => !f.namesTempSchema).map((f) => f.name)
+      expect(offenders).toEqual([])
     })
 
     it("every non-trigger SECURITY DEFINER function is classified, and nothing classified is missing", () => {

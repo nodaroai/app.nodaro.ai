@@ -381,3 +381,39 @@ export type {
   TutorialFlowItem,
   TutorialCategory,
 } from "./resources/tutorials.js"
+
+// --- Organizations --------------------------------------------------------
+// The wire shapes themselves live in @nodaro/shared and are re-exported here
+// so an integration needs one dependency, not two.
+export {
+  OrganizationsResource,
+  type CreateOrgInput,
+  type InviteInput,
+  type ListInvitationsOptions,
+} from "./resources/organizations.js"
+export { WorkspacesResource, type CreateWorkspaceInput } from "./resources/workspaces.js"
+export type {
+  InvitationDelivery,
+  InvitationPreview,
+  InvitationState,
+  InvitationView,
+  JoinCodeView,
+  MeOrganizations,
+  OrganizationSummary,
+  OrganizationView,
+  OrgAuditEntry,
+  OrgErrorCode,
+  OrgKind,
+  OrgMemberView,
+  OrgPage,
+  OrgRole,
+  OrgSettings,
+  OrgStatus,
+  MemberStatus,
+  WorkspaceMemberView,
+  WorkspaceRole,
+  WorkspaceSettings,
+  WorkspaceSummary,
+  WorkspaceView,
+} from "@nodaro/shared"
+export { WORKSPACE_HEADER } from "@nodaro/shared"

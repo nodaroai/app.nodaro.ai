@@ -1,17 +1,13 @@
 ---
-generated_at: 2026-08-21T00:36:15.733Z
-generated_from: 23b00a372
----
-
----
-generated_at: 2026-07-12T19:47:44.882Z
-generated_from: 60b869779
+generated_at: 2026-08-23T15:11:14.030Z
+generated_from: cdef4ed88
 ---
 
 # Nodaro Workflow Editor — General Patterns
 
 Call this skill BEFORE building or editing any Nodaro workflow via `update_workflow_json` or `create_workflow`. It teaches the JSON shape, edge wiring, and the catalog of available node types you can request per-node skills for.
 
+<!-- SECTION:shape -->
 ## Workflow JSON shape
 
 A workflow is a React Flow graph stored on a `workflows` row. The full shape:
@@ -31,7 +27,9 @@ A workflow is a React Flow graph stored on a `workflows` row. The full shape:
 - **`type`** — kebab-case node type (e.g., `generate-image`, NOT `generateImage` or `GenerateImage`). See the catalog below.
 - **`position.x`, `position.y`** — canvas pixel coordinates. Lay nodes out left-to-right with `x` increasing by ~340 per stage and `y` separating sibling rows by ~280.
 - **`data`** — node-type-specific payload. Call `get_node_skill(<type>)` for the exact required + optional fields per type.
+<!-- /SECTION:shape -->
 
+<!-- SECTION:edges -->
 ## Edge wiring conventions
 
 Every edge connects a SOURCE node's output handle to a TARGET node's input handle:
@@ -43,17 +41,22 @@ Every edge connects a SOURCE node's output handle to a TARGET node's input handl
 - **`sourceHandle`** — must match one of the source node's published output handles. Per-node skill content lists the canonical handles. Common shorthand: `generate-image` → `"image"`, `image-to-video` → `"video"`, `generate-music` → `"audio"`.
 - **`targetHandle`** — must match one of the target node's input handles. Most generation nodes accept `"in"` as the default input. Specialized handles: `image-to-video` exposes `"startFrame"`, `"endFrame"`, `"audio"`.
 - **List node columns** — a `list` node starts as a single text column and grows into a multi-column typed table as you connect more inputs. Each column exposes its own source handle named `col_<column_id>`. Wire `sourceHandle: "col_<id>"` to fan out a column's values into a downstream node. Omitting `sourceHandle` connects to the default output, which usually isn't what you want.
+<!-- /SECTION:edges -->
 
+<!-- SECTION:update-contract -->
 ## update_workflow_json contract
 
-`update_workflow_json(workflow_id, workflow, expected_updated_at?)` overwrites the workflow's full graph (nodes + edges). Use it after each approved stage to attach new content to the user's canvas — the user watches it assemble during conversation.
+`update_workflow_json({ workflow_id, nodes, edges, settings?, expected_version? })` overwrites the workflow's full graph. `nodes` and `edges` are TOP-LEVEL parameters (not nested under a `workflow` object) and must be sent together. Use it after each approved stage to attach new content to the user's canvas — the user watches it assemble during conversation.
 
 - **`workflow_id`** — UUID from `create_workflow`.
-- **`workflow`** — the full `{ nodes, edges }` object. You must include ALL existing nodes + the new ones (no partial diff support).
-- **`expected_updated_at`** — optional optimistic concurrency token. Pass the `updated_at` you got from the previous `get_workflow` call to detect races.
+- **`nodes` + `edges`** — the full graph. You must include ALL existing nodes + the new ones (no partial diff support).
+- **`expected_version`** — optional optimistic-concurrency token: pass the `version` from your last `get_workflow_json` read; a stale value is rejected instead of overwriting concurrent edits. (`expected_updated_at` with the `updated_at` timestamp is the legacy equivalent.)
+- The server heals invalid model parameters (e.g. an aspect ratio the chosen model doesn't support) and tells you what it changed — read the adjustments in the result so you don't re-send the same pair.
 
 Read the current workflow with `get_workflow_json(workflow_id)` before each update so you're appending to the latest state, not overwriting concurrent edits.
+<!-- /SECTION:update-contract -->
 
+<!-- SECTION:result-fields -->
 ## Result-field contract (the single most-important rule)
 
 Every node that produced a generated asset (`generate-image`, `image-to-video`, `generate-music`, `trim-video`, `combine-videos`, `merge-video-audio`) MUST set TWO fields on `data` for the asset to render on the canvas:
@@ -62,7 +65,9 @@ Every node that produced a generated asset (`generate-image`, `image-to-video`, 
 2. **`generated<Type>Url: "<asset URL>"`** — exact field name per node type. See `get_node_skill(<type>)` for the canonical name (it's `generatedImageUrl` for image nodes, `generatedVideoUrl` for video nodes, `generatedAudioUrl` for music — NEVER `imageUrl`, `result.url`, etc.).
 
 Optional but recommended: `generatedResults: [{ url, jobId, timestamp }]`, `activeResultIndex: 0`, `currentJobId`. Always include `fieldMappings: {}` on every node that has it in its data type (most do).
+<!-- /SECTION:result-fields -->
 
+<!-- SECTION:catalog -->
 <!-- AUTO-GEN:START node-catalog -->
 ## Available node types
 
@@ -256,7 +261,9 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `youtube-upload` — YouTube Upload
 - `youtube-video` — Video URL
 <!-- AUTO-GEN:END node-catalog -->
+<!-- /SECTION:catalog -->
 
+<!-- SECTION:gotchas -->
 ## Common gotchas
 
 - Node types are kebab-case in JSON (`generate-image`), not camelCase or PascalCase. The frontend silently drops unknown types.
@@ -264,3 +271,4 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - An edge with no `sourceHandle` connects to the default node output. For column-aware fan-out from a `list` node, you MUST set `sourceHandle: "col_<id>"`.
 - `update_workflow_json` overwrites — always merge new nodes into the existing graph, never replace it.
 - The catalog above auto-generates. If a node type you expect to find isn't here, run `npm run gen:skills` from `backend/`.
+<!-- /SECTION:gotchas -->

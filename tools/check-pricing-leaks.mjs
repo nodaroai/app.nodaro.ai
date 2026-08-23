@@ -120,6 +120,12 @@ const ALLOWLIST = new Set([
   "supabase/migrations/295_free_grant_default_1500.sql",
 ])
 
+// Files where the bare word "markup" is a product term, not the platform's
+// cost margin: the CREATOR-set markup on a monetized app (a creator's fee over
+// the inner run, paid to the creator). Every other rule still runs on them.
+// Reviewed 2026-08-23 when docs/ joined the scan.
+const BARE_MARKUP_IS_PRODUCT_TERM = new Set(["docs/design/component-marketplace.md"])
+
 function walk(dir) {
   let entries
   try {
@@ -205,6 +211,30 @@ try {
 } catch {
   // no migrations dir in this checkout
 }
+// docs/ is published to GitHub Pages AND mirrored to the public repo — the
+// widest-read prose we ship. It was never scanned: the first feature whose
+// user docs would naturally spell out a platform rate (the Workflow Copilot's
+// metered pricing, 2026-08) would have walked straight through. Same phrase
+// rules as changelogs; public docs state what a user PAYS, never the
+// platform's own economics.
+function walkDocs(dir) {
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith("_") || SKIP_DIRS.has(entry.name)) continue
+      walkDocs(full)
+    } else if (entry.isFile() && /\.(md|txt|html)$/.test(entry.name)) {
+      PROSE_FILES.push(full.split("\\").join("/"))
+    }
+  }
+}
+walkDocs("docs")
 // Comment blocks WRAP. A phrase split as "<N>-run\n// measurement campaign" is the same
 // disclosure as the one-line spelling, but a line-at-a-time regex never sees
 // it — that is exactly how a measurement-methodology line survived in
@@ -248,7 +278,7 @@ for (const file of PROSE_FILES) {
   } catch {
     continue // changelog may not exist yet for a new package
   }
-  const isMigration = file.startsWith("supabase/migrations/")
+  const isMigration = file.startsWith("supabase/migrations/") || BARE_MARKUP_IS_PRODUCT_TERM.has(file)
   content.split("\n").forEach((line, i) => {
     const reason = isPricingRelevantLine(line, { skipBareMarkup: isMigration })
     if (reason) offenders.push(`${file}:${i + 1}: ${reason} — published prose (changelog/changeset/migration)\n    ${line.trim()}`)
@@ -265,5 +295,5 @@ if (offenders.length > 0) {
   console.error("the ALLOWLIST in tools/check-pricing-leaks.mjs with a comment explaining why.")
   process.exit(1)
 } else {
-  console.log("Pricing-leak lint passed — no provider-$ or margin/markup content in packages/*/src, changelogs, or pending changesets.")
+  console.log("Pricing-leak lint passed — no provider-$ or margin/markup content in packages/*/src, changelogs, pending changesets, migrations, or docs/.")
 }

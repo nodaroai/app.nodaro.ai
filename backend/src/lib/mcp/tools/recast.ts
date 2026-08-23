@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, uiMeta } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
@@ -49,11 +50,13 @@ function recastAppOrigin(): string {
   return config.PUBLIC_URL.includes("next.") ? "https://next.recast.nodaro.ai" : "https://recast.nodaro.ai"
 }
 
+/**
+ * The one header these routes need beyond what `mcpInject` already sends.
+ * The orchestrator secret is NOT here on purpose: it belongs to every injected
+ * request, so it lives in `mcpInject` where nobody can forget it.
+ */
 function internalHeaders(userId: string): Record<string, string> {
-  return {
-    "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-    "x-internal-user-id": userId,
-  }
+  return { "x-internal-user-id": userId }
 }
 
 function textResult(payload: unknown) {
@@ -103,11 +106,12 @@ async function readRecastSettings(
 
 async function patchRecastSettings(
   fastify: FastifyInstance,
-  userId: string,
+  session: McpSession,
   workflowId: string,
   settings: Record<string, unknown>,
 ): Promise<boolean> {
-  const res = await fastify.inject({
+  const userId = session.userId
+  const res = await mcpInject(fastify, session, {
     method: "PATCH",
     url: `/v1/workflows/${workflowId}`,
     headers: internalHeaders(userId),
@@ -159,10 +163,11 @@ function pendingGateOf(interactive: InteractiveState | undefined): unknown {
  */
 async function advanceInteractive(
   fastify: FastifyInstance,
-  userId: string,
+  session: McpSession,
   runId: string,
 ): Promise<{ status: string; interactive?: InteractiveState; fired?: string; error?: { statusCode: number; body: string } }> {
-  const snap = await fastify.inject({ method: "GET", url: `/v1/recast/${runId}`, headers: internalHeaders(userId) })
+  const userId = session.userId
+  const snap = await mcpInject(fastify, session, { method: "GET", url: `/v1/recast/${runId}`, headers: internalHeaders(userId) })
   if (snap.statusCode >= 400) return { status: "unknown", error: { statusCode: snap.statusCode, body: snap.body } }
   const parsed = JSON.parse(snap.body) as { status: string; interactive?: InteractiveState }
   const next = parsed.interactive?.next
@@ -170,7 +175,7 @@ async function advanceInteractive(
 
   let fired: string | undefined
   if (next.kind === "candidates" && next.expect) {
-    const res = await fastify.inject({
+    const res = await mcpInject(fastify, session, {
       method: "POST",
       url: `/v1/recast/${runId}/candidates`,
       headers: internalHeaders(userId),
@@ -185,11 +190,11 @@ async function advanceInteractive(
     if (res.statusCode >= 400) return { status: parsed.status, interactive: parsed.interactive, error: { statusCode: res.statusCode, body: res.body } }
     fired = `candidates cycle ${next.cycle}`
   } else if (next.kind === "plan") {
-    const res = await fastify.inject({ method: "POST", url: `/v1/recast/${runId}/plan`, headers: internalHeaders(userId), payload: { userId } })
+    const res = await mcpInject(fastify, session, { method: "POST", url: `/v1/recast/${runId}/plan`, headers: internalHeaders(userId), payload: { userId } })
     if (res.statusCode >= 400) return { status: parsed.status, interactive: parsed.interactive, error: { statusCode: res.statusCode, body: res.body } }
     fired = "plan"
   } else if (next.kind === "dispatch") {
-    const res = await fastify.inject({ method: "POST", url: `/v1/recast/${runId}/dispatch`, headers: internalHeaders(userId), payload: { userId } })
+    const res = await mcpInject(fastify, session, { method: "POST", url: `/v1/recast/${runId}/dispatch`, headers: internalHeaders(userId), payload: { userId } })
     if (res.statusCode >= 400) return { status: parsed.status, interactive: parsed.interactive, error: { statusCode: res.statusCode, body: res.body } }
     fired = "dispatch"
   }
@@ -213,7 +218,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "GET",
         url: "/v1/video-analysis/authoring-skill",
         headers: internalHeaders(session.userId),
@@ -241,7 +246,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/video-analysis/import/validate",
         headers: internalHeaders(session.userId),
@@ -279,7 +284,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         // 1. Validate + persist the analysis (free; content-hash idempotent).
         //    The import route needs no workflow yet — attach after create so a
         //    failed import creates NOTHING (spec C3).
-        const imp = await fastify.inject({
+        const imp = await mcpInject(fastify, session, {
           method: "POST",
           url: "/v1/video-analysis/import",
           headers: internalHeaders(session.userId),
@@ -297,7 +302,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         //    shows up on the recast.nodaro.ai dashboard.
         const projectId = await ensureRecastProject(session.userId)
         const title = imported.json?.meta?.title?.trim() || "Authored recast"
-        const wf = await fastify.inject({
+        const wf = await mcpInject(fastify, session, {
           method: "POST",
           url: "/v1/workflows",
           headers: internalHeaders(session.userId),
@@ -311,7 +316,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         // 3. Seed settings.recast — mirrors the app's seedAuthoredRecast:
         //    faithful + attested at seed, analysis born completed with the
         //    SERVER's derived document as the raw blueprint (spec C2).
-        const ok = await patchRecastSettings(fastify, session.userId, workflowId, {
+        const ok = await patchRecastSettings(fastify, session, workflowId, {
           recast: {
             version: 1,
             fidelity: "faithful",
@@ -389,7 +394,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
 
         // A run already exists — advance or report, never re-charge.
         if (run?.recastId) {
-          const snap = await fastify.inject({
+          const snap = await mcpInject(fastify, session, {
             method: "GET",
             url: `/v1/recast/${run.recastId}`,
             headers: internalHeaders(session.userId),
@@ -399,7 +404,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
           // INTERACTIVE runs advance by the server-owned `next` pointer (P3):
           // fire the non-gate hop, or surface the gate for the user.
           if (status.interactive) {
-            const adv = await advanceInteractive(fastify, session.userId, run.recastId)
+            const adv = await advanceInteractive(fastify, session, run.recastId)
             if (adv.error) return errorResult(adv.error.statusCode, adv.error.body)
             const gate = pendingGateOf(adv.interactive)
             return textResult({
@@ -417,7 +422,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
           if (status.status === "planned") {
             // The consented estimate covered plan + render; /start is the
             // second hop the app's watcher auto-fires. Idempotent server-side.
-            const start = await fastify.inject({
+            const start = await mcpInject(fastify, session, {
               method: "POST",
               url: `/v1/recast/${run.recastId}/start`,
               headers: internalHeaders(session.userId),
@@ -425,7 +430,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
             })
             if (start.statusCode >= 400) return errorResult(start.statusCode, start.body)
             const started = JSON.parse(start.body) as { gvpJobId?: string }
-            await patchRecastSettings(fastify, session.userId, args.recast_id, {
+            await patchRecastSettings(fastify, session, args.recast_id, {
               ...settings,
               recast: {
                 ...recast,
@@ -445,7 +450,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         }
 
         // No run yet: quote first, always.
-        const est = await fastify.inject({
+        const est = await mcpInject(fastify, session, {
           method: "POST",
           url: "/v1/recast/estimate",
           headers: internalHeaders(session.userId),
@@ -477,7 +482,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
 
         // Consented: buy the plan (the render auto-follows via the planned →
         // /start hop above on the next start_recast call, or the app's watcher).
-        const create = await fastify.inject({
+        const create = await mcpInject(fastify, session, {
           method: "POST",
           url: "/v1/recast",
           headers: internalHeaders(session.userId),
@@ -502,7 +507,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         })
         if (create.statusCode >= 400) return errorResult(create.statusCode, create.body)
         const createdRun = JSON.parse(create.body) as { recastId: string }
-        await patchRecastSettings(fastify, session.userId, args.recast_id, {
+        await patchRecastSettings(fastify, session, args.recast_id, {
           ...settings,
           recast: {
             ...recast,
@@ -592,7 +597,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         }
         if (args.finish_auto) body.finishAuto = true
 
-        const sel = await fastify.inject({
+        const sel = await mcpInject(fastify, session, {
           method: "POST",
           url: `/v1/recast/${run.recastId}/select`,
           headers: internalHeaders(session.userId),
@@ -602,7 +607,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
 
         // The walk continues server-owned: fire the next non-gate hop so a
         // headless conversation never strands the run at "picked, now what".
-        const adv = await advanceInteractive(fastify, session.userId, run.recastId)
+        const adv = await advanceInteractive(fastify, session, run.recastId)
         const gate = pendingGateOf(adv.interactive)
         return textResult({
           recastRunId: run.recastId,
@@ -661,7 +666,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
           })
         }
 
-        const snap = await fastify.inject({
+        const snap = await mcpInject(fastify, session, {
           method: "GET",
           url: `/v1/recast/${run.recastId}`,
           headers: internalHeaders(session.userId),
@@ -683,7 +688,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         // the client watcher's applyRunCompleted, mirrored for headless runs.
         if (status.status === "completed" && status.resultUrl) {
           const prevVersion = typeof results[0]?.version === "number" ? (results[0]!.version as number) : 0
-          await patchRecastSettings(fastify, session.userId, args.recast_id, {
+          await patchRecastSettings(fastify, session, args.recast_id, {
             ...settings,
             recast: {
               ...recast,
@@ -705,7 +710,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
             },
           })
         } else if (status.status === "failed" && run.status !== "failed") {
-          await patchRecastSettings(fastify, session.userId, args.recast_id, {
+          await patchRecastSettings(fastify, session, args.recast_id, {
             ...settings,
             recast: { ...recast, run: { ...run, status: "failed", ...(status.failureReason ? { error: status.failureReason } : {}) } },
           })

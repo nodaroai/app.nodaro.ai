@@ -3,9 +3,9 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { config } from "../../config.js"
 import {
   parseJobId,
   errorResult,
@@ -54,7 +54,7 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  *
  * All tools are scoped to `session.userId`. Read tools query Supabase
  * service-role with a manual `user_id` filter; mutation tools that fire
- * approval/caption/motion side-effects go through `fastify.inject()` with
+ * approval/caption/motion side-effects go through `mcpInject()` with
  * the internal-orchestrator-secret so the auth middleware accepts `userId`
  * from the request body.
  */
@@ -521,12 +521,9 @@ function registerWriteTools(opts: RegisterLocationToolsOpts): void {
           "approve_main_image is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/locations/${encodeURIComponent(args.location_id)}/approve-main-image`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: {
           candidateJobId: args.candidate_job_id,
           userId: session.userId,
@@ -574,12 +571,9 @@ function registerWriteTools(opts: RegisterLocationToolsOpts): void {
           "recaption_location is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/locations/${encodeURIComponent(args.location_id)}/llm-caption`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: { userId: session.userId },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -721,12 +715,9 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
         payload.refineFromVideoUrl = args.refine_from_video_url
       }
 
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/generate-location-motion",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

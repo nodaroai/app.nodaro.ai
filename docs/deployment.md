@@ -130,10 +130,12 @@ added to `config.ts` without a row here.
 | `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
 | `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |
 | `KIE_API_KEY` | `""` | KIE.ai — broadest media/LLM coverage (or paste it on Install health) |
+| `KIE_API_BASE_URL` | `https://api.kie.ai` | Where KIE traffic goes. Point it at an egress proxy — see 12a. **Also moves the Claude/Gemini LLM lanes** |
 | `REPLICATE_API_TOKEN` | `""` | Replicate — Flux 2 family, LoRA training |
 | `ANTHROPIC_API_KEY` | `""` | Direct Anthropic lane for Claude LLM nodes |
 | `GEMINI_API_KEY` | `""` | Direct Google lane for Gemini models — see "Gemini routing" |
 | `ELEVENLABS_API_KEY` | `""` | Speech, voices, dubbing |
+| `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | Where ElevenLabs traffic goes — see 12a |
 | `FAL_KEY` | `""` | fal.ai-hosted models |
 | `HEYGEN_API_KEY` | `""` | AI Avatar / Cinematic Avatar (or run them on the nodaro.ai connection) |
 | `BEEBLE_API_KEY` | `""` | Relight & Switch |
@@ -144,6 +146,8 @@ added to `config.ts` without a row here.
 | `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
 | `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO | Object storage — see 2d |
+| `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
+| `STORAGE_OBJECT_ACL` | `""` (header omitted) | Canned ACL stamped on every uploaded object. For S3-compatible stores that cannot take a bucket policy — e.g. DO Spaces refuses `PutBucketPolicy` to a bucket-scoped key. See 2d |
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
@@ -161,6 +165,7 @@ added to `config.ts` without a row here.
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch (§10) |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
+| `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
 
@@ -266,10 +271,39 @@ to `https://<your-domain>/storage/nodaro-assets`.
    compose defaults don't apply — with them empty, the endpoint is
    derived from `R2_ACCOUNT_ID`.
 
-For any other S3-compatible store (AWS S3, Backblaze B2, self-managed
-MinIO), set `R2_ENDPOINT` to its S3 API URL, `R2_FORCE_PATH_STYLE=true`
-for most self-hosted servers, and `R2_PUBLIC_URL` to the bucket's
-public URL.
+For any other S3-compatible store (AWS S3, Backblaze B2, DigitalOcean
+Spaces, Supabase Storage, self-managed MinIO), set `R2_ENDPOINT` to its
+S3 API URL, `R2_FORCE_PATH_STYLE=true` for most self-hosted servers, and
+`R2_PUBLIC_URL` to the bucket's public URL.
+
+Also set **`R2_REGION`** unless the store is Cloudflare R2 or MinIO. It
+defaults to `auto`, which is R2's own value and which MinIO ignores — but
+AWS, DO Spaces (`nyc3`, `fra1`, …) and Supabase-local (`local`) validate
+the region and reject `auto`, so every request fails with an authorization
+or endpoint error that does not mention the region at all.
+
+**Making media publicly readable.** There are two mechanisms, and most
+installs need only the first:
+
+1. **A bucket policy** — the default. On a custom `R2_ENDPOINT` the app
+   creates the bucket at boot and applies an anonymous-read policy to it, so
+   objects are readable without any per-object header. Cloudflare R2 does not
+   need this (its public bucket setting covers it), and Nodaro Cloud
+   deliberately sends no ACL at all.
+2. **`STORAGE_OBJECT_ACL`** — for stores that cannot take a bucket policy.
+   DigitalOcean Spaces is the usual case: it refuses `PutBucketPolicy` to a
+   bucket-scoped key, so per-object ACLs are the only way. Set
+   `STORAGE_OBJECT_ACL=public-read` and every object this app writes carries
+   that ACL.
+
+Leave it empty unless you need mechanism 2. Empty means the header is omitted
+entirely, which is the behaviour every existing install already has — setting
+it on a store that is already public via policy is redundant, and setting it
+on a store whose keys lack `s3:PutObjectAcl` will make every upload fail.
+Accepted values are the standard canned ACLs (`private`, `public-read`,
+`public-read-write`, `authenticated-read`, `aws-exec-read`,
+`bucket-owner-read`, `bucket-owner-full-control`); anything else is rejected
+at boot rather than on the first upload.
 
 If the Cloud Recast plugin is enabled, its revisioned audio player loads
 audio-only layer files directly in Web Audio. The public storage origin must
@@ -392,7 +426,7 @@ seconds.
 | User management UI | no | yes | yes |
 | Credit ledger | no | no | yes |
 | Stripe billing webhooks | no | no | yes |
-| Markup on AI provider cost | no | no | yes |
+| Admin-configurable credit pricing | no | no | yes |
 
 Switch by changing `EDITION=community|business|cloud` and restarting.
 Edition is read at startup; there is no migration cost moving
@@ -792,6 +826,45 @@ capture that would freeze a key.
 
 Requires the instance encryption key (section 8). Without one, tiles report
 `missing` and `/setup` shows a red **Encryption** card with the fix.
+
+### 12a. Sending provider traffic through your own proxy
+
+Two providers let you move the *host*, not just the key:
+
+| Variable | Default | Moves |
+|---|---|---|
+| `KIE_API_BASE_URL` | `https://api.kie.ai` | Every KIE call — media generation **and** the KIE-fronted LLM lanes |
+| `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | Every ElevenLabs call — TTS, STT, voices, cloning, dubbing, forced alignment |
+
+Leave both unset and nothing changes: the defaults are the vendors' own
+hosts, so an install that never touches these makes byte-identical requests
+to the ones it made before the variables existed.
+
+Set one and Nodaro talks to your host instead. The usual reasons are key
+custody (the real vendor key lives on the proxy, never in the app's
+environment), audit logging of every outbound generation, and regional
+routing. Your proxy is expected to be transparent — same paths, same
+request and response bodies — because Nodaro only substitutes the origin.
+Trailing slashes are stripped, so `https://proxy.example.com/kie/` and
+`https://proxy.example.com/kie` behave identically.
+
+**`KIE_API_BASE_URL` also reroutes LLM traffic.** This is the part that
+surprises people. KIE is not only a media provider here — the Claude and
+Gemini lanes that power prompt enhancement, script generation, the workflow
+copilot and the pipeline stages are served over the same host. Overriding it
+therefore sends those through your proxy too, which is usually what you want
+(one audit point for everything) but means the proxy must handle more than
+the media API: it needs `/api/v1/...` (task creation and polling — this also covers the
+`/api/v1/chat/credit` balance probe), `/claude/v1/messages`,
+`/<family>/v1/chat/completions`, `/<family>/v1/responses`, and
+`/client/v1/userRecord/...` (the per-task credit lookup behind the admin
+credit audit). A proxy that forwards only the media paths will
+leave every LLM-backed feature failing while image and video generation keep
+working — a confusing state worth ruling out first.
+
+Direct-lane keys are unaffected: set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
+and those models leave KIE entirely, proxy or no proxy (see "Gemini
+routing").
 
 ## See also
 

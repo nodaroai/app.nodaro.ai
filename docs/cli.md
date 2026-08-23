@@ -270,7 +270,79 @@ nodaro audio fx --audio <url> [--preset <preset>] [--mix <0-100>] [--delay <20-2
 nodaro audio mix --audio <url> --audio <url> ... [--volumes <csv>] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio adjust-volume --audio <url>|--video <url> [--volume <0-200>] [--normalize] [--fade-in <sec>] [--fade-out <sec>] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio combine --segment <url[@a-b]> --segment ... [--watch] [--poll-interval <ms>] [--json]
+
+# Organizations — only on instances that have them
+nodaro org list [--json]
+nodaro org get <id> [--json]
+nodaro org create --name <name> --kind school|team [--slug <slug>] [--accept-terms] [--json]
+nodaro org members <orgId> [--limit <n>] [--cursor <token>] [--json]
+nodaro org invite <orgId> --email a@x.com --email b@x.com [--role admin|member] [--workspace <id>] [--workspace-role admin|member] [--json]
+nodaro org invitations <orgId> [--status open|accepted|revoked|expired] [--limit <n>] [--cursor <token>] [--json]
+nodaro org revoke <invitationId> [--json]
+nodaro org audit <orgId> [--limit <n>] [--cursor <token>] [--json]
+
+# Workspaces — where work lands
+nodaro workspace list [--json]
+nodaro workspace current [--json]
+nodaro workspace use <id> [--json]
+nodaro workspace clear
+nodaro workspace get <id> [--json]
+nodaro workspace members <id> [--limit <n>] [--cursor <token>] [--json]
+nodaro workspace join <code> [--json]
 ```
+
+### Working in a workspace
+
+Instances with organizations put work inside a **workspace**. A browser shows
+the current one on every screen; a terminal shows nothing, so the CLI makes it
+explicit.
+
+Three ways to say which workspace a command acts in, each beating the one below
+it:
+
+```bash
+nodaro --workspace <id> workflows list   # 1. this command only
+export NODARO_WORKSPACE=<id>             # 2. this shell, or this CI job
+nodaro workspace use <id>                # 3. saved on the profile, until changed
+```
+
+`nodaro workspace current` answers "where am I", and names **which** of the
+three decided — an inherited `NODARO_WORKSPACE` looks exactly like a saved one
+otherwise.
+
+`nodaro workspace use` verifies the workspace before saving it, so a typo fails
+once, here, rather than on every later command.
+
+The workspace decides which workspace a **list** reads from and where a
+**create** lands. It never decides access: reading, updating, deleting or
+running something you name by id is governed by that object's own workspace. So
+a forgotten `--workspace` cannot hide your work, and a wrong one cannot reach
+anyone else's — it just wastes a command.
+
+With none set, everything happens in your personal space. On an instance
+without organizations these commands are simply unavailable, and the header is
+never sent.
+
+### Inviting people
+
+`nodaro org invite` is the reason this group exists: bringing a class or a team
+onto an instance is a bulk, one-off, scriptable job.
+
+```bash
+nodaro org invite org_abc --email ada@school.edu --email grace@school.edu   --workspace ws_xyz --workspace-role member
+```
+
+It prints **one line per address**. An install with no mail provider — every
+fresh self-host — cannot email anybody, and those rows come back with a link
+instead:
+
+```
+✓ ada@school.edu — emailed
+⚠ grace@school.edu — not emailed (link_only); send this link yourself:
+  https://app.example.com/invite/9f3c…
+```
+
+Send those links yourself, or the invitation exists and nobody can reach it.
 
 ### The interactive recast flow (analyze → recast stems → export)
 

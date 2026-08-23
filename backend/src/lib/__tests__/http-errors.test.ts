@@ -9,6 +9,7 @@ import {
   sendInternalError,
   registerInternalErrorSanitizer,
   registerErrorTelemetry,
+  __flushHttpErrorTelemetry,
   __resetHttpErrorTelemetry,
 } from "../http-errors.js"
 
@@ -211,6 +212,59 @@ describe("server-error telemetry → app_reports", () => {
       via: "route-catch",
     })
     expect(String(report.payload?.stack)).toContain("relation jobs does not exist")
+  })
+
+  // The report is filed WITHOUT being awaited by the response path — right in
+  // production, and the reason a straggler used to be recorded against a later
+  // test's Supabase mock (a phantom `.insert()` that showed up as a rare
+  // "expected 4 calls, got 5" in generate-character.test.ts under full-suite
+  // load). src/test/setup.ts drains this after every test; these two pin the
+  // hook it drains with, so the barrier cannot quietly stop being one.
+  it("does not await the report on the response path", async () => {
+    const reply = makeReply()
+    const { req } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new Error("async by design"))
+
+    // Already replied, report not yet filed: that is the contract.
+    expect(reply.statusCode).toBe(500)
+    expect(insertAppReport).not.toHaveBeenCalled()
+
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+  })
+
+  it("__flushHttpErrorTelemetry waits for a report still in flight", async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    vi.mocked(insertAppReport).mockImplementationOnce(async () => {
+      await gate
+      return true
+    })
+
+    const reply = makeReply()
+    const { req } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new Error("slow report"))
+
+    let settled = false
+    const flushing = __flushHttpErrorTelemetry().then(() => {
+      settled = true
+    })
+
+    // The write has started but cannot finish until the gate opens; the flush
+    // must still be waiting. A flush that resolved here would be useless — it
+    // is exactly the "one Promise.all over a snapshot" mistake.
+    await vi.waitFor(() => expect(insertAppReport).toHaveBeenCalledTimes(1))
+    expect(settled).toBe(false)
+
+    release()
+    await flushing
+    expect(settled).toBe(true)
+  })
+
+  it("flushing with nothing in flight resolves immediately", async () => {
+    await expect(__flushHttpErrorTelemetry()).resolves.toBeUndefined()
   })
 
   it("throttles repeats of the same (method, route, message) into one report", async () => {

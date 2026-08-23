@@ -9,7 +9,23 @@ import {
   type ProviderKeyId,
 } from "./provider-keys-runtime.js"
 
-const envSchema = z.object({
+/**
+ * An overridable service base URL: defaults to the vendor's own host, and
+ * trailing slashes are stripped so an operator pasting `https://proxy/kie/`
+ * cannot produce `//api/v1/...` at every call site. Every consumer builds
+ * `${BASE}/path`.
+ */
+export function baseUrl(fallback: string) {
+  return z
+    .string()
+    .default(fallback)
+    .transform((v) => (v.trim() || fallback).replace(/\/+$/, ""))
+    .refine((v) => /^https?:\/\/[^/?#\s]+/.test(v), {
+      message: "must be an absolute http(s) URL, e.g. https://proxy.example.com",
+    })
+}
+
+export const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   REDIS_URL: z.string().default("redis://localhost:6379"),
@@ -36,6 +52,48 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /**
+   * S3 region. "auto" is Cloudflare R2's own value and MinIO ignores the
+   * field entirely, which is why it was hardcoded — but a Supabase-local
+   * stack wants "local" and DO Spaces / AWS want a real region ("nyc3",
+   * "us-east-1", …) and reject "auto" outright. Default unchanged.
+   *
+   * The trim-to-default matters: zod `.default()` fires only on an UNDEFINED
+   * value, and `.env.example` ships this key blank, so `cp .env.example .env`
+   * would otherwise hand the S3 client `region: ""` — which throws "Region is
+   * missing" from the constructor at import time, taking the whole API down
+   * with a message that never names this variable.
+   */
+  R2_REGION: z
+    .string()
+    .default("auto")
+    .transform((v) => v.trim() || "auto"),
+  /**
+   * Canned ACL to stamp on every object this app writes. EMPTY BY DEFAULT,
+   * meaning the header is omitted entirely — which is what Cloud sends to R2
+   * today, and what self-host needs too, because public read is already
+   * solved there by the boot-time bucket policy (see storage.ts
+   * buildPublicReadPolicy). A constant "public-read" would change Cloud
+   * behaviour, so this is opt-in.
+   *
+   * It exists for the third shape: S3-compatible stores that refuse
+   * PutBucketPolicy to a bucket-scoped key — DigitalOcean Spaces is the
+   * common one — where per-object ACLs are the only way to make media
+   * readable. Validated here rather than at the store, so a typo is a boot
+   * error instead of a 400 on every upload.
+   */
+  STORAGE_OBJECT_ACL: z
+    .enum([
+      "",
+      "private",
+      "public-read",
+      "public-read-write",
+      "authenticated-read",
+      "aws-exec-read",
+      "bucket-owner-read",
+      "bucket-owner-full-control",
+    ])
+    .default(""),
   /**
    * Extra hostname to allow in the /v1/download + /v1/image-proxy origin
    * allowlist, in addition to the origin derived from R2_PUBLIC_URL. Use when
@@ -66,6 +124,19 @@ const envSchema = z.object({
    *  path and wins when both exist. See lib/nodaro-connect.ts. */
   NODARO_API_KEY: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
+  /**
+   * Base URL for the KIE.ai API. Override to route provider traffic through an
+   * egress proxy that holds the real key — key custody, audit logging, or
+   * regional routing, all of which a self-hoster may need and none of which
+   * the app should know about. Default = KIE direct (unchanged behaviour).
+   *
+   * CONSEQUENCE, easy to miss: `lib/llm-client.ts` imports the same
+   * `KIE_API_BASE` const, so this ALSO reroutes the KIE-fronted LLM lanes
+   * (Claude, Gemini, the OpenAI-compatible ones) — not just media generation.
+   * A proxy set here must speak both the /api/v1 task API and the
+   * /claude/v1/messages + /<family>/v1/chat/completions LLM paths.
+   */
+  KIE_API_BASE_URL: baseUrl("https://api.kie.ai"),
   ANTHROPIC_API_KEY: z.string().default(""),
   /** Google Gemini API key (https://aistudio.google.com/apikey). Enables the
    *  direct-Google lane for models declaring `directGeminiModel`; empty leaves
@@ -73,6 +144,11 @@ const envSchema = z.object({
    *  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` pair is OAuth login, unrelated. */
   GEMINI_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),
+  /**
+   * Base URL for the ElevenLabs API. Same egress-proxy rationale as
+   * KIE_API_BASE_URL; default = ElevenLabs direct (unchanged behaviour).
+   */
+  ELEVENLABS_BASE_URL: baseUrl("https://api.elevenlabs.io"),
   HEYGEN_API_KEY: z.string().default(""),
   /**
    * How often the shared (Redis) HeyGen public catalog — ≈7,000 preset
@@ -160,6 +236,13 @@ const envSchema = z.object({
    *  accounts that purchased before the surface model changed). */
   PAYG_WEB_BLOCK_EXEMPT_USER_IDS: z.string().default(""),
   MCP_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /** Kill switch for the in-app Workflow Copilot (cloud). Unset/false = the
+   *  routes answer 503 feature_disabled. Strict parsing like MCP_ENABLED; the
+   *  admin `copilot_enabled` app setting can additionally pause it at runtime. */
+  COPILOT_ENABLED: z
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),

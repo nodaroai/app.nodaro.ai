@@ -156,6 +156,38 @@ suspension, and it obeys the organization's `allowed_email_domains`.
 | `POST` | `/v1/workspaces/:id/join-code` | workspace admin | `{ action: "rotate" | "enable" | "disable" }`. Enabling a workspace that never had a code mints one; rotating replaces it and the previous code stops working immediately. |
 | `POST` | `/v1/workspaces/join` | anyone signed in | `{ code }`. Accepts the spoken forms — `BCDF-GHJK`, lower case, and the letters people mishear (`O` for zero, `I` and `L` for one) are folded. Limited to 10 attempts per minute per account and 30 per minute per IP. |
 
+### Audit
+
+| Method | Path | Who | Body / query |
+|--------|------|-----|--------------|
+| `GET` | `/v1/orgs/:id/audit` | owner, org admin | `?cursor&limit`. Newest first. Each entry is `{ id, workspaceId, action, targetType, targetId, details, createdAt, actor }`; `actor` is `null` for anything the system did on nobody's behalf. |
+
+Readable while the organization is **suspended**, unlike every other management
+endpoint — the record of what happened is exactly what someone needs when
+things have gone wrong.
+
+`action` is an **open vocabulary**: new actions are added as the product
+grows, and the schema promises only that the field holds a string. Render the
+ones you recognise and fall back to the raw value for the rest — a client that
+switched exhaustively over it would break on the first new one.
+
+### Platform administration
+
+On instances that hold new organizations for review, a platform administrator
+approves them. These endpoints answer **403**, not 404, to everyone else: they
+are a platform surface, not a member one, and there is nothing to conceal
+about their existence.
+
+| Method | Path | Who | Body / query |
+|--------|------|-----|--------------|
+| `GET` | `/v1/admin/orgs` | platform admin | `?status&cursor&limit`. Unfiltered returns every live organization; a soft-deleted one appears only when `status=deleted` is asked for explicitly. Each row carries the owner, the member count and the workspace count. |
+| `GET` | `/v1/admin/orgs/:id` | platform admin | One organization, same shape. |
+| `PATCH` | `/v1/admin/orgs/:id` | platform admin | `{ status: "active" | "suspended" }`. Approving a `pending` organization and restoring a suspended one are the same call. |
+
+The surface stops there on purpose. A platform administrator decides whether
+an organization may **operate** on the instance; renaming it, reading its
+members and changing its settings belong to the people who run it.
+
 ## Errors
 
 Errors use the standard envelope `{ "error": { "code", "message" } }`; dispatch
@@ -222,5 +254,58 @@ curl -X POST https://app.nodaro.ai/v1/orgs/$ORG/invitations   -H "Authorization:
 curl -X POST https://app.nodaro.ai/v1/workspaces/$WS/join-code   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json"   -d '{"action":"enable"}'
 # → 200 { "data": { "code": "BCDFGHJK", "enabled": true, ... } }
 ```
+
+## From the SDK, the CLI, and MCP
+
+The same endpoints, three ways.
+
+**[SDK](./sdk-reference.md)** — `client.organizations` and
+`client.workspaces`. Choose where a request acts with
+`createClient({ workspaceId })` or `client.withWorkspace(id)`, which returns a
+NEW client rather than mutating a shared one, so two concurrent operations
+cannot race over which workspace they are in:
+
+```ts
+const classroom = nodaro.withWorkspace(workspaceId)
+await classroom.workflows.run(workflowId)   // lands in the class
+await nodaro.workflows.run(workflowId)      // lands in the personal space
+```
+
+`client.me()` carries the organizations block. Keep its three states apart:
+the fields **absent** means the instance has no organizations, present and
+**empty** means the account belongs to none, and `organizationsUnavailable`
+means the lookup failed — in which case keep whatever selection you had rather
+than concluding the person was removed from everything.
+
+**[CLI](./cli.md)** — `nodaro org` and `nodaro workspace`. Three ways to say
+which workspace a command acts in, each beating the one below:
+`--workspace <id>` for one command, `NODARO_WORKSPACE` for a shell or a CI
+job, and `nodaro workspace use <id>` saved on the profile.
+`nodaro workspace current` reports which of the three decided.
+
+**[MCP](./mcp/tools.md)** — `list_workspaces` and `select_workspace`. An MCP
+client has no switcher and no header it controls, so the same two questions
+become tools. The selection is remembered across sessions and **re-validated
+at every one**: a preference is written once and read for months, and
+membership can end in between.
+
+## Notes for integrators
+
+**Invitations may come back as links.** `POST /v1/orgs/:id/invitations`
+returns one row per address, and a row whose `status` is not `sent` carries a
+`link` instead — an install with no mail provider, or a delivery that failed.
+Surface it. The invitation exists either way, and without the link nobody can
+reach it.
+
+**Third-party app tokens.** `workspaces:read` and `workspaces:write` exist
+and are required by the MCP workspace tools; request them if your app uses
+those. The organization REST endpoints are not scope-gated yet and are
+reachable with a first-party session — that will change, and further scopes
+will be added alongside the checks that enforce them, so do not build on a
+token continuing to reach these endpoints without asking for anything.
+
+**A pending organization grants nothing.** Where approval is required, a newly
+created organization is `pending` until a platform administrator approves it.
+Say so to whoever created it, or waiting is indistinguishable from broken.
 
 Budgets, model policy and assignments are documented as they become available.

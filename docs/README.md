@@ -12,7 +12,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Learn the editor with guided tutorials** (dashboard Tutorials tab; self-host installs seed a starter set on first boot) → [Tutorials](./tutorials.md)
 - **Use Nodaro Cloud models from my self-hosted instance** → [Community Cloud-Connect](./community-cloud-connect.md)
 - **Build a server-side integration** → [API Integration](./api-integration.md) → [OAuth Flow](./oauth-flow.md)
-- **Run a school or a team on Nodaro Cloud** → [Organizations](./organizations.md)
+- **Run a school or a team on Nodaro Cloud** (workspaces, invitations, join codes, audit — from the app, the [SDK](./sdk-reference.md#clientorganizations), the [CLI](./cli.md#working-in-a-workspace) or [MCP](./mcp/tools.md#workspace-tools)) → [Organizations](./organizations.md)
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)
 - **Build Nodaro's parameter pickers in your own app** (Mood, Framing, Lens, Voice…) → [Picker Catalogs](./picker-catalogs.md)
 - **Keep characters/products consistent across generations** (boards, cast grids, model choice) → [Reference Boards Guide](./reference-boards-guide.md)
@@ -23,6 +23,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Embed a published Nodaro MiniApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
+- **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
 

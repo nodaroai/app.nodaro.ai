@@ -20,6 +20,9 @@ import { shotsCommand } from "./commands/shots.js"
 import { recastCommand } from "./commands/recast.js"
 import { registerLocationsCommands } from "./commands/locations.js"
 import { registerObjectsCommands } from "./commands/objects.js"
+import { orgCommand } from "./commands/org.js"
+import { workspaceCommand } from "./commands/workspace.js"
+import { setWorkspaceFlag } from "./workspace.js"
 
 // Resolve the package version at runtime so we don't need to bake it in.
 // Falls back to "0.0.0-dev" when running from source via tsx.
@@ -36,6 +39,17 @@ const program = new Command()
   .name("nodaro")
   .description("Nodaro command-line interface — list and run workflows, inspect jobs and executions, manage projects.")
   .version(readVersion(), "-v, --version")
+  // Global, not per-command: the workspace is a property of the INVOCATION,
+  // and a flag each command had to declare is one a new command forgets.
+  // See ./workspace.ts for how it ranks against NODARO_WORKSPACE and the
+  // profile's saved workspace.
+  .option("--workspace <id>", "work in this workspace for this command only")
+
+// Runs before every action handler, including nested subcommands, so the
+// flag is in place by the time any of them builds a client.
+program.hook("preAction", () => {
+  setWorkspaceFlag(program.opts<{ workspace?: string }>().workspace)
+})
 
 program.addCommand(authCommand())
 program.addCommand(projectsCommand())
@@ -56,6 +70,8 @@ program.addCommand(pickerCatalogsCommand())
 program.addCommand(modelsCommand())
 program.addCommand(shotsCommand())
 program.addCommand(recastCommand())
+program.addCommand(orgCommand())
+program.addCommand(workspaceCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 

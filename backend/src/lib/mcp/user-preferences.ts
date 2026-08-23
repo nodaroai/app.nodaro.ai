@@ -12,6 +12,13 @@
 import { supabase } from "../supabase.js"
 
 export interface UserMcpPreferences {
+  /**
+   * The workspace an MCP client works in across sessions — the equivalent of
+   * the browser's remembered selection, and equally a PREFERENCE rather than
+   * a permission: it is re-validated on every session, because membership
+   * can end between two of them.
+   */
+  defaultWorkspaceId?: string | null
   image?: {
     model?: string
     aspectRatio?: string

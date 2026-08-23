@@ -1,6 +1,7 @@
 import { createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/sdk"
 import pc from "picocolors"
 import { getProfile } from "./config.js"
+import { resolveWorkspace } from "./workspace.js"
 
 /** Replaced at build time by tsup `define` from package.json; the fallback
  *  keeps source-mode runs (tsx / vitest) working. */
@@ -14,9 +15,12 @@ export function buildClient(profileName?: string): ReturnType<typeof createClien
     console.error(pc.dim(`  run: nodaro auth login${profileName ? ` --profile ${profileName}` : ""}`))
     process.exit(1)
   }
+  const { workspaceId } = resolveWorkspace(profile)
   return createClient({
     baseUrl: profile.baseUrl,
     auth: new StaticTokenAuth(profile.token),
+    // Scope, not access — see ./workspace.ts. Absent means the personal space.
+    ...(workspaceId ? { workspaceId } : {}),
     // Without this the CLI is indistinguishable from any other SDK consumer:
     // it IS an SDK consumer, so it would otherwise report `sdk/<sdk version>`
     // and every CLI-created job would be filed under the wrong surface.

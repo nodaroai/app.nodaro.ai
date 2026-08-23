@@ -3,9 +3,9 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { config } from "../../config.js"
 import {
   parseJobId,
   errorResult,
@@ -56,7 +56,7 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  * All tools are scoped to `session.userId`. Mutation tools that touch
  * `characters` rows write via Supabase service-role with a manual
  * `user_id` filter; tools that fire generation routes go through
- * `fastify.inject()` with the internal-orchestrator-secret so the auth
+ * `mcpInject()` with the internal-orchestrator-secret so the auth
  * middleware accepts `userId` from the request body.
  */
 
@@ -556,12 +556,9 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
           "approve_portrait is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/characters/${encodeURIComponent(args.character_id)}/approve-portrait`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: { candidateJobId: args.candidate_job_id, userId: session.userId },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -605,12 +602,9 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
           "recaption_character is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/characters/${encodeURIComponent(args.id)}/llm-caption`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: { userId: session.userId },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -730,12 +724,9 @@ function registerGenerationTools({
       if (args.base_outfit) payload.baseOutfit = args.base_outfit
       if (args.provider) payload.provider = args.provider
 
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/generate-character-motion",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

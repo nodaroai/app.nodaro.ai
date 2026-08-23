@@ -2,63 +2,26 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import Fastify, { type FastifyInstance } from "fastify"
 import { newSession, type McpSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
+import { createMcpInvoker, type McpToolCallResult, type McpToolDef } from "../../invoke.js"
 
 /**
- * Shared test helpers for MCP tool unit tests. The MCP SDK's tools/* handlers
- * live on a private `_requestHandlers` Map; we invoke them directly to avoid
- * the overhead of standing up a transport pair. Mirrors the trick used in
- * `__tests__/server.test.ts` and `__tests__/verbs.test.ts`.
+ * Shared test helpers for MCP tool unit tests. In-process invocation lives in
+ * `lib/mcp/invoke.ts` (product code — the Workflow Copilot calls tools the
+ * same way); these are thin wrappers that keep the historical test signatures.
  */
-export interface ToolCallResult {
-  content: { type: string; text?: string }[]
-  structuredContent?: Record<string, unknown>
-  _meta?: Record<string, unknown>
-  isError?: boolean
-}
-
-export type ToolHandler = (
-  req: { method: string; params: Record<string, unknown> },
-  extra: Record<string, unknown>,
-) => Promise<ToolCallResult>
-
-export interface ListedTool {
-  name: string
-  _meta?: Record<string, unknown>
-}
-
-export type ListToolsHandler = (
-  req: { method: string; params: Record<string, unknown> },
-  extra: Record<string, unknown>,
-) => Promise<{ tools: ListedTool[] }>
+export type ToolCallResult = McpToolCallResult
+export type ListedTool = McpToolDef
 
 export async function callTool(
   server: McpServer,
   name: string,
   args: unknown,
 ): Promise<ToolCallResult> {
-  const internal = (server as unknown as {
-    server: { _requestHandlers: Map<string, ToolHandler> }
-  }).server._requestHandlers
-  const handler = internal.get("tools/call")
-  if (!handler) throw new Error("tools/call handler not registered")
-  return await handler(
-    { method: "tools/call", params: { name, arguments: args } },
-    {},
-  )
+  return createMcpInvoker(server).callTool(name, args)
 }
 
 export async function listTools(server: McpServer): Promise<ListedTool[]> {
-  const internal = (server as unknown as {
-    server: { _requestHandlers: Map<string, ListToolsHandler> }
-  }).server._requestHandlers
-  const handler = internal.get("tools/list")
-  if (!handler) {
-    // No tool registered yet — surface as empty list so callers can assert
-    // "tool absent" without juggling undefined.
-    return []
-  }
-  const result = await handler({ method: "tools/list", params: {} }, {})
-  return result.tools
+  return createMcpInvoker(server).listTools()
 }
 
 export function buildServer(): McpServer {

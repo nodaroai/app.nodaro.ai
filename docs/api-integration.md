@@ -60,6 +60,12 @@ authenticated route in the backend, including the published-app endpoints
 under `/v1/app/:slug/*` (see the [Embed App Guide](./embed-app-guide.md))
 and the per-feature routes (jobs, workflows, projects, etc.).
 
+A few surfaces are deliberately app-only and reject API tokens and OAuth
+app tokens with `403 in_app_only` — currently the archived-runs routes and
+the [Workflow Copilot](./features/workflow-copilot.md) (`/v1/copilot/*`).
+They exist for the Nodaro web app's own session, not as an integration
+surface. To build workflows programmatically, use MCP or the SDK.
+
 The five legacy endpoints below are scoped specifically to running
 workflows by ID with input overrides — they live under `/v1/api/` and
 predate the published-app system. Most new integrations should prefer
@@ -204,6 +210,13 @@ may select, so clear a cached selection when they stop listing it.
 An API token may be bound to one workspace; it then behaves as if it sent this
 header on every request, and an explicit header naming a different workspace
 is refused with `400 token_workspace_mismatch`.
+
+The [SDK](./sdk-reference.md#clientwithworkspaceworkspaceid) sends it for you
+— `createClient({ workspaceId })`, or `client.withWorkspace(id)` for a client
+scoped to one workspace. The [CLI](./cli.md#working-in-a-workspace) takes
+`--workspace`, `NODARO_WORKSPACE`, or a saved profile selection. For the full
+organization surface — members, invitations, join codes, the audit log — see
+[Organizations](./organizations.md).
 
 The header has no effect unless organizations are enabled on the instance you
 are calling; self-hosted builds ignore it.
@@ -978,7 +991,7 @@ Expected validation failures are `400` (`validation_error`,
 `audio_preview_unavailable` means the layer is logically present but its
 browser/ffmpeg-ready derivative is not available for an honest custom mix. A
 stale-revision or in-progress response includes the current revision or live job
-when available. Quoting never reserves credits and still returns the post-markup
+when available. Quoting never reserves credits and still returns the final
 price when the current balance is insufficient; the paid route can return the
 normal `402 insufficient_credits` response.
 

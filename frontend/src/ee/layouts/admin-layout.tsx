@@ -28,6 +28,7 @@ import {
   FolderTree,
   Puzzle,
   Blocks,
+  Building2,
   Inbox,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -40,13 +41,14 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isFeatureEnabled } from "@/lib/edition"
+import { hasOrganizations, isFeatureEnabled } from "@/lib/edition"
 
 const STORAGE_KEY = "nodaro-admin-sidebar-collapsed"
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
   { href: "/admin/users", label: "Users", icon: Users },
+  ...(hasOrganizations() ? [{ href: "/admin/organizations", label: "Organizations", icon: Building2 }] : []),
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
   { href: "/admin/usage", label: "Usage", icon: Activity },
   { href: "/admin/alerts", label: "Alerts", icon: Bell },

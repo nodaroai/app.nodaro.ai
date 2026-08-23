@@ -20,12 +20,36 @@ export interface McpSession {
   progressTokens?: Map<string, string>
   /** Cached mcp-project id — set by ensureMcpProject() on first call, reused thereafter. */
   mcpProjectId?: string
+  /**
+   * When set, `ensureMcpProject()` returns this id instead of resolving or
+   * creating the auto-managed "mcp" project — an in-app session (the
+   * Workflow Copilot) works inside the project of the workflow the user has
+   * open, not in a side project. Set ONLY by server code from an
+   * ownership-checked workflow row, never from a request body.
+   *
+   * INVARIANT: this is a NARROWING filter, not an authorization. Every tool
+   * that filters on `project_id` keeps its `user_id` filter on the same query
+   * chain (guarded by `__tests__/project-scope-guard.test.ts`), so a wrong
+   * project id can only hide rows, never expose another user's.
+   */
+  scopedProjectId?: string
+  /**
+   * The workspace this session works in, or undefined for the personal
+   * space. Resolved ONCE at session creation from the stored preference and
+   * re-validated there, never trusted from the preference alone: a
+   * membership can end between two sessions, and a client that kept working
+   * in a workspace it had been removed from would be the one bug this axis
+   * exists to prevent.
+   */
+  workspaceId?: string
 }
 
 export function newSession(opts: {
   userId: string
   scopes: Scope[]
   clientName: string
+  workspaceId?: string
+  scopedProjectId?: string
 }): McpSession {
   return { ...opts, progressTokens: new Map() }
 }

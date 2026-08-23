@@ -50,6 +50,9 @@ import { supabase } from "../../lib/supabase.js"
 // ---------------------------------------------------------------------------
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+// The route casts ids to uuid; fixtures must be real uuids.
+const JOB_1_ID = "00000000-0000-4000-8000-000000000101"
+const JOB_2_ID = "00000000-0000-4000-8000-000000000102"
 
 let app: FastifyInstance
 
@@ -113,7 +116,7 @@ describe("POST /v1/jobs/cost-summary", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/cost-summary",
-      payload: { jobIds: ["job-1"] }, // no userId → preHandler leaves req.userId unset
+      payload: { jobIds: [JOB_1_ID] }, // no userId → preHandler leaves req.userId unset
     })
     expect(res.statusCode).toBe(401)
     expect(supabase.from).not.toHaveBeenCalled()
@@ -122,7 +125,7 @@ describe("POST /v1/jobs/cost-summary", () => {
   it("returns aggregated breakdown for completed jobs", async () => {
     const mockJobs = [
       {
-        id: "job-1",
+        id: JOB_1_ID,
         status: "completed",
         input_data: { type: "generate-image", provider: "nano-banana" },
         provider_cost: 0.02,
@@ -130,7 +133,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         credits: 4,
       },
       {
-        id: "job-2",
+        id: JOB_2_ID,
         status: "completed",
         input_data: { type: "generate-image", provider: "nano-banana" },
         provider_cost: 0.02,
@@ -148,7 +151,7 @@ describe("POST /v1/jobs/cost-summary", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/cost-summary",
-      payload: { jobIds: ["job-1", "job-2"], userId: TEST_USER_ID },
+      payload: { jobIds: [JOB_1_ID, JOB_2_ID], userId: TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(200)
@@ -166,7 +169,7 @@ describe("POST /v1/jobs/cost-summary", () => {
   it("returns zeros for mix of completed and failed jobs", async () => {
     const mockJobs = [
       {
-        id: "job-1",
+        id: JOB_1_ID,
         status: "completed",
         input_data: { type: "generate-image", provider: "flux" },
         provider_cost: 0.05,
@@ -174,7 +177,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         credits: 10,
       },
       {
-        id: "job-2",
+        id: JOB_2_ID,
         status: "failed",
         input_data: { type: "generate-image", provider: "flux" },
         provider_cost: null,
@@ -192,7 +195,7 @@ describe("POST /v1/jobs/cost-summary", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/cost-summary",
-      payload: { jobIds: ["job-1", "job-2"], userId: TEST_USER_ID },
+      payload: { jobIds: [JOB_1_ID, JOB_2_ID], userId: TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(200)
@@ -214,7 +217,7 @@ describe("POST /v1/jobs/cost-summary", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/cost-summary",
-      payload: { jobIds: ["job-1"], userId: TEST_USER_ID },
+      payload: { jobIds: [JOB_1_ID], userId: TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(500)

@@ -302,7 +302,7 @@ Kling models speak scripted dialogue natively: quote the line in the prompt (opt
 
 ### Credit pricing (character voice)
 
-The audio step is reserved as an add-on **on top of** the base video cost — same `computeCredits` mechanism as Loop Trim (no double-markup) — and committed only if the step actually runs:
+The audio step is reserved as an add-on **on top of** the base video cost — same `computeCredits` mechanism as Loop Trim (the base cost is never counted twice) — and committed only if the step actually runs:
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|

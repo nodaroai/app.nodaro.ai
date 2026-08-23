@@ -32,6 +32,15 @@ function insertChain(error: unknown) {
 describe("ensureMcpProject", () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it("returns scopedProjectId without touching the DB or the cache (in-app sessions)", async () => {
+    const session = makeSession({ scopedProjectId: "proj-open-workflow", mcpProjectId: "cached-id" })
+    const id = await ensureMcpProject(session)
+    expect(id).toBe("proj-open-workflow")
+    expect(supabase.from).not.toHaveBeenCalled()
+    // The "mcp" project cache is left alone — the pin is not a cache entry.
+    expect(session.mcpProjectId).toBe("cached-id")
+  })
+
   it("returns cached id without DB call on second invocation", async () => {
     const session = makeSession({ mcpProjectId: "cached-id" })
     const result = await ensureMcpProject(session)

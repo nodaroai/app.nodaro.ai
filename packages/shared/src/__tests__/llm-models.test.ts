@@ -392,10 +392,11 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "translate",
     "image-critic",
     "pick-best-llm",
+    "workflow-copilot",
   ]
 
-  it("has entries for all 16 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(16)
+  it("has entries for all 17 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(17)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }

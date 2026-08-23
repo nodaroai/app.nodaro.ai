@@ -42,7 +42,7 @@ It pairs naturally with **Text to Speech → Audio FX (Room) → Merge Video & A
 
 ## Credits
 
-Flat **2 credits** per run (FFmpeg processing, no provider markup).
+Flat **2 credits** per run (FFmpeg processing, no external provider).
 
 Reverb presets calibrate their level against the rendering engine at run
 time. If that calibration cannot complete safely, the run **fails and the

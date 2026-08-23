@@ -22,6 +22,7 @@
 
 **Rules:**
 - Pricing math in docs MUST match the runtime formula. If you write a formula in code, write the same formula in the doc.
+- `docs/` is scanned by `tools/check-pricing-leaks.mjs` (CI job "Check Pricing Leaks") exactly like the published npm packages: document what the user PAYS (credit prices, credit formulas), never the platform's own economics — no provider $ rates, no margin/markup percentages, no "cost + N%". A product term that happens to be spelled "markup" (the creator-set markup on a monetized app) is exempted per file in the script's `BARE_MARKUP_IS_PRODUCT_TERM` set.
 - Worked examples in docs MUST match the test cases in code (cross-check before committing).
 - For dynamic-priced nodes, document both the formula AND the fallback behavior (what happens when upstream metadata is missing).
 - If the change is rolled out under a flag, gate-check the doc — note the flag explicitly so users don't see undocumented behavior.

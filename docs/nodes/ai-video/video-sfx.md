@@ -31,28 +31,28 @@ The Video SFX node takes an input video plus an optional text prompt and produce
 
 ## Credit Cost
 
-Duration is derived automatically from the input video via ffprobe. The duration is rounded up into the next bucket; the bucket determines the BASE cost. The system markup (default 25%) is applied on top.
+Duration is derived automatically from the input video via ffprobe. The duration is rounded up into the next bucket; the bucket determines the cost shown in the editor and charged at run time.
 
-| Input video duration | Bucket | BASE credits / version | Visible credits / version |
-|----------------------|--------|----------------------:|--------------------------:|
-| ≤ 8s   | `:8s`   | 1  | 2  |
-| ≤ 15s  | `:15s`  | 1  | 2  |
-| ≤ 30s  | `:30s`  | 2  | 3  |
-| ≤ 60s  | `:60s`  | 3  | 4  |
-| ≤ 120s | `:120s` | 5  | 7  |
-| ≤ 300s | `:300s` | 11 | 14 |
+| Input video duration | Bucket | Credits / version |
+|----------------------|--------|------------------:|
+| ≤ 8s   | `:8s`   | 2  |
+| ≤ 15s  | `:15s`  | 2  |
+| ≤ 30s  | `:30s`  | 3  |
+| ≤ 60s  | `:60s`  | 4  |
+| ≤ 120s | `:120s` | 7  |
+| ≤ 300s | `:300s` | 14 |
 
 For multi-version runs the cost multiplies: `versions × per-version`. Worked examples:
 
-| Duration | Versions | BASE total | Visible total |
-|----------|---------:|-----------:|--------------:|
-| 5s       | 1        | 1          | 2             |
-| 8s       | 1        | 1          | 2             |
-| 12s      | 1        | 1          | 2             |
-| 30s      | 1        | 2          | 3             |
-| 31s      | 1        | 3          | 4             |
-| 60s      | 4        | 12         | 15            |
-| 180s     | 1        | 11         | 14            |
+| Duration | Versions | Total credits |
+|----------|---------:|--------------:|
+| 5s       | 1        | 2             |
+| 8s       | 1        | 2             |
+| 12s      | 1        | 2             |
+| 30s      | 1        | 3             |
+| 31s      | 1        | 4             |
+| 60s      | 4        | 15            |
+| 180s     | 1        | 14            |
 
 If ffprobe fails to derive a duration, the `:8s` bucket is used as a fallback and a warning is logged.
 

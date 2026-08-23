@@ -269,7 +269,7 @@ Three editions live in the same codebase:
 - **Business** (`EDITION=business`) — adds the admin panel + user
   management UI. Still self-hosted, still no billing.
 - **Cloud** (`EDITION=cloud`) — adds the credit system, Stripe
-  webhooks, AI-cost markup. Powers `nodaro.ai`. Not intended for
+  webhooks, admin-configurable credit pricing. Powers `nodaro.ai`. Not intended for
   self-hosting.
 
 Helpers in `backend/src/lib/config.ts`:

@@ -3,9 +3,9 @@ import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import { REDUCE_STRATEGY_IDS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, parseFailure } from "./_verb-helpers.js"
-import { config } from "../../config.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -28,7 +28,7 @@ export interface RegisterReduceOpts {
  *   - `merge-json` — Parse each survivor as JSON and merge into one object.
  *
  * This delegates to the existing `POST /v1/reduce` route via
- * `fastify.inject()` so the credit guard, Zod validation, EmptyInputError
+ * `mcpInject()` so the credit guard, Zod validation, EmptyInputError
  * handling, and job-lifecycle (reserve/commit/refund) all live in one
  * place. Same pattern as `run_app` / `run_workflow`.
  */
@@ -78,12 +78,9 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
         strategyConfig: args.strategyConfig ?? {},
         inputs: args.inputs,
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/reduce",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) {

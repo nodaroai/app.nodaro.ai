@@ -138,7 +138,7 @@ replaces it, and the **Copy** button and legend now live inside it.
 ### What the final view shows
 
 In place of the editor, the field renders the assembled text read-only, with a
-**Copy** button (top-right) that copies the **plain text** — no color markup
+**Copy** button (top-right) that copies the **plain text** — no color formatting
 ever reaches the clipboard or the model. If the field is empty, the editor's
 placeholder shows muted and the toggle stays available.
 

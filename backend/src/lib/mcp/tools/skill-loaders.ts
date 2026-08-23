@@ -60,7 +60,7 @@ Each node needs a unique \`id\`, a registered \`type\`, a \`position\` (x/y in p
 
 ## update_workflow_json contract
 
-\`update_workflow_json(workflow_id, workflow, expected_updated_at?)\` overwrites the workflow's full graph. Always merge new nodes into the existing graph rather than replacing it. After each approved stage, call it once to attach that stage's new nodes — the user watches their canvas fill up during conversation.
+\`update_workflow_json({ workflow_id, nodes, edges, expected_version? })\` overwrites the workflow's full graph — \`nodes\` and \`edges\` are top-level parameters sent together. Always merge new nodes into the existing graph rather than replacing it. After each approved stage, call it once to attach that stage's new nodes — the user watches their canvas fill up during conversation.
 
 ## Per-node schema
 
@@ -100,7 +100,7 @@ function loadWorkflowEditorContent(): string {
  */
 const NODE_TYPE_RE = /^[a-z0-9][a-z0-9-]*$/
 
-function loadNodeSkillContent(nodeType: string): string | null {
+export function loadNodeSkillContent(nodeType: string): string | null {
   // Defense-in-depth: even though the Zod regex blocks bad input at the API
   // boundary, the loader must reject anything that isn't a strict kebab-case
   // identifier to prevent path traversal (`../../CLAUDE`, etc.).
@@ -109,8 +109,9 @@ function loadNodeSkillContent(nodeType: string): string | null {
   const path = resolve(nodesDir, `${nodeType}.md`)
   // Ensure the resolved path is a direct child of nodesDir. Belt-and-braces
   // with the regex above — symlinks or other oddities can't escape either.
-  const prefix = nodesDir + "/"
-  if (!path.startsWith(prefix)) return null
+  // (`dirname`, not a "/"-prefix check: `resolve` yields backslashes on
+  // Windows, where the prefix form rejected every type.)
+  if (dirname(path) !== nodesDir) return null
   try {
     if (!existsSync(path)) return null
     const content = readFileSync(path, "utf-8")
@@ -121,7 +122,7 @@ function loadNodeSkillContent(nodeType: string): string | null {
   }
 }
 
-function listAvailableNodeTypes(): string[] {
+export function listAvailableNodeTypes(): string[] {
   try {
     const dir = resolve(resolveSkillsDir(), "nodes")
     return readdirSync(dir)
@@ -134,8 +135,56 @@ function listAvailableNodeTypes(): string[] {
 }
 
 /** Cached at module load — no per-invocation file I/O or directory walks. */
-const WORKFLOW_EDITOR_CONTENT = loadWorkflowEditorContent()
+export const WORKFLOW_EDITOR_CONTENT = loadWorkflowEditorContent()
 const AVAILABLE_NODE_TYPES = listAvailableNodeTypes()
+
+/**
+ * Named sections of workflow-editor.md, delimited in the hand-written prose by
+ * `<!-- SECTION:<name> -->` … `<!-- /SECTION:<name> -->` pairs (the generator
+ * owns the separate AUTO-GEN markers and never touches these). The in-app
+ * Workflow Copilot composes its system prompt from a SUBSET — it has no
+ * `update_workflow_json`, so it must be able to skip `update-contract` and
+ * `result-fields` without forking the document.
+ */
+export type WorkflowEditorSection =
+  | "shape"
+  | "edges"
+  | "update-contract"
+  | "result-fields"
+  | "catalog"
+  | "gotchas"
+
+const SECTION_RE = /<!--\s*SECTION:([a-z-]+)\s*-->([\s\S]*?)<!--\s*\/SECTION:\1\s*-->/g
+
+function parseWorkflowEditorSections(content: string): ReadonlyMap<string, string> {
+  const sections = new Map<string, string>()
+  for (const m of content.matchAll(SECTION_RE)) {
+    sections.set(m[1]!, m[2]!.replace(/^\n+/, "").replace(/\n+$/, ""))
+  }
+  return sections
+}
+
+const WORKFLOW_EDITOR_SECTIONS = parseWorkflowEditorSections(WORKFLOW_EDITOR_CONTENT)
+
+/**
+ * The requested sections joined in the given order. A section missing from
+ * the on-disk file (damaged file → embedded fallback, which carries no
+ * markers) falls back to the WHOLE document once, so a caller never ends up
+ * with an empty prompt silently.
+ */
+export function getWorkflowEditorSections(names: ReadonlyArray<WorkflowEditorSection>): string {
+  const parts = names.map((n) => WORKFLOW_EDITOR_SECTIONS.get(n)).filter((s): s is string => !!s)
+  const text = parts.length < names.length ? WORKFLOW_EDITOR_CONTENT : parts.join("\n\n")
+  return stripPromptNoise(text)
+}
+
+/** Generator frontmatter and AUTO-GEN markers are file plumbing, not prompt content. */
+function stripPromptNoise(text: string): string {
+  return text
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .replace(/<!--\s*\/?AUTO-GEN:(START|END)[^>]*-->\n?/g, "")
+    .trim()
+}
 
 /**
  * Tool description shown to every connecting MCP client. Designed to be the

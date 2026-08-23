@@ -17,7 +17,7 @@
 import type { FastifyInstance } from "fastify"
 import { createHmac, timingSafeEqual, hkdfSync, randomUUID } from "node:crypto"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
-import { s3 } from "../lib/storage.js"
+import { s3, withObjectAcl } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { redis } from "../lib/queue.js"
 
@@ -165,13 +165,13 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
 
       try {
         await s3.send(
-          new PutObjectCommand({
+          new PutObjectCommand(withObjectAcl({
             Bucket: config.R2_BUCKET_NAME,
             Key: payload.key,
             Body: buffer,
             ContentType: payload.mime,
             CacheControl: "public, max-age=31536000, immutable",
-          }),
+          })),
         )
       } catch (err) {
         req.log.error({ err }, "[upload-proxy] R2 upload failed")

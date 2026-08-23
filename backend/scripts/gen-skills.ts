@@ -31,6 +31,7 @@ import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared"
 
 import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/capture-mcp-schemas.js"
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
+import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
 import {
   parseDataInterface,
   parseNodeDefinitions,
@@ -56,6 +57,9 @@ const SKILLS_DIR = join(REPO_ROOT, "backend", "skills")
 const NODES_DIR = join(SKILLS_DIR, "nodes")
 const WORKFLOW_EDITOR_FILE = join(SKILLS_DIR, "workflow-editor.md")
 const CHOOSING_MODELS_FILE = join(REPO_ROOT, "docs", "choosing-models.md")
+// Backend-internal handle map (Copilot edge validation). Generated here so the
+// backend never hand-copies handle ids from the frontend NODE_DEFINITIONS.
+const NODE_HANDLES_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "node-handles.ts")
 
 const CHECK_MODE = process.argv.includes("--check")
 
@@ -253,6 +257,15 @@ async function main(): Promise<void> {
   for (const s of captured) schemaByName.set(s.name, s)
   console.log(`[gen-skills] captured ${captured.length} MCP tools`)
 
+  // backend/src/lib/mcp/generated/node-handles.ts — handle ids per node type.
+  console.log("[gen-skills] rendering backend node-handles map")
+  const handlesSource = renderNodeHandlesModule(defs)
+  const existingHandles = existsSync(NODE_HANDLES_FILE) ? readFileSync(NODE_HANDLES_FILE, "utf-8") : null
+  if (existingHandles !== handlesSource) {
+    mkdirSync(dirname(NODE_HANDLES_FILE), { recursive: true })
+    writeFileSync(NODE_HANDLES_FILE, handlesSource)
+  }
+
   // workflow-editor.md catalog block.
   console.log("[gen-skills] rewriting workflow-editor.md node-catalog block")
   const editorSource = readFileSync(WORKFLOW_EDITOR_FILE, "utf-8")
@@ -342,16 +355,26 @@ async function main(): Promise<void> {
 
   if (CHECK_MODE) {
     try {
+      // `git diff` ignores untracked files — a generated module that was never
+      // `git add`ed would read as "no drift" forever. Fail on those too.
+      const untracked = execFileSync(
+        "git",
+        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/"],
+        { encoding: "utf-8", cwd: REPO_ROOT },
+      ).trim()
+      if (untracked) {
+        throw new Error(`untracked generated file(s) — commit them: ${untracked}`)
+      }
       execFileSync(
         "git",
-        ["diff", "--exit-code", "backend/skills/", "docs/choosing-models.md"],
+        ["diff", "--exit-code", "backend/skills/", "docs/choosing-models.md", "backend/src/lib/mcp/generated/"],
         {
           stdio: "inherit",
           cwd: REPO_ROOT,
         },
       )
       console.log(
-        "[gen-skills] no drift — backend/skills/ and docs/choosing-models.md are up to date",
+        "[gen-skills] no drift — backend/skills/, docs/choosing-models.md and backend/src/lib/mcp/generated/ are up to date",
       )
     } catch {
       console.error(
