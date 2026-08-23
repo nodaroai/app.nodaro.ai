@@ -24,6 +24,8 @@ import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts"
+import { FOCUS_NODES_EVENT, focusNodesChanges, parseFocusNodesDetail, type FocusNodesDetail } from "@/lib/canvas-focus-event"
+import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
@@ -568,6 +570,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
   const computeGuides = useAlignmentGuides()
   const isMobile = useIsMobile()
+  const copilotTurnActive = useCopilotUiStore((s) => s.turnActive)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const arrowGuideClearRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -597,6 +600,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }, 300)
     return () => clearTimeout(timer)
   }, [focusType, nodes, setCenter, selectNode, setSearchParams, isMobile])
+
+  // "Show on canvas": select and frame a set of nodes someone else picked.
+  // Delivered as a DOM event because the sender (the Copilot panel) lives
+  // outside ReactFlowProvider and must not reach into the instance API.
+  useEffect(() => {
+    const onFocusNodes = (event: Event) => {
+      // The detail is whatever a page script chose to dispatch — parse it.
+      const ids = parseFocusNodesDetail((event as CustomEvent<FocusNodesDetail>).detail)
+      if (ids.length === 0) return
+      // `select` changes only — see focusNodesChanges for why this must never
+      // become a setNodes call.
+      onNodesChange(focusNodesChanges(getNodes().map((n) => n.id), ids))
+      if (ids.length === 1) selectNode(ids[0]!)
+      // Let the selection paint before the viewport moves to it.
+      requestAnimationFrame(() => fitView({ nodes: ids.map((id) => ({ id })), padding: 0.35, duration: 400, maxZoom: 1 }))
+    }
+    window.addEventListener(FOCUS_NODES_EVENT, onFocusNodes)
+    return () => window.removeEventListener(FOCUS_NODES_EVENT, onFocusNodes)
+  }, [onNodesChange, getNodes, selectNode, fitView])
 
   // Focus mode: zoom to selected node; mobile gets nav arrows + bottom sheet
   const [focusMode, setFocusMode] = useState(false)
@@ -2977,8 +2999,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         {/* First-run empty-canvas surface. Gated on a loaded (not loading) workflow
             with zero nodes. isWorkflowLoading suppresses the flash that would
             otherwise appear while the initial loadWorkflow(id, "", [], []) clear
-            sets workflowId before the real nodes arrive from the fetch. */}
-        {realtimeWorkflowId != null && nodes.length === 0 && !isWorkflowLoading && (
+            sets workflowId before the real nodes arrive from the fetch.
+            Also suppressed while the Copilot is mid-turn: "add your first node"
+            is the wrong thing to say while nodes are being added for you. */}
+        {realtimeWorkflowId != null && nodes.length === 0 && !isWorkflowLoading && !copilotTurnActive && (
           <EmptyCanvasState
             onCreate={handleEmptyStateCreate}
             onOpenInputPanel={handleOpenInputPanel}

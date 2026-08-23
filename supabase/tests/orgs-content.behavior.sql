@@ -155,6 +155,8 @@ SELECT pg_temp.assert_eq('U1 sees all three of their locations, the project-less
   (SELECT count(*)::text FROM locations WHERE name LIKE 'U%'), '3');
 SELECT pg_temp.assert_eq('U1 sees both objects',   (SELECT count(*)::text FROM objects   WHERE name LIKE 'U%'), '2');
 SELECT pg_temp.assert_eq('U1 sees both creatures', (SELECT count(*)::text FROM creatures WHERE name LIKE 'U%'), '2');
+SELECT pg_temp.assert_eq('U1 sees all three of their locations — the project-less one included',
+  (SELECT count(*)::text FROM locations WHERE name LIKE 'U%'), '3');
 SELECT pg_temp.assert_eq('U1 sees their character via the project', (SELECT count(*)::text FROM characters WHERE name LIKE 'U%'), '1');
 SELECT pg_temp.assert_eq('U1 sees their folder via the project',    (SELECT count(*)::text FROM folders    WHERE name LIKE 'U%'), '1');
 SELECT pg_temp.assert_eq('U1 sees all three of their jobs', (SELECT count(*)::text FROM jobs WHERE id::text LIKE 'f0000000%'), '3');
@@ -179,14 +181,21 @@ SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000102","r
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000102';
 
 SELECT pg_temp.assert_eq('U2 sees exactly their own project',  (SELECT count(*)::text FROM projects  WHERE name LIKE 'U%'), '1');
--- [moves in part c] U2 holds a viewer grant on U1's workflow: 1 -> 2.
-SELECT pg_temp.assert_eq('U2 sees exactly their own workflow', (SELECT count(*)::text FROM workflows WHERE name LIKE 'U%'), '1');
+-- [MOVED in part c] The one core assertion the RLS rewrite changes, and the
+-- only one: U2 holds a viewer grant on U1's workflow, and from part c onward
+-- workflow_access honours it. 1 -> 2, by design.
+SELECT pg_temp.assert_eq('U2 sees their own workflow AND the one shared with them',
+  (SELECT count(*)::text FROM workflows WHERE name LIKE 'U%'), '2');
+SELECT pg_temp.assert_eq('...and the extra one is exactly the workflow they were granted',
+  (SELECT count(*)::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000101'), '1');
 SELECT pg_temp.assert_eq('U2 does NOT see U1''s location that sits in U2''s project (today''s rule: creator only)',
   (SELECT count(*)::text FROM locations WHERE name LIKE 'U%'), '0');
 SELECT pg_temp.assert_eq('U2 sees only the public completed job of U1''s',
   (SELECT count(*)::text FROM jobs WHERE id::text LIKE 'f0000000%'), '1');
+-- A VIEWER grant reads and does not write. This is the assertion that would
+-- catch a grant being treated as edit access.
 WITH u AS (UPDATE workflows SET name = 'hijack' WHERE id = 'd0000000-0000-4000-8000-000000000101' RETURNING 1)
-  SELECT pg_temp.assert_eq('U2 cannot touch U1''s workflow', (SELECT count(*)::text FROM u), '0');
+  SELECT pg_temp.assert_eq('U2 cannot touch U1''s workflow — a viewer grant does not write', (SELECT count(*)::text FROM u), '0');
 RESET ROLE;
 
 -- ----------------------------------------------------- U4: belongs to nothing
@@ -228,6 +237,347 @@ SELECT pg_temp.assert_eq('assets still has exactly its four policies',
 SELECT pg_temp.assert_eq('the assets SELECT predicate is unchanged',
   (SELECT qual FROM pg_policies WHERE tablename = 'assets' AND cmd = 'SELECT'),
   '((user_id = ( SELECT auth.uid() AS uid)) OR (is_shared = true) OR (is_library_item = true) OR is_admin())');
+
+-- ---------------------------------------------- part b: triggers and backfills
+-- Everything below is a no-op on today's data, and that is exactly what is
+-- being pinned: the triggers exist, they are shaped correctly, and on rows
+-- with no workspace they change nothing.
+
+-- The project decides the workspace. U1's projects have none, so a workflow
+-- created in one derives NULL — no exception, no value invented.
+INSERT INTO workflows (id, user_id, project_id, name)
+  VALUES ('d0000000-0000-4000-8000-000000000131', '00000000-0000-4000-8000-000000000101',
+          'c0000000-0000-4000-8000-000000000101', 'U1 wf derived');
+SELECT pg_temp.assert_eq('a workflow in a workspace-less project derives NULL, without raising',
+  (SELECT COALESCE(workspace_id::text, 'NULL') FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000131'), 'NULL');
+
+-- A client-supplied workspace_id is DISCARDED, not trusted. This is the whole
+-- point of deriving rather than accepting: the column is not forgeable even by
+-- a writer that bypasses RLS entirely.
+UPDATE workflows SET workspace_id = '00000000-0000-4000-8000-0000000000ff'
+ WHERE id = 'd0000000-0000-4000-8000-000000000131';
+SELECT pg_temp.assert_eq('a client-supplied workspace_id is overwritten from the project',
+  (SELECT COALESCE(workspace_id::text, 'NULL') FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000131'), 'NULL');
+
+-- The backfill filled created_by for every pre-existing row. The fixture rows
+-- were inserted after the migration ran, so assert the STATEMENT's effect
+-- rather than the migration's: a row with created_by NULL gets its user_id.
+UPDATE workflows SET created_by = NULL WHERE id = 'd0000000-0000-4000-8000-000000000131';
+UPDATE workflows SET created_by = user_id WHERE created_by IS NULL;
+SELECT pg_temp.assert_eq('the backfill statement fills created_by from user_id',
+  (SELECT (created_by = user_id)::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000131'), 'true');
+
+-- The jobs clamp does NOT fire on a workspace-less job: a public completed job
+-- stays public. Every job on the platform today is this shape.
+INSERT INTO jobs (id, user_id, status, is_public, job_type)
+  VALUES ('f0000000-0000-4000-8000-000000000131', '00000000-0000-4000-8000-000000000101', 'pending', true, 'test');
+UPDATE jobs SET status = 'completed', is_public = true WHERE id = 'f0000000-0000-4000-8000-000000000131';
+SELECT pg_temp.assert_eq('a job with no workspace keeps is_public — the clamp did not fire',
+  (SELECT is_public::text FROM jobs WHERE id = 'f0000000-0000-4000-8000-000000000131'), 'true');
+SELECT pg_temp.assert_eq('...and force_private is untouched',
+  (SELECT COALESCE(force_private::text, 'NULL') FROM jobs WHERE id = 'f0000000-0000-4000-8000-000000000131'), 'NULL');
+
+-- The clamp is affordable only because of its WHEN clause: without it every
+-- one of the tens of thousands of job writes enters PL/pgSQL. The assertion
+-- above cannot see the difference — it passes either way — so pin the clause
+-- itself. pg_get_triggerdef, never pg_trigger.tgqual, which is an internal
+-- node tree with no stable text form.
+SELECT pg_temp.assert_eq('the jobs clamp is gated by a WHEN clause',
+  (SELECT (pg_get_triggerdef(oid) LIKE '%WHEN ((new.workspace_id IS NOT NULL))%')::text
+     FROM pg_trigger WHERE tgname = 'trg_clamp_workspace_job_privacy'), 'true');
+
+-- All four triggers exist, on the right tables, at the right time.
+SELECT pg_temp.assert_eq('the four part-b triggers exist',
+  (SELECT array_agg(tgname ORDER BY tgname)::text FROM pg_trigger
+    WHERE tgname IN ('trg_sync_workflow_workspace','trg_propagate_project_workspace_change',
+                     'trg_clamp_workspace_job_privacy','trg_reparent_workspace_content')),
+  '{trg_clamp_workspace_job_privacy,trg_propagate_project_workspace_change,trg_reparent_workspace_content,trg_sync_workflow_workspace}');
+
+-- Every definer in this migration names pg_temp. A definer that does not is
+-- shadowable by any caller who can create a temporary table.
+SELECT pg_temp.assert_eq('every part-b definer pins search_path with pg_temp',
+  (SELECT count(*)::text FROM pg_proc
+    WHERE proname IN ('sync_workflow_workspace','propagate_project_workspace_change','reparent_workspace_content')
+      AND prosecdef
+      AND array_to_string(proconfig, ',') LIKE '%search_path=public, pg_temp%'), '3');
+SELECT pg_temp.assert_eq('the jobs clamp is NOT a definer — it reads no table',
+  (SELECT prosecdef::text FROM pg_proc WHERE proname = 'clamp_workspace_job_privacy'), 'false');
+
+-- ---- the triggers doing their job, not merely staying quiet ----------------
+-- Everything above proves part b is INERT on today's data, which is what makes
+-- it safe to ship. That alone would also pass if the triggers did nothing at
+-- all, so here they are made to fire. The rows are created as postgres and
+-- removed by the transaction's ROLLBACK; no organization survives this file.
+
+INSERT INTO organizations (id, slug, name, kind, owner_user_id, status)
+  VALUES ('a0000000-0000-4000-8000-000000000141', 'proof-org-b', 'Proof Org', 'school',
+          '00000000-0000-4000-8000-000000000101', 'active');
+INSERT INTO workspaces (id, org_id, name, slug)
+  VALUES ('b0000000-0000-4000-8000-000000000141', 'a0000000-0000-4000-8000-000000000141', 'Proof Class', 'proof-class');
+INSERT INTO projects (id, user_id, name, workspace_id)
+  VALUES ('c0000000-0000-4000-8000-000000000141', '00000000-0000-4000-8000-000000000101',
+          'U1 workspace project', 'b0000000-0000-4000-8000-000000000141');
+
+-- sync: a workflow created in a workspace project derives that workspace.
+INSERT INTO workflows (id, user_id, project_id, name)
+  VALUES ('d0000000-0000-4000-8000-000000000141', '00000000-0000-4000-8000-000000000101',
+          'c0000000-0000-4000-8000-000000000141', 'U1 wf in workspace');
+SELECT pg_temp.assert_eq('a workflow in a workspace project derives that workspace',
+  (SELECT workspace_id::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000141'),
+  'b0000000-0000-4000-8000-000000000141');
+
+-- sync: and a client cannot overwrite it with another workspace either.
+UPDATE workflows SET workspace_id = NULL WHERE id = 'd0000000-0000-4000-8000-000000000141';
+SELECT pg_temp.assert_eq('clearing workspace_id by hand is overwritten from the project',
+  (SELECT workspace_id::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000141'),
+  'b0000000-0000-4000-8000-000000000141');
+
+-- propagate: moving the project out of the workspace re-stamps its workflows.
+UPDATE projects SET workspace_id = NULL WHERE id = 'c0000000-0000-4000-8000-000000000141';
+SELECT pg_temp.assert_eq('moving a project out of a workspace re-stamps its workflows',
+  (SELECT COALESCE(workspace_id::text, 'NULL') FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000141'), 'NULL');
+
+-- propagate: and back in again.
+UPDATE projects SET workspace_id = 'b0000000-0000-4000-8000-000000000141'
+ WHERE id = 'c0000000-0000-4000-8000-000000000141';
+SELECT pg_temp.assert_eq('moving it back re-stamps them again',
+  (SELECT workspace_id::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000141'),
+  'b0000000-0000-4000-8000-000000000141');
+
+-- clamp: a workspace job is never public, on INSERT...
+INSERT INTO jobs (id, user_id, status, is_public, job_type, workspace_id)
+  VALUES ('f0000000-0000-4000-8000-000000000141', '00000000-0000-4000-8000-000000000101',
+          'pending', true, 'test', 'b0000000-0000-4000-8000-000000000141');
+SELECT pg_temp.assert_eq('a workspace job is forced private on insert',
+  (SELECT (is_public::text || '/' || force_private::text) FROM jobs WHERE id = 'f0000000-0000-4000-8000-000000000141'),
+  'false/true');
+
+-- ...and on the UPDATE the workers issue when a job completes, which is the
+-- write that would otherwise undo an insert-only clamp.
+UPDATE jobs SET status = 'completed', is_public = true, force_private = false
+ WHERE id = 'f0000000-0000-4000-8000-000000000141';
+SELECT pg_temp.assert_eq('and again when the worker republishes it on completion',
+  (SELECT (is_public::text || '/' || force_private::text) FROM jobs WHERE id = 'f0000000-0000-4000-8000-000000000141'),
+  'false/true');
+
+-- re-parent: deleting a member hands their workspace content to the org owner,
+-- and leaves their personal content to cascade as it always has.
+INSERT INTO projects (id, user_id, name, workspace_id)
+  VALUES ('c0000000-0000-4000-8000-000000000142', '00000000-0000-4000-8000-000000000102',
+          'U2 workspace project', 'b0000000-0000-4000-8000-000000000141');
+INSERT INTO workflows (id, user_id, project_id, name)
+  VALUES ('d0000000-0000-4000-8000-000000000142', '00000000-0000-4000-8000-000000000102',
+          'c0000000-0000-4000-8000-000000000142', 'U2 wf in workspace');
+DELETE FROM profiles WHERE id = '00000000-0000-4000-8000-000000000102';
+SELECT pg_temp.assert_eq('a departed member''s workspace workflow goes to the organization owner',
+  (SELECT user_id::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000142'),
+  '00000000-0000-4000-8000-000000000101');
+SELECT pg_temp.assert_eq('...and so does their workspace project',
+  (SELECT user_id::text FROM projects WHERE id = 'c0000000-0000-4000-8000-000000000142'),
+  '00000000-0000-4000-8000-000000000101');
+SELECT pg_temp.assert_eq('their personal workflow is gone, as it always was',
+  (SELECT count(*)::text FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000201'), '0');
+
+-- The autosave path still works. It is the hottest write in the product, and
+-- part c changes its predicate, so both answers are pinned from b onward: the
+-- creator is accepted, a stranger is refused. In c the creator must STILL be
+-- accepted and the stranger must still be refused; an editor grant is what
+-- turns a third case true, and c asserts that one itself.
+--
+-- The claim must be set explicitly. RESET ROLE above restores the ROLE but
+-- NOT request.jwt.claims, so without this the platform admin's claim from the
+-- previous block is still live, apply_workflow_delta coalesces auth.uid()
+-- ahead of p_user_id, and it looks up a workflow owned by the wrong user.
+SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000101","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
+SELECT pg_temp.assert_eq('apply_workflow_delta accepts the creator''s edit',
+  (SELECT ok::text FROM apply_workflow_delta(
+     'd0000000-0000-4000-8000-000000000101',
+     (SELECT version FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000101'),
+     '[]'::jsonb, ARRAY[]::text[], '[]'::jsonb, ARRAY[]::text[], NULL,
+     '00000000-0000-4000-8000-000000000101')), 'true');
+
+SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000102","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000102';
+SELECT pg_temp.assert_eq('apply_workflow_delta refuses a stranger''s edit',
+  (SELECT ok::text FROM apply_workflow_delta(
+     'd0000000-0000-4000-8000-000000000101',
+     (SELECT version FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000101'),
+     '[]'::jsonb, ARRAY[]::text[], '[]'::jsonb, ARRAY[]::text[], NULL,
+     '00000000-0000-4000-8000-000000000102')), 'false');
+SET LOCAL request.jwt.claims = '';
+SET LOCAL request.jwt.claim.sub = '';
+
+-- ------------------------------------------------ part c: the rules themselves
+-- The eleven original policies are gone and exactly twenty replace them. A
+-- leftover original would OR its permissions back in — and on UPDATE, its
+-- implicit WITH CHECK would void the column pinning entirely.
+SELECT pg_temp.assert_eq('workflows has exactly its four new policies',
+  (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'workflows'),
+  '{workflows_delete,workflows_insert,workflows_select,workflows_update}');
+SELECT pg_temp.assert_eq('projects has exactly its four new policies',
+  (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'projects'),
+  '{projects_delete,projects_insert,projects_select,projects_update}');
+SELECT pg_temp.assert_eq('locations has exactly its four new policies',
+  (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'locations'),
+  '{locations_delete,locations_insert,locations_select,locations_update}');
+SELECT pg_temp.assert_eq('objects has exactly its four new policies',
+  (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'objects'),
+  '{objects_delete,objects_insert,objects_select,objects_update}');
+SELECT pg_temp.assert_eq('creatures has exactly its four new policies',
+  (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'creatures'),
+  '{creatures_delete,creatures_insert,creatures_select,creatures_update}');
+
+-- This block needs a LIVING grantee and a living second project: part b's
+-- positive half deleted U2 and U4, and both the viewer grant (cascade on
+-- user_id) and U2's project went with them. U5 exists only from here down.
+INSERT INTO auth.users (id, email) VALUES ('00000000-0000-4000-8000-000000000105', 'u5@example.com');
+INSERT INTO projects (id, user_id, name)
+  VALUES ('c0000000-0000-4000-8000-000000000105', '00000000-0000-4000-8000-000000000105', 'U5 project');
+
+-- workflow_access on an id that does not exist answers 'none' and does not
+-- raise. It runs inside USING clauses, where a raise fails the caller's whole
+-- query rather than denying one row.
+SELECT pg_temp.assert_eq('workflow_access on a missing workflow is none, not an error',
+  workflow_access('00000000-0000-4000-8000-0000000000ff', '00000000-0000-4000-8000-000000000101'), 'none');
+SELECT pg_temp.assert_eq('workflow_access with no caller at all is none',
+  workflow_access('d0000000-0000-4000-8000-000000000101'), 'none');
+-- Ordered so the same user is the stranger BEFORE the grant and the viewer
+-- after it — the delta between the two lines is exactly the grant.
+SELECT pg_temp.assert_eq('a stranger gets nothing',
+  workflow_access('d0000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000105'), 'none');
+INSERT INTO workflow_collaborators (workflow_id, user_id, role)
+  VALUES ('d0000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000105', 'viewer');
+SELECT pg_temp.assert_eq('a viewer grant reads',
+  workflow_access('d0000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000105'), 'view');
+SELECT pg_temp.assert_eq('the creator owns',
+  workflow_access('d0000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000101'), 'own');
+
+-- The non-member cap. U5 is NOT a member of the part-b workspace, and holds an
+-- EDITOR grant on its workflow: the answer must be view, never edit — an
+-- outsider may read the class''s work, never change it or bill a run to it.
+INSERT INTO workflow_collaborators (workflow_id, user_id, role)
+  VALUES ('d0000000-0000-4000-8000-000000000141', '00000000-0000-4000-8000-000000000105', 'editor');
+SELECT pg_temp.assert_eq('an editor grant to a workspace outsider is capped at view',
+  workflow_access('d0000000-0000-4000-8000-000000000141', '00000000-0000-4000-8000-000000000105'), 'view');
+
+-- ---- U1: what a creator may and may not change about their own row --------
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000101","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
+
+-- The cross-project attach that parts a and b allowed is now refused. The
+-- target is U5's project — a project that EXISTS and belongs to someone else.
+-- Targeting a deleted project would pass this assertion vacuously: the WITH
+-- CHECK fails on a missing project too, proving nothing about the cross-user
+-- rule. It is an RLS refusal, so it raises rather than affecting zero rows.
+DO $$
+DECLARE v_blocked boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO locations (id, user_id, project_id, name)
+      VALUES ('e1000000-0000-4000-8000-000000000151', '00000000-0000-4000-8000-000000000101',
+              'c0000000-0000-4000-8000-000000000105', 'U1 loc in U5 project');
+  EXCEPTION WHEN insufficient_privilege THEN v_blocked := true;
+  END;
+  IF NOT v_blocked THEN RAISE EXCEPTION 'ASSERT FAIL: a location could still be attached to another user''s project'; END IF;
+  RAISE NOTICE 'ok  a row can no longer be attached to another user''s project';
+END $$;
+
+-- Column transitions. The shape of the refusal matters and is asserted: a
+-- USING failure silently filters the row (0 rows, no error), but a WITH CHECK
+-- failure RAISES — "new row violates row-level security policy", SQLSTATE
+-- insufficient_privilege. The pinning lives in WITH CHECK, so a pinned column
+-- write is an ERROR, not a no-op. An earlier revision of the plan expected
+-- 0 rows here; that expectation was simply wrong about Postgres.
+DO $$
+DECLARE v_blocked boolean;
+BEGIN
+  v_blocked := false;
+  BEGIN
+    UPDATE workflows SET user_id = '00000000-0000-4000-8000-000000000105'
+     WHERE id = 'd0000000-0000-4000-8000-000000000101';
+  EXCEPTION WHEN insufficient_privilege THEN v_blocked := true;
+  END;
+  IF NOT v_blocked THEN RAISE EXCEPTION 'ASSERT FAIL: the creator could hand their workflow to someone else'; END IF;
+  RAISE NOTICE 'ok  the creator cannot hand their workflow to someone else';
+
+  v_blocked := false;
+  BEGIN
+    UPDATE workflows SET created_by = '00000000-0000-4000-8000-000000000105'
+     WHERE id = 'd0000000-0000-4000-8000-000000000101';
+  EXCEPTION WHEN insufficient_privilege THEN v_blocked := true;
+  END;
+  IF NOT v_blocked THEN RAISE EXCEPTION 'ASSERT FAIL: created_by is not pinned'; END IF;
+  RAISE NOTICE 'ok  created_by is pinned';
+
+  v_blocked := false;
+  BEGIN
+    UPDATE workflows SET source_kind = 'import'
+     WHERE id = 'd0000000-0000-4000-8000-000000000101';
+  EXCEPTION WHEN insufficient_privilege THEN v_blocked := true;
+  END;
+  IF NOT v_blocked THEN RAISE EXCEPTION 'ASSERT FAIL: source_kind is not pinned'; END IF;
+  RAISE NOTICE 'ok  source_kind is pinned';
+END $$;
+WITH u AS (UPDATE workflows SET name = 'a name the owner may set'
+            WHERE id = 'd0000000-0000-4000-8000-000000000101' RETURNING 1)
+  SELECT pg_temp.assert_eq('...and an ordinary edit still goes through', (SELECT count(*)::text FROM u), '1');
+-- The owner MAY change visibility and the sharing levers; an editor may not
+-- (there is no editor in this fixture — P10 adds that cell).
+WITH u AS (UPDATE workflows SET visibility = 'workspace'
+            WHERE id = 'd0000000-0000-4000-8000-000000000101' RETURNING 1)
+  SELECT pg_temp.assert_eq('the owner may change visibility', (SELECT count(*)::text FROM u), '1');
+UPDATE workflows SET visibility = 'private' WHERE id = 'd0000000-0000-4000-8000-000000000101';
+RESET ROLE;
+
+-- ---- U3, the platform admin: reads everything, writes nothing ------------
+-- All four client write surfaces of the 2026-08-23 decision, each asserted
+-- separately so a mutation to any one of them fails exactly one line.
+--
+-- The read assertion captures the TRUE total as postgres first; comparing two
+-- counts both taken under U3's RLS would be equal by construction even if the
+-- admin saw nothing at all.
+SELECT set_config('proof.total_workflows', (SELECT count(*)::text FROM workflows), true);
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000103","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000103';
+
+SELECT pg_temp.assert_eq('the platform admin still reads every workflow',
+  (SELECT count(*)::text FROM workflows), current_setting('proof.total_workflows'));
+WITH u AS (UPDATE workflows SET name = 'admin edit'
+            WHERE id = 'd0000000-0000-4000-8000-000000000101' RETURNING 1)
+  SELECT pg_temp.assert_eq('the platform admin cannot UPDATE a workflow from a client', (SELECT count(*)::text FROM u), '0');
+WITH d AS (DELETE FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000104' RETURNING 1)
+  SELECT pg_temp.assert_eq('the platform admin cannot DELETE a workflow from a client', (SELECT count(*)::text FROM d), '0');
+WITH u AS (UPDATE projects SET name = 'admin edit'
+            WHERE id = 'c0000000-0000-4000-8000-000000000101' RETURNING 1)
+  SELECT pg_temp.assert_eq('the platform admin cannot UPDATE a project from a client', (SELECT count(*)::text FROM u), '0');
+WITH u AS (UPDATE locations SET name = 'admin edit'
+            WHERE id = 'e1000000-0000-4000-8000-000000000101' RETURNING 1)
+  SELECT pg_temp.assert_eq('the platform admin cannot UPDATE a location from a client', (SELECT count(*)::text FROM u), '0');
+SELECT pg_temp.assert_eq('the platform admin cannot autosave into someone else''s workflow',
+  (SELECT ok::text FROM apply_workflow_delta(
+     'd0000000-0000-4000-8000-000000000101',
+     (SELECT version FROM workflows WHERE id = 'd0000000-0000-4000-8000-000000000101'),
+     '[]'::jsonb, ARRAY[]::text[], '[]'::jsonb, ARRAY[]::text[], NULL,
+     '00000000-0000-4000-8000-000000000103')), 'false');
+RESET ROLE;
+
+-- ---- grants: nothing new is reachable anonymously ------------------------
+SELECT pg_temp.assert_eq('anon cannot execute workflow_access',
+  has_function_privilege('anon', 'public.workflow_access(uuid,uuid)', 'EXECUTE')::text, 'false');
+SELECT pg_temp.assert_eq('anon cannot execute access_rank',
+  has_function_privilege('anon', 'public.access_rank(text)', 'EXECUTE')::text, 'false');
+SELECT pg_temp.assert_eq('anon cannot execute the workflows update check',
+  has_function_privilege('anon', 'public.check_workflows_update_allowed(uuid,uuid,uuid,uuid,text,uuid,uuid,text,uuid,text,boolean)', 'EXECUTE')::text, 'false');
+SELECT pg_temp.assert_eq('anon cannot execute the projects update check',
+  has_function_privilege('anon', 'public.check_projects_update_allowed(uuid,uuid,uuid,boolean)', 'EXECUTE')::text, 'false');
+SELECT pg_temp.assert_eq('every part-c definer pins search_path with pg_temp',
+  (SELECT count(*)::text FROM pg_proc
+    WHERE proname IN ('workflow_access','check_workflows_update_allowed','check_projects_update_allowed','apply_workflow_delta')
+      AND prosecdef
+      AND array_to_string(proconfig, ',') LIKE '%search_path=public, pg_temp%'), '4');
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 ROLLBACK;

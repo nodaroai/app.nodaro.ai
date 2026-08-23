@@ -1,4 +1,11 @@
 export const queryKeys = {
+  // Workflow Copilot (Cloud only)
+  copilot: {
+    all: ["copilot"] as const,
+    thread: (threadId: string) => ["copilot", "thread", threadId] as const,
+    forWorkflow: (workflowId: string) => ["copilot", "for-workflow", workflowId] as const,
+  },
+
   // Credits
   credits: {
     all: ["credits"] as const,

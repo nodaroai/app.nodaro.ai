@@ -21,6 +21,44 @@ The `frontend/src/ee/` directory holds enterprise-tier UI: admin pages, billing 
 
 ---
 
+## Workflow Copilot panel (`ee/`, Cloud only)
+
+The chat rail in the editor. Core reaches it through ONE shim,
+`components/editor/workflow-editor/copilot-panel-slot.tsx`, which `lazy()`-imports
+`@/ee/components/copilot/copilot-panel` only when `hasCredits()` — the community
+bundle never requests the chunk.
+
+**The turn is NOT owned by a component.** `ee/lib/copilot/turn-engine.ts` is a
+module-level engine writing into a module-level Zustand store
+(`ee/lib/copilot/turn-store.ts`). The panel renders inside the editor TAB, which
+unmounts on a switch to Present/Executions/Cost — a streaming loop in a component
+hook would abort a turn the user is paying for. Components only subscribe.
+
+| Concern | Where | Rule |
+|---|---|---|
+| SSE union | `ee/lib/copilot/types.ts` | Mirrors the backend emits VERBATIM and is passed as `streamRequest`'s generic. Do NOT widen the shared `StreamEvent` — the copilot's `token` carries `{ text }`, the shared one carries a bare string. |
+| Editor callbacks | `turn-store.ts` `bridge` | `save` / `run` / estimate / execution id are registered by the panel on mount and nulled on unmount (same pattern as `setExpandStoryboard` on the workflow store). The engine must null-check — a stale `run` from a closed editor must never fire a paid run. |
+| Run confirmation | `startProposedRun()` | Calls `handleRun(..., { skipConfirm: true })`: the proposal card IS the confirmation. Two dialogs is the bug. |
+| Canvas catch-up | `ee/lib/copilot/canvas-sync.ts` | Realtime first, then a row fetch. NEVER adopt a remote graph while `isDirty` — say the canvas is behind instead of eating the user's edits. |
+| Mid-turn navigation | `turn-engine.ts` `onEvent` | The workflow id is captured at send time and re-checked per event; a mismatch aborts. This is an invariant, not an unmount hook (the panel unmounts on an ordinary tab switch). |
+| "Show on canvas" | `lib/canvas-focus-event.ts` | ee dispatches `nodaro:focus-nodes`; `workflow-canvas.tsx` listens and calls `fitView`. The panel lives OUTSIDE `ReactFlowProvider` and must not reach into the instance API. |
+| Mentions | `ee/lib/copilot/mentions.ts` | A mention travels as a NAME (`[references] character "Maya"`), never a URL — `edit_workflow` rejects model-authored addresses, so a URL here would be useless or a hole. Media/attachments need server-side id resolution and are not shipped. |
+| Theme | `globals.css` `--copilot-*` | The panel sits between chrome and card in the surface ramp; `--card`/`--muted` have no matching step. Both themes are defined and a guard test pins the pair. |
+| Run decision | `copilot-conversation.tsx` | The proposal / running / outcome cards render at PANEL level, NOT inside the live-turn block. The server persists a turn's messages *before* it emits `done`, so the live block is deduped against history a second or two into the decision — scoping the cards to it destroys the user's only way to approve a run, and the outcome watcher with it. |
+| Saving before a send | `turn-engine.ts` | `save()` RESOLVES `{ success: false }` on every real failure (remote conflict, write error) — it never throws. Read the result, then re-check `isDirty`; a try/catch alone is a no-op guard. |
+| Unattended spend | `turn-engine.ts` `MAX_AUTO_FIX_CHAIN` | An auto "Fix it" opens a NEW turn, which resets the per-turn run cap — so that cap bounds nothing. The chain counter is the real bound, and only a user-initiated send resets it. Auto also refuses to decide against a stale estimate or on top of a live run. |
+| Did the run start? | `workflow-editor-main.tsx` `runForCopilot` | The editor answers with the execution id it started, or null. NEVER infer this from `bridge.isRunning`: it is a React-lagged mirror, and a bail after the optimistic flip (insufficient credits, a failed start) resolves before `setIsRunning(false)` is flushed — the panel would sit on "Running" with no Stop and no execution to follow. |
+| Concurrency | `turn-engine.ts` | One assistant message can carry two `run_workflow` calls, arriving a microtask apart. `runPhase` is the only signal that moves synchronously — read it BEFORE writing it. `sending` is a separate synchronous latch because `streaming` is only raised after the save and the thread handshake. |
+| Estimate freshness | `bridge.estimateVersion` | Compared against `loadedVersion`. A boolean flag has to ARRIVE in time and does not when realtime beats the SSE event; a version stamp is an invariant. |
+| A run outliving its turn | `turn-engine.ts` | Sending another message must NOT clear `executionId`/`runPhase` while a run is still followed — its outcome is what the fix loop reacts to and its card carries the only Stop. |
+| Workflow switch mid-turn | `turn-engine.ts` `generation` | Every write is stamped with the generation it was born in, so an abort landing after the switch cannot paint "Stopped." onto the workflow just opened (which would also suppress its empty state). |
+| Stopping a run | `workflow-editor-main.tsx` `handleCopilotStopRun` | `handleExecutionDiscarded` is LOCAL teardown only. Without `discardWorkflowExecution` first, the orchestrator finishes and bills every remaining node while the panel shows idle. |
+
+Declining a run is a LOCAL dismiss (`skipProposedRun`) and a successful run posts
+nothing: each would spend a full paid turn to tell the model something the next
+turn's context preamble already says. Only a FAILURE in Auto mode continues on its
+own — that is the fix loop the feature exists for.
+
 ## API Proxy Architecture (CRITICAL)
 
 All frontend API calls use **same-origin relative paths** (e.g. `/v1/billing/subscription`).

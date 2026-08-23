@@ -162,6 +162,18 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --grid-line-color: #dcdcdc;
+  /* Workflow Copilot panel (ee) — the panel sits between chrome and card, so it
+     needs its own step in the surface ramp. Values come from the design system,
+     not from --card/--muted, which do not have a matching step. */
+  --copilot-panel: #FFFFFF;
+  --copilot-card: #FAFCFE;
+  --copilot-surface: #F1F5F9;
+  --copilot-strong: #CBD5E1;
+  --copilot-muted: #64748B;
+  --copilot-dim: #94A3B8;
+  --copilot-mention: #0284C7;
+  --copilot-ok: #16A34A;
+  --copilot-fail: #DC2626;
 }
 
 .dark {
@@ -197,6 +209,15 @@
   --sidebar-border: #2D2D2D;
   --sidebar-ring: #ff0073;
   --grid-line-color: #1a1a1a;
+  --copilot-panel: #171718;
+  --copilot-card: #1E1E1E;
+  --copilot-surface: #242426;
+  --copilot-strong: #3A3A3C;
+  --copilot-muted: #8A8F98;
+  --copilot-dim: #5A5F66;
+  --copilot-mention: #38BDF8;
+  --copilot-ok: #22C55E;
+  --copilot-fail: #EF4444;
 }
 
 /* Prevent mobile pull-to-refresh — must be outside @layer to avoid being overridden */

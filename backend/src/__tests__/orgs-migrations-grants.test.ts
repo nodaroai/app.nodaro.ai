@@ -38,6 +38,29 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: [],
   },
+  // Content scoping, part c: the access rule, the two column-pinning checks,
+  // and the autosave RPC restated with its one changed line. access_rank is
+  // NOT here — plain SQL, not a definer. apply_workflow_delta is also granted
+  // to service_role (the backend calls it with the service client); the
+  // authenticated-shape assertions require their three lines and permit that.
+  "338_orgs_content_rls.sql": {
+    authenticated: [
+      "apply_workflow_delta",
+      "check_projects_update_allowed",
+      "check_workflows_update_allowed",
+      "workflow_access",
+    ],
+    serviceRole: [],
+  },
+  // Content scoping, part b: backfills and four trigger functions. Three are
+  // SECURITY DEFINER (they read projects / organizations past the caller's
+  // RLS); all four return trigger, so none is classified — a trigger function
+  // is reached through its table's grants, never called from PostgREST. Their
+  // search_path pins are asserted like every other definer's.
+  "337_orgs_content_triggers.sql": {
+    authenticated: [],
+    serviceRole: [],
+  },
 }
 
 const orgMigrations = readdirSync(MIGRATIONS_DIR)
@@ -72,8 +95,12 @@ function definers(sql: string): DefinerFn[] {
     .map((chunk) => {
       const header = chunk.slice(0, chunk.indexOf("$$"))
       return {
-        name: chunk.match(/^(\w+)\s*\(/)?.[1] ?? "",
-        args: chunk.match(/^\w+\s*\(([^)]*)\)/)?.[1] ?? "",
+        // The optional schema prefix matters: 338 declares
+        // `public.apply_workflow_delta` (restating 219 verbatim), and a parser
+        // that cannot see past `public.` reports a definer named "" — which
+        // then fails the classification with a phantom function.
+        name: chunk.match(/^(?:public\.)?(\w+)\s*\(/)?.[1] ?? "",
+        args: chunk.match(/^(?:public\.)?\w+\s*\(([^)]*)\)/)?.[1] ?? "",
         returnsTrigger: /RETURNS\s+trigger/i.test(header),
         definer: /SECURITY DEFINER/i.test(header),
         pinsSearchPath: /SET search_path = public/.test(header),
@@ -89,7 +116,11 @@ function signature(fn: DefinerFn): { sig: string; escaped: string } {
     .map((a) => a.trim().split(/\s+/)[1])
     .join(", ")
   const sig = `public.${fn.name}(${argTypes})`
-  return { sig, escaped: sig.replace(/[.()]/g, "\\$&") }
+  // [ and ] must be escaped too: `text[]` in a signature would otherwise
+  // become an EMPTY character class in the built regex, which matches nothing
+  // — the assertion for any array-taking definer would fail against a
+  // perfectly correct migration. Latent until 338 classified one.
+  return { sig, escaped: sig.replace(/[.()[\]]/g, "\\$&") }
 }
 
 describe("organizations migrations — every SECURITY DEFINER function has explicit grants", () => {

@@ -174,12 +174,36 @@ describe("the workspaces page", () => {
 })
 
 describe("the settings page", () => {
-  it("labels each setting by its consequence, not by its key", async () => {
+  it("asks each setting as a question about its consequence, never by its key", async () => {
     renderSettings()
-    expect(await screen.findByLabelText(/what administrators may do with a member's work/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/what members may do with work shared to a class/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/where new work starts/i)).toBeInTheDocument()
+    expect(await screen.findByLabelText(/what may administrators do with a member's work\?/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/what may members do with work shared to a class\?/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/where does new work start\?/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/do members keep a personal space\?/i)).toBeInTheDocument()
     expect(screen.queryByText("admin_access")).not.toBeInTheDocument()
+  })
+
+  it("spells out both answers under every toggle, and emphasises the one in force", async () => {
+    renderSettings()
+    // personal_space_enabled is true in the fixture, so its Yes line is the
+    // emphasised one and its No line is muted.
+    const yes = await screen.findByText(/members keep their own work, separate/i)
+    const no = screen.getByText(/everything a member makes belongs to the organization/i)
+    expect(yes.className).toContain("text-foreground")
+    expect(no.className).toContain("text-muted-foreground")
+  })
+
+  it("emphasises NEITHER answer for a setting the organization never set", async () => {
+    // The API returns the raw stored jsonb, not the preset-resolved value, so
+    // an absent key means "the preset decides" — and this page cannot know
+    // which way. Emphasising either answer here states something that is false
+    // for three of the five settings on a school.
+    renderSettings()
+    const yes = await screen.findByText(/anyone given access can pass it on/i)
+    const no = screen.getByText(/sharing stays with the person who owns the work/i)
+    expect(yes.className).toContain("text-muted-foreground")
+    expect(no.className).toContain("text-muted-foreground")
+    expect(screen.getAllByText(/following the default for this kind of organization/i).length).toBeGreaterThan(0)
   })
 
   it("sends only what was edited — a full object would overwrite someone else's change", async () => {
@@ -187,7 +211,7 @@ describe("the settings page", () => {
     const nameField = await screen.findByLabelText("Name")
     await userEvent.clear(nameField)
     await userEvent.type(nameField, "School Alpha")
-    await userEvent.click(screen.getByLabelText("Members keep a personal space"))
+    await userEvent.click(screen.getByLabelText("Do members keep a personal space?"))
     await userEvent.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
       expect(h.updateOrganization).toHaveBeenCalledWith("org-1", {
