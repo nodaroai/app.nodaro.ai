@@ -26,6 +26,15 @@ jobs:
   # run on 2026-07-13. actionlint fails the PR instead.
   lint-workflows:
     runs-on: ubuntu-latest
+    # Repo-guard: run on the repos we own, never on a downstream fork.
+    # Both jobs enforce OUR conventions — the author-email allowlist and our
+    # gitleaks config — so on a fork they fail every PR for reasons the fork
+    # cannot fix, which is why the SAI fork deleted these two files outright.
+    # Deleting an upstream workflow is a permanent merge conflict; skipping on
+    # a fork costs nothing and lets a fork keep .github/workflows/ untouched.
+    # `repository_owner` rather than a repo name: this file is mirrored to the
+    # public repo, and both should run it.
+    if: github.repository_owner == 'nodaroai'
     steps:
       - uses: actions/checkout@v4
       - name: actionlint
@@ -35,6 +44,15 @@ jobs:
           ./actionlint -color
   check-identities:
     runs-on: ubuntu-latest
+    # Repo-guard: run on the repos we own, never on a downstream fork.
+    # Both jobs enforce OUR conventions — the author-email allowlist and our
+    # gitleaks config — so on a fork they fail every PR for reasons the fork
+    # cannot fix, which is why the SAI fork deleted these two files outright.
+    # Deleting an upstream workflow is a permanent merge conflict; skipping on
+    # a fork costs nothing and lets a fork keep .github/workflows/ untouched.
+    # `repository_owner` rather than a repo name: this file is mirrored to the
+    # public repo, and both should run it.
+    if: github.repository_owner == 'nodaroai'
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
