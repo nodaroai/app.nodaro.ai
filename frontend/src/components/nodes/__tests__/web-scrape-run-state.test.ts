@@ -9,6 +9,7 @@ import {
   webScrapePeekLine,
   webScrapeResultCount,
   WEB_SCRAPE_PEEK,
+  webScrapeItemLink,
 } from "../web-scrape-run-state"
 import type { WebScrapeNodeData } from "@/types/nodes"
 
@@ -120,5 +121,25 @@ describe("web-scrape run state (#765)", () => {
       expect(relativeTime(now - 2 * 3_600_000, now)).toBe("2h ago")
       expect(relativeTime(undefined, now)).toBe("")
     })
+  })
+})
+
+describe("result links (#779)", () => {
+  const actors = Object.keys(WEB_SCRAPE_PEEK) as Array<keyof typeof WEB_SCRAPE_PEEK>
+
+  it("every actor declares the field its rows link to, beside its peek field", () => {
+    for (const actor of actors) expect(WEB_SCRAPE_PEEK[actor].linkField, actor).toBeTruthy()
+    expect(WEB_SCRAPE_PEEK.tiktok.linkField).toBe("webVideoUrl")
+    expect(WEB_SCRAPE_PEEK["content-crawler"].linkField).toBe("url")
+  })
+
+  it("links http(s) only — a hostile feed's javascript:/data:/relative value renders as text", () => {
+    expect(webScrapeItemLink("google-search", { url: "https://example.com/a" })).toBe("https://example.com/a")
+    expect(webScrapeItemLink("google-search", { url: " http://example.com/b " })).toBe("http://example.com/b")
+    expect(webScrapeItemLink("rss", { url: "javascript:alert(1)" })).toBeNull()
+    expect(webScrapeItemLink("rss", { url: "data:text/html,hi" })).toBeNull()
+    expect(webScrapeItemLink("rss", { url: "/relative/path" })).toBeNull()
+    expect(webScrapeItemLink("instagram", { caption: "no url field" })).toBeNull()
+    expect(webScrapeItemLink("tiktok", { webVideoUrl: "https://www.tiktok.com/@x/video/1" })).toBe("https://www.tiktok.com/@x/video/1")
   })
 })

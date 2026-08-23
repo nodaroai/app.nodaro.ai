@@ -1,6 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
@@ -757,19 +758,9 @@ function injectLocationContext(
   }
 }
 
-/** Node types that produce a Suno track/task ID for downstream passthrough */
-const SUNO_TRACK_NODE_TYPES = new Set([
-  "suno-generate",
-  "suno-cover",
-  "suno-extend",
-  "suno-mashup",
-  "suno-replace-section",
-  "suno-add-instrumental",
-  "suno-add-vocals",
-  "suno-convert-wav",
-  "suno-upload-extend",
-  "suno-separate",
-]);
+// Node types that produce a Suno track/task ID for downstream passthrough:
+// `SUNO_TRACK_SOURCE_TYPES` from @nodaro/shared — one set with the orchestrator
+// resolver and the config panels' "Inherited" hint (#819).
 
 /** Node types whose primary output is an image URL — used to route media into
  *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts. */
@@ -2426,20 +2417,15 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-      if (SUNO_TRACK_NODE_TYPES.has(src.type!)) {
-        const srcData = src.data as Record<string, unknown>;
-        const trackId = (srcData.sunoTrackId as string | undefined);
-        const taskId = (srcData.sunoTaskId as string | undefined);
-        if (trackId) inputs.sunoTrackId = trackId;
-        if (taskId) inputs.sunoTaskId = taskId;
-        // Fallback: check generatedResults for stored sunoTrackId/sunoTaskId
-        if (!trackId || !taskId) {
-          const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
-          const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
-          const activeResult = results?.[activeIndex];
-          if (activeResult?.sunoTrackId && !trackId) inputs.sunoTrackId = activeResult.sunoTrackId as string;
-          if (activeResult?.sunoTaskId && !taskId) inputs.sunoTaskId = activeResult.sunoTaskId as string;
-        }
+      if (SUNO_TRACK_SOURCE_TYPES.has(src.type!)) {
+        // The ACTIVE result's ids first — the track the user selected — then
+        // the node-level fields (always track #1). The old order was the
+        // reverse, so selecting track 2 and extending still extended track 1
+        // (#819). Same reader, gate and last-wins order as the config panels'
+        // `findUpstreamSunoIds` — the hint must name the track the run sends.
+        const ids = readSunoIds(src.data as Record<string, unknown>);
+        if (ids.trackId) inputs.sunoTrackId = ids.trackId;
+        if (ids.taskId) inputs.sunoTaskId = ids.taskId;
       }
     } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check" || src.type === "image-critic") {
       inputs.prompt = output;

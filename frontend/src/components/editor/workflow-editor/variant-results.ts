@@ -13,6 +13,12 @@ import type { GeneratedResult } from "@/types/nodes"
  *
  * `existingUrls` (optional) lets the orchestrator path deduplicate against
  * results that were already added on a prior poll tick.
+ *
+ * `extraFields` is shared by every variant; `perVariantFields(index, url)` is
+ * merged on top per variant (ORIGINAL index + the variant's URL) — the Suno
+ * per-track id (#819: one `extraFields` object spread onto both tracks gave
+ * track #2 track #1's id, so extending your selected track extended the other
+ * one).
  */
 export function buildVariantResults(
   urls: readonly string[],
@@ -20,6 +26,7 @@ export function buildVariantResults(
   opts: {
     readonly thumbnailUrl?: string
     readonly extraFields?: Record<string, unknown>
+    readonly perVariantFields?: (index: number, url: string) => Record<string, unknown> | undefined
     readonly existingUrls?: ReadonlySet<string>
   } = {},
 ): GeneratedResult[] {
@@ -29,12 +36,14 @@ export function buildVariantResults(
   const timestamp = new Date().toISOString()
   return filtered.map((url, i): GeneratedResult => {
     const originalIndex = urls.indexOf(url)
+    const index = originalIndex >= 0 ? originalIndex : i
     return {
       url,
       thumbnailUrl: opts.thumbnailUrl,
       timestamp,
-      jobId: variantJobId(baseJobId, originalIndex >= 0 ? originalIndex : i),
+      jobId: variantJobId(baseJobId, index),
       ...(opts.extraFields ?? {}),
+      ...(opts.perVariantFields?.(index, url) ?? {}),
     }
   })
 }

@@ -47,7 +47,7 @@ import {
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
-import { uploadBufferToR2 } from "../../lib/storage.js"
+import { uploadBufferToR2, tmpObjectKey } from "../../lib/storage.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
@@ -368,7 +368,7 @@ async function ensureAudioDuration(
     ])
 
     const trimmedBuffer = await readFile(outputPath)
-    const key = `audio/lip-sync-trimmed-${Date.now()}.mp3`
+    const key = tmpObjectKey(`lip-sync-trimmed-${Date.now()}`, "mp3")
     const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "audio/mpeg")
     console.log(`[KIE.ai] Trimmed audio uploaded: ${trimmedUrl}`)
     return trimmedUrl
@@ -425,7 +425,7 @@ async function ensureVideoDuration(
     ])
 
     const trimmedBuffer = await readFile(outputPath)
-    const key = `video/motion-trimmed-${Date.now()}.mp4`
+    const key = tmpObjectKey(`motion-trimmed-${Date.now()}`, "mp4")
     const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "video/mp4")
     console.log(`[KIE.ai] Trimmed video uploaded: ${trimmedUrl}`)
     return trimmedUrl

@@ -5,7 +5,7 @@ import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
 import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
 import { promises as fs } from "node:fs"
-import { uploadToR2, uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
+import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -131,7 +131,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
   // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
   const { ok } = await finalizeJobWithMedia({
@@ -394,7 +394,7 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
       // surfaced on the node's audio output handle.
       // POST-PROVIDER: `revoiced` is the speech-to-speech provider's delivered
       // output (we were billed) — an R2 upload failure is post-delivery, skip refund.
-      newAudioR2Url = await runPostProcessing(() => uploadBufferToR2(revoiced, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+      newAudioR2Url = await runPostProcessing(() => uploadBufferToR2(revoiced, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
     } finally {
       await cleanupWorkDir(workDir)
     }
@@ -438,7 +438,7 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: the speech-to-speech provider already delivered `audioBuffer`
   // (we were billed) — an R2 upload failure is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
@@ -475,7 +475,7 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   await setJobProgress(job, ctx.jobId, 85)
   // POST-PROVIDER: ElevenLabs already produced + delivered the dub (we were
   // billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
@@ -499,7 +499,7 @@ const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: ElevenLabs already delivered the remixed audio (we were
   // billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
@@ -528,7 +528,7 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: ElevenLabs already delivered the designed voice audio (we
   // were billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(result.audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,

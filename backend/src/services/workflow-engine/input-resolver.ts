@@ -11,7 +11,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
-import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle } from "@nodaro/shared"
+import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -1102,17 +1102,20 @@ function isImageSourceType(srcType: string): boolean {
   return IMAGE_SOURCE_NODE_TYPES.has(srcType) || ENTITY_NODE_TYPES.has(srcType)
 }
 
-const SUNO_TRACK_NODE_TYPES = new Set([
-  "suno-generate",
-  "suno-cover",
-  "suno-extend",
-  "suno-mashup",
-  "suno-replace-section",
-  "suno-add-instrumental",
-  "suno-add-vocals",
-  "suno-convert-wav",
-  "suno-upload-extend",
-])
+/** The ids stored on a Suno node: active result first, node-level fields as the fallback (mirrors frontend `readSunoIds`). */
+function readSunoIdsFromData(data: Record<string, unknown>): { trackId?: string; taskId?: string } {
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+  const results = data.generatedResults as ReadonlyArray<Record<string, unknown>> | undefined
+  const activeIndex = typeof data.activeResultIndex === "number" ? data.activeResultIndex : 0
+  const active = activeIndex >= 0 ? results?.[activeIndex] : undefined
+  return {
+    trackId: str(active?.sunoTrackId) ?? str(data.sunoTrackId),
+    taskId: str(active?.sunoTaskId) ?? str(data.sunoTaskId),
+  }
+}
+
+// Suno-id sources: `SUNO_TRACK_SOURCE_TYPES` from @nodaro/shared — one set with
+// the canvas resolver and the config panels' "Inherited" hint (#819).
 
 // ---------------------------------------------------------------------------
 // Generate-script helpers
@@ -1846,20 +1849,21 @@ function routeOutput(
   if (AUDIO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeAudioOutput(inputs, output, targetType, src.id)
 
-    // Suno track/task ID passthrough
-    if (SUNO_TRACK_NODE_TYPES.has(srcType)) {
-      const state = nodeStates[src.id]
-      if (state?.output?.sunoTrackId) {
-        inputs.sunoTrackId = state.output.sunoTrackId
-      } else if (src.data.sunoTrackId) {
-        // Fallback to node data for skipped/frozen nodes (matches frontend)
-        inputs.sunoTrackId = src.data.sunoTrackId as string
-      }
-      if (state?.output?.sunoTaskId) {
-        inputs.sunoTaskId = state.output.sunoTaskId
-      } else if (src.data.sunoTaskId) {
-        inputs.sunoTaskId = src.data.sunoTaskId as string
-      }
+    // Suno track/task ID passthrough. A run in THIS execution has no
+    // selection yet — its output is the source of truth. A skipped/frozen
+    // node is read from its data the way the canvas reads it: the ACTIVE
+    // result (the track the user picked) first, the node-level fields (always
+    // track #1) as the fallback — the reverse order extended the wrong track
+    // when track 2 was selected (#819).
+    // The pair is taken from ONE place — a fresh output's track id must not
+    // be joined to a stored (earlier run's) task id.
+    if (SUNO_TRACK_SOURCE_TYPES.has(srcType)) {
+      const fresh = nodeStates[src.id]?.output
+      const ids = fresh?.sunoTrackId || fresh?.sunoTaskId
+        ? { trackId: fresh.sunoTrackId, taskId: fresh.sunoTaskId }
+        : readSunoIdsFromData(src.data)
+      if (ids.trackId) inputs.sunoTrackId = ids.trackId
+      if (ids.taskId) inputs.sunoTaskId = ids.taskId
     }
     return
   }

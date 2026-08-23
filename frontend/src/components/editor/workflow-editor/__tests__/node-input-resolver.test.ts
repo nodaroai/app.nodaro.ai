@@ -745,6 +745,37 @@ describe("resolveNodeInputs", () => {
     expect(inputs.prompt).toBe("A person speaking")
   })
 
+  it("chains the ACTIVE Suno track's id — selecting track 2 hands Extend track 2, not the node-level track 1 (#819)", () => {
+    const gen = makeNode("g1", "suno-generate", {
+      generatedAudioUrl: "https://cdn/g1-v1.mp3",
+      sunoTrackId: "track-1",
+      sunoTaskId: "task-9",
+      activeResultIndex: 1,
+      generatedResults: [
+        { url: "https://cdn/g1-v0.mp3", sunoTrackId: "track-1", sunoTaskId: "task-9" },
+        { url: "https://cdn/g1-v1.mp3", sunoTrackId: "track-2", sunoTaskId: "task-9" },
+      ],
+    })
+    const target = makeNode("x1", "suno-extend")
+    const inputs = resolveNodeInputs(target, [gen, target], [makeEdge("g1", "x1")])
+    expect(inputs.sunoTrackId).toBe("track-2")
+    expect(inputs.sunoTaskId).toBe("task-9")
+  })
+
+  it("falls back to the node-level Suno ids when the results carry none (pre-#819 workflows)", () => {
+    const gen = makeNode("g1", "suno-generate", {
+      generatedAudioUrl: "https://cdn/g1.mp3",
+      sunoTrackId: "track-1",
+      sunoTaskId: "task-9",
+      activeResultIndex: 0,
+      generatedResults: [{ url: "https://cdn/g1.mp3" }],
+    })
+    const target = makeNode("x1", "suno-extend")
+    const inputs = resolveNodeInputs(target, [gen, target], [makeEdge("g1", "x1")])
+    expect(inputs.sunoTrackId).toBe("track-1")
+    expect(inputs.sunoTaskId).toBe("task-9")
+  })
+
   it("resolves audio input for suno-mashup", () => {
     // suno-mashup uses routeSunoMashupAudio which fills audioUrl then audioUrl2
     const audio1 = makeNode("a1", "upload-audio", {

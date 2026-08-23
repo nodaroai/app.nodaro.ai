@@ -165,6 +165,9 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "thumbnailUrl",
   "sunoTrackId",
   "sunoTaskId",
+  // Every track's id — `sunoTrackId` alone is always track #1, and the
+  // orchestrator result path stamps each variant with its own id (#819).
+  "sunoTracks",
   "generatedVoiceId",
   "alignment",
   "script",

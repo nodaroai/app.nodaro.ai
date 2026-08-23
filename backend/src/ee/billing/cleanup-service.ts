@@ -1039,7 +1039,10 @@ interface VaTmpSweepResult {
  * ever list/delete is built from the shared `VIDEO_ANALYSIS_TMP_PREFIX`
  * constant, and every key is re-asserted to start with that prefix immediately
  * before it can reach a delete. Real outputs live under `videos/` / `images/`
- * / `audios/` and can never match.
+ * / `audios/` — plus a legacy singular `audio/` (#754: this repo's writers
+ * until 2026-08-23, and plugin-minted keys until each plugin adopts
+ * `tk.storage.mediaObjectKey`), every object of which is DB-referenced — and
+ * provider-input scratch under `tmp/provider-input/`. None can match.
  *
  * Age gate: only objects strictly older than `maxAgeHours` (default 24 h) are
  * reaped — comfortably past the per-node 30-min + per-workflow 60-min timeouts,

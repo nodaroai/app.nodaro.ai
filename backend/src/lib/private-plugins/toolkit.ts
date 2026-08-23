@@ -33,6 +33,7 @@ import {
   readR2ObjectBuffer,
   deleteFromR2,
   r2KeyFromOurUrl,
+  mediaObjectKey,
 } from "../storage.js"
 import { storeImportedImageBuffer } from "../media-import.js"
 import { markProviderCallStart } from "../reconcile/persistence.js"
@@ -1022,6 +1023,7 @@ export function buildToolkit(): PluginToolkit {
       deleteFromR2,
       r2KeyFromOurUrl,
       storeImportedImageBuffer,
+      mediaObjectKey,
     },
     jobs: {
       storeRecastAudioBase,

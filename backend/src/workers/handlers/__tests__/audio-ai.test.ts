@@ -95,7 +95,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
-vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBufferToR2: mocks.mockUploadBufferToR2, uploadFileToR2: mocks.mockUploadFileToR2 }))
+vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBufferToR2: mocks.mockUploadBufferToR2, uploadFileToR2: mocks.mockUploadFileToR2, mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}` }))
 vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.mockGenerateMusic }))
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
@@ -234,7 +234,7 @@ describe("text-to-speech provider selection (keyless self-host)", () => {
     // The audio must land under the instance's own R2 key, so nothing
     // downstream learns it was generated elsewhere.
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
-      Buffer.from("cloud-audio"), "audio/job-1.mp3", "audio/mpeg", "user-1",
+      Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
     )
   })
 
@@ -263,7 +263,7 @@ describe("text-to-speech handler", () => {
       expect.objectContaining({ allowDefaultVoiceFallback: false }),
     )
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
-      Buffer.from("fake-audio"), "audio/job-1.mp3", "audio/mpeg", "user-1",
+      Buffer.from("fake-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
     )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({

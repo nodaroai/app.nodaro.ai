@@ -18,6 +18,7 @@ import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import {
   WEB_SCRAPE_PEEK,
+  webScrapeItemLink,
   relativeTime,
   webScrapeItems,
   webScrapePeekLine,
@@ -65,7 +66,8 @@ export function WebScrapeConfig(props: ConfigProps<WebScrapeNodeData>) {
   )
 }
 
-function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData }) {
+// Exported for tests — rendered only inside WebScrapeConfig's Results tab.
+export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData }) {
   const [view, setView] = useState<"list" | "json">("list")
   const actor: ScraperActorId = data.actor ?? "google-search"
   const peek = WEB_SCRAPE_PEEK[actor]
@@ -127,14 +129,28 @@ function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData }) {
               actor === "google-search" ? item.url
               : actor === "rss" ? item.pubDate
               : undefined
+            // The item's own address (#779) — only http(s) ever links; a hostile
+            // feed's javascript:/data: value renders as text.
+            const href = webScrapeItemLink(actor, item)
+            const title = webScrapePeekLine(actor, item)
             return (
               <div key={i} className="flex flex-col border-b border-border/40 pb-1.5 min-w-0">
                 <div className="flex items-baseline gap-1.5 min-w-0">
                   <span className="w-[16px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{peek.glyph(item, i)}</span>
-                  <span className="truncate text-xs">{webScrapePeekLine(actor, item)}</span>
+                  {href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="truncate text-xs hover:underline" title={href}>{title}</a>
+                  ) : (
+                    <span className="truncate text-xs">{title}</span>
+                  )}
                 </div>
                 {typeof sub === "string" && sub && (
-                  <span className="pl-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
+                  href && sub.trim() === href ? (
+                    // Same destination as the title link — out of the tab order so
+                    // keyboard users are not handed the same link twice per row.
+                    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="pl-[22px] truncate text-[10px] text-muted-foreground/70 hover:underline hover:text-muted-foreground">{sub}</a>
+                  ) : (
+                    <span className="pl-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
+                  )
                 )}
               </div>
             )

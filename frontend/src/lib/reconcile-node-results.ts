@@ -34,6 +34,7 @@
 import { getJobStatusLean } from "./api"
 import { isValidUuid } from "./uuid"
 import { buildVariantResults } from "@/components/editor/workflow-editor/variant-results"
+import { sunoVariantFields } from "./suno-ids"
 import type { WorkflowNode } from "@/types/nodes"
 import type { GeneratedResult } from "@/types/nodes"
 
@@ -147,7 +148,13 @@ export async function computeReconciledNodeResults(
     const extraFields = extractExtraFields(node.type, output)
     const thumbnailUrl = typeof output?.thumbnailUrl === "string" ? output.thumbnailUrl : undefined
 
-    const rebuilt = buildVariantResults(variantUrls, baseJobId, { thumbnailUrl, extraFields })
+    // Each Suno track carries its OWN id (#819) — the shared fields alone gave
+    // track #2 track #1's id.
+    const rebuilt = buildVariantResults(variantUrls, baseJobId, {
+      thumbnailUrl,
+      extraFields,
+      perVariantFields: sunoVariantFields(output),
+    })
     updates.push({ nodeId: node.id, generatedResults: rebuilt })
   }
 

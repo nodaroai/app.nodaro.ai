@@ -267,3 +267,32 @@ describe("computeReconciledNodeResults", () => {
     expect(updates).toHaveLength(1)
   })
 })
+
+describe("computeReconciledNodeResults — per-track Suno ids (#819)", () => {
+  it("rebuilt variants each carry their OWN sunoTrackId from output_data.sunoTracks", async () => {
+    mocks.getJobStatusLean.mockResolvedValueOnce({
+      id: baseJobId,
+      status: "completed",
+      output_data: {
+        audioUrl: `https://cdn/${baseJobId}.wav`,
+        audioUrls: [`https://cdn/${baseJobId}.wav`, `https://cdn/${baseJobId}-v1.wav`],
+        sunoTrackId: "track-1",
+        sunoTaskId: "task-9",
+        sunoTracks: [
+          { id: "track-1", audioUrl: `https://cdn/${baseJobId}.wav` },
+          { id: "track-2", audioUrl: `https://cdn/${baseJobId}-v1.wav` },
+        ],
+      },
+    })
+    const node = makeNode("node_9", "suno-generate", {
+      executionStatus: "completed",
+      generatedResults: [{ url: `https://cdn/${baseJobId}.wav`, jobId: baseJobId, timestamp: "t" }],
+    })
+    const updates = await computeReconciledNodeResults([node])
+    expect(updates).toHaveLength(1)
+    const [first, second] = updates[0]!.generatedResults
+    expect(first!.sunoTrackId).toBe("track-1")
+    expect(second!.sunoTrackId).toBe("track-2")
+    expect(second!.sunoTaskId).toBe("task-9")
+  })
+})

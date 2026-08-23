@@ -43,7 +43,7 @@ import {
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
-import { uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
+import { uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
 import { randomUUID } from "node:crypto"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { rewriteForContentPolicy } from "../../lib/content-policy-rewrite.js"
@@ -1450,7 +1450,7 @@ async function revoiceClipToR2(
     const revoiced = await withProgressRamp(job, ctx.jobId, { start: 55, cap: 80 },
       () => directVoiceChanger(src, voiceId, { removeBackgroundNoise: false }))
     // POST-PROVIDER: speech-to-speech already delivered (billed) — skip refund on R2 fail.
-    revoicedR2 = await runPostProcessing(() => uploadBufferToR2(revoiced, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId))
+    revoicedR2 = await runPostProcessing(() => uploadBufferToR2(revoiced, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   } finally {
     await cleanupWorkDir(workDir)
   }
@@ -1523,7 +1523,7 @@ async function synthesizeDialogueTrack(
     allowDefaultVoiceFallback: true,
   })
   return runPostProcessing(() =>
-    uploadBufferToR2(buf, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId),
+    uploadBufferToR2(buf, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId),
   )
 }
 

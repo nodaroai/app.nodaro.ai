@@ -600,15 +600,15 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "suno-cover": return <SunoCoverConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-extend": return <SunoExtendConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-lyrics": return <SunoLyricsConfig {...configProps} nodeId={selectedNodeId} />
-    case "suno-separate": return <SunoSeparateConfig {...configProps} />
+    case "suno-separate": return <SunoSeparateConfig {...configProps} nodeId={selectedNodeId} />
     case "audio-separation": return <AudioSeparationConfig {...configProps} />
-    case "suno-music-video": return <SunoMusicVideoConfig {...configProps} />
+    case "suno-music-video": return <SunoMusicVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-mashup": return <SunoMashupConfig {...configProps} />
     case "suno-replace-section": return <SunoReplaceSectionConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-style-boost": return <SunoStyleBoostConfig {...configProps} nodeId={selectedNodeId} />
-    case "suno-add-instrumental": return <SunoAddInstrumentalConfig {...configProps} />
-    case "suno-add-vocals": return <SunoAddVocalsConfig {...configProps} />
-    case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} />
+    case "suno-add-instrumental": return <SunoAddInstrumentalConfig {...configProps} nodeId={selectedNodeId} />
+    case "suno-add-vocals": return <SunoAddVocalsConfig {...configProps} nodeId={selectedNodeId} />
+    case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} nodeId={selectedNodeId} />
     case "lip-sync": return <LipSyncConfig {...configProps} nodeId={selectedNodeId} />
     case "speech-to-video": return <SpeechToVideoConfig {...configProps} nodeId={selectedNodeId} />

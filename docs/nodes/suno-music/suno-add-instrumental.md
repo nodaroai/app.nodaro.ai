@@ -10,8 +10,8 @@ Suno Add Instrumental takes an existing Suno audio track (typically one with iso
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Model | enum | `"V5_5"` | Suno model version: `V5_5`, `V5`, or `V4_5PLUS`. |
-| Task ID | string | `""` | Suno task ID — auto-filled from a connected Suno node, or paste one manually to work with a track from an earlier session. |
-| Audio ID | string | `""` | Suno audio ID — auto-filled from a connected Suno node, or paste one manually. |
+| Task ID | string | `""` | Suno task ID — inherited from a connected Suno node (the panel shows the inherited value under the field), or paste one manually to work with a track from an earlier session. A live connection takes precedence over a manual value. |
+| Audio ID | string | `""` | Suno audio ID — inherited from the connected Suno node's **selected** track (switch tracks on the source node and this follows), or paste one manually. A live connection takes precedence over a manual value. |
 
 ## Inputs & Outputs
 

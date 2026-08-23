@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 vi.mock("../../job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeMock }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
-vi.mock("../../storage.js", () => ({ uploadBufferToR2: mocks.uploadBufferMock }))
+vi.mock("../../storage.js", () => ({ uploadBufferToR2: mocks.uploadBufferMock, mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}` }))
 vi.mock("../../config.js", () => ({ config: { ELEVENLABS_API_KEY: "test-key" } }))
 
 import { reconcileElevenLabsJob, type ElevenLabsJobRow } from "../elevenlabs.js"

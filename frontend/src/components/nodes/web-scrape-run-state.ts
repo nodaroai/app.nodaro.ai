@@ -60,22 +60,28 @@ export const WEB_SCRAPE_PEEK: Record<
   ScraperActorId,
   {
     readonly field: string
+    /** The item's own address — what a row links to (#779). One map, so a
+     *  new actor declares its link beside its peek field, never in a second
+     *  hand-kept table. */
+    readonly linkField: string
     /** "index" renders 1./2./3.; otherwise the glyph for the item. */
     readonly glyph: (item: Record<string, unknown>, index: number) => string
     /** What the count noun is — "results" for all but content-crawler. */
     readonly countNoun: string
   }
 > = {
-  "google-search": { field: "title", glyph: (_i, idx) => `${idx + 1}.`, countNoun: "results" },
-  rss: { field: "title", glyph: (_i, idx) => `${idx + 1}.`, countNoun: "results" },
-  "content-crawler": { field: "url", glyph: () => "◫", countNoun: "pages" },
+  "google-search": { field: "title", linkField: "url", glyph: (_i, idx) => `${idx + 1}.`, countNoun: "results" },
+  rss: { field: "title", linkField: "url", glyph: (_i, idx) => `${idx + 1}.`, countNoun: "results" },
+  "content-crawler": { field: "url", linkField: "url", glyph: () => "◫", countNoun: "pages" },
   instagram: {
     field: "caption",
+    linkField: "url", // the post permalink
     glyph: (item) => (item.type === "Video" || item.videoUrl ? "▶" : "▣"),
     countNoun: "results",
   },
   tiktok: {
     field: "text",
+    linkField: "webVideoUrl",
     glyph: (item) => (item.videoUrl || item.webVideoUrl ? "▶" : "▣"),
     countNoun: "results",
   },
@@ -85,6 +91,23 @@ export const WEB_SCRAPE_PEEK: Record<
 export function webScrapePeekLine(actor: ScraperActorId, item: Record<string, unknown>): string {
   const raw = item[WEB_SCRAPE_PEEK[actor].field]
   return typeof raw === "string" && raw.trim() ? raw.trim() : "(untitled)"
+}
+
+/**
+ * The item's link, or null when it has none worth following. Scraped URLs are
+ * untrusted input: only `http:` / `https:` ever become an anchor — a
+ * `javascript:` or `data:` value from a hostile feed renders as text (#779).
+ */
+export function webScrapeItemLink(actor: ScraperActorId, item: Record<string, unknown>): string | null {
+  const raw = item[WEB_SCRAPE_PEEK[actor].linkField]
+  if (typeof raw !== "string") return null
+  const value = raw.trim()
+  try {
+    const u = new URL(value)
+    return u.protocol === "http:" || u.protocol === "https:" ? value : null
+  } catch {
+    return null
+  }
 }
 
 /**

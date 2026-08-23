@@ -95,7 +95,24 @@ import {
   deleteFromR2,
   batchDeleteFromR2,
   r2KeyFromOurUrl,
+  mediaObjectKey,
+  tmpObjectKey,
 } from "@/lib/storage.js"
+
+describe("mediaObjectKey (#754)", () => {
+  it("pluralizes the type and defaults the extension per media type", () => {
+    expect(mediaObjectKey("job-1", "audio")).toBe("audios/job-1.wav")
+    expect(mediaObjectKey("job-1", "video")).toBe("videos/job-1.mp4")
+    expect(mediaObjectKey("job-1", "image")).toBe("images/job-1.png")
+  })
+  it("takes an explicit extension for writers that already encoded (mp3 speech, revoice)", () => {
+    expect(mediaObjectKey("job-1", "audio", "mp3")).toBe("audios/job-1.mp3")
+  })
+  it("provider-input scratch gets its own prefix, never a deliverable one", () => {
+    expect(tmpObjectKey("lip-sync-trimmed-1", "mp3")).toBe("tmp/provider-input/lip-sync-trimmed-1.mp3")
+    expect(tmpObjectKey("x", "mp4").startsWith("audios/") || tmpObjectKey("x", "mp4").startsWith("videos/")).toBe(false)
+  })
+})
 import {
   updateStorageUsage,
   reserveStorageIfWithinLimit,
