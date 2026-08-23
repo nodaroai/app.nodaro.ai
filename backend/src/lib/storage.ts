@@ -1,3 +1,4 @@
+import type { CopyObjectCommandInput, ObjectCannedACL, PutObjectCommandInput } from "@aws-sdk/client-s3"
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { randomUUID } from "node:crypto"
@@ -43,7 +44,9 @@ export function isStorageConfigured(): boolean {
 }
 
 export const s3 = new S3Client({
-  region: "auto",
+  // "auto" is R2's value and MinIO ignores it; Supabase-local ("local") and
+  // DO Spaces / AWS ("nyc3", "us-east-1", …) reject it. See R2_REGION.
+  region: config.R2_REGION,
   endpoint: resolveStorageEndpoint(config),
   // MinIO and most self-hosted S3 servers require path-style addressing.
   forcePathStyle: config.R2_FORCE_PATH_STYLE,
@@ -52,6 +55,24 @@ export const s3 = new S3Client({
     secretAccessKey: config.R2_SECRET_ACCESS_KEY,
   },
 })
+
+/**
+ * THE object-ACL seam. Every object write in this repo — Put, Copy and
+ * multipart Upload, in lib/ and in routes/ — passes its params through here.
+ *
+ * Default is empty, so nothing is added and the request is byte-identical to
+ * before this existed: Cloud keeps sending no ACL to R2, and self-host keeps
+ * relying on the boot-time bucket policy below. It is one function rather
+ * than a literal at each site because the literal WAS at each site — seven of
+ * them — and the eighth call site somebody adds is the one that silently
+ * writes an unreadable object. See STORAGE_OBJECT_ACL.
+ */
+export function withObjectAcl<T extends PutObjectCommandInput | CopyObjectCommandInput>(
+  params: T,
+): T {
+  const acl = config.STORAGE_OBJECT_ACL
+  return acl ? { ...params, ACL: acl as ObjectCannedACL } : params
+}
 
 /**
  * Anonymous-read bucket policy for self-host storage: the app hands the
@@ -162,13 +183,13 @@ export function r2Url(key: string): string {
 async function streamToR2(key: string, body: Readable | Buffer, contentType: string): Promise<void> {
   const upload = new Upload({
     client: s3,
-    params: {
+    params: withObjectAcl({
       Bucket: config.R2_BUCKET_NAME,
       Key: key,
       Body: body,
       ContentType: contentType,
       CacheControl: R2_CACHE_CONTROL,
-    },
+    }),
     partSize: 5 * 1024 * 1024,
     queueSize: 4,
   })
@@ -331,13 +352,13 @@ export async function uploadBufferToR2(
   trackUserId?: string,
 ): Promise<string> {
   await s3.send(
-    new PutObjectCommand({
+    new PutObjectCommand(withObjectAcl({
       Bucket: config.R2_BUCKET_NAME,
       Key: key,
       Body: buffer,
       ContentType: contentType,
       CacheControl: R2_CACHE_CONTROL,
-    }),
+    })),
   )
 
   trackStorage(trackUserId, buffer.length)
@@ -545,14 +566,14 @@ export async function copyToTemplatePreview(
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
   if (sourceKey) {
     await s3.send(
-      new CopyObjectCommand({
+      new CopyObjectCommand(withObjectAcl({
         Bucket: config.R2_BUCKET_NAME,
         Key: destKey,
         CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
         ContentType: contentType,
         CacheControl: R2_CACHE_CONTROL,
         MetadataDirective: "REPLACE",
-      }),
+      })),
     )
     // Best-effort size tracking. A HEAD failure shouldn't fail the publish —
     // the copy already succeeded; quota accounting drifting by one preview is
@@ -676,14 +697,14 @@ export async function copyR2ObjectToPrefix(
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
   if (sourceKey) {
     await s3.send(
-      new CopyObjectCommand({
+      new CopyObjectCommand(withObjectAcl({
         Bucket: config.R2_BUCKET_NAME,
         Key: destKey,
         CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
         ContentType: contentType,
         CacheControl: R2_CACHE_CONTROL,
         MetadataDirective: "REPLACE",
-      }),
+      })),
     )
   } else {
     // Foreign URL — download and upload, bounded by the size cap. Same

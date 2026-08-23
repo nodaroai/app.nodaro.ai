@@ -13,6 +13,16 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
 process.env.EDITION = "cloud"
 process.env.NODE_ENV = "test"
 process.env.INTERNAL_ORCHESTRATOR_SECRET = "0".repeat(64)
+// The self-host config seams default to "vendor host / no ACL / auto region",
+// and the guard tests assert exactly that. config.ts loads the developer's
+// backend/.env through dotenv, and dotenv does not overwrite a variable that
+// is already set — so pinning them here means someone who put
+// STORAGE_OBJECT_ACL=public-read in .env while testing DO Spaces gets a green
+// suite instead of two failures that read like a code bug.
+process.env.R2_REGION = "auto"
+process.env.STORAGE_OBJECT_ACL = ""
+process.env.KIE_API_BASE_URL = "https://api.kie.ai"
+process.env.ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 // EDITION=cloud above means hasCredits() is true by default in every test
 // file, so any test that calls the real buildApp() (or imports
 // video-worker.ts) exercises the real loadPrivatePlugins() path

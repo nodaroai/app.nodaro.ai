@@ -203,6 +203,16 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-nodaro-minio-secret}
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:-nodaro-assets}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-http://localhost:3000/storage/nodaro-assets}
+      # S3 region. MinIO ignores it and "auto" suits Cloudflare R2, but AWS,
+      # DigitalOcean Spaces ("nyc3", …) and Supabase-local ("local") reject
+      # "auto" outright. Empty = "auto".
+      R2_REGION: ${R2_REGION:-}
+      # Canned ACL for every object written. Empty = no ACL header, which is
+      # right here: the bundled MinIO gets an anonymous-read BUCKET POLICY at
+      # boot. Only for stores that refuse PutBucketPolicy to a bucket-scoped
+      # key (DigitalOcean Spaces), where per-object ACLs are the only way:
+      # STORAGE_OBJECT_ACL=public-read
+      STORAGE_OBJECT_ACL: ${STORAGE_OBJECT_ACL:-}
       # Which Nodaro cloud this instance connects to (OAuth + generation).
       # Empty = the code default (https://app.nodaro.ai). Override in .env for
       # staging soaks: NODARO_CLOUD_URL=https://next.nodaro.ai
@@ -219,10 +229,16 @@ services:
       # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
       NODARO_API_KEY: ${NODARO_API_KEY:-}
       KIE_API_KEY: ${KIE_API_KEY:-}
+      # Send KIE traffic through your own egress proxy instead of api.kie.ai —
+      # key custody, audit logging, regional routing. NOTE it also moves the
+      # KIE-fronted LLM lanes (Claude, Gemini); see docs/deployment.md 12a.
+      KIE_API_BASE_URL: ${KIE_API_BASE_URL:-}
       REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      # Same egress-proxy idea for ElevenLabs. Empty = api.elevenlabs.io.
+      ELEVENLABS_BASE_URL: ${ELEVENLABS_BASE_URL:-}
       FAL_KEY: ${FAL_KEY:-}
       # Keys for the vendor-direct nodes — AI Avatar / Cinematic Avatar
       # (HeyGen), Relight & Switch (Beeble), Web Scrape (Apify). Optional even

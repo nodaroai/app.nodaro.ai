@@ -14,13 +14,13 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
 
 const fromUrlBody = z.object({
   audioUrl: safeUrlSchema,
   name: z.string().min(1).max(200),
 })
 
-const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 const MAX_AUDIO_SIZE = 10 * 1024 * 1024 // 10 MB
 
 const idParams = z.object({

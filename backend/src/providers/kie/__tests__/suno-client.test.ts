@@ -37,6 +37,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("@/lib/config.js", () => ({
   config: {
     KIE_API_KEY: "test-kie-key",
+    // KIE_API_BASE builds from this. Omit it and the const is `undefined`,
+    // so every `expect(url).toBe(`${KIE_API_BASE}/...`)` below compares
+    // "undefined/..." to "undefined/..." — green, but verifying nothing.
+    KIE_API_BASE_URL: "https://api.kie.ai",
     NODE_ENV: "test",
     EDITION: "cloud",
   },
@@ -269,7 +273,7 @@ describe("sunoGenerate — create-task error paths", () => {
   it("throws when KIE_API_KEY is missing", async () => {
     vi.resetModules()
     vi.doMock("@/lib/config.js", () => ({
-      config: { KIE_API_KEY: undefined, NODE_ENV: "test", EDITION: "cloud" },
+      config: { KIE_API_KEY: undefined, KIE_API_BASE_URL: "https://api.kie.ai", NODE_ENV: "test", EDITION: "cloud" },
       hasCredits: () => true, isCloud: () => true, isCommunity: () => false,
       isBusiness: () => false, hasAdmin: () => true,
     }))

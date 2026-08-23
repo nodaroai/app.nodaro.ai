@@ -28,7 +28,7 @@ vi.mock("../../../lib/supabase.js", () => ({
 }))
 
 vi.mock("../../../lib/config.js", () => ({
-  config: { KIE_API_KEY: "test-key" },
+  config: { KIE_API_KEY: "test-key", KIE_API_BASE_URL: "https://api.kie.ai" },
 }))
 
 const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "..", "..", "supabase/migrations")

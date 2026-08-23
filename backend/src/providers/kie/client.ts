@@ -22,7 +22,9 @@ const DEBUG = config.NODE_ENV === "development"
 // CONSTANTS
 // =============================================================================
 
-export const KIE_API_BASE = "https://api.kie.ai"
+/** THE KIE host for every lane, media and LLM alike. Overridable via
+ *  KIE_API_BASE_URL — see the note there before pointing it anywhere. */
+export const KIE_API_BASE = config.KIE_API_BASE_URL
 export const POLL_INTERVAL_MS = 2000 // Used by kling3-client
 // With exponential backoff: ~15 min total for 120 attempts
 export const MAX_POLL_ATTEMPTS = 120

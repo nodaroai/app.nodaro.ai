@@ -5,6 +5,7 @@ import { finalizeJobWithMedia } from "../job-finalize.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
+import { ELEVENLABS_BASE_URL } from "../../providers/elevenlabs/client.js"
 
 export interface ElevenLabsJobRow {
   id: string
@@ -27,7 +28,7 @@ async function fetchDubbingMetadata(
 ): Promise<DubbingMetadata | null> {
   try {
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/dubbing/${dubbingId}`,
+      `${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}`,
       { headers: { "xi-api-key": config.ELEVENLABS_API_KEY ?? "" } },
     )
     if (!res.ok) {
@@ -49,7 +50,7 @@ async function downloadDubbingAudio(
 ): Promise<Buffer | null> {
   try {
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/dubbing/${dubbingId}/audio/${targetLang}`,
+      `${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}/audio/${targetLang}`,
       { headers: { "xi-api-key": config.ELEVENLABS_API_KEY ?? "" } },
     )
     if (!res.ok) return null
