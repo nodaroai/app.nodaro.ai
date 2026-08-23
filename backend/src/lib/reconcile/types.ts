@@ -36,6 +36,11 @@ export const PROVIDER_KIND_VALUES = [
   // here). reconcileNodaroCloudJob re-polls that cloud job — idempotent, it
   // never creates a second one.
   "nodaro-cloud",
+  // Workflow Copilot turn (ee/copilot): a metered LLM agent loop whose spend
+  // is persisted per iteration. NOT a sync kind — the sweep's fail+refund
+  // would refund tokens already burned; `reconcileCopilotTurn` commits the
+  // persisted cost instead and refunds only when nothing was spent.
+  "copilot-turn",
   "pre-task",
 ] as const
 
@@ -84,6 +89,9 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   "elevenlabs-async":         15 * MIN,
   "elevenlabs-sync":           5 * MIN,
   "anthropic-sync":            5 * MIN,
+  // A copilot turn legitimately runs up to its 8-min wall clock (+ a 9-min
+  // hard timer); a sweep at 5 min would hit live turns.
+  "copilot-turn":             15 * MIN,
   // HeyGen avatar/cinematic: generateAvatarVideo persists the video_id via
   // onTaskCreated so a BullMQ stall-retry does NOT re-submit (double-bill the
   // provider). No recover handler yet, so it's swept like pre-task (fail+refund)
@@ -168,6 +176,9 @@ export function isSyncKind(kind: ProviderKind): boolean {
   return SYNC_KINDS.has(kind)
 }
 
+/** Kinds recovered by `ee/copilot/reconcile.ts` (cloud-only; loaded dynamically by the cron). */
+export const COPILOT_KINDS: ReadonlySet<ProviderKind> = new Set(["copilot-turn"])
+
 export function isAsyncKind(kind: ProviderKind): boolean {
   return !isSyncKind(kind)
 }
@@ -222,6 +233,11 @@ export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
   ...ELEVENLABS_RECOVER_KINDS,
   ...FAL_RECOVER_KINDS,
   ...NODARO_CLOUD_RECOVER_KINDS,
+  // The copilot turn has no upstream task to re-fetch, but it DOES have a
+  // recover handler (`ee/copilot/reconcile.ts`): it settles the turn from the
+  // spend persisted per iteration, charging what the model really cost
+  // instead of refunding it the way the sync sweep would.
+  ...COPILOT_KINDS,
 ])
 
 /**

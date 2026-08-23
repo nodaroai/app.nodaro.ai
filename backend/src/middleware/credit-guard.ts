@@ -40,7 +40,7 @@ export interface CreditGuardOpts {
    *  tierRestriction still come from the DB row. May be sync or async.
    *  Markup is applied inside creditGuard so checkCredits and reserveCredits
    *  receive the same final number. */
-  computeCredits?: (parsedBody: unknown) => number | Promise<number>
+  computeCredits?: (parsedBody: unknown, req: FastifyRequest) => number | Promise<number>
   /** Anti-double-click dedup. Default: true. Set to false on routes whose
    *  response body shape is incompatible with `{ jobId, deduped: true }` —
    *  e.g., voice-clone returns `{ id, name, elevenlabsVoiceId, ... }` and

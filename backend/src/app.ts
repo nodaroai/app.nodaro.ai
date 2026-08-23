@@ -128,6 +128,7 @@ import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
 import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
+import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
@@ -457,6 +458,7 @@ export async function buildApp() {
   await app.register(cancelJobsRoutes)
   if (hasCredits()) await app.register(creditsRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
+  if (hasCredits()) await registerCopilotRoutes(app)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)

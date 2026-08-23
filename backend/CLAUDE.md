@@ -78,6 +78,42 @@ The `backend/src/ee/` directory holds enterprise code (admin routes, billing/cre
 
 ---
 
+## Workflow Copilot (`backend/src/ee/copilot/`, Cloud only)
+
+The in-app chat that builds/edits the user's open workflow: a direct-Anthropic
+agent loop over the SAME MCP tools an external client would call, run on our
+backend. Routes: `backend/src/ee/routes/copilot.ts`, registered in `app.ts`
+under `hasCredits()`. Load-bearing rules — regressing any of them is a real
+incident, not a style nit:
+
+- **The model's only write is `edit_workflow`** (delta via `apply_workflow_delta`,
+  migration 219). The session carries no `workflows:write` scope, so
+  `update_workflow_json` / `create_workflow` / `delete_workflow` /
+  `import_workflow` are never registered. The allowlist (`constants.ts`) is
+  enforced at `dispatchTool`, not only at list time — `workflows:execute`
+  registers ~100 generation verbs that must stay unreachable.
+- **Egress deny-list** (`tools/deny-lists.ts`): `webhook-output` + every social
+  publisher cannot be authored, and the model may not introduce or change a
+  URL field on any node. Untrusted content (node labels, entity descriptions,
+  provider errors) reaches the model wrapped in a per-turn nonce tag.
+- **The credit reservation is a HARD ceiling** — `commit_credits` refunds a
+  surplus but never charges above it, so the loop enforces a USD budget
+  (`budget.ts`) and stops at `capped`. The turn commits metered
+  (`commitJobCredits(..., metered, ceilingReservation)`); the ceiling flag
+  suppresses the false "overcharge" anomaly.
+- **Runs never start server-side.** `run_workflow` is a PROPOSAL tool that ends
+  the turn; the browser runs through the editor's own Run path (manual trigger,
+  existing confirm dialog + estimate, restore-on-reload) and posts the outcome
+  back as the next user message.
+- **`copilot-turn` is NOT a sync reconcile kind.** `ee/copilot/reconcile.ts`
+  commits the per-iteration `copilot_turns.cost_usd` for a crashed turn instead
+  of refunding spend that really happened.
+- Liveness is the turn's `heartbeat_at`, never a thread column; a stale turn
+  self-heals on the next request. Every route requires `req.authKind === "jwt"`
+  (403 `in_app_only`), and access is checked in the FIRST preHandler so a
+  refused caller never reaches the rate limiter or credit reservation. SSE
+  bypasses the 500 sanitizer, so `error.message` comes from `TURN_ERROR_TEXT`.
+
 ## Private Plugins (Cloud)
 
 Cloud-only proprietary features (voice-changer-pro, surround-continuation, film-studio pipeline doctrine, generate-video-pro, edit-video-pro, and video-analysis) ship from a private npm package instead of living in this repo — a closed-source counterpart to `ee/` for code that must stay private in implementation, not just license. NOTE: video-analysis was previously community/business-available; moving its implementation to the plugin made it Cloud-only (gated in `frontend/src/lib/cloud-only-nodes.ts`) — its public wire contract (`@nodaro/shared` schemas/pricing), node UI, MCP verb, orchestration glue, and credit TABLE (`@nodaro/shared`'s `VIDEO_ANALYSIS_BUCKET_CREDITS`, plus the `model_pricing` migrations that are what users are actually charged from) stay here. The $-formula that GENERATES that table is private and lives only in the plugin — nothing in this repo can recompute it, and the old `lib/pricing/video-analysis-cost.ts` was deleted along with its test.

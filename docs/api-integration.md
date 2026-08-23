@@ -60,6 +60,12 @@ authenticated route in the backend, including the published-app endpoints
 under `/v1/app/:slug/*` (see the [Embed App Guide](./embed-app-guide.md))
 and the per-feature routes (jobs, workflows, projects, etc.).
 
+A few surfaces are deliberately app-only and reject API tokens and OAuth
+app tokens with `403 in_app_only` — currently the archived-runs routes and
+the [Workflow Copilot](./features/workflow-copilot.md) (`/v1/copilot/*`).
+They exist for the Nodaro web app's own session, not as an integration
+surface. To build workflows programmatically, use MCP or the SDK.
+
 The five legacy endpoints below are scoped specifically to running
 workflows by ID with input overrides — they live under `/v1/api/` and
 predate the published-app system. Most new integrations should prefer
