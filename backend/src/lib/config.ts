@@ -131,6 +131,14 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Multi-tenant organizations rollout gate (cloud only — see hasOrganizations()).
+   *  Default OFF so the feature ships dark and is flipped on deliberately at
+   *  launch; the migrations run everywhere regardless. Strict parsing like
+   *  MCP_ENABLED. */
+  ORGS_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Community cloud-connect (Phase 4a). Gates the community_instance DCR
    *  branch and the connected-instances surface. Default OFF — also guards
    *  the window before migration 312 reaches the shared DB. Strict parse. */
@@ -191,6 +199,17 @@ export function hasCredits(): boolean {
 /** business + cloud are multi-user (community is single-user → sharing is inert) */
 export function isMultiUser(): boolean {
   return config.EDITION === "business" || config.EDITION === "cloud"
+}
+
+/**
+ * Organizations / workspaces / memberships — cloud edition AND the runtime
+ * ORGS_ENABLED flag. An edition test alone would light the feature up for
+ * every production user the moment the code merges; the flag is the launch
+ * lever. Every org route registers behind this, every org UI element hides
+ * behind its frontend twin.
+ */
+export function hasOrganizations(): boolean {
+  return config.EDITION === "cloud" && config.ORGS_ENABLED
 }
 
 function loadConfig() {

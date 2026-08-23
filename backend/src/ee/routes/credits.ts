@@ -318,7 +318,7 @@ export async function creditsRoutes(app: FastifyInstance) {
 
     // Verify the usage log belongs to the requesting user
     const { data: log } = await supabase
-      .from("usage_logs")
+      .from("usage_logs") // tenant-scope-ignore: ownership verified post-fetch (403 below)
       .select("user_id")
       .eq("id", usageLogId)
       .single()
@@ -364,7 +364,7 @@ export async function creditsRoutes(app: FastifyInstance) {
 
     // Verify the usage log belongs to the requesting user
     const { data: log } = await supabase
-      .from("usage_logs")
+      .from("usage_logs") // tenant-scope-ignore: ownership verified post-fetch (403 below)
       .select("user_id")
       .eq("id", usageLogId)
       .single()

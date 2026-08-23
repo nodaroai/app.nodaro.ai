@@ -5,8 +5,11 @@
  * kling-master, happyhorse-ref2v, …) must fail fast with a clear message when
  * the node dispatches to the text-to-video path (no start-frame image wired),
  * mirroring the /v1/text-to-video route's "image_required" 400 — instead of
- * enqueueing a job that dies at provider lookup. Reference images alone do NOT
- * satisfy the requirement (they're conditioning inputs, not the start frame).
+ * enqueueing a job that dies at provider lookup. On the t2v path, reference
+ * images alone do NOT satisfy the requirement (they're conditioning inputs,
+ * not the start frame). A split-id model whose ONLY ref-capable twin is the
+ * i2v one (Grok Imagine 1) never reaches that path with refs wired — the
+ * shared mode resolution routes it to i2v first (#861, below).
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
@@ -56,6 +59,31 @@ describe("generate-video i2v-only provider guard", () => {
     const result = buildPayload(n, JOB_ID, {}, undefined, ctx(n))
     expect(result.jobName).toBe("text-to-video")
     expect(result.payload.provider).toBe("happyhorse")
+  })
+
+  it("routes Grok Imagine 1 with reference images and NO start frame to image-to-video, refs forwarded (#861)", () => {
+    // The t2v twin (`grok`) has no image parameter at all, so refs wired
+    // without a start frame used to be silently dropped on the t2v path.
+    for (const stored of ["grok-i2v", "grok"]) {
+      const n = gv(stored)
+      const inputs: ResolvedInputs = {
+        referenceImageUrls: ["https://cdn.example/ref-1.png", "https://cdn.example/ref-2.png"],
+      }
+      const result = buildPayload(n, JOB_ID, inputs, undefined, ctx(n))
+      expect(result.jobName).toBe("image-to-video")
+      expect(result.payload.provider).toBe("grok-i2v")
+      expect(result.payload.imageUrl).toBeUndefined()
+      expect(result.payload.referenceImageUrls).toEqual(["https://cdn.example/ref-1.png", "https://cdn.example/ref-2.png"])
+      // Billing-neutral: the t2v id already priced off the i2v table
+      // (T2V_CREDIT_OVERRIDES), so the re-route changes no charge.
+      expect(result.modelIdentifier).toMatch(/^grok-i2v/)
+    }
+  })
+
+  it("keeps Grok Imagine 1 on the t2v path when nothing is wired", () => {
+    const result = buildPayload(gv("grok-i2v"), JOB_ID, {}, undefined, ctx(gv("grok-i2v")))
+    expect(result.jobName).toBe("text-to-video")
+    expect(result.payload.provider).toBe("grok")
   })
 
   it("keeps gemini-omni-video on the t2v path with reference images forwarded", () => {

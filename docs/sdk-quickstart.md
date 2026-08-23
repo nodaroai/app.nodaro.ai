@@ -472,6 +472,39 @@ For a guided flow, `analyze()` returns questions you answer, then `generate()`
 builds the final prompt from those selections. See
 [SDK Reference → client.promptHelper](./sdk-reference.md#clientprompthelper).
 
+### Apply a mix to a completed Recast
+
+Revisioned Recast audio is capability-gated. Read the server-authored revision,
+quote the exact desired mix, then submit it with a fresh UUID. Reuse that UUID
+only if the same HTTP request needs a transport retry:
+
+```ts
+const { total: availableCredits } = await client.credits.balance()
+const status = await client.recast.get(recastId)
+if (status.capabilities?.audioLayers === 1 && status.audio) {
+  const operation = {
+    expectedAudioRevision: status.audio.revision,
+    mix: {
+      music: { gain: 55, muted: false },
+      video: { gain: 100, muted: false },
+    },
+  }
+
+  const quote = await client.recast.estimateRescore(recastId, operation)
+  if (!quote.noOp && availableCredits >= quote.credits) {
+    await client.recast.rescore(recastId, {
+      ...operation,
+      requestId: crypto.randomUUID(),
+    })
+  }
+}
+```
+
+The paid operation is asynchronous; poll `client.recast.get(recastId)` until
+`audio.pendingRescore` disappears and `audio.revision` changes. See the
+[Recast SDK reference](./sdk-reference.md#clientrecast) for replacements,
+manifest semantics, and conflict handling.
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,
@@ -581,4 +614,3 @@ patterns, models, credits, OAuth) **and** the hosted MCP connection:
 /plugin marketplace add nodaroai/app.nodaro.ai
 /plugin install nodaro
 ```
-

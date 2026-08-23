@@ -40,12 +40,17 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
+vi.mock("@/lib/workflow-delete.js", () => ({
+  deleteWorkflowWithPrivateMedia: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { workflowRoutes } from "../workflows.js"
 import { supabase } from "../../lib/supabase.js"
+import { deleteWorkflowWithPrivateMedia } from "../../lib/workflow-delete.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,6 +112,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.mocked(deleteWorkflowWithPrivateMedia).mockResolvedValue(true)
 
   app = Fastify({ logger: false })
 
@@ -905,13 +911,6 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 
   it("returns 200 on success", async () => {
-    // .delete().eq().eq().select("id") — PostgREST returns the deleted rows.
-    const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: TEST_WORKFLOW_ID }], error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
-
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
@@ -920,16 +919,14 @@ describe("DELETE /v1/workflows/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+    expect(deleteWorkflowWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
+      workflowId: TEST_WORKFLOW_ID,
+      userId: TEST_USER_ID,
+    }))
   })
 
   it("returns 404 when the scoped delete matched nothing (someone else's workflow, or already gone)", async () => {
-    // Release check 31 (#699): a foreign id used to answer 200 { success: true }
-    // while deleting nothing — GET/PATCH say 404 for the same id, DELETE must too.
-    const mockSelect = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    vi.mocked(deleteWorkflowWithPrivateMedia).mockResolvedValue(false)
 
     const res = await app.inject({
       method: "DELETE",
@@ -942,11 +939,7 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 
   it("returns 500 on DB error", async () => {
-    const mockSelect = vi.fn().mockResolvedValue({ data: null, error: { message: "FK constraint" } })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    vi.mocked(deleteWorkflowWithPrivateMedia).mockRejectedValue(new Error("FK constraint"))
 
     const res = await app.inject({
       method: "DELETE",
@@ -1015,17 +1008,6 @@ describe("cross-tenant denial", () => {
   })
 
   it("DELETE /v1/workflows/:id — delete is user-scoped (foreign rows untouched)", async () => {
-    // The critical security property is that .eq("user_id", CALLER) is
-    // applied, which excludes other users' rows from the delete set. We assert
-    // the scope; the victim's row is then provably untouched. Since #699 the
-    // route also reads the deleted rows back (.select) and answers 404 when
-    // the scope matched nothing — asserted in the DELETE describe above.
-    const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: TEST_WORKFLOW_ID }], error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
-
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
@@ -1033,8 +1015,10 @@ describe("cross-tenant denial", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
-    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(deleteWorkflowWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
+      workflowId: TEST_WORKFLOW_ID,
+      userId: TEST_USER_ID,
+    }))
   })
 })
 
@@ -1103,6 +1087,39 @@ describe("GET /v1/workflows/:id/export", () => {
     expect(body.name).toBe("My Workflow")
     expect(body.assets).toBeUndefined()
     expect(body.exportedAt).toBeDefined()
+    // No media, nothing to warn about — the note is absent, not empty.
+    expect(body.portability).toBeUndefined()
+  })
+
+  it("lists media another instance cannot fetch — a private host's own storage (#866)", async () => {
+    const localMedia = {
+      ...DB_WORKFLOW_FULL,
+      nodes: [
+        { id: "n-yt", type: "youtube-video", data: { label: "Video URL", youtubeUrl: "http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4" } },
+        { id: "n-img", type: "generate-image", data: { imageUrl: "https://cdn.nodaro.ai/images/public.png" } },
+      ],
+    }
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: localMedia, error: null }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.portability).toEqual({
+      unreachableMedia: [
+        { nodeId: "n-yt", nodeLabel: "Video URL", field: "youtubeUrl", url: "http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4" },
+      ],
+    })
+    // The bundle itself is untouched — the note is informative, never a rewrite.
+    expect(body.nodes[0].data.youtubeUrl).toBe("http://localhost:3000/storage/nodaro-assets/videos/yt-1.mp4")
   })
 
   it("includes assets when assets=true and entities exist", async () => {
@@ -1280,6 +1297,9 @@ describe("POST /v1/workflows/import", () => {
     expect(body.data.name).toBe("Imported WF")
     expect(body.data.projectId).toBe(TEST_PROJECT_ID)
     expect(body.data.userId).toBe(TEST_USER_ID)
+    // Always present, so a caller can rely on the shape (#866); nothing to
+    // copy here — the bundle carries no media URLs.
+    expect(body.importReport).toEqual({ rehosted: 0, unreachable: [], skipped: [] })
     expect(insertFn).toHaveBeenCalledWith(
       expect.objectContaining({
         project_id: TEST_PROJECT_ID,

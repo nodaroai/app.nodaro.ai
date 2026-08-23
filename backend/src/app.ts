@@ -5,6 +5,37 @@ import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
+import { WORKSPACE_HEADER } from "@nodaro/shared"
+
+/**
+ * The CORS options the app registers. Exported so a test can register them on
+ * a throwaway instance and assert a real PREFLIGHT, rather than grepping this
+ * file for a symbol — a header that is textually present but wrongly resolved
+ * still breaks every browser call from that origin.
+ *
+ * `allowedHeaders` is load-bearing, not cosmetic. `@nodaro/sdk` sends
+ * CLIENT_HEADER on every request and WORKSPACE_HEADER once a workspace is
+ * selected, and all six Nodaro client apps (studio / person / voice / recast
+ * / recut / stitch) are browser SPAs calling this API cross-origin. A custom
+ * request header missing from this list fails the preflight — not one
+ * endpoint, every call from that origin. Adding a header to the SDK without
+ * adding it here is a fleet-wide outage.
+ */
+export function buildCorsOptions(mcpIframeRe: RegExp) {
+  return {
+    // Same-origin / curl requests have no Origin header — allow them.
+    // Use the async-promise form (NOT callback form) — @fastify/cors invokes
+    // both the cb and resolves the promise if you return one, double-firing.
+    origin: async (origin: string | undefined) => {
+      if (!origin) return true
+      if (mcpIframeRe.test(origin)) return true
+      return isOriginAllowedDynamic(origin)
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER],
+    credentials: true,
+  }
+}
 import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
@@ -213,6 +244,7 @@ import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
@@ -302,26 +334,7 @@ export async function buildApp() {
   // upload tokens still gate protected routes.
   const CLAUDE_MCP_IFRAME_RE = /^https:\/\/[a-f0-9]+\.claudemcpcontent\.com$/
 
-  await app.register(cors, {
-    // Same-origin / curl requests have no Origin header — allow them.
-    // Use the async-promise form (NOT callback form) — @fastify/cors invokes
-    // both the cb and resolves the promise if you return one, double-firing.
-    origin: async (origin: string | undefined) => {
-      if (!origin) return true
-      if (CLAUDE_MCP_IFRAME_RE.test(origin)) return true
-      return isOriginAllowedDynamic(origin)
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    // CLIENT_HEADER is load-bearing here, not cosmetic. `@nodaro/sdk` sends it
-    // on every request, and all six Nodaro client apps (studio / person / voice
-    // / recast / recut / stitch) are browser SPAs that call this API
-    // cross-origin. A custom request header they send must appear in this
-    // allowlist or the CORS PREFLIGHT fails and every one of their API calls
-    // breaks — not just the provenance, the whole app. Adding a header to the
-    // SDK without adding it here is a fleet-wide outage.
-    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER],
-    credentials: true,
-  })
+  await app.register(cors, buildCorsOptions(CLAUDE_MCP_IFRAME_RE))
 
   // Restrict mcp.*.nodaro.ai to MCP-only paths (404s anything else).
   // Registered BEFORE the auth hook so 404'd requests don't waste a DB lookup.
@@ -344,6 +357,11 @@ export async function buildApp() {
   })
 
   registerAuthHook(app)
+
+  // Workspace context — AFTER the auth hook, which is what resolves the
+  // identity this validates against. A no-op unless organizations are
+  // enabled AND a private plugin provides the orgs service.
+  registerOrgsContextHook(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)

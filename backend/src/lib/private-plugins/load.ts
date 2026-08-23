@@ -6,6 +6,7 @@ import type {
   NodaroPrivatePlugin,
   PluginEngines,
   PluginHandlerFn,
+  PluginServices,
   PluginToolkit,
   PrivatePluginsModule,
   PromptTable,
@@ -60,14 +61,48 @@ export interface LoadPrivatePluginsResult {
    * callers that want to inspect what was loaded without reaching into ee/.
    */
   prompts: PromptTable
+  /**
+   * Merged from each loaded plugin's `services(tk)` — the capabilities core
+   * SEAMS delegate to. Unlike `engines`/`handlers` (which the caller threads
+   * into a worker), these are also published to a module-level accessor,
+   * `getPluginServices()`, because a seam runs inside a request or a route
+   * that has no reference to this result.
+   */
+  services: PluginServices
+}
+
+/**
+ * Module-level view of the merged `services`, set by every successful load
+ * and read by the core seams through `getPluginServices()`. Deliberately a
+ * module singleton rather than threaded state: a seam (an auth hook, a
+ * billing resolver) has no path back to the loader's return value, and both
+ * boot paths that register seams — the API server and the workers — call
+ * `loadPrivatePlugins()` exactly once at startup.
+ */
+let pluginServices: PluginServices = {}
+
+/**
+ * The private plugins' service surface, or `{}` when no plugin provided one
+ * (community/business, a plugin-version lag, or a load that failed under
+ * `PRIVATE_MODULES=optional`). Core seams MUST treat an absent member as
+ * "this feature does not exist here" and return their inert answer.
+ */
+export function getPluginServices(): PluginServices {
+  return pluginServices
 }
 
 function emptyResult(): LoadPrivatePluginsResult {
+  // Every early return routes through here — community/business, a failed
+  // load, an optional-mode skip — so clearing the published surface here is
+  // what makes `getPluginServices()`'s contract true. Assigning only on the
+  // success path would leave a previous load's services readable after a
+  // later one failed.
+  pluginServices = {}
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
   // mutable object across calls would alias that merge across processes.
-  return { handlers: {}, loaded: [], engines: {}, prompts: {} }
+  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} }
 }
 
 function isOptionalMode(): boolean {
@@ -185,29 +220,48 @@ export async function loadPrivatePlugins(
   const loaded: string[] = []
   const engines: PluginEngines = {}
   const prompts: PromptTable = {}
+  const services: PluginServices = {}
 
   for (const plugin of plugins) {
-    if (opts.app && plugin.registerRoutes) {
-      await plugin.registerRoutes(opts.app, getToolkit())
-    }
-    if (plugin.handlers) {
-      Object.assign(handlers, plugin.handlers(getToolkit()))
-    }
-    if (plugin.staticCreditCosts) {
-      await applyStaticCreditCosts(plugin.staticCreditCosts())
-    }
-    if (plugin.engines) {
-      Object.assign(engines, plugin.engines(getToolkit()))
-    }
-    if (plugin.prompts) {
-      const pluginPrompts = plugin.prompts()
-      Object.assign(prompts, pluginPrompts)
-      await applyPipelinePrompts(pluginPrompts)
+    // A capability that THROWS while being constructed is a load failure like
+    // any other, and must inherit the same semantics: fatal on cloud, and
+    // survivable under PRIVATE_MODULES=optional. Without this the rejection
+    // escapes `loadPrivatePlugins` entirely — app.ts awaits it with no catch —
+    // so a plugin built against a newer host would take the API server down
+    // at boot, past the escape hatch, with a raw stack instead of the curated
+    // message. That is the documented ordering hazard (a CLOUD_PLUGINS_VERSION
+    // bumped against a stale main) turning from "silently no-ops" into "does
+    // not boot".
+    try {
+      if (opts.app && plugin.registerRoutes) {
+        await plugin.registerRoutes(opts.app, getToolkit())
+      }
+      if (plugin.handlers) {
+        Object.assign(handlers, plugin.handlers(getToolkit()))
+      }
+      if (plugin.staticCreditCosts) {
+        await applyStaticCreditCosts(plugin.staticCreditCosts())
+      }
+      if (plugin.engines) {
+        Object.assign(engines, plugin.engines(getToolkit()))
+      }
+      if (plugin.services) {
+        Object.assign(services, plugin.services(getToolkit()))
+      }
+      if (plugin.prompts) {
+        const pluginPrompts = plugin.prompts()
+        Object.assign(prompts, pluginPrompts)
+        await applyPipelinePrompts(pluginPrompts)
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      return handleLoadFailure(`plugin "${plugin.name}" failed to initialise: ${detail}`, exit)
     }
     loaded.push(plugin.name)
   }
 
-  return { handlers, loaded, engines, prompts }
+  pluginServices = services
+  return { handlers, loaded, engines, prompts, services }
 }
 
 /**

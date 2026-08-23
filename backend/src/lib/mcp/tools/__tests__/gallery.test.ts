@@ -270,6 +270,31 @@ describe("get_asset tool", () => {
     expect(sc?.outputUrl).toBe("https://r2/pub.png")
   })
 
+  it("redacts private remux bases from text and structured output", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "video1",
+        user_id: "u1",
+        status: "completed",
+        job_type: "generate-video-pro",
+        input_data: { unscoredUrl: "https://private.example/input.mp4" },
+        output_data: {
+          videoUrl: "https://public.example/final.mp4",
+          pro: { unscoredUrl: "https://private.example/base.mp4" },
+        },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    const serialized = JSON.stringify(result)
+
+    expect(serialized).toContain("https://public.example/final.mp4")
+    expect(serialized).not.toContain("unscoredUrl")
+    expect(serialized).not.toContain("private.example")
+  })
+
   it("returns isError when not found", async () => {
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeChainableSingle(null),

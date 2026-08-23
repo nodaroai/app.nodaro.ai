@@ -179,7 +179,11 @@ ARG VITE_IMAGE_REFERENCE_FORMAT
 # overridable API/Supabase trio. Empty (local/dev builds) falls back to
 # package.json in code.
 ARG VITE_APP_VERSION
+# Organizations (Cloud): "true" enables the organization surfaces. Empty =
+# off, which is every self-host build and every build before the launch.
+ARG VITE_ORGS_ENABLED
 
+ENV VITE_ORGS_ENABLED=$VITE_ORGS_ENABLED
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL

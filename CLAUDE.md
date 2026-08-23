@@ -203,6 +203,7 @@ There are FIVE registries a parameter picker must appear in. **Missing any one o
 ### Database Rules
 - RLS on every table.
 - **NEVER create RLS policies on `profiles` that query `profiles`** — infinite recursion. Use the `is_admin()` SECURITY DEFINER function instead.
+- Same rule for the membership tables `organization_members` / `workspace_members` (migration 332): policies ask `org_role()` / `workspace_role()` / `workspace_member_status()`, never the table itself. Every new SECURITY DEFINER helper on the organizations axis is `REVOKE ... FROM PUBLIC; REVOKE ... FROM anon; GRANT ... TO authenticated` — Supabase grants `anon` explicitly, so `FROM PUBLIC` alone leaves an anonymous membership oracle. The migration linter enforces the recursion rule; `orgs-foundations-migration.test.ts` enforces the grants.
 - All credit operations must be atomic (RPC functions with `FOR UPDATE` locks).
 - Full schema reference: the SQL migrations in `supabase/migrations/`.
 - **NEVER run `supabase db push` (or `migration up`, or hand-written DDL) against the shared cloud project.** Migrations reach the database exactly one way: the `migrate` job in `ci.yml`, on a push to `main`. Name files `NNN_description.sql` continuing the existing sequence — NOT `supabase migration new`, whose timestamp names are what a local push writes into the remote history.

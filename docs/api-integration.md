@@ -173,6 +173,45 @@ header already identifies the site, and Nodaro prefers it: it names the product
 automatically when it runs in a browser, so a page never depends on the header
 being allowlisted server-side.
 
+## 4c. Selecting a workspace (Cloud, organizations)
+
+Accounts that belong to an organization can work inside one of its workspaces.
+Send the workspace's id and the request is scoped to it:
+
+```
+X-Nodaro-Workspace: 6f1e6b4c-6a4e-4b7b-9d2a-2f0f0a1d9c34
+```
+
+The header does two things, and only these two: it decides **which workspace a
+list returns** and **where a create lands**. It never grants access. Reading,
+updating, deleting or running something you name by id is decided by that
+object's own workspace, so a forgotten header cannot hide your work and a
+forged one cannot reach anyone else's.
+
+Send it only for a workspace you belong to. Anything else — a workspace you are
+not a member of, one that does not exist, or one whose organization is not
+active — is refused with `403 not_a_member`; a suspended membership with
+`403 member_suspended`; a value that is not a uuid with `400 validation_error`.
+Omit it and you are working in your personal space, exactly as an account with
+no organization always does.
+
+Two exceptions exist so a stale selection can never lock you out: on
+`GET /v1/me` and `GET /v1/workspaces` (and when accepting an invitation) a
+workspace you can no longer select is treated as if you had sent nothing, and
+the call succeeds. Those are the endpoints that tell you which workspaces you
+may select, so clear a cached selection when they stop listing it.
+
+An API token may be bound to one workspace; it then behaves as if it sent this
+header on every request, and an explicit header naming a different workspace
+is refused with `400 token_workspace_mismatch`.
+
+The header has no effect unless organizations are enabled on the instance you
+are calling; self-hosted builds ignore it.
+
+The organization, workspace and membership endpoints themselves — creating an
+organization, adding people, archiving a class — are documented in
+[Organizations](./organizations.md).
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`
@@ -830,7 +869,10 @@ Two endpoints let you poll multiple job statuses in a single round trip
 
 Both require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
-editor but are equally suited to external polling clients.
+editor but are equally suited to external polling clients. `input_data` and
+`output_data` are public projections: server-only fields such as Recast's
+private pre-watermark remux base are removed recursively for every caller,
+including administrators.
 
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 
@@ -854,9 +896,11 @@ The full run lane (all Cloud-only; SDK: `client.recast`, MCP: the
 |---|---|---|
 | `POST` | `/v1/recast/estimate` | Quote the run in credits (`{ totalCredits, breakdown }`) before buying. Free. Body mirrors create: `analysisJobId`, `fidelity`, `resolution`, `segmentSec`, `renderMethod`, `interactive?`, `provider?`. |
 | `POST` | `/v1/recast` | Create the run — **buys the plan**. Returns `{ recastId }`. |
-| `GET` | `/v1/recast/:id` | Poll the run: `{ status, interactive? }` — `interactive.next` names the pending step or gate on interactive runs. |
+| `GET` | `/v1/recast/:id` | Poll the run: `{ status, interactive?, capabilities?, audio? }` — `interactive.next` names the pending step or gate on interactive runs. A server with revisioned audio returns `capabilities.audioLayers: 1`. |
 | `POST` | `/v1/recast/:id/start` | Start rendering a `planned` run (idempotent; the plan's quote covered it). Returns `{ gvpJobId? }`. |
 | `POST` | `/v1/recast/:id/select` | Answer a pending pick — body `{ gate: "cast" \| "sheet" \| "anchors" \| "music", picks? / anchorPicks? / musicPick?, segment? / section?, finishAuto? }`. The pick itself is free. |
+| `POST` | `/v1/recast/:id/estimate-rescore` | Quote a revisioned Music replacement and/or complete desired mix. Free; returns `{ credits, audioRevision, noOp }`. |
+| `POST` | `/v1/recast/:id/rescore` | Apply the quoted audio operation. V2 returns `{ recastId, jobId }`, or `{ recastId, noOp: true, audioRevision }` without creating a job. |
 
 Interactive runs are **server-driven**: a platform cron advances every
 non-gate step, so a client only polls `GET /v1/recast/:id` and answers
@@ -866,6 +910,87 @@ declared in `clientCapabilities` (e.g. `"clientCapabilities":
 that gate; the platform decides it automatically instead. Pass
 `finishAuto: true` on `/select` to hand this and every remaining gate to
 the automatic critic.
+
+### Revisioned audio layers
+
+Only enable an audio-layer UI when status includes
+`capabilities.audioLayers: 1` and the selected completed take has an `audio`
+manifest. The manifest is server-authored:
+
+```ts
+interface RecastAudioManifestV1 {
+  version: 1
+  revision: string
+  mode: "bed" | "replace"
+  present: { music?: true; video?: true }
+  layers: { music?: { url: string }; video?: { url: string } }
+  bakedEffectiveGain: { music?: number; video?: number }
+  pendingRescore?: {
+    jobId: string
+    requestId: string
+    state: "pending" | "running"
+    expectedAudioRevision: string
+    requestedEffectiveGain: { music?: number; video?: number }
+  }
+}
+```
+
+`present` is the logical layer set; `layers` is only the subset with a
+browser-ready audio derivative. Do not infer that a missing derivative is absent
+from the downloadable video. `bakedEffectiveGain` is the effective integer
+percentage already rendered into the current result. The only generated video
+URL exposed to clients remains `resultUrl`; private remux bases are not part of
+this contract.
+
+Quote and Apply use the same prospective operation:
+
+```json
+{
+  "expectedAudioRevision": "server-revision",
+  "sections": [{ "index": 0, "brief": "Sparse analogue pulse" }],
+  "mix": {
+    "music": { "gain": 60, "muted": false },
+    "video": { "gain": 85, "muted": false }
+  }
+}
+```
+
+Send at most one Music replacement: either `audioUrl`, or one or more
+`sections`. A mix-only request is also valid. Gains are finite linear
+percentages; the server rounds and clamps them to 0–200, and a muted lane has an
+effective gain of zero. Address only lanes in `present` (or Music introduced by
+this request); replace-mode takes do not have a Video lane. The resolved
+operation cannot leave every layer silent.
+
+For Apply, add a UUID `requestId` and send the same
+`expectedAudioRevision`. Keep that UUID stable only while retrying the identical
+transport request. A successful no-op reserves no credits and creates no job.
+Otherwise poll status: `audio.pendingRescore` survives reloads and disappears
+when the new revision is published or the operation fails. Refresh status before
+another operation.
+
+Expected validation failures are `400` (`validation_error`,
+`duplicate_section`, `unknown_section`, `all_audio_silent`). State conflicts are
+`409` (`audio_layers_unavailable`, `audio_layer_unavailable`,
+`audio_preview_unavailable`, `rescore_sections_unavailable`,
+`legacy_mix_mismatch`, `stale_audio_revision`, `rescore_in_progress`,
+`idempotency_conflict`).
+`audio_preview_unavailable` means the layer is logically present but its
+browser/ffmpeg-ready derivative is not available for an honest custom mix. A
+stale-revision or in-progress response includes the current revision or live job
+when available. Quoting never reserves credits and still returns the post-markup
+price when the current balance is insufficient; the paid route can return the
+normal `402 insufficient_credits` response.
+
+Revisioned replacement requests should normally send the complete desired
+`mix`, even when its gains equal the current bake. Omitting `mix` is accepted only
+when the resolved output exactly matches the fixed legacy recipe: Music 35 +
+Video 100 in bed mode, or Music 100 in replace mode. Any other baked state returns
+`409 legacy_mix_mismatch` instead of publishing gains that do not match the file.
+
+Compatibility: a request with no `requestId`, `expectedAudioRevision`, or `mix`
+and exactly one of `audioUrl` / `sections` uses the legacy rescore behavior. New
+clients should use the revisioned contract above.
 
 ## 13d. Authored script import (Cloud edition)
 

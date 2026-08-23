@@ -842,6 +842,35 @@ export function resolveVideoProviderForMode(
 }
 
 /**
+ * Which execution mode a unified Generate Video run takes from what is wired.
+ * Shared by the frontend DAG executor (`execute-node.ts`) and the backend
+ * orchestrator (`payload-builder.ts`) so the two cannot disagree.
+ *
+ * A start frame is image-to-video, full stop. Reference images ALONE are the
+ * nuance: most models forward refs on either path, but a split-id model
+ * (VIDEO_MODE_ALIASES) can carry them on one twin only — Grok Imagine 1's
+ * text-to-video endpoint has no image parameter at all, while its i2v twin
+ * takes up to 7. Refs wired without a start frame used to resolve to t2v →
+ * `grok` → silently dropped (#861). When refs are present and ONLY the i2v
+ * twin can carry them, the run is image-to-video with the refs as its images.
+ * Derived from VIDEO_REF_LIMITS_BY_PROVIDER (= the catalog's `reference-image`
+ * feature), never from a provider name; single-id models are untouched
+ * because both twins are the same id.
+ */
+export function resolveVideoModeForInputs(
+  provider: string | undefined,
+  inputs: { readonly hasStartFrame: boolean; readonly hasImageRefs: boolean },
+): "image-to-video" | "text-to-video" {
+  if (inputs.hasStartFrame) return "image-to-video"
+  if (!provider || !inputs.hasImageRefs) return "text-to-video"
+  const i2v = resolveVideoProviderForMode(provider, "image-to-video")
+  const t2v = resolveVideoProviderForMode(provider, "text-to-video")
+  if (i2v === t2v) return "text-to-video"
+  const carriesImageRefs = (id: string) => (VIDEO_REF_LIMITS_BY_PROVIDER[id]?.images ?? 0) > 0
+  return carriesImageRefs(i2v) && !carriesImageRefs(t2v) ? "image-to-video" : "text-to-video"
+}
+
+/**
  * t2v twin ids hidden from the unified Generate Video picker — the i2v/base
  * entry already represents both modes (execution remaps by image presence).
  * Only includes twins whose `base` is NOT the t2v id, so the surviving picker

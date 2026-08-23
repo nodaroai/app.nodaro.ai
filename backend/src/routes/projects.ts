@@ -5,6 +5,7 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 import { ensureDefaultProject } from "../lib/default-project.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { deleteProjectWithPrivateMedia } from "../lib/workflow-delete.js"
 import {
   clientAppVisibilityFilter,
   getListedAppSlugs,
@@ -354,14 +355,20 @@ export async function projectRoutes(app: FastifyInstance) {
       })
     }
 
-    const { error } = await supabase
-      .from("projects")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", req.userId)
-
-    if (error) {
+    let deleted: boolean
+    try {
+      deleted = await deleteProjectWithPrivateMedia({
+        projectId: id,
+        userId: req.userId,
+        logger: req.log,
+      })
+    } catch (error) {
       return sendInternalError(reply, req, error, "Failed to delete project")
+    }
+    if (!deleted) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Project not found" },
+      })
     }
 
     return { success: true }

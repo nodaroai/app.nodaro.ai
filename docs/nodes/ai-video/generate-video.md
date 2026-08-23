@@ -42,12 +42,12 @@ The backend orchestrator inspects the wired inputs at job-build time and dispatc
 | `startFrame` only | `image-to-video` | (unset — default i2v path) |
 | `startFrame` + `endFrame` | `image-to-video` | `FIRST_AND_LAST_FRAMES_2_VIDEO` |
 | `imageReferences` / `videoReferences` **with** `startFrame` | `image-to-video` | `REFERENCE_2_VIDEO` |
-| `imageReferences` only (no `startFrame`) | `text-to-video` — references are forwarded and used by reference-capable models (Gemini Omni, Seedance 2, VEO 3.1) | `REFERENCE_2_VIDEO` |
+| `imageReferences` only (no `startFrame`) | `text-to-video` — references are forwarded and used by reference-capable models (Gemini Omni, Seedance 2, VEO 3.1). **Exception:** a split-id model whose text-to-video twin cannot carry references routes `image-to-video` with the references as its images — Grok Imagine 1 (`grok-i2v`; its `grok` text endpoint has no image parameter), derived from the model catalog's reference caps | `REFERENCE_2_VIDEO` |
 | `videoReferences` only (no `startFrame`) | `text-to-video`, except Gemini Omni which routes `image-to-video` (its video-edit mode) | `REFERENCE_2_VIDEO` |
 
 `endFrame` only (no `startFrame`) is swapped server-side — the end frame is promoted to `imageUrl` so providers that take a single image (`veo3`, `minimax`, `kling-turbo`, ...) get a usable input.
 
-> **Image-required models.** Models with no text-to-video mode — `kling-3-omni`, `kling-master`, `hailuo-2.3`, `hailuo-2.3-pro`, `bytedance-pro-fast`, `happyhorse-ref2v`, `grok-imagine-video-1.5` — return a clean `image_required` error when run without a `startFrame` image. Reference images alone do **not** satisfy this; they are conditioning inputs, not the start frame. (Derived from the model catalog: `VIDEO_PROVIDERS_REQUIRING_IMAGE` in `@nodaro/shared`.)
+> **Image-required models.** Models with no text-to-video mode — `kling-3-omni`, `kling-master`, `hailuo-2.3`, `hailuo-2.3-pro`, `bytedance-pro-fast`, `happyhorse-ref2v`, `grok-imagine-video-1.5` — return a clean `image_required` error when run without a `startFrame` image. On the text-to-video path, reference images alone do **not** satisfy this; they are conditioning inputs, not the start frame. (The split-id exception above — Grok Imagine 1 — never reaches that path with references wired.) (Derived from the model catalog: `VIDEO_PROVIDERS_REQUIRING_IMAGE` in `@nodaro/shared`.)
 
 ## Providers
 

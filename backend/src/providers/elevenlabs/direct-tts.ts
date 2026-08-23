@@ -28,6 +28,7 @@ const PREMADE_VOICE_IDS: Record<string, string> = {
   Liam: "TX3LPaxmHKxFdv7VOQHJ",
   Charlotte: "XB0fDUnXU5powFXDhCwa",
   Alice: "Xb7hH8MSUJpSbSDYk0k2",
+  Bella: "hpp4J3VqNfWAUOO0d1Us",
   Matilda: "XrExE9yKIg1WjnnlVkGX",
   Will: "bIHbv24MWmeRgasZH58o",
   Jessica: "cgSgspJ2msm6clMCkdW9",

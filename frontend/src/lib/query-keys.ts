@@ -263,4 +263,29 @@ export const queryKeys = {
     all: ["archived-runs"] as const,
     list: (cursor?: string) => (cursor ? ["archived-runs", "list", cursor] as const : ["archived-runs", "list"] as const),
   },
+
+  /**
+   * Organizations. Everything hangs off `all` so one invalidation after a
+   * membership change refreshes every view that could have been affected by
+   * it — a role change alters what its subject may see in several places at
+   * once, and reasoning about which is how a stale roster survives.
+   */
+  orgs: {
+    all: ["orgs"] as const,
+    list: () => ["orgs", "list"] as const,
+    detail: (orgId: string) => ["orgs", "detail", orgId] as const,
+    members: (orgId: string, cursor?: string) =>
+      cursor ? (["orgs", "members", orgId, cursor] as const) : (["orgs", "members", orgId] as const),
+    invitations: (orgId: string, status?: string, workspaceId?: string) =>
+      ["orgs", "invitations", orgId, status ?? "", workspaceId ?? ""] as const,
+    workspaces: (orgId: string, includeArchived?: boolean) =>
+      ["orgs", "workspaces", orgId, includeArchived ? "with-archived" : "live"] as const,
+    workspace: (workspaceId: string) => ["orgs", "workspace", workspaceId] as const,
+    workspaceMembers: (workspaceId: string, cursor?: string) =>
+      cursor
+        ? (["orgs", "workspace-members", workspaceId, cursor] as const)
+        : (["orgs", "workspace-members", workspaceId] as const),
+    joinCode: (workspaceId: string) => ["orgs", "join-code", workspaceId] as const,
+    invitationPreview: (token: string) => ["orgs", "invitation-preview", token] as const,
+  },
 } as const

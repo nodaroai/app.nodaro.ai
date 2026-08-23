@@ -38,8 +38,14 @@ import { createHash } from "node:crypto"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const BACKEND_ROOT = resolve(__dirname, "..")
-const ROUTES_DIR = join(BACKEND_ROOT, "src", "routes")
+// Core routes AND enterprise routes — ee/routes was invisible to this scanner
+// until the organizations work made the gap obvious.
+const ROUTE_DIRS = [join(BACKEND_ROOT, "src", "routes"), join(BACKEND_ROOT, "src", "ee", "routes")]
 const BASELINE_PATH = join(__dirname, "tenant-scope-baseline.json")
+// The baseline may only shrink. A re-run with --update-baseline that would
+// GROW it is a new unscoped chain being accepted as legacy, which is exactly
+// what this lint exists to stop; lower the number as entries are fixed.
+const BASELINE_MAX_ENTRIES = 34
 
 // ---------------------------------------------------------------------------
 // Tenant-owned tables — rows belong to a single user_id, accessible only by
@@ -69,6 +75,16 @@ const TENANT_TABLES = new Set([
   "assets",
   "published_apps",
   "folders",
+  // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
+  // the require* helpers rather than user_id; the routes PR teaches this
+  // scanner those forms before any route under ee/routes/orgs lands.
+  "organizations",
+  "organization_members",
+  "workspaces",
+  "workspace_members",
+  "workspace_join_codes",
+  "invitations",
+  "organization_audit_log",
 ])
 
 // ---------------------------------------------------------------------------
@@ -78,8 +94,10 @@ const TENANT_TABLES = new Set([
 
 const ALLOWED_PATHS = [
   // Admin routes authorize on req.userRole === "admin"; ownership scoping
-  // doesn't apply.
+  // doesn't apply. Same rule for the enterprise admin routes.
   /^src\/routes\/admin.*\.ts$/,
+  /^src\/ee\/routes\/admin.*\.ts$/,
+  /^src\/ee\/routes\/__tests__\//,
 
   // Stripe webhook: signature-verified, operates on stripe_customers /
   // subscriptions / transactions linked via stripe_*_id, not user_id.
@@ -235,8 +253,9 @@ function scan(filePath) {
       /\.maybeSingle\s*\(\s*\)/.test(block)
     if (!isProtected) continue
 
-    // Does the chain also scope by user_id?
-    if (/\.eq\s*\(\s*["']user_id["']/.test(block)) continue
+    // Does the chain also scope by its tenant key? Personal rows by user_id;
+    // organization rows by org_id / workspace_id (the second tenancy axis).
+    if (/\.eq\s*\(\s*["'](user_id|org_id|workspace_id)["']/.test(block)) continue
 
     findings.push({ line: i + 1, table, block })
   }
@@ -273,16 +292,27 @@ function loadBaseline() {
 // ---------------------------------------------------------------------------
 
 const updateBaseline = process.argv.includes("--update-baseline")
-const files = walkTs(ROUTES_DIR).sort()
+const files = ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)).sort()
 const { entries: baselineEntries } = loadBaseline()
 const consumed = new Set()
+
+if (Object.keys(baselineEntries).length > BASELINE_MAX_ENTRIES) {
+  process.stderr.write(
+    `\n✗ tenant-scope baseline has ${Object.keys(baselineEntries).length} entries, above the cap of ${BASELINE_MAX_ENTRIES}.\n` +
+      `  The baseline only shrinks: fix or annotate the new chain instead of baselining it.\n\n`,
+  )
+  process.exit(1)
+}
 
 let newFailures = 0
 const newFailureFiles = new Set()
 const currentEntries = []
 
 for (const file of files) {
-  const rel = relative(BACKEND_ROOT, file)
+  // Forward slashes regardless of platform: ALLOWED_PATHS and the baseline
+  // keys are written with "/" (a Windows checkout used to report every
+  // baseline entry as new).
+  const rel = relative(BACKEND_ROOT, file).replace(/\\/g, "/")
   if (isAllowed(rel)) continue
   const findings = scan(file)
   for (const f of findings) {

@@ -32,6 +32,7 @@ import {
   downloadR2ObjectToFile,
   readR2ObjectBuffer,
   deleteFromR2,
+  r2KeyFromOurUrl,
 } from "../storage.js"
 import { storeImportedImageBuffer } from "../media-import.js"
 import { markProviderCallStart } from "../reconcile/persistence.js"
@@ -47,6 +48,9 @@ import {
   requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
+import { config } from "../config.js"
+import { redis } from "../queue.js"
+import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
@@ -57,7 +61,9 @@ import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
-import { hasCredits } from "../config.js"
+import { hasCredits, hasOrganizations } from "../config.js"
+import { appBaseUrl } from "../deployment-urls.js"
+import { getAppSettings } from "../app-settings.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -440,6 +446,182 @@ async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown>
   return (data?.output_data as Record<string, unknown> | null) ?? null
 }
 
+/** Server-only storage for Recast's pre-watermark remux input. */
+async function storeRecastAudioBase(args: {
+  gvpJobId: string
+  userId: string
+  baseUrl: string
+}): Promise<void> {
+  const { error } = await supabase.from("recast_audio_bases").upsert({
+    gvp_job_id: args.gvpJobId,
+    user_id: args.userId,
+    base_url: args.baseUrl,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "gvp_job_id" })
+  if (error) throw new Error(`Failed to store private Recast audio base: ${error.message}`)
+}
+
+async function readRecastAudioBase(args: {
+  gvpJobId: string
+  userId: string
+}): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("recast_audio_bases")
+    .select("base_url")
+    .eq("gvp_job_id", args.gvpJobId)
+    .eq("user_id", args.userId)
+    .maybeSingle()
+  if (error) throw new Error(`Failed to read private Recast audio base: ${error.message}`)
+  return typeof data?.base_url === "string" && data.base_url.length > 0 ? data.base_url : null
+}
+
+async function clearRecastAudioBase(args: {
+  gvpJobId: string
+  userId: string
+  baseUrl: string
+}): Promise<void> {
+  const { error } = await supabase
+    .from("recast_audio_bases")
+    .delete()
+    .eq("gvp_job_id", args.gvpJobId)
+    .eq("user_id", args.userId)
+    .eq("base_url", args.baseUrl)
+  if (error) throw new Error(`Failed to clear private Recast audio base: ${error.message}`)
+}
+
+/** Stable V2 transport retries must resolve before stale-revision checks. */
+async function findJobByIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): Promise<{
+  id: string
+  status: string
+  input_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+} | null> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id,status,input_data,output_data,error_message")
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (error) {
+    throw new Error(`Failed to read idempotent job: ${error.message}`)
+  }
+  if (!data) return null
+  return {
+    id: data.id as string,
+    status: data.status as string,
+    input_data: (data.input_data as Record<string, unknown> | null) ?? null,
+    output_data: (data.output_data as Record<string, unknown> | null) ?? null,
+    error_message: (data.error_message as string | null) ?? null,
+  }
+}
+
+async function claimRecastRescore(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+  gvpJobId: string
+  expectedAudioRevision: string
+  pendingRescore: Record<string, unknown>
+}): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.rpc("claim_recast_rescore", {
+    p_recast_id: args.recastId,
+    p_child_job_id: args.childJobId,
+    p_user_id: args.userId,
+    p_gvp_job_id: args.gvpJobId,
+    p_expected_audio_revision: args.expectedAudioRevision,
+    p_pending_rescore: args.pendingRescore,
+  })
+  if (error) throw new Error(`claim_recast_rescore failed: ${error.message}`)
+  return (data ?? { ok: false, reason: "unknown" }) as Record<string, unknown>
+}
+
+async function clearRecastRescoreClaim(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc("clear_recast_rescore_claim", {
+    p_recast_id: args.recastId,
+    p_child_job_id: args.childJobId,
+    p_user_id: args.userId,
+  })
+  if (error) throw new Error(`clear_recast_rescore_claim failed: ${error.message}`)
+  return data === true
+}
+
+/**
+ * Publication RPCs are transactionally atomic but their HTTP response is not:
+ * the database can commit and the connection can disappear before PostgREST
+ * returns. Retry the exact idempotent call once so a committed first attempt is
+ * observed as success and an uncommitted transport failure can simply execute.
+ */
+async function retryBooleanPublicationRpc(
+  name: string,
+  invoke: () => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<boolean> {
+  let detail = "unknown error"
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await invoke()
+      if (!error) return data === true
+      detail = error.message
+    } catch (error) {
+      detail = error instanceof Error ? error.message : String(error)
+    }
+  }
+  throw new Error(`${name} failed after an exact retry: ${detail}`)
+}
+
+async function publishLegacyRecastRescore(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+  gvpJobId: string
+  resultUrl: string
+  rescore: Record<string, unknown>
+}): Promise<boolean> {
+  return retryBooleanPublicationRpc(
+    "publish_legacy_recast_rescore",
+    () => supabase.rpc("publish_legacy_recast_rescore", {
+      p_recast_id: args.recastId,
+      p_child_job_id: args.childJobId,
+      p_user_id: args.userId,
+      p_gvp_job_id: args.gvpJobId,
+      p_result_url: args.resultUrl,
+      p_rescore: args.rescore,
+    }),
+  )
+}
+
+async function publishRecastRescore(args: {
+  recastId: string
+  childJobId: string
+  userId: string
+  gvpJobId: string
+  expectedAudioRevision: string
+  resultUrl: string
+  audio: Record<string, unknown>
+  rescore: Record<string, unknown>
+}): Promise<boolean> {
+  return retryBooleanPublicationRpc(
+    "publish_recast_rescore",
+    () => supabase.rpc("publish_recast_rescore", {
+      p_recast_id: args.recastId,
+      p_child_job_id: args.childJobId,
+      p_user_id: args.userId,
+      p_gvp_job_id: args.gvpJobId,
+      p_expected_audio_revision: args.expectedAudioRevision,
+      p_result_url: args.resultUrl,
+      p_audio: args.audio,
+      p_rescore: args.rescore,
+    }),
+  )
+}
+
 /**
  * `tk.jobs.markJobCompleted` — plugins pass the job's OUTPUT PAYLOAD
  * (`{ videoUrl, pro: checkpoint }`), NOT jobs-table columns. This wrapper
@@ -457,6 +639,20 @@ async function readJobCheckpoint(jobId: string): Promise<Record<string, unknown>
  * next BullMQ attempt) rather than returning false — false means "skip the
  * credit commit", which is wrong for a delivered output.
  */
+function jsonContains(actual: unknown, expected: unknown): boolean {
+  if (expected === null || typeof expected !== "object") return Object.is(actual, expected)
+  if (Array.isArray(expected)) {
+    return Array.isArray(actual)
+      && actual.length === expected.length
+      && expected.every((value, index) => jsonContains(actual[index], value))
+  }
+  if (actual === null || typeof actual !== "object" || Array.isArray(actual)) return false
+  const actualRecord = actual as Record<string, unknown>
+  return Object.entries(expected as Record<string, unknown>)
+    .every(([key, value]) => Object.prototype.hasOwnProperty.call(actualRecord, key)
+      && jsonContains(actualRecord[key], value))
+}
+
 async function pluginMarkJobCompleted(
   jobId: string,
   output: Record<string, unknown>,
@@ -467,10 +663,40 @@ async function pluginMarkJobCompleted(
     throw new Error(`Failed to read output_data for job ${jobId}: ${error.message}`)
   }
   const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
+  const nextOutput = { ...existing, ...output }
   // `output` merges into output_data; `extraColumns` (optional) spread as real
   // jobs-table COLUMNS (video-analysis writes provider_cost this way). markJobCompleted
   // spreads its `fields` as UPDATE columns, so output_data + extraColumns land together.
-  return markJobCompleted(jobId, { output_data: { ...existing, ...output }, ...(extraColumns ?? {}) })
+  const updated = await markJobCompleted(jobId, {
+    output_data: nextOutput,
+    ...(extraColumns ?? {}),
+  })
+  if (updated) return true
+
+  // `markJobCompleted` intentionally returns false both for a terminal CAS
+  // loss and for a PostgREST error. Resolve that ambiguity before a plugin
+  // deletes staged media or skips settlement. An exact completed payload means
+  // the UPDATE committed and only its response was lost; a still-live row is
+  // retryable infrastructure failure, never a cancellation.
+  const { data: terminal, error: terminalError } = await supabase
+    .from("jobs")
+    .select("status,output_data")
+    .eq("id", jobId)
+    .single()
+  if (terminalError) {
+    throw new Error(`Failed to verify completion outcome for job ${jobId}: ${terminalError.message}`)
+  }
+  const terminalRow = terminal as {
+    status?: unknown
+    output_data?: unknown
+  } | null
+  if (terminalRow?.status === "completed" && jsonContains(terminalRow.output_data, nextOutput)) {
+    return true
+  }
+  if (["pending", "queued", "processing"].includes(String(terminalRow?.status))) {
+    throw new Error(`Job ${jobId} is still live after its completion CAS failed`)
+  }
+  return false
 }
 
 /**
@@ -794,9 +1020,18 @@ export function buildToolkit(): PluginToolkit {
       downloadR2ObjectToFile,
       readR2ObjectBuffer,
       deleteFromR2,
+      r2KeyFromOurUrl,
       storeImportedImageBuffer,
     },
     jobs: {
+      storeRecastAudioBase,
+      readRecastAudioBase,
+      clearRecastAudioBase,
+      findJobByIdempotencyKey,
+      claimRecastRescore,
+      clearRecastRescoreClaim,
+      publishLegacyRecastRescore,
+      publishRecastRescore,
       markJobCompleted: pluginMarkJobCompleted,
       setJobProgress,
       withProgressRamp,
@@ -822,6 +1057,15 @@ export function buildToolkit(): PluginToolkit {
       videoQueue,
       creditGuard,
       reserveCreditsForJob,
+      applyCreditMarkup: async (modelIdentifier, baseCredits) => {
+        if (!Number.isFinite(baseCredits) || baseCredits < 0) {
+          throw new Error("Dynamic credit quote must be a finite non-negative number")
+        }
+        if (!hasCredits() || baseCredits === 0) return baseCredits
+        const { effectiveMarkupPercent } = await import("../../ee/billing/service-margin.js")
+        const markup = effectiveMarkupPercent(await getAppSettings(), modelIdentifier)
+        return markup > 0 ? Math.ceil(baseCredits * (1 + markup / 100)) : baseCredits
+      },
       safeUrlSchema,
       extractWorkflowId,
       extractNodeId,
@@ -962,6 +1206,38 @@ export function buildToolkit(): PluginToolkit {
         return estimateSeededPipelineCredits(supabase, input)
       },
       getSnapshot: getPipelineSnapshot,
+    },
+    features: { organizations: hasOrganizations() },
+    deployment: { publicUrl: appBaseUrl() },
+    redis: {
+      url: config.REDIS_URL,
+      kv: {
+        get: (key) => redis.get(key),
+        set: async (key, value, ttlSeconds) => {
+          if (ttlSeconds === undefined) await redis.set(key, value)
+          else await redis.set(key, value, "EX", ttlSeconds)
+        },
+        del: (...keys) => redis.del(...keys),
+        incr: (key) => redis.incr(key),
+        expire: (key, seconds) => redis.expire(key, seconds),
+        ttl: (key) => redis.ttl(key),
+      },
+    },
+    db: supabase,
+    auth: {
+      isPlatformAdmin: checkIsAdmin,
+      // Throws on a lookup failure rather than returning null: null means
+      // "this user holds no platform role", and a plugin gating on a SPECIFIC
+      // role (`=== "super_admin"`) fails closed on that, but one gating the
+      // other way would not. A database outage must not read as an answer.
+      // Uncached, unlike its `isPlatformAdmin` sibling, which goes through
+      // admin-check's 5-minute cache and its invalidation — ask for the
+      // boolean unless the exact role matters.
+      platformRole: async (userId) => {
+        const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle()
+        if (error) throw new Error(`platformRole lookup failed: ${error.message}`)
+        return (data?.role as string | undefined) ?? null
+      },
     },
   }
 }

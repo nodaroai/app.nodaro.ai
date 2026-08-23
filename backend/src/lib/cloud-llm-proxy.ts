@@ -38,6 +38,7 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 import { config } from "./config.js"
 import { getNodaroCredential, getNodaroProviderPrefs, nodaroCloudBase } from "./nodaro-connect.js"
 import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
+import { URL_FIELD } from "./media-portability.js"
 import { insertJob } from "./insert-job.js"
 import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request-helpers.js"
 
@@ -79,9 +80,9 @@ export function stripInstanceLocalKeys(body: unknown): unknown {
   return rest
 }
 
-/** Field names whose values are media URLs — matched on the NAME so a prompt
- *  that happens to contain a link is never rewritten. */
-const URL_FIELD = /url$|urls$|urllist$/i
+// Field names whose values are media URLs — matched on the NAME so a prompt
+// that happens to contain a link is never rewritten. One regex, shared with
+// the workflow export/import walk (lib/media-portability.ts).
 
 /**
  * Media in these bodies usually lives on THIS instance (a user upload), and

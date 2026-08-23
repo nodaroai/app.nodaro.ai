@@ -3,7 +3,8 @@
  * release/compare links on one side, the two numbered steps (back up first —
  * with the published guide linked — then pull+restart) and the backup
  * acknowledgment on the other. What's-new mode (cloud): changelog only —
- * no steps, no commands, nothing to act on.
+ * no steps, no commands, nothing to act on. Current mode (self-host, up to
+ * date): the same changelog-only body framed as "this is what you run".
  */
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
@@ -69,6 +70,31 @@ describe("UpdateDialog — what's-new mode (cloud)", () => {
     expect(screen.queryByText(/docker compose/)).toBeNull()
     expect(screen.queryByText(/Compare/)).toBeNull()
     expect(screen.queryByText(/You are running/)).toBeNull()
+    expect(screen.getByText("Close")).toBeTruthy()
+  })
+})
+
+describe("UpdateDialog — current mode (self-host, on the newest release)", () => {
+  it("answers 'what is in my version': changelog + release link, framed as running, nothing to act on (#869)", () => {
+    render(
+      <UpdateDialog
+        open
+        onOpenChange={vi.fn()}
+        info={{ ...info("1.30.1", "v1.30.1"), updateAvailable: false }}
+        mode="current"
+      />,
+    )
+    expect(screen.getByText("What's in v1.30.1")).toBeTruthy()
+    expect(screen.getByText(/You are on the latest release/)).toBeTruthy()
+    expect(screen.getByText("– NODARO marks")).toBeTruthy()
+    const release = screen.getByText(/Release v1\.30\.1 on GitHub/) as HTMLAnchorElement
+    expect(release.href).toContain("/releases/tag/v1.30.1")
+    // No upgrade framing: no steps, no commands, no compare, no "Upgrade to".
+    expect(screen.queryByText("Back up your data")).toBeNull()
+    expect(screen.queryByText(/docker compose/)).toBeNull()
+    expect(screen.queryByText(/Compare/)).toBeNull()
+    expect(screen.queryByText(/Upgrade to/)).toBeNull()
+    expect(screen.queryByText(/already live for you/)).toBeNull()
     expect(screen.getByText("Close")).toBeTruthy()
   })
 })

@@ -1,0 +1,154 @@
+/**
+ * Grants guard for EVERY organizations-axis migration.
+ *
+ * Every SECURITY DEFINER function on this axis must pin `search_path` and be
+ * revoked from PUBLIC *and* anon (Supabase grants anon through default
+ * privileges, so `FROM PUBLIC` alone leaves an anonymous oracle), and then be
+ * one of exactly two things: an RLS-facing helper granted to `authenticated`,
+ * or a mutating RPC granted to `service_role` only. A function that is
+ * neither — or a migration this file does not know — fails here, so a new
+ * organizations migration cannot ship an unclassified definer.
+ *
+ * The per-file invariants (kind presets, the transfer RPC's ordering, CHECK
+ * enums) stay in the file-specific guards; this one is the family rule.
+ */
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+
+const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "supabase", "migrations")
+
+/** Which functions each organizations migration defines, and for whom. */
+const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: string[] }> = {
+  "332_orgs_foundations.sql": {
+    authenticated: ["effective_setting", "org_member_status", "org_role", "workspace_member_status", "workspace_role", "ws_setting_bool"],
+    serviceRole: ["transfer_org_ownership"],
+  },
+  "333_orgs_invitation_rpcs.sql": {
+    authenticated: [],
+    serviceRole: ["accept_invitation", "join_workspace_by_code"],
+  },
+}
+
+const orgMigrations = readdirSync(MIGRATIONS_DIR)
+  .filter((f) => /^\d+_orgs[_-].*\.sql$/.test(f))
+  .sort()
+
+interface DefinerFn {
+  name: string
+  args: string
+  returnsTrigger: boolean
+  pinsSearchPath: boolean
+}
+
+function definers(sql: string): DefinerFn[] {
+  return sql
+    .split(/CREATE OR REPLACE FUNCTION\s+/)
+    .slice(1)
+    .map((chunk) => {
+      const header = chunk.slice(0, chunk.indexOf("$$"))
+      return {
+        name: chunk.match(/^(\w+)\s*\(/)?.[1] ?? "",
+        args: chunk.match(/^\w+\s*\(([^)]*)\)/)?.[1] ?? "",
+        returnsTrigger: /RETURNS\s+trigger/i.test(header),
+        definer: /SECURITY DEFINER/i.test(header),
+        pinsSearchPath: /SET search_path = public/.test(header),
+      }
+    })
+    .filter((f) => f.definer)
+}
+
+function signature(fn: DefinerFn): { sig: string; escaped: string } {
+  const argTypes = fn.args
+    .split(",")
+    .map((a) => a.trim().split(/\s+/)[1])
+    .join(", ")
+  const sig = `public.${fn.name}(${argTypes})`
+  return { sig, escaped: sig.replace(/[.()]/g, "\\$&") }
+}
+
+describe("organizations migrations — every SECURITY DEFINER function has explicit grants", () => {
+  it("every organizations migration on disk is classified here", () => {
+    expect(orgMigrations.length).toBeGreaterThan(0)
+    expect(orgMigrations.filter((f) => !CLASSIFICATION[f])).toEqual([])
+  })
+
+  it("every classified migration exists on disk", () => {
+    expect(Object.keys(CLASSIFICATION).filter((f) => !orgMigrations.includes(f))).toEqual([])
+  })
+
+  describe.each(orgMigrations.map((f) => [f] as const))("%s", (file) => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8").replace(/--[^\n]*/g, "")
+    const fns = definers(sql)
+    const expected = CLASSIFICATION[file] ?? { authenticated: [], serviceRole: [] }
+
+    it("every SECURITY DEFINER function pins search_path", () => {
+      expect(fns.filter((f) => !f.pinsSearchPath).map((f) => f.name)).toEqual([])
+    })
+
+    it("every non-trigger SECURITY DEFINER function is classified, and nothing classified is missing", () => {
+      expect(fns.filter((f) => !f.returnsTrigger).map((f) => f.name).sort()).toEqual(
+        [...expected.authenticated, ...expected.serviceRole].sort(),
+      )
+    })
+
+    for (const fn of fns.filter((f) => expected.authenticated.includes(f.name))) {
+      it(`${fn.name} — REVOKE FROM PUBLIC, REVOKE FROM anon, GRANT TO authenticated`, () => {
+        const { sig, escaped } = signature(fn)
+        expect(sql, `${sig} must be revoked from PUBLIC`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM PUBLIC;`))
+        expect(sql, `${sig} must be revoked from anon`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM anon;`))
+        expect(sql, `${sig} must be granted to authenticated`).toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO authenticated;`))
+      })
+    }
+
+    for (const fn of fns.filter((f) => expected.serviceRole.includes(f.name))) {
+      it(`${fn.name} — REVOKE FROM PUBLIC, anon AND authenticated; GRANT TO service_role only`, () => {
+        const { sig, escaped } = signature(fn)
+        for (const role of ["PUBLIC", "anon", "authenticated"]) {
+          expect(sql, `${sig} must be revoked from ${role}`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM ${role};`))
+        }
+        expect(sql, `${sig} must be granted to service_role`).toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO service_role;`))
+        expect(sql, `${sig} must NOT be granted to authenticated`).not.toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO authenticated;`))
+      })
+    }
+  })
+})
+
+describe("333_orgs_invitation_rpcs — the RAISE prefixes the routes map", () => {
+  const sql = readFileSync(join(MIGRATIONS_DIR, "333_orgs_invitation_rpcs.sql"), "utf8")
+
+  it("both functions resolve name clashes between their OUT columns and table columns in favour of the column", () => {
+    // RETURNS TABLE (org_id, workspace_id) declares OUT variables named like
+    // the columns the bodies write; without the pragma, `ON CONFLICT
+    // (org_id, user_id)` is ambiguous and the function fails at its first
+    // successful call (found on a real Postgres, 2026-08-23).
+    const pragmas = sql.match(/#variable_conflict use_column/g) ?? []
+    expect(pragmas).toHaveLength(2)
+  })
+
+  it("accept_invitation signals every refusal with a stable prefix and lets auth.uid() win", () => {
+    const body = sql.slice(sql.indexOf("FUNCTION accept_invitation"), sql.indexOf("FUNCTION join_workspace_by_code"))
+    // NO_USER is unreachable from the behavior proof — the service role
+    // always supplies a uid — so this text guard is the only thing keeping
+    // the null check from being dropped.
+    for (const prefix of ["NO_USER:", "INVITATION_NOT_FOUND:", "INVITATION_REVOKED:", "INVITATION_ACCEPTED:", "INVITATION_EXPIRED:", "EMAIL_MISMATCH:", "ORG_NOT_ACTIVE:"]) {
+      expect(body, prefix).toContain(`RAISE EXCEPTION '${prefix}`)
+    }
+    expect(body).toContain("COALESCE(auth.uid(), p_user_id)")
+    expect(body).toContain("FOR UPDATE")
+    // Consumed even when the membership rows already exist.
+    expect(body).toContain("ON CONFLICT (org_id, user_id) DO NOTHING")
+    expect(body).toContain("SET accepted_at = now(), accepted_by = v_uid")
+  })
+
+  it("join_workspace_by_code refuses a suspended member and an unlisted domain, and never promotes", () => {
+    const body = sql.slice(sql.indexOf("FUNCTION join_workspace_by_code"))
+    for (const prefix of ["NO_USER:", "JOIN_CODE_INVALID:", "ORG_NOT_ACTIVE:", "DOMAIN_NOT_ALLOWED:", "MEMBER_SUSPENDED:"]) {
+      expect(body, prefix).toContain(`RAISE EXCEPTION '${prefix}`)
+    }
+    expect(body).toContain("COALESCE(auth.uid(), p_user_id)")
+    expect(body).toContain("FOR UPDATE OF jc")
+    expect(body).toContain("VALUES (v_org_id, v_uid, 'member', 'active')")
+    expect(body).toContain("VALUES (v_ws_id, v_org_id, v_uid, 'member', 'active')")
+  })
+})

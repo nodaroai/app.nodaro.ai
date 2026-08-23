@@ -61,7 +61,7 @@ export type MediaImportResult =
   | { ok: false; status: 400 | 413 | 422; code: string; message: string; details?: Record<string, unknown> }
 
 /** Read a Response body with a hard cap; null when the cap is exceeded. */
-async function readBodyCapped(res: Response, maxBytes: number): Promise<Buffer | null> {
+export async function readBodyCapped(res: Response, maxBytes: number): Promise<Buffer | null> {
   if (!res.body) {
     const buf = Buffer.from(await res.arrayBuffer())
     return buf.length > maxBytes ? null : buf
