@@ -145,6 +145,38 @@ async function categoryIdBySlug(slug: string): Promise<string | null> {
   return (data?.id as string | undefined) ?? null
 }
 
+/**
+ * Columns the INSTALLATION owns — never sent by a content update.
+ *
+ * A tutorial gets switched off, or taken out of the Tutorials tab, because the
+ * flow cannot run on THIS box: no provider balance, no key for that lane. That
+ * is a statement about the deployment, and a reworded tutorial carries no
+ * information about it, so a reseed must leave it alone. Both columns used to
+ * ride in the shared upsert payload and were rewritten on every content
+ * release.
+ *
+ * `listed_in` is an extensible tag array ('tutorial', 'marketplace', …), so
+ * rewriting it wholesale also dropped any other tag an admin had added.
+ *
+ * Presentation stays content-owned: name, description, the snapshot, and the
+ * tutorial's category and sort order all still come from the shipped doc — a
+ * release is entitled to re-word and re-order the set it ships.
+ *
+ * Exported so the seeder's own test can assert structurally that no UPDATE
+ * payload carries any of these, which is what catches the NEXT column added
+ * to the shared literal.
+ */
+export const OPERATOR_OWNED_COLUMNS: readonly string[] = ["is_active", "listed_in"]
+
+/**
+ * What a tutorial this installation has never seen starts as: visible, and
+ * listed in the Tutorials tab. Applied on INSERT only — see above.
+ */
+const SEEDED_DEFAULTS = {
+  is_active: true,
+  listed_in: ["tutorial"],
+}
+
 async function seedOne(
   doc: TutorialTemplateDoc,
   userId: string,
@@ -192,6 +224,9 @@ async function seedOne(
   }
 
   const categoryId = await categoryIdBySlug(doc.tutorialCategorySlug)
+  // Everything a content update owns. Every OPERATOR_OWNED_COLUMNS entry is
+  // deliberately absent — they are applied on the insert below and never
+  // resent.
   const row = {
     workflow_id: workflowId,
     creator_id: userId,
@@ -212,19 +247,35 @@ async function seedOne(
     // The column the UI shows, so the system account's email never surfaces.
     creator_display_name: SYSTEM_NAME,
     node_count: doc.nodes.length,
-    is_active: true,
-    listed_in: ["tutorial"],
-    // Migration 114's CHECK requires a category whenever 'tutorial' is listed.
+    // Migration 114's CHECK is one-directional — 'tutorial' in listed_in
+    // REQUIRES a category, not the reverse — so writing the category while
+    // leaving listed_in alone is safe whether or not the tag is still there.
     tutorial_category_id: categoryId,
     tutorial_sort_order: doc.tutorialSortOrder,
   }
 
   if (existing) {
+    // CONTENT ONLY — see OPERATOR_OWNED_COLUMNS. Sending those here
+    // republished every hidden tutorial, and re-listed every un-listed one,
+    // on the next content release.
+    //
+    // Which lever reaches which column is worth knowing. `listed_in` is
+    // written by the admin-only tutorial-flag route
+    // (PATCH /v1/admin/workflow-templates/:id/tutorial-flag), which gates on
+    // role and does NOT check ownership — so it reaches a seeded row and is
+    // the reachable half of this bug. `is_active` is NOT reachable that way:
+    // the generic template routes (PATCH /v1/templates/:id and the DELETE
+    // soft-delete) both require `creator_id === userId`, and these rows belong
+    // to the never-loginable system account, so both 403. It arrives from the
+    // back office instead — direct SQL, a support script, or an admin lever
+    // added later. Preserving it is what makes any of those safe.
     const { error } = await supabase.from("workflow_templates").update(row).eq("id", existing.id)
     if (error) throw error
     return "updated"
   }
-  const { error } = await supabase.from("workflow_templates").insert(row)
+  const { error } = await supabase
+    .from("workflow_templates")
+    .insert({ ...row, ...SEEDED_DEFAULTS })
   if (error) throw error
   return "created"
 }
