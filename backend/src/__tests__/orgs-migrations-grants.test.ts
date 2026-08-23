@@ -38,6 +38,15 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: [],
   },
+  // Content scoping, part b: backfills and four trigger functions. Three are
+  // SECURITY DEFINER (they read projects / organizations past the caller's
+  // RLS); all four return trigger, so none is classified — a trigger function
+  // is reached through its table's grants, never called from PostgREST. Their
+  // search_path pins are asserted like every other definer's.
+  "337_orgs_content_triggers.sql": {
+    authenticated: [],
+    serviceRole: [],
+  },
 }
 
 const orgMigrations = readdirSync(MIGRATIONS_DIR)
