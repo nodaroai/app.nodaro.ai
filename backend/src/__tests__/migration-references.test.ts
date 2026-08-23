@@ -25,6 +25,10 @@ const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../s
 const NOT_A_TABLE = new Set([
   "p", "o", "w", "l", "c", "wm", "om", "wf", "ws", "s", "t", "u", "e", "d", "x",
   "new", "old", "new_row", "old_row", "v_row", "v_wf", "excluded",
+  // `CREATE POLICY ... FOR UPDATE USING (...)` parses as UPDATE <target> with
+  // target `using`. A real relation named "using" would need quoting anyway —
+  // it is a reserved word.
+  "using",
   "public", "auth", "pg_temp", "pg_catalog", "information_schema",
 ])
 
@@ -36,6 +40,11 @@ function stripCommentsAndStrings(sql: string): string {
     .replace(/--[^\n]*/g, " ")
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/'(?:[^']|'')*'/g, "''")
+    // Double-quoted identifiers are NAMES, not references. Without this, a
+    // policy called "Users can update own workflows" reads as `UPDATE own`
+    // and the checker reports a table named `own` — found the moment part c
+    // dropped the old policies by their names.
+    .replace(/"[^"\n]*"/g, '""')
 }
 
 /** The schema after applying `files` in order: table -> set of columns. */
