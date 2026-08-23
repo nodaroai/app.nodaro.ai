@@ -22,7 +22,7 @@
  */
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
-import { eachSourceFile, lineOf, walk } from "./source-scan.js"
+import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, walk } from "./source-scan.js"
 import { config } from "../config.js"
 import { withObjectAcl } from "../storage.js"
 
@@ -59,7 +59,7 @@ function paramsInitializer(arg: ts.Node | undefined): ts.Node | undefined {
 
 function writeSites(): Site[] {
   const sites: Site[] = []
-  eachSourceFile((sf, rel) => {
+  eachSourceFile([...WRITE_COMMANDS, UPLOADER], (sf, rel) => {
     walk(sf, (n) => {
       if (!ts.isNewExpression(n) || !ts.isIdentifier(n.expression)) return
       const name = n.expression.text
@@ -81,19 +81,22 @@ function writeSites(): Site[] {
   return sites
 }
 
-// The tree is walked once — it is ~830 files.
-const SITES = writeSites()
+// Walked once, lazily: at module scope this would run during collection,
+// where vitest's per-test timeout does not apply and a slow runner surfaces
+// as an opaque collection failure instead of a named slow test.
+let cached: Site[] | null = null
+const sites = (): Site[] => (cached ??= writeSites())
 
 describe("object ACL coverage", () => {
   it("routes every Put / Copy / multipart write through withObjectAcl()", () => {
-    expect(SITES.filter((s) => !s.wrapped).map((s) => s.where)).toEqual([])
-  })
+    expect(sites().filter((s) => !s.wrapped).map((s) => s.where)).toEqual([])
+  }, SCAN_TIMEOUT_MS)
 
   it("actually found the write sites (a vacuous pass is not a pass)", () => {
     // Seven today. A floor, not an equality: adding an eighth write is fine —
     // the check above is what makes it wrap.
-    expect(SITES.length).toBeGreaterThanOrEqual(7)
-  })
+    expect(sites().length).toBeGreaterThanOrEqual(7)
+  }, SCAN_TIMEOUT_MS)
 
   it("recognises the shapes a text scan would miss", () => {
     const scan = (src: string) => {

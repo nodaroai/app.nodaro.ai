@@ -18,6 +18,19 @@ import { dirname, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import ts from "typescript"
 
+/**
+ * Timeout for the tree-walking guards.
+ *
+ * These scan and parse source files, and a shared CI runner under parallel
+ * workers is roughly an order of magnitude slower than a dev machine: the
+ * literal scan measured 731ms locally and 7125ms in CI, which blew vitest's
+ * 5000ms default and failed a green branch. The substring pre-filter in
+ * eachSourceFile() cut that to ~50ms, so this ceiling is insurance rather
+ * than the mechanism — it exists so growth in the tree degrades into a slow
+ * test rather than a red build.
+ */
+export const SCAN_TIMEOUT_MS = 30_000
+
 export const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 
 /** Every shipped .ts file under backend/src — tests and node_modules excluded. */
@@ -42,14 +55,22 @@ export function relPath(file: string): string {
   return relative(SRC, file).split(sep).join("/")
 }
 
-export function parse(file: string): ts.SourceFile {
+export function parseText(file: string, text: string): ts.SourceFile {
   return ts.createSourceFile(
     file,
-    readFileSync(file, "utf8"),
+    text,
     ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
+    // No parent pointers: nothing here walks upward, and setting them roughly
+    // doubles the retained tree — which matters on a CI runner parsing many
+    // files under parallel workers. `lineOf` passes the SourceFile explicitly
+    // for exactly this reason.
+    /* setParentNodes */ false,
     ts.ScriptKind.TS,
   )
+}
+
+export function parse(file: string): ts.SourceFile {
+  return parseText(file, readFileSync(file, "utf8"))
 }
 
 export function lineOf(sf: ts.SourceFile, node: ts.Node): number {
@@ -61,7 +82,24 @@ export function walk(node: ts.Node, visit: (n: ts.Node) => void): void {
   node.forEachChild((child) => walk(child, visit))
 }
 
-/** Parse every source file once; the guards below each scan the same trees. */
-export function eachSourceFile(fn: (sf: ts.SourceFile, rel: string) => void): void {
-  for (const file of sourceFiles()) fn(parse(file), relPath(file))
+/**
+ * Visit the source files that could possibly contain `needles`, parsed.
+ *
+ * The substring pre-filter is a strict SUPERSET of what the AST can match: a
+ * string literal containing "api.kie.ai", or a `new PutObjectCommand`, cannot
+ * exist in a file whose raw text lacks that substring. So skipping the parse
+ * there cannot produce a false negative — while a file that merely MENTIONS
+ * the token in a comment is still parsed and still correctly excluded by the
+ * AST. It is the difference between parsing ~830 files and parsing a handful,
+ * which matters because these run on every CI job on a shared runner.
+ */
+export function eachSourceFile(
+  needles: readonly string[],
+  fn: (sf: ts.SourceFile, rel: string) => void,
+): void {
+  for (const file of sourceFiles()) {
+    const text = readFileSync(file, "utf8")
+    if (!needles.some((n) => text.includes(n))) continue
+    fn(parseText(file, text), relPath(file))
+  }
 }

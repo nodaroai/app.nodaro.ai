@@ -16,7 +16,7 @@
  */
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
-import { eachSourceFile, lineOf, parse, walk } from "./source-scan.js"
+import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parse, walk } from "./source-scan.js"
 import { baseUrl, config, envSchema } from "../config.js"
 
 /** The single place each host is allowed to be spelled out. */
@@ -44,7 +44,7 @@ function literals(sf: ts.SourceFile): Array<{ text: string; line: number }> {
 describe("provider base URLs are configuration", () => {
   it("spells each provider host only in the config default", () => {
     const offenders: string[] = []
-    eachSourceFile((sf, rel) => {
+    eachSourceFile(HOSTS, (sf, rel) => {
       if (ALLOWLIST.includes(rel)) return
       for (const { text, line } of literals(sf)) {
         for (const host of HOSTS) {
@@ -53,7 +53,7 @@ describe("provider base URLs are configuration", () => {
       }
     })
     expect(offenders).toEqual([])
-  })
+  }, SCAN_TIMEOUT_MS)
 
   it("the scanner sees literals and ignores comments (it IS the guard)", () => {
     // Without this the check above can silently pass on an empty haystack.
