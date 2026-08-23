@@ -259,6 +259,9 @@ export function AiAvatarInputCard({
             <AvatarPicker
               value={avatarId || undefined}
               onSelect={handleAvatarSelect}
+              // A published app's viewer may not be the operator (or even
+              // signed in) — the keys screen would bounce them to a login.
+              showKeysAction={false}
             />
           </div>
         ))}
@@ -270,6 +273,7 @@ export function AiAvatarInputCard({
             <VoicePicker
               value={voiceId || undefined}
               onSelect={handleVoiceSelect}
+              showKeysAction={false}
             />
           </div>
         )}

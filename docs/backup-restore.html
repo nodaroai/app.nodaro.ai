@@ -115,7 +115,8 @@ description: One command each way — and the only downgrade path.
   </div>
   <p class="note">Redis is deliberately absent — it holds only ephemeral job state.</p>
 
-  <div class="warn"><strong>The archive is a credential.</strong> It contains your <code>.env</code> and the encryption key. The script chmods it <code>600</code>; keep it that way, and store it like a password.</div>
+  <div class="warn"><strong>The archive is a credential.</strong> It contains your <code>.env</code> and the encryption key. The script chmods it <code>600</code>; keep it that way, and store it like a password. On Windows that <code>chmod</code> has no real effect — keep the file out of synced folders and shared drives, and restrict it with NTFS permissions if others use the PC.</div>
+  <p class="note"><strong>Windows:</strong> run both scripts from <strong>Git Bash</strong> (installed with Git for Windows) — not PowerShell, and not WSL's bash, which sees a different filesystem. The scripts print what actually went into the archive; if the encryption key is missing the backup says so loudly <em>and exits non-zero</em> (so a cron job notices), and that archive cannot restore your provider keys.</p>
 
   <div class="sec"><div class="n">02</div><h2>Taking a backup</h2></div>
   <p class="p">From your install directory (where <code>docker-compose.community.yml</code> lives), with the stack <strong>running</strong>:</p>
@@ -135,8 +136,8 @@ description: One command each way — and the only downgrade path.
   <ol class="steps">
     <li><span class="b">1</span><span>Stops the app and the database clients (<code>auth</code>, <code>rest</code>) — their live connections would block the restore.</span></li>
     <li><span class="b">2</span><span>Restores Postgres and <strong>verifies it functionally</strong> — it does not trust exit codes; some harmless supabase-image noise is expected and printed.</span></li>
-    <li><span class="b">3</span><span>Restores the media store, the encryption key, and your <code>.env</code> (an existing <code>.env</code> is saved aside first).</span></li>
-    <li><span class="b">4</span><span>Restarts everything.</span></li>
+    <li><span class="b">3</span><span>Restores the media store and <strong>verifies it</strong> (buckets back in place, MinIO healthy again), then the encryption key and <strong>verifies it</strong> (byte count on the volume), then your <code>.env</code> (an existing <code>.env</code> is saved aside first). A failed verification stops the script <em>before</em> the app starts — booting without the right key would mint a new one and make every restored provider key unreadable for good.</span></li>
+    <li><span class="b">4</span><span>Restarts everything and waits for the app's own health check — the script only says &ldquo;complete&rdquo; once the app is actually up (a non-zero exit otherwise).</span></li>
   </ol>
   <div class="warn"><strong>It is destructive.</strong> It replaces the database and media with the archive&rsquo;s contents — so it asks you to type <code>RESTORE</code> before touching anything.</div>
   <p class="p">When it finishes, open <code>http://localhost:3000/setup</code> — every card should be green.</p>
@@ -153,6 +154,8 @@ description: One command each way — and the only downgrade path.
     <div><dt>&ldquo;the db service is not running&rdquo;</dt><dd>Start the stack first: <code>docker compose -f docker-compose.community.yml up -d</code>.</dd></div>
     <div><dt>Provider keys show <code>missing</code> after a restore</dt><dd>The database was restored without its matching <code>encryption-key</code> (or with a different one). Restore from an archive that has the key, or re-enter the keys on <code>/setup</code>.</dd></div>
     <div><dt>Restore verification failed</dt><dd>The script refuses to leave a half-restored database silently; re-run the restore. If it fails repeatedly, the archive may be truncated — check its size against the original.</dd></div>
+    <div><dt>&ldquo;could not read the encryption key&rdquo; during a backup on Windows</dt><dd>You are not in Git Bash (PowerShell and WSL both break the container paths), or the app container is not running. Re-run from Git Bash with the stack up; the archive the script printed a warning for is not a usable backup.</dd></div>
+    <div><dt>&ldquo;media restore verification FAILED&rdquo; / &ldquo;encryption key verification FAILED&rdquo;</dt><dd>The script stopped on purpose and did not start the app. Inspect the volume it names, fix the cause (usually a stopped container or a full disk), and run the restore again — it is safe to repeat.</dd></div>
   </dl>
 
   <div class="foot">

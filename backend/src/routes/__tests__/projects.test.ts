@@ -38,6 +38,10 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
+vi.mock("@/lib/workflow-delete.js", () => ({
+  deleteProjectWithPrivateMedia: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -46,6 +50,7 @@ import { projectRoutes } from "../projects.js"
 import { supabase } from "../../lib/supabase.js"
 import { checkIsAdmin } from "../../lib/admin-check.js"
 import { _resetClientAppStampCacheForTests } from "../../lib/client-app-stamp.js"
+import { deleteProjectWithPrivateMedia } from "../../lib/workflow-delete.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,6 +113,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(checkIsAdmin).mockResolvedValue(false)
+  vi.mocked(deleteProjectWithPrivateMedia).mockResolvedValue(true)
   _resetClientAppStampCacheForTests()
 
   app = Fastify({ logger: false })
@@ -654,6 +660,10 @@ describe("DELETE /v1/projects/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+    expect(deleteProjectWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: TEST_PROJECT_ID,
+      userId: TEST_USER_ID,
+    }))
   })
 
   it("returns 409 default_project for the default workspace", async () => {
@@ -689,9 +699,10 @@ describe("DELETE /v1/projects/:id", () => {
   })
 
   it("returns 500 on DB error during delete", async () => {
+    vi.mocked(deleteProjectWithPrivateMedia).mockRejectedValue(new Error("FK constraint"))
     mockFromForDeleteFlow({
       lookup: { data: { is_default: false }, error: null },
-      deleteResult: { error: { message: "FK constraint" } },
+      deleteResult: { error: null },
     })
 
     const res = await app.inject({
@@ -821,9 +832,8 @@ describe("cross-tenant denial", () => {
   })
 
   it("DELETE /v1/projects/:id — delete is user-scoped (foreign rows untouched)", async () => {
-    // The DELETE handler now does a lookup first (to surface a friendly 409
-    // for default projects). Both the lookup and the delete must be scoped by
-    // user_id — exercise that the .eq("user_id", ...) calls fire on each.
+    // The lookup and the atomic delete helper both carry the authenticated
+    // owner. The helper's service-only RPC repeats the scope in SQL.
     const mocks = mockFromForDeleteFlow({
       lookup: { data: { is_default: false }, error: null },
       deleteResult: { error: null },
@@ -838,7 +848,9 @@ describe("cross-tenant denial", () => {
     expect(res.statusCode).toBe(200)
     expect(mocks.mockLookupEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
     expect(mocks.mockLookupEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
-    expect(mocks.mockDeleteEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
-    expect(mocks.mockDeleteEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(deleteProjectWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: TEST_PROJECT_ID,
+      userId: TEST_USER_ID,
+    }))
   })
 })

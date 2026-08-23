@@ -12,6 +12,7 @@
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent } from "react"
 import { AlertCircle, Image as ImageIcon, Search, User, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { KeylessNotice } from "@/components/heygen/keyless-notice"
 import type { HeygenAvatar } from "@/lib/api"
 import { CachedImage } from "@/components/ui/cached-image"
 import {
@@ -233,14 +234,13 @@ export function AvatarQuickPick({
             <p className="text-[11px] text-muted-foreground">Failed to load avatars</p>
           </div>
         ) : avatars.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center gap-1.5 flex-1 text-center px-6"
-            data-testid="ai-avatar-quick-pick-empty"
-          >
-            <User className="size-7 text-muted-foreground/40" />
-            <p className="text-[11px] font-medium text-muted-foreground">No HeyGen avatars</p>
-            <p className="text-[10px] text-muted-foreground/70 leading-snug">{keylessCatalogHint("avatars")}</p>
-          </div>
+          <KeylessNotice
+            compact
+            icon={User}
+            title="No HeyGen avatars"
+            hint={keylessCatalogHint("avatars")}
+            testId="ai-avatar-quick-pick-empty"
+          />
         ) : searching && shown.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-1.5 flex-1 text-center px-6" data-testid="ai-avatar-search-empty">
             <p className="text-[11px] text-muted-foreground">No avatars match “{query.trim()}”</p>

@@ -32,6 +32,22 @@ export function hasUserManagement(): boolean {
   return EDITION === 'business' || EDITION === 'cloud'
 }
 
+/**
+ * Organizations — the second tenancy axis. Twin of the backend's
+ * `hasOrganizations()`: cloud edition AND the launch flag. Off everywhere
+ * until the flag is thrown, so every organization surface is absent rather
+ * than empty on a build without it.
+ *
+ * Inlined by Vite at BUILD time, which is why the Dockerfile must carry both
+ * an ARG and an ENV for it — a missing pair yields `undefined` and the
+ * feature silently stays off in a build that meant to have it.
+ */
+export const ORGS_ENABLED = import.meta.env.VITE_ORGS_ENABLED === "true"
+
+export function hasOrganizations(): boolean {
+  return isCloud() && ORGS_ENABLED
+}
+
 /** business + cloud are multi-user (community is single-user → sharing is inert) */
 export function isMultiUser(): boolean {
   return EDITION === 'business' || EDITION === 'cloud'
@@ -43,6 +59,7 @@ export const features = {
   creditsSystem: hasCredits(),
   billing: hasCredits(),
   multiTenancy: hasCredits(),
+  organizations: hasOrganizations(),
   providerSelection: isCloud(),
   costMarkup: isCloud(),
 } as const

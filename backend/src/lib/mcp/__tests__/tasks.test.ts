@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { GetTaskPayloadRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import {
   registerTask,
+  registerTaskHandlers,
   getTask,
   cancelTask,
   completeTask,
   _resetRegistry,
 } from "../tasks.js"
+
+const taskDb = vi.hoisted(() => ({ row: null as Record<string, unknown> | null }))
 
 // Mock supabase so cancelTask -> markJobCancelled is a no-op in unit tests.
 // The path is relative to tasks.ts, not to this test file.
@@ -15,15 +19,26 @@ vi.mock("../../supabase.js", () => {
   const inFn = vi.fn().mockResolvedValue({ data: null, error: null })
   const eq = vi.fn().mockReturnValue({ in: inFn })
   const update = vi.fn().mockReturnValue({ eq })
-  const from = vi.fn().mockReturnValue({ update })
+  const maybeSingle = vi.fn().mockImplementation(async () => ({ data: taskDb.row, error: null }))
+  let selectChain: Record<string, unknown>
+  selectChain = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === "maybeSingle") return maybeSingle
+      return vi.fn().mockReturnValue(selectChain)
+    },
+  })
+  const select = vi.fn().mockReturnValue(selectChain)
   return {
-    supabase: { from },
+    supabase: {
+      from: vi.fn().mockImplementation(() => ({ update, select })),
+    },
   }
 })
 
 describe("task lifecycle", () => {
   beforeEach(() => {
     _resetRegistry()
+    taskDb.row = null
   })
 
   it("registers a task and retrieves it", () => {
@@ -64,6 +79,36 @@ describe("task lifecycle", () => {
     registerTask({ taskId: "j4", userId: "u1", kind: "audio" })
     completeTask("j4")
     expect(getTask("j4")).toBeNull()
+  })
+
+  it("redacts private remux bases from tasks/result output", async () => {
+    taskDb.row = {
+      status: "completed",
+      output_data: {
+        videoUrl: "https://public.example/final.mp4",
+        pro: { unscoredUrl: "https://private.example/base.mp4" },
+      },
+      error_message: null,
+    }
+    registerTask({ taskId: "j-private", userId: "u1", kind: "video" })
+
+    const handlers = new Map<unknown, (req: { params: { taskId: string } }) => Promise<unknown>>()
+    const server = {
+      server: {
+        setRequestHandler: vi.fn((schema: unknown, handler: (req: { params: { taskId: string } }) => Promise<unknown>) => {
+          handlers.set(schema, handler)
+        }),
+      },
+    }
+    registerTaskHandlers(server as never, () => "u1")
+
+    const handler = handlers.get(GetTaskPayloadRequestSchema)
+    expect(handler).toBeDefined()
+    const result = await handler!({ params: { taskId: "j-private" } })
+
+    expect(JSON.stringify(result)).toContain("https://public.example/final.mp4")
+    expect(JSON.stringify(result)).not.toContain("unscoredUrl")
+    expect(JSON.stringify(result)).not.toContain("private.example")
   })
 
   it("registers timestamp and a fresh AbortController per task", () => {

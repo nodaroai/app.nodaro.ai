@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { GenericNode, GenericEdge, WorkflowExport } from "@nodaro/shared"
+import type { GenericNode, GenericEdge, WorkflowExport, WorkflowImportReport } from "@nodaro/shared"
 
 /**
  * Workflow metadata + (when fetched as a single record) full nodes/edges/settings.
@@ -163,8 +163,11 @@ export class WorkflowsResource {
   /**
    * Import a `WorkflowExport` bundle into the specified project.
    * Re-creates any bundled assets (characters, objects, locations) under your account.
+   * Media the bundle references on other hosts is copied onto this instance's
+   * storage where reachable; `importReport` says what was copied, what could
+   * not be reached, and what was skipped (and why).
    */
-  import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow }> {
+  import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow; importReport?: WorkflowImportReport }> {
     const { projectId, ...workflowJson } = input
     return this.client.request("POST", "/v1/workflows/import", {
       body: { projectId, workflow_json: workflowJson },

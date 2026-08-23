@@ -5,12 +5,14 @@ export interface TTSVoice {
 
 // Curated "premade" voice catalog for the TTS node — all text-to-speech
 // requests route through the direct ElevenLabs API (never KIE), but this
-// stays a fixed 21-name list (plus Adam & Harry via their ElevenLabs UUIDs)
-// so premade voices resolve consistently across turbo/multilingual/v3.
+// stays a fixed name list (plus Adam, Bella & Harry via their ElevenLabs
+// UUIDs) so premade voices resolve consistently across turbo/multilingual/v3.
+// Mirrors FALLBACK_VOICES in backend/src/routes/voices.ts — keep the two in step.
 export const TTS_VOICES: readonly TTSVoice[] = [
   // Female voices
   { id: "Alice", name: "Alice (Female, British)" },
   { id: "Aria", name: "Aria (Female, American)" },
+  { id: "hpp4J3VqNfWAUOO0d1Us", name: "Bella (Female, American)" },
   { id: "Charlotte", name: "Charlotte (Female, English-Swedish)" },
   { id: "Jessica", name: "Jessica (Female, American)" },
   { id: "Laura", name: "Laura (Female, American)" },
@@ -23,7 +25,7 @@ export const TTS_VOICES: readonly TTSVoice[] = [
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam (Male, American)" },
   { id: "Bill", name: "Bill (Male, American)" },
   { id: "Brian", name: "Brian (Male, American)" },
-  { id: "Callum", name: "Callum (Male, Transatlantic)" },
+  { id: "Callum", name: "Callum (Male, American)" },
   { id: "Charlie", name: "Charlie (Male, Australian)" },
   { id: "Chris", name: "Chris (Male, American)" },
   { id: "Daniel", name: "Daniel (Male, British)" },

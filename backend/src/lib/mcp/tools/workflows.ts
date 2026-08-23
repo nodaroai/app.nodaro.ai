@@ -19,6 +19,7 @@ import {
   workflowExportSchema,
 } from "../../workflow-assets.js"
 import { migrateGenerateImageHandles } from "../../generate-image-handle-migration.js"
+import { findUnroutableMedia, rehostForeignMedia } from "../../media-portability.js"
 
 
 /** Refuse Cloud-only node types on editions that can't run them — an
@@ -228,6 +229,10 @@ export function registerWorkflows({
           if ("error" in assetsResult) return err(`Error: ${assetsResult.error}`)
           result.assets = assetsResult
         }
+
+        // Same portability note the REST export carries (#866).
+        const unreachableMedia = findUnroutableMedia(result.nodes)
+        if (unreachableMedia.length > 0) result.portability = { unreachableMedia }
 
         return ok(JSON.stringify(result, null, 2))
       },
@@ -524,9 +529,34 @@ export function registerWorkflows({
           return err(`Error: ${wfError?.message ?? "Failed to create workflow"}`)
         }
         const row = newWorkflow as Record<string, unknown>
+
+        // Same as the REST import (#866): media the bundle points at elsewhere
+        // is copied onto this instance AFTER the row exists (a failed copy is
+        // never a lost import); what could not be copied is reported below.
+        const { nodes: portableNodes, report: importReport } = await rehostForeignMedia(remappedNodes, session.userId)
+        if (importReport.rehosted > 0) {
+          const { error: updError } = await supabase
+            .from("workflows")
+            .update({ nodes: portableNodes })
+            .eq("id", row.id as string)
+            .eq("user_id", session.userId)
+          if (updError) {
+            importReport.notes = [...(importReport.notes ?? []), `Media was copied onto this instance, but the workflow could not be updated to use the copies (${updError.message}).`]
+          }
+        }
+        const mediaNotes = [
+          importReport.rehosted > 0 ? `${importReport.rehosted} media file(s) copied onto this instance.` : "",
+          importReport.unreachable.length > 0
+            ? `${importReport.unreachable.length} media URL(s) point at a private host this instance cannot reach — those nodes need their media re-uploaded here: ${importReport.unreachable.map((m) => `${m.nodeLabel ?? m.nodeId} (${m.field})`).join(", ")}.`
+            : "",
+          importReport.skipped.length > 0
+            ? `${importReport.skipped.length} media URL(s) skipped: ${importReport.skipped.map((m) => `${m.nodeLabel ?? m.nodeId} (${m.field}): ${m.reason}`).join("; ")}.`
+            : "",
+          ...(importReport.notes ?? []),
+        ].filter(Boolean)
         return ok(
-          `Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project.`,
-          { id: row.id, name: row.name },
+          [`Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project.`, ...mediaNotes].join(" "),
+          { id: row.id, name: row.name, importReport },
         )
       },
     )

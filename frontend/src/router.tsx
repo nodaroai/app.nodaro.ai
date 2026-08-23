@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { hasAdmin, hasCredits, isCloud, isMultiUser } from "@/lib/edition"
+import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -43,6 +43,16 @@ const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-pag
 const DeletedAppsPage = lazy(() => import("@/app/(dashboard)/apps/deleted/page"))
 const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 const ExplorePage = lazy(() => import("@/ee/app/explore/page"))
+const InvitationPage = lazy(() => import("@/ee/app/join/invitation-page"))
+const JoinCodePage = lazy(() => import("@/ee/app/join/join-code-page"))
+const NewOrgPage = lazy(() => import("@/ee/app/org/new-org-page"))
+const WorkspaceHomePage = lazy(() => import("@/ee/app/workspace/workspace-home-page"))
+const OrgOverviewPage = lazy(() => import("@/ee/app/org/org-overview-page"))
+const OrgMembersPage = lazy(() => import("@/ee/app/org/org-members-page"))
+const OrgWorkspacesPage = lazy(() => import("@/ee/app/org/org-workspaces-page"))
+const OrgSettingsPage = lazy(() => import("@/ee/app/org/org-settings-page"))
+const WorkspacePeoplePage = lazy(() => import("@/ee/app/workspace/workspace-people-page"))
+const WorkspaceSettingsPage = lazy(() => import("@/ee/app/workspace/workspace-settings-page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -141,6 +151,19 @@ const communityRoutes: RouteObject[] = isMultiUser()
   ? [{ path: "/explore", element: <SuspenseWrapper><ExplorePage /></SuspenseWrapper> }]
   : []
 
+// The two ways INTO an organization, registered next to /login rather than
+// inside the dashboard layout — an invitee following a link is signed out,
+// and a route behind the app chrome would bounce them to /login and lose the
+// token they arrived with. Absent entirely on a build without the feature,
+// so the URLs fall through to the NotFound handler rather than rendering a
+// page that can only fail.
+const orgPublicRoutes: RouteObject[] = hasOrganizations()
+  ? [
+      { path: "/join", element: <SuspenseWrapper><JoinCodePage /></SuspenseWrapper> },
+      { path: "/join/:token", element: <SuspenseWrapper><InvitationPage /></SuspenseWrapper> },
+    ]
+  : []
+
 // Self-host install health screen — never registered on cloud builds (the
 // backend route is likewise gated behind !isCloud() in app.ts).
 const setupRoutes: RouteObject[] = !isCloud()
@@ -161,6 +184,7 @@ export const router = createBrowserRouter([
     path: "/auth/callback",
     element: <AuthCallback />,
   },
+  ...orgPublicRoutes,
   {
     path: "/login",
     element: <SuspenseWrapper><LoginPage /></SuspenseWrapper>,
@@ -310,6 +334,20 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><TemplatesPage /></SuspenseWrapper>,
       },
       ...communityRoutes,
+      // Creating an organization needs a session and a sidebar, so unlike the
+      // two /join routes it lives INSIDE the dashboard layout.
+      ...(hasOrganizations()
+        ? [
+            { path: "/org/new", element: <SuspenseWrapper><NewOrgPage /></SuspenseWrapper> },
+            { path: "/w/:id", element: <SuspenseWrapper><WorkspaceHomePage /></SuspenseWrapper> },
+            { path: "/org/:slug", element: <SuspenseWrapper><OrgOverviewPage /></SuspenseWrapper> },
+            { path: "/org/:slug/members", element: <SuspenseWrapper><OrgMembersPage /></SuspenseWrapper> },
+            { path: "/org/:slug/workspaces", element: <SuspenseWrapper><OrgWorkspacesPage /></SuspenseWrapper> },
+            { path: "/org/:slug/settings", element: <SuspenseWrapper><OrgSettingsPage /></SuspenseWrapper> },
+            { path: "/w/:id/people", element: <SuspenseWrapper><WorkspacePeoplePage /></SuspenseWrapper> },
+            { path: "/w/:id/settings", element: <SuspenseWrapper><WorkspaceSettingsPage /></SuspenseWrapper> },
+          ]
+        : []),
       {
         path: "/_gallery",
         element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,

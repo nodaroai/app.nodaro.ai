@@ -6,6 +6,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { isRetryableFailure } from "./_job-error.js"
+import { redactPrivateJobData } from "../../public-job-data.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -165,6 +166,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const kinds = args.kinds ?? ["image", "video"]
       const allowed = new Set(kinds.flatMap((k) => setForKind[k] ?? []))
       rows = rows.filter((r) => r.job_type && allowed.has(r.job_type as string))
+      rows = redactPrivateJobData(rows)
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
@@ -229,10 +231,11 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // error_message is already in `data`, but the flag makes the
       // "content policy → do NOT re-run the same request" signal
       // unambiguous so the model stops retrying a permanent block.
-      const failed = data.status === "failed" || data.status === "cancelled"
+      const publicData = redactPrivateJobData(data)
+      const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
-        ? { data, retryable: isRetryableFailure(data.error_message as string | null) }
-        : { data }
+        ? { data: publicData, retryable: isRetryableFailure(publicData.error_message as string | null) }
+        : { data: publicData }
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       }

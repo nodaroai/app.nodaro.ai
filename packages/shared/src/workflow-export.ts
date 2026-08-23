@@ -74,6 +74,45 @@ export interface WorkflowExportLocation {
   styleLock?: boolean | null
 }
 
+/** A media URL referenced from a node's data, located by node + field path. */
+export interface WorkflowMediaRef {
+  nodeId: string
+  nodeLabel?: string
+  /** Dot/bracket path inside `node.data`, e.g. `imageUrl` or `referenceImageUrls[1]`. */
+  field: string
+  url: string
+}
+
+/**
+ * Export-time portability analysis (#866). A bundle exported from a private
+ * host carries media URLs only that host can serve (`http://localhost:3000/
+ * storage/…`, a LAN address, a `.internal` name); imported anywhere else, the
+ * nodes fail at Run time with an opaque provider fetch error. The exporter
+ * lists those URLs here so the person exporting is told BEFORE sharing, and
+ * an importer can explain what will not load. Absent when every media URL is
+ * publicly routable.
+ */
+export interface WorkflowPortability {
+  unreachableMedia: WorkflowMediaRef[]
+}
+
+/**
+ * What the importer did about the bundle's media (#866). Publicly reachable
+ * media that is not already on the importing instance's own storage is
+ * copied there (`rehosted`) so the workflow runs from local copies; media on
+ * a host the importer cannot reach is left as-is and listed (`unreachable`);
+ * anything declined for another reason (too large, not a media type, over
+ * the per-import cap, upload failed) is listed with the reason (`skipped`).
+ */
+export interface WorkflowImportReport {
+  rehosted: number
+  unreachable: WorkflowMediaRef[]
+  skipped: Array<WorkflowMediaRef & { reason: string }>
+  /** Anything else the importer should know, e.g. copies were made but the
+   *  workflow could not be updated to use them. */
+  notes?: string[]
+}
+
 export interface WorkflowExport {
   version: 1
   exportedAt: string
@@ -87,6 +126,8 @@ export interface WorkflowExport {
     creatures?: WorkflowExportCreature[]
     locations: WorkflowExportLocation[]
   }
+  /** Present only when the bundle references media another instance cannot fetch. */
+  portability?: WorkflowPortability
 }
 
 /**

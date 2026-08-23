@@ -102,6 +102,8 @@ const OWNED_KEY = "uploads/audios/owned.mp3"
 const JOB_URL = `${R2_PUBLIC_URL}/audios/job-output.mp3`
 const JOB_KEY = "audios/job-output.mp3"
 const STEM_URL = `${R2_PUBLIC_URL}/audio/vcp-stem-recast-0-A.mp3`
+const MUSIC_LAYER_URL = `${R2_PUBLIC_URL}/audios/recast-music.m4a`
+const VIDEO_LAYER_URL = `${R2_PUBLIC_URL}/audios/recast-video.m4a`
 const UNOWNED_URL = `${R2_PUBLIC_URL}/images/someone-elses.png`
 const FOREIGN_URL = "https://cdn.example.com/not-ours.mp3"
 
@@ -326,6 +328,30 @@ describe("POST /v1/media/delete — assets path", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/media/delete — job-output path", () => {
+  it.each([
+    ["initial Music", MUSIC_LAYER_URL, "output_data->pro->audio->layers->music->>url"],
+    ["initial Video", VIDEO_LAYER_URL, "output_data->pro->audio->layers->video->>url"],
+    ["published Music", MUSIC_LAYER_URL, "output_data->audio->layers->music->>url"],
+    ["published Video", VIDEO_LAYER_URL, "output_data->audio->layers->video->>url"],
+  ])("proves ownership of a row-less %s audio derivative", async (_name, url, expectedPath) => {
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs") {
+        expect(eqVal(calls, "user_id")).toBe(TEST_USER_ID)
+        const match = calls.find((call) => call.method === "eq" && call.args[0] === expectedPath)
+        return { count: match?.args[1] === url ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [url] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [url], skipped: [] })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(url.slice(`${R2_PUBLIC_URL}/`.length))
+  })
+
   it("deletes ONLY the R2 object for a caller-owned job output: no row delete, no storage decrement", async () => {
     let assetDeletes = 0
     let bareAssetRefChecks = 0

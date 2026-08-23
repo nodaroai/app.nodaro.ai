@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase"
+import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
@@ -15,18 +17,28 @@ export const API_BASE_URL = ''
 /**
  * Get auth headers with the current session's JWT token.
  * Returns { Authorization: 'Bearer ...' } or {} if no session.
+ *
+ * On a build with organizations, this is also where the active workspace is
+ * attached — the single choke point every REST call passes through, so a new
+ * call site cannot forget it. The header decides which workspace a list is
+ * read from and where a create lands; it never grants access, so sending it
+ * on a call that does not care is harmless and omitting it means "my
+ * personal space".
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {}
   try {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` }
+      headers.Authorization = `Bearer ${session.access_token}`
     }
   } catch {
     // Silently fall back to no auth header
   }
-  return {}
+  const workspaceId = getActiveWorkspaceId()
+  if (workspaceId) headers[WORKSPACE_HEADER] = workspaceId
+  return headers
 }
 
 export async function getCurrentUserId(): Promise<string | undefined> {
@@ -127,6 +139,14 @@ export class NodaroConnectionRequiredError extends Error {
  */
 function throwApiError(errJson: Record<string, unknown> | null, fallback: string): never {
   const errObj = errJson?.error as Record<string, unknown> | undefined
+  // The server refused the workspace this browser had selected — the caller
+  // was removed, suspended, or the organization stopped being active. The
+  // selection is a preference, so the remedy is to drop it: the next call
+  // runs in the personal space rather than repeating a request that cannot
+  // succeed. Every REST call funnels through here, so one place is enough.
+  if (errObj?.code === "not_a_member" || errObj?.code === "member_suspended") {
+    clearActiveWorkspaceAfterRefusal()
+  }
   if (errObj?.code === "storage_limit_exceeded") {
     throw new StorageExceededError(
       (errObj.message as string) ?? fallback,
@@ -6122,17 +6142,21 @@ export interface ImportedWorkflow {
   updatedAt: string
 }
 
-/** Import a workflow bundle into a project — re-creates bundled assets and returns the new workflow. */
+/**
+ * Import a workflow bundle into a project — re-creates bundled assets and
+ * returns the new workflow. `importReport` (#866) says what happened to the
+ * bundle's media: copied onto this instance, unreachable, or skipped.
+ */
 export async function importWorkflow(
   input: WorkflowExport & { projectId: string },
-): Promise<ImportedWorkflow> {
+): Promise<ImportedWorkflow & { importReport?: WorkflowImportReport }> {
   const { projectId, ...workflow_json } = input
-  const json = await apiRequest<{ data: ImportedWorkflow }>(
+  const json = await apiRequest<{ data: ImportedWorkflow; importReport?: WorkflowImportReport }>(
     `/v1/workflows/import`,
     "Failed to import workflow",
     { method: "POST", body: { projectId, workflow_json } },
   )
-  return json.data
+  return { ...json.data, importReport: json.importReport }
 }
 
 // ---------------------------------------------------------------------------

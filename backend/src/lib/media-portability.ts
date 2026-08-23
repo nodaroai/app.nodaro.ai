@@ -1,0 +1,452 @@
+import { randomUUID } from "node:crypto"
+import type { WorkflowImportReport, WorkflowMediaRef } from "@nodaro/shared"
+import { EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { safeFetch } from "./safe-fetch.js"
+
+/**
+ * Workflow media portability (#866).
+ *
+ * "Workflows are portable JSON" held in one direction only: a bundle exported
+ * from a private host (localhost, a LAN box, a `.internal` name) carries media
+ * URLs nobody else can fetch, and import accepted it silently — the breakage
+ * surfaced at Run time as an opaque provider error. Two halves here:
+ *
+ *   - export: `findUnroutableMedia` lists the URLs another instance cannot
+ *     reach, so the exporter is told before sharing the file;
+ *   - import: `rehostForeignMedia` copies publicly reachable media that is
+ *     not already on THIS instance's storage into it, so the workflow runs
+ *     from local copies instead of someone else's host.
+ *
+ * URL fields are found by NAME (`…url` / `…urls` / `…urllist`), the same rule
+ * the cloud proxy's re-host walk uses — a prompt that happens to contain a
+ * link is never touched. The import half narrows that further: endpoint-like
+ * names and generated/preview fields are never fetched or rewritten.
+ *
+ * The import half must NEVER throw: one flaky media URL is a skipped entry in
+ * the report, not a lost import.
+ */
+
+/** Field names whose values are media URLs. */
+export const URL_FIELD = /url$|urls$|urllist$/i
+
+/** Node data nests (scene-graph `assets[].url`), but not without end. */
+const WALK_DEPTH = 6
+
+const HTTP_URL = /^https?:\/\//i
+const MEDIA_TYPE = /^(image|video|audio)\//i
+
+/**
+ * URL-named fields that point at ENDPOINTS, not files — a webhook target, a
+ * platform post, a share page, a presigned upload slot. Re-hosting those would
+ * mean GETting a third party's endpoint from this server and, if it happened
+ * to answer with a media type, rewriting the link to our copy.
+ */
+const ENDPOINT_FIELD = /(webhook|callback|endpoint|api|redirect|page|post|share|feed|site|link|upload)url(s|list)?$/i
+
+/** Derived media — regenerable, and the importer should not pay to copy it. */
+const DERIVED_FIELD = /(thumbnail|preview|poster)url(s|list)?$/i
+
+/**
+ * A host nothing outside this machine/network can reach. Shared with the
+ * nodaro.ai client's "can the cloud fetch this?" check — one list.
+ */
+export function isUnroutableHost(hostname: string): boolean {
+  // Strip IPv6 brackets so ::1 / fc00:: literals compare cleanly.
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase()
+  return (
+    host === "localhost" ||
+    host === "host.docker.internal" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    !host.includes(".") ||
+    /^127\./.test(host) || // whole loopback /8, not just .0.1
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    /^169\.254\./.test(host) || // link-local — cloud metadata lives here
+    /^0\./.test(host) ||
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) || // CGNAT 100.64/10
+    host === "::1" ||
+    host === "::" ||
+    /^f[cd][0-9a-f]{2}:/.test(host) || // IPv6 unique-local fc00::/7
+    /^fe80:/.test(host) // IPv6 link-local
+  )
+}
+
+/** True when another instance (or the cloud) could not fetch this URL. */
+export function isUnroutableMediaUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== "http:" && u.protocol !== "https:") return true
+    return isUnroutableHost(u.hostname)
+  } catch {
+    return true
+  }
+}
+
+type NodeLike = { readonly id?: unknown; readonly data?: unknown }
+
+interface WalkFilter {
+  /** Skip a top-level `data` key entirely (runtime/result state on import). */
+  readonly skipTopLevel?: (key: string) => boolean
+  /** Skip a URL-named field by its own name (endpoints, previews). */
+  readonly skipField?: (key: string) => boolean
+}
+
+/** The import half's filter: inputs only — never outputs, never endpoints. */
+const REHOST_FILTER: WalkFilter = {
+  skipTopLevel: (key) => EXECUTION_DATA_KEYS.has(key),
+  skipField: (key) => ENDPOINT_FIELD.test(key) || DERIVED_FIELD.test(key),
+}
+
+function labelOf(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined
+  const label = (data as { label?: unknown }).label
+  return typeof label === "string" && label.trim() ? label : undefined
+}
+
+function walkUrlFields(
+  value: unknown,
+  path: string,
+  depth: number,
+  visit: (field: string, url: string) => void,
+  filter: WalkFilter,
+): void {
+  if (depth > WALK_DEPTH || !value || typeof value !== "object") return
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => walkUrlFields(item, `${path}[${i}]`, depth + 1, visit, filter))
+    return
+  }
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (depth === 0 && filter.skipTopLevel?.(key)) continue
+    const field = path ? `${path}.${key}` : key
+    if (URL_FIELD.test(key)) {
+      if (filter.skipField?.(key)) continue
+      if (typeof v === "string" && HTTP_URL.test(v)) visit(field, v)
+      else if (Array.isArray(v)) {
+        v.forEach((item, i) => {
+          if (typeof item === "string" && HTTP_URL.test(item)) visit(`${field}[${i}]`, item)
+        })
+      }
+      continue
+    }
+    walkUrlFields(v, field, depth + 1, visit, filter)
+  }
+}
+
+/** Every http(s) media URL referenced from the nodes' data, with its location. */
+export function collectNodeMediaUrls(nodes: readonly unknown[], filter: WalkFilter = {}): WorkflowMediaRef[] {
+  const out: WorkflowMediaRef[] = []
+  for (const n of nodes) {
+    if (!n || typeof n !== "object") continue
+    const node = n as NodeLike
+    const nodeId = typeof node.id === "string" ? node.id : ""
+    const nodeLabel = labelOf(node.data)
+    walkUrlFields(
+      node.data,
+      "",
+      0,
+      (field, url) => {
+        out.push(nodeLabel ? { nodeId, nodeLabel, field, url } : { nodeId, field, url })
+      },
+      filter,
+    )
+  }
+  return out
+}
+
+/** The export half: media URLs another instance cannot fetch. */
+export function findUnroutableMedia(nodes: readonly unknown[]): WorkflowMediaRef[] {
+  return collectNodeMediaUrls(nodes).filter((ref) => isUnroutableMediaUrl(ref.url))
+}
+
+// ---------------------------------------------------------------------------
+// Import half — copy foreign, reachable media into this instance's storage
+// ---------------------------------------------------------------------------
+
+export interface RehostOptions {
+  /** Distinct URLs copied per import; the rest are reported as skipped. */
+  readonly maxFiles?: number
+  /** Per-file cap for video/audio (images use the image-import cap). */
+  readonly maxBytes?: number
+  readonly concurrency?: number
+  readonly timeoutMs?: number
+}
+
+// Buffered in memory while copying: maxBytes × concurrency is the peak.
+const REHOST_DEFAULTS: Required<RehostOptions> = {
+  maxFiles: 25,
+  maxBytes: 50 * 1024 * 1024,
+  concurrency: 2,
+  timeoutMs: 20_000,
+}
+
+// The import half's storage/DB dependencies load lazily: the URL predicate
+// and the walk are imported by the nodaro.ai client and the cloud proxy,
+// whose suites mock config minimally — a static storage/supabase/sharp
+// import here would make every one of them construct a real client at load.
+const importDeps = () =>
+  Promise.all([
+    import("./storage.js"),
+    import("./supabase.js"),
+    import("./media-import.js"),
+    import("../utils/file-validation.js"),
+  ] as const)
+type ImportDeps = Awaited<ReturnType<typeof importDeps>>
+
+const EXT_BY_MIME: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/ogg": "ogg",
+  "audio/flac": "flac",
+}
+
+function extensionFor(mime: string, url: string): string {
+  const known = EXT_BY_MIME[mime]
+  if (known) return known
+  try {
+    const ext = new URL(url).pathname.split(".").pop() ?? ""
+    if (/^[a-z0-9]{1,5}$/i.test(ext)) return ext.toLowerCase()
+  } catch {
+    /* fall through */
+  }
+  return "bin"
+}
+
+function filenameFor(url: string): string | undefined {
+  try {
+    const last = new URL(url).pathname.split("/").pop()
+    return last ? decodeURIComponent(last) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+type FetchOutcome = { readonly ok: true; readonly url: string } | { readonly ok: false; readonly reason: string }
+
+/**
+ * Copy one foreign media URL into our storage. Images go through the same
+ * decode-gated path as `POST /v1/import-image` (thumbnail + asset row);
+ * video/audio are stored as-is with an asset row so the library and the
+ * cleanup sweeps see them like any upload. Never throws — every failure is
+ * a reason in the report.
+ */
+async function rehostOne(
+  ref: WorkflowMediaRef,
+  userId: string,
+  opts: Required<RehostOptions>,
+  deps: ImportDeps,
+): Promise<FetchOutcome> {
+  try {
+    return await rehostOneUnsafe(ref, userId, opts, deps)
+  } catch (err) {
+    return { ok: false, reason: `copy failed: ${errorText(err)}` }
+  }
+}
+
+async function rehostOneUnsafe(
+  ref: WorkflowMediaRef,
+  userId: string,
+  opts: Required<RehostOptions>,
+  deps: ImportDeps,
+): Promise<FetchOutcome> {
+  const [
+    { uploadBufferToR2 },
+    { supabase },
+    { IMPORT_MAX_BYTES, readBodyCapped, storeImportedImageBuffer },
+    { refundStorage, reserveStorageIfWithinLimit },
+  ] = deps
+  let res: Response
+  try {
+    res = await safeFetch(ref.url, { timeoutMs: opts.timeoutMs })
+  } catch (err) {
+    return { ok: false, reason: `fetch failed: ${errorText(err)}` }
+  }
+  if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` }
+  const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase()
+  if (!MEDIA_TYPE.test(mime)) return { ok: false, reason: `not media (${mime || "no content-type"})` }
+  const isImage = mime.startsWith("image/")
+  const cap = isImage ? IMPORT_MAX_BYTES : opts.maxBytes
+  let body: Buffer | null
+  try {
+    body = await readBodyCapped(res, cap)
+  } catch (err) {
+    // A reset or the timeout firing mid-body — the stream rejects.
+    return { ok: false, reason: `download failed: ${errorText(err)}` }
+  }
+  if (body === null) return { ok: false, reason: `larger than ${Math.round(cap / (1024 * 1024))}MB` }
+
+  if (isImage) {
+    const stored = await storeImportedImageBuffer({
+      userId,
+      body,
+      uploadSource: "url_import",
+      sourceUrl: ref.url,
+      filename: filenameFor(ref.url),
+    })
+    return stored.ok ? { ok: true, url: stored.url } : { ok: false, reason: stored.message }
+  }
+
+  // Atomic storage reservation — the same race-free RPC the upload route uses.
+  if (!(await reserveStorageIfWithinLimit(userId, body.length))) {
+    return { ok: false, reason: "storage limit exceeded" }
+  }
+  const kind = mime.startsWith("video/") ? "video" : "audio"
+  const fileId = randomUUID()
+  const ext = extensionFor(mime, ref.url)
+  const r2Key = `uploads/${kind}s/${fileId}.${ext}`
+  let publicUrl: string
+  try {
+    // The reservation already counted the bytes — no trackUserId.
+    publicUrl = await uploadBufferToR2(body, r2Key, mime)
+  } catch (err) {
+    await refundStorage(userId, body.length)
+    return { ok: false, reason: `upload failed: ${errorText(err)}` }
+  }
+  // Asset record, best-effort like the upload route: the media is already in
+  // place and referenced from the workflow, so a missing library row must not
+  // fail the import — but it IS a permanent quota leak (reserved bytes with no
+  // row to reclaim them through), so it is logged the way the upload route
+  // logs it: loud, with everything needed to repair by hand.
+  const { error } = await supabase.from("assets").insert({
+    user_id: userId,
+    type: kind,
+    filename: filenameFor(ref.url) ?? `imported-${fileId}.${ext}`,
+    mime_type: mime,
+    size_bytes: body.length,
+    r2_key: r2Key,
+    r2_url: publicUrl,
+    upload_source: "url_import",
+    metadata: { source_url: ref.url },
+  })
+  if (error) {
+    console.error(
+      `[media-portability] ASSET ROW FAILED after upload — storage reserved with no row to reclaim it: user=${userId} key=${r2Key} bytes=${body.length}:`,
+      error.message,
+    )
+  }
+  return { ok: true, url: publicUrl }
+}
+
+async function runPool<T>(items: readonly T[], concurrency: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const lanes = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++]!
+      await work(item)
+    }
+  })
+  await Promise.all(lanes)
+}
+
+/** Deep copy of a node's DATA with every URL-field value passed through `map` — inputs untouched. */
+function rewriteUrlFields(value: unknown, depth: number, map: (url: string) => string): unknown {
+  if (depth > WALK_DEPTH || !value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((item) => rewriteUrlFields(item, depth + 1, map))
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, v]) => {
+      if (URL_FIELD.test(key)) {
+        if (typeof v === "string") return [key, map(v)]
+        if (Array.isArray(v)) return [key, v.map((item) => (typeof item === "string" ? map(item) : item))]
+        return [key, v]
+      }
+      return [key, rewriteUrlFields(v, depth + 1, map)]
+    }),
+  )
+}
+
+function emptyReport(): WorkflowImportReport {
+  return { rehosted: 0, unreachable: [], skipped: [] }
+}
+
+/**
+ * The import half. Returns new node objects (the input is never mutated) plus
+ * a report the response carries so the importer can explain what happened.
+ * Never throws: an unavailable storage layer degrades to "nothing copied,
+ * every candidate reported as skipped".
+ */
+export async function rehostForeignMedia<T>(
+  nodes: readonly T[],
+  userId: string,
+  options: RehostOptions = {},
+): Promise<{ nodes: T[]; report: WorkflowImportReport }> {
+  const opts = { ...REHOST_DEFAULTS, ...options }
+  const report = emptyReport()
+  const refs = collectNodeMediaUrls(nodes, REHOST_FILTER)
+  if (refs.length === 0) return { nodes: [...nodes], report }
+
+  let deps: ImportDeps
+  try {
+    // Loaded once per import, not once per file.
+    deps = await importDeps()
+  } catch (err) {
+    for (const ref of refs) report.skipped.push({ ...ref, reason: `re-host unavailable: ${errorText(err)}` })
+    return { nodes: [...nodes], report }
+  }
+  const { r2KeyFromOurUrl, getR2ObjectSize } = deps[0]
+
+  // One decision per distinct URL, however many fields reference it.
+  const candidates = new Map<string, WorkflowMediaRef>()
+  const ownPrefixed = new Map<string, WorkflowMediaRef>()
+  for (const ref of refs) {
+    if (candidates.has(ref.url) || ownPrefixed.has(ref.url)) continue
+    if (r2KeyFromOurUrl(ref.url)) {
+      ownPrefixed.set(ref.url, ref)
+      continue
+    }
+    if (isUnroutableMediaUrl(ref.url)) {
+      report.unreachable.push(ref)
+      continue
+    }
+    candidates.set(ref.url, ref)
+  }
+
+  // A URL under OUR public prefix is ours only if the object exists here. Two
+  // default self-hosts share `http://localhost:3000/storage/…` verbatim, so a
+  // bundle from install A looks "already ours" on install B by prefix alone —
+  // the exact case this module exists for. Missing here ⇒ it is someone else's
+  // private host, and nothing can fetch it.
+  await runPool([...ownPrefixed.entries()], opts.concurrency, async ([url, ref]) => {
+    const key = r2KeyFromOurUrl(url)!
+    const size = await getR2ObjectSize(key).catch(() => 0)
+    if (size <= 0) report.unreachable.push(ref)
+  })
+
+  const queue = [...candidates.values()]
+  for (const ref of queue.splice(opts.maxFiles)) {
+    report.skipped.push({ ...ref, reason: `over the ${opts.maxFiles}-file import cap` })
+  }
+
+  const replacements = new Map<string, string>()
+  await runPool(queue, opts.concurrency, async (ref) => {
+    const outcome = await rehostOne(ref, userId, opts, deps)
+    if (outcome.ok) {
+      replacements.set(ref.url, outcome.url)
+      report.rehosted += 1
+    } else {
+      report.skipped.push({ ...ref, reason: outcome.reason })
+    }
+  })
+
+  if (replacements.size === 0) return { nodes: [...nodes], report }
+  const map = (url: string) => replacements.get(url) ?? url
+  const mapped = nodes.map((n) => {
+    if (!n || typeof n !== "object") return n
+    const node = n as NodeLike
+    // Same axis as the walk: depth 0 is `node.data`, and only INPUT fields
+    // were fetched — but the rewrite may touch every field, since it only
+    // ever substitutes URLs that were actually copied.
+    return { ...(n as object), data: rewriteUrlFields(node.data, 0, map) } as T
+  })
+  return { nodes: mapped, report }
+}

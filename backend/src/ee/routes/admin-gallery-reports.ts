@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { redactPrivateJobData } from "../../lib/public-job-data.js"
 
 // ---- Zod Schemas ----
 
@@ -50,7 +51,7 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      data: reports ?? [],
+      data: redactPrivateJobData(reports ?? []),
       total: count ?? 0,
       page,
       limit,

@@ -9,6 +9,7 @@ import {
   readShowClientAppsFlag,
 } from "@/hooks/queries/use-client-apps-queries"
 import type { Json } from "@/types/database.types"
+import { nodaroClient } from "@/lib/nodaro-client"
 
 export interface Project {
   readonly id: string
@@ -212,9 +213,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         return
       }
 
-      const supabase = createClient()
-      const { error } = await supabase.from("projects").delete().eq("id", id)
-      if (error) return
+      await nodaroClient.projects.delete(id)
 
       set((s) => ({
         projects: s.projects.filter((p) => p.id !== id),
@@ -328,9 +327,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
   deleteWorkflow: async (id) => {
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from("workflows").delete().eq("id", id)
-      if (error) return
+      await nodaroClient.workflows.delete(id)
 
       set((s) => ({
         workflowMetas: s.workflowMetas.filter((w) => w.id !== id),

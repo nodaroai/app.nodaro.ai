@@ -121,6 +121,9 @@ added to `config.ts` without a row here.
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
+| `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
+| `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
+| `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
@@ -156,6 +159,7 @@ added to `config.ts` without a row here.
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated |
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch (§10) |
+| `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
@@ -266,6 +270,14 @@ For any other S3-compatible store (AWS S3, Backblaze B2, self-managed
 MinIO), set `R2_ENDPOINT` to its S3 API URL, `R2_FORCE_PATH_STYLE=true`
 for most self-hosted servers, and `R2_PUBLIC_URL` to the bucket's
 public URL.
+
+If the Cloud Recast plugin is enabled, its revisioned audio player loads
+audio-only layer files directly in Web Audio. The public storage origin must
+allow anonymous cross-origin `GET` from the Recast web origin (and `HEAD` when
+your player or CDN uses it), expose the headers needed for media reads, and
+honor byte-range requests (`Range` / `206 Partial Content`) so seeking works.
+Configure this on the bucket or CDN, and verify it against an actual generated
+audio-layer URL; API `CORS_ORIGIN` does not configure object-storage CORS.
 
 ### 2e. Start the stack
 

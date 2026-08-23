@@ -11,6 +11,8 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import type { CreditReservation, StorageSnapshot, CreditGuardOpts } from "../../middleware/credit-guard.js"
 import { resolveEffectiveTier } from "@nodaro/shared"
 import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
+import { effectiveMarkupPercent } from "../billing/service-margin.js"
+import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 
 // Per-instance monthly spend rollup for the community-connect cap. Reads the
 // jobs ledger (source_detail carries the appId — stamped by insertJob) with a
@@ -93,9 +95,10 @@ export function creditGuardImpl(
       try {
         const baseCredits = await opts.computeCredits(req.body)
         const settings = await getAppSettings()
+        const markupPercent = effectiveMarkupPercent(settings, modelIdentifier)
         computedCreditOverride =
-          settings.cost_markup_percent > 0 && baseCredits > 0
-            ? Math.ceil(baseCredits * (1 + settings.cost_markup_percent / 100))
+          markupPercent > 0 && baseCredits > 0
+            ? Math.ceil(baseCredits * (1 + markupPercent / 100))
             : baseCredits
       } catch (err) {
         // Hard-fail policy: a missing-price error during computeCredits must
@@ -280,6 +283,14 @@ export async function reserveCreditsForJobImpl(
 
     return reservation
   } catch (err) {
+    // The reserve RPC may have committed before its HTTP response was lost.
+    // Reconcile by job id before deleting the orphan row so an ambiguous
+    // transport failure cannot strand a reserved usage log (and its debit).
+    await refundReservedCreditsForJob(jobId).catch((refundError) => {
+      console.warn(
+        `[credit-guard] ${routeName} ambiguous reservation refund failed job=${jobId}: ${(refundError as Error).message}`,
+      )
+    })
     // Clean up the stale job row before responding (same as the legacy 500 path).
     await supabase.from("jobs").delete().eq("id", jobId)
     // Hard-fail policy: missing-price misconfig → 503 (handled below)

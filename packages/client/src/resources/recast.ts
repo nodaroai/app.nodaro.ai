@@ -68,10 +68,87 @@ export interface RecastEstimate {
   [key: string]: unknown
 }
 
+export type RecastAudioLayerName = "music" | "video"
+
+export interface RecastAudioMixControl {
+  /** Linear gain percentage. The server rounds and clamps this to 0–200. */
+  gain: number
+  /** A muted lane has an effective wire gain of zero. */
+  muted: boolean
+}
+
+/** Complete desired controls for the logical lanes addressed by an operation. */
+export interface RecastAudioMix {
+  music?: RecastAudioMixControl
+  video?: RecastAudioMixControl
+}
+
+export interface RecastAudioManifestV1 {
+  version: 1
+  /** Opaque server-minted identity of the currently published audio delivery. */
+  revision: string
+  mode: "bed" | "replace"
+  /** Logical layers in the delivery, including layers whose preview derivative failed. */
+  present: { music?: true; video?: true }
+  /** Browser-ready, CORS-enabled audio-only derivatives. */
+  layers: { music?: { url: string }; video?: { url: string } }
+  /** Effective integer gain percentages baked into the current `resultUrl`. */
+  bakedEffectiveGain: { music?: number; video?: number }
+  /** Present only while a paid audio operation is genuinely live. */
+  pendingRescore?: {
+    jobId: string
+    requestId: string
+    state: "pending" | "running"
+    expectedAudioRevision: string
+    requestedEffectiveGain: { music?: number; video?: number }
+  }
+}
+
+export interface RecastAudioSectionReplacement {
+  index: number
+  brief: string
+}
+
+/** Exactly one replacement lane may be combined with a mix. */
+export type RecastRescoreReplacement =
+  | { audioUrl: string; sections?: never }
+  | { sections: RecastAudioSectionReplacement[]; audioUrl?: never }
+
+type RecastNoReplacement = { audioUrl?: never; sections?: never }
+
+/** A mix, one Music replacement, or a replacement and its complete desired mix. */
+export type RecastRescoreOperation =
+  | ({ mix: RecastAudioMix } & (RecastRescoreReplacement | RecastNoReplacement))
+  | (RecastRescoreReplacement & { mix?: RecastAudioMix })
+
+/** Free quote input. `requestId` is deliberately absent because quoting has no side effects. */
+export type EstimateRecastRescoreInput = RecastRescoreOperation & {
+  expectedAudioRevision: string
+}
+
+/** Revision-safe paid operation. Reuse `requestId` only for transport retries. */
+export type RecastRescoreRequestV2 = EstimateRecastRescoreInput & {
+  requestId: string
+}
+
+export interface RecastRescoreQuote {
+  credits: number
+  audioRevision: string
+  noOp: boolean
+}
+
+export type RecastRescoreResponse =
+  | { recastId: string; jobId: string; noOp?: false }
+  | { recastId: string; noOp: true; audioRevision: string }
+
 /** Run snapshot — `status` plus, on interactive runs, the pending step. */
 export interface RecastRunSnapshot {
   status: string
   interactive?: Record<string, unknown>
+  /** Presence of `audioLayers: 1` opts a client into the revisioned audio contract. */
+  capabilities?: { audioLayers?: 1; [key: string]: unknown }
+  /** Server-authored manifest for the selected completed take. */
+  audio?: RecastAudioManifestV1
   [key: string]: unknown
 }
 
@@ -141,6 +218,30 @@ export class RecastResource {
   /** Poll the run — status plus any pending interactive step. */
   get(recastId: string): Promise<RecastRunSnapshot> {
     return this.client.request("GET", `/v1/recast/${encodeURIComponent(recastId)}`)
+  }
+
+  /** Quote a revisioned Music replacement and/or complete desired mix. Free. */
+  estimateRescore(
+    recastId: string,
+    input: EstimateRecastRescoreInput,
+  ): Promise<RecastRescoreQuote> {
+    return this.client.request(
+      "POST",
+      `/v1/recast/${encodeURIComponent(recastId)}/estimate-rescore`,
+      { body: input },
+    )
+  }
+
+  /** Apply a quoted audio operation. Reuse its request id only for a transport retry. */
+  rescore(
+    recastId: string,
+    input: RecastRescoreRequestV2,
+  ): Promise<RecastRescoreResponse> {
+    return this.client.request(
+      "POST",
+      `/v1/recast/${encodeURIComponent(recastId)}/rescore`,
+      { body: input },
+    )
   }
 
   /** Start rendering a `planned` run. Idempotent server-side. */

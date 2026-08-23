@@ -114,13 +114,66 @@ describe("GET /v1/voices", () => {
     expect(body.voices.length).toBeGreaterThan(0) // static FALLBACK_VOICES — still usable for TTS via the connection
     expect(fetchMock).not.toHaveBeenCalled()
     // The honest half: the response admits the list is the keyless fallback,
-    // with the shared phrasing (names the key, points at Install health).
+    // with the shared phrasing (names the key, points at the keys screen, and
+    // — on an install that is NOT connected — offers nodaro.ai as the other
+    // way to generate; #863).
     expect(body.keyMissing).toBe(true)
     expect(body.hint).toContain("ELEVENLABS_API_KEY")
-    expect(body.hint).toContain("Install health")
+    expect(body.hint).toContain("Integrations → Model providers")
+    expect(body.hint).toContain("connect nodaro.ai")
     expect(body.hint!.length).toBeLessThanOrEqual(200)
     // A cached "key missing" notice must not survive the key being added.
     expect(res.headers["cache-control"]).toBe("no-store")
+  })
+
+  it("an install already connected to nodaro.ai is not told to connect again (#863)", async () => {
+    cfgState.key = ""
+    // Same module generation as the route (vi.resetModules ran in beforeEach),
+    // so this is the cache the route's hint reads.
+    const { rememberNodaroConnected, _resetNodaroConnectedCacheForTests } = await import("@/lib/nodaro-connect-cache.js")
+    try {
+      rememberNodaroConnected(true)
+      const res = await app.inject({ method: "GET", url: "/v1/voices" })
+      const body = res.json() as { keyMissing?: boolean; hint?: string }
+      expect(body.keyMissing).toBe(true)
+      expect(body.hint).toContain("nodaro.ai connection")
+      expect(body.hint).not.toContain("connect nodaro.ai")
+      expect(body.hint).toContain("ELEVENLABS_API_KEY")
+      expect(body.hint).toContain("Integrations → Model providers")
+      expect(body.hint!.length).toBeLessThanOrEqual(200)
+
+      // A known-disconnected install gets the offer, same as an unknown one.
+      rememberNodaroConnected(false)
+      const again = (await app.inject({ method: "GET", url: "/v1/voices" })).json() as { hint?: string }
+      expect(again.hint).toContain("connect nodaro.ai")
+      expect(again.hint).not.toContain("nodaro.ai connection")
+    } finally {
+      _resetNodaroConnectedCacheForTests()
+    }
+  })
+
+  it("the keyless fallback can be auditioned: every current premade voice ships a public preview + description (#862)", async () => {
+    cfgState.key = ""
+    const res = await app.inject({ method: "GET", url: "/v1/voices" })
+    const body = res.json() as { voices: Array<{ voice_id: string; name: string; preview_url: string; description: string }> }
+    // Every entry describes itself — a label-less row is the "picker is just
+    // poor" impression all over again.
+    expect(body.voices.filter((v) => !v.description).map((v) => v.name)).toEqual([])
+    // ElevenLabs retired these three from its catalog — nothing public to
+    // play. Kept in the list only because stored node data names them. A new
+    // preview-less entry must be a deliberate addition here, never an accident.
+    const RETIRED_UPSTREAM = new Set(["Aria", "Charlotte", "Rachel"])
+    const { resolveDirectVoiceId } = await import("@/providers/elevenlabs/direct-tts.js")
+    for (const v of body.voices) {
+      if (RETIRED_UPSTREAM.has(v.name)) continue
+      // Public CDN objects, not the keyed /previews/audio endpoint (those URLs
+      // carry a payload token) — and each one is THIS voice's object, keyed by
+      // its ElevenLabs UUID, so a copy-paste swap cannot pass.
+      expect(v.preview_url).toMatch(/^https:\/\/storage\.googleapis\.com\/eleven-public-prod\/premade\/voices\//)
+      expect(v.preview_url).toContain(`/voices/${resolveDirectVoiceId(v.voice_id)}/`)
+    }
+    expect(body.voices.filter((v) => RETIRED_UPSTREAM.has(v.name)).every((v) => v.preview_url === "")).toBe(true)
+    expect(body.voices.filter((v) => RETIRED_UPSTREAM.has(v.name))).toHaveLength(RETIRED_UPSTREAM.size)
   })
 
   it("does NOT carry the keyless marker when a key is configured", async () => {

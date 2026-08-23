@@ -15,7 +15,8 @@ export type JobStatus =
  * Sensitive fields stripped server-side for non-admin callers:
  * `provider`, `provider_cost`, `display_cost`, `credits_actual`. USD
  * pricing is admin-only across api/sdk/mcp — non-admin consumers see
- * only the `credits` abstraction.
+ * only the `credits` abstraction. Server-only nested job data (including
+ * Recast's private remux base) is stripped for every caller, including admins.
  */
 export interface Job {
   id: string
@@ -48,8 +49,9 @@ export interface CancelJobResult {
 
 /**
  * Lean job status returned by `GET /v1/jobs/:id/status`. Skips the
- * `input_data` JSONB, cost/timestamp columns, and the public sanitize pass —
- * intended for poll loops that only need progress/output/error.
+ * `input_data` JSONB and cost/timestamp columns. Its `output_data` still goes
+ * through the server-only nested-field redaction. Intended for poll loops that
+ * only need progress/output/error.
  */
 export interface JobStatusResult {
   id: string

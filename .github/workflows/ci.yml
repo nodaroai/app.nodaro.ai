@@ -326,6 +326,90 @@ jobs:
       - name: Check admin-client imports
         run: node backend/scripts/check-admin-client-import.mjs
 
+  migration-behavior:
+    name: Migration Behavior (real Postgres)
+    runs-on: ubuntu-latest
+    # The organizations migrations put the tenancy rules INTO the database —
+    # RLS policies, SECURITY DEFINER helpers, the invitation and join RPCs.
+    # None of that is provable from the SQL text, and none of it is exercised
+    # by a unit test, so every PR applies the whole chain to a real Supabase
+    # Postgres and runs the behavioral assertions against it.
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.085
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install the migration runner's dependency
+        run: npm install --no-save --no-audit --no-fund pg@8
+      - name: Apply every migration
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          MIGRATIONS_WAIT_SECONDS: "60"
+        run: node backend/scripts/run-migrations.mjs
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Run every behavioral proof
+        env:
+          PGPASSWORD: postgres
+        run: |
+          shopt -s nullglob
+          files=(supabase/tests/*.behavior.sql)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no behavioral proofs found — the glob or the directory moved"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            echo "== $f"
+            # The proof rolls itself back, so a failure is reported in the
+            # output rather than by the exit code alone. Both are checked, and
+            # the final NOTICE must be present: a file that stopped early
+            # without erroring would otherwise pass silently.
+            out=$(psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$f" 2>&1) || {
+              echo "$out"
+              echo "psql failed on $f"
+              exit 1
+            }
+            if echo "$out" | grep -qE "ERROR|ASSERT FAIL"; then
+              echo "$out"
+              exit 1
+            fi
+            if ! echo "$out" | grep -q "ALL BEHAVIOR ASSERTIONS PASSED"; then
+              echo "$out"
+              echo "$f did not reach its final assertion"
+              exit 1
+            fi
+            echo "   ok ($(echo "$out" | grep -c "NOTICE:  ok") assertions)"
+          done
+      - name: Re-apply the newest migration (idempotency)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          shopt -s nullglob
+          # Every migration is NNN_-prefixed and zero-padded, so the shell
+          # glob is already in migration order; the last one is the newest.
+          migrations=(supabase/migrations/[0-9][0-9][0-9]_*.sql)
+          if [ ${#migrations[@]} -eq 0 ]; then
+            echo "no migrations found — the glob or the naming convention moved"
+            exit 1
+          fi
+          latest="${migrations[-1]}"
+          echo "re-applying $latest"
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$latest"
+
   i18n-completeness:
     name: i18n Locale Completeness
     runs-on: ubuntu-latest

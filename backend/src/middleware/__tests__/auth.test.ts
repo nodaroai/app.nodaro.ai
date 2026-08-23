@@ -96,6 +96,17 @@ describe("auth middleware", () => {
       })
       expect(res.statusCode).not.toBe(401)
     })
+
+    it("allows GET /v1/invitations/by-token/<token> without a token — the invitee is signed out", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/invitations/by-token/abcdef" })
+      expect(res.statusCode).not.toBe(401)
+    })
+
+    it("keeps the rest of /v1/invitations authenticated (revoke / resend / accept)", async () => {
+      expect((await app.inject({ method: "DELETE", url: "/v1/invitations/abcdef" })).statusCode).toBe(401)
+      expect((await app.inject({ method: "POST", url: "/v1/invitations/abcdef/resend" })).statusCode).toBe(401)
+      expect((await app.inject({ method: "POST", url: "/v1/invitations/abcdef/accept" })).statusCode).toBe(401)
+    })
   })
 
   describe("protected routes", () => {

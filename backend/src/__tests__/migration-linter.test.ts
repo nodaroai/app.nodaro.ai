@@ -198,6 +198,49 @@ describe("migrations don't introduce profiles RLS recursion", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Test 2b — membership-table RLS recursion (the same footgun, new tables).
+//
+// A policy ON organization_members that queries organization_members to ask
+// "is the caller an org admin?" recurses exactly like the profiles case. The
+// SECURITY DEFINER helpers org_role() / workspace_role() exist for this.
+// Greenfield tables, so there is no allowlist: any hit is a bug.
+// Scope: direct self-reference only. Mutual recursion (a policy on
+// organization_members reading workspace_members while the reverse also
+// holds) is not detected — keep every cross-membership read inside the
+// SECURITY DEFINER helpers and this rule stays sufficient.
+// ---------------------------------------------------------------------------
+
+const SELF_RECURSION_TABLES = ["organization_members", "workspace_members"] as const
+
+describe("migrations don't introduce membership-table RLS recursion", () => {
+  it.each(MIGRATION_FILES)(
+    "%s — CREATE POLICY ON a membership table does not query that table inside USING/WITH CHECK",
+    (filename) => {
+      const sql = stripComments(readFileSync(join(MIGRATIONS_DIR, filename), "utf8"))
+
+      const violations: string[] = []
+      for (const table of SELF_RECURSION_TABLES) {
+        const policyMatches = sql.matchAll(
+          new RegExp(`CREATE\\s+POLICY\\s+[^;]+?\\s+ON\\s+(?:public\\.)?${table}\\b[\\s\\S]+?;`, "gi"),
+        )
+        const selfQuery = new RegExp(`\\b(FROM|JOIN)\\s+(?:public\\.)?${table}\\b`, "i")
+        for (const m of policyMatches) {
+          if (selfQuery.test(m[0])) {
+            const snippet = m[0].slice(0, 80).replace(/\s+/g, " ")
+            violations.push(`Policy on ${table} queries ${table}: "${snippet}…"`)
+          }
+        }
+      }
+
+      expect(
+        violations,
+        `Migration ${filename} creates a policy ON a membership table that queries the same table in USING/WITH CHECK — INFINITE RECURSION risk. Use the org_role() / workspace_role() SECURITY DEFINER helpers instead.\n\n${violations.map((v) => `  • ${v}`).join("\n")}`,
+      ).toEqual([])
+    },
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Test 3 — INSERT INTO model_pricing must use ON CONFLICT DO NOTHING.
 // ---------------------------------------------------------------------------
 
