@@ -90,12 +90,25 @@ actually changed. Editing your own clone never affects it.
 
 The seeder is self-healing for anything **missing**: delete a seeded
 tutorial's row (or its underlying workflow) and the next boot recreates it.
-It does not, however, override the state of a tutorial you deliberately
-turned **off** — a tutorial deactivated in the database (`is_active =
-false`, typically because the flow needs a provider this install has no key
-or balance for) stays off across content updates, and reactivating it is
-likewise a database change. Before this behaviour existed, every content
-release silently switched such a tutorial back on.
+
+It does not, however, override a tutorial you deliberately turned **off**.
+Two things are treated as decisions about *your install* rather than as
+content, and a reseed leaves both alone:
+
+- **whether the tutorial is active** (`is_active`), and
+- **whether it appears in the Tutorials tab** — the `tutorial` tag, which
+  admins toggle from the Flow Tutorials screen.
+
+The usual reason to turn one off is that the flow needs a provider this
+install has no key or balance for. Whichever way you switched it off, it
+stays off across content updates, and switching it back on is done the same
+way you switched it off. Any other tag on the template (for example a
+marketplace listing) is preserved too. Before this, every content release
+silently switched such a tutorial back on.
+
+Everything else about a seeded tutorial is still content the release owns:
+its name, description, the workflow snapshot, and its tutorial category and
+ordering all update in place when the shipped version changes.
 
 The workflows are seeded from the repo, but the images, videos, and audio
 they display are fetched from Nodaro's CDN, so a walkthrough's media needs

@@ -1,18 +1,19 @@
 /**
- * The reseed must not un-hide a tutorial an operator deliberately hid.
+ * A content reseed must not overwrite what the INSTALLATION decided.
  *
- * The seeder is a slug-keyed upsert: one `row` object feeds BOTH the INSERT
- * (a tutorial this installation has never seen) and the UPDATE (the content
- * changed since the copy on disk). `is_active` belongs only to the first.
- * An operator turns a tutorial off — via PATCH /v1/templates/:id
- * `{isActive:false}` or the DELETE soft-delete — because the flow cannot run
- * HERE: no provider balance, no key for that lane. That is a decision about
- * the installation, and a content update carries no information about it, so
- * a reworded tutorial must not overrule it.
+ * The seeder is a slug-keyed upsert: one `row` object fed BOTH the INSERT (a
+ * tutorial this installation has never seen) and the UPDATE (the content
+ * changed since the copy on disk). Two columns do not belong in the second —
+ * `is_active` and `listed_in`, i.e. OPERATOR_OWNED_COLUMNS. A tutorial is
+ * switched off, or taken out of the Tutorials tab, because the flow cannot run
+ * HERE: no provider balance, no key for that lane. A reworded tutorial carries
+ * no information about that, so it must not overrule it.
  *
  * These tests drive the real `seedTutorialTemplates()` against an in-memory
  * store, because the defect lives in which payload each branch sends — a
- * property no test of the row builder alone would pin.
+ * property no test of the row builder alone would pin. The last of them is the
+ * structural form: no UPDATE payload may carry ANY operator-owned column, so
+ * the next column added to the shared literal is caught without a new test.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
@@ -45,6 +46,7 @@ const store = vi.hoisted(() => ({
   tutorial_categories: [] as Row[],
   seq: 0,
   fromCalls: 0,
+  updatePayloads: [] as Array<{ table: string; payload: Row }>,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -84,6 +86,7 @@ vi.mock("../../supabase.js", () => {
         return { data: row, error: null }
       }
       if (this.op === "update") {
+        store.updatePayloads.push({ table: this.name, payload: this.payload })
         for (const r of this.matches()) Object.assign(r, this.payload)
         return { data: null, error: null }
       }
@@ -133,7 +136,7 @@ vi.mock("../../supabase.js", () => {
 })
 
 import { config } from "../../config.js"
-import { seedTutorialTemplates } from "../index.js"
+import { OPERATOR_OWNED_COLUMNS, seedTutorialTemplates } from "../index.js"
 
 // The shared test setup pins EDITION=cloud, where the seeder is a deliberate
 // no-op (staging and production share one Supabase project). Self-host is the
@@ -175,7 +178,7 @@ async function seed(): Promise<void> {
 
 const template = () => store.workflow_templates[0]!
 
-describe("tutorial seeder — operator deactivation survives a content reseed", () => {
+describe("tutorial seeder — operator decisions survive a content reseed", () => {
   beforeEach(() => {
     config.EDITION = "community"
     store.users.length = 0
@@ -186,6 +189,7 @@ describe("tutorial seeder — operator deactivation survives a content reseed", 
     store.tutorial_categories.push({ id: "cat-basics", slug: "basics" })
     store.seq = 0
     store.fromCalls = 0
+    store.updatePayloads.length = 0
     docs.value = [doc()]
   })
 
@@ -218,6 +222,49 @@ describe("tutorial seeder — operator deactivation survives a content reseed", 
     expect(template().name).toBe("Welcome, rewritten")
     // ...and the operator's decision still stands.
     expect(template().is_active).toBe(false)
+  })
+
+  it("leaves an un-listed tutorial un-listed when its content is reseeded", async () => {
+    await seed()
+    expect(template().listed_in).toEqual(["tutorial"])
+
+    // The admin-only tutorial-flag route removes the tag; unlike the generic
+    // template routes it gates on role, not ownership, so it is the ONE lever
+    // that actually reaches a seeded row.
+    template().listed_in = []
+
+    docs.value = [doc({ markdownDescription: "v2" })]
+    await seed()
+
+    expect(template().markdown_description).toContain("v2")
+    expect(template().listed_in).toEqual([])
+  })
+
+  it("preserves a marketplace tag an admin added alongside the tutorial tag", async () => {
+    await seed()
+    // listed_in is an extensible tag array; rewriting it wholesale on reseed
+    // dropped any other tag with it.
+    template().listed_in = ["tutorial", "marketplace"]
+
+    docs.value = [doc({ markdownDescription: "v2" })]
+    await seed()
+
+    expect(template().listed_in).toEqual(["tutorial", "marketplace"])
+  })
+
+  it("sends no operator-owned column in any reseed UPDATE", async () => {
+    // The structural form of the two cases above: whatever columns the
+    // installation owns, a content update must not carry them. This is what
+    // catches the NEXT column added to the shared payload.
+    await seed()
+    docs.value = [doc({ markdownDescription: "v2", name: "Rewritten" })]
+    await seed()
+
+    const templateUpdates = store.updatePayloads.filter((u) => u.table === "workflow_templates")
+    expect(templateUpdates.length).toBeGreaterThan(0)
+    for (const { payload } of templateUpdates) {
+      expect(Object.keys(payload).filter((k) => OPERATOR_OWNED_COLUMNS.includes(k))).toEqual([])
+    }
   })
 
   it("does not touch the row at all when the content is unchanged", async () => {
