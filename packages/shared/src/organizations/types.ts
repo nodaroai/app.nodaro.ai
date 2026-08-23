@@ -80,6 +80,16 @@ export const ORG_ERROR_CODES = [
   "domain_not_allowed",
   "already_started",
   "collab_unavailable",
+  // Organization, workspace and membership endpoints.
+  "terms_required",
+  "not_org_member",
+  "already_a_member",
+  "owner_cannot_leave",
+  "has_active_workspaces",
+  // Invitations and join codes.
+  "invitation_not_found",
+  "invitation_accepted",
+  "bulk_invite_cap_exceeded",
 ] as const
 export type OrgErrorCode = (typeof ORG_ERROR_CODES)[number]
 

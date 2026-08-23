@@ -42,6 +42,10 @@ const BACKEND_ROOT = resolve(__dirname, "..")
 // until the organizations work made the gap obvious.
 const ROUTE_DIRS = [join(BACKEND_ROOT, "src", "routes"), join(BACKEND_ROOT, "src", "ee", "routes")]
 const BASELINE_PATH = join(__dirname, "tenant-scope-baseline.json")
+// The baseline may only shrink. A re-run with --update-baseline that would
+// GROW it is a new unscoped chain being accepted as legacy, which is exactly
+// what this lint exists to stop; lower the number as entries are fixed.
+const BASELINE_MAX_ENTRIES = 34
 
 // ---------------------------------------------------------------------------
 // Tenant-owned tables — rows belong to a single user_id, accessible only by
@@ -249,8 +253,9 @@ function scan(filePath) {
       /\.maybeSingle\s*\(\s*\)/.test(block)
     if (!isProtected) continue
 
-    // Does the chain also scope by user_id?
-    if (/\.eq\s*\(\s*["']user_id["']/.test(block)) continue
+    // Does the chain also scope by its tenant key? Personal rows by user_id;
+    // organization rows by org_id / workspace_id (the second tenancy axis).
+    if (/\.eq\s*\(\s*["'](user_id|org_id|workspace_id)["']/.test(block)) continue
 
     findings.push({ line: i + 1, table, block })
   }
@@ -290,6 +295,14 @@ const updateBaseline = process.argv.includes("--update-baseline")
 const files = ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)).sort()
 const { entries: baselineEntries } = loadBaseline()
 const consumed = new Set()
+
+if (Object.keys(baselineEntries).length > BASELINE_MAX_ENTRIES) {
+  process.stderr.write(
+    `\n✗ tenant-scope baseline has ${Object.keys(baselineEntries).length} entries, above the cap of ${BASELINE_MAX_ENTRIES}.\n` +
+      `  The baseline only shrinks: fix or annotate the new chain instead of baselining it.\n\n`,
+  )
+  process.exit(1)
+}
 
 let newFailures = 0
 const newFailureFiles = new Set()

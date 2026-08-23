@@ -208,6 +208,10 @@ is refused with `400 token_workspace_mismatch`.
 The header has no effect unless organizations are enabled on the instance you
 are calling; self-hosted builds ignore it.
 
+The organization, workspace and membership endpoints themselves — creating an
+organization, adding people, archiving a class — are documented in
+[Organizations](./organizations.md).
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`

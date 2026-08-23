@@ -60,7 +60,8 @@ import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
-import { hasCredits } from "../config.js"
+import { hasCredits, hasOrganizations } from "../config.js"
+import { appBaseUrl } from "../deployment-urls.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -966,6 +967,8 @@ export function buildToolkit(): PluginToolkit {
       },
       getSnapshot: getPipelineSnapshot,
     },
+    features: { organizations: hasOrganizations() },
+    deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,
       kv: {

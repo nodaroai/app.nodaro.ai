@@ -85,64 +85,12 @@ describe("332_orgs_foundations — kind_preset literal", () => {
   })
 })
 
-/** RLS-facing helpers: callable by signed-in users (and the service role). */
-const AUTHENTICATED_HELPERS = ["effective_setting", "org_member_status", "org_role", "workspace_member_status", "workspace_role", "ws_setting_bool"]
-/** Mutating RPCs: the route authorizes, so clients must not reach them at all. */
-const SERVICE_ROLE_ONLY = ["transfer_org_ownership"]
-
-describe("332_orgs_foundations — SECURITY DEFINER functions have explicit grants", () => {
-  const chunks = sql.split(/CREATE OR REPLACE FUNCTION\s+/).slice(1)
-  const fns = chunks
-    .map((chunk) => {
-      const header = chunk.slice(0, chunk.indexOf("$$"))
-      const name = chunk.match(/^(\w+)\s*\(/)?.[1] ?? ""
-      const args = chunk.match(/^\w+\s*\(([^)]*)\)/)?.[1] ?? ""
-      const returnsTrigger = /RETURNS\s+trigger/i.test(header)
-      const definer = /SECURITY DEFINER/i.test(header)
-      const pinsSearchPath = /SET search_path = public/.test(header)
-      return { name, args, returnsTrigger, definer, pinsSearchPath }
-    })
-    .filter((f) => f.definer)
-
-  const signature = (fn: { name: string; args: string }) => {
-    const argTypes = fn.args
-      .split(",")
-      .map((a) => a.trim().split(/\s+/)[1])
-      .join(", ")
-    const sig = `public.${fn.name}(${argTypes})`
-    return { sig, escaped: sig.replace(/[.()]/g, "\\$&") }
-  }
-
-  it("every SECURITY DEFINER function pins search_path", () => {
-    expect(fns.filter((f) => !f.pinsSearchPath).map((f) => f.name)).toEqual([])
-  })
-
-  it("every non-trigger SECURITY DEFINER function is classified", () => {
-    expect(fns.filter((f) => !f.returnsTrigger).map((f) => f.name).sort()).toEqual([...AUTHENTICATED_HELPERS, ...SERVICE_ROLE_ONLY].sort())
-  })
-
-  it.each(fns.filter((f) => AUTHENTICATED_HELPERS.includes(f.name)).map((f) => [f.name, f] as const))(
-    "%s — REVOKE FROM PUBLIC, REVOKE FROM anon, GRANT TO authenticated",
-    (_name, fn) => {
-      const { sig, escaped } = signature(fn)
-      expect(sql, `${sig} must be revoked from PUBLIC`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM PUBLIC;`))
-      expect(sql, `${sig} must be revoked from anon`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM anon;`))
-      expect(sql, `${sig} must be granted to authenticated`).toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO authenticated;`))
-    },
-  )
-
-  it.each(fns.filter((f) => SERVICE_ROLE_ONLY.includes(f.name)).map((f) => [f.name, f] as const))(
-    "%s — REVOKE FROM PUBLIC, anon AND authenticated; GRANT TO service_role only",
-    (_name, fn) => {
-      const { sig, escaped } = signature(fn)
-      for (const role of ["PUBLIC", "anon", "authenticated"]) {
-        expect(sql, `${sig} must be revoked from ${role}`).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM ${role};`))
-      }
-      expect(sql, `${sig} must be granted to service_role`).toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO service_role;`))
-      expect(sql, `${sig} must NOT be granted to authenticated`).not.toMatch(new RegExp(`GRANT\\s+EXECUTE ON FUNCTION ${escaped} TO authenticated;`))
-    },
-  )
-
+// The SECURITY DEFINER grant rules (search_path pinned, revoked from PUBLIC
+// and anon, helpers to authenticated / RPCs to service_role only) are the
+// FAMILY rule and live in orgs-migrations-grants.test.ts, which classifies
+// every organizations migration — this file keeps only what is specific to
+// 332.
+describe("332_orgs_foundations — settings helpers", () => {
   it("effective_setting gates on membership (SECURITY DEFINER bypasses the table RLS)", () => {
     const body = sql.slice(sql.indexOf("FUNCTION effective_setting"), sql.indexOf("FUNCTION ws_setting_bool"))
     expect(body).toMatch(/auth\.uid\(\) IS NULL OR is_admin\(\) OR workspace_role\(p_workspace_id\) IS NOT NULL/)

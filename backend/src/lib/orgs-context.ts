@@ -59,6 +59,8 @@ const IDENTITY_ROUTES: ReadonlySet<string> = new Set([
   "GET /v1/me",
   "GET /v1/workspaces",
   "POST /v1/invitations/:token/accept",
+  // Joining by code is the other way IN: a stale selection must not stop it.
+  "POST /v1/workspaces/join",
 ])
 
 export function isIdentityRoute(method: string, routePattern: string | undefined): boolean {

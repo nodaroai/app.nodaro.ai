@@ -1304,6 +1304,32 @@ export interface PluginToolkit {
    * the calling route's job, never the database's.
    */
   db: PluginSupabaseClient
+  /**
+   * Feature switches the host has turned on, each mirroring one edition /
+   * env gate. Always present on this side; the plugin side declares it
+   * OPTIONAL and reads absence as off, so a plugin built for a newer app
+   * registers nothing for a feature this app has not enabled. The loader
+   * registers every plugin's routes unconditionally and cannot know which
+   * belong to a gated feature — the plugin checks here and stays dark.
+   */
+  features: PluginFeatures
+  /**
+   * Where this install lives, for links a plugin puts in front of people
+   * (an invitation email, a share link). The public origin is decided in
+   * exactly one place on the app side (`lib/deployment-urls.ts`, with its
+   * fallback); a plugin must never carry a copy of that default.
+   */
+  deployment: PluginDeploymentToolkit
+}
+
+/** One member per gated feature. `organizations` = `hasOrganizations()`. */
+export interface PluginFeatures {
+  organizations: boolean
+}
+
+export interface PluginDeploymentToolkit {
+  /** `appBaseUrl()` — the install's public origin, no trailing slash. */
+  publicUrl: string
 }
 
 // ============================================================================
