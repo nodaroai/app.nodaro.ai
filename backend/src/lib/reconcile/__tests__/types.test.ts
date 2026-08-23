@@ -9,12 +9,13 @@ import {
   ELEVENLABS_RECOVER_KINDS,
   FAL_RECOVER_KINDS,
   NODARO_CLOUD_RECOVER_KINDS,
+  COPILOT_KINDS,
   ASYNC_RECOVERABLE_KINDS,
   isReconcileRecoverable,
 } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -26,6 +27,7 @@ describe("ProviderKind registry", () => {
       "beeble",
       "fal-request",
       "nodaro-cloud",
+      "copilot-turn",
       "pre-task",
     ])
   })
@@ -82,6 +84,10 @@ describe("recoverable-kind sets (single source of truth — audit M5)", () => {
       ...ELEVENLABS_RECOVER_KINDS,
       ...FAL_RECOVER_KINDS,
       ...NODARO_CLOUD_RECOVER_KINDS,
+      // The copilot turn has no upstream task to re-fetch, but it does have a
+      // recover handler that settles it from the persisted spend — so it is
+      // async-recoverable, not a sync fail+refund.
+      ...COPILOT_KINDS,
     ])
     expect(new Set(ASYNC_RECOVERABLE_KINDS)).toEqual(union)
   })

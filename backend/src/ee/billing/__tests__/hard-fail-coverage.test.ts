@@ -71,7 +71,16 @@ const LLM_FEATURES = [
   "qa-check",
   "generate-script",
   "image-to-text",
+  "image-critic",
 ]
+
+/**
+ * Features whose runtime never emits a TIERED identifier: the Workflow Copilot
+ * runs one pinned model and reserves under the bare feature id, so `:economy`
+ * / `:premium` rows would be prices nobody can be charged. Only the bare id is
+ * required to exist.
+ */
+const UNTIERED_LLM_FEATURES = ["workflow-copilot"]
 
 // ---------------------------------------------------------------------------
 // Test
@@ -179,6 +188,11 @@ describe("hard-fail policy: every runtime-emitted credit identifier is in STATIC
         const id = buildLlmCreditIdentifier(feature, model.id)
         check(id, `llm ${feature} ${model.id} tier=${model.tier}`)
       }
+    }
+
+    // Untiered LLM features: only the bare identifier is ever reserved.
+    for (const feature of UNTIERED_LLM_FEATURES) {
+      check(feature, `llm ${feature} (untiered, bare identifier)`)
     }
 
     // Pipeline-pinnable models — create-pipeline.ts's tier guard passes each

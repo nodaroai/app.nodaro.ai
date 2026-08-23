@@ -1127,6 +1127,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "llm-chat": 2,                 // standard (base)
   "llm-chat:economy": 1,
   "llm-chat:premium": 6,         // Opus 4.7
+  // Workflow Copilot turn: RESERVATION CEILING, not a price. The turn is
+  // metered (commitJobCredits metered=true → actual model usage × the
+  // identifier's service rate) and `commit_credits` can only refund surplus,
+  // so the loop keeps its spend under this ceiling. Single identifier: the
+  // copilot runs one model; tiers are not exposed.
+  "workflow-copilot": 900,
   "translate": 10,                // internal utility (replicate i2i prompt translation)
   "translate:economy": 10,
   "translate:premium": 10,

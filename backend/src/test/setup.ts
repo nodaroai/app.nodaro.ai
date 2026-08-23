@@ -72,6 +72,32 @@ if (process.env.PRIVATE_MODULES === undefined) {
   registerPipelinePrompts(fixturePrompts)
 }
 
+// ---------------------------------------------------------------------------
+// A test boundary must be a real barrier.
+//
+// `sendInternalError` files a best-effort `app_reports` row and deliberately
+// does NOT await it — telemetry must not add latency to, or fail, the response
+// it observes. So the write lands after the request is answered, which under a
+// slow enough run is DURING A LATER TEST. Route tests share one module-level
+// `supabase.from` mock and re-point it per test, so that straggler is recorded
+// against whichever test happens to be running: a phantom `.insert()` nobody
+// made. It surfaced as a rare "expected 4 calls, got 5" in
+// generate-character.test.ts, only ever under full-suite load, and it can reach
+// any route test that both triggers a 500 and counts DB calls.
+//
+// Draining here fixes the whole class once instead of per file. The throttle
+// map is process-global too, so reset it as well — otherwise whether a report
+// fires at all depends on which earlier test happened to use the same
+// (kind, method, route, message) key within the 5-minute window, which is not
+// something a test should silently inherit.
+import { afterEach } from "vitest"
+
+afterEach(async () => {
+  const { __flushHttpErrorTelemetry, __resetHttpErrorTelemetry } = await import("../lib/http-errors.js")
+  await __flushHttpErrorTelemetry()
+  __resetHttpErrorTelemetry()
+})
+
 // Silence operational console output during tests. Heavy console.log emission
 // from provider modules (image.ts emits ~3 lines per call) triggers a vitest
 // worker RPC race during teardown: `EnvironmentTeardownError: Closing rpc while
