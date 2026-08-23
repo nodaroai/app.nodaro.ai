@@ -43,7 +43,9 @@ export function isStorageConfigured(): boolean {
 }
 
 export const s3 = new S3Client({
-  region: "auto",
+  // "auto" is R2's value and MinIO ignores it; Supabase-local ("local") and
+  // DO Spaces / AWS ("nyc3", "us-east-1", …) reject it. See R2_REGION.
+  region: config.R2_REGION,
   endpoint: resolveStorageEndpoint(config),
   // MinIO and most self-hosted S3 servers require path-style addressing.
   forcePathStyle: config.R2_FORCE_PATH_STYLE,

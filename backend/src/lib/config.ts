@@ -50,6 +50,13 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === "true" || v === "1"),
   /**
+   * S3 region. "auto" is Cloudflare R2's own value and MinIO ignores the
+   * field entirely, which is why it was hardcoded — but a Supabase-local
+   * stack wants "local" and DO Spaces / AWS want a real region ("nyc3",
+   * "us-east-1", …) and reject "auto" outright. Default unchanged.
+   */
+  R2_REGION: z.string().default("auto"),
+  /**
    * Extra hostname to allow in the /v1/download + /v1/image-proxy origin
    * allowlist, in addition to the origin derived from R2_PUBLIC_URL. Use when
    * assets are served from a different host than R2_PUBLIC_URL (e.g. a raw

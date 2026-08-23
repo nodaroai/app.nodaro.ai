@@ -146,6 +146,7 @@ added to `config.ts` without a row here.
 | `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
 | `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO | Object storage — see 2d |
+| `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
@@ -268,10 +269,16 @@ to `https://<your-domain>/storage/nodaro-assets`.
    compose defaults don't apply — with them empty, the endpoint is
    derived from `R2_ACCOUNT_ID`.
 
-For any other S3-compatible store (AWS S3, Backblaze B2, self-managed
-MinIO), set `R2_ENDPOINT` to its S3 API URL, `R2_FORCE_PATH_STYLE=true`
-for most self-hosted servers, and `R2_PUBLIC_URL` to the bucket's
-public URL.
+For any other S3-compatible store (AWS S3, Backblaze B2, DigitalOcean
+Spaces, Supabase Storage, self-managed MinIO), set `R2_ENDPOINT` to its
+S3 API URL, `R2_FORCE_PATH_STYLE=true` for most self-hosted servers, and
+`R2_PUBLIC_URL` to the bucket's public URL.
+
+Also set **`R2_REGION`** unless the store is Cloudflare R2 or MinIO. It
+defaults to `auto`, which is R2's own value and which MinIO ignores — but
+AWS, DO Spaces (`nyc3`, `fra1`, …) and Supabase-local (`local`) validate
+the region and reject `auto`, so every request fails with an authorization
+or endpoint error that does not mention the region at all.
 
 If the Cloud Recast plugin is enabled, its revisioned audio player loads
 audio-only layer files directly in Web Audio. The public storage origin must
