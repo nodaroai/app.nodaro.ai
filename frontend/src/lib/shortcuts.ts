@@ -223,6 +223,8 @@ export const SHORTCUTS = {
     bindings: [{ code: "KeyG", key: "g", mods: ["mod", "shift"] }] },
   alignmentGuides: { id: "alignmentGuides", category: "View", description: "Toggle alignment guides",
     bindings: [{ code: "KeyA", key: "a", mods: ["mod", "shift"] }] },
+  copilot: { id: "copilot", category: "View", description: "Toggle the Copilot panel",
+    bindings: [{ code: "KeyJ", key: "j", mods: ["mod"] }] },
   mediaLibrary: { id: "mediaLibrary", category: "View", description: "Toggle the Media Library",
     bindings: [{ code: "KeyM", key: "m", mods: ["mod"] }] },
   myLibrary: { id: "myLibrary", category: "View", description: "Open My Library",

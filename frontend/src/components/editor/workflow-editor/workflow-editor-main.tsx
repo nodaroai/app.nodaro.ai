@@ -103,6 +103,7 @@ import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config";
 import { ConnectProviderWatcher } from "./connect-provider-watcher"
+import { CopilotPanelSlot, CopilotToolbarButton } from "./copilot-panel-slot"
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
@@ -168,6 +169,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   } | null>(null);
   const [workflowCreditEstimate, setWorkflowCreditEstimate] =
     useState<number>(0);
+  const [workflowCreditEstimateVersion, setWorkflowCreditEstimateVersion] = useState<number | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [showStorageExceeded, setShowStorageExceeded] = useState(false);
   const [storageExceededData, setStorageExceededData] = useState<{
@@ -484,6 +486,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return sum + cost * multiplier;
       }, 0);
       setWorkflowCreditEstimate(total);
+      // Stamp it with the graph it describes. A consumer that must not spend
+      // against a stale price compares versions rather than racing a boolean.
+      setWorkflowCreditEstimateVersion(useWorkflowStore.getState().loadedVersion);
     };
 
     // Collect model identifiers and check which need fetching
@@ -888,6 +893,38 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setTimeout(() => queryClient.invalidateQueries({ queryKey: ["workflow-executions"] }), 500);
   }
 
+  // The Copilot needs to know whether a run actually STARTED — it decides
+  // between showing progress and handing the decision back. `handleRun` already
+  // announces a start through `onExecutionStarted`; observing that callback is
+  // a pass-through, where reading `isRunning` afterwards would be a guess (React
+  // has not flushed a bail's `setIsRunning(false)` by the time this resolves).
+  async function runForCopilot(opts?: { skipConfirm?: boolean }): Promise<{ executionId: string | null }> {
+    let started: string | null = null;
+    await handleRun(
+      ctx,
+      projectId,
+      useWorkflowStore.getState().workflowId,
+      save,
+      setIsRunning,
+      (id) => {
+        started = id;
+        onExecutionStarted(id);
+      },
+      onExecutionEnded,
+      opts,
+    );
+    return { executionId: started };
+  }
+
+  // Stop, from the Copilot's run card. `handleExecutionDiscarded` is only the
+  // LOCAL teardown — without the discard call the orchestrator keeps running
+  // every remaining node and bills them, while the panel shows idle.
+  function handleCopilotStopRun(): void {
+    const id = activeExecutionId;
+    if (id) discardWorkflowExecution(id).catch(() => {});
+    handleExecutionDiscarded();
+  }
+
   // "Run instead" for the whole-workflow bar: discard the active run (in-flight
   // jobs finish → Library, off canvas), detach the canvas, then start a fresh
   // run. Order matters — discard old → UI cleanup → handleRun new.
@@ -1220,11 +1257,29 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               Cost
             </button>
             )}
+            <CopilotToolbarButton />
           </div>
         </div>
 
         {activeTab === "editor" && (
-          <div className="absolute inset-0 overflow-hidden">
+          /* Flex row: the Copilot rail is a real sibling of the canvas, not an
+             overlay, so the canvas keeps its full usable width when the rail is
+             open. Everything absolutely positioned (run strip, config panel,
+             empty state) lives inside the canvas wrapper below and therefore
+             anchors to the canvas, not to canvas+rail. */
+          <div className="absolute inset-0 overflow-hidden flex">
+            <CopilotPanelSlot
+              projectId={projectId}
+              save={isReadOnly ? null : save}
+              run={isReadOnly ? null : runForCopilot}
+              onStopRun={handleCopilotStopRun}
+              creditEstimate={workflowCreditEstimate}
+              estimateStale={estimateLoading}
+              estimateVersion={workflowCreditEstimateVersion}
+              isRunning={isRunning}
+              activeExecutionId={activeExecutionId}
+            />
+            <div className="relative flex-1 min-w-0">
             <ReactFlowProvider>
               <EditorErrorBoundary label="Canvas">
                 <WorkflowCanvas
@@ -1334,6 +1389,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   )}
                 </Button>
               )}
+            </div>
             </div>
           </div>
         )}

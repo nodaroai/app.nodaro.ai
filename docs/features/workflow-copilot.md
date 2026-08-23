@@ -9,7 +9,7 @@ edition: Cloud
 
 Describe what you want; the workflow gets built on your canvas. The copilot reads your open workflow, adds and rewires nodes while you watch, proposes a run, and — after a run — reads what failed and fixes it.
 
-It lives in the workflow editor as a side panel. Open it from the toolbar or with `Ctrl/Cmd + J`.
+It lives in the workflow editor as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar, from the narrow tab beside the canvas, or with `Ctrl/Cmd + J`. Closing the panel does not stop a message that is still being written.
 
 ## What it can do
 
@@ -18,12 +18,22 @@ It lives in the workflow editor as a side panel. Open it from the toolbar or wit
 - **Run — with your permission.** The copilot never starts a run by itself. It proposes one, you see the credit estimate, and you decide. See *Ask or Auto* below.
 - **Fix.** After a run it can read the per-node result, diagnose a failure and change the configuration that caused it.
 
+## Point at your own characters and locations
+
+Type `@` in the message box (or press the `@` button) to pick from the characters and locations you have already made. Pick one and it becomes a chip above the box; the copilot looks it up by name and can wire it into the workflow it builds.
+
+Mentions travel as names, never as file addresses — the same rule as *What it will not do* below. Mentioning your uploaded media files and attaching a file from your computer are not available yet.
+
 ## Ask or Auto
 
 Each conversation has a run mode, in the panel header:
 
 - **Ask** (default) — a run proposal appears as a card with its credit estimate. Nothing runs until you press Run.
-- **Auto** — runs start automatically as long as the estimate stays under the credit limit you set on the same card. Anything more expensive still asks.
+- **Auto** — runs start automatically as long as the estimate stays under the credit limit you set on the same card. Anything more expensive still asks, and so does anything whose price is still being worked out.
+
+Auto starts **one** run per message, and only when the price for the workflow on screen is already known — while it is being worked out, or if a run is already going, it asks instead.
+
+In Auto mode a failed run is retried on its own: the copilot reads the failure, changes what caused it, and runs again. It does this **twice** and then stops and waits for you — a run that keeps failing cannot quietly spend your balance overnight. Press **Fix it** to give it another two attempts.
 
 Either way the run itself is the normal workflow run: the same progress on the canvas, the same history, the same per-node credits.
 
@@ -31,7 +41,7 @@ Either way the run itself is the normal workflow run: the same progress on the c
 
 - The workflow you have open: node types, their configuration and how they are wired, plus the last run's per-node status.
 - Nodaro's own documentation: the node catalogue, each node's fields, picker options and model capabilities.
-- Your saved building blocks: brand presets, characters, locations and objects — so it can reference the ones you already made.
+- Your saved building blocks: brand presets, characters and locations — so it can reference the ones you already made.
 
 It does not read your other workflows, and it does not browse the web.
 
@@ -50,7 +60,8 @@ Runs the copilot proposes are charged the same way any run is — per node, when
 
 ## Good to know
 
-- **Save first.** The panel waits until your canvas is saved before it sends a message, so you and the copilot are working on the same graph. If you edit while it works, you get a banner and can choose which version wins.
+- **Save first.** The panel saves your canvas before it sends a message, so you and the copilot are working on the same graph. If it cannot save, it refuses to send rather than risk your edits.
+- **If you edit while it works,** your unsaved changes win: the copilot's edit is written to the workflow but is not pulled onto your canvas, and the panel says so instead of pretending. Reload to see its version.
 - **A turn ends if you close the tab.** You are only charged for what was already spent. A run that has started keeps going.
-- **Stop any time.** The Stop button ends the current message; anything already written to the canvas stays.
+- **Stop any time.** The Stop button in the composer ends the current message; anything already written to the canvas stays. **Stop** on a run card really stops the run — results that were already produced are saved to My Library.
 - **Cloud only.** The copilot is part of Nodaro Cloud and is not available in the community edition.
