@@ -199,6 +199,32 @@ ENV VITE_PLATFORM_OWNER_EMAIL=$VITE_PLATFORM_OWNER_EMAIL
 ENV VITE_IMAGE_REFERENCE_FORMAT=$VITE_IMAGE_REFERENCE_FORMAT
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
 
+# Fail the build when a REQUIRED VITE_* arg is empty.
+#
+# Vite INLINES VITE_* at build time, so an unset one still builds cleanly and
+# ships a frontend that is silently wrong — the failure surfaces in someone's
+# browser, far from the cause. The fork shipped exactly that.
+#
+# Only genuinely-unrecoverable args belong on this list. VITE_API_URL,
+# VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY and VITE_FREECUT_URL are
+# deliberately ABSENT: start.sh writes /app/frontend/dist/config.js at boot and
+# frontend/src/lib/runtime-config.ts prefers it over the baked value, so an
+# empty build arg is repointable at RUNTIME without a rebuild (#700, #767).
+# Adding them here would break the cloud build, which legitimately leaves
+# VITE_API_URL to PUBLIC_URL.
+#
+# VITE_EDITION is not recoverable. Empty silently becomes "community"
+# (frontend/src/lib/edition.ts `|| 'community'`), so a cloud image would ship
+# with no billing, no admin and no credits — and look fine until a user
+# looked for them. All three build paths already pass it (Railway staging and
+# production service vars, and community-image.yml).
+RUN set -eu; \
+    case "${VITE_EDITION:-}" in \
+      community|business|cloud) echo "[build] VITE_EDITION=${VITE_EDITION}" ;; \
+      "") echo "ERROR: VITE_EDITION is empty. Vite inlines it, and an empty value silently becomes 'community' — a cloud/business image would ship without billing or admin. Pass --build-arg VITE_EDITION=community|business|cloud." >&2; exit 1 ;; \
+      *) echo "ERROR: VITE_EDITION='${VITE_EDITION}' is not one of community|business|cloud." >&2; exit 1 ;; \
+    esac
+
 WORKDIR /app/frontend
 # Skip the `prebuild` lifecycle hook (would re-run tsup for shared+client
 # but src dirs aren't copied; prebuilt dists are already in place).
@@ -336,6 +362,22 @@ ARG FFMPEG_TARBALL_URL_AMD64=https://github.com/BtbN/FFmpeg-Builds/releases/down
 ARG FFMPEG_TARBALL_SHA256_AMD64=0ba73bbd93472c7622f6dec26d334c5e62e64d858d072490b2844320970456cd
 ARG FFMPEG_TARBALL_URL_ARM64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1.tar.xz
 ARG FFMPEG_TARBALL_SHA256_ARM64=d3f90a71a38238466de2e4dc98537862d244e3307383435f94cbc4b8491033f8
+# Caddy is PINNED — by version and SHA-512, per arch.
+#
+# It used to come from `caddyserver.com/api/download?os=linux&arch=…`, which is
+# a ROLLING redirect to whatever is current: the image's reverse proxy — the
+# thing every request in the community stack passes through — could change
+# under us on any cache miss, and an older image could never be reproduced.
+# That is the same shape as the ffmpeg scar below, which cost every image build
+# when its pin moved.
+#
+# The SHA-512s are the values from Caddy's own `caddy_<ver>_checksums.txt`
+# release asset (they publish 512, not 256), so a reviewer can verify a bump
+# against upstream without trusting whoever made it:
+#   curl -fsSL https://github.com/caddyserver/caddy/releases/download/v<ver>/caddy_<ver>_checksums.txt
+ARG CADDY_VERSION=2.11.4
+ARG CADDY_SHA512_AMD64=8220d1f013b6f27510247b2360c9e0ca9f018feebd82515f07635318b34ff9777ccc8fd0b6e6f2486ce3a33fe389fbb7db12d05baa474f4587509fb4f5ebf1c9
+ARG CADDY_SHA512_ARM64=d5a7c423853c24a799765e0e8210d5c7c22a8f56ed37a3cae2fb9f58be138853c02b4efd6b59d576e6d8c7c0d30b9c1592deeaa6a536ff69bcca23b8c1ea709c
 COPY tools/install-pinned-ffmpeg.sh /tmp/install-pinned-ffmpeg.sh
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates xz-utils \
@@ -353,9 +395,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && bash /tmp/install-pinned-ffmpeg.sh --url "${FFMPEG_TARBALL_URL}" --sha256 "${FFMPEG_TARBALL_SHA256}" \
     && rm -f /tmp/install-pinned-ffmpeg.sh \
     && rm -rf /var/lib/apt/lists/* \
-    && ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${ARCH}" -o /usr/bin/caddy \
-    && chmod +x /usr/bin/caddy
+    && case "$(dpkg --print-architecture)" in \
+         amd64) CADDY_ARCH=amd64; CADDY_SHA512="${CADDY_SHA512_AMD64}" ;; \
+         arm64) CADDY_ARCH=arm64; CADDY_SHA512="${CADDY_SHA512_ARM64}" ;; \
+         *) echo "unsupported arch for caddy: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_${CADDY_ARCH}.tar.gz" -o /tmp/caddy.tar.gz \
+    && echo "${CADDY_SHA512}  /tmp/caddy.tar.gz" | sha512sum -c - \
+    && tar -xzf /tmp/caddy.tar.gz -C /tmp caddy \
+    && mv /tmp/caddy /usr/bin/caddy \
+    && rm -f /tmp/caddy.tar.gz \
+    && chmod +x /usr/bin/caddy \
+    && caddy version
 
 # yt-dlp — the OFFICIAL pinned static binary, NOT Debian's `yt-dlp` package.
 #

@@ -443,6 +443,13 @@ docker compose -f docker-compose.community.yml build --no-cache nodaro
 docker compose -f docker-compose.community.yml up
 ```
 
+**The build refuses an empty or unknown `VITE_EDITION`.** Because Vite inlines
+the value, an unset one would otherwise build cleanly and silently fall back to
+`community` — a Business or Cloud image would ship with no admin panel and no
+billing, and nothing would say so until someone went looking for them. The
+compose file passes it for you; a hand-rolled `docker build` needs
+`--build-arg VITE_EDITION=community|business|cloud`.
+
 Three frontend values are **not** frozen at build time: the API origin, the
 browser-facing Supabase URL and the anon key. At boot the container writes
 them from its env into `/config.js` (`PUBLIC_URL`, `FRONTEND_SUPABASE_URL`
