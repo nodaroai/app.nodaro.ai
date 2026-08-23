@@ -51,6 +51,7 @@ const OrgOverviewPage = lazy(() => import("@/ee/app/org/org-overview-page"))
 const OrgMembersPage = lazy(() => import("@/ee/app/org/org-members-page"))
 const OrgWorkspacesPage = lazy(() => import("@/ee/app/org/org-workspaces-page"))
 const OrgSettingsPage = lazy(() => import("@/ee/app/org/org-settings-page"))
+const OrgAuditPage = lazy(() => import("@/ee/app/org/org-audit-page"))
 const WorkspacePeoplePage = lazy(() => import("@/ee/app/workspace/workspace-people-page"))
 const WorkspaceSettingsPage = lazy(() => import("@/ee/app/workspace/workspace-settings-page"))
 
@@ -92,6 +93,7 @@ const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page
 const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
 const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"))
 const AdminStuckPipelines = lazy(() => import("@/ee/app/(admin)/admin/stuck-pipelines/page"))
+const AdminOrganizations = lazy(() => import("@/ee/app/(admin)/admin/organizations/page"))
 const AdminTutorialCategories = lazy(() => import("@/ee/app/(admin)/admin/tutorial-categories/page"))
 const AdminClientApps = lazy(() => import("@/ee/app/(admin)/admin/client-apps/page"))
 const AdminAppReports = lazy(() => import("@/ee/app/(admin)/admin/app-reports/page"))
@@ -138,6 +140,12 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "tutorial-categories", element: <SuspenseWrapper><AdminTutorialCategories /></SuspenseWrapper> },
       { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
       { path: "stuck-pipelines", element: <SuspenseWrapper><AdminStuckPipelines /></SuspenseWrapper> },
+      // Only where organizations exist. The nav entry is gated the same way,
+      // so the route and the link appear and disappear together — a visible
+      // link to a 404 is worse than no link.
+      ...(hasOrganizations()
+        ? [{ path: "organizations", element: <SuspenseWrapper><AdminOrganizations /></SuspenseWrapper> }]
+        : []),
       { path: "client-apps", element: <SuspenseWrapper><AdminClientApps /></SuspenseWrapper> },
       { path: "app-reports", element: <SuspenseWrapper><AdminAppReports /></SuspenseWrapper> },
     ],
@@ -344,6 +352,7 @@ export const router = createBrowserRouter([
             { path: "/org/:slug/members", element: <SuspenseWrapper><OrgMembersPage /></SuspenseWrapper> },
             { path: "/org/:slug/workspaces", element: <SuspenseWrapper><OrgWorkspacesPage /></SuspenseWrapper> },
             { path: "/org/:slug/settings", element: <SuspenseWrapper><OrgSettingsPage /></SuspenseWrapper> },
+            { path: "/org/:slug/audit", element: <SuspenseWrapper><OrgAuditPage /></SuspenseWrapper> },
             { path: "/w/:id/people", element: <SuspenseWrapper><WorkspacePeoplePage /></SuspenseWrapper> },
             { path: "/w/:id/settings", element: <SuspenseWrapper><WorkspaceSettingsPage /></SuspenseWrapper> },
           ]

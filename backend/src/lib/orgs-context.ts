@@ -59,9 +59,37 @@ const IDENTITY_ROUTES: ReadonlySet<string> = new Set([
   "GET /v1/me",
   "GET /v1/workspaces",
   "POST /v1/invitations/:token/accept",
+  // The invitation PREVIEW, for the same reason as the accept below it. It is
+  // a public route, so an invitee reads it signed out and no header is
+  // involved — but a SIGNED-IN client reaches it too (the SDK attaches auth
+  // and its workspace on every request), and that client is the one most
+  // likely to be carrying a selection that has gone stale. Refusing the
+  // preview would hide the invitation that is the way back in.
+  "GET /v1/invitations/by-token/:token",
   // Joining by code is the other way IN: a stale selection must not stop it.
   "POST /v1/workspaces/join",
 ])
+
+/**
+ * Platform-admin routes are outside the tenancy axis entirely.
+ *
+ * They are answered from the PLATFORM role and read across organizations by
+ * definition, so a workspace selection means nothing to them — and letting
+ * the resolver run in front of one turns an unrelated selection into a
+ * refusal. The concrete way that bites: a platform admin who belongs to an
+ * organization, with one of its workspaces selected, suspends that
+ * organization. Their selection stops resolving on the very next request, and
+ * the admin page that holds the button to undo it stops loading.
+ *
+ * Skipped rather than added to IDENTITY_ROUTES: an identity route treats a
+ * stale selection as absent, which is right for a route that then SCOPES by
+ * workspace. These never scope by workspace at all, so there is nothing to
+ * resolve. Prefix-matched on the route PATTERN for the same reason the set
+ * above is — a pattern is exact, so no crafted path can reach it.
+ */
+export function isPlatformAdminRoute(routePattern: string | undefined): boolean {
+  return routePattern !== undefined && routePattern.startsWith("/v1/admin/")
+}
 
 export function isIdentityRoute(method: string, routePattern: string | undefined): boolean {
   if (!routePattern) return false
@@ -92,6 +120,7 @@ export function registerOrgsContextHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const orgs = hasOrganizations() ? getPluginServices().orgs : undefined
     if (!orgs || !req.userId) return
+    if (isPlatformAdminRoute(req.routeOptions?.url)) return
 
     // `|| undefined`, not `??`: an EMPTY header is not a selection. Treating
     // it as one would let a workspace-bound token escape its binding — the

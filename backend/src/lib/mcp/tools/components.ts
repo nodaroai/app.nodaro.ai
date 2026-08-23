@@ -2,9 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { config } from "../../config.js"
 import type { ComponentMetadata } from "@nodaro/shared"
 import {
   extractComponentInputSchema,
@@ -242,12 +242,9 @@ export function registerComponents({
           mcp_client: session.clientName,
           userId: session.userId,
         }
-        const res = await fastify.inject({
+        const res = await mcpInject(fastify, session, {
           method: "POST",
           url: "/v1/component/execute",
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload,
         })
         if (res.statusCode >= 400) {

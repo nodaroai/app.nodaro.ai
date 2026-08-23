@@ -3,9 +3,9 @@ import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, parseFailure } from "./_verb-helpers.js"
-import { config } from "../../config.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -16,15 +16,18 @@ export interface RegisterPromptHelperOpts {
 }
 
 /**
- * Delegate to `POST /v1/prompt-helper/wizard` via fastify.inject (so the credit
+ * Delegate to `POST /v1/prompt-helper/wizard` via mcpInject (so the credit
  * guard, Zod validation, and job lifecycle all live in the route). Same pattern
  * as `reduce`. Returns the final MCP tool result (success or typed error).
  */
-async function runWizard(fastify: FastifyInstance, payload: Record<string, unknown>) {
-  const res = await fastify.inject({
+async function runWizard(
+  fastify: FastifyInstance,
+  session: McpSession,
+  payload: Record<string, unknown>,
+) {
+  const res = await mcpInject(fastify, session, {
     method: "POST",
     url: "/v1/prompt-helper/wizard",
-    headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
     payload,
   })
   if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -63,7 +66,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
       annotations,
     },
     async (args) =>
-      runWizard(fastify, {
+      runWizard(fastify, session, {
         userId: session.userId,
         action: "analyze",
         nodeType: args.nodeType,
@@ -98,7 +101,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
       annotations,
     },
     async (args) =>
-      runWizard(fastify, {
+      runWizard(fastify, session, {
         userId: session.userId,
         action: "generate",
         nodeType: args.nodeType,
@@ -130,7 +133,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
       annotations,
     },
     async (args) =>
-      runWizard(fastify, {
+      runWizard(fastify, session, {
         userId: session.userId,
         action: "enhance",
         nodeType: args.nodeType,

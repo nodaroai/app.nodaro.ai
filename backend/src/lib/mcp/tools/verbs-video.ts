@@ -2,7 +2,6 @@ import { z } from "zod"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { connectedReferenceSchema } from "../../connected-reference-schema.js"
 import {
@@ -29,6 +28,7 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
+import { mcpInject } from "../internal-request.js"
 
 // Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
 // legacy ids (seedance V1.5 etc.) accepted for cached Claude.ai sessions —
@@ -1722,12 +1722,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         payload.startTime = args.start_time
         payload.endTime = args.end_time
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/trim-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -1862,12 +1859,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.mode === "duration") payload.targetDuration = args.target_duration
       if (args.smart_cut_before_repeat) payload.smartLoopCutBeforeRepeat = true
       if (args.smart_cut_lookback !== undefined) payload.smartLoopCutLookback = args.smart_cut_lookback
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/loop-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -2771,10 +2765,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/generate-video-pro/${encodeURIComponent(args.job_id)}/stop`,
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
         payload: { userId: session.userId },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

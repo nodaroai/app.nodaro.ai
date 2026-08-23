@@ -3,8 +3,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { OBJECT_MOTION_PROVIDERS, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
 import {
   parseJobId,
   errorResult,
@@ -53,7 +53,7 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  *   - `workflows:execute` — generate_creature_motion (it produces an i2v job
  *     that consumes credits, same gate as generate_object_motion)
  *
- * Dispatch pattern: all 3 tools use `fastify.inject()` to call the
+ * Dispatch pattern: all 3 tools use `mcpInject()` to call the
  * underlying REST routes (creature-main-image-approval.ts,
  * creature-llm-caption.ts, generate-creature-motion.ts). The routed-through
  * requests carry the internal-orchestrator-secret header, so the auth
@@ -145,12 +145,9 @@ function registerWriteTools(opts: RegisterCreatureToolsOpts): void {
           "approve_creature_main_image is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/creatures/${encodeURIComponent(args.creature_id)}/approve-main-image`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: {
           candidateJobId: args.candidate_job_id,
           expectedUpdatedAt: args.expected_updated_at,
@@ -206,12 +203,9 @@ function registerWriteTools(opts: RegisterCreatureToolsOpts): void {
           "recaption_creature is not available in this server build (no Fastify instance).",
         )
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: `/v1/creatures/${encodeURIComponent(args.creature_id)}/llm-caption`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload: { userId: session.userId },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -366,12 +360,9 @@ function registerGenerationTools(opts: RegisterCreatureToolsOpts): void {
         payload.refineFromVideoUrl = args.refine_from_video_url
       }
 
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/generate-creature-motion",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

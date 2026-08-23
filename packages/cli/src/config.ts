@@ -18,6 +18,14 @@ export function configPath(): string {
 export interface Profile {
   baseUrl: string
   token: string
+  /**
+   * The workspace this profile works in. A PREFERENCE, not a credential:
+   * it decides which workspace a list reads from and where a create lands,
+   * and the server refuses it outright if the account no longer belongs
+   * there. Absent = the personal space. See ./workspace.ts for how a flag
+   * and an env var override it.
+   */
+  workspace?: string
 }
 
 export interface Config {

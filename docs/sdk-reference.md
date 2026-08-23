@@ -39,6 +39,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.community`](#clientcommunity)
   - [`client.templates`](#clienttemplates)
   - [`client.tutorials`](#clienttutorials)
+  - [`client.organizations`](#clientorganizations)
+  - [`client.workspaces`](#clientworkspaces)
 - [Type re-exports](#type-re-exports)
 
 ---
@@ -65,6 +67,7 @@ const client = createClient({
 | `auth` | `Auth` | yes | Auth provider — `StaticTokenAuth`, `supabaseAuth(...)`, or `CallbackAuth`. |
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
+| `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
 The instance exposes 30 resource objects: `workflows`, `projects`, `jobs`,
@@ -72,7 +75,7 @@ The instance exposes 30 resource objects: `workflows`, `projects`, `jobs`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `media`, `audio`, `credits`, `uploads`, `library`,
 `presets`, `pickerCatalogs`, `models`, `shots`, `recast`, `community`,
-`templates`, `tutorials`. It also exposes a low-level
+`templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -84,6 +87,30 @@ typechecking (`function takesClient(c: NodaroClient) { ... }`).
 ```ts
 import { NodaroClient } from "@nodaro/sdk"
 ```
+
+### `client.withWorkspace(workspaceId)`
+
+Returns a **new** client that acts in `workspaceId`, sharing this one's auth,
+base URL, timeout and fetch. Pass `null` for the personal space.
+
+```ts
+const classroom = client.withWorkspace(workspaceId)
+await classroom.workflows.run(workflowId)   // lands in the class
+await client.workflows.run(workflowId)      // lands in the personal space
+```
+
+A new client rather than a setter, deliberately: a mutable selection means two
+concurrent operations race over which workspace they are in, and the loser
+creates work in the wrong place with nothing failing. A per-workspace client
+cannot be raced.
+
+The workspace decides **scope**, never **access**: which workspace a list
+reads from and where a create lands. Reading, updating, deleting or running
+something you name by id is governed by that object's own workspace — so a
+forgotten workspace cannot hide your work and a wrong one cannot reach anyone
+else's. See [Selecting a workspace](./api-integration.md#4c-selecting-a-workspace-cloud-organizations).
+
+**Signature:** `withWorkspace(workspaceId: string | null): NodaroClient`
 
 ### `client.me()`
 
@@ -109,6 +136,16 @@ Returns `UserIdentity`:
 | `avatarUrl` | `string \| null` | Avatar URL; `null` if unset. |
 | `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). |
 | `isAdmin` | `boolean` | Whether the user holds an admin role. **Descriptive only** — use it to decide whether to render admin UI instead of capability-probing an admin endpoint; every admin API stays enforced server-side regardless. |
+
+On an instance with [organizations](./organizations.md) the same object also
+carries `organizations`, `workspaces`, `lastWorkspaceId`. Three states, and
+collapsing them is wrong in a way users feel:
+
+| What you see | What it means | What to do |
+|--------------|---------------|------------|
+| the fields are **absent** | this instance has no organizations at all | never show a switcher |
+| present and **empty** | the account belongs to none | offer to create or join one |
+| `organizationsUnavailable: true` | the lookup **failed** | keep the selection you already had — telling someone their school vanished during a cache blip is worse than a stale switcher |
 
 ---
 
@@ -2295,7 +2332,7 @@ credits surface as `InsufficientCreditsError`.
 
 AI prompt assistance for generation nodes. All three methods delegate to
 `POST /v1/prompt-helper/wizard` (see
-[API Integration §12](./api-integration.md#12-prompt-wizard)) and reserve
+[API Integration §12](./api-integration.md#15-prompt-wizard)) and reserve
 credits per call.
 
 All three inputs also accept optional `llmModel`, `reasoningEffort`, `advancedMode`, `temperature` and `maxTokens` fields
@@ -3693,6 +3730,72 @@ Public, read-only; curation is an admin surface outside the public SDK.
 
 ---
 
+### `client.organizations`
+
+[Organizations](./organizations.md) — a school or a team, the people in it,
+and the invitations that fill it. Only on instances that have them; elsewhere
+every call answers 404.
+
+Nothing here decides anything. Whether a caller may invite, remove or rename
+is the server's answer, delivered as a typed error code
+([the table](./organizations.md#errors)) — an SDK that guessed would be wrong
+the first time a setting changed.
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `list()` | `GET /v1/orgs` | What this account belongs to. |
+| `get(id)` | `GET /v1/orgs/:id` | |
+| `create(input)` | `POST /v1/orgs` | `{ name, kind: "school" | "team", slug?, acceptTerms?, settings? }`. May return `status: "pending"` — see below. |
+| `update(id, input)` | `PATCH /v1/orgs/:id` | `{ name?, settings? }` |
+| `delete(id)` | `DELETE /v1/orgs/:id` | Soft-delete. Nothing is destroyed. |
+| `transferOwnership(id, userId)` | `POST /v1/orgs/:id/transfer-ownership` | The caller becomes an admin. |
+| `leave(id)` | `POST /v1/orgs/:id/leave` | An owner cannot — transfer first (`owner_cannot_leave`). |
+| `listMembers(orgId, { cursor?, limit? })` | `GET /v1/orgs/:id/members` | Returns `{ data, nextCursor }`. |
+| `updateMember(orgId, userId, input)` | `PATCH /v1/orgs/:id/members/:userId` | `{ role?, status? }` |
+| `removeMember(orgId, userId)` | `DELETE /v1/orgs/:id/members/:userId` | |
+| `invite(orgId, input)` | `POST /v1/orgs/:id/invitations` | `{ emails, orgRole?, workspaceId?, workspaceRole? }`. **Read the note below.** |
+| `listInvitations(orgId, opts)` | `GET /v1/orgs/:id/invitations` | `{ status?, workspaceId?, cursor?, limit? }` |
+| `revokeInvitation(id)` | `DELETE /v1/invitations/:id` | |
+| `resendInvitation(id)` | `POST /v1/invitations/:id/resend` | |
+| `previewInvitation(token)` | `GET /v1/invitations/by-token/:token` | **Public** — works while the invitee is still signed out. The address comes back masked. |
+| `acceptInvitation(token)` | `POST /v1/invitations/:token/accept` | Requires a signed-in caller whose email matches. |
+| `audit(orgId, { cursor?, limit? })` | `GET /v1/orgs/:id/audit` | Newest first. Readable while the organization is suspended. |
+
+`invite` returns **one row per address**, and a row whose `status` is not
+`sent` carries a `link` instead — an install with no mail provider, or a
+delivery that failed. Surface it: the invitation exists either way, and
+without the link nobody can reach it.
+
+`audit` entries carry an `action` from an **open vocabulary**. Render the
+ones you recognise and fall back to the raw string; a client that switched
+exhaustively over it would break on the first new action.
+
+---
+
+### `client.workspaces`
+
+Workspaces — the inner tenancy axis, where work lives. Belonging to a
+workspace and *acting in* one are different things: this resource is the
+first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `list()` | `GET /v1/workspaces` | `{ data, lastWorkspaceId }`. Byte-for-byte the list `GET /v1/me` carries, so there is one truth to reconcile against — these are **summaries**, not full views. |
+| `listForOrg(orgId, { includeArchived? })` | `GET /v1/orgs/:id/workspaces` | |
+| `get(id)` | `GET /v1/workspaces/:id` | The full view. |
+| `create(orgId, input)` | `POST /v1/orgs/:id/workspaces` | `{ name, slug?, description?, settings? }` |
+| `update(id, input)` | `PATCH /v1/workspaces/:id` | `{ name?, description?, settings? }` |
+| `setArchived(id, archived)` | `POST /v1/workspaces/:id/archive` | `/unarchive` | Reversible, destroys nothing: the workspace stops accepting new work and stays fully readable. |
+| `listMembers(id, { cursor?, limit? })` | `GET /v1/workspaces/:id/members` | |
+| `addMember(id, input)` | `POST /v1/workspaces/:id/members` | `{ userId, role }`. The person must already be in the organization; to bring in a new one, invite them. |
+| `updateMember(id, userId, input)` | `PATCH /v1/workspaces/:id/members/:userId` | `{ role?, status?, creditCap? }` |
+| `removeMember(id, userId)` | `DELETE /v1/workspaces/:id/members/:userId` | |
+| `getJoinCode(id)` | `GET /v1/workspaces/:id/join-code` | `null` when none has been minted. Admins only. |
+| `actOnJoinCode(id, action)` | `POST /v1/workspaces/:id/join-code` | `"rotate" | "enable" | "disable"`. Rotating invalidates the old code immediately. |
+| `join(code)` | `POST /v1/workspaces/join` | Another way IN, so a stale workspace selection never blocks it. |
+
+---
+
 ## Type re-exports
 
 Every type used in a public method signature is re-exported from
@@ -3701,7 +3804,19 @@ Every type used in a public method signature is re-exported from
 ### Client identity
 
 - `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier, isAdmin }`
-- `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs?, clientLabel? }`
+- `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs?, clientLabel?, workspaceId? }`
+
+### Organizations
+
+Re-exported from `@nodaro/shared`, so an integration needs one dependency and
+not two.
+
+- `OrganizationView` / `OrgMemberView` / `WorkspaceView` / `WorkspaceMemberView` — the full records
+- `OrganizationSummary` / `WorkspaceSummary` / `MeOrganizations` — what `GET /v1/me` and `GET /v1/workspaces` carry
+- `InvitationView` / `InvitationDelivery` / `InvitationPreview` / `InvitationState` — invitations; `InvitationDelivery.link` is the one to surface
+- `JoinCodeView`, `OrgAuditEntry`, `OrgPage<T>`
+- `OrgKind` / `OrgRole` / `WorkspaceRole` / `MemberStatus` / `OrgStatus` / `OrgSettings` / `WorkspaceSettings`
+- `OrgErrorCode` — the codes to dispatch on; `WORKSPACE_HEADER` — the header name
 
 ### Templates & tutorials
 

@@ -190,6 +190,12 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // params (only 8 presets; a filter would add complexity without value).
   // See brand-presets.ts.
   "list_brand_presets",
+  // Reads what THIS account belongs to — a person is in a handful of
+  // workspaces, not a page of them, and there is nothing to filter by that
+  // the caller does not already know. A parameter here would also invite the
+  // idea that it can look up someone else's, which it cannot. See
+  // workspaces.ts.
+  "list_workspaces",
   // Premade voice catalog listing — returns the curated premade ElevenLabs
   // voices (id + name) so a caller can pick a voice_id. The catalog is small
   // and fixed; no filter/pagination params. See verbs-audio.ts. (Cloned voices

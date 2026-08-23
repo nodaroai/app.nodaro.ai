@@ -205,6 +205,13 @@ An API token may be bound to one workspace; it then behaves as if it sent this
 header on every request, and an explicit header naming a different workspace
 is refused with `400 token_workspace_mismatch`.
 
+The [SDK](./sdk-reference.md#clientwithworkspaceworkspaceid) sends it for you
+— `createClient({ workspaceId })`, or `client.withWorkspace(id)` for a client
+scoped to one workspace. The [CLI](./cli.md#working-in-a-workspace) takes
+`--workspace`, `NODARO_WORKSPACE`, or a saved profile selection. For the full
+organization surface — members, invitations, join codes, the audit log — see
+[Organizations](./organizations.md).
+
 The header has no effect unless organizations are enabled on the instance you
 are calling; self-hosted builds ignore it.
 

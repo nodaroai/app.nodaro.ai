@@ -2,10 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
 import { connectedReferenceSchema } from "../../connected-reference-schema.js"
 import {
   errorResult,
@@ -580,12 +580,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           }
         }
 
-        const res = await fastify.inject({
+        const res = await mcpInject(fastify, session, {
           method: "PATCH",
           url: "/v1/user/settings",
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           // userId in body is how the internal-secret auth path resolves
           // req.userId — see middleware/auth.ts.
           payload: { mcpPreferences: { image }, userId: session.userId },

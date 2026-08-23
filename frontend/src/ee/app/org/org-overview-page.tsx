@@ -95,6 +95,9 @@ export default function OrgOverviewPage() {
             <Button asChild variant="outline" size="sm">
               <Link to={`/org/${slug}/settings`}>Settings</Link>
             </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/org/${slug}/audit`}>History</Link>
+            </Button>
           </div>
         )}
       </header>

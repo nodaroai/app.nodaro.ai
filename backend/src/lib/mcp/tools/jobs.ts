@@ -15,7 +15,7 @@ export interface RegisterJobsOpts {
   session: McpSession
   /**
    * Kept on the opts shape for symmetry with other registrars and so a
-   * future v1.2 tool can hop to `app.inject()` if a route grows MCP-specific
+   * future v1.2 tool can hop to `mcpInject()` if a route grows MCP-specific
    * shaping. The current handlers query Supabase directly because the GET
    * endpoints' Fastify auth path requires `req.userId` set from a request
    * body, and GETs have no body.
@@ -31,7 +31,7 @@ export interface RegisterJobsOpts {
  * filtered by `session.userId`, because:
  *  1. The OAuth scope (`jobs:read`) is already gated at the MCP layer.
  *  2. The HTTP routes' user resolution path doesn't apply for GETs over
- *     `fastify.inject()` (no body to carry `userId`).
+ *     `mcpInject()` (no body to carry `userId`).
  */
 export function registerJobs({ server, session }: RegisterJobsOpts): void {
   if (!passesGate(session, jobsReadGate)) return

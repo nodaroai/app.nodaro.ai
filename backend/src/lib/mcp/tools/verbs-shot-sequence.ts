@@ -1,10 +1,10 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config } from "../../config.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { mcpInject } from "../internal-request.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -66,10 +66,9 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/shot-sequence/resolve",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
         payload: { brief: args.brief, audioUrl: args.audio_url, alignment: args.alignment, userId: session.userId },
       })
       if (res.statusCode >= 400) {

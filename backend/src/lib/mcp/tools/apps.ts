@@ -2,9 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { config } from "../../config.js"
 import { appBaseUrl } from "../../deployment-urls.js"
 import {
   extractAppInputSchema,
@@ -260,12 +260,9 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           mcp_client: session.clientName,
           userId: session.userId,
         }
-        const res = await fastify.inject({
+        const res = await mcpInject(fastify, session, {
           method: "POST",
           url: `/v1/app/${encodeURIComponent(args.slug)}/run`,
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload,
         })
         if (res.statusCode >= 400) {
@@ -332,12 +329,9 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         },
       },
       async (args) => {
-        const res = await fastify.inject({
+        const res = await mcpInject(fastify, session, {
           method: "DELETE",
           url: `/v1/app/${encodeURIComponent(args.slug)}/runs/${encodeURIComponent(args.runId)}`,
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload: { userId: session.userId },
         })
         if (res.statusCode >= 400) {

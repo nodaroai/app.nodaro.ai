@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 147 tools exposed by the Nodaro MCP server.
+Complete reference for the tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -22,8 +22,79 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:execute` | `branch_pipeline`, `start_pipeline` |
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets`, `get_node_preset` |
+| `workspaces:read` | `list_workspaces` |
+| `workspaces:write` | `select_workspace` |
 
 **Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`
+
+The workspace scopes are deliberately **not** granted to tokens issued before
+organizations existed: consenting to an app back then could not have meant
+agreeing to let it choose where your work lands. Re-authorize to grant them.
+
+---
+
+## Workspace tools
+
+Only on instances with [organizations](../organizations.md). Everywhere else
+these tools are **absent** rather than present-and-empty, so a client
+discovers there is no such concept here instead of finding a switch that does
+nothing.
+
+A browser picks a workspace from a switcher and every request carries the
+choice. An MCP client has neither a switcher nor a header it controls, so the
+same two questions become tools.
+
+### `list_workspaces`
+
+The organizations and workspaces this account belongs to, and which workspace
+the session is working in.
+
+**Scope:** `workspaces:read`
+**Input:** none
+
+An empty result means the account belongs to no organization — normal, not an
+error.
+
+**Response shape:**
+```json
+{
+  "workspaces": [
+    { "id": "uuid", "orgId": "uuid", "name": "Class 1", "slug": "class-1", "role": "member", "memberStatus": "active", "archived": false }
+  ],
+  "organizations": [
+    { "id": "uuid", "slug": "kent-high", "name": "Kent High", "kind": "school", "status": "active", "role": "owner" }
+  ],
+  "selectedWorkspaceId": "uuid"
+}
+```
+
+---
+
+### `select_workspace`
+
+Work in a workspace for the rest of the session, and remember it for the next
+one. Pass `workspace_id: null` to go back to the personal space.
+
+**Scope:** `workspaces:write`
+**Input:** `workspace_id` (uuid or `null`)
+
+The tool does not decide whether a workspace is selectable — it proposes one
+and the server either resolves it or refuses. Only what actually resolved is
+remembered: a preference that was never valid costs every later session a
+lookup.
+
+The stored selection is **re-validated at every session**, never trusted. A
+preference is written once and read for months, and membership can end in
+between; a client that kept working inside a workspace it had been removed
+from is the one failure the tenancy axis exists to prevent, and unlike a
+browser there is nobody watching a switcher who would notice. A selection that
+no longer resolves is cleared and the session continues in the personal space,
+rather than refusing every tool to someone whose only mistake was being
+removed from a class.
+
+Selecting records where the session's work belongs. It grants nothing and
+moves nothing, so selecting the wrong one wastes a step rather than exposing
+anything.
 
 ---
 

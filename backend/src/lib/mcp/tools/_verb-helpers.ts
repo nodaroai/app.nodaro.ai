@@ -14,9 +14,9 @@
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
-import { config } from "../../config.js"
 import { validateModelInput } from "@nodaro/shared"
 
 /**
@@ -411,10 +411,9 @@ export async function dispatchJob(
     widgetData?: Omit<SingleJobStructuredContent, "jobId">
   },
 ) {
-  const res = await fastify.inject({
+  const res = await mcpInject(fastify, session, {
     method: "POST",
     url: opts.url,
-    headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
     payload: opts.payload as string | object | Buffer | undefined,
   })
   if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

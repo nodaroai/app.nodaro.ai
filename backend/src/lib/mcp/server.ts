@@ -9,6 +9,7 @@ import { registerWorkflows } from "./tools/workflows.js"
 import { registerProjectTools } from "./tools/projects.js"
 import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
+import { registerWorkspaces } from "./tools/workspaces.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
 import { registerCharacterTools } from "./tools/characters.js"
@@ -36,6 +37,7 @@ void _startProgressEmitter
 import { registerWidgetResources } from "./widgets/registrar.js"
 import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
+import { resolveSessionWorkspace } from "./workspace-session.js"
 
 interface BuildOpts {
   userId: string
@@ -78,7 +80,11 @@ interface BuildOpts {
  * `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
 export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
-  const session = newSession(opts)
+  // Resolved once, at session creation, and re-validated there rather than
+  // trusted from the stored preference — see workspace-session.ts. Returns
+  // undefined on any build without organizations.
+  const workspaceId = await resolveSessionWorkspace(opts.userId)
+  const session = newSession({ ...opts, workspaceId })
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
     {
@@ -128,6 +134,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerProjectTools(server, session)
   registerComponents({ server, session, fastify: opts.fastify })
   registerApps({ server, session, fastify: opts.fastify })
+  registerWorkspaces({ server, session })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
   registerCharacterTools({ server, session, fastify: opts.fastify })

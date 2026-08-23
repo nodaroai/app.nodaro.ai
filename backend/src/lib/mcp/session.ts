@@ -20,12 +20,22 @@ export interface McpSession {
   progressTokens?: Map<string, string>
   /** Cached mcp-project id — set by ensureMcpProject() on first call, reused thereafter. */
   mcpProjectId?: string
+  /**
+   * The workspace this session works in, or undefined for the personal
+   * space. Resolved ONCE at session creation from the stored preference and
+   * re-validated there, never trusted from the preference alone: a
+   * membership can end between two sessions, and a client that kept working
+   * in a workspace it had been removed from would be the one bug this axis
+   * exists to prevent.
+   */
+  workspaceId?: string
 }
 
 export function newSession(opts: {
   userId: string
   scopes: Scope[]
   clientName: string
+  workspaceId?: string
 }): McpSession {
   return { ...opts, progressTokens: new Map() }
 }

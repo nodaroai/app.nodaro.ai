@@ -168,6 +168,11 @@ nodaro auth login
 nodaro workflows run <workflowId> --watch
 ```
 
+On a Cloud instance with [organizations](docs/organizations.md), `nodaro org`
+and `nodaro workspace` manage schools and teams and choose where work lands —
+per command (`--workspace`), per shell (`NODARO_WORKSPACE`), or saved on the
+profile.
+
 ### MCP
 
 Drive Nodaro from Claude, Cursor, Cline, Continue, or any MCP-compatible

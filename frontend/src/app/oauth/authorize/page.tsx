@@ -17,6 +17,8 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "assets:write": "Upload assets to your account",
   "credits:read": "See your credit balance",
   "apps:read": "Read published apps",
+  "workspaces:read": "See the workspaces you belong to",
+  "workspaces:write": "Choose which workspace it works in",
   // Keep in sync with backend ALL_SCOPES (lib/scopes.ts) — a requested scope
   // with no entry here renders as its raw machine string on the consent screen,
   // which is worst for the most sensitive scopes (pipelines:execute spends

@@ -5,6 +5,7 @@ import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripTransientRuntimeData, normalizeNodeModelParams, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
+import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
@@ -62,7 +63,7 @@ function ok(text: string, structuredContent?: Record<string, unknown>) {
  * workflow into the MCP project via export → import.
  *
  * `run_workflow` calls the existing `/v1/workflows/:id/run` route via
- * `fastify.inject()` (the route supports the internal-orchestrator path with
+ * `mcpInject()` (the route supports the internal-orchestrator path with
  * `userId` in the body); the rest query Supabase directly, scoped by
  * `user_id` (the service-role client bypasses RLS).
  */
@@ -613,12 +614,9 @@ export function registerWorkflows({
           userId: session.userId,
           ...(args.inputs ? { inputOverrides: args.inputs } : {}),
         }
-        const res = await fastify.inject({
+        const res = await mcpInject(fastify, session, {
           method: "POST",
           url: `/v1/workflows/${encodeURIComponent(args.workflow_id)}/run`,
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload,
         })
         if (res.statusCode >= 400) {

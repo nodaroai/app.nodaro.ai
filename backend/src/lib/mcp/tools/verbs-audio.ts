@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { config, hasCredits } from "../../config.js"
+import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -16,6 +16,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS } from "@nodaro/shared"
 import { resolvePreset } from "../../presets/resolve-preset.js"
+import { mcpInject } from "../internal-request.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -636,10 +637,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "GET",
         url: "/v1/voices",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const parsed = JSON.parse(res.body) as { voices?: unknown }
@@ -1263,12 +1263,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/voice-clones/from-url",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
@@ -1719,12 +1716,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
+      const res = await mcpInject(fastify, session, {
         method: "POST",
         url: "/v1/trim-audio",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)

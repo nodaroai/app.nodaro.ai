@@ -1,4 +1,6 @@
-import type { MemberStatus, OrgKind, OrgRole, OrgStatus, WorkspaceRole } from "@nodaro/shared"
+import type { MeOrganizations, OrganizationSummary, WorkspaceSummary } from "@nodaro/shared"
+
+export type { OrganizationSummary, WorkspaceSummary }
 import { hasOrganizations } from "@/lib/edition"
 import { createClient } from "@/lib/supabase"
 
@@ -27,32 +29,6 @@ import { createClient } from "@/lib/supabase"
  * selection instantly, and `profiles.last_workspace_id` so a different
  * device picks it up. The server's copy wins on hydration.
  */
-
-export interface OrganizationSummary {
-  id: string
-  slug: string
-  name: string
-  kind: OrgKind
-  status: OrgStatus
-  role: OrgRole
-  memberStatus: MemberStatus
-  settings: {
-    personal_space_enabled: boolean
-    allowed_email_domains: string[]
-    vocabulary_overrides: Record<string, string>
-  }
-  vocabulary: Record<string, string>
-}
-
-export interface WorkspaceSummary {
-  id: string
-  orgId: string
-  name: string
-  slug: string
-  role: WorkspaceRole
-  memberStatus: MemberStatus
-  archived: boolean
-}
 
 export type WorkspaceStatus = "idle" | "loading" | "ready" | "unavailable"
 
@@ -131,12 +107,7 @@ export function getWorkspaceState(): WorkspaceState {
 }
 
 interface MeResponse {
-  data?: {
-    organizations?: OrganizationSummary[]
-    workspaces?: WorkspaceSummary[]
-    lastWorkspaceId?: string | null
-    organizationsUnavailable?: boolean
-  }
+  data?: MeOrganizations
 }
 
 /**

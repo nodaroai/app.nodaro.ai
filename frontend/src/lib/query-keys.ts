@@ -280,6 +280,8 @@ export const queryKeys = {
       ["orgs", "invitations", orgId, status ?? "", workspaceId ?? ""] as const,
     workspaces: (orgId: string, includeArchived?: boolean) =>
       ["orgs", "workspaces", orgId, includeArchived ? "with-archived" : "live"] as const,
+    audit: (orgId: string, cursor?: string) =>
+      cursor ? (["orgs", "audit", orgId, cursor] as const) : (["orgs", "audit", orgId] as const),
     workspace: (workspaceId: string) => ["orgs", "workspace", workspaceId] as const,
     workspaceMembers: (workspaceId: string, cursor?: string) =>
       cursor
