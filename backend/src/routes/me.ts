@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { roleIsAdmin, warmAdminCache } from "../lib/admin-check.js"
+import { hasOrganizations } from "../lib/config.js"
+import { getPluginServices } from "../lib/private-plugins/load.js"
 
 /**
  * GET /v1/me — the canonical identity / token-introspection endpoint.
@@ -45,19 +47,40 @@ export async function meRoutes(app: FastifyInstance) {
     // admin-gated call skips its profile round-trip (mirrors creditGuard).
     warmAdminCache(userId, profile.role)
 
-    return reply.send({
-      data: {
-        id: profile.id,
-        email: profile.email,
-        displayName: profile.full_name ?? null,
-        avatarUrl: profile.avatar_url ?? null,
-        // `tier` first: it is the column the Stripe paths write, so it tracks
-        // reality; `subscription_tier` is the fallback for rows predating it.
-        // Inlined rather than importing ee/billing/tier-columns.ts — core may
-        // not statically import from ee/ (tools/check-ee-imports.mjs).
-        tier: profile.tier ?? profile.subscription_tier ?? "free",
-        isAdmin: roleIsAdmin(profile.role),
-      },
-    })
+    const data: Record<string, unknown> = {
+      id: profile.id,
+      email: profile.email,
+      displayName: profile.full_name ?? null,
+      avatarUrl: profile.avatar_url ?? null,
+      // `tier` first: it is the column the Stripe paths write, so it tracks
+      // reality; `subscription_tier` is the fallback for rows predating it.
+      // Inlined rather than importing ee/billing/tier-columns.ts — core may
+      // not statically import from ee/ (tools/check-ee-imports.mjs).
+      tier: profile.tier ?? profile.subscription_tier ?? "free",
+      isAdmin: roleIsAdmin(profile.role),
+    }
+
+    // Organizations, when the instance has them. The fields are ABSENT rather
+    // than empty on a build without the feature, so a client can tell "you
+    // belong to nothing" from "this instance has no organizations at all".
+    // A failure to read them is a THIRD state, named explicitly: identity is
+    // what this endpoint owes the caller and must not fail over an extra,
+    // but answering with the fields absent would tell a client its school
+    // had vanished during a Redis blip — so it keeps its cached switcher
+    // instead.
+    const orgs = hasOrganizations() ? getPluginServices().orgs : undefined
+    if (orgs) {
+      try {
+        const memberships = await orgs.me(userId)
+        data.organizations = memberships.organizations
+        data.workspaces = memberships.workspaces
+        data.lastWorkspaceId = memberships.lastWorkspaceId
+      } catch (err) {
+        req.log.error({ err }, "me: organization memberships unavailable")
+        data.organizationsUnavailable = true
+      }
+    }
+
+    return reply.send({ data })
   })
 }

@@ -103,6 +103,25 @@ describe("orgs-context — inert without the feature or the plugin", () => {
     expect(res.json().workspaceId).toBeNull()
   })
 
+  it("ignores the header when the plugin IS present but the feature is off", async () => {
+    // This is production today: cloud always installs the plugin, and
+    // ORGS_ENABLED is the launch lever. Asserting it with the service
+    // present is the only way to prove the flag itself is load-bearing —
+    // with both absent, either gate alone would satisfy the test.
+    const orgs = orgsService()
+    vi.mocked(hasOrganizations).mockReturnValue(false)
+    vi.mocked(getPluginServices).mockReturnValue({ orgs })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/anything",
+      headers: { "x-user-id": USER, [WORKSPACE_HEADER]: WS },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ workspaceId: null, orgId: null, memberships: { organizations: [], workspaces: [] } })
+    expect(orgs.resolveRequestContext).not.toHaveBeenCalled()
+    expect(orgs.loadMemberships).not.toHaveBeenCalled()
+  })
+
   it("never calls the service for an unauthenticated request", async () => {
     const orgs = orgsService()
     vi.mocked(hasOrganizations).mockReturnValue(true)
