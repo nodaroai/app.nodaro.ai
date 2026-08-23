@@ -108,7 +108,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
               >
                 {/* First row (xl:grid-cols-5) is the LCP candidate — fetch it
                     at high priority. */}
-                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} priority={i < 5} />
+                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} priority={i < 5} />
                 <div className="px-3 py-2">
                   <p className="text-sm font-medium truncate">{wf.name}</p>
                   <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">

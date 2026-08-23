@@ -1,17 +1,24 @@
-import { Image } from "lucide-react"
 import { isVideoUrl } from "@/lib/media-type"
 import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
+import { WorkflowCoverPlaceholder } from "./workflow-cover-placeholder"
 
 interface WorkflowThumbnailProps {
   readonly thumbnailUrl: string | null
+  /**
+   * Distinct node types in the flow, used to pick the placeholder's look when
+   * no cover has been chosen. Absent (the column has not reached this
+   * environment yet, or the caller does not have it) reads the same as an empty
+   * flow — one consistent default rather than a wrong guess.
+   */
+  readonly nodeTypes?: readonly string[] | null
   /** Above-the-fold thumbnail (first row of a grid). Fetches the image at high
    *  priority so it can be the LCP element without waiting behind other
    *  requests. See CachedImage's `priority` prop. */
   readonly priority?: boolean
 }
 
-export function WorkflowThumbnail({ thumbnailUrl, priority }: WorkflowThumbnailProps) {
+export function WorkflowThumbnail({ thumbnailUrl, nodeTypes, priority }: WorkflowThumbnailProps) {
   return (
     <div className="aspect-[4/3] bg-muted/50 overflow-hidden">
       {thumbnailUrl ? (
@@ -30,9 +37,7 @@ export function WorkflowThumbnail({ thumbnailUrl, priority }: WorkflowThumbnailP
           />
         )
       ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <Image className="h-8 w-8 text-muted-foreground/30" />
-        </div>
+        <WorkflowCoverPlaceholder nodeTypes={nodeTypes} />
       )}
     </div>
   )

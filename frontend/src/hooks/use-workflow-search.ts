@@ -67,6 +67,9 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
             folderId: row.folder_id ?? null,
             name: row.name,
             thumbnailUrl: row.thumbnail_url ?? null,
+            // Search results are a name lookup, not a gallery — the cover falls
+            // back to the empty-flow default rather than widening this select.
+            nodeTypes: null,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             projectName: map.get(row.project_id) ?? "Unknown Project",

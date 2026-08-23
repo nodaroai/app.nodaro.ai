@@ -35,7 +35,7 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
         className="block"
         draggable={false}
       >
-        <WorkflowThumbnail thumbnailUrl={workflow.thumbnailUrl} />
+        <WorkflowThumbnail thumbnailUrl={workflow.thumbnailUrl} nodeTypes={workflow.nodeTypes} />
         <div className="px-3 py-2">
           <p className="text-sm font-medium truncate">{workflow.name}</p>
           <p className="text-[10px] text-muted-foreground">

@@ -88,7 +88,7 @@ export function StudioWorkflowsView({ showAll }: StudioWorkflowsViewProps) {
               to={`/projects/${wf.projectId}/workflows/${wf.id}`}
               className="group relative rounded-lg border bg-card hover:bg-accent/30 transition-colors overflow-hidden block"
             >
-              <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} />
+              <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} />
               <div className="px-3 py-2">
                 <p className="text-sm font-medium truncate">{wf.name}</p>
                 <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">

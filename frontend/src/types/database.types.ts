@@ -1362,6 +1362,7 @@ export type Database = {
       workflows: {
         Row: {
           app_slug: string | null
+          cover_node_types: string[] | null
           created_at: string
           description: string | null
           edges: Json
@@ -1380,6 +1381,7 @@ export type Database = {
         }
         Insert: {
           app_slug?: string | null
+          cover_node_types?: string[] | null
           created_at?: string
           description?: string | null
           edges?: Json
@@ -1398,6 +1400,7 @@ export type Database = {
         }
         Update: {
           app_slug?: string | null
+          cover_node_types?: string[] | null
           created_at?: string
           description?: string | null
           edges?: Json

@@ -782,7 +782,7 @@ export default function ProjectsPage() {
                 to={`/projects/${wf.projectId}/workflows/${wf.id}`}
                 className="group rounded-lg border bg-card hover:bg-accent/30 transition-colors overflow-hidden"
               >
-                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} />
+                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} />
                 <div className="px-3 py-2">
                   <p className="text-sm font-medium truncate">{wf.name}</p>
                   <p className="text-[10px] text-muted-foreground truncate">

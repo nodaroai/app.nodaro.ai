@@ -2,9 +2,11 @@ import { create } from "zustand"
 import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+import { nodeTypesOf } from "@/lib/workflow-cover"
 import {
   fetchListedAppSlugs,
   isAppSlugColumnMissing,
+  isMissingColumnError,
   projectVisibilityFilter,
   readShowClientAppsFlag,
 } from "@/hooks/queries/use-client-apps-queries"
@@ -34,6 +36,8 @@ export interface WorkflowMeta {
   readonly folderId: string | null
   readonly name: string
   readonly thumbnailUrl: string | null
+  /** Distinct node types, for the cover placeholder. `null` = not known here. */
+  readonly nodeTypes: readonly string[] | null
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -89,6 +93,8 @@ function toFolder(row: Record<string, unknown>): Folder {
   }
 }
 
+const WORKFLOW_META_COLS = "id, project_id, folder_id, name, thumbnail_url, created_at, updated_at"
+
 function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
   return {
     id: row.id as string,
@@ -96,6 +102,7 @@ function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
     folderId: (row.folder_id as string) ?? null,
     name: row.name as string,
     thumbnailUrl: (row.thumbnail_url as string) ?? null,
+    nodeTypes: (row.cover_node_types as string[] | undefined) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -154,9 +161,12 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           .select("*")
           .eq("project_id", projectId)
           .order("created_at"),
+        // Migration 337's `cover_node_types` is requested first; a database
+        // that predates it fails the whole select, so the retry below drops it
+        // and the covers fall back to the empty-flow default.
         supabase
           .from("workflows")
-          .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
+          .select(`${WORKFLOW_META_COLS}, cover_node_types`)
           .eq("project_id", projectId)
           .order("created_at", { ascending: false }),
       ])
@@ -165,14 +175,30 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         set({ error: foldersRes.error.message, loading: false })
         return
       }
-      if (workflowsRes.error) {
+
+      // The two selects differ by one column, so the rows are read through the
+      // mapper's own loose shape rather than the generated per-select types.
+      let workflowRows: Record<string, unknown>[] = (workflowsRes.data ?? []) as Record<string, unknown>[]
+      if (workflowsRes.error && !isMissingColumnError(workflowsRes.error)) {
         set({ error: workflowsRes.error.message, loading: false })
         return
+      }
+      if (workflowsRes.error) {
+        const retry = await supabase
+          .from("workflows")
+          .select(WORKFLOW_META_COLS)
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false })
+        if (retry.error) {
+          set({ error: retry.error.message, loading: false })
+          return
+        }
+        workflowRows = (retry.data ?? []) as Record<string, unknown>[]
       }
 
       set({
         folders: foldersRes.data.map(toFolder),
-        workflowMetas: workflowsRes.data.map(toWorkflowMeta),
+        workflowMetas: workflowRows.map(toWorkflowMeta),
         loading: false,
       })
     } catch (err) {
@@ -311,12 +337,14 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           folder_id: folderId,
           name,
         })
-        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
+        .select(WORKFLOW_META_COLS)
         .single()
 
       if (error || !data) return null
 
-      const wf = toWorkflowMeta(data)
+      // A brand-new workflow is empty. State that exactly rather than leaving the
+      // cover to guess from a column this select does not carry.
+      const wf: WorkflowMeta = { ...toWorkflowMeta(data), nodeTypes: [] }
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return wf
@@ -426,12 +454,14 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           edges: original.edges,
           settings: original.settings,
         })
-        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
+        .select(WORKFLOW_META_COLS)
         .single()
 
       if (error || !data) return null
 
-      const wf = toWorkflowMeta(data)
+      // The copy has the original's graph, so its cover is correct on the first
+      // paint instead of only after the list refetches.
+      const wf: WorkflowMeta = { ...toWorkflowMeta(data), nodeTypes: nodeTypesOf(original.nodes) }
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return wf
@@ -455,10 +485,11 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           edges: content.edges as Json,
           settings: content.settings as Json,
         })
-        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
+        .select(WORKFLOW_META_COLS)
         .single()
       if (error || !data) return null
-      const wf = toWorkflowMeta(data)
+      // The graph came in with the import, so the cover is right immediately.
+      const wf: WorkflowMeta = { ...toWorkflowMeta(data), nodeTypes: nodeTypesOf(content.nodes) }
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return wf

@@ -158,9 +158,21 @@ export function writeShowClientAppsFlag(value: boolean): void {
  * migration, mirroring how useMyWorkflows tolerates a missing `is_default`.
  * Codes: 42703 (undefined_column) / PGRST204 (schema-cache miss).
  */
+/**
+ * "That column does not exist" — the one error a select may legitimately step
+ * down from, because it means the database is behind on a migration rather
+ * than that anything is wrong. Everything else (an expired session, RLS, the
+ * network) must surface immediately: retrying a narrower select would just
+ * fail three more times and then blame the wrong thing.
+ */
+export function isMissingColumnError(error: unknown): boolean {
+  const e = error as { code?: string } | null
+  return e?.code === "42703" || e?.code === "PGRST204"
+}
+
 export function isAppSlugColumnMissing(error: unknown): boolean {
   const e = error as { code?: string; message?: string } | null
   if (!e) return false
-  if (e.code === "42703" || e.code === "PGRST204") return true
+  if (isMissingColumnError(e)) return true
   return typeof e.message === "string" && e.message.includes("app_slug")
 }
