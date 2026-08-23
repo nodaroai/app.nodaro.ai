@@ -1,7 +1,6 @@
 import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
-
-const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
+import { ELEVENLABS_BASE_URL } from "./client.js"
 
 function resolveModel(provider?: string): string {
   if (provider === "elevenlabs-v3") return "eleven_v3"

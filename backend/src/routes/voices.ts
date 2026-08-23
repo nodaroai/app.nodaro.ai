@@ -3,6 +3,7 @@ import type { TtsProvider } from "@nodaro/shared"
 import { config } from "../lib/config.js"
 import { registerVoiceLookup } from "../providers/kie/audio.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
+import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,7 +86,7 @@ const FALLBACK_VOICES: ElevenLabsVoice[] = [
 
 async function fetchVoicesFromApi(): Promise<ElevenLabsVoice[]> {
   const res = await fetch(
-    "https://api.elevenlabs.io/v2/voices?category=premade&page_size=100",
+    `${ELEVENLABS_BASE_URL}/v2/voices?category=premade&page_size=100`,
     {
       headers: {
         "xi-api-key": config.ELEVENLABS_API_KEY,
@@ -275,7 +276,7 @@ export async function voicesRoutes(app: FastifyInstance) {
       }
 
       const res = await fetch(
-        `https://api.elevenlabs.io/v1/shared-voices?${qs.toString()}`,
+        `${ELEVENLABS_BASE_URL}/v1/shared-voices?${qs.toString()}`,
         {
           headers: {
             "xi-api-key": config.ELEVENLABS_API_KEY,

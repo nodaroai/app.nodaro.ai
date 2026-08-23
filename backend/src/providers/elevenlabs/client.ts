@@ -2,7 +2,9 @@ import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
-export const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
+/** THE ElevenLabs host. Every module that talks to ElevenLabs imports this
+ *  one const — a second local copy silently escapes the override. */
+export const ELEVENLABS_BASE_URL = config.ELEVENLABS_BASE_URL
 
 export function getElevenLabsApiKey(): string {
   const apiKey = config.ELEVENLABS_API_KEY

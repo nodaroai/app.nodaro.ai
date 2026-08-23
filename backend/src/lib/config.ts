@@ -9,6 +9,19 @@ import {
   type ProviderKeyId,
 } from "./provider-keys-runtime.js"
 
+/**
+ * An overridable service base URL: defaults to the vendor's own host, and
+ * trailing slashes are stripped so an operator pasting `https://proxy/kie/`
+ * cannot produce `//api/v1/...` at every call site. Every consumer builds
+ * `${BASE}/path`.
+ */
+export function baseUrl(fallback: string) {
+  return z
+    .string()
+    .default(fallback)
+    .transform((v) => (v.trim() || fallback).replace(/\/+$/, ""))
+}
+
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
@@ -66,6 +79,19 @@ const envSchema = z.object({
    *  path and wins when both exist. See lib/nodaro-connect.ts. */
   NODARO_API_KEY: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
+  /**
+   * Base URL for the KIE.ai API. Override to route provider traffic through an
+   * egress proxy that holds the real key — key custody, audit logging, or
+   * regional routing, all of which a self-hoster may need and none of which
+   * the app should know about. Default = KIE direct (unchanged behaviour).
+   *
+   * CONSEQUENCE, easy to miss: `lib/llm-client.ts` imports the same
+   * `KIE_API_BASE` const, so this ALSO reroutes the KIE-fronted LLM lanes
+   * (Claude, Gemini, the OpenAI-compatible ones) — not just media generation.
+   * A proxy set here must speak both the /api/v1 task API and the
+   * /claude/v1/messages + /<family>/v1/chat/completions LLM paths.
+   */
+  KIE_API_BASE_URL: baseUrl("https://api.kie.ai"),
   ANTHROPIC_API_KEY: z.string().default(""),
   /** Google Gemini API key (https://aistudio.google.com/apikey). Enables the
    *  direct-Google lane for models declaring `directGeminiModel`; empty leaves
@@ -73,6 +99,11 @@ const envSchema = z.object({
    *  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` pair is OAuth login, unrelated. */
   GEMINI_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),
+  /**
+   * Base URL for the ElevenLabs API. Same egress-proxy rationale as
+   * KIE_API_BASE_URL; default = ElevenLabs direct (unchanged behaviour).
+   */
+  ELEVENLABS_BASE_URL: baseUrl("https://api.elevenlabs.io"),
   HEYGEN_API_KEY: z.string().default(""),
   /**
    * How often the shared (Redis) HeyGen public catalog — ≈7,000 preset

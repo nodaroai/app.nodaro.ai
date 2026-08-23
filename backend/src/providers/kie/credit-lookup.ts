@@ -20,10 +20,10 @@
  */
 
 import { config } from "../../lib/config.js"
+import { KIE_API_BASE } from "./client.js"
 
-const KIE_BASE = "https://api.kie.ai"
-const KIE_GENERIC_URL = `${KIE_BASE}/api/v1/playground/pageRecordListByDoris`
-const KIE_USER_RECORD_URL = `${KIE_BASE}/client/v1/userRecord`
+const KIE_GENERIC_URL = `${KIE_API_BASE}/api/v1/playground/pageRecordListByDoris`
+const KIE_USER_RECORD_URL = `${KIE_API_BASE}/client/v1/userRecord`
 
 export interface KieLogRecord {
   taskId: string

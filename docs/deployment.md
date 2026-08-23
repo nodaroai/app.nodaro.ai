@@ -130,10 +130,12 @@ added to `config.ts` without a row here.
 | `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
 | `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |
 | `KIE_API_KEY` | `""` | KIE.ai — broadest media/LLM coverage (or paste it on Install health) |
+| `KIE_API_BASE_URL` | `https://api.kie.ai` | Where KIE traffic goes. Point it at an egress proxy — see 12a. **Also moves the Claude/Gemini LLM lanes** |
 | `REPLICATE_API_TOKEN` | `""` | Replicate — Flux 2 family, LoRA training |
 | `ANTHROPIC_API_KEY` | `""` | Direct Anthropic lane for Claude LLM nodes |
 | `GEMINI_API_KEY` | `""` | Direct Google lane for Gemini models — see "Gemini routing" |
 | `ELEVENLABS_API_KEY` | `""` | Speech, voices, dubbing |
+| `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | Where ElevenLabs traffic goes — see 12a |
 | `FAL_KEY` | `""` | fal.ai-hosted models |
 | `HEYGEN_API_KEY` | `""` | AI Avatar / Cinematic Avatar (or run them on the nodaro.ai connection) |
 | `BEEBLE_API_KEY` | `""` | Relight & Switch |
@@ -792,6 +794,43 @@ capture that would freeze a key.
 
 Requires the instance encryption key (section 8). Without one, tiles report
 `missing` and `/setup` shows a red **Encryption** card with the fix.
+
+### 12a. Sending provider traffic through your own proxy
+
+Two providers let you move the *host*, not just the key:
+
+| Variable | Default | Moves |
+|---|---|---|
+| `KIE_API_BASE_URL` | `https://api.kie.ai` | Every KIE call — media generation **and** the KIE-fronted LLM lanes |
+| `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | Every ElevenLabs call — TTS, STT, voices, cloning, dubbing, forced alignment |
+
+Leave both unset and nothing changes: the defaults are the vendors' own
+hosts, so an install that never touches these makes byte-identical requests
+to the ones it made before the variables existed.
+
+Set one and Nodaro talks to your host instead. The usual reasons are key
+custody (the real vendor key lives on the proxy, never in the app's
+environment), audit logging of every outbound generation, and regional
+routing. Your proxy is expected to be transparent — same paths, same
+request and response bodies — because Nodaro only substitutes the origin.
+Trailing slashes are stripped, so `https://proxy.example.com/kie/` and
+`https://proxy.example.com/kie` behave identically.
+
+**`KIE_API_BASE_URL` also reroutes LLM traffic.** This is the part that
+surprises people. KIE is not only a media provider here — the Claude and
+Gemini lanes that power prompt enhancement, script generation, the workflow
+copilot and the pipeline stages are served over the same host. Overriding it
+therefore sends those through your proxy too, which is usually what you want
+(one audit point for everything) but means the proxy must handle more than
+the media API: it needs `/api/v1/...` (task creation and polling),
+`/claude/v1/messages`, and `/<family>/v1/chat/completions` and
+`/<family>/v1/responses`. A proxy that forwards only the media paths will
+leave every LLM-backed feature failing while image and video generation keep
+working — a confusing state worth ruling out first.
+
+Direct-lane keys are unaffected: set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
+and those models leave KIE entirely, proxy or no proxy (see "Gemini
+routing").
 
 ## See also
 
