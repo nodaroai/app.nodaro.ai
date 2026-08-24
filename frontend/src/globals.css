@@ -1898,4 +1898,14 @@ html, body {
 .npk-tabs { scrollbar-width: none; -ms-overflow-style: none; }
 .npk-tabs::-webkit-scrollbar { display: none; }
 
+/* The canvas keeps its authored direction in every locale: a workflow is
+   shared content, not chrome — an RTL reader must see the same board its
+   LTR author laid out, and node internals are not converted to logical
+   utilities. Class-scoped so every <ReactFlow> mount (editor, viewer
+   modal, template preview, tutorial shell, and any future one) inherits
+   the pin with no per-site wiring. Guarded by rtl-direction-guards.test. */
+.react-flow {
+  direction: ltr;
+}
+
 

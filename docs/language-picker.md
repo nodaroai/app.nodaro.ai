@@ -40,8 +40,14 @@ label. It's expected that some languages are fully translated in one area
 another (for example, the app chrome), and that this improves over time as
 more translations ship.
 
-Right-to-left languages (like Arabic and Hebrew) render their own text
-correctly, but the overall page layout doesn't mirror yet.
+Right-to-left languages (Arabic and Hebrew) mirror the app's layout: the
+sidebar moves to the right and navigation, pages and panels flip with it.
+Two areas intentionally keep their left-to-right layout in every language:
+the workflow canvas (a workflow you share looks the same to everyone,
+whatever language they read) and the visual picker grids (their tiles keep
+the same order as the catalogs and tutorials). Choosing a right-to-left
+language whose translation is still incomplete mirrors the layout while
+showing English text for the untranslated parts.
 
 ## Where your choice is saved
 

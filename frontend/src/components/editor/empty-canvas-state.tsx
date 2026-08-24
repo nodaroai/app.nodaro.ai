@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { SceneNodeType } from "@/types/nodes";
 import { useT, type MessageKey } from "@/lib/i18n";
+import { useAppDir } from "@/lib/locale-store";
+import { cn } from "@/lib/utils";
 
 /**
  * Empty-canvas first-run surface. Shown only when the active Flow page has zero
@@ -81,6 +83,7 @@ export function EmptyCanvasState({
   onOpenTutorials,
 }: EmptyCanvasStateProps) {
   const t = useT();
+  const isRtl = useAppDir() === "rtl";
   return (
     // Wrapper is click-through so the empty canvas stays pannable around the
     // content; only the interactive cluster captures pointer events.
@@ -119,7 +122,7 @@ export function EmptyCanvasState({
               key={card.key}
               type="button"
               onClick={() => onCreate(card.nodeType)}
-              className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm
+              className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 text-start shadow-sm
                          transition-all hover:-translate-y-0.5 hover:border-[#ff0073]/60 hover:shadow-md
                          dark:border-[#2D2D2D] dark:bg-[#1A1A1A] dark:shadow-none dark:hover:border-[#ff0073]/60"
             >
@@ -137,7 +140,7 @@ export function EmptyCanvasState({
         <button
           type="button"
           onClick={onOpenInputPanel}
-          className="group mt-4 flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-3 text-left
+          className="group mt-4 flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-3 text-start
                      transition-colors hover:border-[#ff0073]/50 hover:bg-white
                      dark:border-[#2D2D2D] dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
         >
@@ -148,7 +151,7 @@ export function EmptyCanvasState({
             <span className="text-[13px] font-semibold text-slate-900 dark:text-white">{t("canvas.haveFile")}</span>
             <span className="text-[12px] text-slate-500 dark:text-slate-400">{t("canvas.uploadOrBrowse")}</span>
           </span>
-          <ArrowRight className="ml-auto h-4 w-4 text-slate-300 transition-colors group-hover:text-[#ff0073] dark:text-slate-600" />
+          <ArrowRight className={cn("ms-auto h-4 w-4 text-slate-300 transition-colors group-hover:text-[#ff0073] dark:text-slate-600", isRtl && "rotate-180")} />
         </button>
 
         {/* Tertiary utility pills */}
@@ -162,11 +165,11 @@ export function EmptyCanvasState({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-44">
               <DropdownMenuItem onClick={onOpenMyLibrary}>
-                <FolderOpen className="mr-2 h-4 w-4" />
+                <FolderOpen className="me-2 h-4 w-4" />
                 {t("canvas.myLibrary")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenMediaLibrary}>
-                <Images className="mr-2 h-4 w-4" />
+                <Images className="me-2 h-4 w-4" />
                 {t("canvas.mediaLibrary")}
               </DropdownMenuItem>
             </DropdownMenuContent>

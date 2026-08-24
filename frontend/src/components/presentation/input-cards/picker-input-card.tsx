@@ -23,7 +23,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DimensionTileGrid } from "@/lib/picker-ui"
 import { LocalePicker } from "@/components/editor/locale-picker"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
-import { useLocaleDir } from "@/lib/locale-store"
+import { usePickerDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import {
   getParameterPickerMeta,
@@ -89,7 +89,7 @@ function SinglePickerCard({
   allowedValues,
   meta,
 }: PickerInputCardProps & { meta: SingleDimParameterPickerMeta }) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const { resolveLabel, resolveDescription } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -324,7 +324,7 @@ function MultiPickerCard({
   displayMode = "inline",
   meta,
 }: PickerInputCardProps & { meta: MultiDimParameterPickerMeta }) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const { resolveLabel } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
 

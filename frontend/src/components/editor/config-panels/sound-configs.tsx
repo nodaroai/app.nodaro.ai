@@ -6,7 +6,7 @@ import type {
   VoiceCharacterData, VoiceDeliveryData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { useLocaleDir } from "@/lib/locale-store"
+import { usePickerDir } from "@/lib/locale-store"
 import { LocaleHeader } from "./locale-header"
 import { CustomTextRows } from "./custom-text-rows"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
@@ -24,7 +24,7 @@ function unfreeze(v: string | ReadonlyArray<string> | undefined): string | strin
 }
 
 export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -46,7 +46,7 @@ export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>
 }
 
 export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -72,7 +72,7 @@ export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) 
 }
 
 export function InstrumentationConfig({ data, onUpdate }: ConfigProps<InstrumentationData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -108,7 +108,7 @@ export function InstrumentationConfig({ data, onUpdate }: ConfigProps<Instrument
 }
 
 export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharacterData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -144,7 +144,7 @@ export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharac
 }
 
 export function VoiceDeliveryConfig({ data, onUpdate }: ConfigProps<VoiceDeliveryData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />

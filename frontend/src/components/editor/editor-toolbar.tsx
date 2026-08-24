@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
 import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
@@ -93,6 +95,7 @@ function describeMediaRefNodes(refs: ReadonlyArray<{ nodeId: string; nodeLabel?:
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
   const isDirty = useWorkflowStore((s) => s.isDirty)
@@ -444,7 +447,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             className="h-8 w-8 p-0 shrink-0"
             onClick={() => onNavigate ? onNavigate(`/projects/${projectId}`) : undefined}
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
           </Button>
         )}
 
@@ -459,7 +462,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </button>
           {project && (
             <>
-              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              <ChevronRight className={cn("h-3 w-3 text-muted-foreground", isRtl && "rotate-180")} />
               <button
                 type="button"
                 onClick={() => onNavigate?.(`/projects/${projectId}`)}
@@ -469,7 +472,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               </button>
             </>
           )}
-          <ChevronRight className="h-3 w-3 text-muted-foreground" />
+          <ChevronRight className={cn("h-3 w-3 text-muted-foreground", isRtl && "rotate-180")} />
         </nav>
 
         <div className="flex items-center gap-0.5 min-w-0">
@@ -565,16 +568,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           <DropdownMenuContent align="end">
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4 me-2" />
                 {t("editor.export")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onClick={() => handleExport(true)}>
-                  <Package className="h-4 w-4 mr-2" />
+                  <Package className="h-4 w-4 me-2" />
                   {t("editor.withAssets")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExport(false)}>
-                  <FileJson className="h-4 w-4 mr-2" />
+                  <FileJson className="h-4 w-4 me-2" />
                   {t("editor.templateOnly")}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
@@ -582,16 +585,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <Upload className="h-4 w-4 mr-2" />
+                <Upload className="h-4 w-4 me-2" />
                 {t("editor.import")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                  <FileJson className="h-4 w-4 mr-2" />
+                  <FileJson className="h-4 w-4 me-2" />
                   {t("editor.fromFile")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleClipboardImport}>
-                  <ClipboardPaste className="h-4 w-4 mr-2" />
+                  <ClipboardPaste className="h-4 w-4 me-2" />
                   {t("editor.fromClipboard")}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
@@ -642,15 +645,15 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               title={hasError ? saveError ?? t("editor.saveFailed") : undefined}
             >
               {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin sm:mr-1" />
+                <Loader2 className="h-4 w-4 animate-spin sm:me-1" />
               ) : isSaved ? (
-                <CheckCircle className="h-4 w-4 text-green-300 sm:mr-1" />
+                <CheckCircle className="h-4 w-4 text-green-300 sm:me-1" />
               ) : hasError ? (
-                <RefreshCw className="h-4 w-4 sm:mr-1" />
+                <RefreshCw className="h-4 w-4 sm:me-1" />
               ) : isUnsaved ? (
-                <Save className="h-4 w-4 sm:mr-1" />
+                <Save className="h-4 w-4 sm:me-1" />
               ) : (
-                <CheckCircle className="h-4 w-4 sm:mr-1" />
+                <CheckCircle className="h-4 w-4 sm:me-1" />
               )}
               <span className="hidden sm:inline">{buttonText}</span>
             </Button>

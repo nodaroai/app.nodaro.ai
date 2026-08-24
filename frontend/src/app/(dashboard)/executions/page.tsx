@@ -207,7 +207,7 @@ export default function ExecutionsPage() {
             onClick={handleRefresh}
             disabled={isLoading}
           >
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 me-1.5 ${isLoading ? "animate-spin" : ""}`} />
             {t("exec.refresh")}
           </Button>
           <div className="flex items-center gap-1">
@@ -247,7 +247,7 @@ export default function ExecutionsPage() {
           <h3 className="text-lg font-semibold mb-2">{t("exec.failedToLoad")}</h3>
           <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
           <Button onClick={handleRefresh} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
+            <RefreshCw className="w-4 h-4 me-2" />
             {t("exec.retry")}
           </Button>
         </div>
@@ -387,7 +387,7 @@ function GlobalExecutionRow({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400 ml-1.5 inline" />
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
                   <p className="text-xs">{exec.errorMessage}</p>
@@ -519,7 +519,7 @@ function GlobalExecutionRow({
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <AlertCircle className="w-3 h-3 text-red-400 ml-1 inline" />
+                                    <AlertCircle className="w-3 h-3 text-red-400 ms-1 inline" />
                                   </TooltipTrigger>
                                   <TooltipContent side="right" className="max-w-xs">
                                     <p className="text-xs">{state.error}</p>

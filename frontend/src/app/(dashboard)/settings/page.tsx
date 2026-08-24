@@ -511,7 +511,7 @@ export default function SettingsPage() {
           <FileText className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-xl font-bold">{t("settings.promptTemplates")}</h2>
 
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1 ms-auto">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -593,9 +593,9 @@ export default function SettingsPage() {
             className="bg-[#ff0073] hover:bg-[#e00067] text-white"
           >
             {templatesMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4 me-2" />
             )}
             {t("settings.saveTemplates")}
           </Button>
@@ -610,11 +610,11 @@ export default function SettingsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 ml-auto"
+            className="h-8 ms-auto"
             onClick={handleAddTextTemplate}
             disabled={!user?.id}
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
+            <Plus className="h-3.5 w-3.5 me-1" />
             {t("settings.addTemplate")}
           </Button>
         </div>
@@ -652,9 +652,9 @@ export default function SettingsPage() {
             className="bg-[#ff0073] hover:bg-[#e00067] text-white"
           >
             {templatesMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4 me-2" />
             )}
             {t("settings.saveTemplates")}
           </Button>
@@ -711,7 +711,7 @@ function TextTemplateCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onCancelEdit}
             >
-              <X className="h-3.5 w-3.5 mr-1" />
+              <X className="h-3.5 w-3.5 me-1" />
               {t("settings.done")}
             </Button>
           ) : (
@@ -721,7 +721,7 @@ function TextTemplateCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onStartEdit}
             >
-              <Pencil className="h-3.5 w-3.5 mr-1" />
+              <Pencil className="h-3.5 w-3.5 me-1" />
               {t("common.edit")}
             </Button>
           )}
@@ -892,7 +892,7 @@ function TemplateGroupCard({
           {t("settings.generationTab")}
         </button>
 
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-1 ms-auto">
           {isEditing && hasOverride && (
             <TooltipProvider>
               <Tooltip>
@@ -918,7 +918,7 @@ function TemplateGroupCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onCancelEdit}
             >
-              <X className="h-3.5 w-3.5 mr-1" />
+              <X className="h-3.5 w-3.5 me-1" />
               {t("common.cancel")}
             </Button>
           ) : (
@@ -928,7 +928,7 @@ function TemplateGroupCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => onStartEdit(activeKey)}
             >
-              <Pencil className="h-3.5 w-3.5 mr-1" />
+              <Pencil className="h-3.5 w-3.5 me-1" />
               {t("common.edit")}
             </Button>
           )}
@@ -1042,7 +1042,7 @@ function TemplateCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onCancelEdit}
             >
-              <X className="h-3.5 w-3.5 mr-1" />
+              <X className="h-3.5 w-3.5 me-1" />
               {t("common.cancel")}
             </Button>
           ) : (
@@ -1052,7 +1052,7 @@ function TemplateCard({
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onStartEdit}
             >
-              <Pencil className="h-3.5 w-3.5 mr-1" />
+              <Pencil className="h-3.5 w-3.5 me-1" />
               {t("common.edit")}
             </Button>
           )}

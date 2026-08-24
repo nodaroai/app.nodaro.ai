@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
-import { useLocaleDir } from "@/lib/locale-store"
+import { usePickerDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import type { SingleDimParameterPickerMeta } from "@/lib/picker-ui"
 
@@ -40,7 +40,7 @@ export function PickerRestrictDialog({
   value,
   onChange,
 }: PickerRestrictDialogProps) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(meta.catalogId)
   const [query, setQuery] = useState("")
 

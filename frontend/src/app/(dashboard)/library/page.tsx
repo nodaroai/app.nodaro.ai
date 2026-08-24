@@ -171,7 +171,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
               onDelete(asset.id)
             }}
           >
-            <Trash2 className="h-3 w-3 mr-1" />
+            <Trash2 className="h-3 w-3 me-1" />
             {t("lib.delete")}
           </Button>
         </div>
@@ -349,7 +349,7 @@ export default function LibraryPage() {
         <div className="flex items-center gap-3">
           <HardDrive className="h-5 w-5 text-[#ff0073]" />
           <h2 className="text-lg font-semibold">{t("lib.storage")}</h2>
-          <span className="text-sm text-muted-foreground ml-auto">
+          <span className="text-sm text-muted-foreground ms-auto">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
           </span>
         </div>
@@ -377,7 +377,7 @@ export default function LibraryPage() {
             </p>
             <Link to="/pricing">
               <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
-                <ArrowUpRight className="h-3 w-3 mr-1" />
+                <ArrowUpRight className="h-3 w-3 me-1" />
                 {t("lib.upgrade")}
               </Button>
             </Link>
@@ -424,9 +424,9 @@ export default function LibraryPage() {
               disabled={deleting}
             >
               {deleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin me-1" />
               ) : (
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                <Trash2 className="h-3.5 w-3.5 me-1" />
               )}
               {t("lib.deleteSelected", { n: selected.size })}
             </Button>
@@ -488,7 +488,7 @@ export default function LibraryPage() {
             disabled={loadingMore}
           >
             {loadingMore ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : null}
             {t("lib.loadMore")}
           </Button>

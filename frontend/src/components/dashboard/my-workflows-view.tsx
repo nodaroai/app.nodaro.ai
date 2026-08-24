@@ -67,9 +67,9 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
         </p>
         <Button onClick={onCreateWorkflow} disabled={isCreating}>
           {isCreating ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            <Loader2 className="h-4 w-4 me-1 animate-spin" />
           ) : (
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-4 w-4 me-1" />
           )}
           {isCreating ? t("dash.creating") : t("dash.newWorkflow")}
         </Button>
@@ -140,14 +140,14 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => onMoveWorkflow(wf)}>
-                      <FolderInput className="h-3.5 w-3.5 mr-2" />
+                      <FolderInput className="h-3.5 w-3.5 me-2" />
                       {t("dialog.moveToProject")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => handleDelete(wf.id)}
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                      <Trash2 className="h-3.5 w-3.5 me-2" />
                       {t("common.delete")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
