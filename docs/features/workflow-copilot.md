@@ -22,11 +22,13 @@ There are two ways in.
 - **Run — with your permission.** The copilot never starts a run by itself. It proposes one, you see the credit estimate, and you decide. See *Ask or Auto* below.
 - **Fix.** After a run it can read the per-node result, diagnose a failure and change the configuration that caused it.
 
-## Point at your own characters and locations
+## Point at your own saved things
 
-Type `@` in the message box (or press the `@` button) to pick from the characters and locations you have already made. Pick one and it becomes a chip above the box; the copilot looks it up by name and can wire it into the workflow it builds.
+Type `@` in the message box (or press the `@` button) to pick from the characters, objects, animals and locations you have already made. The name is written into your sentence, where you were typing it — because where you put it is part of what you meant: "@Emma walks in while @George raises the bottle" says who does what, which a list of names beside the box does not. The copilot looks each one up and can wire it into the workflow it builds.
 
 Mentions travel as names, never as file addresses — the same rule as *What it will not do* below. Mentioning your uploaded media files and attaching a file from your computer are not available yet.
+
+A character the copilot places this way arrives complete: the picture and the saved variants are read from your library when the workflow runs, so the run uses the right likeness even if the node was added a moment ago and you have not reloaded the page.
 
 ## Ask or Auto
 
@@ -45,9 +47,11 @@ Either way the run itself is the normal workflow run: the same progress on the c
 
 - The workflow you have open: node types, their configuration and how they are wired, plus the last run's per-node status.
 - Nodaro's own documentation: the node catalogue, each node's fields, picker options and model capabilities.
-- Your saved building blocks: brand presets, characters and locations — so it can reference the ones you already made.
+- Your saved building blocks: brand presets, characters, objects, animals and locations — so it can reference the ones you already made.
+- Media you already have: your own gallery results and your uploads, plus the voices and saved components available to you.
+- Your other workflows, by name and shape — so it can learn from a flow of yours that already works.
 
-It does not read your other workflows, and it does not browse the web.
+It only ever sees things that are yours: the public gallery is out of reach, and so is anyone else's work. It does not browse the web.
 
 ## What it will not do
 

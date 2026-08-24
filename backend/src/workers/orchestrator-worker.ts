@@ -44,6 +44,7 @@ import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { overrideInputWithListItem as applyListItem } from "./list-item-override.js"
+import { hydrateEntityNodes } from "../lib/entity-hydration.js"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -399,6 +400,18 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         data: n.data,
         parentId: (n as { parentId?: string }).parentId,
       }))
+    // Fill in entity nodes that carry a *DbId but no image. Only the BROWSER
+    // copies an entity's row onto its node, and only on `loadWorkflow`, and
+    // only for characters — so a graph written by the Copilot, an MCP client or
+    // a template import arrives with the id and nothing else, and
+    // `expandWiredCharacterRefs` then skips the reference in silence: the run
+    // succeeds, the credits are spent, the picture is of the wrong person.
+    //
+    // Scoped to the WORKFLOW OWNER, set by both branches above — a published
+    // app runs against its creator's characters, and using the runner's would
+    // strip them.
+    await hydrateEntityNodes(nodes, ctx.workflowOwnerId ?? userId)
+
     const nodeIds = new Set(nodes.map((n) => n.id))
     const filteredEdges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
     // Defensive Generate Image handles v2 migration — catches workflows

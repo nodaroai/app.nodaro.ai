@@ -13,6 +13,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { registerEntityReadTools, CREATURE_READ_CONFIG } from "./_entity-reads.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -25,9 +26,12 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  * `/v1/generate-object-motion`→`/v1/generate-creature-motion`). Exposes only
  * the 3 Studio-action tools (NOT the CRUD parity tools):
  * `approve_creature_main_image`, `recaption_creature`,
- * `generate_creature_motion`. Read/list/create/update tools are DEFERRED —
- * same posture as object (creature workflows are typically wired upstream of
- * generation pipelines, less MCP-driven than location). Creature candidate +
+ * `generate_creature_motion`, plus the READ pair (`list_creatures` /
+ * `get_creature`) shared with objects in `_entity-reads.ts`. Create/update are
+ * still deferred — same posture as object (creature workflows are typically
+ * wired upstream of generation pipelines, less MCP-driven than location) — but
+ * the reads are not: every action tool here takes a creature id, and until now
+ * nothing could produce one. Creature candidate +
  * variant-asset generation already lives as a verb tool in
  * `verbs-clo.ts::generate_creature` — we do NOT duplicate it here.
  * `generate_creature_motion` stays in this file because it dispatches to a
@@ -84,6 +88,8 @@ export interface RegisterCreatureToolsOpts {
 }
 
 export function registerCreatureTools(opts: RegisterCreatureToolsOpts): void {
+  // See the note in objects.ts — reads are no longer deferred.
+  registerEntityReadTools(opts.server, opts.session, CREATURE_READ_CONFIG)
   registerWriteTools(opts)
   registerGenerationTools(opts)
 }

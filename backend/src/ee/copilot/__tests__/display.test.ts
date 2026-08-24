@@ -74,4 +74,34 @@ describe("toDisplayMessages", () => {
     ])
     expect(messages[0]!.parts).toEqual([{ kind: "text", text: "make me a product shot" }])
   })
+
+  it("hides it when the fence carries a nonce too", () => {
+    // The fence gained a per-turn nonce; rows written before that still have
+    // the bare tag, and BOTH are in the database. Miss the nonced form and the
+    // node inventory renders in the panel as if the user had typed it.
+    const messages = toDisplayMessages([
+      row({
+        role: "user",
+        content: [
+          { type: "text", text: "<workflow-context-a1b2c3>\nnodes…\n</workflow-context-a1b2c3>" },
+          { type: "text", text: "make me a product shot" },
+        ],
+      }),
+    ])
+    expect(messages[0]!.parts).toEqual([{ kind: "text", text: "make me a product shot" }])
+  })
+
+  it("still shows a message that merely MENTIONS the fence", () => {
+    // The strip matches a block that STARTS with the fence, on any text block
+    // of a user row — not only the first. So a user asking ABOUT the tag keeps
+    // their message; one whose text opened with it would lose it, which is
+    // pre-existing, needs the exact opening string, and is not worth machinery.
+    const messages = toDisplayMessages([
+      row({
+        role: "user",
+        content: [{ type: "text", text: "why does my prompt contain <workflow-context> ?" }],
+      }),
+    ])
+    expect(messages[0]!.parts).toHaveLength(1)
+  })
 })

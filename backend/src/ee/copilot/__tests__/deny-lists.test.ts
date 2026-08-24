@@ -123,4 +123,53 @@ describe("locked fields", () => {
     expect(changedLockedUrlFields({ imageUrls: [] }, { imageUrls: [] })).toEqual([])
     expect(changedLockedUrlFields(undefined, { prompt: "a cat", nested: { prompt: "also fine" } })).toEqual([])
   })
+
+  describe("a destination hidden in a LIST", () => {
+    // `extraRefs` is the live case: seven node types carry it, the config
+    // panels are its only legitimate writer, and the run engine feeds its
+    // urls straight to providers. Until the walk descended into arrays, the
+    // model could author one — the key itself is not locked, so the whole
+    // list was waved through.
+    const ref = (url: string) => ({ url, description: "a ref" })
+
+    it("flags a url the model appends to a list", () => {
+      expect(changedLockedUrlFields({}, { extraRefs: [ref("https://evil.test/x.png")] })).toEqual([
+        "extraRefs[0].url",
+      ])
+    })
+
+    it("flags the NEW one when it rides along with the user's own", () => {
+      const mine = ref("https://mine.test/a.png")
+      expect(
+        changedLockedUrlFields({ extraRefs: [mine] }, { extraRefs: [mine, ref("https://evil.test/b.png")] }),
+      ).toEqual(["extraRefs[1].url"])
+    })
+
+    it("lets the user's own list be reordered or trimmed", () => {
+      // By VALUE, not by index: after a removal every later element shifts,
+      // and comparing position to position would call all of them changed.
+      const a = ref("https://mine.test/a.png")
+      const b = ref("https://mine.test/b.png")
+      expect(changedLockedUrlFields({ extraRefs: [a, b] }, { extraRefs: [b, a] })).toEqual([])
+      expect(changedLockedUrlFields({ extraRefs: [a, b] }, { extraRefs: [b] })).toEqual([])
+      expect(changedLockedUrlFields({ extraRefs: [a, b] }, { extraRefs: [a, b] })).toEqual([])
+    })
+
+    it("still finds one buried deeper in the list", () => {
+      expect(
+        changedLockedUrlFields({}, { blocks: [{ media: { videoUrl: "https://evil.test/v.mp4" } }] }),
+      ).toEqual(["blocks[0].media.videoUrl"])
+    })
+
+    it("leaves a list with no destinations in it alone", () => {
+      expect(changedLockedUrlFields({}, { items: ["a", "b"], rows: [{ prompt: "a cat" }] })).toEqual([])
+    })
+
+    it("does not change how a LOCKED key holding a list behaves", () => {
+      // `imageUrls` was and stays whole-array: preserved or rejected as one.
+      expect(changedLockedUrlFields({}, { imageUrls: ["https://evil.test/a.png"] })).toEqual(["imageUrls"])
+      const own = ["https://mine.test/a.png"]
+      expect(changedLockedUrlFields({ imageUrls: own }, { imageUrls: own })).toEqual([])
+    })
+  })
 })

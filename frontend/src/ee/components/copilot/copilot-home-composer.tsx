@@ -24,12 +24,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useNavigate } from "react-router-dom"
 import { ArrowRight, AtSign, Bot, Loader2, X } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useCharacters, useLocations } from "@/hooks/queries/use-assets-queries"
 import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { CopilotApiError, createCopilotThread } from "@/ee/lib/copilot/api"
 import { COPILOT_MESSAGE_MAX_CHARS } from "@/ee/lib/copilot/constants"
-import { activeMentionQuery, buildWireMessage, insertMentionName, toMentions } from "@/ee/lib/copilot/mentions"
+import { activeMentionQuery, buildWireMessage, insertMentionName } from "@/ee/lib/copilot/mentions"
+import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
@@ -92,11 +92,11 @@ export default function CopilotHomeComposer() {
 
   // Every project's, not one project's: the home page has no project context,
   // and the workflow this creates lands in the default project regardless.
-  // Passing no user id while collapsed is what disables the query — a pill
-  // should not cost two list requests on every visit to the home page.
+  // Passing no user id while collapsed is what disables the queries — a pill
+  // should not cost a list request per entity kind on every visit to the home
+  // page.
   const entityUserId = collapsed ? undefined : userId
-  const { data: characters, isLoading: charactersLoading } = useCharacters(undefined, entityUserId)
-  const { data: locations, isLoading: locationsLoading } = useLocations(undefined, entityUserId)
+  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(undefined, entityUserId)
 
   /**
    * The dock is fixed, so it covers whatever the page's last rows are. The
@@ -234,13 +234,12 @@ export default function CopilotHomeComposer() {
             {query !== null && (
               <CopilotMentionPicker
                 query={query}
-                characters={toMentions(characters, "character")}
-                locations={toMentions(locations, "location")}
+                mentions={mentionSources}
                 onPick={pick}
                 onActiveChange={setActiveMentionId}
                 onClose={() => setQuery(null)}
                 insetClassName="left-0 right-0"
-                loading={charactersLoading || locationsLoading}
+                loading={mentionsLoading}
               />
             )}
 

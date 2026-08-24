@@ -559,9 +559,10 @@ to poll until completion. Multi-profile auth lives at
 
 ### MCP
 
-Three object tools are exposed, gated by scope. They mirror the location
-platform's "Studio-grade ops" subset: approve, recaption, and motion-
-animate. Generation (main image + variants) flows through the shared
+Five object tools are exposed, gated by scope: two reads (`list_objects`,
+`get_object` — the same shape as `list_characters` / `get_character`), plus
+the location platform's "Studio-grade ops" subset — approve, recaption, and
+motion-animate. Generation (main image + variants) flows through the shared
 `generate_object` tool registered alongside the other verb-style entries.
 (Unlike characters and locations, objects have no `create_object` /
 `update_object` MCP tools — creation happens via `generate_object`, and
@@ -569,6 +570,8 @@ identity edits are done through the REST/SDK surface.)
 
 | Tool | Scope | What it does |
 |---|---|---|
+| `list_objects` | `assets:read` | The caller's own objects, newest first. Optional `search` (name), `limit` (max 100). Returns a summary per row — variant COUNTS, not URLs. |
+| `get_object` | `assets:read` | One object in full, by id: description, style, and every variant bucket with its URLs. |
 | `approve_object_main_image` | `assets:write` | Approve a completed `generate_object` candidate as the main image. Fires the LLM caption inline. |
 | `recaption_object` | `assets:write` | Re-run the LLM caption against the current main image. Idempotent retry — does NOT accept `expected_updated_at`. |
 | `generate_object_motion` | `workflows:execute` | Animate the main image into a motion clip via i2v. Hardcoded attach column = `motion_clips`. Default provider `kling-turbo` + aspect ratio `1:1`. |

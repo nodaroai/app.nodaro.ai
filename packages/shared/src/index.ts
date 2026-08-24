@@ -963,3 +963,16 @@ export * from "./hint-graph-types.js"
 
 // --- Organizations (second tenancy axis): wire contract only — enums, settings request schemas, error codes ---
 export * from "./organizations/index.js"
+
+export {
+  ENTITY_DB_ID_FIELD,
+  ENTITY_NAME_FIELD,
+  ENTITY_TABLE,
+  ENTITY_BUCKET_FIELDS,
+  ENTITY_KIND_SCALAR_FIELDS,
+  ENTITY_SCALAR_FIELDS,
+  entityScalarFields,
+  entityHydrationColumns,
+} from "./entity-node-fields.js"
+export { ENTITY_NODE_KINDS } from "./entity-node-fields.js"
+export type { EntityNodeKind } from "./entity-node-fields.js"

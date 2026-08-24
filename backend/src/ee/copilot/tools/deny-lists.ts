@@ -70,6 +70,33 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Every locked-field leaf inside a value, as `[path, jsonValue]`.
+ *
+ * Used for the array case, where position is not identity: `extraRefs` is a
+ * list the user reorders and deletes from, so comparing `after[i]` against
+ * `before[i]` reports every element after a removal as changed. What the lock
+ * actually cares about is whether a destination is NEW to this node, so the
+ * comparison is by VALUE across the whole array.
+ */
+function lockedLeaves(value: unknown, path: string, out: Array<[string, string]>): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => lockedLeaves(item, `${path}[${i}]`, out))
+    return
+  }
+  if (!isPlainObject(value)) return
+  for (const [key, inner] of Object.entries(value)) {
+    const here = path ? `${path}.${key}` : key
+    if (isPlainObject(inner) || Array.isArray(inner)) {
+      lockedLeaves(inner, here, out)
+      continue
+    }
+    if (!isLockedField(key)) continue
+    if (inner === undefined || inner === null || inner === "") continue
+    out.push([here, JSON.stringify(inner)])
+  }
+}
+
+/**
  * Locked fields whose value the model introduced or changed versus `before` —
  * walked recursively, so a destination nested inside a config object counts.
  * Preserving a value that already exists on the node is allowed (it is the
@@ -89,6 +116,25 @@ export function changedLockedUrlFields(
       changed.push(...changedLockedUrlFields(isPlainObject(prev) ? prev : undefined, next, here))
       continue
     }
+
+    // An ORDINARY key holding a list — `extraRefs` is the one that matters, and
+    // it was invisible to this lock until now: the walk only descended into
+    // plain objects, so a list of `{url}` objects under a key that is not
+    // itself locked was waved straight through, and the run engine hands those
+    // urls to providers. A LOCKED key holding an array stays a leaf below
+    // (`imageUrls` is whole-array preserve-or-reject, unchanged).
+    if (!isLockedField(key) && Array.isArray(next)) {
+      if (prev !== undefined && JSON.stringify(prev) === JSON.stringify(next)) continue
+      const known = new Set<string>()
+      const before_: Array<[string, string]> = []
+      lockedLeaves(prev, "", before_)
+      for (const [, value] of before_) known.add(value)
+      const after_: Array<[string, string]> = []
+      lockedLeaves(next, here, after_)
+      for (const [leafPath, value] of after_) if (!known.has(value)) changed.push(leafPath)
+      continue
+    }
+
     if (!isLockedField(key)) continue
     if (next === undefined || next === null || next === "") continue
     if (Array.isArray(next) && next.length === 0) continue

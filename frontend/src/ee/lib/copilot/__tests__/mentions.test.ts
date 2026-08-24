@@ -7,7 +7,7 @@ import {
   mentionDisplayName,
   splitWireMessage,
 } from "../mentions"
-import type { CopilotMention } from "../types"
+import { MENTION_KINDS, type CopilotMention } from "../types"
 
 const maya: CopilotMention = { id: "c1", name: "Maya", kind: "character" }
 const loft: CopilotMention = { id: "l1", name: "Studio Loft", kind: "location" }
@@ -180,5 +180,20 @@ describe("filterMentions", () => {
 
   it("returns everything for an empty query", () => {
     expect(filterMentions([maya, loft], "  ")).toHaveLength(2)
+  })
+})
+
+describe("every mentionable kind reaches the model", () => {
+  // `@` used to offer characters and locations while the library held four
+  // kinds. The list is shared now, so the failure this guards against is the
+  // reverse: a kind in the picker whose wire label the model cannot act on.
+  it.each(MENTION_KINDS)("names a %s and hands over its id", (kind) => {
+    const wire = buildWireMessage("put it in the shot", [
+      { id: "11111111-1111-4111-8111-111111111111", name: "Rex", kind },
+    ])
+    // The label must be the one the matching get_<kind> tool is named after —
+    // that is how the model knows which lookup resolves the id.
+    expect(wire).toContain(`${kind} "Rex"`)
+    expect(wire).toContain("(id: 11111111-1111-4111-8111-111111111111)")
   })
 })

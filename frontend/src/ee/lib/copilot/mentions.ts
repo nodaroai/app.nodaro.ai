@@ -11,7 +11,7 @@
  * Media files and uploaded attachments still need server-side resolution and
  * are not part of this release.
  */
-import type { CopilotMention } from "./types"
+import type { CopilotMention, MentionKind } from "./types"
 
 /** The `@query` the caret is currently sitting in, or null. */
 export function activeMentionQuery(text: string, caret: number): { query: string; start: number } | null {
@@ -48,8 +48,11 @@ export function insertMentionName(text: string, caret: number, name: string): { 
   return { text: before + token + after, caret: before.length + token.length }
 }
 
-const KIND_LABEL: Record<CopilotMention["kind"], string> = {
+/** How a kind is named TO THE MODEL, so it knows which tool resolves the id. */
+const KIND_LABEL: Record<MentionKind, string> = {
   character: "character",
+  object: "object",
+  creature: "creature",
   location: "location",
 }
 
@@ -149,7 +152,7 @@ interface EntityLike {
  * the editor rail scopes its lists to the open project, the home dock has no
  * project and asks for all of the user's, and the shape is the same either way.
  */
-export function toMentions(items: EntityLike[] | undefined, kind: CopilotMention["kind"]): CopilotMention[] {
+export function toMentions(items: EntityLike[] | undefined, kind: MentionKind): CopilotMention[] {
   return (items ?? []).map((item) => ({
     id: item.id,
     name: item.name,

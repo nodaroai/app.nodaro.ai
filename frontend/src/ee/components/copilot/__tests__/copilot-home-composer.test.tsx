@@ -22,11 +22,16 @@ vi.mock("@/hooks/use-auth", () => ({
 }))
 
 const CHARACTERS = { data: [{ id: "c1", name: "Maya", sourceImageUrl: null }], isLoading: false }
-const LOCATIONS = { data: [] as unknown[], isLoading: false }
+const OBJECTS = { data: [{ id: "o1", name: "Kettle", sourceImageUrl: null }], isLoading: false }
+const EMPTY = { data: [] as unknown[], isLoading: false }
 const useCharacters = vi.fn((_projectId?: string, _userId?: string) => CHARACTERS)
-const useLocations = vi.fn((_projectId?: string, _userId?: string) => LOCATIONS)
+const useObjects = vi.fn((_projectId?: string, _userId?: string) => OBJECTS)
+const useCreatures = vi.fn((_projectId?: string, _userId?: string) => EMPTY)
+const useLocations = vi.fn((_projectId?: string, _userId?: string) => EMPTY)
 vi.mock("@/hooks/queries/use-assets-queries", () => ({
   useCharacters: (projectId?: string, userId?: string) => useCharacters(projectId, userId),
+  useObjects: (projectId?: string, userId?: string) => useObjects(projectId, userId),
+  useCreatures: (projectId?: string, userId?: string) => useCreatures(projectId, userId),
   useLocations: (projectId?: string, userId?: string) => useLocations(projectId, userId),
 }))
 
@@ -62,7 +67,9 @@ beforeEach(() => {
   // `clearAllMocks` clears calls, not implementations — a test that swaps the
   // list state would otherwise leak into every test after it.
   useCharacters.mockReturnValue(CHARACTERS)
-  useLocations.mockReturnValue(LOCATIONS)
+  useObjects.mockReturnValue(OBJECTS)
+  useCreatures.mockReturnValue(EMPTY)
+  useLocations.mockReturnValue(EMPTY)
   window.localStorage.clear()
 })
 
@@ -109,6 +116,21 @@ describe("home dock", () => {
     expect(screen.queryByRole("combobox")).toBeNull()
     fireEvent.keyDown(window, { key: "j", code: "KeyJ", ctrlKey: true })
     expect(input()).toBeTruthy()
+  })
+
+  it("offers the other kinds of thing the user owns, not only characters", async () => {
+    // `@` reached characters and locations while the library held four kinds,
+    // so half of what a user had saved was unmentionable and the model had no
+    // way to be told about it.
+    renderDock()
+    fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    fireEvent.click(await screen.findByRole("option", { name: /Kettle/ }))
+    expect(input().value).toBe("@Kettle ")
+
+    fireEvent.click(screen.getByRole("button", { name: /Build it/i }))
+    await waitFor(() => expect(createCopilotThread).toHaveBeenCalled())
+    const { prompt } = createCopilotThread.mock.calls.at(-1)![0]
+    expect(prompt).toContain('[references] object "Kettle" (id: o1)')
   })
 
   it("leaves the picked name in the sentence rather than lifting it out", async () => {
@@ -158,8 +180,9 @@ describe("home dock", () => {
     // The state after expanding a collapsed dock: the fetch has started and
     // has not resolved. Telling a user with fifty characters they have none is
     // worse than saying nothing.
-    useCharacters.mockReturnValue({ data: [], isLoading: true } as never)
-    useLocations.mockReturnValue({ data: [], isLoading: true } as never)
+    for (const q of [useCharacters, useObjects, useCreatures, useLocations]) {
+      q.mockReturnValue({ data: [], isLoading: true } as never)
+    }
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
     expect(await screen.findByText("Looking…")).toBeTruthy()
@@ -167,8 +190,9 @@ describe("home dock", () => {
   })
 
   it("still says there is nothing when there genuinely is not", async () => {
-    useCharacters.mockReturnValue({ data: [], isLoading: false } as never)
-    useLocations.mockReturnValue({ data: [], isLoading: false } as never)
+    for (const q of [useCharacters, useObjects, useCreatures, useLocations]) {
+      q.mockReturnValue({ data: [], isLoading: false } as never)
+    }
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
     expect(await screen.findByText("Nothing here yet")).toBeTruthy()

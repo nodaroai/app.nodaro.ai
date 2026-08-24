@@ -13,10 +13,9 @@ import { useEffect, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
-import { useCharacters, useLocations } from "@/hooks/queries/use-assets-queries"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
-import { toMentions } from "@/ee/lib/copilot/mentions"
+import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
 import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
@@ -75,8 +74,7 @@ export default function CopilotPanel({
   useCopilotHandoff(thread, workflowId)
   const settings = useCopilotSettings(threadId)
 
-  const { data: characters } = useCharacters(projectId, userId)
-  const { data: locations } = useLocations(projectId, userId)
+  const { mentions: mentionSources } = useCopilotMentions(projectId, userId)
 
   // Hand the engine the editor callbacks it cannot reach on its own.
   //
@@ -193,8 +191,7 @@ export default function CopilotPanel({
         </div>
       ) : (
         <CopilotComposer
-          characters={toMentions(characters, "character")}
-          locations={toMentions(locations, "location")}
+          mentionSources={mentionSources}
           onSend={send}
           onStop={() => void stopCopilotTurn()}
           disabled={busy !== null}

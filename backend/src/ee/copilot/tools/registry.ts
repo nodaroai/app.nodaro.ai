@@ -14,7 +14,7 @@
  * not spend the user's credits.
  */
 import type { McpInvoker, McpToolDef } from "../../../lib/mcp/invoke.js"
-import { MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
+import { FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
 import { EditRejected, runEditWorkflow, type EditWorkflowArgs } from "./edit-workflow.js"
 import { runGetGraph, type GetGraphArgs } from "./get-graph.js"
 import { proposeRun, runGetExecution, type GetExecutionArgs, type RunWorkflowArgs } from "./run-and-execution.js"
@@ -120,7 +120,7 @@ const NATIVE_DEFINITIONS: ToolDefinition[] = [
         set: {
           type: "object",
           description: "Rename the workflow. (Workflow settings are not writable here.)",
-          properties: { name: { type: "string" } },
+          properties: { name: { type: "string", maxLength: 120 } },
           additionalProperties: false,
         },
         note: { type: "string", description: "One sentence describing the change, shown to the user." },
@@ -215,7 +215,14 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
         if (!MCP_TOOL_ALLOWLIST.has(name)) {
           return { text: `Tool "${name}" is not available in this conversation.`, isError: true }
         }
-        const result = await deps.invoker.callTool(name, { ...args, workflow_id: deps.ctx.workflowId })
+        // Order is the enforcement: the model's own args go in first, then
+        // whatever this tool pins, then the workflow id. A model-supplied
+        // `scope: "public"` or `workflow_id` loses to the value after it.
+        const result = await deps.invoker.callTool(name, {
+          ...args,
+          ...(FORCED_MCP_ARGS[name] ?? {}),
+          workflow_id: deps.ctx.workflowId,
+        })
         const text = result.content
           .map((block) => (typeof block.text === "string" ? block.text : ""))
           .filter(Boolean)

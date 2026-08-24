@@ -26,7 +26,8 @@ import { getCharacter, getObjectById, getCreatureById, getLocationById } from "@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { mergeCharacterDetailIntoNodeData } from "@/lib/character-node-data"
 
-export type EntityKind = "character" | "object" | "creature" | "location"
+export const ENTITY_KINDS = ["character", "object", "creature", "location"] as const
+export type EntityKind = (typeof ENTITY_KINDS)[number]
 
 /** The `data.*DbId` field that binds each entity node to its DB row. */
 export const ENTITY_DB_ID_FIELD: Record<EntityKind, string> = {
@@ -41,6 +42,9 @@ function currentDbId(kind: EntityKind, data: Record<string, unknown>): string {
 }
 
 type CharacterDetail = NonNullable<Awaited<ReturnType<typeof getCharacter>>>
+
+/** Whatever `fetchDetail` resolves to, for any kind. */
+type EntityDetail = CharacterDetail | DbObject | DbCreature | DbLocation
 
 async function fetchDetail(
   kind: EntityKind,
@@ -186,4 +190,89 @@ export async function bindEntityNodeFromLibrary(
 
   useWorkflowStore.getState().updateNodeData(nodeId, { ...cur.data, ...patch, ...invariants })
   return true
+}
+
+// --- refresh (same entity, re-read from DB) ---
+
+/**
+ * An entity node whose media never made it onto it.
+ *
+ * The node carries a `*DbId` and nothing else — the shape produced by every
+ * writer that has no browser in the loop: the Copilot's `edit_workflow`, an MCP
+ * client, a template import. The run engine hydrates these server-side, so the
+ * RUN is correct either way; this is what stops the canvas from showing an
+ * empty card until the user reloads the page.
+ */
+function isMissingMedia(data: Record<string, unknown>): boolean {
+  const canonical = data.defaultAssetUrl ?? data.sourceImageUrl
+  return typeof canonical !== "string" || canonical.length === 0
+}
+
+/**
+ * Re-read entity `nodeId`'s CURRENT binding and merge the full detail back in.
+ *
+ * The rebind sibling above changes which entity a node points at; this one
+ * keeps the binding and refreshes what it copied. Same concurrency guard (node
+ * still exists, still this kind, still this id), same non-fatal failure, and a
+ * deep-equality check so an unchanged refresh never marks the workflow dirty.
+ */
+export function refreshEntityNodeFromDetail(
+  kind: EntityKind,
+  nodeId: string,
+  entityId: string,
+  /** A detail fetch already in flight for this entity — see `refreshEntityNodes`. */
+  pending?: Promise<EntityDetail | null>,
+): void {
+  void (pending ?? fetchDetail(kind, entityId))
+    .then((fresh) => {
+      if (!fresh) return
+      const cur = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+      if (!cur || cur.type !== kind) return
+      if (currentDbId(kind, cur.data as Record<string, unknown>) !== entityId) return
+      const merged = { ...(cur.data as Record<string, unknown>), ...mergePatch(kind, cur.data as Record<string, unknown>, fresh) }
+      if (JSON.stringify(merged) === JSON.stringify(cur.data)) return
+      // Re-derived, never authored: see `fromDatabase` on updateNodeData.
+      useWorkflowStore.getState().updateNodeData(nodeId, merged, { fromDatabase: true })
+    })
+    .catch(() => {})
+}
+
+/**
+ * Refresh the entity nodes in `nodes` from their live rows. Fire-and-forget.
+ *
+ * Two callers, two appetites, one implementation — so a fifth entity kind is
+ * covered in both places by existing there at all:
+ * - `loadWorkflow` refreshes EVERY entity node, because studio-added buckets
+ *   (expressions, poses, wardrobe) land after the node was placed and the saved
+ *   JSON holds a stale snapshot.
+ * - `reconcileFromRemote` refreshes only nodes with NO media, because it fires
+ *   on every remote write and a blanket refresh would be one request per entity
+ *   node per keystroke elsewhere.
+ *
+ * Read-only (Studio) workflows are skipped by the caller — Studio owns writes.
+ */
+export function refreshEntityNodes(
+  nodes: ReadonlyArray<{ id: string; type?: string; data?: unknown }>,
+  opts: { onlyMissingMedia?: boolean } = {},
+): void {
+  // One fetch per ENTITY, not per node. This runs over the whole canvas on
+  // every load, and the same character placed in four shots is four identical
+  // requests otherwise — these call the API directly, so nothing upstream
+  // dedupes them.
+  const fetched = new Map<string, Promise<EntityDetail | null>>()
+  for (const node of nodes) {
+    const kind = ENTITY_KINDS.find((k) => k === node.type)
+    if (!kind) continue
+    const data = (node.data ?? {}) as Record<string, unknown>
+    if (opts.onlyMissingMedia && !isMissingMedia(data)) continue
+    const entityId = currentDbId(kind, data)
+    if (!entityId) continue
+    const key = `${kind}:${entityId}`
+    let pending = fetched.get(key)
+    if (!pending) {
+      pending = fetchDetail(kind, entityId).catch(() => null)
+      fetched.set(key, pending)
+    }
+    refreshEntityNodeFromDetail(kind, node.id, entityId, pending)
+  }
 }

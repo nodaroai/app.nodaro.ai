@@ -8,6 +8,7 @@
  * make every other consumer's `event.data` a union it does not want, so the
  * copilot passes this type as `streamRequest`'s generic instead.
  */
+import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared"
 
 export type CopilotRunMode = "ask" | "auto"
 
@@ -153,9 +154,22 @@ export const EMPTY_TURN: CopilotTurnState = {
 }
 
 /** A picked entity in the composer. Wire form is plain text (`@Name`) — see `mentions.ts`. */
+/**
+ * The entity kinds a mention can carry, in the order the picker lists them.
+ *
+ * Same list the canvas and the run-time hydrator use, deliberately: `@` reaching
+ * fewer kinds than the library holds is exactly how this surface sat at two
+ * while there were four. Every per-kind table is a `Record<MentionKind, …>`, so
+ * a fifth kind is a compiler error in each place that must handle it — and the
+ * picker groups by kind rather than taking a prop per kind.
+ */
+export const MENTION_KINDS = ENTITY_NODE_KINDS
+
+export type MentionKind = EntityNodeKind
+
 export interface CopilotMention {
   id: string
   name: string
-  kind: "character" | "location"
+  kind: MentionKind
   imageUrl?: string | null
 }

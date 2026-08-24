@@ -1,26 +1,39 @@
 /**
- * `@` picker over the user's own characters and locations.
+ * `@` picker over the user’s own entities — characters, objects, animals,
+ * locations.
  *
  * Only entities appear here, not media files: a mention travels to the model as
- * a NAME, which it resolves with `list_characters` / `list_locations`. A media
- * file has no such tool and would have to travel as a URL — which
- * `edit_workflow` refuses to let the model write into a node. Attachments need
- * server-side id resolution before they can be offered honestly.
+ * a NAME plus an id, which it resolves with `list_characters` / `list_objects` /
+ * `list_creatures` / `list_locations`. A media file has no such tool and would
+ * have to travel as a URL — which `edit_workflow` refuses to let the model
+ * write into a node. Attachments need server-side id resolution before they can
+ * be offered honestly.
+ *
+ * The list arrives as ONE array and is grouped here by kind. A prop per kind is
+ * what let this surface sit at two kinds while the library had four.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
-import type { CopilotMention } from "@/ee/lib/copilot/types"
+import { MENTION_KINDS, type CopilotMention, type MentionKind } from "@/ee/lib/copilot/types"
 
 /** The composer's `aria-controls` target. */
 export const MENTION_LIST_ID = "copilot-mention-list"
 
 const optionId = (mention: CopilotMention) => `copilot-mention-${mention.kind}-${mention.id}`
 
+/** Everything that differs per kind, one row each. Round for living things. */
+const KIND_UI: Record<MentionKind, { section: string; chip: string; round: boolean }> = {
+  character: { section: S.sectionCharacters, chip: S.kindCharacter, round: true },
+  object: { section: S.sectionObjects, chip: S.kindObject, round: false },
+  creature: { section: S.sectionCreatures, chip: S.kindCreature, round: true },
+  location: { section: S.sectionLocations, chip: S.kindLocation, round: false },
+}
+
 interface CopilotMentionPickerProps {
   query: string
-  characters: CopilotMention[]
-  locations: CopilotMention[]
+  /** Every mentionable entity, any kind, any order — grouped here. */
+  mentions: CopilotMention[]
   onPick: (mention: CopilotMention) => void
   /** Reported up so the textarea's `aria-activedescendant` can follow the arrow keys. */
   onActiveChange: (optionId: string | undefined) => void
@@ -41,8 +54,7 @@ interface CopilotMentionPickerProps {
 
 export function CopilotMentionPicker({
   query,
-  characters,
-  locations,
+  mentions,
   onPick,
   onActiveChange,
   onClose,
@@ -50,11 +62,12 @@ export function CopilotMentionPicker({
   loading = false,
 }: CopilotMentionPickerProps) {
   const sections = useMemo(
-    () => [
-      { label: S.sectionCharacters, items: filterMentions(characters, query) },
-      { label: S.sectionLocations, items: filterMentions(locations, query) },
-    ],
-    [characters, locations, query],
+    () =>
+      MENTION_KINDS.map((kind) => ({
+        label: KIND_UI[kind].section,
+        items: filterMentions(mentions.filter((m) => m.kind === kind), query),
+      })),
+    [mentions, query],
   )
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections])
@@ -100,7 +113,7 @@ export function CopilotMentionPicker({
     return () => window.removeEventListener("keydown", onKey, true)
   }, [flat, active, onPick, onClose])
 
-  const nothingAtAll = characters.length === 0 && locations.length === 0
+  const nothingAtAll = mentions.length === 0
   let index = -1
 
   return (
@@ -151,7 +164,7 @@ export function CopilotMentionPicker({
                       <MentionThumb mention={item} size={22} />
                       <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{item.name}</span>
                       <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap">
-                        {item.kind === "character" ? S.kindCharacter : S.kindLocation}
+                        {KIND_UI[item.kind].chip}
                       </span>
                     </button>
                   )
@@ -181,9 +194,10 @@ function safeThumbUrl(url: string | null | undefined): string | null {
   }
 }
 
-/** Round for people, square for places — the shape carries the kind. */
+/** Round for living things, square for things and places — the shape
+ *  carries the kind at a glance. */
 export function MentionThumb({ mention, size }: { mention: CopilotMention; size: number }) {
-  const radius = mention.kind === "character" ? "50%" : "6px"
+  const radius = KIND_UI[mention.kind].round ? "50%" : "6px"
   const src = safeThumbUrl(mention.imageUrl)
   return (
     <span

@@ -46,8 +46,13 @@ export function toDisplayMessages(rows: readonly CopilotMessageRow[]): DisplayMe
     const parts: DisplayPart[] = []
     for (const block of asBlocks(row.content)) {
       if (block.type === "text" && typeof block.text === "string") {
-        // The user message's first block is the generated context preamble.
-        if (row.role === "user" && block.text.startsWith("<workflow-context>")) continue
+        // The user message's first block is the generated context preamble —
+        // never shown; the user did not type it. Matched WITHOUT the closing
+        // bracket, for the same reason the replay strip is: the fence carries a
+        // per-turn nonce now, and every row written before that still opens
+        // with the bare `<workflow-context>`. Miss either form and a node
+        // inventory appears in the panel as if the user had typed it.
+        if (row.role === "user" && block.text.startsWith("<workflow-context")) continue
         parts.push({ kind: "text", text: block.text })
       } else if (block.type === "tool_use" && typeof block.id === "string" && typeof block.name === "string") {
         parts.push({

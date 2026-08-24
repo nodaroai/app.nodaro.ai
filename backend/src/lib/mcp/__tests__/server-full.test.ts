@@ -182,9 +182,10 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // get_recipe (ungated content-delivery recipe catalog).
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
-    // (last bump: +5 recast authored-script verbs, 2026-08-07)
+    // (last bump: +4 entity reads — list/get for objects and creatures, which
+    //  had action tools taking an id and no way to produce one, 2026-08-24)
     expect(tools.length).toBeGreaterThanOrEqual(30)
-    expect(tools.length).toBeLessThanOrEqual(155)
+    expect(tools.length).toBeLessThanOrEqual(165)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {

@@ -64,6 +64,32 @@ describe("buildHistory", () => {
     expect(JSON.stringify(history)).not.toContain(big)
   })
 
+  it("drops a replayed preamble whether it carries a nonce or not", () => {
+    // The fence gained a per-turn nonce, but every row written before that is
+    // still in the database with the bare tag. Both must strip, or an old
+    // thread replays ten contradictory node inventories — which is the exact
+    // failure this strip exists to prevent.
+    const rows = [
+      row("turn1", "user", [
+        { type: "text", text: "<workflow-context>OLD SNAPSHOT</workflow-context>" },
+        { type: "text", text: "first question" },
+      ]),
+      row("turn1", "assistant", [{ type: "text", text: "done" }]),
+      row("turn2", "user", [
+        { type: "text", text: "<workflow-context-a1b2c3>NEW SNAPSHOT</workflow-context-a1b2c3>" },
+        { type: "text", text: "second question" },
+      ]),
+      row("turn2", "assistant", [{ type: "text", text: "done" }]),
+    ]
+
+    const replayed = JSON.stringify(buildHistory(rows))
+
+    expect(replayed).not.toContain("OLD SNAPSHOT")
+    expect(replayed).not.toContain("NEW SNAPSHOT")
+    expect(replayed).toContain("first question")
+    expect(replayed).toContain("second question")
+  })
+
   it("skips rows with no content instead of sending an empty message", () => {
     expect(buildHistory([row("turn1", "user", [])])).toEqual([])
   })

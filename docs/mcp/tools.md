@@ -14,7 +14,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow`, `import_recast_script` |
 | `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce`, `forced_alignment`, `video_analysis`, `video_audit`, `resolve_shot_sequence`, `render_shot_sequence`, `create_explainer`, `create_launch_video`, `start_recast`, `resolve_recast_gate` |
 | `jobs:read` | `list_jobs`, `get_job`, `diagnose_run` |
-| `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location` |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location`, `list_objects`, `get_object`, `list_creatures`, `get_creature` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character`, `create_location`, `update_location`, `approve_main_image`, `recaption_location`, `approve_object_main_image`, `recaption_object`, `upload_image_widget`, `upload_audio_widget`, `upload_video_widget`, `request_image_upload`, `request_audio_upload`, `request_video_upload`, `prepare_image_upload`, `prepare_audio_upload`, `prepare_video_upload` |
 | `credits:read` | `check_balance`, `credit_transactions` |
 | `apps:read` | `list_apps`, `get_app_inputs` |
@@ -733,7 +733,7 @@ a subsequent generation call.
 Lists the caller's characters with summary fields, ordered by most recently
 updated.
 
-**Input:** `{ limit?: integer }` — default 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is a case-insensitive substring of the name; `limit` defaults to 50, max 100.
 
 ---
 
@@ -830,7 +830,7 @@ the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
 
 Summary list (name, main image URL, asset counts, identity copy).
 
-**Input:** `{ archived?: boolean }`
+**Input:** `{ search?: string, archived?: boolean }` — `search` is a case-insensitive substring of the name; `archived` lists the archive instead.
 
 ---
 
@@ -905,9 +905,35 @@ for iterating on an existing clip.
 
 ## Object tools
 
-Four tools for the object (prop / product / vehicle / etc.) lifecycle —
-main-image approval, LLM recaption, motion clips, and verb-style generation.
+Six tools for the object (prop / product / vehicle / etc.) lifecycle — listing,
+detail, main-image approval, LLM recaption, motion clips, and verb-style
+generation.
 Mirrored on the SDK at [`client.objects`](../sdk-reference.md#clientobjects).
+
+### `list_objects`
+
+**Scope:** `assets:read`
+
+Lists the caller's objects — props, accessories and physical items reused across shots. Each row carries the name,
+description, main image and a COUNT of each variant bucket rather than the
+asset URLs themselves; call `get_object` for those. Newest first.
+
+**Input:** `{ search?: string, limit?: integer }` — `search` is a
+case-insensitive substring of the name; `limit` defaults to 50, max 100.
+
+---
+
+### `get_object`
+
+**Scope:** `assets:read`
+
+Returns full detail for one object — every variant asset with its name
+and URL, plus reference photos. Errors if the object is not found
+or not owned by the caller.
+
+**Input:** `{ id: uuid }`
+
+---
 
 ### `generate_object`
 
@@ -952,9 +978,34 @@ Pass `refine_from_video_url` to use video-to-video refinement.
 
 ## Creature tools
 
-Four tools for the creature / animal lifecycle — main-image approval, LLM
-recaption, motion clips, and verb-style generation. Mirrors the Object tools
+Six tools for the creature / animal lifecycle — listing, detail, main-image
+approval, LLM recaption, motion clips, and verb-style generation. Mirrors the Object tools
 with the Animal/Creature delta (free-text `species` / `category` / `style`).
+
+### `list_creatures`
+
+**Scope:** `assets:read`
+
+Lists the caller's creatures — animals and non-human beings with a locked look. Each row carries the name,
+description, main image and a COUNT of each variant bucket rather than the
+asset URLs themselves; call `get_creature` for those. Newest first.
+
+**Input:** `{ search?: string, limit?: integer }` — `search` is a
+case-insensitive substring of the name; `limit` defaults to 50, max 100.
+
+---
+
+### `get_creature`
+
+**Scope:** `assets:read`
+
+Returns full detail for one creature — every variant asset with its name
+and URL, plus reference photos and the stored voice. Errors if the creature is not found
+or not owned by the caller.
+
+**Input:** `{ id: uuid }`
+
+---
 
 ### `generate_creature`
 
