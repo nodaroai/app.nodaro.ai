@@ -185,7 +185,7 @@ async function send(
   // Stop the panel offers. Clearing it here would silently drop both.
   const following = copilotState().runPhase === "running" && copilotState().executionId !== null
   setCopilotState({
-    turn: startTurn(text),
+    turn: startTurn(text, Date.now()),
     streaming: true,
     ...(following ? {} : { runPhase: "idle" as const, executionId: null }),
     autoRunCount: 0,

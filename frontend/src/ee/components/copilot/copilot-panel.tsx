@@ -16,6 +16,7 @@ import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
 import { useCharacters, useLocations } from "@/hooks/queries/use-assets-queries"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
+import { toMentions } from "@/ee/lib/copilot/mentions"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
 import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
@@ -201,21 +202,6 @@ export default function CopilotPanel({
       )}
     </aside>
   )
-}
-
-interface EntityLike {
-  id: string
-  name: string
-  sourceImageUrl?: string | null
-}
-
-function toMentions(items: EntityLike[] | undefined, kind: CopilotMention["kind"]): CopilotMention[] {
-  return (items ?? []).map((item) => ({
-    id: item.id,
-    name: item.name,
-    kind,
-    imageUrl: item.sourceImageUrl ?? null,
-  }))
 }
 
 /** "Hey asi" — the greeting uses whatever first name we can honestly derive. */

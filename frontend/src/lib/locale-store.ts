@@ -8,11 +8,12 @@
  *     2. Persist via PATCH /v1/user/settings { preferredLocale: ... }.
  *     3. localStorage mirror so reload-without-network shows last choice.
  * - Fallback chain on first load:
- *     profile.preferred_locale  →  localStorage  →  navigator.language  →  "en"
+ *     profile.preferred_locale  →  localStorage  →  DEFAULT_LOCALE  →  navigator.language  →  "en"
  */
 
 import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
+import { runtimeDefaultLocale } from "./runtime-config"
 
 const STORAGE_KEY = "nodaro:preferred-locale"
 
@@ -22,17 +23,26 @@ function isSupportedLocale(value: string | null | undefined): value is LocaleId 
   return typeof value === "string" && SUPPORTED_IDS.has(value)
 }
 
+/**
+ * Resolve a BCP-47 tag to a locale we ship: an exact match, else the
+ * language-only prefix ("en-US" → "en"). null if neither is supported. Shared
+ * so the DEFAULT_LOCALE operator knob is exactly as forgiving as the automatic
+ * browser detection it overrides.
+ */
+function matchSupportedLocale(tag: string | null | undefined): LocaleId | null {
+  if (!tag) return null
+  if (isSupportedLocale(tag)) return tag
+  const prefix = tag.split("-")[0]
+  return isSupportedLocale(prefix) ? prefix : null
+}
+
 function detectBrowserLocale(): LocaleId {
   if (typeof navigator === "undefined") return "en"
-  // navigator.languages is BCP-47 ordered by user preference. Pick the first
-  // that matches one of our supported locales (also try the language-only
-  // prefix, since "en-US" should match "en").
+  // navigator.languages is BCP-47 ordered by user preference; first supported wins.
   const candidates = (navigator.languages ?? [navigator.language ?? "en"]) as string[]
   for (const tag of candidates) {
-    if (!tag) continue
-    if (isSupportedLocale(tag)) return tag
-    const prefix = tag.split("-")[0]
-    if (isSupportedLocale(prefix)) return prefix
+    const m = matchSupportedLocale(tag)
+    if (m) return m
   }
   return "en"
 }
@@ -45,6 +55,16 @@ function readStoredLocale(): LocaleId | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The deployment's default locale (env `DEFAULT_LOCALE` via `/config.js`),
+ * resolved the same lenient way as browser detection — exact match or
+ * language-prefix ("en-US" → "en"). Unset, blank or unrecognised → null, so the
+ * chain degrades to browser detection.
+ */
+function readRuntimeDefaultLocale(): LocaleId | null {
+  return matchSupportedLocale(runtimeDefaultLocale())
 }
 
 function writeStoredLocale(value: LocaleId) {
@@ -69,7 +89,21 @@ interface LocaleStore {
   markHydrated: (locale: LocaleId | null) => void
 }
 
-const initialLocale: LocaleId = readStoredLocale() ?? detectBrowserLocale()
+/**
+ * The locale a page starts in, before the user profile hydrates:
+ *   saved choice (localStorage) → deployment default (`DEFAULT_LOCALE`) →
+ *   browser detection → "en"
+ * The deployment default outranks browser detection — an instance that declares
+ * an audience should win over how a visitor's laptop happens to be configured —
+ * but never a saved choice: a user who deliberately picked a language is not
+ * dragged back. The profile locale, when it arrives via `markHydrated`,
+ * outranks all of this.
+ */
+export function resolveInitialLocale(): LocaleId {
+  return readStoredLocale() ?? readRuntimeDefaultLocale() ?? detectBrowserLocale()
+}
+
+const initialLocale: LocaleId = resolveInitialLocale()
 
 export const useLocaleStore = create<LocaleStore>((set) => ({
   locale: initialLocale,

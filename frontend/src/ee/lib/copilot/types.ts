@@ -121,6 +121,15 @@ export interface CopilotTurnState {
   status: "idle" | "streaming" | "completed" | "capped" | "cancelled" | "failed"
   /** The message the user sent — echoed locally so the bubble appears instantly. */
   userText: string
+  /**
+   * When the turn was started, client-side, for the live timer.
+   *
+   * Not the server's clock: this counts from the moment the user pressed send,
+   * which includes the save flush and the thread handshake — the part of the
+   * wait that has no other visible signal, and the part that made people think
+   * the panel had hung.
+   */
+  startedAt: number | null
   /** Streamed assistant prose. */
   text: string
   activities: CopilotActivity[]
@@ -134,6 +143,7 @@ export const EMPTY_TURN: CopilotTurnState = {
   turnId: null,
   status: "idle",
   userText: "",
+  startedAt: null,
   text: "",
   activities: [],
   update: null,

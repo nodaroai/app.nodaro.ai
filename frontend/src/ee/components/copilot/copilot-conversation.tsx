@@ -13,6 +13,7 @@ import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { mentionDisplayName, splitWireMessage } from "@/ee/lib/copilot/mentions"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotActivityRows } from "./copilot-activity"
+import { CopilotAnswerSkeleton, CopilotLivePill } from "./copilot-live-pill"
 import { WorkflowUpdatedCard } from "./copilot-cards"
 import { CopilotRunSection } from "./copilot-run-section"
 import type { CopilotActivity, DisplayMessage } from "@/ee/lib/copilot/types"
@@ -73,6 +74,13 @@ export function CopilotConversation({
       {showLive && (
         <>
           <UserBubble text={turn.userText} />
+
+          {/* The whole point of this block: from the moment of send there is
+              always something on screen saying the turn is alive. Both are
+              gated on `streaming`, so they clear themselves when it ends —
+              and history, which never streams, never renders them. */}
+          {streaming && <CopilotLivePill activities={turn.activities} startedAt={turn.startedAt} />}
+          {streaming && !turn.text && <CopilotAnswerSkeleton />}
 
           {turn.text && (
             <div className="text-[13px] leading-[1.6] text-foreground tracking-[-0.005em] whitespace-pre-wrap break-words">

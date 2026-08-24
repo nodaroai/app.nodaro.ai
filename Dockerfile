@@ -656,6 +656,8 @@ done
 #                      bundled community stack), PUBLIC_URL/supabase; else
 #                      nothing (a managed project URL is baked correctly).
 #   supabaseAnonKey <- SUPABASE_ANON_KEY
+#   defaultLocale   <- DEFAULT_LOCALE (the locale a fresh visitor to this install
+#                      starts in; unset/blank/unrecognised → browser detection)
 # ALWAYS written — a missing file would fall through try_files to index.html
 # served as JavaScript.
 FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"
@@ -664,10 +666,10 @@ if [ -z "$FRONTEND_SUPABASE_URL_EFFECTIVE" ] && [ -n "$PUBLIC_URL" ]; then
     http://localhost:3000/supabase*|http://127.0.0.1:3000/supabase*) FRONTEND_SUPABASE_URL_EFFECTIVE="${PUBLIC_URL%/}/supabase" ;;
   esac
 fi
-if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" \
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" \
   node -e '
     const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
-    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY), freecutUrl: pick(process.env.RUNTIME_FREECUT_URL) }
+    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY), freecutUrl: pick(process.env.RUNTIME_FREECUT_URL), defaultLocale: pick(process.env.RUNTIME_DEFAULT_LOCALE) }
     for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
     require("fs").writeFileSync("/app/frontend/dist/config.js", "window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
     console.log("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")

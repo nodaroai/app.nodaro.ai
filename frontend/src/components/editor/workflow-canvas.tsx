@@ -69,6 +69,8 @@ import type { ComponentSelection } from "./component-marketplace-modal"
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
 import { EmptyCanvasState } from "./empty-canvas-state"
+import { CanvasCopilotPlanning } from "./canvas-copilot-planning"
+import { emptyCanvasSurface } from "./empty-canvas-surface"
 import { Loader2 } from "lucide-react"
 import { assetToUploadNode } from "@/lib/asset-to-node"
 import { useWorkflowStore, migrateImageNodes, buildDuplicatedNodeData } from "@/hooks/use-workflow-store"
@@ -871,6 +873,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
   const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading)
+  /** Which of the two empty-canvas surfaces shows, if either — see the module. */
+  const emptySurface = emptyCanvasSurface({
+    workflowId: realtimeWorkflowId,
+    nodeCount: nodes.length,
+    isLoading: isWorkflowLoading,
+    copilotTurnActive,
+  })
   const reconcileFromRemote = useWorkflowStore((s) => s.reconcileFromRemote)
   const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   useWorkflowRealtimeSync({
@@ -3000,9 +3009,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             with zero nodes. isWorkflowLoading suppresses the flash that would
             otherwise appear while the initial loadWorkflow(id, "", [], []) clear
             sets workflowId before the real nodes arrive from the fetch.
-            Also suppressed while the Copilot is mid-turn: "add your first node"
-            is the wrong thing to say while nodes are being added for you. */}
-        {realtimeWorkflowId != null && nodes.length === 0 && !isWorkflowLoading && !copilotTurnActive && (
+            Which of the two shows — and whether either does — is decided by
+            `emptyCanvasSurface`, where it is testable. */}
+        {emptySurface === "copilot-planning" && <CanvasCopilotPlanning />}
+        {emptySurface === "empty-state" && (
           <EmptyCanvasState
             onCreate={handleEmptyStateCreate}
             onOpenInputPanel={handleOpenInputPanel}

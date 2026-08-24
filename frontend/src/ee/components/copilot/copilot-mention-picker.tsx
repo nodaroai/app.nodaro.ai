@@ -25,6 +25,18 @@ interface CopilotMentionPickerProps {
   /** Reported up so the textarea's `aria-activedescendant` can follow the arrow keys. */
   onActiveChange: (optionId: string | undefined) => void
   onClose: () => void
+  /**
+   * Horizontal inset, so the list lines up with the composer that owns it: the
+   * editor rail insets its own padding, the home dock is flush with the glass.
+   */
+  insetClassName?: string
+  /**
+   * The lists are still arriving. Without this the picker would tell a user
+   * with fifty characters that they have none — the home dock does not fetch
+   * while it is collapsed, so expanding it and reaching straight for `@` is a
+   * real path, not a theoretical one.
+   */
+  loading?: boolean
 }
 
 export function CopilotMentionPicker({
@@ -34,6 +46,8 @@ export function CopilotMentionPicker({
   onPick,
   onActiveChange,
   onClose,
+  insetClassName = "left-3.5 right-3.5",
+  loading = false,
 }: CopilotMentionPickerProps) {
   const sections = useMemo(
     () => [
@@ -94,7 +108,7 @@ export function CopilotMentionPicker({
       role="listbox"
       aria-label={S.mention}
       id={MENTION_LIST_ID}
-      className="absolute left-3.5 right-3.5 bottom-full mb-2 bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] overflow-hidden flex flex-col z-20"
+      className={`absolute ${insetClassName} bottom-full mb-2 bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] overflow-hidden flex flex-col z-20`}
     >
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <span className="font-mono text-[11.5px] text-[var(--copilot-mention)]">@{query}</span>
@@ -102,7 +116,9 @@ export function CopilotMentionPicker({
       </div>
 
       <div ref={listRef} className="pt-1 pb-1.5 max-h-[260px] overflow-y-auto overflow-x-hidden">
-        {nothingAtAll ? (
+        {nothingAtAll && loading ? (
+          <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{S.pickerLoading}</div>
+        ) : nothingAtAll ? (
           <div className="px-3.5 py-4 text-center">
             <div className="text-xs text-foreground">{S.pickerEmptyTitle}</div>
             <div className="mt-1 text-[11.5px] text-[var(--copilot-muted)]">{S.pickerEmptyBlurb}</div>
