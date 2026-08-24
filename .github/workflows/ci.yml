@@ -513,6 +513,23 @@ jobs:
       - name: Check no provider key is frozen at construction/import (keys are live)
         run: node tools/check-provider-key-captures.mjs
 
+  check-surface-funnel:
+    name: Check Surface Funnel
+    runs-on: ubuntu-latest
+    needs: [frontend-tests, backend-tests, typecheck]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # B1: a new hardcoded brand product-name literal in a chrome component must
+      # go through surfaceBrandName() (or be allowlisted with a reason) so a
+      # white-label surface profile can rename it. Keeps the 101st site honest.
+      - name: Check brand literals go through the surface funnel
+        run: node tools/check-surface-funnel.mjs
+
   check-pricing-leaks:
     # packages/shared, packages/prompts, packages/client, and packages/cli are
     # published npm artifacts (Apache-2.0 / FSL) — every release is an
@@ -687,7 +704,7 @@ jobs:
     # Without it here, a migration whose proof failed still reached production
     # — the job ran, went red, and nothing downstream cared. Found while
     # planning the content-scoping migrations, 2026-08-23.
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, i18n-completeness, backend-boot-smoke, migration-behavior]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, i18n-completeness, backend-boot-smoke, migration-behavior]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

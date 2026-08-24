@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getAuthHeaders } from "@/lib/api"
+import { surfaceBrandName } from "@/lib/surface-selectors"
 import { CONNECT_START_NETWORK_MESSAGE, interpretConnectStart } from "@/lib/cloud-connect-start"
 import {
   PROVIDER_META,
@@ -589,7 +590,7 @@ export default function SetupPage() {
           <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
             <img
               src="/logo.svg"
-              alt="Nodaro"
+              alt={surfaceBrandName()}
               width={44}
               height={44}
               style={{ width: 44, height: 44, borderRadius: 12, display: "block" }}

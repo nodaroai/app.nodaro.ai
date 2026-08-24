@@ -144,6 +144,7 @@ import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
 import { billingRoutes } from "./ee/routes/billing.js"
 import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
+import { runtimeSurfaceProfile } from "./lib/surface-profile.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -476,7 +477,10 @@ export async function buildApp() {
   // Community cloud-connect containment surface (Phase 4a) — flag-gated with
   // the DCR branch so the whole feature appears/disappears together.
   if (hasCredits() && config.COMMUNITY_CONNECT_ENABLED) await app.register(connectedInstancesRoutes)
-  await app.register(galleryRoutes)
+  // Surface profile (B1): a deployment that hides gallery must not register the
+  // public /v1/gallery route either — a hidden nav entry over a live public
+  // route is a decorative-only deny.
+  if (!runtimeSurfaceProfile().nav.hide.includes("gallery")) await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
   await app.register(meRoutes)
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)

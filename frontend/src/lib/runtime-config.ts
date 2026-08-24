@@ -21,6 +21,13 @@ export interface NodaroRuntimeConfig {
   readonly supabaseAnonKey?: string
   readonly freecutUrl?: string
   readonly defaultLocale?: string
+  /**
+   * Deployment surface profile (B1) — a partial narrowing set by the /config.js
+   * writer (tools/build-runtime-config.mjs), read through surface-profile.ts's
+   * runtimeSurfaceProfile()/selectors. Partial: the writer passes arbitrary
+   * validated JSON, and consumers merge it over the code default.
+   */
+  readonly surface?: Partial<import("./surface-profile").SurfaceProfile>
 }
 
 declare global {

@@ -7,6 +7,7 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
+import { isModelDenied } from "../../surface-deny.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
@@ -97,6 +98,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         // current generation. Frontend pickers ignore mcpHidden.
         .filter((m) => !m.mcpHidden)
         .filter((m) => (args.featuredOnly ? m.featured === true : true))
+        // Deployment surface deny (B1): a denied model is invisible to agents too.
+        .filter((m) => !isModelDenied(m.id))
 
       const grouped = groupByFamily(filtered)
       // Group again by kind for the outer envelope — Image / Video / Audio

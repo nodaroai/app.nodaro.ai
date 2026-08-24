@@ -14,6 +14,7 @@
 import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
 import { runtimeDefaultLocale } from "./runtime-config"
+import { surfaceLocaleDefault } from "./surface-selectors"
 
 const STORAGE_KEY = "nodaro:preferred-locale"
 
@@ -58,13 +59,15 @@ function readStoredLocale(): LocaleId | null {
 }
 
 /**
- * The deployment's default locale (env `DEFAULT_LOCALE` via `/config.js`),
- * resolved the same lenient way as browser detection — exact match or
- * language-prefix ("en-US" → "en"). Unset, blank or unrecognised → null, so the
- * chain degrades to browser detection.
+ * The deployment's default locale, resolved the same lenient way as browser
+ * detection — exact match or language-prefix ("en-US" → "en"). Unset, blank or
+ * unrecognised → null, so the chain degrades to browser detection.
+ *
+ * B1 folds the surface profile's `locale.default` in front of A3's top-level
+ * `DEFAULT_LOCALE`: a surface value wins, the shipped env value is the fallback.
  */
 function readRuntimeDefaultLocale(): LocaleId | null {
-  return matchSupportedLocale(runtimeDefaultLocale())
+  return matchSupportedLocale(surfaceLocaleDefault() ?? runtimeDefaultLocale())
 }
 
 function writeStoredLocale(value: LocaleId) {

@@ -1,0 +1,40 @@
+# Example SSH deploy lane for a self-hosted Nodaro VM. Copy this into your OWN
+# repository's .github/workflows/ and set the repository secrets — it never runs
+# in this repo (the public mirror has no deploy secrets). Flow: reuse the
+# published community image tag -> SSH to the host -> `compose pull && up -d` ->
+# health-gate on /health -> prune old layers.
+name: Deploy (self-host VM)
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image tag to deploy"
+        default: "ghcr.io/nodaroai/nodaro-community:latest"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # github.event.inputs.image is passed through an env var (never inlined
+          # into the script) so a crafted input can't break out of the command.
+          envs: NODARO_IMAGE
+          script: |
+            set -euo pipefail
+            cd /opt/nodaro
+            export NODARO_IMAGE="$NODARO_IMAGE"
+            docker compose pull
+            docker compose up -d
+            # health-gate: wait up to 90s for the app to answer /health
+            for i in $(seq 1 18); do
+              if curl -fsS http://localhost:3000/health >/dev/null; then echo "healthy"; break; fi
+              sleep 5
+              if [ "$i" = "18" ]; then echo "health check failed"; exit 1; fi
+            done
+            docker image prune -f
+        env:
+          NODARO_IMAGE: ${{ github.event.inputs.image }}

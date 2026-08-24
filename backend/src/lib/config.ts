@@ -163,6 +163,14 @@ export const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   EDITION: z.enum(["community", "business", "cloud"]).default("community"),
+  /**
+   * Deployment surface profile (B1) — inline JSON or "@/path/to/profile.json".
+   * Documents the env surface here for typing/validation; the resolved profile
+   * is read fresh from process.env by runtimeSurfaceProfile() in
+   * surface-profile.ts (config snapshots env at import, which the memoized
+   * getter's test hook must be able to bypass). Business+ only — see d2.
+   */
+  NODARO_SURFACE_PROFILE: z.string().optional(),
   /** Comma-separated list of allowed CORS origins (e.g. "https://app.nodaro.ai,http://localhost:3000") */
   CORS_ORIGIN: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().default(""),

@@ -20,6 +20,17 @@
          reads it; src/lib/runtime-config.ts falls back to the build-time value
          when a key is absent. In dev/plain builds public/config.js is empty. -->
     <script src="/config.js"></script>
+    <!-- Deployment surface profile (B1): apply the brand product name to the
+         document title before paint, from the same runtime object. Runtime-cheap
+         (no rebuild); the wordmark itself is React (surfaceBrandName). -->
+    <script>
+      (function () {
+        try {
+          var s = (window.__NODARO_RUNTIME__ || {}).surface;
+          if (s && s.brand && s.brand.productName) document.title = s.brand.productName;
+        } catch (e) {}
+      })();
+    </script>
     <!-- Analytics (Microsoft Clarity + Google gtag) — opt-in via build-time env
          (VITE_CLARITY_ID / VITE_GA_ID); empty/unset (the self-hosted
          Community/Business default) is a no-op and nothing leaves the

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
+import { surfaceAuthMethods } from "@/lib/surface-selectors"
+import type { AuthMethod } from "@/lib/surface-profile"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
@@ -54,10 +56,6 @@ export default function LoginPage() {
     }
   }, [navigate])
 
-  // Email/password is the self-host path (GoTrue native). Cloud stays
-  // Google-only — its funnel is a product decision, not an edition default.
-  const showEmailAuth = !isCloud()
-
   // Self-host: the bundled GoTrue has NO Google OAuth configured — clicking
   // "Continue with Google" would land on a raw GoTrue JSON error (founder hit
   // this 2026-08-14). Ask GoTrue which external providers exist and show the
@@ -79,6 +77,18 @@ export default function LoginPage() {
       cancelled = true
     }
   }, [])
+
+  // Email/password is the self-host path (GoTrue native); cloud stays
+  // Google-only. B1: the deployment surface profile can NARROW which methods
+  // show — surfaceAuthMethods drops any method the code doesn't offer, so a
+  // profile can hide a lever but never surface an unavailable one.
+  const codeDefaultAuthMethods: AuthMethod[] = [
+    ...(isCloud() ? [] : (["email"] as const)),
+    ...(googleAvailable ? (["google"] as const) : []),
+  ]
+  const authMethods = surfaceAuthMethods(codeDefaultAuthMethods)
+  const showEmailAuth = authMethods.includes("email")
+  const showGoogle = authMethods.includes("google")
 
   // Persist redirect param to localStorage (survives Google OAuth round-trip).
   // Both spellings are live senders: dashboard guards use ?redirect=, while
@@ -190,7 +200,7 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              {googleAvailable && (
+              {showGoogle && (
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-border" />
                   <span className="text-xs text-muted-foreground/60">{t("auth.or")}</span>
@@ -200,7 +210,7 @@ export default function LoginPage() {
             </>
           )}
 
-          {googleAvailable && (
+          {showGoogle && (
             <Button
               variant={showEmailAuth ? "outline" : "default"}
               className="w-full"

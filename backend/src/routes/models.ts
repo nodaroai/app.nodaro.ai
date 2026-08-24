@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { listModels, groupByFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, type ModelKind, type ModelMode } from "@nodaro/shared"
 import { projectModel } from "../lib/mcp/tools/models.js"
+import { isModelDenied } from "../lib/surface-deny.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
@@ -43,6 +44,8 @@ export async function modelsRoutes(app: FastifyInstance) {
     })
       .filter((m) => !m.mcpHidden)
       .filter((m) => (featuredOnly ? m.featured === true : true))
+      // Deployment surface deny (B1): a denied model is invisible in discovery.
+      .filter((m) => !isModelDenied(m.id))
 
     const grouped = groupByFamily(filtered)
     const byKind: Record<ModelKind, Array<{ family: string; models: Record<string, unknown>[] }>> = {

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest"
+import { describe, it, expect, beforeAll, afterEach } from "vitest"
 import { buildApp } from "../../app.js"
+import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import type { FastifyInstance } from "fastify"
 
 let app: FastifyInstance
@@ -65,5 +66,23 @@ describe("GET /v1/nodes/:type", () => {
   it("returns 404 for unknown type", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/nodes/foo-bar-nonexistent" })
     expect(res.statusCode).toBe(404)
+  })
+})
+
+describe("GET /v1/nodes honours surface nodes.deny (B1)", () => {
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("omits a denied node from the list and 404s on its detail", async () => {
+    // generate-image lists + 200s by default (asserted above); denying it must
+    // remove it from discovery and 404 its detail — the filter reads per request.
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["generate-image"] } })
+    __resetSurfaceProfileCacheForTests()
+    const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json()
+    expect(list.data.some((n: { type: string }) => n.type === "generate-image")).toBe(false)
+    const detail = await app.inject({ method: "GET", url: "/v1/nodes/generate-image" })
+    expect(detail.statusCode).toBe(404)
   })
 })

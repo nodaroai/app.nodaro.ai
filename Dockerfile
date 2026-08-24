@@ -503,6 +503,11 @@ COPY --chown=node:node --from=frontend-build /app/packages/remotion/tsconfig.jso
 COPY --chown=node:node --from=frontend-build /app/frontend/dist ./frontend/dist
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 
+# 7b. Frontend runtime-config writer (B1) — start.sh runs it at boot to emit
+#     /config.js (apiUrl / supabase / locale + the deployment surface profile).
+#     A testable module rather than an inline heredoc; see start.sh below.
+COPY --chown=node:node tools/build-runtime-config.mjs ./tools/build-runtime-config.mjs
+
 # Startup script: run backend + worker + Caddy
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
@@ -666,14 +671,14 @@ if [ -z "$FRONTEND_SUPABASE_URL_EFFECTIVE" ] && [ -n "$PUBLIC_URL" ]; then
     http://localhost:3000/supabase*|http://127.0.0.1:3000/supabase*) FRONTEND_SUPABASE_URL_EFFECTIVE="${PUBLIC_URL%/}/supabase" ;;
   esac
 fi
-if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" \
-  node -e '
-    const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
-    const cfg = { apiUrl: pick(process.env.RUNTIME_API_URL), supabaseUrl: pick(process.env.RUNTIME_SUPABASE_URL), supabaseAnonKey: pick(process.env.RUNTIME_SUPABASE_ANON_KEY), freecutUrl: pick(process.env.RUNTIME_FREECUT_URL), defaultLocale: pick(process.env.RUNTIME_DEFAULT_LOCALE) }
-    for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
-    require("fs").writeFileSync("/app/frontend/dist/config.js", "window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
-    console.log("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")
-  '; then
+# The surface block (B1) rides the same channel — parsed by
+# tools/build-runtime-config.mjs (a testable module, not an inline heredoc:
+# inline-JSON-or-@file parsing + the d2 business+ edition gate are too much
+# logic to leave untested). It prints the /config.js line to stdout (log line to
+# stderr), so the redirect captures only the payload; on failure the file is
+# left empty, which the frontend reads as "no override" → build-time values.
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$NODARO_SURFACE_PROFILE" EDITION="$EDITION" \
+  node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi
 
