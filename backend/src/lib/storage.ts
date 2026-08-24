@@ -177,6 +177,58 @@ export function r2Url(key: string): string {
   return `${config.R2_PUBLIC_URL}/${key}`
 }
 
+/** Audio-inclusive MIME map for recast fork copies. The generic
+ *  `copyR2ObjectToPrefix` has no audio entries and mints uuid keys, so a
+ *  forked `.wav`/`.mp3` would land as application/octet-stream under a lost
+ *  suffix — hence this dedicated recast copier. */
+const RECAST_COPY_EXT_TO_MIME: Record<string, string> = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+}
+
+/**
+ * Physically copy ONE recast-owned R2 object into a fork-owned key, R2-to-R2
+ * (`CopyObjectCommand` — no egress, storage only). The caller encodes the
+ * whole fork key (type prefix + fork-scoped id + suffix + ext) in `destKey`;
+ * this preserves it and sets `ContentType` from the audio-inclusive map above
+ * (MetadataDirective REPLACE, so a source with a drifted type is corrected).
+ *
+ * Returns the fork public URL and the SOURCE object's byte size (HEAD the
+ * source, which is known to exist, rather than the post-copy dest whose HEAD
+ * can race) so the caller can reserve quota. Throws on a foreign source URL
+ * (a recast object is always ours — a foreign URL is a fork bug that would
+ * leave the fork pointing at someone else's bytes) or an unknown extension.
+ */
+export async function copyRecastObject(
+  sourceUrl: string,
+  destKey: string,
+): Promise<{ url: string; bytes: number }> {
+  const sourceKey = r2KeyFromOurUrl(sourceUrl)
+  if (!sourceKey) throw new Error(`copyRecastObject: not one of our R2 objects: ${sourceUrl}`)
+  const ext = destKey.slice(destKey.lastIndexOf(".") + 1).toLowerCase()
+  const contentType = RECAST_COPY_EXT_TO_MIME[ext]
+  if (!contentType) throw new Error(`copyRecastObject: unknown extension for dest key ${destKey}`)
+  const bytes = await getR2ObjectSize(sourceKey)
+  await s3.send(
+    new CopyObjectCommand(withObjectAcl({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: destKey,
+      CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+      ContentType: contentType,
+      CacheControl: R2_CACHE_CONTROL,
+      MetadataDirective: "REPLACE",
+    })),
+  )
+  return { url: r2Url(destKey), bytes }
+}
+
 /**
  * Stream a body to R2 via multipart upload.
  */
