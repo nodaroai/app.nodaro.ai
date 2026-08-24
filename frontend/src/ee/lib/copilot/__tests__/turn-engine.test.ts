@@ -15,11 +15,14 @@ const cancelCopilotTurn = vi.fn(async () => ({ cancelled: true }))
 const updateCopilotThread = vi.fn()
 const ensureCanvasVersion = vi.fn(async () => "realtime" as const)
 
+const setNeedsAutoLayout = vi.fn()
+
 const workflowState = {
   workflowId: "wf-1" as string | null,
   isDirty: false,
   isReadOnly: false,
   loadedVersion: 6 as number | null,
+  setNeedsAutoLayout,
 }
 
 vi.mock("@/lib/sse-client", async () => {
@@ -139,6 +142,64 @@ describe("the live timer's clock", () => {
     expect(startedAt).not.toBeNull()
     expect(startedAt!).toBeGreaterThanOrEqual(before)
     expect(startedAt!).toBeLessThanOrEqual(Date.now())
+  })
+})
+
+describe("the canvas after a build", () => {
+  /** A turn that added nodes, the way the stream reports one. */
+  const built = (addedNodeIds: string[]): CopilotStreamEvent => ({
+    type: "workflow_updated",
+    data: {
+      workflowId: "wf-1",
+      version: 7,
+      updatedAt: "now",
+      note: null,
+      addedNodeIds,
+      updatedNodeIds: [],
+      removedNodeIds: [],
+      addedNodeTypes: ["generate-image"],
+      nodeCount: 12,
+      edgeCount: 11,
+      adjustments: [],
+    },
+  })
+
+  const done: CopilotStreamEvent = {
+    type: "done",
+    data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 },
+  }
+
+  it("asks for a size-aware layout once it has finished adding nodes", async () => {
+    // The server positions new nodes on a fixed grid it cannot size correctly.
+    // Only the browser knows the rendered heights, so the browser re-lays it
+    // out — otherwise a big build arrives as the overlapping pile the user has
+    // to untangle with Tidy Up by hand.
+    events([metadata("ask", 100), built(["n1", "n2"]), done])
+    await sendCopilotMessage("build me a product shot workflow")
+    expect(setNeedsAutoLayout).toHaveBeenCalledWith(true)
+  })
+
+  it("still tidies when the LAST stage of a staged build only wired edges", async () => {
+    // The doctrine asks a big graph to be written in stages, and the final call
+    // is often edges-only. Reading just the last event would skip the layout on
+    // exactly the twelve-node builds that need it most.
+    events([metadata("ask", 100), built(["n1", "n2"]), built(["n3"]), built([]), done])
+    await sendCopilotMessage("build me the whole ad pipeline")
+    expect(setNeedsAutoLayout).toHaveBeenCalledWith(true)
+  })
+
+  it("leaves a hand-arranged canvas alone when the turn added nothing", async () => {
+    events([metadata("ask", 100), built([]), done])
+    await sendCopilotMessage("shorten the prompt on the video node")
+    expect(setNeedsAutoLayout).not.toHaveBeenCalled()
+  })
+
+  it("does not rearrange a workflow the user has already left", async () => {
+    events([metadata("ask", 100), built(["n1"]), done])
+    const promise = sendCopilotMessage("build it")
+    workflowState.workflowId = "wf-2"
+    await promise
+    expect(setNeedsAutoLayout).not.toHaveBeenCalled()
   })
 })
 

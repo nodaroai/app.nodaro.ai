@@ -21,12 +21,31 @@ export function activeMentionQuery(text: string, caret: number): { query: string
   return { query: match[1] ?? "", start: caret - (match[1]?.length ?? 0) - 1 }
 }
 
-/** Remove the `@query` the user was typing once they pick from the list. */
-export function stripMentionQuery(text: string, caret: number): { text: string; caret: number } {
+/**
+ * Put the picked name where the user was typing it — do NOT lift it out of the
+ * sentence.
+ *
+ * A mention carries two things: WHO, and WHERE in the sentence. Picking used to
+ * delete the `@query` and show the entity only as a chip above the box, which
+ * kept the who and threw away the where: "an ad with two actors" plus a
+ * detached list of two names tells the model nothing about which of them does
+ * what. "@Emma walks in while @George raises the bottle" does, and that is how
+ * the Studio's composer has always worked.
+ *
+ * The `@` is kept so the user can still see which words are linked — a plain
+ * name in the middle of their own prose is indistinguishable from typing it.
+ */
+export function insertMentionName(text: string, caret: number, name: string): { text: string; caret: number } {
   const active = activeMentionQuery(text, caret)
-  if (!active) return { text, caret }
-  const next = text.slice(0, active.start) + text.slice(caret)
-  return { text: next, caret: active.start }
+  const start = active ? active.start : caret
+  const before = text.slice(0, start)
+  const after = text.slice(caret)
+  // A trailing space ONLY at the end of the text, so the user can keep typing
+  // without gluing the next word on. Mid-sentence it must not be added: what
+  // follows a mention there is usually punctuation, and "@Maya , then" is worse
+  // than the problem the space solves.
+  const token = `@${cleanName(name)}${after.length === 0 ? " " : ""}`
+  return { text: before + token + after, caret: before.length + token.length }
 }
 
 const KIND_LABEL: Record<CopilotMention["kind"], string> = {
@@ -68,8 +87,13 @@ function cleanName(name: string): string {
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
 
 /**
- * What actually goes over the wire. The references line is appended rather than
- * interpolated so the user's own sentence reaches the model unedited.
+ * What actually goes over the wire.
+ *
+ * The names themselves are already IN the sentence, where the user put them
+ * (`insertMentionName`) — that is what tells the model which mention is the
+ * subject and which is the object. This line is the glossary for those names:
+ * it is appended rather than interpolated so the user's own sentence reaches
+ * the model unedited.
  *
  * The ID is what makes a mention work at all. Without it the model has to FIND
  * the entity by name, and the listing tools return a bounded, most-recently-

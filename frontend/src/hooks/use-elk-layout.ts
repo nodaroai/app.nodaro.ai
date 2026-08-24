@@ -70,6 +70,37 @@ export function toElkLayoutNode(n: {
 }
 
 /**
+ * Wait until React Flow has MEASURED the nodes, or give up after a bounded
+ * wait.
+ *
+ * The fallback in `toElkLayoutNode` is 200×120. Real nodes here are media
+ * cards, 200–650px — so laying out before measurement packs 650px cards into
+ * 200px slots and produces exactly the overlapping pile this layout exists to
+ * prevent. Nodes that have just arrived (a Studio import, or the Copilot
+ * writing a graph over Realtime) are unmeasured for the frame or two before
+ * they paint, which is precisely when something wants to lay them out.
+ *
+ * Bounded, and it resolves either way: a node that never measures (rendered
+ * inside a collapsed container, say) must not block the layout forever — an
+ * approximate layout beats none.
+ */
+export async function whenNodesMeasured(
+  getNodes: () => ReadonlyArray<{ measured?: { width?: number } }>,
+  opts: { maxFrames?: number; cancelled?: () => boolean } = {},
+): Promise<void> {
+  const maxFrames = opts.maxFrames ?? 60
+  for (let frame = 0; frame < maxFrames; frame++) {
+    if (opts.cancelled?.()) return
+    const nodes = getNodes()
+    if (nodes.length === 0 || nodes.every((n) => typeof n.measured?.width === "number")) return
+    await new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve())
+      else setTimeout(resolve, 16)
+    })
+  }
+}
+
+/**
  * Debounce window for the live-build auto-layout. Stage 2/3/4 fan-out can
  * insert 5-10 nodes within a few hundred ms; coalescing the layout calls
  * keeps the canvas from thrashing while ELK is still computing the previous
