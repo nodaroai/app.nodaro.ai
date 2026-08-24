@@ -417,7 +417,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
               {triggerLabel}
             </span>
             {dirty && <span className={cn("font-bold text-[#ff0073]", !isNode && "text-sm")}>*</span>}
-            <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ml-auto h-3.5 w-3.5")} size={np?.icon} />
+            <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ms-auto h-3.5 w-3.5")} size={np?.icon} />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[40rem] p-0" onClick={(e) => e.stopPropagation()}>
@@ -511,7 +511,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               <span className="truncate text-sm font-medium">{g.name}</span>
-                              <span className="ml-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
+                              <span className="ms-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
                             </button>
                           ) : (
                             <GroupLabel>{g.name}</GroupLabel>
@@ -557,7 +557,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               <span className="truncate text-sm font-medium">{localizePresetGroup(g.group ?? "")}</span>
-                              <span className="ml-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
+                              <span className="ms-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
                             </button>
                           ) : (
                             <GroupLabel>{localizePresetGroup(g.group ?? "")}</GroupLabel>
@@ -778,7 +778,7 @@ function PresetRow({
     <div
       className={cn(
         "group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent",
-        indented && "ml-3",
+        indented && "ms-3",
         active && "bg-accent/60",
       )}
     >

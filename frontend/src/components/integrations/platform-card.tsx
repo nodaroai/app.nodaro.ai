@@ -267,7 +267,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                     )}
                   </div>
                 </div>
-                <div className="flex items-center shrink-0 ml-2">
+                <div className="flex items-center shrink-0 ms-2">
                   {needsReconnect && (
                     <Button
                       variant="ghost"
@@ -278,7 +278,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                     >
                       {connecting
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                        : <RefreshCw className="h-3.5 w-3.5 me-1" />}
                       {t("integ.reconnect")}
                     </Button>
                   )}
@@ -310,12 +310,12 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
             : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
         }
       >
-        {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        {connecting && <Loader2 className="h-4 w-4 animate-spin me-2" />}
         {unavailable ? (
           comingSoon ? t("dash.comingSoon") : t("integ.requiresSetup")
         ) : connections.length > 0 ? (
           <>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4 me-2" />
             {t("integ.addAnother")}
           </>
         ) : (
@@ -360,7 +360,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
               disabled={dialogBusy || !botToken.trim()}
               className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
             >
-              {dialogBusy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {dialogBusy && <Loader2 className="h-4 w-4 animate-spin me-2" />}
               {t("integ.connect")}
             </Button>
           </div>
@@ -403,7 +403,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
               title={fieldValidationError ?? undefined}
               className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
             >
-              {dialogBusy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {dialogBusy && <Loader2 className="h-4 w-4 animate-spin me-2" />}
               {t("integ.connect")}
             </Button>
           </div>

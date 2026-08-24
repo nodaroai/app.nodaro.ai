@@ -102,7 +102,7 @@ import { AestheticPicker } from "@/lib/picker-ui"
 import { EraPicker } from "@/lib/picker-ui"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode, composeTransitionHintForNode, composeCharacterFxHintForNode } from "@/lib/cinematography-hints"
-import { useLocaleDir } from "@/lib/locale-store"
+import { usePickerDir } from "@/lib/locale-store"
 import { LocaleHeader } from "./locale-header"
 import { CustomTextRows } from "./custom-text-rows"
 import type { ConfigProps } from "./types"
@@ -283,7 +283,7 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
 }
 
 export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<CameraMotionData> & { nodeId?: string }) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const composed = composeCameraMotionHintForNode(
     data.cameraMotion,
     nodeId,
@@ -315,7 +315,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 }
 
 export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -364,7 +364,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
 }
 
 export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -387,7 +387,7 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
 }
 
 export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -410,7 +410,7 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
 }
 
 export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -459,7 +459,7 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
 }
 
 export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -482,7 +482,7 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
 }
 
 export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -506,7 +506,7 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
 }
 
 export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -530,7 +530,7 @@ export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
 }
 
 export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -553,7 +553,7 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
 }
 
 export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -576,7 +576,7 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
 }
 
 export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -606,7 +606,7 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
 }
 
 export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -699,7 +699,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 }
 
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -748,7 +748,7 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
 }
 
 export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -772,7 +772,7 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
 }
 
 export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -796,7 +796,7 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
 }
 
 export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -819,7 +819,7 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
 }
 
 export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -867,7 +867,7 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
 }
 
 export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -946,7 +946,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
 }
 
 export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -994,7 +994,7 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
 }
 
 export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1018,7 +1018,7 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
 }
 
 export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const animal = getAnimal(data.animal)
   const hint = animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
   return (
@@ -1043,7 +1043,7 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
 }
 
 export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const vehicle = getVehicle(data.vehicle)
   const hint = vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
   return (
@@ -1068,7 +1068,7 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
 }
 
 export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const weapon = getWeapon(data.weapon)
   const hint = weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
   return (
@@ -1093,7 +1093,7 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
 }
 
 export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const furniture = getFurniture(data.furniture)
   const hint = furniture ? `featuring ${furniture.label.toLowerCase()}, ${furniture.description}` : ""
   return (
@@ -1118,7 +1118,7 @@ export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) 
 }
 
 export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1141,7 +1141,7 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
 }
 
 export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1164,7 +1164,7 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
 }
 
 export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1188,7 +1188,7 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
 }
 
 export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureSettingsData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1211,7 +1211,7 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
 }
 
 export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualityData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1234,7 +1234,7 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
 }
 
 export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<CompositionEffectsData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1257,7 +1257,7 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
 }
 
 export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostProcessEffectsData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -1305,7 +1305,7 @@ const TIMING_SELECTS = [
 ] as const
 
 export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const composed = composeTransitionHintForNode(data)
 
   return (
@@ -1350,7 +1350,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
 }
 
 export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxData>) {
-  const dir = useLocaleDir()
+  const dir = usePickerDir()
   const composed = composeCharacterFxHintForNode(data)
 
   return (

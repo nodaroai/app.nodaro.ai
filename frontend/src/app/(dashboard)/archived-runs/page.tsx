@@ -128,7 +128,7 @@ export default function ArchivedRunsPage() {
                   onClick={() => run.appSlug && restoreMutation.mutate({ slug: run.appSlug, runId: run.id })}
                   disabled={!run.appSlug || restoreMutation.isPending}
                 >
-                  <RotateCcw className="h-4 w-4 mr-1" />
+                  <RotateCcw className="h-4 w-4 me-1" />
                   {t("archive.restore")}
                 </Button>
                 <Button
@@ -138,7 +138,7 @@ export default function ArchivedRunsPage() {
                   disabled={!run.appSlug}
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
-                  <Trash2 className="h-4 w-4 mr-1" />
+                  <Trash2 className="h-4 w-4 me-1" />
                   {t("archive.deleteForever")}
                 </Button>
               </div>

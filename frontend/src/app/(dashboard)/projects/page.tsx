@@ -49,6 +49,7 @@ import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 
 function TemplatesCarousel() {
@@ -440,15 +441,19 @@ export default function ProjectsPage() {
   const featuredApps = shuffledAppsRef.current.apps
 
   const appsScrollRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
+  const [canScrollBack, setCanScrollBack] = useState(false)
+  const [canScrollForward, setCanScrollForward] = useState(false)
   const isHoveringApps = useRef(false)
+  const isRtl = useAppDir() === "rtl"
 
   const updateScrollState = useCallback(() => {
     const el = appsScrollRef.current
     if (!el) return
-    setCanScrollLeft(el.scrollLeft > 0)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+    // RTL: scrollLeft runs 0 → negative; abs() = distance from the start edge
+    // in both directions.
+    const scrolled = Math.abs(el.scrollLeft)
+    setCanScrollBack(scrolled > 0)
+    setCanScrollForward(scrolled + el.clientWidth < el.scrollWidth - 1)
   }, [])
 
   useEffect(() => {
@@ -469,22 +474,22 @@ export default function ProjectsPage() {
     const timer = setInterval(() => {
       const el = appsScrollRef.current
       if (!el || isHoveringApps.current) return
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+      const atEnd = Math.abs(el.scrollLeft) + el.clientWidth >= el.scrollWidth - 1
       if (atEnd) {
-        el.scrollTo({ left: 0, behavior: "smooth" })
+        el.scrollTo({ left: 0, behavior: "smooth" })   // 0 = start edge in both directions
       } else {
-        el.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
+        el.scrollBy({ left: (isRtl ? -1 : 1) * CARD_SCROLL_PX, behavior: "smooth" })
       }
     }, autoScrollMs)
     return () => clearInterval(timer)
-  }, [featuredApps.length, activeTab, autoScrollMs])
+  }, [featuredApps.length, activeTab, autoScrollMs, isRtl])
 
-  const scrollAppsLeft = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: -CARD_SCROLL_PX, behavior: "smooth" })
-  }, [])
-  const scrollAppsRight = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
-  }, [])
+  const scrollAppsBack = useCallback(() => {
+    appsScrollRef.current?.scrollBy({ left: (isRtl ? 1 : -1) * CARD_SCROLL_PX, behavior: "smooth" })
+  }, [isRtl])
+  const scrollAppsForward = useCallback(() => {
+    appsScrollRef.current?.scrollBy({ left: (isRtl ? -1 : 1) * CARD_SCROLL_PX, behavior: "smooth" })
+  }, [isRtl])
 
   return (
     <div className="p-4 sm:p-6">
@@ -519,9 +524,9 @@ export default function ProjectsPage() {
               disabled={isCreating}
             >
               {isCreating ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <Loader2 className="h-4 w-4 me-1 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4 mr-1" />
+                <Plus className="h-4 w-4 me-1" />
               )}
               <span className="hidden sm:inline">
                 {isCreating ? t("dash.creating") : t("dash.newWorkflow")}
@@ -541,7 +546,7 @@ export default function ProjectsPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleCreateProject}>
-                  <FolderPlus className="h-3.5 w-3.5 mr-2" />
+                  <FolderPlus className="h-3.5 w-3.5 me-2" />
                   {t("dash.newProject")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -578,7 +583,7 @@ export default function ProjectsPage() {
               onClick={() => navigate("/apps")}
               className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              {t("dash.seeAllMiniApps")} <ArrowRight className="h-3 w-3" />
+              {t("dash.seeAllMiniApps")} <ArrowRight className={cn("h-3 w-3", isRtl && "rotate-180")} />
             </button>
           )}
           {activeTab === "templates" && (
@@ -587,7 +592,7 @@ export default function ProjectsPage() {
               onClick={() => navigate("/templates")}
               className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              {t("dash.seeAllTemplates")} <ArrowRight className="h-3 w-3" />
+              {t("dash.seeAllTemplates")} <ArrowRight className={cn("h-3 w-3", isRtl && "rotate-180")} />
             </button>
           )}
         </div>
@@ -652,29 +657,29 @@ export default function ProjectsPage() {
                     className="shrink-0 w-[200px] text-left"
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 flex flex-col items-center justify-center gap-2 hover:bg-muted transition-colors">
-                      <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                      <ArrowRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
                       <p className="text-xs font-medium text-muted-foreground">{t("dash.seeAllMiniApps")}</p>
                     </div>
                   </button>
                 </div>
 
                 {/* Scroll arrows */}
-                {canScrollLeft && (
+                {canScrollBack && (
                   <button
                     type="button"
-                    onClick={scrollAppsLeft}
-                    className="absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
+                    onClick={scrollAppsBack}
+                    className="absolute start-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                   </button>
                 )}
-                {canScrollRight && (
+                {canScrollForward && (
                   <button
                     type="button"
-                    onClick={scrollAppsRight}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
+                    onClick={scrollAppsForward}
+                    className="absolute end-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    {isRtl ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                 )}
               </>
@@ -767,13 +772,13 @@ export default function ProjectsPage() {
             />
           )}
           <div className="relative w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={showAll ? t("dash.searchProjectsUsers") : t("dash.searchProjectsPlaceholder")}
               aria-label={t("dash.searchProjects")}
-              className="pl-8 h-8 text-sm w-full"
+              className="ps-8 h-8 text-sm w-full"
             />
           </div>
         </div>

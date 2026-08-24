@@ -94,18 +94,28 @@ export function useUserLocale(): LocaleId {
   return useLocaleStore((s) => s.locale)
 }
 
-/** Convenience hook: reading direction.
+/**
+ * Reading direction for PARAMETER-PICKER TILE GRIDS ONLY.
  *
- * Deliberately pinned to `"ltr"` for now — we ship Hebrew / Arabic translations
- * but do NOT flip the overall layout. Bidi rendering inside text elements
- * still works automatically (the browser handles RTL characters), and the
- * picker / config panels read the same regardless of locale (label on the
- * left, control on the right, tabs in catalog order).
+ * Deliberately pinned to `"ltr"`: tile grids are laid out against catalog
+ * order, so they read the same in every locale (label left, control right,
+ * tabs in catalog order). Flipping them buys nothing and costs alignment
+ * with the catalogs, docs and tutorial media.
  *
- * To re-enable RTL layout for he/ar, swap the body for
- * `useLocaleStore((s) => s.dir)` — every consumer already plumbs `dir`
- * through to the relevant container.
+ * THIS IS NOT THE APP'S DIRECTION. `<html dir>` is set from the locale by
+ * `I18nHtmlDir`, so RTL locales flip the whole chrome. Anything outside a
+ * picker grid that needs the live direction must use `useAppDir()`;
+ * reaching for this hook there silently pins it LTR inside an RTL page.
  */
-export function useLocaleDir(): LocaleDirection {
+export function usePickerDir(): LocaleDirection {
   return "ltr"
+}
+
+/**
+ * The app's live reading direction, derived from the chosen locale.
+ * `I18nHtmlDir` mirrors this into `<html dir>`. Use it for icon flips and
+ * any layout decision that must follow the user's locale.
+ */
+export function useAppDir(): LocaleDirection {
+  return useLocaleStore((s) => s.dir)
 }

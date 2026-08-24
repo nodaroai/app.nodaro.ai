@@ -48,7 +48,9 @@ export function NodaroLogo({
   }
 
   return (
-    <span className={cn("inline-flex items-center gap-[3px]", className)}>
+    // The wordmark is a brand mark, not chrome: pin it LTR so an RTL locale
+    // (<html dir="rtl">) can't reverse the tile+text order and render "odaroN".
+    <span dir="ltr" className={cn("inline-flex items-center gap-[3px]", className)}>
       <span className={cn(ICON_SIZES[size], "inline-flex shrink-0")}>
         <LogoImg className="h-full w-full" />
       </span>

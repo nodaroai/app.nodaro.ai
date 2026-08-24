@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import {
   Tooltip,
   TooltipContent,
@@ -225,6 +226,9 @@ export function AppSidebar({
   }
   const { user, isAdmin, signOut } = useAuth()
   const { isCollapsed, setCollapsed } = useSidebar()
+  // RTL: the sidebar sits on the RIGHT — the drawer slides from the right,
+  // the border faces the content, and every chevron points the other way.
+  const isRtl = useAppDir() === "rtl"
   const { data: creditBalance } = useUserCredits(user?.id)
   const [mounted, setMounted] = useState(false)
   const updateInfo = useUpdateCheck()
@@ -328,13 +332,17 @@ export function AppSidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col border-r transition-all duration-300 ease-in-out md:static",
+          "fixed inset-y-0 start-0 z-40 flex flex-col border-e transition-all duration-300 ease-in-out md:static",
           // Theme-aware background
           "bg-white dark:bg-zinc-950",
           // Theme-aware border
           "border-zinc-200 dark:border-zinc-800",
           isCollapsed ? "w-14" : "w-56",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          isMobileOpen
+            ? "translate-x-0"
+            : isRtl
+              ? "translate-x-full md:translate-x-0"
+              : "-translate-x-full md:translate-x-0",
           className,
         )}
       >
@@ -356,7 +364,7 @@ export function AppSidebar({
               title={t("nav.nodaroApps")}
               className={cn(
                 "flex items-center gap-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
-                isCollapsed ? "justify-center w-full" : "ml-1",
+                isCollapsed ? "justify-center w-full" : "ms-1",
               )}
             >
               {isCollapsed ? (
@@ -447,7 +455,7 @@ export function AppSidebar({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
-                  side="right"
+                  side={isRtl ? "left" : "right"}
                   className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                 >
                   <p>{t("nav.creditsLeft", { n: creditBalance.total })}</p>
@@ -594,7 +602,7 @@ export function AppSidebar({
                       </span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700">
+                  <TooltipContent side={isRtl ? "left" : "right"} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700">
                     {t(item.label)}
                   </TooltipContent>
                 </Tooltip>
@@ -639,7 +647,7 @@ export function AppSidebar({
                         <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
                         <span>{t(item.label)}</span>
                         {showBadge && (
-                          <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
+                          <span className="ms-auto px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
                             {pendingReportsCount}
                           </span>
                         )}
@@ -678,7 +686,7 @@ export function AppSidebar({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent
-                    side="right"
+                    side={isRtl ? "left" : "right"}
                     className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                   >
                     <div className="text-xs">{user.email}</div>
@@ -706,7 +714,7 @@ export function AppSidebar({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent
-                      side="right"
+                      side={isRtl ? "left" : "right"}
                       className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                     >
                       {t("nav.signOut")}
@@ -730,11 +738,11 @@ export function AppSidebar({
                       className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                       onClick={toggleCollapsed}
                     >
-                      <ChevronRight className="h-4 w-4" />
+                      {isRtl ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent
-                    side="right"
+                    side={isRtl ? "left" : "right"}
                     className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                   >
                     {t("nav.expandSidebar")}
@@ -747,7 +755,7 @@ export function AppSidebar({
                   className="h-8 gap-2 px-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                   onClick={toggleCollapsed}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                   <span className="text-sm">{t("nav.collapse")}</span>
                 </Button>
               )}
@@ -820,6 +828,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
   const t = useT()
   const location = useLocation()
   const isDashboard = location.pathname === "/projects"
+  const isRtl = useAppDir() === "rtl"
 
   return (
     <header className="flex items-center gap-3 px-4 py-3 border-b bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 md:hidden">
@@ -829,7 +838,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
           className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 touch-manipulation"
           aria-label={t("nav.backToProjects")}
         >
-          <ChevronLeft className="h-5 w-5" />
+          {isRtl ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </Link>
       )}
       <Button
@@ -842,7 +851,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
         <Menu className="h-5 w-5" />
       </Button>
       <NodaroLogo size="sm" />
-      <div className="ml-auto">
+      <div className="ms-auto">
         <ThemeToggle />
       </div>
     </header>
