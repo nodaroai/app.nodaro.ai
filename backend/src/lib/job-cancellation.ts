@@ -23,6 +23,9 @@ import { AsyncLocalStorage } from "node:async_hooks"
  */
 interface JobCancelStore {
   readonly jobId: string
+  /** The job's owner, for the egress decorator (identity rides this ALS —
+   *  see providers/egress.ts). Undefined on the orchestrator/internal path. */
+  readonly userId?: string
   /** Last time we hit the DB for this job's status (throttle). */
   lastCheckMs: number
   /** Sticky once observed cancelled — avoids re-querying after the first hit. */
@@ -65,9 +68,19 @@ export class JobStopRequestedError extends Error {
   }
 }
 
-/** Run `fn` inside a cancellation context bound to `jobId`. */
-export function runWithJobCancellation<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
-  return storage.run({ jobId, lastCheckMs: 0, cancelled: false }, fn)
+/** Run `fn` inside a cancellation context bound to `jobId` (+ its owner `userId`). */
+export function runWithJobCancellation<T>(
+  jobId: string,
+  userId: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return storage.run({ jobId, userId, lastCheckMs: 0, cancelled: false }, fn)
+}
+
+/** The owner of the job whose context is currently active, or undefined
+ *  outside a `runWithJobCancellation` context (orchestrator/internal calls). */
+export function getJobUserId(): string | undefined {
+  return storage.getStore()?.userId
 }
 
 /**

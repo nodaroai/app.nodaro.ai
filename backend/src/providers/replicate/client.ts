@@ -10,6 +10,7 @@ import { config } from "../../lib/config.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { liveProviderClient, requireProviderKey } from "../provider-keys.js"
+import { egressSdkFetch } from "../egress.js"
 
 // Singleton Replicate client.
 //
@@ -23,7 +24,9 @@ import { liveProviderClient, requireProviderKey } from "../provider-keys.js"
 // live: env, then the operator-supplied key from /setup) — a client
 // constructed once at import would keep a stale token after a paste.
 export const replicate = liveProviderClient(
-  (auth) => new Replicate({ auth }),
+  // Inject the egress-decorated fetch so the SDK's own transport (predictions,
+  // wait, models.*) flows through the seam like every other provider call.
+  (auth) => new Replicate({ auth, fetch: egressSdkFetch("replicate") }),
   "REPLICATE_API_TOKEN",
   () => config.REPLICATE_API_TOKEN,
 )

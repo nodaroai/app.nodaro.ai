@@ -19,7 +19,7 @@ describe("job-cancellation", () => {
 
   it("does not throw while the job is still running", async () => {
     mockSingle.mockResolvedValue({ data: { status: "processing" }, error: null })
-    await runWithJobCancellation("job-1", async () => {
+    await runWithJobCancellation("job-1", undefined, async () => {
       await expect(throwIfJobCancelled()).resolves.toBeUndefined()
     })
     expect(mockSingle).toHaveBeenCalledTimes(1)
@@ -27,7 +27,7 @@ describe("job-cancellation", () => {
 
   it("throws JobCancelledError once the job is cancelled, and is sticky without re-querying", async () => {
     mockSingle.mockResolvedValue({ data: { status: "cancelled" }, error: null })
-    await runWithJobCancellation("job-2", async () => {
+    await runWithJobCancellation("job-2", undefined, async () => {
       await expect(throwIfJobCancelled()).rejects.toBeInstanceOf(JobCancelledError)
       await expect(throwIfJobCancelled()).rejects.toBeInstanceOf(JobCancelledError)
       expect(mockSingle).toHaveBeenCalledTimes(1)
@@ -36,7 +36,7 @@ describe("job-cancellation", () => {
 
   it("throttles DB reads within the check window", async () => {
     mockSingle.mockResolvedValue({ data: { status: "processing" }, error: null })
-    await runWithJobCancellation("job-3", async () => {
+    await runWithJobCancellation("job-3", undefined, async () => {
       await throwIfJobCancelled()
       await throwIfJobCancelled() // within the throttle window → no second query
       expect(mockSingle).toHaveBeenCalledTimes(1)
@@ -47,7 +47,7 @@ describe("job-cancellation", () => {
 
   it("throws JobStopRequestedError when stop_requested_at is stamped (status still processing), sticky without re-querying", async () => {
     mockSingle.mockResolvedValue({ data: { status: "processing", stop_requested_at: "2026-07-21T10:00:00Z" }, error: null })
-    await runWithJobCancellation("job-4", async () => {
+    await runWithJobCancellation("job-4", undefined, async () => {
       const first = throwIfJobCancelled()
       await expect(first).rejects.toBeInstanceOf(JobStopRequestedError)
       await expect(first).rejects.toMatchObject({ name: "JobStopRequestedError" })
@@ -58,14 +58,14 @@ describe("job-cancellation", () => {
 
   it("cancellation WINS when both flags are set — the row is terminal, a partial delivery would be refused anyway", async () => {
     mockSingle.mockResolvedValue({ data: { status: "cancelled", stop_requested_at: "2026-07-21T10:00:00Z" }, error: null })
-    await runWithJobCancellation("job-5", async () => {
+    await runWithJobCancellation("job-5", undefined, async () => {
       await expect(throwIfJobCancelled()).rejects.toBeInstanceOf(JobCancelledError)
     })
   })
 
   it("a null stop_requested_at never throws", async () => {
     mockSingle.mockResolvedValue({ data: { status: "processing", stop_requested_at: null }, error: null })
-    await runWithJobCancellation("job-6", async () => {
+    await runWithJobCancellation("job-6", undefined, async () => {
       await expect(throwIfJobCancelled()).resolves.toBeUndefined()
     })
   })

@@ -14,6 +14,7 @@ import type { ReconcileOpts } from "../provider.interface.js"
 import { replicate } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { config } from "../../lib/config.js"
+import { providerFetch } from "../egress.js"
 
 // Pinned trainer version — bump when Replicate releases a newer trainer.
 // Hash extracted from `ostris/flux-dev-lora-trainer:<hash>`.
@@ -163,7 +164,8 @@ export async function cancelCharacterTraining(trainingId: string): Promise<void>
  */
 export async function deleteCharacterLora(modelDestination: string): Promise<void> {
   try {
-    const res = await fetch(
+    const res = await providerFetch(
+      { provider: "replicate", operation: "training.deleteModel", modelKey: null, body: undefined, dimensions: {} },
       `https://api.replicate.com/v1/models/${modelDestination}`,
       {
         method: "DELETE",

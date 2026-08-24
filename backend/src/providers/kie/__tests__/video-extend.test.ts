@@ -65,6 +65,7 @@ describe("kieExtendVideoVEO", () => {
       "the figure continues walking into the mist",
       "quality",
       12345,
+      expect.objectContaining({ modelKey: "veo3" }),
     )
     expect(result).toEqual({
       url: "https://cdn.kie.ai/extended.mp4",

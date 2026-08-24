@@ -11,6 +11,7 @@
 
 import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 const BASE_URL = "https://api.beeble.ai"
 
@@ -57,18 +58,28 @@ export class BeebleError extends Error {
  * - Throws `BeebleError` (carrying `.code` + `.status`) on a non-2xx status
  *   OR on a response whose body contains `{ error: { code, message } }`.
  */
-export async function beebleFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function beebleFetch<T>(path: string, init?: RequestInit, meta?: EgressMeta): Promise<T> {
   // isBeebleConfigured() had no callers at all — requests went out with an
   // empty x-api-key and came back as a raw "Beeble request failed (401)".
   requireProviderKey(config.BEEBLE_API_KEY, "BEEBLE_API_KEY")
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "x-api-key": config.BEEBLE_API_KEY,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
+  const res = await providerFetch(
+    {
+      provider: "beeble",
+      operation: `beeble${path}`,
+      modelKey: meta?.modelKey ?? null,
+      body: init?.body,
+      dimensions: meta?.dimensions ?? {},
     },
-  })
+    `${BASE_URL}${path}`,
+    {
+      ...init,
+      headers: {
+        "x-api-key": config.BEEBLE_API_KEY,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    },
+  )
 
   const text = await res.text()
   const body = text ? JSON.parse(text) : {}

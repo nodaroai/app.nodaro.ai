@@ -21,6 +21,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
+import { providerFetch } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -34,6 +35,8 @@ async function postKieEndpoint(
   path: string,
   input: Record<string, unknown>,
   label: string,
+  operation: string,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ taskId: string; apiKey: string }> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -45,7 +48,14 @@ async function postKieEndpoint(
     console.log(`[KIE.ai ${label}] Request body:`, JSON.stringify(input, null, 2))
   }
 
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation,
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: input,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}${path}`,
     {
       method: "POST",
@@ -108,7 +118,7 @@ export async function runRunwayTask(
   input: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate")
+  const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate", "runway.generate", reconcileOpts)
 
   await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Runway]")
 
@@ -147,7 +157,8 @@ async function pollRunwayRecordDetail(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "runway.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/runway/record-detail?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -228,7 +239,9 @@ export async function runRunwayExtendTask(
   const { taskId: extendTaskId, apiKey } = await postKieEndpoint(
     "/api/v1/runway/extend",
     { taskId, prompt, quality },
-    "Runway extend"
+    "Runway extend",
+    "runway.extend",
+    reconcileOpts,
   )
 
   await fireOnTaskCreated(reconcileOpts, extendTaskId, "[KIE.ai Runway Extend]")
@@ -249,7 +262,7 @@ export async function runAlephTask(
   input: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate")
+  const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate", "runway.aleph.generate", reconcileOpts)
 
   await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Aleph]")
 
@@ -284,7 +297,8 @@ async function pollAlephRecordInfo(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "runway.aleph.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/aleph/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )

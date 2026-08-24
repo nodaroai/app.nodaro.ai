@@ -1,4 +1,5 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 export interface VoiceRemixOptions {
   outputFormat?: string
@@ -17,6 +18,7 @@ export async function remixVoice(
   text: string,
   voiceDescription: string,
   options?: VoiceRemixOptions,
+  meta?: EgressMeta,
 ): Promise<Buffer> {
   const headers = getElevenLabsHeaders()
 
@@ -28,14 +30,19 @@ export async function remixVoice(
     body.output_format = options.outputFormat
   }
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-voice/create-previews`, {
-    method: "POST",
-    headers: {
-      ...headers,
-      "Content-Type": "application/json",
+  const response = await providerFetch(
+    // Single-purpose funnel → default OUR key inside (caller passes no meta).
+    { provider: "elevenlabs", operation: "voiceRemix", modelKey: meta?.modelKey ?? "elevenlabs-voice-remix", body, dimensions: meta?.dimensions ?? {} },
+    `${ELEVENLABS_BASE_URL}/v1/text-to-voice/create-previews`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  })
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")

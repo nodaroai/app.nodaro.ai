@@ -118,7 +118,7 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, duration } },
     )
 
     const audioUrl =
@@ -210,7 +210,7 @@ export class KieAudioProvider
       input,
       undefined,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, characters: text.length } },
     )
 
     const audioUrl =
@@ -261,7 +261,7 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: "elevenlabs-sfx", dimensions: { ...reconcileOpts?.dimensions, duration: options?.duration } },
     )
 
     const audioUrl =
@@ -298,7 +298,7 @@ export class KieAudioProvider
       { audio_url: audioUrl },
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: "elevenlabs-isolation" },
     )
 
     const resultUrl =
@@ -349,7 +349,7 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: "elevenlabs-stt" },
     )
 
     const raw = resultJson as Record<string, unknown>
@@ -410,7 +410,9 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      reconcileOpts,
+      // OUR Nodaro key (NOT modelConfig.model, the KIE provider id) for the
+      // egress seam — mirrors the sibling speechToText site above.
+      { ...reconcileOpts, modelKey: "elevenlabs-dialogue" },
     )
 
     const audioUrl =

@@ -71,7 +71,7 @@ import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
 import { pollKieTask, isUpstreamKieFailure } from "../../providers/kie/client.js"
-import { sunoGenerate } from "../../providers/kie/suno-client.js"
+import { sunoGenerate, sunoCreditType } from "../../providers/kie/suno-client.js"
 import { combineVideos as combineVideosCore } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { llmCompleteStructured } from "../llm-client.js"
@@ -281,7 +281,9 @@ async function pluginGenerateMusic(
         ? { duration: Math.min(SUNO_DURATION_MAX, Math.max(SUNO_DURATION_MIN, Math.round(duration))) }
         : {}),
     },
-    toReconcileOpts(options),
+    // Thread OUR Nodaro key so the egress seam attributes this billed create
+    // (model is pinned V5_5 → "suno-v5_5"); spread keeps any onTaskCreated.
+    { ...toReconcileOpts(options), modelKey: sunoCreditType("V5_5", "suno-generate") },
   )
   const track = result.tracks[0]
   if (!track?.audioUrl) {

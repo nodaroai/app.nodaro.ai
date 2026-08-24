@@ -1,5 +1,6 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
 import { DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 export interface VoiceDesignOptions {
   model?: string
@@ -23,6 +24,7 @@ export async function designVoice(
   text: string,
   voiceDescription: string,
   options?: VoiceDesignOptions,
+  meta?: EgressMeta,
 ): Promise<{ audioBuffer: Buffer; generatedVoiceId: string }> {
   const headers = getElevenLabsHeaders()
 
@@ -39,14 +41,19 @@ export async function designVoice(
   if (options?.quality != null) body.quality = options.quality
   if (options?.shouldEnhance != null) body.should_enhance = options.shouldEnhance
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-voice/design`, {
-    method: "POST",
-    headers: {
-      ...headers,
-      "Content-Type": "application/json",
+  const response = await providerFetch(
+    // Single-purpose funnel → default OUR key inside (caller passes no meta).
+    { provider: "elevenlabs", operation: "voiceDesign", modelKey: meta?.modelKey ?? "elevenlabs-voice-design", body, dimensions: meta?.dimensions ?? {} },
+    `${ELEVENLABS_BASE_URL}/v1/text-to-voice/design`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  })
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")

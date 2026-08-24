@@ -12,6 +12,7 @@
 
 import { config } from "../../lib/config.js"
 import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, pollDelay } from "./client.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import type { SunoModel, SunoAddTrackModel } from "@nodaro/shared"
@@ -25,6 +26,23 @@ export type { SunoModel, SunoAddTrackModel }
 const SUNO_POLL_INTERVAL_MS = 5000 // kept for timeout calculations
 const DEBUG = config.NODE_ENV === "development"
 const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
+
+/**
+ * OUR Nodaro credit key for a Suno music create, given the version + a
+ * per-operation fallback. Mirrors the route's reservation identifier
+ * (`sunoModelCreditType` in `routes/suno.ts`) EXACTLY so the egress-seam
+ * modelKey matches what was reserved: V5_5 → "suno-v5_5", V5 → "suno-v5",
+ * else the operation key ("suno-generate" / "suno-cover" / "suno-extend").
+ * The worker handlers own this axis (the model is a job-data field, not
+ * visible at the shared `createSunoTask` funnel), so they call this to
+ * thread the key rather than duplicating the map. This is a billing key
+ * (never the KIE provider id) so it satisfies the B3 egress invariant.
+ */
+export function sunoCreditType(model: string | undefined, fallback: string): string {
+  if (model === "V5_5") return "suno-v5_5"
+  if (model === "V5") return "suno-v5"
+  return fallback
+}
 
 // =============================================================================
 // TYPES
@@ -359,7 +377,14 @@ async function createSunoTask(opts: CreateSunoTaskOpts): Promise<string> {
     )
   }
 
-  const response = await fetch(
+  const response = await providerFetch(
+    {
+      provider: "kie",
+      operation: `suno.${opName}`,
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}${path}`,
     {
       method: "POST",
@@ -473,7 +498,8 @@ async function pollSunoEndpoint<T>(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "suno.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}${path}?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -990,7 +1016,8 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "suno.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/mp4/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -1159,7 +1186,8 @@ export async function sunoReplaceSection(
  * Endpoint: POST /api/v1/style/generate — synchronous, returns immediately.
  */
 export async function sunoStyleBoost(
-  params: SunoStyleBoostParams
+  params: SunoStyleBoostParams,
+  meta?: EgressMeta,
 ): Promise<SunoStyleBoostResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1176,7 +1204,16 @@ export async function sunoStyleBoost(
   if (DEBUG) console.log(`[Suno] Style boost request`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const response = await fetch(
+  const response = await providerFetch(
+    {
+      provider: "kie",
+      operation: "suno.styleBoost",
+      // Single-purpose funnel → default OUR key inside so every caller is
+      // correct by construction (mirrors the "suno-style-boost" reservation).
+      modelKey: meta?.modelKey ?? "suno-style-boost",
+      body,
+      dimensions: meta?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/style/generate`,
     {
       method: "POST",
@@ -1350,7 +1387,8 @@ async function pollSunoWavTask(taskId: string): Promise<SunoConvertWavResult> {
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "suno.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/wav/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -1554,7 +1592,8 @@ interface VoiceRecordInfoResponse {
 async function postVoiceJson(
   path: string,
   body: Record<string, unknown>,
-  errLabel: string
+  errLabel: string,
+  meta?: EgressMeta,
 ): Promise<string> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1563,15 +1602,25 @@ async function postVoiceJson(
 
   if (DEBUG) console.log(`[Suno Voice] POST ${path}`, JSON.stringify(body))
 
-  const response = await fetch(`${KIE_API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const response = await providerFetch(
+    {
+      provider: "kie",
+      operation: `suno.voice.${path.split("/").pop() ?? "post"}`,
+      modelKey: meta?.modelKey ?? null,
+      body,
+      dimensions: meta?.dimensions ?? {},
     },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  })
+    `${KIE_API_BASE}${path}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    },
+  )
 
   const responseText = await response.text()
   if (DEBUG) console.log(`[Suno Voice] ${path} status=${response.status} body=${responseText.substring(0, 300)}`)
@@ -1620,11 +1669,15 @@ async function getVoiceJson<T extends VoiceValidateInfoResponse | VoiceRecordInf
   const url = new URL(`${KIE_API_BASE}${path}`)
   url.searchParams.set("taskId", taskId)
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(10_000),
-  })
+  const response = await providerFetch(
+    { provider: "kie", operation: "suno.voice.recordInfo", modelKey: null, body: undefined, dimensions: {} },
+    url.toString(),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
 
   const responseText = await response.text()
   if (DEBUG) console.log(`[Suno Voice] GET ${path} status=${response.status} body=${responseText.substring(0, 300)}`)
@@ -1667,7 +1720,11 @@ export async function sunoVoiceValidate(
   }
   if (params.language) body.language = params.language
 
-  const taskId = await postVoiceJson("/api/v1/voice/validate", body, "Suno voice validate")
+  // OUR Nodaro key for the free validate task (ownership rows are tagged
+  // "suno-voice-validate"); single-purpose funnel → hardcode the key.
+  const taskId = await postVoiceJson("/api/v1/voice/validate", body, "Suno voice validate", {
+    modelKey: "suno-voice-validate",
+  })
   return { taskId }
 }
 
@@ -1700,7 +1757,9 @@ export async function sunoVoiceRegenerate(taskId: string): Promise<{ taskId: str
   const newTaskId = await postVoiceJson(
     "/api/v1/voice/regenerate",
     { taskId, calBackUrl: "https://callback.placeholder" },
-    "Suno voice regenerate"
+    "Suno voice regenerate",
+    // Free, same ownership tag as validate.
+    { modelKey: "suno-voice-validate" },
   )
   return { taskId: newTaskId }
 }
@@ -1721,7 +1780,11 @@ export async function sunoVoiceGenerate(
   if (params.style) body.style = params.style
   if (params.singerSkillLevel) body.singerSkillLevel = params.singerSkillLevel
 
-  const taskId = await postVoiceJson("/api/v1/voice/generate", body, "Suno voice generate")
+  // OUR Nodaro key for the billed persona create (reserved as
+  // "suno-voice-create"); single-purpose funnel → hardcode the key.
+  const taskId = await postVoiceJson("/api/v1/voice/generate", body, "Suno voice generate", {
+    modelKey: "suno-voice-create",
+  })
   return { taskId }
 }
 

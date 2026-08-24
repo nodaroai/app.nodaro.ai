@@ -366,6 +366,12 @@ export async function generateAvatarVideo(
     const resp = await heygenFetch<RawCreateVideoResponse>("/v3/videos", {
       method: "POST",
       body: JSON.stringify(buildBody(engine)),
+    }, {
+      // OUR Nodaro key for the egress seam: the BILLING engine (image-source
+      // mode is pinned to avatar-iv above, mirroring resolveAiAvatarCreditId),
+      // NOT a HeyGen provider id. dimensions carry the resolution tier.
+      modelKey: `heygen-${effectiveEngine}`,
+      dimensions: { resolution },
     })
     videoId = resp.data.video_id
   } catch (err) {
@@ -381,6 +387,10 @@ export async function generateAvatarVideo(
       const retryResp = await heygenFetch<RawCreateVideoResponse>("/v3/videos", {
         method: "POST",
         body: JSON.stringify(buildBody("avatar-iv")),
+      }, {
+        // Fallback billed at the avatar-iv rate — key mirrors effectiveEngine.
+        modelKey: `heygen-${effectiveEngine}`,
+        dimensions: { resolution },
       })
       videoId = retryResp.data.video_id
     } else {

@@ -1,6 +1,7 @@
 import type { ReconcileOpts } from "../provider.interface.js"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { providerFetch } from "../egress.js"
 
 export interface DubbingOptions {
   sourceLang?: string
@@ -65,11 +66,16 @@ export async function startDubbing(
     formData.append("drop_background_audio", String(options.dropBackgroundAudio))
   }
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/dubbing`, {
-    method: "POST",
-    headers,
-    body: formData,
-  })
+  const response = await providerFetch(
+    // Single-purpose funnel → default OUR key inside (caller passes no meta).
+    { provider: "elevenlabs", operation: "dubbing.start", modelKey: reconcileOpts?.modelKey ?? "elevenlabs-dubbing", body: undefined, dimensions: reconcileOpts?.dimensions ?? {} },
+    `${ELEVENLABS_BASE_URL}/v1/dubbing`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    },
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")
@@ -87,10 +93,14 @@ export async function startDubbing(
 export async function pollDubbingStatus(dubbingId: string): Promise<DubbingStatus> {
   const headers = getElevenLabsHeaders()
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}`, {
-    method: "GET",
-    headers,
-  })
+  const response = await providerFetch(
+    { provider: "elevenlabs", operation: "dubbing.status", modelKey: null, body: undefined, dimensions: {} },
+    `${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}`,
+    {
+      method: "GET",
+      headers,
+    },
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")
@@ -103,13 +113,17 @@ export async function pollDubbingStatus(dubbingId: string): Promise<DubbingStatu
 export async function downloadDubbedAudio(dubbingId: string, langCode: string): Promise<Buffer> {
   const headers = getElevenLabsHeaders()
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}/audio/${langCode}`, {
-    method: "GET",
-    headers: {
-      ...headers,
-      Accept: "audio/mpeg",
+  const response = await providerFetch(
+    { provider: "elevenlabs", operation: "dubbing.audio", modelKey: null, body: undefined, dimensions: {} },
+    `${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}/audio/${langCode}`,
+    {
+      method: "GET",
+      headers: {
+        ...headers,
+        Accept: "audio/mpeg",
+      },
     },
-  })
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")

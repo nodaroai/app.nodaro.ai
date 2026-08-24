@@ -235,7 +235,7 @@ export function createVideoWorker() {
 
         // Bind a cancellation context so provider poll loops abort the moment
         // the user cancels — instead of polling the upstream job to completion.
-        await runWithJobCancellation(jobId, () => handler(job, ctx))
+        await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
 
         // Record execution duration for progress bar estimation
         // (started_at was set on the job record at the start of processing above)

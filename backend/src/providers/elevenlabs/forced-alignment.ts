@@ -1,4 +1,5 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 export interface AlignmentWord {
   word: string
@@ -13,6 +14,7 @@ export interface ForcedAlignmentResult {
 export async function forcedAlignment(
   audioUrl: string,
   transcript: string,
+  meta?: EgressMeta,
 ): Promise<ForcedAlignmentResult> {
   const headers = getElevenLabsHeaders()
   const audioBuffer = await fetchAudioFromUrl(audioUrl)
@@ -25,11 +27,16 @@ export async function forcedAlignment(
   formData.append("file", blob, "audio.mp3")
   formData.append("text", transcript)
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/forced-alignment`, {
-    method: "POST",
-    headers,
-    body: formData,
-  })
+  const response = await providerFetch(
+    // Single-purpose funnel → default OUR key inside (caller passes no meta).
+    { provider: "elevenlabs", operation: "forcedAlignment", modelKey: meta?.modelKey ?? "elevenlabs-forced-alignment", body: undefined, dimensions: meta?.dimensions ?? {} },
+    `${ELEVENLABS_BASE_URL}/v1/forced-alignment`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    },
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")

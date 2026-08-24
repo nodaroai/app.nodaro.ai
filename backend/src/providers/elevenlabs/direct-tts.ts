@@ -1,11 +1,24 @@
 import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
 
 function resolveModel(provider?: string): string {
   if (provider === "elevenlabs-v3") return "eleven_v3"
   if (provider === "elevenlabs-multilingual") return "eleven_multilingual_v2"
   return "eleven_turbo_v2_5"
+}
+
+/**
+ * OUR Nodaro key for the egress seam, mirroring `resolveModel` 1:1 so the key
+ * names the model the request actually SENDS: v3 / multilingual, else turbo
+ * (the resolveModel default). These strings ARE our credit ids (the TTS route
+ * reserves under the same `provider` value); never a raw ElevenLabs model id.
+ */
+function ttsModelKey(provider?: string): string {
+  if (provider === "elevenlabs-v3") return "elevenlabs-v3"
+  if (provider === "elevenlabs-multilingual") return "elevenlabs-multilingual"
+  return "elevenlabs-turbo"
 }
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
@@ -126,10 +139,14 @@ async function fetchStoredVoiceSettings(voiceId: string, apiKey: string): Promis
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), VOICE_SETTINGS_TIMEOUT_MS)
   try {
-    const res = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/${voiceId}/settings`, {
-      headers: { "xi-api-key": apiKey },
-      signal: controller.signal,
-    })
+    const res = await providerFetch(
+      { provider: "elevenlabs", operation: "tts.voiceSettings", modelKey: null, body: undefined, dimensions: {} },
+      `${ELEVENLABS_BASE_URL}/v1/voices/${voiceId}/settings`,
+      {
+        headers: { "xi-api-key": apiKey },
+        signal: controller.signal,
+      },
+    )
     if (res.ok) value = (await res.json()) as StoredVoiceSettings
   } catch {
     // Network failure OR timeout → fall back to API defaults below; never fail the job
@@ -147,6 +164,7 @@ export async function directElevenLabsTTS(
   voiceId: string,
   provider?: string,
   options?: DirectTTSOptions,
+  meta?: EgressMeta,
 ): Promise<Buffer> {
   const apiKey = config.ELEVENLABS_API_KEY
   if (!apiKey) {
@@ -194,16 +212,28 @@ export async function directElevenLabsTTS(
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TTS_GENERATION_TIMEOUT_MS)
     try {
-      return await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`, {
-        method: "POST",
-        headers: {
-          "xi-api-key": apiKey,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
+      return await providerFetch(
+        {
+          provider: "elevenlabs",
+          operation: "tts",
+          // Single-purpose funnel → default OUR key inside (production callers
+          // pass no meta); mirrors the model resolveModel actually sends.
+          modelKey: meta?.modelKey ?? ttsModelKey(provider),
+          body,
+          dimensions: meta?.dimensions ?? {},
         },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
+        `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        },
+      )
     } catch (err) {
       if (controller.signal.aborted) {
         throw new Error(`ElevenLabs TTS timed out after ${TTS_GENERATION_TIMEOUT_MS / 1000}s`)

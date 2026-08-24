@@ -14,6 +14,7 @@ import { requireProviderKey, MissingProviderKeyError } from "../provider-keys.js
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
@@ -95,11 +96,22 @@ export function createSanitizedError(
   context: string,
   isUpstreamFailure = false,
   contentPolicy = false,
+  opts?: { userSafeMessage?: string | null },
 ): KieError {
   // Log the full internal error for debugging (visible in Railway logs)
   console.error(
     `[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`
   )
+
+  // A10: a proxy/decorator may mark a message user-safe STRUCTURALLY (via the
+  // egress `observe` hook → readUserSafeMessage). When marked, honor it verbatim
+  // — the proxy is the sole author of that text, so it needs no sanitizing.
+  // Unmarked (the default: no decorator) sanitizes exactly as before. A blank
+  // mark is not a mark.
+  const marked = opts?.userSafeMessage
+  if (typeof marked === "string" && marked.trim()) {
+    return new KieError(marked, internalMessage, context, isUpstreamFailure, contentPolicy)
+  }
 
   // Parse specific error patterns and return user-friendly messages
   const lowerMsg = internalMessage.toLowerCase()
@@ -377,15 +389,15 @@ export interface CreateKieTaskResult {
   taskId: string
 }
 
-export interface RunKieTaskOptions {
-  /**
-   * Fires AFTER createTask returns a taskId, BEFORE the first poll. Used by
-   * the reconciliation system to persist `jobs.provider_task_id` so a crashed
-   * worker can be recovered later. Throws here are caught + logged — they
-   * never prevent polling.
-   */
-  onTaskCreated?: (taskId: string) => Promise<void>
-}
+/**
+ * Options for the standard createTask path. `onTaskCreated` fires AFTER
+ * createTask returns a taskId, BEFORE the first poll (used by the reconciliation
+ * system to persist `jobs.provider_task_id` so a crashed worker can be recovered
+ * — throws here are caught + logged, never preventing polling); `modelKey` /
+ * `dimensions` carry the money-bearing egress metadata. All three are the
+ * shared `ReconcileOpts` shape, so a caller's `reconcileOpts` flows straight in.
+ */
+export type RunKieTaskOptions = ReconcileOpts
 
 /**
  * Submit a task to KIE.ai. Returns the upstream taskId. Split off from
@@ -395,6 +407,7 @@ export interface RunKieTaskOptions {
 export async function createKieTask(
   model: string,
   input: Record<string, unknown>,
+  meta?: EgressMeta,
 ): Promise<CreateKieTaskResult> {
   // Cancellation is only honored BEFORE we call the external provider — once the
   // task is submitted, KIE has no cancel API and it runs to completion. If the
@@ -423,7 +436,14 @@ export async function createKieTask(
     console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
   }
 
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "jobs.createTask",
+      modelKey: meta?.modelKey ?? null,
+      body: requestBody,
+      dimensions: meta?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/jobs/createTask`,
     {
       method: "POST",
@@ -446,9 +466,14 @@ export async function createKieTask(
     console.error(
       `[KIE.ai] createTask HTTP error - Status: ${createResponse.status}, Body: ${responseText}`
     )
+    // A10: if a decorator's observe() marked this response user-safe, honor that
+    // verbatim instead of running the sanitizer heuristic (default: no mark).
     throw createSanitizedError(
       `createTask failed: ${createResponse.status} - ${responseText}`,
-      "Generation"
+      "Generation",
+      false,
+      false,
+      { userSafeMessage: readUserSafeMessage(createResponse) },
     )
   }
 
@@ -521,7 +546,8 @@ export async function pollKieTask(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "jobs.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -658,7 +684,10 @@ export async function runKieTask(
   rawRecordInfo?: Record<string, unknown>
   taskId?: string
 }> {
-  const { taskId } = await createKieTask(model, input)
+  const { taskId } = await createKieTask(model, input, {
+    modelKey: opts?.modelKey ?? null,
+    dimensions: opts?.dimensions,
+  })
   await fireOnTaskCreated(opts, taskId, "[KIE.ai]")
   return pollKieTask(taskId, maxAttempts, onProgress)
 }
@@ -754,7 +783,14 @@ export async function runVeoTask(
   }
 
   // Step 1: Create VEO task using special endpoint
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "veo.generate",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: requestBody,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/veo/generate`,
     {
       method: "POST",
@@ -868,7 +904,8 @@ async function pollVeoRecordInfo(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "veo.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )
@@ -986,7 +1023,14 @@ export async function runVeoExtendTask(
     console.log(`[KIE.ai VEO Extend] Request body:`, JSON.stringify(requestBody, null, 2))
   }
 
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "veo.extend",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: requestBody,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/veo/extend`,
     {
       method: "POST",
@@ -1073,7 +1117,14 @@ export async function runVeo1080pTask(
 
     let response: Response
     try {
-      response = await fetch(
+      response = await providerFetch(
+        {
+          provider: "kie",
+          operation: "veo.get1080p",
+          modelKey: reconcileOpts?.modelKey ?? null,
+          body: undefined,
+          dimensions: reconcileOpts?.dimensions ?? {},
+        },
         `${KIE_API_BASE}/api/v1/veo/get-1080p-video?taskId=${taskId}&index=${index}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(30_000) }
       )
@@ -1123,7 +1174,14 @@ export async function runVeo4kTask(
     console.log(`[KIE.ai VEO 4K] Request body:`, JSON.stringify(requestBody, null, 2))
   }
 
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "veo.get4k",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: requestBody,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/veo/get-4k-video`,
     {
       method: "POST",

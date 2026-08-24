@@ -57,6 +57,10 @@ vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoAddVocals: mocks.mockSunoAddVocals,
   sunoConvertWav: mocks.mockSunoConvertWav,
   sunoUploadExtend: mocks.mockSunoUploadExtend,
+  // Real (pure) impl — the handler uses it to derive the version-aware egress
+  // modelKey; mocking it away would make the B3 assertions meaningless.
+  sunoCreditType: (model: string | undefined, fallback: string) =>
+    model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : fallback,
 }))
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
@@ -600,6 +604,65 @@ describe("bespoke operations replay on the connected cloud when this install has
     ).rejects.toThrow("no WAV")
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
+})
+
+// ---------------------------------------------------------------------------
+// B3 egress seam — every suno create funnel must receive OUR non-null modelKey
+// in the PRODUCTION path. The funnel-level egress test supplies the key itself;
+// this proves the WORKER HANDLER threads it (it used to pass bare
+// `{ onTaskCreated }` → the seam saw modelKey:null on a billed create). The key
+// mirrors each route's reservation identifier EXACTLY: version-aware for
+// generate/cover/extend, sepType-aware for separate, op-key elsewhere.
+// ---------------------------------------------------------------------------
+describe("B3 egress: handlers thread OUR modelKey into the create funnel", () => {
+  const mockFor: Record<string, ReturnType<typeof vi.fn>> = {
+    "suno-generate": mocks.mockSunoGenerate,
+    "suno-cover": mocks.mockSunoCover,
+    "suno-extend": mocks.mockSunoExtend,
+    "suno-lyrics": mocks.mockSunoLyrics,
+    "suno-separate": mocks.mockSunoSeparate,
+    "suno-music-video": mocks.mockSunoMusicVideo,
+    "suno-mashup": mocks.mockSunoMashup,
+    "suno-replace-section": mocks.mockSunoReplaceSection,
+    "suno-add-instrumental": mocks.mockSunoAddInstrumental,
+    "suno-add-vocals": mocks.mockSunoAddVocals,
+    "suno-convert-wav": mocks.mockSunoConvertWav,
+    "suno-upload-extend": mocks.mockSunoUploadExtend,
+  }
+
+  // [jobType, jobData, expectedModelKey]
+  const cases: Array<[string, Record<string, unknown>, string]> = [
+    ["suno-generate", { prompt: "p", model: "V5_5" }, "suno-v5_5"],
+    ["suno-generate", { prompt: "p", model: "V5" }, "suno-v5"],
+    ["suno-generate", { prompt: "p" }, "suno-generate"], // no model → op fallback (mirrors route)
+    ["suno-cover", { prompt: "p", uploadUrl: "https://x/a.mp3", model: "V5" }, "suno-v5"],
+    ["suno-cover", { prompt: "p", uploadUrl: "https://x/a.mp3" }, "suno-cover"],
+    ["suno-extend", { audioId: "a-1", model: "V5_5" }, "suno-v5_5"],
+    ["suno-extend", { audioId: "a-1" }, "suno-extend"],
+    ["suno-lyrics", { prompt: "p" }, "suno-lyrics"],
+    ["suno-separate", { taskId: "t", audioId: "a" }, "suno-separate"], // default separate_vocal
+    ["suno-separate", { taskId: "t", audioId: "a", separateType: "split_stem" }, "suno-separate-stem"],
+    ["suno-music-video", { taskId: "t", audioId: "a" }, "suno-music-video"],
+    ["suno-mashup", { uploadUrlList: ["https://x/a.mp3", "https://x/b.mp3"] }, "suno-mashup"],
+    ["suno-replace-section", { taskId: "t", audioId: "a", infillStartS: 1, infillEndS: 2, prompt: "p", tags: "r" }, "suno-replace-section"],
+    ["suno-add-instrumental", { taskId: "t", audioId: "a" }, "suno-add-instrumental"],
+    ["suno-add-vocals", { taskId: "t", audioId: "a" }, "suno-add-vocals"],
+    ["suno-convert-wav", { taskId: "t", audioId: "a" }, "suno-convert-wav"],
+    ["suno-upload-extend", { uploadUrl: "https://x/a.mp3", continueAt: 30 }, "suno-upload-extend"],
+  ]
+
+  for (const [jobType, data, expected] of cases) {
+    const label = data.model ? `${jobType} (model ${data.model})` : data.separateType ? `${jobType} (${data.separateType})` : jobType
+    it(`${label} → modelKey "${expected}"`, async () => {
+      await sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never)
+      const mock = mockFor[jobType]!
+      expect(mock).toHaveBeenCalledTimes(1)
+      const reconcileOpts = mock.mock.calls[0][1] as { modelKey?: string | null; onTaskCreated?: unknown }
+      expect(reconcileOpts.modelKey).toBe(expected)
+      // onTaskCreated must survive alongside the new key (reconciliation wiring).
+      expect(reconcileOpts.onTaskCreated).toEqual(expect.any(Function))
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------

@@ -143,7 +143,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       expect.any(Object),
       120,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "minimax" }),
     )
   })
 
@@ -154,7 +154,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       expect.any(Object),
       120,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "kling" }),
     )
   })
 
@@ -164,8 +164,8 @@ describe("KieVideoProvider.imageToVideo", () => {
       "veo3",
       "cinematic",
       ["https://img.png"],
-      { aspectRatio: undefined, seed: undefined },
-      undefined,
+      expect.objectContaining({ aspectRatio: undefined, seed: undefined }),
+      expect.objectContaining({ modelKey: "veo3" }),
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
@@ -178,8 +178,8 @@ describe("KieVideoProvider.imageToVideo", () => {
       "veo3_fast",
       "cinematic",
       ["https://img.png"],
-      { aspectRatio: undefined, seed: undefined },
-      undefined,
+      expect.objectContaining({ aspectRatio: undefined, seed: undefined }),
+      expect.objectContaining({ modelKey: "veo3.1" }),
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
@@ -244,7 +244,7 @@ describe("KieVideoProvider.imageToVideo", () => {
         prompt: "cinematic",
         imageUrls: ["https://img.png"],
       }),
-      undefined,
+      expect.objectContaining({ modelKey: "kling-3.0" }),
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/kling3-video.mp4")
@@ -284,7 +284,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "cinematic scene",
       ["https://ref1.png", "https://ref2.png"],
       expect.objectContaining({ generationType: "REFERENCE_2_VIDEO" }),
-      undefined,
+      expect.objectContaining({ modelKey: "veo3" }),
     )
   })
 
@@ -320,7 +320,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       }),
       expect.any(Number),
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "grok-i2v" }),
     )
   })
 
@@ -398,7 +398,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "test",
       ["https://cdn.nodaro.ai/images/big.png"],
       expect.any(Object),
-      undefined,
+      expect.objectContaining({ modelKey: "veo3" }),
     )
   })
 })
@@ -415,7 +415,7 @@ describe("KieVideoProvider.textToVideo", () => {
       expect.objectContaining({ prompt: "a sunset scene" }),
       120,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "minimax" }),
     )
     expect(result.url).toBe("https://cdn.kie.ai/video.mp4")
     expect(result.cost).toBe(0.285)
@@ -437,8 +437,8 @@ describe("KieVideoProvider.textToVideo", () => {
       "veo3",
       "space exploration",
       undefined,
-      { aspectRatio: undefined, seed: undefined },
-      undefined,
+      expect.objectContaining({ aspectRatio: undefined, seed: undefined }),
+      expect.objectContaining({ modelKey: "veo3" }),
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
@@ -464,7 +464,7 @@ describe("KieVideoProvider.textToVideo", () => {
       "space exploration",
       ["https://cdn.example/ref1.png", "https://cdn.example/ref2.png"],
       expect.objectContaining({ generationType: "REFERENCE_2_VIDEO" }),
-      undefined,
+      expect.objectContaining({ modelKey: "veo3" }),
     )
   })
 
@@ -482,7 +482,7 @@ describe("KieVideoProvider.textToVideo", () => {
       expect.objectContaining({
         prompt: "cinematic",
       }),
-      undefined,
+      expect.objectContaining({ modelKey: "kling-3.0" }),
     )
     // textToVideo for kling-3.0 should NOT pass imageUrls
     const callArgs = mocks.mockKling3Generate.mock.calls[0][0]

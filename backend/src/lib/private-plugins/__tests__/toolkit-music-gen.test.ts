@@ -13,6 +13,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const { mockSunoGenerate } = vi.hoisted(() => ({ mockSunoGenerate: vi.fn() }))
 vi.mock("../../../providers/kie/suno-client.js", () => ({
   sunoGenerate: mockSunoGenerate,
+  // Real (pure) impl — the toolkit uses it to derive the egress modelKey.
+  sunoCreditType: (model: string | undefined, fallback: string) =>
+    model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : fallback,
 }))
 
 import { buildToolkit } from "../toolkit.js"
@@ -43,7 +46,9 @@ describe("tk.providers.generateMusic", () => {
       style: "orchestral hybrid, 140 BPM",
     })
     expect(params.duration).toBeUndefined()
-    expect(reconcile).toBeUndefined() // no onTaskCreated → no reconcileOpts at all
+    // B3 egress: even with no onTaskCreated, OUR modelKey rides the reconcileOpts
+    // (model is pinned V5_5 → "suno-v5_5") so the seam attributes this billed create.
+    expect(reconcile).toEqual({ modelKey: "suno-v5_5" })
     expect(res).toEqual({ url: "https://suno/track-1.mp3", durationSec: 187.4, taskId: "suno-task-1" })
   })
 
@@ -139,6 +144,8 @@ describe("tk.providers.generateMusic", () => {
     await tk.providers.generateMusic!("brief", { onTaskCreated: (id) => void seen.push(id) })
     const [, reconcile] = mockSunoGenerate.mock.calls[0]!
     expect(typeof reconcile?.onTaskCreated).toBe("function")
+    // The onTaskCreated adapter and OUR modelKey coexist on the reconcileOpts.
+    expect(reconcile.modelKey).toBe("suno-v5_5")
     await reconcile.onTaskCreated("task-xyz")
     expect(seen).toEqual(["task-xyz"])
   })

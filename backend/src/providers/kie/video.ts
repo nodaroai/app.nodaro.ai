@@ -680,7 +680,7 @@ async function runKling3(
     klingElements: options?.klingElements,
     motionPrompt: options?.motionPrompt,
     onProgress: options?.onProgress,
-  }, reconcileOpts)
+  }, { ...reconcileOpts, modelKey: "kling-3.0", dimensions: { duration: String(snappedDuration) } })
 
   // Audit log for Kling 3.0 (known to have variable duration/audio pricing)
   logCreditAudit({
@@ -746,6 +746,8 @@ function geminiOmniTierCostUsd(resolution: string, durationSec: number, videoCon
  *  this is the single choke point both the single-node route AND the orchestrator reach. */
 async function runGeminiOmni(
   modelConfig: { model: string; cost: number; allowedDurations?: number[] },
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: string,
   prompt: string,
   duration: number | undefined,
   aspectRatioValue: string | undefined,
@@ -805,7 +807,8 @@ async function runGeminiOmni(
   }
   console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(geminiInput, null, 2))
   const { resultJson, taskId: gTaskId, providerMs } = await runKieTask(
-    modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, reconcileOpts,
+    modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { duration: String(snappedDuration) } },
   )
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
@@ -992,7 +995,7 @@ export class KieVideoProvider
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,
         },
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider, dimensions: { duration: snappedDuration } },
       )
 
       const videoUrl =
@@ -1028,7 +1031,7 @@ export class KieVideoProvider
         duration: snapped,
         imageUrl,
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, reconcileOpts)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { duration: snapped } })
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -1068,6 +1071,7 @@ export class KieVideoProvider
         const basePrompt = effectivePrompt ?? "smooth cinematic motion"
         return runGeminiOmni(
           modelConfig,
+          provider,
           resolved.promptSuffix ? `${basePrompt}\n\n${resolved.promptSuffix}` : basePrompt,
           duration,
           options?.aspectRatio,
@@ -1080,6 +1084,7 @@ export class KieVideoProvider
       const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
       return runGeminiOmni(
         modelConfig,
+        provider,
         effectivePrompt ?? "smooth cinematic motion",
         duration,
         options?.aspectRatio,
@@ -1289,7 +1294,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider, dimensions: { duration } },
     )
 
     const videoUrl =
@@ -1385,7 +1390,7 @@ export class KieVideoProvider
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,
         },
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider, dimensions: { duration: snappedDuration } },
       )
 
       const videoUrl =
@@ -1421,7 +1426,7 @@ export class KieVideoProvider
         duration: snapped,
         ...(aspectRatio && { aspectRatio }),
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, reconcileOpts)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { duration: snapped } })
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -1440,6 +1445,7 @@ export class KieVideoProvider
       const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
       return runGeminiOmni(
         modelConfig,
+        provider,
         effectivePrompt,
         duration,
         aspectRatio ?? options?.aspectRatio,
@@ -1517,7 +1523,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider, dimensions: { duration } },
     )
 
     const videoUrl =
@@ -1586,7 +1592,7 @@ export class KieVideoProvider
       if (options?.referenceImageUrl) {
         alephInput.referenceImage = options.referenceImageUrl
       }
-      const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput, reconcileOpts)
+      const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput, { ...reconcileOpts, modelKey: provider })
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
         throw createSanitizedError(
@@ -1605,7 +1611,7 @@ export class KieVideoProvider
       const { resultJson } = await runLumaModifyTask({
         prompt: finalPrompt,
         videoUrl,
-      }, reconcileOpts)
+      }, { ...reconcileOpts, modelKey: provider })
       const outputUrl = resultJson.resultUrls?.[0]
       if (!outputUrl) {
         throw createSanitizedError(
@@ -1638,7 +1644,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider },
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1672,7 +1678,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider },
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1721,7 +1727,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider },
     )
 
     const outputUrl =
@@ -1841,7 +1847,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider },
       )
 
       const outputUrl =
@@ -1889,7 +1895,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        reconcileOpts,
+        { ...reconcileOpts, modelKey: provider },
       )
 
       const outputUrl =
@@ -1938,7 +1944,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider },
     )
 
     const outputUrl =
@@ -2001,7 +2007,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: "topaz" },
     )
 
     const outputUrl =
@@ -2075,7 +2081,7 @@ export class KieVideoProvider
       input,
       pollAttempts,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider },
     )
 
     const videoUrl =
@@ -2154,7 +2160,7 @@ export class KieVideoProvider
       input,
       pollAttempts,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: provider },
     )
 
     const outUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
@@ -2251,7 +2257,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey: "wan-s2v" },
     )
 
     const videoUrl =
@@ -2335,7 +2341,11 @@ export async function kieExtendVideoVEO(
   // veoModelVariant: "lite" → fall back to "fast" (VEO Extend only accepts fast/quality).
   const model: "fast" | "quality" =
     veoModelVariant === "quality" ? "quality" : "fast"
-  const result = await runVeoExtendTask(priorClipKieTaskId, prompt, model, seed)
+  // OUR Nodaro key: VEO Quality tier → "veo3", Fast → "veo3.1" (NOT the KIE
+  // "fast"/"quality" wire value). No reconcileOpts flows through this wrapper.
+  const result = await runVeoExtendTask(priorClipKieTaskId, prompt, model, seed, {
+    modelKey: model === "quality" ? "veo3" : "veo3.1",
+  })
   const url = result.resultJson.resultUrls?.[0]
   if (!url) {
     throw createSanitizedError(

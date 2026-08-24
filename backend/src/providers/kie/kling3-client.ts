@@ -16,6 +16,7 @@ import {
   createUpstreamFailureError,
   pollDelay,
 } from "./client.js"
+import { providerFetch } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -197,7 +198,14 @@ export async function kling3Generate(
     console.log(`[Kling3] Input:`, JSON.stringify(requestBody, null, 2))
   }
 
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "kling3.generate",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: requestBody,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/jobs/createTask`,
     {
       method: "POST",
@@ -278,7 +286,8 @@ export async function pollKling3Task(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "kling3.getTaskDetail", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${resolvedKey}` }, signal: AbortSignal.timeout(10_000) }
       )

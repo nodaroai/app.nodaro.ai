@@ -1,4 +1,5 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 /**
  * ElevenLabs Scribe speech-to-text, called DIRECTLY — the sibling of the other
@@ -53,6 +54,7 @@ const DEFAULT_TIMEOUT_MS = 120_000
 export async function directSpeechToText(
   audioUrl: string,
   options?: DirectSttOptions,
+  meta?: EgressMeta,
 ): Promise<DirectSttResult> {
   const form = new FormData()
   form.append("model_id", SCRIBE_MODEL)
@@ -72,12 +74,17 @@ export async function directSpeechToText(
   try {
     // getElevenLabsHeaders() is xi-api-key only — deliberately NO Content-Type,
     // so fetch sets the multipart boundary for the FormData body.
-    response = await fetch(`${ELEVENLABS_BASE_URL}/v1/speech-to-text`, {
-      method: "POST",
-      headers: getElevenLabsHeaders(),
-      body: form,
-      signal: controller.signal,
-    })
+    response = await providerFetch(
+      // Single-purpose funnel → default OUR key inside (caller passes no meta).
+      { provider: "elevenlabs", operation: "stt", modelKey: meta?.modelKey ?? "elevenlabs-stt", body: undefined, dimensions: meta?.dimensions ?? {} },
+      `${ELEVENLABS_BASE_URL}/v1/speech-to-text`,
+      {
+        method: "POST",
+        headers: getElevenLabsHeaders(),
+        body: form,
+        signal: controller.signal,
+      },
+    )
   } catch (err) {
     if (controller.signal.aborted) {
       throw new Error(`ElevenLabs Scribe STT timed out after ${timeoutMs}ms`)

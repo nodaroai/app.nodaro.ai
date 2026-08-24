@@ -111,7 +111,9 @@ describe("runFalRequest", () => {
     await runFalRequest({ endpoint: "ep", input: {}, label: "l", pollIntervalMs: 0 })
 
     expect(mockFalConfig).toHaveBeenCalledTimes(1)
-    expect(mockFalConfig).toHaveBeenCalledWith({ credentials: "test-fal-key" })
+    expect(mockFalConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ credentials: "test-fal-key", fetch: expect.any(Function) }),
+    )
   })
 
   it("throws a prefixed error when the queue reports a failed status", async () => {
