@@ -39,4 +39,11 @@ describe("COPILOT_DOCTRINE", () => {
     expect(COPILOT_DOCTRINE).toContain("[references]")
     expect(COPILOT_DOCTRINE).toContain("get_graph")
   })
+
+  it("tells the model the recipe catalog exists", () => {
+    // get_recipe is allowlisted but self-describing only at the tool level; the
+    // LEARN step is what makes the model actually reach for a proven playbook
+    // before improvising a graph. Losing this line silently loses the library.
+    expect(COPILOT_DOCTRINE).toContain("get_recipe")
+  })
 })

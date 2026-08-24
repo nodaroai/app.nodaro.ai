@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-08-19T19:18:06.567Z
-generated_from: 9af042e0f
+generated_at: 2026-08-24T22:10:20.975Z
+generated_from: 39fdb63a4
 ---
 
 # Text to Video
@@ -371,5 +371,5 @@ setting" — subject → action → scene → camera → style, within the 1800-
 
 Source: KIE Runway contract (docs.kie.ai/runway-api/generate-ai-video). Captured 2026-08-09.
 
-_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/shared` — edit there, then `npm run gen:skills`._
+_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/prompts` — edit there, then `npm run gen:skills`._
 <!-- AUTO-GEN:END provider-prompting -->

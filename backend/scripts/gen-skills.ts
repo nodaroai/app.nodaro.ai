@@ -38,8 +38,10 @@ import {
   type NodeDef,
 } from "./lib/gen-skills/parse-node-definitions.js"
 import {
+  IMAGE_PROMPTING_NODE_TYPES,
   PROVIDER_PROMPTING_NODE_TYPES,
   renderExampleBlock,
+  renderImageReferencePromptingBlock,
   renderMcpCallBlock,
   renderNodeDataShapeBlock,
   renderProviderPromptingBlock,
@@ -342,6 +344,16 @@ async function main(): Promise<void> {
       if (doctrineBody) {
         source = rewriteBlock(source, "provider-prompting", doctrineBody)
       }
+    }
+
+    // Image reference-token doctrine ({image:N:label}) — image-gen nodes only.
+    // Same append-on-first-run behavior as the provider block above.
+    if (IMAGE_PROMPTING_NODE_TYPES.has(def.type)) {
+      source = rewriteBlock(
+        source,
+        "image-reference-prompting",
+        renderImageReferencePromptingBlock(),
+      )
     }
 
     const final = refreshFrontmatterIfChanged(source, existing, def.type, sha)

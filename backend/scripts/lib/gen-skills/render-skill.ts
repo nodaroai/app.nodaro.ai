@@ -8,7 +8,11 @@ import type {
   InterfaceShape,
 } from "./parse-node-definitions.js"
 import type { CapturedSchema } from "./capture-mcp-schemas.js"
-import { PROVIDER_PROMPT_DOCTRINES, getPickerCatalog } from "@nodaro/prompts"
+import {
+  PROVIDER_PROMPT_DOCTRINES,
+  IMAGE_REFERENCE_PROMPT_DOCTRINE,
+  getPickerCatalog,
+} from "@nodaro/prompts"
 
 /** Node types whose skill doc carries the per-provider prompting doctrine. */
 export const PROVIDER_PROMPTING_NODE_TYPES = new Set([
@@ -16,6 +20,9 @@ export const PROVIDER_PROMPTING_NODE_TYPES = new Set([
   "text-to-video",
   "image-to-video",
 ])
+
+/** Node types whose skill doc carries the image reference-token doctrine. */
+export const IMAGE_PROMPTING_NODE_TYPES = new Set(["generate-image"])
 
 export function renderProviderPromptingBlock(): string {
   if (PROVIDER_PROMPT_DOCTRINES.length === 0) return ""
@@ -29,7 +36,17 @@ export function renderProviderPromptingBlock(): string {
     "",
     sections,
     "",
-    "_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/shared` — edit there, then `npm run gen:skills`._",
+    "_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/prompts` — edit there, then `npm run gen:skills`._",
+  ].join("\n")
+}
+
+export function renderImageReferencePromptingBlock(): string {
+  return [
+    `## ${IMAGE_REFERENCE_PROMPT_DOCTRINE.heading}`,
+    "",
+    IMAGE_REFERENCE_PROMPT_DOCTRINE.doctrine,
+    "",
+    "_Generated from `IMAGE_REFERENCE_PROMPT_DOCTRINE` in `@nodaro/prompts` — edit there, then `npm run gen:skills`._",
   ].join("\n")
 }
 
