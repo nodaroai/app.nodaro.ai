@@ -126,17 +126,36 @@ export const queryKeys = {
   },
 
   // Projects
+  // `workspaceId` is a REQUIRED first argument on every list below, and there
+  // is deliberately no default.
+  //
+  // These are the only two tables whose rows differ by workspace, so they are
+  // the only keys that carry one — assets, characters, locations and the rest
+  // have no workspace column at all and never have, so keying them would
+  // duplicate a cache that cannot differ.
+  //
+  // Required, because the value has to reach the FILTER as well, and both must
+  // come from the same render. A default would let a call site take the key
+  // without the filter and cache one workspace's rows under another's name;
+  // making it mandatory turns that mistake into a compile error, and the
+  // compiler then lists every site that has to be looked at.
   projects: {
     all: ["projects"] as const,
-    list: () => ["projects", "list"] as const,
+    list: (workspaceId: string | null) => ["projects", "list", workspaceId ?? "personal"] as const,
     detail: (projectId: string) => ["projects", "detail", projectId] as const,
   },
 
   // Workflows (flat, owner-scoped)
   workflows: {
     all: ["workflows"] as const,
-    listMine: () => ["workflows", "list", "mine"] as const,
-    listStudioMine: () => ["workflows", "list", "studio", "mine"] as const,
+    listMine: (workspaceId: string | null) =>
+      ["workflows", "list", "mine", workspaceId ?? "personal"] as const,
+    listStudioMine: (workspaceId: string | null) =>
+      ["workflows", "list", "studio", "mine", workspaceId ?? "personal"] as const,
+    // NOT keyed by workspace, deliberately: this is the admin cross-user
+    // view, and the route answers it identically whatever the header says —
+    // its branch returns before any scoping runs. Keying it would split a
+    // cache that cannot differ and refetch on every switch for nothing.
     listStudioAll: () => ["workflows", "list", "studio", "all"] as const,
   },
 
@@ -148,9 +167,15 @@ export const queryKeys = {
   },
 
   // Search
+  // The workspace belongs here for the same reason it belongs on the lists:
+  // this search FILTERS by it. Keyed by the text alone, searching the same
+  // word in a second class served the first one0s results out of cache — the
+  // exact "entry labelled one workspace, holding another0s rows" the scope
+  // hook exists to prevent, created in the file that warns about it.
   search: {
     all: ["search"] as const,
-    results: (query: string) => ["search", query] as const,
+    results: (query: string, workspaceId: string | null) =>
+      ["search", query, workspaceId ?? "personal"] as const,
   },
 
   // Voices

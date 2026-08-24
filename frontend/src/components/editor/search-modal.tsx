@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { createClient } from "@/lib/supabase"
 import { queryKeys } from "@/lib/query-keys"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import {
   fetchListedAppSlugs,
   isAppSlugColumnMissing,
@@ -51,8 +52,13 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
   const queryClient = useQueryClient()
 
+  // The key and the filter, from the same render. Read separately they can
+  // disagree across a switch, and this search is where that showed: keyed by
+  // the text alone, the same word in a second class returned the first one.
+  const { workspaceId, ready } = useWorkspaceScope()
+
   const { data: searchResults, isLoading: loading } = useQuery({
-    queryKey: queryKeys.search.results(debouncedQuery),
+    queryKey: queryKeys.search.results(debouncedQuery, workspaceId),
     queryFn: async () => {
       const supabase = createClient()
 
@@ -65,6 +71,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
       // Fetch projects. projects.app_slug is new (migration 256); tolerate a DB
       // that hasn't applied it yet by retrying unfiltered (mirrors useProjects).
+      // Both halves, for the reason in use-workspace-scope: without them a
+      // search mixes class results into personal ones with nothing on the row
+      // to tell them apart.
       const buildProjects = (applyFilter: boolean) => {
         let q = supabase
           .from("projects")
@@ -73,6 +82,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           .limit(10)
         if (debouncedQuery) q = q.ilike("name", `%${debouncedQuery}%`)
         if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        q = workspaceId ? q.eq("workspace_id", workspaceId) : q.is("workspace_id", null)
         return q
       }
       let projectsRes = await buildProjects(!showAll)
@@ -94,6 +104,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       if (!showAll) {
         workflowsQuery = workflowsQuery.or(workflowVisibilityFilter(listed))
       }
+      workflowsQuery = workspaceId
+        ? workflowsQuery.eq("workspace_id", workspaceId)
+        : workflowsQuery.is("workspace_id", null)
       const { data: workflowsData } = await workflowsQuery
 
       return {
@@ -104,7 +117,10 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
         })) as Workflow[],
       }
     },
-    enabled: open,
+    // `ready` as well as `open`: before the selection is confirmed the
+    // scope is not known, and answering "personal" in the meantime shows
+    // private work to someone who is standing in a class.
+    enabled: open && ready,
     staleTime: 10_000,
   })
 

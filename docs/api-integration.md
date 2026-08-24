@@ -85,6 +85,41 @@ All responses use the same envelope: success returns the payload directly
 
 The full route handler is at `backend/src/routes/api-tokens.ts`.
 
+### Moving a workflow between projects
+
+```
+POST /v1/workflows/:id/move   { "projectId": "…" }
+```
+
+Authorized by `workflows:write` — a move is a workflow write, not a permission
+of its own. `PATCH /v1/workflows/:id` with a `projectId` does the same thing
+and is decided by the same rule; it remains supported.
+
+You may move work you created. Inside an organization a workspace admin may
+also move work between two workspaces they administer — both sides, not one.
+A personal project must be your own on both sides: owning the workflow is not
+enough to file it in somebody else's project.
+
+| Status | Code | Meaning |
+|---|---|---|
+| `400` | `validation_error` | The workflow is already in that project |
+| `403` | `not_permitted` | Not yours to move, or not yours to move there |
+| `404` | `not_found` | No such workflow, or no such project for you |
+| `409` | `move_blocked` | The work was created for an assignment |
+| `409` | `workspace_archived` | The target workspace is archived |
+
+A move that changes workspace clears the workflow's collaborator grants and
+reports them, so you can see what the move cost. Both forms do this; the
+`PATCH` form includes the field only when something was actually dropped, so
+an ordinary save keeps the response shape it has always had:
+
+```json
+{
+  "data": { "id": "…", "projectId": "…" },
+  "droppedCollaborators": [{ "userId": "…", "name": "Sam" }]
+}
+```
+
 **OAuth scope note:** the `workflows:read` scope also gates the broader
 workflow REST routes: `GET /v1/workflows` (flat list across all projects),
 `GET /v1/workflows/:id`, and `GET /v1/workflows/:id/export` — in addition
@@ -210,6 +245,54 @@ may select, so clear a cached selection when they stop listing it.
 An API token may be bound to one workspace; it then behaves as if it sent this
 header on every request, and an explicit header naming a different workspace
 is refused with `400 token_workspace_mismatch`.
+
+Bind or unbind with `PATCH /v1/api-tokens/:id`:
+
+```bash
+# bind
+curl -X PATCH https://app.nodaro.ai/v1/api-tokens/$TOKEN_ID \
+  -H "Content-Type: application/json" \
+  -d '{"workspaceId":"6f1e6b4c-6a4e-4b7b-9d2a-2f0f0a1d9c34"}'
+
+# unbind
+curl -X PATCH https://app.nodaro.ai/v1/api-tokens/$TOKEN_ID \
+  -H "Content-Type: application/json" \
+  -d '{"workspaceId":null}'
+```
+
+You may bind a token only to a workspace you could select with the header;
+anything else is refused the same way the header is. Unbinding is always
+allowed. The binding is returned as `workspaceId` when you list your tokens.
+
+### Where a create lands
+
+Inside a workspace, a create that names no project lands in **that
+workspace's** project, never your personal one. If the workspace has no
+project yet the create is refused with `409 workspace_has_no_default_project`
+rather than guessing — name a project explicitly and it will succeed.
+
+A project you name must belong to the workspace you are working in. One that
+belongs to a different workspace, or to your personal space, answers
+`404 Project not found` — the same answer a project that does not exist gets,
+so the header cannot be used to discover what exists.
+
+Creating a **project** inside a workspace may be restricted to its admins. When
+it is, members get `403 project_create_not_allowed`.
+
+### Archived workspaces are read-only
+
+Archiving a workspace keeps everything in it readable and stops new work being
+added. Lists behave normally. Every create — a project, a workflow, an import,
+a sub-workflow — answers `409 workspace_archived`, as does moving work **into**
+it. Moving work **out** of an archived workspace stays allowed: rescuing it is
+the reason to open one.
+
+### When the personal space is closed
+
+An organization can require that its members create only inside a workspace.
+For those accounts, a create with no workspace selected answers
+`403 personal_space_disabled`. Send the workspace header and the same call
+succeeds. Accounts that belong to no organization are never affected.
 
 The [SDK](./sdk-reference.md#clientwithworkspaceworkspaceid) sends it for you
 — `createClient({ workspaceId })`, or `client.withWorkspace(id)` for a client

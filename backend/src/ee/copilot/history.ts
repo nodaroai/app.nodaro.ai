@@ -31,7 +31,11 @@ function toMessage(row: CopilotMessageRow): Anthropic.Messages.MessageParam | nu
   // inventories and version numbers.
   if (row.role === "user") {
     const first = content[0] as { type?: string; text?: string }
-    if (first?.type === "text" && typeof first.text === "string" && first.text.startsWith("<workflow-context>")) {
+    // Matched WITHOUT the closing bracket on purpose: the fence carries a
+    // per-turn nonce now (`<workflow-context-a1b2c3>`), and every row written
+    // before that change still opens with the bare `<workflow-context>`. The
+    // prefix covers both, so old threads keep replaying correctly.
+    if (first?.type === "text" && typeof first.text === "string" && first.text.startsWith("<workflow-context")) {
       content = content.slice(1)
     }
   }

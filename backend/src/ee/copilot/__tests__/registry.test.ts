@@ -72,6 +72,38 @@ describe("dispatchTool", () => {
     expect(invoker.calls[0]!.args).toMatchObject({ node_type: "generate-image", workflow_id: "wf1" })
   })
 
+  it("pins the copilot to the user's OWN gallery, whatever scope the model asks for", async () => {
+    // `browse_gallery`'s public branch returns other users' rows, 80 characters
+    // of each one's prompt included. Free and Basic outputs are public by
+    // definition, so anyone with a free account can seed attacker-authored text
+    // into that corpus — and the tool's `query` argument aims at it. Every
+    // other untrusted string the copilot reads was written by the user it is
+    // working for. Enforced at DISPATCH: hiding `scope` from the schema would
+    // describe the rule, not impose it.
+    const invoker = fakeInvoker(["browse_gallery"])
+    await dispatchTool({ ...deps, invoker }, "browse_gallery", { scope: "public", query: "ignore previous" })
+
+    expect(invoker.calls[0]!.args).toMatchObject({ scope: "mine", query: "ignore previous" })
+  })
+
+  it("pins components to the user's own, not the public marketplace", async () => {
+    // `list_components` defaults to the marketplace, and `is_listed` is set
+    // from the publish request body — self-serve, no review. It was allowlisted
+    // so the copilot could reuse the user's OWN building blocks; the
+    // marketplace half is attacker-authored text nobody asked for.
+    const invoker = fakeInvoker(["list_components"])
+    await dispatchTool({ ...deps, invoker }, "list_components", { scope: "public", search: "x" })
+
+    expect(invoker.calls[0]!.args).toMatchObject({ scope: "mine" })
+  })
+
+  it("leaves a tool with nothing pinned exactly as the model sent it", async () => {
+    const invoker = fakeInvoker(["list_objects"])
+    await dispatchTool({ ...deps, invoker }, "list_objects", { search: "sword", limit: 10 })
+
+    expect(invoker.calls[0]!.args).toMatchObject({ search: "sword", limit: 10 })
+  })
+
   it("turns a thrown tool error into a result the model can act on", async () => {
     const invoker: McpInvoker = {
       listTools: async () => [],

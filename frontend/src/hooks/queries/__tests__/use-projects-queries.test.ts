@@ -29,7 +29,7 @@ vi.mock("@/lib/query-keys", () => ({
   queryKeys: {
     projects: {
       all: ["projects"],
-      list: () => ["projects", "list"],
+      list: (ws: string | null) => ["projects", "list", ws ?? "personal"],
       detail: (id: string) => ["projects", "detail", id],
     },
   },
@@ -39,6 +39,14 @@ vi.mock("@/lib/query-keys", () => ({
 // runs without reaching for real supabase auth.
 vi.mock("@/lib/api", () => ({
   getAuthHeaders: vi.fn().mockResolvedValue({}),
+}))
+
+// The scope hook has its own tests; here it is pinned to the personal space
+// so these stay about the QUERY shape. `ready: true` because organizations
+// are off in tests, which is what the real hook returns then.
+const mockScope = vi.fn(() => ({ workspaceId: null as string | null, ready: true }))
+vi.mock("@/hooks/use-workspace-scope", () => ({
+  useWorkspaceScope: () => mockScope(),
 }))
 
 import { useProjects, useProjectData, useAllProjects } from "../use-projects-queries"
@@ -53,12 +61,12 @@ describe("useProjects", () => {
     useProjects()
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["projects", "list"],
+        queryKey: ["projects", "list", "personal"],
       })
     )
   })
 
-  it("has 30s stale time", () => {
+  it("has 3's stale time", () => {
     mockUseQuery.mockReturnValue({ data: null })
     useProjects()
     const opts = mockUseQuery.mock.calls[0][0]
@@ -72,7 +80,9 @@ describe("useProjects", () => {
     ]
     // Default path: owner-scoped `.eq` then the visibility `.or` terminal.
     const mockOr = vi.fn().mockResolvedValue({ data: mockData, error: null })
-    const mockEq = vi.fn().mockReturnValue({ or: mockOr })
+    // The personal half of the workspace filter sits between them now.
+    const mockIs = vi.fn().mockReturnValue({ or: mockOr })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
     const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
@@ -93,7 +103,8 @@ describe("useProjects", () => {
 
   it("admin override ON skips the visibility filter (no .or)", async () => {
     mockReadShowClientAppsFlag.mockReturnValue(true)
-    const mockEq = vi.fn().mockResolvedValue({ data: [], error: null })
+    const mockIs = vi.fn().mockResolvedValue({ data: [], error: null })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
     const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
@@ -122,6 +133,7 @@ describe("useProjects", () => {
       b.select = () => b
       b.order = () => b
       b.eq = () => b
+      b.is = () => b
       b.or = filteredOr
       b.then = (resolve: (v: unknown) => unknown) =>
         Promise.resolve({ data: rows, error: null }).then(resolve)
@@ -138,10 +150,44 @@ describe("useProjects", () => {
     expect((result as Array<{ id: string }>).map((p) => p.id)).toEqual(["p1"]) // list still renders
   })
 
+  it("inside a workspace, applies BOTH filters and keys the cache by it", async () => {
+    // The under-show rule: `user_id` STAYS in the workspace branch. Dropping
+    // it would list every member's work through a resolver that does not
+    // exist yet, while the row policies gave the narrower answer — one list,
+    // two answers.
+    mockScope.mockReturnValue({ workspaceId: "ws-1", ready: true })
+    mockReadShowClientAppsFlag.mockReturnValue(false)
+    const mockOr = vi.fn().mockResolvedValue({ data: [], error: null })
+    const mockWsEq = vi.fn().mockReturnValue({ or: mockOr })
+    const mockEq = vi.fn().mockReturnValue({ eq: mockWsEq })
+    const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
+    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
+    mockCreateClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select: mockSelect }), auth: mockAuth })
+    mockUseQuery.mockReturnValue({ data: null })
+
+    useProjects()
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.queryKey).toEqual(["projects", "list", "ws-1"])
+    await opts.queryFn()
+
+    expect(mockEq).toHaveBeenCalledWith("user_id", "user-1")
+    expect(mockWsEq).toHaveBeenCalledWith("workspace_id", "ws-1")
+  })
+
+  it("holds the query until the selection is confirmed", () => {
+    mockScope.mockReturnValue({ workspaceId: null, ready: false })
+    mockUseQuery.mockReturnValue({ data: null })
+    useProjects()
+    expect(mockUseQuery.mock.calls[0][0].enabled).toBe(false)
+  })
+
   it("queryFn throws on supabase error", async () => {
     mockReadShowClientAppsFlag.mockReturnValue(false)
     const mockOr = vi.fn().mockResolvedValue({ data: null, error: new Error("db error") })
-    const mockEq = vi.fn().mockReturnValue({ or: mockOr })
+    // The personal half of the workspace filter sits between them now.
+    const mockIs = vi.fn().mockReturnValue({ or: mockOr })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
     const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
@@ -179,7 +225,7 @@ describe("useProjectData", () => {
     )
   })
 
-  it("has 30s stale time", () => {
+  it("has 3's stale time", () => {
     mockUseQuery.mockReturnValue({ data: null })
     useProjectData("proj-123")
     const opts = mockUseQuery.mock.calls[0][0]

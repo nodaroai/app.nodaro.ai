@@ -45,7 +45,7 @@ const JOB_UUID_2 = "22222222-2222-4222-8222-222222222222"
  * to `{ data, error: null }` when `await`-ed at any point. Lets handler
  * code reorder its query chain without breaking tests.
  */
-function makeChainable(rows: unknown[]) {
+function makeChainable(rows: unknown[], selects?: string[]) {
   const result = { data: rows, error: null }
   let chain: unknown
   const promise: Promise<typeof result> = Promise.resolve(result)
@@ -55,6 +55,15 @@ function makeChainable(rows: unknown[]) {
       if (prop === "then") return promise.then.bind(promise)
       if (prop === "catch") return promise.catch.bind(promise)
       if (prop === "finally") return promise.finally.bind(promise)
+      // Optionally record what was SELECTed. The rows a test hands back are
+      // fixtures, so a handler that reads a column it never asked for still
+      // "works" here while returning undefined in production.
+      if (prop === "select" && selects) {
+        return (...args: unknown[]) => {
+          if (typeof args[0] === "string") selects.push(args[0])
+          return chain
+        }
+      }
       return () => chain
     },
     apply() {
@@ -92,6 +101,58 @@ describe("browse_gallery tool", () => {
     expect(result.content.length).toBe(1)
     const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
     expect(Array.isArray(sc?.items)).toBe(true)
+  })
+
+  it("never hands over another user's input references", async () => {
+    // The prompt and the finished picture are what "public" means. The
+    // `references` are the INPUTS — the photo that person uploaded to make it,
+    // never published, reachable only because the job row carries it.
+    const SECRET = "https://r2/private-source-photo.png"
+    const selects: string[] = []
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable(
+        [
+        {
+          id: "mine",
+          user_id: "u1",
+          job_type: "generate-image",
+          input_data: { prompt: "mine", image_url: SECRET },
+          output_data: { imageUrl: "https://r2/mine.png" },
+          completed_at: "2026-04-29T12:00:00Z",
+          created_at: "2026-04-29T12:00:00Z",
+          provider: "nano-banana",
+          status: "completed",
+        },
+        {
+          id: "theirs",
+          user_id: "someone-else",
+          job_type: "generate-image",
+          input_data: { prompt: "theirs", image_url: SECRET },
+          output_data: { imageUrl: "https://r2/theirs.png" },
+          completed_at: "2026-04-29T12:00:00Z",
+          created_at: "2026-04-29T12:00:00Z",
+          provider: "nano-banana",
+          status: "completed",
+        },
+        ],
+        selects,
+      ),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_gallery", { scope: "public", limit: 2 })
+
+    // The rule is per-row, so the row has to carry its owner. Ask for the
+    // column or every reference silently becomes nobody's, including the
+    // caller's own.
+    expect(selects.join(" | ")).toContain("user_id")
+
+    const items = (result as { structuredContent?: { items?: { jobId: string; references?: string[] }[] } })
+      .structuredContent?.items
+    expect(items?.find((i) => i.jobId === "mine")?.references).toEqual([SECRET])
+    expect(items?.find((i) => i.jobId === "theirs")?.references).toEqual([])
+    // And nowhere else in the payload either.
+    expect(JSON.stringify(items?.find((i) => i.jobId === "theirs"))).not.toContain(SECRET)
   })
 
   it("does NOT register without assets:read scope", async () => {

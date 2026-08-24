@@ -17,7 +17,7 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { rateLimiter } from "../../middleware/rate-limit.js"
 import { creditGuard, paygSurfaceGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
-import { ensureDefaultProject } from "../../lib/default-project.js"
+import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"
 import { redis } from "../../lib/queue.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
 import { COPILOT_FEATURE, COPILOT_MODEL_ID, RESERVATION_FLOOR_CREDITS, THREAD_CAPS, TURN_CAPS } from "../copilot/constants.js"
@@ -187,6 +187,9 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           const project = await ensureDefaultProject(userId)
           if ("error" in project) {
             return sendInternalError(reply, req, new Error(project.error), "Failed to resolve your default project")
+          }
+          if ("personalSpaceDisabled" in project) {
+            return reply.status(403).send({ error: PERSONAL_SPACE_DISABLED_ERROR })
           }
           const name = parsed.data.name ?? parsed.data.prompt!.slice(0, 60)
           const { data, error } = await supabase

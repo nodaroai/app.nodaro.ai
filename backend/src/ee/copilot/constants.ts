@@ -74,12 +74,62 @@ export const MCP_TOOL_ALLOWLIST: ReadonlySet<string> = new Set([
   "get_node_preset",
   "get_recipe",
   "list_brand_presets",
+  "check_balance",
+  // The user's own saved things. All four kinds, so the copilot stops being
+  // the only surface that cannot see half of someone's library.
   "list_characters",
   "get_character",
   "list_locations",
   "get_location",
-  "check_balance",
+  "list_objects",
+  "get_object",
+  "list_creatures",
+  "get_creature",
+  // Media the user already has. `browse_gallery` is pinned to their OWN rows
+  // by FORCED_MCP_ARGS below — see the note there, it is not optional.
+  "browse_gallery",
+  "browse_uploads",
+  "list_voices",
+  // NOT list_favorites: its model-visible text is bare job ids. The hydrated
+  // rows it builds go into structuredContent, which dispatch drops, so the
+  // model would need one get_job per id to learn what any of them is —
+  // prefix bytes on every turn for a capability it cannot actually use.
+  // Worth revisiting if its TEXT ever carries names.
+  // Their other work, for learning from a flow that already succeeds.
+  "list_workflows",
+  "list_components",
+  "get_component_inputs",
 ])
+
+/**
+ * Arguments the copilot pins on an allowlisted MCP tool, whatever the model asks.
+ *
+ * `browse_gallery` takes `scope: "mine" | "public"`, and the public branch
+ * returns OTHER users' rows — including 80 characters of each one's prompt.
+ * Free and Basic outputs are public by definition, so anyone with a free
+ * account can seed unlimited attacker-authored text into that corpus, and the
+ * tool's own `query` argument is a steering wheel pointed straight at it. Every
+ * other untrusted string the copilot reads was written by the user it is
+ * working for; this one would not be.
+ *
+ * Pinned at DISPATCH rather than by narrowing the model-visible schema, for the
+ * same reason the allowlist is enforced here: a schema describes, it does not
+ * enforce. Merged after `...args` so a model-supplied value loses.
+ */
+export const FORCED_MCP_ARGS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  browse_gallery: { scope: "mine" },
+  // Same shape, same reason. `list_components` DEFAULTS to the public
+  // marketplace, whose rows carry another user's name, description and tags —
+  // and `is_listed` is set straight from the publish request body, so listing
+  // there is self-serve with no review. One API call puts arbitrary text in
+  // front of every copilot.
+  //
+  // Pinning to "mine" keeps what this tool was allowlisted FOR — reusing the
+  // user's own building blocks — and drops the part nobody asked for. Opening
+  // the marketplace to the model is a separate decision that needs a
+  // moderation story first, not a default.
+  list_components: { scope: "mine" },
+}
 
 /** Native copilot tool names. */
 export const NATIVE_TOOLS = {
@@ -101,3 +151,13 @@ export const NODE_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 /** Auto-layout spacing (matches the skill doc's "~340 per stage, ~280 per row"). */
 export const LAYOUT = { columnGap: 340, rowGap: 280 } as const
+
+/**
+ * How much of a workflow name anything is allowed to carry.
+ *
+ * The name reaches the model in every turn's context preamble, so it is both a
+ * standing token cost and a channel for pushing text at the model. The snapshot
+ * truncates what it renders and `edit_workflow` truncates what it writes —
+ * same number, one place, or the two drift and the write wins.
+ */
+export const MAX_WORKFLOW_NAME_CHARS = 120

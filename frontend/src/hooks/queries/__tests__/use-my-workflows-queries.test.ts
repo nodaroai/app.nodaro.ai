@@ -19,15 +19,23 @@ vi.mock("@/lib/query-keys", () => ({
   queryKeys: {
     workflows: {
       all: ["workflows"],
-      listMine: () => ["workflows", "list", "mine"],
-      listStudioMine: () => ["workflows", "list", "studio", "mine"],
-      listStudioAll: () => ["workflows", "list", "studio", "all"],
+      listMine: (ws: string | null) => ["workflows", "list", "mine", ws ?? "personal"],
+      listStudioMine: (ws: string | null) => ["workflows", "list", "studio", "mine", ws ?? "personal"],
+      listStudioAll: (ws: string | null) => ["workflows", "list", "studio", "all", ws ?? "personal"],
     },
     clientApps: {
       all: ["client-apps"],
       list: () => ["client-apps", "list"],
     },
   },
+}))
+
+// The scope hook has its own tests; here it is pinned to the personal space
+// so these stay about the QUERY shape. `ready: true` because organizations
+// are off in tests, which is what the real hook returns then.
+const mockScope = vi.fn(() => ({ workspaceId: null as string | null, ready: true }))
+vi.mock("@/hooks/use-workspace-scope", () => ({
+  useWorkspaceScope: () => mockScope(),
 }))
 
 import { useMyWorkflows, useMyStudioWorkflows } from "../use-my-workflows-queries"
@@ -84,6 +92,7 @@ function filteringChain(rows: ReadonlyArray<Record<string, unknown>>) {
 }
 
 beforeEach(() => {
+    mockScope.mockReturnValue({ workspaceId: null, ready: true })
   vi.clearAllMocks()
   localStorage.clear()
   mockUseQuery.mockReturnValue({ data: null })
@@ -93,6 +102,40 @@ beforeEach(() => {
 const SHOW_CLIENT_APPS_KEY = "nodaro:admin:show-client-apps"
 
 describe("useMyWorkflows — NATIVE ONLY (app_slug IS NULL)", () => {
+  it("inside a workspace, applies BOTH filters and keys the cache by it", async () => {
+    // A mutation survived without this: the workspace filter could be deleted
+    // and every test still passed, because every one of them ran in the
+    // personal branch. The half that is never exercised is the half that
+    // silently stops working.
+    mockScope.mockReturnValue({ workspaceId: "ws-1", ready: true })
+    const wf = chain({ data: [], error: null })
+    mockCreateClient.mockReturnValue(supabaseReturning(wf))
+
+    useMyWorkflows()
+    expect(mockUseQuery.mock.calls[0][0].queryKey).toEqual([
+      "workflows", "list", "mine", "ws-1",
+    ])
+    await mockUseQuery.mock.calls[0][0].queryFn()
+
+    expect(wf.eq).toHaveBeenCalledWith("workspace_id", "ws-1")
+    // And the owner filter STAYS. Dropping it would list every member of the
+    // class through a resolver that does not exist yet, while the row
+    // policies gave the narrower answer — one list, two answers.
+    expect(wf.eq).toHaveBeenCalledWith("user_id", "user-1")
+    expect(wf.is).not.toHaveBeenCalledWith("workspace_id", null)
+  })
+
+  it("outside one, excludes every workspace row", async () => {
+    mockScope.mockReturnValue({ workspaceId: null, ready: true })
+    const wf = chain({ data: [], error: null })
+    mockCreateClient.mockReturnValue(supabaseReturning(wf))
+
+    useMyWorkflows()
+    await mockUseQuery.mock.calls[0][0].queryFn()
+
+    expect(wf.is).toHaveBeenCalledWith("workspace_id", null)
+  })
+
   it("filters on app_slug IS NULL and never reads settings->studio", async () => {
     const wf = chain({ data: [], error: null })
     mockCreateClient.mockReturnValue(supabaseReturning(wf))

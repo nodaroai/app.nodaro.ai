@@ -8,15 +8,19 @@ import { useAuth } from "@/hooks/use-auth"
 import { useUpdatePreferredLocaleMutation } from "@/hooks/queries/use-user-settings-queries"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 /**
- * Global app language switcher (sidebar). Unlike the compact config-panel
- * <LocalePicker>, this is a full-width row for the nav. Both write the same
- * locale-store + persist to the profile, so switching here localizes BOTH the
- * app chrome (via useT) AND the picker catalogs.
+ * Global app language switcher (sidebar footer). A compact icon button that
+ * sits beside the theme toggle; hovering shows the current language, clicking
+ * opens the language menu. Unlike the compact config-panel <LocalePicker>, this
+ * writes the same locale-store + persists to the profile, so switching here
+ * localizes BOTH the app chrome (via useT) AND the picker catalogs.
+ * Must be rendered inside a <TooltipProvider> (the sidebar supplies one).
  */
-function LanguageSwitcherComponent({ collapsed }: { readonly collapsed?: boolean }) {
+function LanguageSwitcherComponent() {
   const t = useT()
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
@@ -35,25 +39,22 @@ function LanguageSwitcherComponent({ collapsed }: { readonly collapsed?: boolean
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={t("lang.pick")}
-          title={`${t("lang.label")}: ${current.englishName}`}
-          className={cn(
-            "flex items-center rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors",
-            collapsed ? "justify-center w-full h-9" : "gap-2 w-full px-3 py-2",
-          )}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label={t("lang.pick")}>
+              <Languages className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
         >
-          <Languages className="size-4 shrink-0" />
-          {!collapsed && (
-            <span className="flex items-center gap-1.5 min-w-0">
-              <span className="truncate">{current.nativeName}</span>
-            </span>
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-1" align="start" side="top" sideOffset={4}>
+          {`${t("lang.label")}: ${current.englishName}`}
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-56 p-1" align="end" side="top" sideOffset={4}>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 select-none">
           {t("lang.label")}
         </div>

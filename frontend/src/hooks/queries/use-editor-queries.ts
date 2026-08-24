@@ -3,6 +3,7 @@ import { getWorkflowCostSummary } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { hasCredits } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import type { CharacterDefinition } from "@/types/nodes"
 
 export interface ImportableWorkflow {
@@ -13,6 +14,8 @@ export interface ImportableWorkflow {
 
 export function useWorkflowCostSummary(jobIds: readonly string[]) {
   return useQuery({
+    // scope-key-ok: keyed by the job ids themselves, and jobs carry no
+    // workspace of their own until the billing work stamps them.
     queryKey: queryKeys.editor.costSummary(jobIds),
     queryFn: async () => {
       const { data } = await getWorkflowCostSummary(jobIds)
@@ -28,11 +31,15 @@ export function useImportableWorkflows(
   currentWorkflowId: string | null | undefined,
   isOpen: boolean,
 ) {
+  // Only the no-project branch below scopes, but the KEY carries the
+  // workspace either way: one key that sometimes depends on the scope and
+  // sometimes does not is a key nobody can reason about.
+  const { workspaceId, ready } = useWorkspaceScope()
   return useQuery({
-    queryKey: queryKeys.editor.importableWorkflows(
-      projectId ?? "",
-      currentWorkflowId ?? "",
-    ),
+    queryKey: [
+      ...queryKeys.editor.importableWorkflows(projectId ?? "", currentWorkflowId ?? ""),
+      workspaceId ?? "personal",
+    ],
     queryFn: async () => {
       const supabase = createClient()
       let query = supabase
@@ -41,7 +48,13 @@ export function useImportableWorkflows(
         .order("updated_at", { ascending: false })
 
       if (projectId) {
+        // A project already decides the scope — filtering by workspace on
+        // top of it would be the same answer twice.
         query = query.eq("project_id", projectId)
+      } else {
+        query = workspaceId
+          ? query.eq("workspace_id", workspaceId)
+          : query.is("workspace_id", null)
       }
 
       const { data, error } = await query
@@ -57,7 +70,7 @@ export function useImportableWorkflows(
         })
         .filter((w) => w.characters.length > 0)
     },
-    enabled: isOpen,
+    enabled: isOpen && ready,
     staleTime: 30_000,
   })
 }

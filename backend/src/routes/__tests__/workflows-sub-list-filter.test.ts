@@ -105,6 +105,29 @@ afterEach(async () => {
 // project it names already decides the scope.
 // ---------------------------------------------------------------------------
 
+/**
+ * The project-addressed routes read the project itself first — whether the
+ * caller may work inside it is now decided from the row rather than filtered
+ * out by the query, because inside a workspace the project belongs to the
+ * admin who made it and not to the caller.
+ */
+function withProjectScope(otherTables: Record<string, unknown>) {
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: {
+      id: TEST_PROJECT_ID,
+      app_slug: null,
+      user_id: TEST_USER_ID,
+      workspace_id: null,
+    },
+    error: null,
+  })
+  const eq = vi.fn().mockReturnValue({ maybeSingle })
+  const select = vi.fn().mockReturnValue({ eq })
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    if (table === "projects") return { select } as never
+    return otherTables as never
+  })
+}
 describe("GET /v1/projects/:projectId/workflows — filters out child sub-workflows", () => {
   it("applies .is('parent_workflow_id', null) on the list query", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null })
@@ -112,7 +135,7 @@ describe("GET /v1/projects/:projectId/workflows — filters out child sub-workfl
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    withProjectScope({ select: mockSelect })
 
     const res = await app.inject({
       method: "GET",

@@ -72,6 +72,54 @@ describe("edit_workflow — guards", () => {
     expect(rpcMock).not.toHaveBeenCalled()
   })
 
+  it("refuses a URL smuggled inside a LIST", async () => {
+    // `extraRefs` reaches the providers at run time but its key is not itself
+    // locked, so before the walk descended into arrays this was the one shape
+    // that got a model-authored address all the way to a generation.
+    await expect(
+      runEditWorkflow(ctx, {
+        note: "add a reference",
+        upsertNodes: [
+          {
+            id: "img",
+            type: "generate-image",
+            data: { prompt: "a cat", extraRefs: [{ url: "https://evil.test/exfil.png" }] },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/extraRefs/)
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("still lets the copilot patch a node that has already produced results", async () => {
+    // The highest-consequence path of the array walk, and the reason the
+    // whole-array escape runs FIRST. `generatedResults` is a list of objects
+    // carrying four locked fields (url, thumbnailUrl, freecutProjectUrl,
+    // filerobotDesignStateUrl) under a key that is not itself locked — and the
+    // lock runs BEFORE the strip, so a patch's merged data always contains it.
+    // Without the escape, every edit of a finished image or video node would
+    // reject and the copilot could not fix a workflow after its first run.
+    graphState.nodes = [
+      {
+        id: "img",
+        type: "generate-image",
+        position: { x: 0, y: 0 },
+        data: {
+          prompt: "a cat",
+          generatedResults: [
+            { url: "https://r2.test/out.png", thumbnailUrl: "https://r2.test/t.png", jobId: "j1" },
+          ],
+        },
+      },
+    ]
+
+    await runEditWorkflow(ctx, { note: "retype", patchNodes: [{ id: "img", data: { prompt: "a dog" } }] })
+
+    expect(rpcMock).toHaveBeenCalled()
+    const args = rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ data: Record<string, unknown> }> }
+    expect(args.p_upsert_nodes[0]!.data.prompt).toBe("a dog")
+  })
+
   it("allows preserving a URL the user already put on the node", async () => {
     graphState.nodes = [{ id: "img", type: "upload-image", data: { imageUrl: "https://mine.test/x.png" } }]
     await runEditWorkflow(ctx, {

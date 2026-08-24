@@ -17,14 +17,14 @@ import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-m
 import type { CopilotMention } from "@/ee/lib/copilot/types"
 
 interface CopilotComposerProps {
-  characters: CopilotMention[]
-  locations: CopilotMention[]
+  /** The @ catalogue. Not to be confused with the chips the user has picked. */
+  mentionSources: CopilotMention[]
   onSend: (text: string) => void
   onStop: () => void
   disabled?: boolean
 }
 
-export function CopilotComposer({ characters, locations, onSend, onStop, disabled }: CopilotComposerProps) {
+export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: CopilotComposerProps) {
   const draft = useCopilotStore((s) => s.draft)
   const mentions = useCopilotStore((s) => s.mentions)
   const setDraft = useCopilotStore((s) => s.setDraft)
@@ -87,8 +87,7 @@ export function CopilotComposer({ characters, locations, onSend, onStop, disable
       {query !== null && (
         <CopilotMentionPicker
           query={query}
-          characters={characters}
-          locations={locations}
+          mentions={mentionSources}
           onPick={pick}
           onActiveChange={setActiveMentionId}
           onClose={() => setQuery(null)}

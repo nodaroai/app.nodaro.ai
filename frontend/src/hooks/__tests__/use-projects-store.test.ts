@@ -11,7 +11,8 @@ const NOW = "2026-01-30T00:00:00.000Z"
 
 function makeChain(resolvedValue: { data: unknown; error: null } | { data: null; error: { message: string } }) {
   const chain: Record<string, unknown> = {}
-  const methods = ["select", "insert", "update", "delete", "eq", "single", "order", "or"]
+  // "is" joined the list when the personal half of the workspace filter did.
+  const methods = ["select", "insert", "update", "delete", "eq", "is", "single", "order", "or"]
   for (const m of methods) {
     chain[m] = vi.fn(() => chain)
   }

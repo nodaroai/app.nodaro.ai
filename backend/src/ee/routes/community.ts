@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { CommunityCard, CommunityFullDetail } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
+import { PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import type { EntityType } from "../lib/community-entity-adapters.js"
 import { decodeCommunityCursor, encodeCommunityCursor } from "./community-cursor.js"
@@ -99,6 +100,9 @@ export async function communityRoutes(app: FastifyInstance) {
         }
         if ((e as { code?: string }).code === "storage_limit_exceeded") {
           return reply.status(413).send({ error: { code: "storage_limit_exceeded", message: "Storage limit exceeded" } })
+        }
+        if ((e as { code?: string }).code === "personal_space_disabled") {
+          return reply.status(403).send({ error: PERSONAL_SPACE_DISABLED_ERROR })
         }
         return reply.status(500).send({ error: { code: "clone_failed", message: (e as Error).message } })
       }

@@ -31,6 +31,10 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  // These routes resolve a default project, which now asks whether the
+  // caller's organization allows a personal space at all. Off here: this file
+  // is about the behaviour every user without an organization gets.
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -250,12 +254,14 @@ describe("POST /v1/workflows", () => {
   })
 
   it("creates under a caller-owned projectId when provided", async () => {
-    // Sequence:
-    //   1) projects ownership lookup → returns { id } so OK.
-    //   2) workflows insert → returns the new row.
-    const ownershipMaybeSingle = vi.fn().mockResolvedValue({ data: { id: TEST_PROJECT_ID }, error: null })
-    const ownershipEq2 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
-    const ownershipEq1 = vi.fn().mockReturnValue({ eq: ownershipEq2 })
+    // The project is now fetched by id ALONE and judged in TypeScript — inside
+    // a workspace the owning user is not the caller, so .eq("user_id") would
+    // decide the question before asking it.
+    const ownershipMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: TEST_PROJECT_ID, app_slug: null, user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
+    const ownershipEq1 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
     const projectsSelect = vi.fn().mockReturnValue({ eq: ownershipEq1 })
 
     const insertSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
@@ -277,13 +283,26 @@ describe("POST /v1/workflows", () => {
 
     expect(res.statusCode).toBe(201)
     expect(ownershipEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
-    expect(ownershipEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    // The owner and the workspace must still be READ, or the decision that
+    // replaced the filter has nothing to decide on.
+    expect(projectsSelect).toHaveBeenCalledWith(expect.stringContaining("user_id"))
+    expect(projectsSelect).toHaveBeenCalledWith(expect.stringContaining("workspace_id"))
   })
 
   it("returns 404 when projectId belongs to another user", async () => {
-    const ownershipMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
-    const ownershipEq2 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
-    const ownershipEq1 = vi.fn().mockReturnValue({ eq: ownershipEq2 })
+    // The row EXISTS — it simply is not the caller's. The query used to filter
+    // it out; now the route refuses it on the facts, which is the case that
+    // would go unnoticed if only "missing" were ever tested.
+    const ownershipMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_PROJECT_ID,
+        app_slug: null,
+        user_id: "00000000-0000-4000-8000-0000000000ff",
+        workspace_id: null,
+      },
+      error: null,
+    })
+    const ownershipEq1 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
     const projectsSelect = vi.fn().mockReturnValue({ eq: ownershipEq1 })
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -308,15 +327,57 @@ describe("POST /v1/workflows", () => {
 // ---------------------------------------------------------------------------
 
 describe("PATCH /v1/workflows/:id (projectId move)", () => {
-  it("moves the workflow to a caller-owned project and clears folder_id", async () => {
-    // Order of `from()` calls:
-    //   1) projects: ownership lookup for the target project (succeeds).
-    //   2) workflows: update.
-    const ownershipMaybeSingle = vi.fn().mockResolvedValue({ data: { id: OTHER_PROJECT_ID }, error: null })
-    const ownershipEq2 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
-    const ownershipEq1 = vi.fn().mockReturnValue({ eq: ownershipEq2 })
-    const projectsSelect = vi.fn().mockReturnValue({ eq: ownershipEq1 })
+  /**
+   * PATCH now shares the move endpoint's authorization, so the reads changed
+   * shape: the WORKFLOW is loaded first (its owner and its assignment are
+   * inputs to the decision), then the target project, then the update.
+   */
+  function mockMoveTables(opts: {
+    workflow?: Record<string, unknown> | null
+    project?: Record<string, unknown> | null
+    onUpdate?: ReturnType<typeof vi.fn>
+  }) {
+    const wfMaybeSingle = vi.fn().mockResolvedValue({
+      data:
+        opts.workflow === undefined
+          ? {
+              id: TEST_WORKFLOW_ID,
+              user_id: TEST_USER_ID,
+              workspace_id: null,
+              project_id: TEST_PROJECT_ID,
+              assignment_id: null,
+            }
+          : opts.workflow,
+      error: null,
+    })
+    const wfEq = vi.fn().mockReturnValue({ maybeSingle: wfMaybeSingle })
+    const wfSelect = vi.fn().mockReturnValue({ eq: wfEq })
 
+    const projMaybeSingle = vi.fn().mockResolvedValue({
+      data:
+        opts.project === undefined
+          ? { id: OTHER_PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null }
+          : opts.project,
+      error: null,
+    })
+    const projEq = vi.fn().mockReturnValue({ maybeSingle: projMaybeSingle })
+    const projSelect = vi.fn().mockReturnValue({ eq: projEq })
+
+    const workflowsUpdate =
+      opts.onUpdate ??
+      vi.fn().mockImplementation(() => {
+        throw new Error("update should not run")
+      })
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "projects") return { select: projSelect } as never
+      if (table === "workflows") return { select: wfSelect, update: workflowsUpdate } as never
+      throw new Error("unexpected table " + table)
+    })
+    return { wfEq, projEq, workflowsUpdate }
+  }
+
+  it("moves the workflow to a caller-owned project and clears folder_id", async () => {
     const updateSingle = vi.fn().mockResolvedValue({
       data: { ...DB_WORKFLOW_FULL, project_id: OTHER_PROJECT_ID, folder_id: null },
       error: null,
@@ -327,11 +388,7 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
     const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
     const workflowsUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
 
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "projects") return { select: projectsSelect } as never
-      if (table === "workflows") return { update: workflowsUpdate } as never
-      throw new Error(`unexpected table ${table}`)
-    })
+    const { projEq } = mockMoveTables({ onUpdate: workflowsUpdate })
 
     const res = await app.inject({
       method: "PATCH",
@@ -342,24 +399,15 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().data.projectId).toBe(OTHER_PROJECT_ID)
-    // Ownership probe must scope by user_id (no IDOR).
-    expect(ownershipEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(projEq).toHaveBeenCalledWith("id", OTHER_PROJECT_ID)
     // The update must apply project_id and clear folder_id.
     expect(workflowsUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: OTHER_PROJECT_ID, folder_id: null }),
     )
   })
 
-  it("returns 404 when the target projectId is not owned by the caller", async () => {
-    const ownershipMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
-    const ownershipEq2 = vi.fn().mockReturnValue({ maybeSingle: ownershipMaybeSingle })
-    const ownershipEq1 = vi.fn().mockReturnValue({ eq: ownershipEq2 })
-    const projectsSelect = vi.fn().mockReturnValue({ eq: ownershipEq1 })
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "projects") return { select: projectsSelect } as never
-      throw new Error("update should not run when target project is foreign")
-    })
+  it("returns 404 when the target project does not exist", async () => {
+    mockMoveTables({ project: null })
 
     const res = await app.inject({
       method: "PATCH",
@@ -370,5 +418,84 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
 
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("refuses when the target project exists but belongs to someone else", async () => {
+    // The IDOR case, now decided on the facts rather than filtered out by the
+    // query. Owning the WORKFLOW is not enough: without this the caller could
+    // park their work in a stranger's project, which that stranger cannot see
+    // into but can delete.
+    mockMoveTables({
+      project: { id: OTHER_PROJECT_ID, user_id: "00000000-0000-4000-8000-0000000000ff", workspace_id: null },
+    })
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: OTHER_PROJECT_ID },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("not_permitted")
+  })
+
+  it("refuses to move someone else's workflow", async () => {
+    mockMoveTables({
+      workflow: {
+        id: TEST_WORKFLOW_ID,
+        user_id: "00000000-0000-4000-8000-0000000000ff",
+        workspace_id: null,
+        project_id: TEST_PROJECT_ID,
+        assignment_id: null,
+      },
+    })
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: OTHER_PROJECT_ID },
+    })
+
+    expect(res.statusCode).toBe(403)
+  })
+
+  it("refuses work that belongs to an assignment", async () => {
+    mockMoveTables({
+      workflow: {
+        id: TEST_WORKFLOW_ID,
+        user_id: TEST_USER_ID,
+        workspace_id: null,
+        project_id: TEST_PROJECT_ID,
+        assignment_id: "00000000-0000-4000-8000-0000000000aa",
+      },
+    })
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: OTHER_PROJECT_ID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("move_blocked")
+  })
+
+  it("refuses a move into the project it is already in", async () => {
+    mockMoveTables({
+      project: { id: TEST_PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null },
+    })
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: TEST_PROJECT_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 })

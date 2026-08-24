@@ -13,6 +13,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { registerEntityReadTools, OBJECT_READ_CONFIG } from "./_entity-reads.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -20,11 +21,13 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
 /**
  * Object Studio MCP tools — `assets:write` + `workflows:execute` slice only.
  *
- * Mirrors `lib/mcp/tools/locations.ts` in structure but exposes only the 3
- * Studio-action tools (NOT the CRUD parity tools): `approve_object_main_image`,
- * `recaption_object`, `generate_object_motion`. Read/list/create/update
- * tools are DEFERRED — object workflows are typically wired upstream of
- * generation pipelines (less MCP-driven than location). Object candidate +
+ * Mirrors `lib/mcp/tools/locations.ts` in structure. Exposes the 3 Studio-action
+ * tools — `approve_object_main_image`, `recaption_object`,
+ * `generate_object_motion` — plus the READ pair (`list_objects` / `get_object`),
+ * which lives in `_entity-reads.ts` and is shared with creatures. Create/update
+ * stay out (NOT the CRUD parity tools); the reads do not, because every action
+ * tool above takes an object id and until now nothing could produce one.
+ * Object candidate +
  * variant-asset generation already lives as a verb tool in
  * `verbs-clo.ts::generate_object` — we do NOT duplicate it here.
  * `generate_object_motion` stays in this file because it dispatches to a
@@ -85,6 +88,10 @@ export interface RegisterObjectToolsOpts {
 }
 
 export function registerObjectTools(opts: RegisterObjectToolsOpts): void {
+  // Reads are no longer deferred: a model that can recaption an object but has
+  // no way to LIST one has been handed keys with no address. The pair mirrors
+  // `list_characters`/`get_character` and is shared with creatures.
+  registerEntityReadTools(opts.server, opts.session, OBJECT_READ_CONFIG)
   registerWriteTools(opts)
   registerGenerationTools(opts)
 }

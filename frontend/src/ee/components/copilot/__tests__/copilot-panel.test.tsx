@@ -28,6 +28,8 @@ vi.mock("@/hooks/use-auth", () => ({
 }))
 vi.mock("@/hooks/queries/use-assets-queries", () => ({
   useCharacters: () => ({ data: [{ id: "c1", name: "Maya", sourceImageUrl: null }] }),
+  useObjects: () => ({ data: [] }),
+  useCreatures: () => ({ data: [] }),
   useLocations: () => ({ data: [] }),
 }))
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 900 }))

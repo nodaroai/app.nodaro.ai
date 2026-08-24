@@ -9,6 +9,7 @@ import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
 import { isRetryableFailure } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
+import { escapeLikeArgument } from "./_like-escape.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -21,6 +22,8 @@ export interface RegisterGalleryOpts {
 
 interface GalleryRow {
   id: string
+  /** Whose job it is. Load-bearing: see `rowToGalleryItem`'s references rule. */
+  user_id: string | null
   job_type: string | null
   input_data: Record<string, unknown> | null
   output_data: Record<string, unknown> | null
@@ -153,7 +156,7 @@ function extractReferences(input: Record<string, unknown> | null): string[] {
  * kind-specific key — `imageUrl`, `videoUrl`, `audioUrl`) and the prompt +
  * model from `input_data`.
  */
-function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
+function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | null {
   const kind = getKind(row.job_type)
   if (!kind) return null
   const out = row.output_data ?? {}
@@ -185,7 +188,12 @@ function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
     favorited: false,
     aspectRatio,
     resolution,
-    references: extractReferences(row.input_data),
+    // Someone else's row: the prompt and the output are what "public" means,
+    // but `references` are the INPUTS — the photo they uploaded to make it,
+    // which was never published and is only reachable here because the job
+    // row carries it. Decided per ROW rather than per scope, so a third
+    // caller cannot reintroduce the leak by forgetting to pass a scope.
+    references: row.user_id === viewerUserId ? extractReferences(row.input_data) : [],
   }
 }
 
@@ -300,11 +308,11 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           scope === "mine"
             ? supabase
                 .from("jobs")
-                .select("id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .select("id, user_id, job_type, input_data, output_data, completed_at, created_at, provider, status")
                 .eq("user_id", session.userId)
             : supabase
                 .from("jobs")
-                .select("id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .select("id, user_id, job_type, input_data, output_data, completed_at, created_at, provider, status")
                 .eq("is_public", true)
                 .eq("status", "completed")
                 .neq("user_id", session.userId)
@@ -315,7 +323,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           // can ilike it. ilike with %…% is a partial substring match,
           // case-insensitive. Trim + escape % / _ so a literal "20%" in
           // the user's request doesn't widen the wildcard.
-          const safe = args.query.replace(/[%_\\]/g, (c) => "\\" + c).trim()
+          const safe = escapeLikeArgument(args.query)
           if (safe.length > 0) {
             query = query.ilike("input_data->>prompt", `%${safe}%`)
           }
@@ -349,7 +357,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         const text = lines.length > 0 ? lines.join("\n") + cursorLine : "(no items)"
 
         const items = rows
-          .map(rowToGalleryItem)
+          .map((row) => rowToGalleryItem(row, session.userId))
           .filter((item): item is GalleryItem => item !== null)
 
         // Real total count on the FIRST page only — same column filters as
@@ -372,7 +380,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                   .neq("user_id", session.userId)
           countQuery = countQuery.not("output_data", "is", null)
           if (args.query) {
-            const safe = args.query.replace(/[%_\\]/g, (c) => "\\" + c).trim()
+            const safe = escapeLikeArgument(args.query)
             if (safe.length > 0) {
               countQuery = countQuery.ilike("input_data->>prompt", `%${safe}%`)
             }
@@ -479,7 +487,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .limit(limit + 1) // +1 to detect hasMore
 
         if (args.kind) query = query.eq("type", args.kind)
-        if (args.search) query = query.ilike("filename", `%${args.search}%`)
+        if (args.search) query = query.ilike("filename", `%${escapeLikeArgument(args.search)}%`)
         if (cursorTimestamp) query = query.lt("created_at", cursorTimestamp)
 
         const { data, error } = await query
@@ -502,7 +510,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .select("id", { count: "exact", head: true })
             .eq("user_id", session.userId)
           if (args.kind) countQuery = countQuery.eq("type", args.kind)
-          if (args.search) countQuery = countQuery.ilike("filename", `%${args.search}%`)
+          if (args.search) countQuery = countQuery.ilike("filename", `%${escapeLikeArgument(args.search)}%`)
           const { count } = await countQuery
           totalCount = count ?? null
         }
@@ -606,7 +614,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         if (jobIds.length > 0) {
           const { data: jobsData } = await supabase
             .from("jobs")
-            .select("id, job_type, input_data, output_data, completed_at, provider")
+            .select("id, user_id, job_type, input_data, output_data, completed_at, provider")
             .in("id", jobIds)
             // Tenant scope: only hydrate jobs the caller may see (own, or
             // public+completed) — same predicate as get_asset/display_asset.
@@ -614,7 +622,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // output_data URLs + input_data prompt.
             .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
           items = ((jobsData ?? []) as GalleryRow[])
-            .map(rowToGalleryItem)
+            .map((row) => rowToGalleryItem(row, session.userId))
             .filter((item): item is GalleryItem => item !== null)
             .map((item) => ({ ...item, favorited: true }))
         }

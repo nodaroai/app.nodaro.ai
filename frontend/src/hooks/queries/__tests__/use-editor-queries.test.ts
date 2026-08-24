@@ -33,6 +33,12 @@ vi.mock("@/lib/query-keys", () => ({
   },
 }))
 
+// These call the hook outside a renderer to read the query config, so the
+// scope seam is pinned rather than subscribed. It has its own tests.
+vi.mock("@/hooks/use-workspace-scope", () => ({
+  useWorkspaceScope: () => ({ workspaceId: null, ready: true }),
+}))
+
 import {
   useWorkflowCostSummary,
   useImportableWorkflows,
@@ -114,7 +120,10 @@ describe("useImportableWorkflows", () => {
     useImportableWorkflows("proj-1", "wf-2", true)
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["editor", "importable-workflows", "proj-1", "wf-2"],
+        // The workspace joins every key in this file: one key that sometimes
+        // depends on the scope and sometimes does not is a key nobody can
+        // reason about.
+        queryKey: ["editor", "importable-workflows", "proj-1", "wf-2", "personal"],
       })
     )
   })
@@ -124,7 +133,7 @@ describe("useImportableWorkflows", () => {
     useImportableWorkflows(undefined, null, false)
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["editor", "importable-workflows", "", ""],
+        queryKey: ["editor", "importable-workflows", "", "", "personal"],
       })
     )
   })

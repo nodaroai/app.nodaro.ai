@@ -47,6 +47,7 @@ const TemplatePreviewModal = lazy(() =>
 import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
@@ -255,6 +256,10 @@ export default function ProjectsPage() {
             user_id: user.id,
             name: fallbackName,
             description: "Auto-created workspace for new workflows",
+            // Lands in the scope the person is working in. The row policy
+            // decides whether they may: admins always, members only when
+            // the workspace allows it — the same rule the REST route runs.
+            workspace_id: getActiveWorkspaceId(),
           })
           .select("id")
           .single()

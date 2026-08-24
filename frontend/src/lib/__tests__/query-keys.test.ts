@@ -166,8 +166,17 @@ describe("queryKeys", () => {
       expect(queryKeys.projects.all).toEqual(["projects"])
     })
 
-    it("builds list key", () => {
-      expect(queryKeys.projects.list()).toEqual(["projects", "list"])
+    it("builds list key, separated by workspace", () => {
+      expect(queryKeys.projects.list(null)).toEqual(["projects", "list", "personal"])
+      expect(queryKeys.projects.list("ws-1")).toEqual(["projects", "list", "ws-1"])
+    })
+
+    it("never lets two scopes share one cache entry", () => {
+      // The whole reason the argument is required. If these ever compared
+      // equal, switching class would serve the previous one's rows from cache
+      // and the person would be looking at work that is not theirs to see.
+      expect(queryKeys.projects.list(null)).not.toEqual(queryKeys.projects.list("ws-1"))
+      expect(queryKeys.projects.list("ws-1")).not.toEqual(queryKeys.projects.list("ws-2"))
     })
 
     it("builds detail key", () => {
@@ -181,7 +190,18 @@ describe("queryKeys", () => {
     })
 
     it("builds results key with query", () => {
-      expect(queryKeys.search.results("hello")).toEqual(["search", "hello"])
+      expect(queryKeys.search.results("hello", null)).toEqual(["search", "hello", "personal"])
+    })
+
+    it("separates the scopes — the same word in two classes is two searches", () => {
+      // This search FILTERS by workspace. Keyed by the text alone it served the
+      // first class's results for the second one's query.
+      expect(queryKeys.search.results("hello", "ws-1")).not.toEqual(
+        queryKeys.search.results("hello", "ws-2"),
+      )
+      expect(queryKeys.search.results("hello", null)).not.toEqual(
+        queryKeys.search.results("hello", "ws-1"),
+      )
     })
   })
 
@@ -266,6 +286,29 @@ describe("queryKeys", () => {
 
     it("builds userTransactions key", () => {
       expect(queryKeys.admin.userTransactions("u1")).toEqual(["admin", "user-transactions", "u1"])
+    })
+  })
+
+  describe("workflows", () => {
+    it("separates the flat lists by workspace", () => {
+      expect(queryKeys.workflows.listMine(null)).toEqual(["workflows", "list", "mine", "personal"])
+      expect(queryKeys.workflows.listMine("ws-1")).toEqual(["workflows", "list", "mine", "ws-1"])
+      expect(queryKeys.workflows.listMine(null)).not.toEqual(queryKeys.workflows.listMine("ws-1"))
+    })
+
+    it("keeps the studio lists separate too", () => {
+      expect(queryKeys.workflows.listStudioMine("ws-1")).not.toEqual(
+        queryKeys.workflows.listStudioMine("ws-2"),
+      )
+      // The admin cross-user view takes NO workspace: the route answers it
+      // identically whatever is selected, so a key that varied would split a
+      // cache that cannot differ.
+      expect(queryKeys.workflows.listStudioAll()).toEqual(["workflows", "list", "studio", "all"])
+    })
+
+    it("the ALL key stays static — it is what invalidation targets", () => {
+      expect(queryKeys.workflows.all).toEqual(["workflows"])
+      expect(queryKeys.projects.all).toEqual(["projects"])
     })
   })
 })

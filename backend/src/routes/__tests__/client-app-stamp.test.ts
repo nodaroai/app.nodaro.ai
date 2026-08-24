@@ -102,7 +102,10 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
       data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "c", app_slug: "voice-changer-pro", settings: {}, nodes: [], edges: [] },
       error: null,
     })
-    const projectsChain = chain({ data: { id: PROJECT_ID, app_slug: null }, error: null })
+    const projectsChain = chain({
+      data: { id: PROJECT_ID, app_slug: null, user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
       if (table === "client_apps") return registryChain()
       if (table === "projects") return projectsChain
@@ -127,7 +130,10 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
       data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "n", app_slug: null, settings: {}, nodes: [], edges: [] },
       error: null,
     })
-    const projectsChain = chain({ data: { id: PROJECT_ID, app_slug: null }, error: null })
+    const projectsChain = chain({
+      data: { id: PROJECT_ID, app_slug: null, user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
       if (table === "client_apps") return registryChain()
       if (table === "projects") return projectsChain
@@ -154,7 +160,10 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
       data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "s", app_slug: "studio", settings: {}, nodes: [], edges: [] },
       error: null,
     })
-    const projectsChain = chain({ data: { id: PROJECT_ID, app_slug: null }, error: null })
+    const projectsChain = chain({
+      data: { id: PROJECT_ID, app_slug: null, user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
       if (table === "client_apps") return chain({ data: { slug: "studio" }, error: null })
       if (table === "projects") return projectsChain
@@ -180,7 +189,10 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
       error: null,
     })
     // Project already classified (vcp) — a bare conversion created inside it is vcp.
-    const projectsChain = chain({ data: { app_slug: "voice-changer-pro" }, error: null })
+    const projectsChain = chain({
+      data: { id: PROJECT_ID, app_slug: "voice-changer-pro", user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
       if (table === "client_apps") return registryChain()
       if (table === "projects") return projectsChain

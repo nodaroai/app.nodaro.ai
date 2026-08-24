@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import type { WorkflowMeta } from "@/hooks/use-projects-store"
 import {
   fetchListedAppSlugs,
@@ -29,6 +30,9 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
   const projectMapRef = useRef(projectMap)
   projectMapRef.current = projectMap
   const queryClient = useQueryClient()
+  // Subscribed, not read on demand: a switch has to re-run the search, or
+  // the previous scope's results sit there until someone types again.
+  const { workspaceId, ready } = useWorkspaceScope()
 
   useEffect(() => {
     if (search.length < 2) {
@@ -48,12 +52,18 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
         const showAll = readShowClientAppsFlag()
         const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
 
+        // Scoped, because a search is where the mixing shows first: type a
+        // word and get one hit from the class and one from your own files,
+        // with nothing on the row to say which is which.
         let query = supabase
           .from("workflows")
           .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
           .ilike("name", `%${search}%`)
           .order("updated_at", { ascending: false })
           .limit(20)
+        query = workspaceId
+          ? query.eq("workspace_id", workspaceId)
+          : query.is("workspace_id", null)
         if (!showAll) query = query.or(workflowVisibilityFilter(listed))
         const { data, error } = await query
 
@@ -84,7 +94,9 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
       cancelled = true
       clearTimeout(timer)
     }
-  }, [search, queryClient])
+    // `workspaceId` and `ready` are dependencies for the same reason they are
+    // key members elsewhere: the answer changes when they do.
+  }, [search, queryClient, workspaceId, ready])
 
   return { results, loading }
 }

@@ -17,6 +17,16 @@ const LABELS: Readonly<Record<string, string>> = {
   get_character: "Reading a character",
   list_locations: "Listing locations",
   get_location: "Reading a location",
+  list_objects: "Listing objects",
+  get_object: "Reading an object",
+  list_creatures: "Listing creatures",
+  get_creature: "Reading a creature",
+  browse_gallery: "Looking through your gallery",
+  browse_uploads: "Looking through your uploads",
+  list_voices: "Listing voices",
+  list_workflows: "Listing your workflows",
+  list_components: "Listing components",
+  get_component_inputs: "Reading a component",
   check_balance: "Checking credits",
 }
 

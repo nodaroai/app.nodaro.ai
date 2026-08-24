@@ -760,8 +760,12 @@ export function AppSidebar({
                 </Button>
               )}
             </div>
-            <LanguageSwitcher collapsed={isCollapsed} />
-            {!isCollapsed && <ThemeToggle />}
+            {!isCollapsed && (
+              <div className="flex items-center gap-0.5">
+                <LanguageSwitcher />
+                <ThemeToggle />
+              </div>
+            )}
           </div>
 
           {/* Version row. Clickable whenever a release is known, every

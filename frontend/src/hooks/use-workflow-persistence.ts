@@ -13,7 +13,7 @@ import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
 import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/lib/single-node-restore"
-import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
+import { refreshEntityNodes } from "@/lib/entity-node-data"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -1087,22 +1087,18 @@ export function useWorkflowPersistence(projectId?: string) {
           listCompleted: (wfId) => listWorkflowExecutions(wfId, { limit: 50, status: "completed", source: "editor" }),
         }).catch(() => {})
 
-        // Refresh each placed character node from its live DB row. Character
-        // assets (expressions, poses, wardrobe, …) are added in the Character
-        // Studio AFTER a node is placed, so the saved workflow JSON holds a STALE
-        // snapshot — without this, studio-added assets never appear in the node,
-        // the reference picker, or the @-mention list on reload (the "whole
-        // expressions/poses missing" report). Fire-and-forget + self-guarded
-        // (skips deleted / re-issued / non-character nodes) and a no-op when the
-        // detail is unchanged. Skip read-only (Studio) workflows — Studio owns
-        // their writes.
+        // Refresh every placed ENTITY node (character / object / creature /
+        // location) from its live DB row. Buckets — expressions, poses,
+        // wardrobe, materials, weather — are added in the studios AFTER a node
+        // is placed, so the saved workflow JSON holds a STALE snapshot; without
+        // this, studio-added assets never appear in the node, the reference
+        // picker, or the @-mention list on reload (the "whole expressions/poses
+        // missing" report). It also fills in a node an agent wrote with an id
+        // and no media at all. Fire-and-forget + self-guarded (skips deleted /
+        // re-issued / rebound nodes) and a no-op when the detail is unchanged.
+        // Skip read-only (Studio) workflows — Studio owns their writes.
         if (!useWorkflowStore.getState().isReadOnly) {
-          for (const n of nodes) {
-            const dbId = (n.data as Record<string, unknown> | undefined)?.characterDbId
-            if (n.type === "character" && typeof dbId === "string" && dbId) {
-              hydrateCharacterNodeFromDetail(n.id, dbId)
-            }
-          }
+          refreshEntityNodes(nodes)
         }
 
         // Prefetch model credit costs for all nodes in one batch request

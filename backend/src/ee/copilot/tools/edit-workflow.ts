@@ -20,9 +20,11 @@ import {
   type GenericNode,
 } from "@nodaro/shared"
 import { supabase } from "../../../lib/supabase.js"
+import { EditRejected } from "./edit-rejected.js"
 import { migrateGenerateImageHandles } from "../../../lib/generate-image-handle-migration.js"
-import { GRAPH_CAPS, LAYOUT, NODE_ID_RE } from "../constants.js"
+import { GRAPH_CAPS, LAYOUT, MAX_WORKFLOW_NAME_CHARS, NODE_ID_RE } from "../constants.js"
 import { changedLockedUrlFields, isDeniedNodeType } from "./deny-lists.js"
+import { assertEntitiesAreTheirs } from "./entity-ownership.js"
 import { knownNodeTypes, suggestNodeTypes, validateWorkflowEdges, type EdgeLike } from "./edge-validation.js"
 import type { CopilotToolContext } from "./types.js"
 
@@ -70,7 +72,7 @@ export interface EditWorkflowResult {
 }
 
 /** A rejected edit. The message is written for the model, not for a log. */
-export class EditRejected extends Error {}
+
 
 interface StoredGraph {
   nodes: GenericNode[]
@@ -381,6 +383,10 @@ function applyLayout(
 }
 
 export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflowArgs): Promise<EditWorkflowResult> {
+  // Outside the retry loop on purpose: these ids come from the ARGS, so they
+  // cannot change between attempts, and the check costs a query per kind.
+  await assertEntitiesAreTheirs([...(args.upsertNodes ?? []), ...(args.patchNodes ?? [])], ctx.userId)
+
   for (let attempt = 0; attempt < 2; attempt++) {
     const stored = await loadGraph(ctx)
     const prepared = prepare(args, stored)
@@ -392,8 +398,12 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
       p_delete_node_ids: prepared.deleteNodeIds,
       p_upsert_edges: prepared.upsertEdges,
       p_delete_edge_ids: prepared.deleteEdgeIds,
-      // Rename only — never `settings` (see EditWorkflowArgs).
-      p_set: args.set?.name ? { name: args.set.name } : null,
+      // Rename only — never `settings` (see EditWorkflowArgs) — and capped:
+      // the name is echoed into every turn's context preamble, so an unbounded
+      // one is both a per-turn token cost and a way to push text into the
+      // preamble. Truncated rather than rejected: losing the tail of an absurd
+      // name is a smaller harm than failing the graph edit it came with.
+      p_set: args.set?.name ? { name: args.set.name.slice(0, MAX_WORKFLOW_NAME_CHARS) } : null,
       p_user_id: ctx.userId,
     })
     if (error) throw new Error(`edit_workflow: ${error.message}`)
@@ -436,3 +446,5 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
   }
   throw new EditRejected("The workflow changed while I was editing. Read it again with get_graph and re-apply your change.")
 }
+
+export { EditRejected }

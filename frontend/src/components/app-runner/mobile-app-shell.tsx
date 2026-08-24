@@ -21,6 +21,7 @@ import {
   getNodeResult,
 } from "@/lib/presentation-utils"
 import { createClient } from "@/lib/supabase"
+import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { toast } from "sonner"
 import { isVideoUrl } from "@/lib/media-type"
 import { optimizedImageUrl } from "@/lib/image"
@@ -517,7 +518,9 @@ export function MobileAppShell({
       } else {
         const { data: newProject, error: projErr } = await supabase
           .from("projects")
-          .insert({ user_id: user.id, name: REMIX_PROJECT_NAME })
+          // The remix lands where the person is working, not always in
+          // their private space.
+          .insert({ user_id: user.id, name: REMIX_PROJECT_NAME, workspace_id: getActiveWorkspaceId() })
           .select("id")
           .single()
         if (projErr || !newProject) throw new Error("Failed to create project")

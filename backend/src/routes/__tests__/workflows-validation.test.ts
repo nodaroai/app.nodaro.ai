@@ -90,6 +90,29 @@ afterEach(async () => {
 // at all) must pass through unmodified.
 // ---------------------------------------------------------------------------
 
+/**
+ * The project-addressed routes read the project itself first — whether the
+ * caller may work inside it is now decided from the row rather than filtered
+ * out by the query, because inside a workspace the project belongs to the
+ * admin who made it and not to the caller.
+ */
+function withProjectScope(otherTables: Record<string, unknown>) {
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: {
+      id: TEST_PROJECT_ID,
+      app_slug: null,
+      user_id: TEST_USER_ID,
+      workspace_id: null,
+    },
+    error: null,
+  })
+  const eq = vi.fn().mockReturnValue({ maybeSingle })
+  const select = vi.fn().mockReturnValue({ eq })
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    if (table === "projects") return { select } as never
+    return otherTables as never
+  })
+}
 describe("POST /v1/projects/:projectId/workflows — sub-workflow validation", () => {
   it("rejects an orphaned sub-workflow-input with 400 invalid_sub_workflow", async () => {
     // No supabase mock needed — validation runs before the insert chain.
@@ -147,7 +170,7 @@ describe("POST /v1/projects/:projectId/workflows — sub-workflow validation", (
     })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
     const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    withProjectScope({ insert: mockInsert })
 
     const res = await app.inject({
       method: "POST",
@@ -201,7 +224,7 @@ describe("POST /v1/projects/:projectId/workflows — sub-workflow validation", (
     })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
     const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    withProjectScope({ insert: mockInsert })
 
     // Case 1: nodes omitted entirely
     const res1 = await app.inject({

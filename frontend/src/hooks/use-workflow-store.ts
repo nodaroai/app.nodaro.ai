@@ -21,6 +21,7 @@ import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
+import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
 import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefaultType, readMemory, type AdminDefault } from "@/lib/node-defaults"
@@ -488,7 +489,20 @@ interface WorkflowState {
    *  viewport stays where it is. */
   readonly openFullscreenSettings: (nodeId: string) => void
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
-  readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  readonly updateNodeData: (
+    nodeId: string,
+    data: Record<string, unknown>,
+    opts?: {
+      /**
+       * Re-derived from the database, not edited by anyone — so it must not
+       * mark the workflow dirty. Two things go wrong if it does: an autosave
+       * fires for data the server can re-derive at any time, and the copilot's
+       * `ensureCanvasVersion` sees a dirty canvas and REFUSES to adopt its own
+       * next edit, leaving the user looking at a stale graph mid-turn.
+       */
+      readonly fromDatabase?: boolean
+    },
+  ) => void
   /**
    * Batched optimistic execution-status flip for many nodes in ONE store
    * update. Sets `data.executionStatus` on every matched id (to `undefined`,
@@ -1534,7 +1548,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
   },
 
-  updateNodeData: (nodeId, data) => {
+  updateNodeData: (nodeId, data, opts) => {
     if (get().isReadOnly) return
     // If every key in the update is execution-related, tell the undo system
     // to skip snapshot capture so job polling doesn't pollute undo history.
@@ -1583,7 +1597,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return { ...node, data: { ...d, ...patch } as SceneNodeData }
       })
 
-      return isTransientOnly ? { nodes } : { nodes, isDirty: true }
+      return isTransientOnly || opts?.fromDatabase ? { nodes } : { nodes, isDirty: true }
     })
     if (isExecOnly) setSkipUndoCapture(false)
 
@@ -2750,6 +2764,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       return next as Partial<WorkflowState>
     })
+    // A graph written without a browser in the loop (the Copilot, an MCP
+    // client, an import) carries entity ids with no media on them. The run
+    // engine hydrates those server-side, so the RUN is right either way — this
+    // is what stops the canvas from showing an empty character card until the
+    // user reloads. Only the empty ones, because this fires on every remote
+    // write. Studio owns its own writes.
+    if (!get().isReadOnly) refreshEntityNodes(orderedNodes, { onlyMissingMedia: true })
   },
 
   setVideoAutoplay: (autoplay) => {
