@@ -27,7 +27,7 @@ describe("organizations wire contract — enums", () => {
 })
 
 describe("organizations wire contract — settings request schemas", () => {
-  it("the preset shape has exactly the eight resolvable keys", () => {
+  it("the preset shape has exactly the nine resolvable keys", () => {
     expect([...PRESET_SETTING_KEYS].sort()).toEqual(
       [
         "admin_access",
@@ -37,6 +37,7 @@ describe("organizations wire contract — settings request schemas", () => {
         "member_caps_enabled",
         "members_can_create_projects",
         "personal_space_enabled",
+        "policy_survives_suspension",
         "workspace_admins_can_invite",
       ].sort(),
     )
