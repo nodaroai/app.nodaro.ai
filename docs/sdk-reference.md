@@ -74,7 +74,7 @@ The instance exposes 30 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `media`, `audio`, `credits`, `uploads`, `library`,
-`presets`, `pickerCatalogs`, `models`, `shots`, `recast`, `community`,
+`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `community`,
 `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
@@ -346,7 +346,7 @@ but rarely need to be imported directly:
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
-`UploadsResource`, `PresetsResource`, `PickerCatalogsResource`, `CommunityResource`.
+`UploadsResource`, `PresetsResource`, `PickerCatalogsResource`, `CatalogsResource`, `CommunityResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -3522,6 +3522,36 @@ const { pickerJson, gaps } = await client.pickerCatalogs.analyzeText({
   text: "Neon-soaked Tokyo alley at night, rain, handheld tracking shot, moody synthwave",
 })
 console.log(pickerJson["setting"], pickerJson["camera-motion"], gaps)
+```
+
+---
+
+### `client.catalogs`
+
+The **server-driven** catalog projection: every picker catalog in one call,
+reflecting the deployment's registered *vendored packs* (a deployment can
+replace / extend / deny a catalog's options). Where `client.pickerCatalogs`
+fetches one picker at a time, `client.catalogs.list()` returns the whole set at
+once — so a thin client that renders its own pickers honors the deployment's
+curation. Public (no auth), publicly cacheable for 5 minutes.
+
+#### `list(opts?)`
+
+```ts
+list(opts?: { detail?: "compact" | "full" }): Promise<{ data: ProjectedCatalog[] }>
+```
+
+`GET /v1/catalogs` → every registered catalog projected to one flat shape.
+`detail: "compact"` (default) carries `id`, `label`, `category`, `icon`;
+`detail: "full"` additionally carries each option's `description` and
+`promptHint`. A single-dim catalog carries `options`; a multi-dim catalog
+carries `dimensions` (one `{ field, label, options }` per field). The shape is
+tag/policy-free.
+
+```ts
+const { data } = await client.catalogs.list({ detail: "full" })
+const setting = data.find((c) => c.catalogId === "setting")
+console.log(setting?.options?.[0]?.promptHint)
 ```
 
 ---

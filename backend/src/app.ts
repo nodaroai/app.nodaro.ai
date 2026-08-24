@@ -228,6 +228,7 @@ import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
 import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
+import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { registerWellKnown } from "./routes/well-known.js"
@@ -568,6 +569,7 @@ export async function buildApp() {
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
   await app.register(pickerCatalogsRoutes)
+  await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
   await registerOauthRegister(app)
   await registerWellKnown(app)

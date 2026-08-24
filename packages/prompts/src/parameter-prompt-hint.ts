@@ -57,6 +57,7 @@ import { buildMusicMoodHints } from "./music-mood.js"
 import { buildInstrumentationHints } from "./instrumentation.js"
 import { buildVoiceCharacterHints } from "./voice-character.js"
 import { buildVoiceDeliveryHints } from "./voice-delivery.js"
+import { getPickerCatalog } from "./picker-catalogs.js"
 
 
 function asStr(v: unknown): string {
@@ -174,7 +175,27 @@ export function getParameterPromptHint(
     return withCustomText(data, composeCharacterFxHintFromConnections(effectId, targetNames, timing))
   }
 
-  switch (node.type) {
+  const base = resolveBaseHint(node.type, data)
+  if (base) return base
+  // Pack-extend fallback: a single-dim pack entry the per-catalog getter (which
+  // reads the frozen base array) can't resolve. Resolve it against the
+  // registered (pack-composed) catalog's options.
+  const cat = getPickerCatalog(node.type)
+  if (cat?.kind === "single" && cat.valueField) {
+    const id = typeof data[cat.valueField] === "string" ? (data[cat.valueField] as string) : ""
+    const opt = cat.options?.find((o) => o.id === id)
+    if (opt) return opt.promptHint
+  }
+  return base
+}
+
+/**
+ * Base (upstream) hint dispatch by node type — the per-catalog getters read the
+ * frozen base arrays. Pack-added single-dim ids are resolved by the caller
+ * against the registered (pack-composed) catalog.
+ */
+function resolveBaseHint(type: string, data: Record<string, unknown>): string {
+  switch (type) {
     case "framing":
       return withCustomText(data, buildFramingHints(data).join(", "))
     case "lighting":

@@ -310,6 +310,13 @@ jobs:
       - name: Typecheck CLI
         run: npx tsc --noEmit
         working-directory: packages/cli
+      - name: Typecheck shared
+        # packages/shared is an Apache published package; its tsconfig includes
+        # src/**/*.ts (tests too), so this gives the catalog-projection
+        # @ts-expect-error guard real CI teeth — a `tags`/`policy` field added
+        # to ProjectedCatalog fails here (TS2578) before it can cross the wire.
+        run: npx tsc --noEmit
+        working-directory: packages/shared
 
   tenant-scope-lint:
     name: Tenant Scope Lint

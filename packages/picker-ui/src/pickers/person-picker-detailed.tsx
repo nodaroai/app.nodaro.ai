@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { PEOPLE, PERSON_DIMENSION_ORDER, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { getRegisteredPeople, getRegisteredPersonDimensionOrder, getRegisteredPersonFieldByDimension, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
@@ -41,8 +41,11 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("person")
 
   const grouped = useMemo(() => {
+    // Read the REGISTERED (pack-composed) person set + dimension order so a
+    // deployment's person packs (e.g. B7) enumerate here. Pack dimensions widen
+    // to string outside the closed union; the casts round-trip them safely.
     const byDimension = new Map<PersonDimension, Person[]>()
-    for (const person of PEOPLE) {
+    for (const person of getRegisteredPeople() as readonly Person[]) {
       if (!matches(person.id, person.label, person.description, query)) {
         continue
       }
@@ -50,9 +53,9 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
       list.push(person)
       byDimension.set(person.dimension, list)
     }
-    return PERSON_DIMENSION_ORDER.map((dim) => ({
-      dimension: dim,
-      entries: byDimension.get(dim) ?? [],
+    return getRegisteredPersonDimensionOrder().map((dim) => ({
+      dimension: dim as PersonDimension,
+      entries: byDimension.get(dim as PersonDimension) ?? [],
     }))
   }, [query, matches])
 
@@ -78,7 +81,7 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
       )}
 
       {grouped.map(({ dimension, entries }) => {
-        const field = PERSON_FIELD_BY_DIMENSION[dimension]
+        const field = getRegisteredPersonFieldByDimension()[dimension] as keyof PersonValue
         const selectedIds = pickIds(value[field])
         const maxSelected = getPersonDimensionLimit(dimension)
         const isMultiCapable = maxSelected > 1

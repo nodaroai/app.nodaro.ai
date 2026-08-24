@@ -28,8 +28,8 @@ describe("resolvePipelineModel", () => {
   })
 
   it("returns the global script_llm for the script_llm stage", () => {
-    const config: Partial<PipelineConfig> = { script_llm: "claude-opus-4-6" }
-    expect(resolvePipelineModel(config, "script_llm")).toBe("claude-opus-4-6")
+    const config: Partial<PipelineConfig> = { script_llm: "claude-opus-4-7" }
+    expect(resolvePipelineModel(config, "script_llm")).toBe("claude-opus-4-7")
   })
 
   it("per-stage override beats the matching global field", () => {
@@ -52,12 +52,12 @@ describe("resolvePipelineModel", () => {
       stage_models: {
         scene_keyframes_image: "gpt-image",
         shots_video: "veo3",
-        script_llm: "claude-opus-4-6",
+        script_llm: "claude-opus-4-7",
       },
     }
     expect(resolvePipelineModel(config, "scene_keyframes_image")).toBe("gpt-image")
     expect(resolvePipelineModel(config, "shots_video")).toBe("veo3")
-    expect(resolvePipelineModel(config, "script_llm")).toBe("claude-opus-4-6")
+    expect(resolvePipelineModel(config, "script_llm")).toBe("claude-opus-4-7")
     // Entity image stages keep the global pick.
     expect(resolvePipelineModel(config, "characters_image")).toBe("flux")
   })

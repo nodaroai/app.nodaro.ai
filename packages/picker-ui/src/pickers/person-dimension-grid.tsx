@@ -1,7 +1,14 @@
 "use client"
 
 import { useId, useMemo, useState, type JSX } from "react"
-import { PEOPLE, PERSON_DIMENSION_LABELS, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { getRegisteredPeople, getRegisteredPersonFieldByDimension, getRegisteredPersonDimensionLabels, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+
+// The precise per-dimension field-name union (a key of PersonValue for every
+// BASE dimension). Pack dimensions add new fields outside this union at run
+// time; the registered field-map returns them as a widened string that we cast
+// back to this type so PersonValue reads/writes keep typechecking (the cast is
+// runtime-safe — pack fields are opaque strings the grid only round-trips).
+type PersonFieldName = (typeof PERSON_FIELD_BY_DIMENSION)[PersonDimension]
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
@@ -322,7 +329,7 @@ export function usePersonDimension(
   value: PersonValue,
   onChange: (patch: Partial<PersonValue>) => void,
 ): UsePersonDimensionResult {
-  const field = PERSON_FIELD_BY_DIMENSION[dimension]
+  const field = getRegisteredPersonFieldByDimension()[dimension] as PersonFieldName
   const raw = value[field]
   const selectedIds = pickIds(raw)
   const maxSelected = getPersonDimensionLimit(dimension)
@@ -362,7 +369,7 @@ export function usePersonDimension(
   }
 
   const enableSingle = () => {
-    const first = PEOPLE.find((p) => p.dimension === dimension)?.id
+    const first = getRegisteredPeople().find((p) => p.dimension === dimension)?.id
     if (first) onChange({ [field]: first })
   }
 
@@ -434,12 +441,12 @@ export function PersonDimensionGrid({
   const isSearching = Boolean(query)
 
   const entries = useMemo(
-    () => PEOPLE.filter((p) => p.dimension === dimension && matches(p.id, p.label, p.description, query)),
+    () => (getRegisteredPeople() as readonly Person[]).filter((p) => p.dimension === dimension && matches(p.id, p.label, p.description, query)),
     [dimension, matches, query],
   )
 
   const checked = enabled ?? true
-  const baseLabel = PERSON_DIMENSION_LABELS[dimension]
+  const baseLabel = getRegisteredPersonDimensionLabels()[dimension]
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   // Ethnicity (39 entries / 6 region groups) and Type (60+ entries spanning
   // realistic, primitive, fantasy, mythic, sci-fi, heroes, anime) get the
