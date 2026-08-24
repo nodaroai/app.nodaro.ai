@@ -86,6 +86,7 @@ beforeEach(() => {
       turnId: TURN_ID,
       status: "completed",
       userText: "build me a 6-shot promo",
+      startedAt: 1_700_000_000_000,
       text: "Built it — six shots.",
       activities: [],
       update: {
@@ -146,5 +147,54 @@ describe("the run decision", () => {
     useCopilotStore.setState({ proposalDismissed: true, runPhase: "idle" })
     renderConversation(persistedHistory)
     expect(screen.queryByText("Run this workflow?")).not.toBeInTheDocument()
+  })
+})
+
+describe("the gap between send and the first token", () => {
+  /** The exact state the panel is in for the first several seconds of a turn. */
+  const justSent = {
+    streaming: true,
+    turn: {
+      turnId: null,
+      status: "streaming" as const,
+      userText: "build me a product shot",
+      startedAt: 1_700_000_000_000,
+      text: "",
+      activities: [],
+      update: null,
+      proposal: null,
+      creditsCharged: null,
+      error: null,
+    },
+  }
+
+  it("is never blank — the pill and the skeleton stand in for the answer", () => {
+    useCopilotStore.setState({ ...justSent, runPhase: "idle", proposalDismissed: true })
+    renderConversation([])
+    expect(screen.getByText("build me a product shot")).toBeInTheDocument()
+    expect(screen.getByText("Reading the workflow")).toBeInTheDocument()
+    expect(screen.getByTestId("copilot-answer-skeleton")).toBeInTheDocument()
+  })
+
+  it("drops the skeleton the moment prose starts arriving", () => {
+    useCopilotStore.setState({
+      ...justSent,
+      turn: { ...justSent.turn, text: "Adding three angles" },
+      runPhase: "idle",
+      proposalDismissed: true,
+    })
+    renderConversation([])
+    expect(screen.getByText("Adding three angles")).toBeInTheDocument()
+    // Real text has arrived, so the stand-in for it must be gone.
+    expect(screen.queryByTestId("copilot-answer-skeleton")).toBeNull()
+    // The pill stays — it carries the step and the clock until `done`.
+    expect(screen.getByText("Reading the workflow")).toBeInTheDocument()
+  })
+
+  it("shows neither on a turn that is over", () => {
+    useCopilotStore.setState({ streaming: false, runPhase: "idle", proposalDismissed: true })
+    renderConversation(persistedHistory)
+    expect(screen.queryByText("Reading the workflow")).toBeNull()
+    expect(screen.queryByTestId("copilot-answer-skeleton")).toBeNull()
   })
 })

@@ -78,6 +78,8 @@ export const COPILOT_STRINGS = {
   kindLocation: "Location",
 
   stepsCollapsed: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
+  /** What the live pill says before the first tool call names a real step. */
+  stepStarting: "Reading the workflow",
 
   readOnlyTitle: "Read-only",
   readOnlyBlurb: "Editing is off for this workflow",

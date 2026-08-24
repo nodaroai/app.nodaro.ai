@@ -8,8 +8,13 @@
  */
 import { EMPTY_TURN, type CopilotStreamEvent, type CopilotTurnState } from "./types"
 
-export function startTurn(userText: string): CopilotTurnState {
-  return { ...EMPTY_TURN, status: "streaming", userText }
+/**
+ * `startedAt` is a PARAMETER, not a `Date.now()` inside: this file is the one
+ * place a whole turn can be replayed as a list of events, and a clock read in
+ * here would make that replay non-deterministic.
+ */
+export function startTurn(userText: string, startedAt: number): CopilotTurnState {
+  return { ...EMPTY_TURN, status: "streaming", userText, startedAt }
 }
 
 export function reduceTurn(state: CopilotTurnState, event: CopilotStreamEvent): CopilotTurnState {

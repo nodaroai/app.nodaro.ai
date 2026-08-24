@@ -207,6 +207,7 @@ describe("a live turn", () => {
         turnId: "turn-1",
         status: "streaming",
         userText: "build me a product shot",
+        startedAt: 1_700_000_000_000,
         text: "Adding three angles",
         activities: [{ id: "tu1", label: "Reading the workflow", note: "", status: "started" }],
         update: null,
@@ -221,7 +222,9 @@ describe("a live turn", () => {
     renderPanel()
     expect(screen.getByText("build me a product shot")).toBeInTheDocument()
     expect(screen.getByText("Adding three angles")).toBeInTheDocument()
-    expect(screen.getByText("Reading the workflow")).toBeInTheDocument()
+    // Twice on purpose: the activity ROW is the log of what happened, the live
+    // PILL is the always-visible "still working, on this step, for this long".
+    expect(screen.getAllByText("Reading the workflow")).toHaveLength(2)
   })
 
   it("turns the send button into a stop button", () => {

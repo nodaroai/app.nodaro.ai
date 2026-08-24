@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import { isTurnOver, reduceTurn, startTurn } from "../turn-reducer"
 import type { CopilotStreamEvent, CopilotTurnState } from "../types"
 
-function drive(events: CopilotStreamEvent[], initial = startTurn("build me a product shot")): CopilotTurnState {
+/** Fixed, so a replayed turn is byte-identical run to run. */
+const T0 = 1_700_000_000_000
+
+function drive(events: CopilotStreamEvent[], initial = startTurn("build me a product shot", T0)): CopilotTurnState {
   return events.reduce(reduceTurn, initial)
 }
 
@@ -82,14 +85,14 @@ describe("reduceTurn", () => {
   })
 
   it("is a pure function — the input state is never mutated", () => {
-    const before = startTurn("hello")
+    const before = startTurn("hello", T0)
     const snapshot = JSON.stringify(before)
     reduceTurn(before, { type: "token", data: { text: "hi" } })
     expect(JSON.stringify(before)).toBe(snapshot)
   })
 
   it("ignores an event shape it does not know", () => {
-    const before = startTurn("hello")
+    const before = startTurn("hello", T0)
     const after = reduceTurn(before, { type: "future_event" } as unknown as CopilotStreamEvent)
     expect(after).toBe(before)
   })

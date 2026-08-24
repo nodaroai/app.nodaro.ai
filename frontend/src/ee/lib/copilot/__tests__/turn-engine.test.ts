@@ -128,6 +128,20 @@ beforeEach(() => {
   events([metadata("ask", 100), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
 })
 
+describe("the live timer's clock", () => {
+  it("stamps the turn with a real send time, which is what the pill counts from", async () => {
+    const before = Date.now()
+    await sendCopilotMessage("add a video step")
+    const startedAt = useCopilotStore.getState().turn.startedAt
+
+    // A placeholder here (0, or the server's clock) shows the user a wildly
+    // wrong elapsed time — the one number the pill exists to make trustworthy.
+    expect(startedAt).not.toBeNull()
+    expect(startedAt!).toBeGreaterThanOrEqual(before)
+    expect(startedAt!).toBeLessThanOrEqual(Date.now())
+  })
+})
+
 describe("unsaved work", () => {
   it("flushes a dirty canvas before sending, so the copilot never writes over it", async () => {
     const save = vi.fn(async () => {
