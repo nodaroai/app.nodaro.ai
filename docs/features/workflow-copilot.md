@@ -9,7 +9,11 @@ edition: Cloud
 
 Describe what you want; the workflow gets built on your canvas. The copilot reads your open workflow, adds and rewires nodes while you watch, proposes a run, and — after a run — reads what failed and fixes it.
 
-It lives in the workflow editor as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar, from the narrow tab beside the canvas, or with `Ctrl/Cmd + J`. Closing the panel does not stop a message that is still being written.
+There are two ways in.
+
+**From the home page** — a box at the top of the page: describe what you want, press **Build it**, and you land in a new workflow with the copilot already building it. It can be dismissed and stays dismissed.
+
+**From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar, from the narrow tab beside the canvas, or with `Ctrl/Cmd + J`. Closing the panel does not stop a message that is still being written.
 
 ## What it can do
 

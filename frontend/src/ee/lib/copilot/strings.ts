@@ -19,6 +19,15 @@ export const COPILOT_STRINGS = {
   ceilingLabel: "Auto-run credit limit",
   close: "Close Copilot",
 
+  homeTagline: "describe it, and it gets built on the canvas",
+  homePlaceholder: "Describe the workflow you want…",
+  homeBuild: "Build it",
+  homeDismiss: "Hide the Copilot composer",
+  homeBuildFailed: "Could not start that — try again.",
+  handoffSendFailed: "Could not send that automatically — press send to try again.",
+  handoffInterrupted: "You left before this could start — press send when you are ready.",
+  handoffFetchFailed: "Could not read what you asked for on the home page. Type it here and send.",
+
   emptyGreeting: (name: string) => `Hey ${name}`,
   emptyBlurb: "Describe the workflow you want. I build it on the canvas, then ask before spending anything.",
 

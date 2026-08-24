@@ -75,6 +75,24 @@ function apply(next: (turn: CopilotTurnState) => CopilotTurnState, bornIn = gene
 // Sending
 // ---------------------------------------------------------------------------
 
+/**
+ * Send a message and run the turn.
+ *
+ * Two properties callers depend on, neither obvious from the signature:
+ *
+ *  - **It never rejects.** A read-only workflow, a failed save, an insufficient
+ *    balance, a dropped stream and the re-entry latch are all early returns or
+ *    handled errors. A caller that needs to know whether a turn actually
+ *    started must ASK — `copilotState().turn.userText` — because catching will
+ *    catch nothing.
+ *  - **The workflow is resolved HERE, not by the caller.** It reads the editor's
+ *    current workflow and find-or-creates a thread on it. The home-page handoff
+ *    therefore re-checks the workflow and thread immediately before calling
+ *    this, and that check is only sound while nothing awaits between this
+ *    function's entry and the `streaming: true` / `threadId` pin below. An
+ *    `await` inserted above that point silently reopens a hole where a turn
+ *    lands on the wrong workflow.
+ */
 export async function sendCopilotMessage(
   rawText: string,
   opts: { auto?: boolean } = {},

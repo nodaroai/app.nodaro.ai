@@ -20,6 +20,7 @@ import { useWorkflowSearch } from "@/hooks/use-workflow-search"
 import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-queries"
 import { isStudioProject } from "@/lib/studio"
 import { ProjectCard } from "@/components/dashboard/project-card"
+import { CopilotHomeSlot } from "@/components/dashboard/copilot-home-slot"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
@@ -490,6 +491,9 @@ export default function ProjectsPage() {
       {/* Community: "this install can't generate yet" until a key or the
           connection exists — dismissible, per user (#706). Renders null on cloud. */}
       <ProviderSetupCallout userId={user?.id} />
+      {/* The one control on this page that MAKES something, rather than
+          listing what already exists. Renders nothing without credits. */}
+      <CopilotHomeSlot />
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting}{displayName ? `, ${displayName}` : ""}

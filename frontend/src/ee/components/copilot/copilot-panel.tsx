@@ -19,6 +19,7 @@ import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
 import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
+import { useCopilotHandoff } from "@/ee/hooks/copilot/use-copilot-handoff"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
 import { CopilotComposer } from "./copilot-composer"
 import { CopilotConversation } from "./copilot-conversation"
@@ -67,8 +68,10 @@ export default function CopilotPanel({
   const turnStatus = useCopilotStore((s) => s.turn.status)
   const turnUserText = useCopilotStore((s) => s.turn.userText)
 
-  useCopilotThreadForWorkflow()
+  const { thread } = useCopilotThreadForWorkflow()
   const { messages, busy } = useCopilotHistory(threadId)
+  // Arriving from the home page: send what the user typed there, once.
+  useCopilotHandoff(thread, workflowId)
   const settings = useCopilotSettings(threadId)
 
   const { data: characters } = useCharacters(projectId, userId)

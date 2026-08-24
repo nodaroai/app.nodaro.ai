@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 
 /** jsdom has no matchMedia; `useIsMobile` needs one to decide rail vs sheet. */
 let viewportIsMobile = false
@@ -31,6 +32,9 @@ vi.mock("@/lib/edition", async () => {
 const { CopilotCollapsedTab, CopilotPanelSlot, CopilotToolbarButton } = await import("../copilot-panel-slot")
 const { useCopilotUiStore } = await import("@/hooks/use-copilot-ui-store")
 
+/** The slot reads the handoff parameter; nothing here navigates. */
+const Router = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>
+
 const props = {
   projectId: "p1",
   save: null,
@@ -50,23 +54,23 @@ beforeEach(() => {
 
 describe("community build", () => {
   it("renders no rail", () => {
-    const { container } = render(<CopilotPanelSlot {...props} />)
+    const { container } = render(<CopilotPanelSlot {...props} />, { wrapper: Router })
     expect(container).toBeEmptyDOMElement()
   })
 
   it("renders no toolbar button", () => {
-    const { container } = render(<CopilotToolbarButton />)
+    const { container } = render(<CopilotToolbarButton />, { wrapper: Router })
     expect(container).toBeEmptyDOMElement()
   })
 
   it("renders no collapsed tab", () => {
-    const { container } = render(<CopilotCollapsedTab />)
+    const { container } = render(<CopilotCollapsedTab />, { wrapper: Router })
     expect(container).toBeEmptyDOMElement()
   })
 
   it("does not bind the keyboard shortcut", () => {
     const addSpy = vi.spyOn(window, "addEventListener")
-    render(<CopilotToolbarButton />)
+    render(<CopilotToolbarButton />, { wrapper: Router })
     expect(addSpy.mock.calls.some(([type]) => type === "keydown")).toBe(false)
     addSpy.mockRestore()
   })
@@ -78,12 +82,12 @@ describe("cloud build", () => {
   })
 
   it("shows the collapsed tab before the panel has ever been opened, and loads no ee chunk", () => {
-    render(<CopilotPanelSlot {...props} />)
+    render(<CopilotPanelSlot {...props} />, { wrapper: Router })
     expect(screen.getByRole("button", { name: /copilot/i })).toBeInTheDocument()
   })
 
   it("opens the rail from the toolbar button", async () => {
-    render(<CopilotToolbarButton />)
+    render(<CopilotToolbarButton />, { wrapper: Router })
     const button = screen.getByRole("button", { name: /copilot/i })
     button.click()
     expect(useCopilotUiStore.getState().open).toBe(true)
@@ -92,19 +96,19 @@ describe("cloud build", () => {
 
   it("marks the button pressed while the rail is open", () => {
     useCopilotUiStore.setState({ open: true, everOpened: true })
-    render(<CopilotToolbarButton />)
+    render(<CopilotToolbarButton />, { wrapper: Router })
     expect(screen.getByRole("button", { name: /copilot/i })).toHaveAttribute("aria-pressed", "true")
   })
 
   it("shows no collapsed tab on a phone — 40px of a phone's canvas is not free", () => {
     viewportIsMobile = true
-    const { container } = render(<CopilotPanelSlot {...props} />)
+    const { container } = render(<CopilotPanelSlot {...props} />, { wrapper: Router })
     expect(container).toBeEmptyDOMElement()
   })
 
   it("still offers the toolbar button on a phone", () => {
     viewportIsMobile = true
-    render(<CopilotToolbarButton />)
+    render(<CopilotToolbarButton />, { wrapper: Router })
     expect(screen.getByRole("button", { name: /copilot/i })).toBeInTheDocument()
   })
 })
