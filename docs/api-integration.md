@@ -120,6 +120,11 @@ an ordinary save keeps the response shape it has always had:
 }
 ```
 
+Those grants are the ones described under [workflow
+collaborators](./organizations.md#workflow-collaborators): a move can carry
+work out of the reach of somebody who was sharing it, and the response names
+who so you can tell them.
+
 **OAuth scope note:** the `workflows:read` scope also gates the broader
 workflow REST routes: `GET /v1/workflows` (flat list across all projects),
 `GET /v1/workflows/:id`, and `GET /v1/workflows/:id/export` — in addition

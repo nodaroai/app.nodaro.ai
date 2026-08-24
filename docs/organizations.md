@@ -156,6 +156,43 @@ suspension, and it obeys the organization's `allowed_email_domains`.
 | `POST` | `/v1/workspaces/:id/join-code` | workspace admin | `{ action: "rotate" | "enable" | "disable" }`. Enabling a workspace that never had a code mints one; rotating replaces it and the previous code stops working immediately. |
 | `POST` | `/v1/workspaces/join` | anyone signed in | `{ code }`. Accepts the spoken forms — `BCDF-GHJK`, lower case, and the letters people mishear (`O` for zero, `I` and `L` for one) are folded. Limited to 10 attempts per minute per account and 30 per minute per IP. |
 
+### Workflow collaborators
+
+A grant gives one person access to one workflow. It is a **floor**: it can
+only add access, never take it away, so a `viewer` grant handed to someone
+who could already edit the workflow changes nothing.
+
+| Method | Path | Who | Body / query |
+|--------|------|-----|--------------|
+| `GET` | `/v1/workflows/:id/collaborators` | anyone who may view the workflow | Rows of `{ userId, name, avatarUrl, role, createdAt }`. **Never an email address** — this list is readable by someone granted a look at this one workflow and belonging to nothing else. |
+| `POST` | `/v1/workflows/:id/collaborators` | see below | `{ userId }` **or** `{ email }` — exactly one — plus `role: "viewer" \| "editor"`. Returns `201`. Limited to 20 additions per minute per account. |
+| `PATCH` | `/v1/workflows/:id/collaborators/:userId` | same as `POST` | `{ role }`. |
+| `DELETE` | `/v1/workflows/:id/collaborators/:userId` | same as `POST`, **or yourself** | Leaving is always yours to do: nobody has to ask permission to stop having access. |
+
+**Who may share.** The creator always; a workspace admin where `admin_access`
+is `edit`; and anyone else who may edit the workflow where the workspace's
+`collaborators_can_invite` is on — off in a school by default, on in a team.
+Deliberately *not* "anyone who may edit": changing a piece of work and
+deciding who else sees it are different powers.
+
+**Adding by email** matches any address with an account, whatever
+organization it belongs to — a class often needs to include someone who is
+not in it yet. The address is matched case-insensitively. `404` means no
+account; nothing else is disclosed about it.
+
+**A non-member of the workspace is capped at `view`**, editor grant or not:
+one person sharing the class's work cannot hand an outsider the ability to
+change it. Running is stricter still and needs active membership, so an
+outside collaborator can edit the canvas and never spend the class's credits.
+
+An **archived** workspace refuses `POST` and `PATCH` with `403
+workspace_archived` — a frozen workspace takes no new sharing. Removing
+somebody still works.
+
+You cannot grant to the workflow's creator (they own it) or to yourself
+(you already have access, and a grant would outlive the role that allowed
+you to write it). Both answer `400`.
+
 ### Audit
 
 | Method | Path | Who | Body / query |
