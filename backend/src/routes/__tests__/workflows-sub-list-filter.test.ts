@@ -97,6 +97,12 @@ afterEach(async () => {
 // only top-level workflows surface. Without this, a refactor that drops the
 // filter would let child workflows leak into the dashboard or get selected
 // as picker targets — both are user-visible regressions.
+//
+// `/v1/workflows/callable` additionally carries `.is("workspace_id", null)`:
+// it is a PERSONAL list, and both halves of that filter are required or the
+// caller's own workspace work appears in it the moment they join one. The
+// project-scoped endpoint deliberately does NOT filter by workspace — the
+// project it names already decides the scope.
 // ---------------------------------------------------------------------------
 
 describe("GET /v1/projects/:projectId/workflows — filters out child sub-workflows", () => {
@@ -126,7 +132,8 @@ describe("GET /v1/projects/:projectId/workflows — filters out child sub-workfl
 describe("GET /v1/workflows/callable — filters out child sub-workflows", () => {
   it("applies .is('parent_workflow_id', null) when no projectId is given", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -138,14 +145,16 @@ describe("GET /v1/workflows/callable — filters out child sub-workflows", () =>
     })
 
     expect(res.statusCode).toBe(200)
-    expect(mockIs).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIs).toHaveBeenCalledWith("workspace_id", null)
     expect(mockEq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
   it("applies .is('parent_workflow_id', null) when projectId is given", async () => {
     const mockEqProject = vi.fn().mockResolvedValue({ data: [], error: null })
     const mockLimit = vi.fn().mockReturnValue({ eq: mockEqProject })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEqUser = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEqUser })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -157,7 +166,8 @@ describe("GET /v1/workflows/callable — filters out child sub-workflows", () =>
     })
 
     expect(res.statusCode).toBe(200)
-    expect(mockIs).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIs).toHaveBeenCalledWith("workspace_id", null)
     expect(mockEqUser).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(mockEqProject).toHaveBeenCalledWith("project_id", TEST_PROJECT_ID)
   })

@@ -253,8 +253,13 @@ describe("POST /v1/api-tokens", () => {
       }
       return {
         select: vi.fn().mockReturnValue({
+          // .eq("user_id") -> .is("workspace_id", null) -> .in("id", …):
+          // a token binds to personal workflows only, so the ownership check
+          // filters the workspace half out before it looks at the ids.
           eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            is: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
           }),
         }),
       } as never

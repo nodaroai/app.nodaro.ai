@@ -377,7 +377,12 @@ export async function workflowRoutes(app: FastifyInstance) {
     const params = parseWith(reply, projectIdParams, req.params, "Invalid project ID")
     if (!params) return
 
+    // A PROJECT-scoped list: the project's own scope is the answer, so this
+    // must NOT filter by workspace_id — a workspace project's workflows belong
+    // in this list. The check that decides whether the caller may see the
+    // project at all arrives with the rest of P9.
     const { data, error } = await supabase
+      // tenant-scope-ignore: project-scoped list; the project carries the scope.
       .from("workflows")
       .select(WORKFLOW_META_COLS)
       .eq("project_id", params.projectId)
@@ -533,10 +538,21 @@ export async function workflowRoutes(app: FastifyInstance) {
       }
     }
 
+    // Personal context: mine, and only the rows that belong to no workspace.
+    // BOTH halves are required. `user_id` alone would leak the caller's own
+    // workspace work into their personal list the moment they join one — the
+    // class's work showing up beside their private work, with no way to tell
+    // which is which. Today every row has a NULL workspace_id so this is a
+    // no-op; it has to be in place BEFORE the first workspace exists, not
+    // after someone notices.
+    //
+    // The workspace branch (list what this workspace may see) arrives with the
+    // rest of P9, once the RLS that agrees with it is on production.
     let listQuery = supabase
       .from("workflows")
       .select(WORKFLOW_META_COLS)
       .eq("user_id", userId)
+      .is("workspace_id", null)
       .is("parent_workflow_id", null)
       .order("updated_at", { ascending: false })
       .limit(limit)

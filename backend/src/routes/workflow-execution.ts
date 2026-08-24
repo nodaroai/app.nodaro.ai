@@ -958,7 +958,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const workflowIds = [...new Set(pageRows.map((r) => r.workflowId as string).filter(Boolean))]
     const workflowMap = new Map<string, { name: string; projectId: string }>()
     if (workflowIds.length > 0) {
+      // Enrichment only: the id set comes from rows the caller was already
+      // authorized to see, so re-filtering here would be decoration.
       const { data: workflows } = await supabase
+        // tenant-scope-ignore: enrichment over ids already authorized above.
         .from("workflows")
         .select("id, name, project_id")
         .in("id", workflowIds)

@@ -120,8 +120,11 @@ describe("GET /v1/workflows", () => {
       error: null,
     })
     const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
-    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
+    // Two .is() links now: the workspace half of the personal filter, then
+    // parent_workflow_id. The first returns a shape carrying the second.
+    const mockIsParent = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsWorkspace = vi.fn().mockReturnValue({ is: mockIsParent })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIsWorkspace })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -134,15 +137,19 @@ describe("GET /v1/workflows", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toHaveLength(2)
     expect(mockEq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
-    expect(mockIs).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsWorkspace).toHaveBeenCalledWith("workspace_id", null)
+    expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
     expect(mockOrder).toHaveBeenCalledWith("updated_at", { ascending: false })
   })
 
   it("respects a custom limit", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
     const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
-    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
+    // Two .is() links now: the workspace half of the personal filter, then
+    // parent_workflow_id. The first returns a shape carrying the second.
+    const mockIsParent = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsWorkspace = vi.fn().mockReturnValue({ is: mockIsParent })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIsWorkspace })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 

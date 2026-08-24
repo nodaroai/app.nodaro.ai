@@ -95,7 +95,9 @@ export async function projectRoutes(app: FastifyInstance) {
         : clientAppVisibilityFilter(await getListedAppSlugs())
 
       const runViewAll = (withFilter: boolean) => {
+        // tenant-scope-ignore: deliberate cross-tenant read, admin-gated above.
         let q = supabase.from("projects").select(PROJECT_COLS)
+
         if (withFilter && listedFilter) q = q.or(listedFilter)
         return q.order("created_at", { ascending: false })
       }
@@ -134,10 +136,14 @@ export async function projectRoutes(app: FastifyInstance) {
       }
     }
 
+    // Personal context: mine, and only the projects that belong to no
+    // workspace. See the note on GET /v1/workflows — both halves are required,
+    // and this is a no-op until the first workspace exists.
     const { data, error } = await supabase
       .from("projects")
       .select(PROJECT_COLS)
       .eq("user_id", req.userId)
+      .is("workspace_id", null)
       .order("created_at", { ascending: false })
 
     if (error) {

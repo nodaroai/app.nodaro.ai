@@ -33,7 +33,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { createHash } from "node:crypto"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
@@ -61,6 +61,19 @@ const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"]])
 function rowKeyMatcher(table) {
   return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
 }
+
+/**
+ * Tables that carry a workspace, and whose LIST queries must therefore say
+ * which side of the line they are on.
+ *
+ * The failure this catches has no error and no symptom until it is too late:
+ * a personal list that filters only by `user_id` starts including the
+ * caller's own workspace work the moment they join one — the class's rows
+ * appearing beside their private rows with nothing to tell them apart. It is
+ * a no-op today (nothing carries a workspace yet), which is exactly why the
+ * rule has to exist before the first workspace does.
+ */
+const WORKSPACE_SCOPED_TABLES = new Set(["workflows", "projects"])
 
 const TENANT_TABLES = new Set([
   "characters",
@@ -209,6 +222,56 @@ function parenDelta(line) {
  * chain-per-line formatting and sidesteps Semgrep's AST-node matching
  * limitation on nested method calls.
  */
+/**
+ * The chain PLUS any later statements that keep building the same query.
+ *
+ * `collectChain` stops at the first line that does not begin with `.`, which
+ * is right for a fluent chain and wrong for the shape this codebase actually
+ * uses for conditional filters:
+ *
+ *     let dbQuery = supabase.from("workflows").select(COLS)
+ *     dbQuery = dbQuery.eq("user_id", userId).is("workspace_id", null)
+ *
+ * Reading only the first statement, the scope looks missing and the list rule
+ * fires on correct code. Whoever hits that will reach for an ignore comment,
+ * and an ignore comment on a correctly-scoped query is how a rule stops
+ * meaning anything.
+ *
+ * So: find the variable the chain was assigned to, and fold in every later
+ * `VAR = VAR.…` line until the variable is consumed (awaited or destructured)
+ * or the function plainly ends. Used by the LIST rule only — the id rule's
+ * baseline is keyed on the hash of its block, and widening that block would
+ * invalidate every baselined entry at once.
+ */
+function collectChainWithContinuations(lines, startIdx) {
+  const base = collectChain(lines, startIdx)
+  const assigned =
+    lines[startIdx].match(/(?:const|let|var)\s+(\w+)\s*=/) ??
+    (startIdx > 0 ? lines[startIdx - 1].match(/(?:const|let|var)\s+(\w+)\s*=/) : null)
+  if (!assigned) return base
+
+  const name = assigned[1]
+  // `\.` OR end-of-line. A long continuation is often broken right after the
+  // assignment (`q = q` / newline / `.eq(...)`), and collectChain picks the
+  // dot-lines up from there. Without the `$` branch that line reads as a
+  // CONSUMPTION instead — the walk stops before the filters and a correctly
+  // scoped query is flagged, which is the exact false positive this function
+  // exists to remove.
+  const cont = new RegExp(`^\\s*${name}\\s*=\\s*${name}\\s*(\\.|$)`)
+  const consumed = new RegExp(`(await|=)\\s*${name}\\b(?!\\s*=)`)
+  const extra = []
+  for (let j = startIdx + base.split("\n").length; j < lines.length && j < startIdx + 60; j++) {
+    if (cont.test(lines[j])) {
+      extra.push(collectChain(lines, j))
+      continue
+    }
+    // The query is being run — nothing after this can still add a filter.
+    if (consumed.test(lines[j])) break
+    if (/^\s*(export\s+)?(async\s+)?function\b|^\}/.test(lines[j])) break
+  }
+  return extra.length > 0 ? base + "\n" + extra.join("\n") : base
+}
+
 function collectChain(lines, startIdx) {
   const chain = [lines[startIdx]]
   let depth = parenDelta(lines[startIdx])
@@ -234,7 +297,7 @@ function collectChain(lines, startIdx) {
   return chain.join("\n")
 }
 
-function scan(filePath) {
+export function scan(filePath) {
   const src = readFileSync(filePath, "utf8")
   const lines = src.split("\n")
   const findings = []
@@ -268,8 +331,28 @@ function scan(filePath) {
     // organization rows by org_id / workspace_id (the second tenancy axis).
     if (/\.eq\s*\(\s*["'](user_id|org_id|workspace_id)["']/.test(block)) continue
 
-    findings.push({ line: i + 1, table, block })
+    findings.push({ kind: "id", line: i + 1, table, block })
   }
+
+  // ---- rule 2: an unscoped LIST on a workspace-scoped table --------------
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(fromRe)
+    if (!match) continue
+    const table = match[1]
+    if (!WORKSPACE_SCOPED_TABLES.has(table)) continue
+    if (IGNORE_COMMENT.test(lines[i])) continue
+    if (i > 0 && IGNORE_COMMENT.test(lines[i - 1])) continue
+
+    const block = collectChainWithContinuations(lines, i)
+    // A LIST: selects, and does not narrow to one row.
+    if (!/\.select\s*\(/.test(block)) continue
+    if (/\.single\s*\(\s*\)|\.maybeSingle\s*\(\s*\)/.test(block)) continue
+    // Said which side it is on?
+    if (/\.(is|eq)\s*\(\s*["']workspace_id["']/.test(block)) continue
+
+    findings.push({ kind: "list", line: i + 1, table, block })
+  }
+
   return findings
 }
 
@@ -300,7 +383,16 @@ function loadBaseline() {
 
 // ---------------------------------------------------------------------------
 // Main
+//
+// Guarded so a test can import `scan` without running the whole lint (and
+// without `process.exit` taking the test runner down with it). Running the
+// file directly — which is what CI does — is unchanged.
 // ---------------------------------------------------------------------------
+
+const isEntryPoint = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url
+if (!isEntryPoint) {
+  // Imported for its scanner only.
+} else {
 
 const updateBaseline = process.argv.includes("--update-baseline")
 const files = ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)).sort()
@@ -324,8 +416,16 @@ for (const file of files) {
   // keys are written with "/" (a Windows checkout used to report every
   // baseline entry as new).
   const rel = relative(BACKEND_ROOT, file).replace(/\\/g, "/")
-  if (isAllowed(rel)) continue
-  const findings = scan(file)
+  // ALLOWED_PATHS is PER-RULE, not per-file. Every entry in it was written
+  // about the id rule — "authorizes on req.userRole", "share_token auths the
+  // run", "scoped via resolved.userId, not req.userId". None of those reasons
+  // says anything about whether a LIST in the same file has declared which
+  // side of the workspace line it is on, and a rule that inherits an
+  // exemption written for a different rule is exempt for no stated reason at
+  // all. So the id rule honours the allowlist; the list rule does not.
+  const allowed = isAllowed(rel)
+  const findings = scan(file).filter((f) => f.kind === "list" || !allowed)
+  if (findings.length === 0) continue
   for (const f of findings) {
     const hash = blockHash(f.block)
     const key = `${rel}|${f.table}|${hash}`
@@ -337,9 +437,11 @@ for (const file of files) {
     }
 
     const preview = f.block.split("\n").slice(0, 8).join("\n").replace(/^/gm, "    ")
-    process.stderr.write(
-      `\n${rel}:${f.line}  tenant-scope: unscoped .eq("id", ...) on ${f.table}\n${preview}\n`,
-    )
+    const what =
+      f.kind === "list"
+        ? `list on ${f.table} says nothing about workspace_id`
+        : `unscoped .eq("id", ...) on ${f.table}`
+    process.stderr.write(`\n${rel}:${f.line}  tenant-scope: ${what}\n${preview}\n`)
     newFailures++
     newFailureFiles.add(rel)
   }
@@ -376,9 +478,12 @@ if (updateBaseline) {
 
 if (newFailures > 0) {
   process.stderr.write(
-    `\n✗ tenant-scope lint failed — ${newFailures} NEW unscoped id lookup(s) across ${newFailureFiles.size} file(s).\n` +
+    `\n✗ tenant-scope lint failed — ${newFailures} NEW finding(s) across ${newFailureFiles.size} file(s).\n` +
       `  Add .eq("user_id", userId) to the chain, or suffix the .from() line with\n` +
       `  // tenant-scope-ignore: <reason>  when ownership is verified post-fetch.\n` +
+      `  For a LIST finding: add .is("workspace_id", null) for a personal list, or\n` +
+      `  .eq("workspace_id", req.workspaceId) for a workspace one — a list that says\n` +
+      `  neither will silently mix the two once workspaces exist.\n` +
       `  New routes needing cross-user access: add to ALLOWED_PATHS in\n` +
       `  backend/scripts/check-tenant-scope.mjs with a justification.\n\n` +
       `Accepted legacy entries (in baseline): ${Object.keys(baselineEntries).length}.\n` +
@@ -403,3 +508,5 @@ if (stale.length > 0) {
 process.stdout.write(
   `✓ tenant-scope lint passed (${files.length} files scanned, ${TENANT_TABLES.size} tenant tables guarded, ${Object.keys(baselineEntries).length} baselined).\n`,
 )
+
+} // end isEntryPoint

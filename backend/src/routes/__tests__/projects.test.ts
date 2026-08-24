@@ -151,7 +151,8 @@ describe("GET /v1/projects", () => {
 
   it("returns 200 with empty list", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -167,7 +168,8 @@ describe("GET /v1/projects", () => {
 
   it("returns 200 with camelCase data", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [DB_PROJECT], error: null })
-    const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -186,7 +188,8 @@ describe("GET /v1/projects", () => {
       data: null,
       error: { message: "DB down" },
     })
-    const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
