@@ -97,6 +97,26 @@ function writeStoredWorkspaceId(id: string | null): void {
  * reads this while building headers. Null on any build without the feature,
  * so the header is never sent where it would mean nothing.
  */
+/**
+ * Resolve once the workspace selection has settled.
+ *
+ * The React side holds a query behind `ready`; a plain function has no
+ * render to hold, so it waits here instead. Same reason, same moment: a
+ * remembered workspace is not trusted until the server confirms it, and
+ * answering "personal" in the meantime shows private work to someone who is
+ * standing in a class.
+ *
+ * Returns immediately when organizations are off, when the selection is
+ * already settled, or when nothing is in flight to wait for — the last case
+ * being a caller that runs before hydration was ever started, which is no
+ * worse than the behaviour it had before this existed.
+ */
+export async function awaitWorkspaceScope(): Promise<void> {
+  if (!hasOrganizations()) return
+  if (state.status === "ready" || state.status === "unavailable") return
+  if (hydrating) await hydrating
+}
+
 export function getActiveWorkspaceId(): string | null {
   if (!hasOrganizations()) return null
   return state.activeWorkspaceId

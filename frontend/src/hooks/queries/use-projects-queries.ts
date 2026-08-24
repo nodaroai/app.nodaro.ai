@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import {
   fetchListedAppSlugs,
   isAppSlugColumnMissing,
@@ -73,8 +74,12 @@ function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
 
 export function useProjects() {
   const queryClient = useQueryClient()
+  // ONE value, captured once, into both the cache key and the filter. Reading
+  // the workspace separately in each place is how an entry ends up labelled
+  // one workspace while holding another one's rows.
+  const { workspaceId, ready } = useWorkspaceScope()
   return useQuery({
-    queryKey: queryKeys.projects.list(),
+    queryKey: queryKeys.projects.list(workspaceId),
     queryFn: async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -91,6 +96,11 @@ export function useProjects() {
           .select("*")
           .order("created_at", { ascending: false })
         if (user) q = q.eq("user_id", user.id)
+        // BOTH halves. `user_id` alone would spill the caller's own class work
+        // into their personal list the moment they join one. Inside a class it
+        // stays, because widening this to everyone else's work is a visibility
+        // decision that belongs with the access resolver, not here.
+        q = workspaceId ? q.eq("workspace_id", workspaceId) : q.is("workspace_id", null)
         if (applyFilter) q = q.or(projectVisibilityFilter(listed))
         return q
       }
@@ -107,6 +117,10 @@ export function useProjects() {
       throw primary.error
     },
     staleTime: 30_000,
+    // Held until the remembered selection has been confirmed. Without this a
+    // reload inside a class paints the private projects first, then replaces
+    // them once the class resolves.
+    enabled: ready,
   })
 }
 
@@ -117,6 +131,7 @@ export interface AllProjectsResult {
 
 export function useAllProjects(enabled: boolean) {
   return useQuery({
+    // scope-key-ok: the admin cross-user view, unscoped by design.
     queryKey: [...queryKeys.projects.all, "all-admin"] as const,
     queryFn: async (): Promise<AllProjectsResult> => {
       // The admin "all users" list hides client-app projects by default (server
@@ -144,6 +159,8 @@ export function useAllProjects(enabled: boolean) {
 
 export function useProject(projectId: string | undefined) {
   return useQuery({
+    // scope-key-ok: a by-id read. The project id names one row, and which
+    // workspace the caller happens to be in cannot change which row that is.
     queryKey: [...queryKeys.projects.all, "single", projectId ?? ""] as const,
     queryFn: async (): Promise<Project | null> => {
       const supabase = createClient()
@@ -165,6 +182,7 @@ export function useProject(projectId: string | undefined) {
 
 export function useProjectData(projectId: string | undefined) {
   return useQuery({
+    // scope-key-ok: a by-id read, as above.
     queryKey: queryKeys.projects.detail(projectId ?? ""),
     queryFn: async () => {
       const supabase = createClient()

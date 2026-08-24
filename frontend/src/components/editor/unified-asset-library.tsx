@@ -32,6 +32,7 @@ import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
 import { CachedImage } from "@/components/ui/cached-image"
 import { LibraryMediaBrowser } from "./library-media-browser"
 import { assetToUploadNode } from "@/lib/asset-to-node"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import type { CharacterNodeData, ObjectNodeData, CreatureNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
 // Definition-asset tabs + media tabs (images/videos/audio pulled from the
@@ -115,8 +116,10 @@ function useAssetData() {
     })),
   ], [characters, objects, creatures, locations, faces])
 
+  // Key and filter from one render, and held until the scope is known.
+  const { workspaceId, ready } = useWorkspaceScope()
   const { data: projects = [] } = useQuery({
-    queryKey: ["projects", "list", user?.id],
+    queryKey: ["projects", "list", user?.id, workspaceId ?? "personal"],
     queryFn: async () => {
       const supabase = createClient()
       // Hide client-app projects (voice-changer-pro's dedicated project) from the
@@ -132,6 +135,7 @@ function useAssetData() {
           .eq("user_id", user!.id)
           .order("name")
         if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        q = workspaceId ? q.eq("workspace_id", workspaceId) : q.is("workspace_id", null)
         return q
       }
 
@@ -143,7 +147,7 @@ function useAssetData() {
       if (result.error) throw result.error
       return result.data as Array<{ id: string; name: string }>
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && ready,
     staleTime: 60_000,
   })
 

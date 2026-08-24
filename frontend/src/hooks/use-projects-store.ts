@@ -12,6 +12,7 @@ import {
 } from "@/hooks/queries/use-client-apps-queries"
 import type { Json } from "@/types/database.types"
 import { nodaroClient } from "@/lib/nodaro-client"
+import { awaitWorkspaceScope, getActiveWorkspaceId } from "@/lib/workspace-context"
 
 export interface Project {
   readonly id: string
@@ -125,12 +126,19 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       const showAll = readShowClientAppsFlag()
       const listed = showAll ? [] : await fetchListedAppSlugs(queryClient)
 
+      // Not a React hook — a store, so the wait is an await rather than a
+      // held query. Without it a reload lands here before the server has
+      // confirmed the remembered class, and the list fills with the private
+      // work of someone who is standing in one.
+      await awaitWorkspaceScope()
+      const workspaceId = getActiveWorkspaceId()
       const build = (applyFilter: boolean) => {
         let q = supabase
           .from("projects")
           .select("*")
           .order("created_at", { ascending: false })
         if (applyFilter) q = q.or(projectVisibilityFilter(listed))
+        q = workspaceId ? q.eq("workspace_id", workspaceId) : q.is("workspace_id", null)
         return q
       }
 
@@ -212,9 +220,13 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
 
+      // A create belongs to the scope the person was IN when they pressed
+      // the button. The row policy has the final word: inside a workspace it
+      // admits admins always and members only when the workspace allows it,
+      // which is the same rule the REST route applies.
       const { data, error } = await supabase
         .from("projects")
-        .insert({ name, description, user_id: user.id })
+        .insert({ name, description, user_id: user.id, workspace_id: getActiveWorkspaceId() })
         .select()
         .single()
 

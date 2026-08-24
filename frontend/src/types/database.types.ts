@@ -965,6 +965,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          workspace_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -974,6 +975,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          workspace_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -983,6 +985,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          workspace_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1361,6 +1364,15 @@ export type Database = {
       }
       workflows: {
         Row: {
+          workspace_id: string | null
+          visibility: string
+          created_by: string | null
+          source_kind: string | null
+          source_id: string | null
+          original_author_id: string | null
+          assignment_id: string | null
+          last_edited_by: string | null
+          last_edited_at: string | null
           app_slug: string | null
           cover_node_types: string[] | null
           created_at: string
@@ -1380,6 +1392,15 @@ export type Database = {
           version: number
         }
         Insert: {
+          workspace_id?: string | null
+          visibility?: string
+          created_by?: string | null
+          source_kind?: string | null
+          source_id?: string | null
+          original_author_id?: string | null
+          assignment_id?: string | null
+          last_edited_by?: string | null
+          last_edited_at?: string | null
           app_slug?: string | null
           cover_node_types?: string[] | null
           created_at?: string
@@ -1399,6 +1420,15 @@ export type Database = {
           version?: number
         }
         Update: {
+          workspace_id?: string | null
+          visibility?: string
+          created_by?: string | null
+          source_kind?: string | null
+          source_id?: string | null
+          original_author_id?: string | null
+          assignment_id?: string | null
+          last_edited_by?: string | null
+          last_edited_at?: string | null
           app_slug?: string | null
           cover_node_types?: string[] | null
           created_at?: string

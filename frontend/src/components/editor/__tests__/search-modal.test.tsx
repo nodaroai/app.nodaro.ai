@@ -46,7 +46,7 @@ import { SearchModal } from "../search-modal"
 /** Chainable, thenable supabase builder — records `.or` / `.ilike`. */
 function makeBuilder(result: { data: unknown; error: unknown }) {
   const b: Record<string, ReturnType<typeof vi.fn>> & { then?: unknown } = {}
-  for (const m of ["select", "ilike", "order", "limit", "or"]) b[m] = vi.fn(() => b)
+  for (const m of ["select", "ilike", "order", "limit", "or", "eq", "is"]) b[m] = vi.fn(() => b)
   b.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve)
   return b
 }

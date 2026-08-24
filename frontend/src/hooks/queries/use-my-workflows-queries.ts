@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
 import { STUDIO_APP_SLUG, isMissingColumnError, readShowClientAppsFlag } from "./use-client-apps-queries"
 
 export interface MyWorkflow {
@@ -131,8 +132,10 @@ async function selectFirstThatWorks(baseQuery: WorkflowQuery): Promise<DbWorkflo
  * is just lost until the migration applies.
  */
 export function useMyWorkflows() {
+  // One value, into both the key and the filter — see use-workspace-scope.
+  const { workspaceId, ready } = useWorkspaceScope()
   return useQuery({
-    queryKey: queryKeys.workflows.listMine(),
+    queryKey: queryKeys.workflows.listMine(workspaceId),
     queryFn: async (): Promise<MyWorkflow[]> => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -154,6 +157,11 @@ export function useMyWorkflows() {
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
         if (!showClientApps) q = q.is("app_slug", null)
+        // BOTH halves. `user_id` alone spills class work into the personal
+        // tab the moment someone joins one; inside a class it STAYS, because
+        // widening to everyone else's work is a visibility decision owned by
+        // the access resolver, which does not exist yet.
+        q = workspaceId ? q.eq("workspace_id", workspaceId) : q.is("workspace_id", null)
         return q.order("updated_at", { ascending: false }).limit(200)
       }
 
@@ -161,6 +169,7 @@ export function useMyWorkflows() {
       return rows.map(toMyWorkflow)
     },
     staleTime: 30_000,
+    enabled: ready,
   })
 }
 
@@ -171,26 +180,31 @@ export function useMyWorkflows() {
  * `app_slug` equality to one app instead of `app_slug IS NULL`.
  */
 export function useMyStudioWorkflows() {
+  const { workspaceId, ready } = useWorkspaceScope()
   return useQuery({
-    queryKey: queryKeys.workflows.listStudioMine(),
+    queryKey: queryKeys.workflows.listStudioMine(workspaceId),
     queryFn: async (): Promise<MyWorkflow[]> => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return []
 
-      const baseQuery = (cols: string) =>
-        supabase
+      const baseQuery = (cols: string) => {
+        const q = supabase
           .from("workflows")
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
           .eq("app_slug", STUDIO_APP_SLUG)
-          .order("updated_at", { ascending: false })
-          .limit(200)
+        const scoped = workspaceId
+          ? q.eq("workspace_id", workspaceId)
+          : q.is("workspace_id", null)
+        return scoped.order("updated_at", { ascending: false }).limit(200)
+      }
 
       return (await selectFirstThatWorks(baseQuery)).map(toMyWorkflow)
     },
     staleTime: 30_000,
+    enabled: ready,
   })
 }
 
@@ -206,7 +220,14 @@ export interface AllStudioWorkflowsResult {
  * Pass enabled = isAdmin && viewAll.
  */
 export function useAllStudioWorkflows(enabled: boolean) {
+  // The ADMIN cross-user view: read across tenants by definition, and the
+  // route answers it identically whatever workspace is selected — its branch
+  // returns before any scoping runs. So it takes neither the filter nor the
+  // key. An earlier version keyed it and said that prevented cross-workspace
+  // cache reuse: a benefit that does not exist, on a view that cannot differ.
   return useQuery({
+    // scope-key-ok: the admin cross-user view — the route answers it the
+    // same way whatever workspace is selected.
     queryKey: queryKeys.workflows.listStudioAll(),
     queryFn: async (): Promise<AllStudioWorkflowsResult> => {
       // Thread the one admin reveal flag so "the one toggle governs everything".
