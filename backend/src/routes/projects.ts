@@ -1,8 +1,10 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
-import { ensureDefaultProject } from "../lib/default-project.js"
+import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
+import { refuseIfWorkspaceArchived } from "../lib/orgs-context.js"
+import { getPluginServices } from "../lib/private-plugins/load.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deleteProjectWithPrivateMedia } from "../lib/workflow-delete.js"
@@ -60,6 +62,43 @@ function toProjectResponse(row: Record<string, unknown>, ownerEmail?: string) {
     updatedAt: row.updated_at,
     ...(ownerEmail !== undefined && { ownerEmail }),
   }
+}
+
+/**
+ * May this caller create a project in the workspace they are working in?
+ *
+ * One question, so one function. It lived as four nested conditions inside the
+ * route — which is how a rule reads when each clause is added as it is thought
+ * of — and that shape made the decision impossible to exercise without driving
+ * the whole endpoint.
+ *
+ * True whenever no workspace is selected: outside one, creating a project is
+ * nobody else's business. True also when the plugin cannot answer, because
+ * core must not invent the settings rule it deliberately does not own; with no
+ * plugin at all `req.workspaceId` is never set, so community and business
+ * never reach past the first line.
+ */
+async function mayCreateProjectHere(req: FastifyRequest): Promise<boolean> {
+  const workspaceId = req.workspaceId
+  if (!workspaceId) return true
+
+  const orgs = getPluginServices().orgs
+  if (!orgs?.getEffectiveSettings) return true
+
+  // No membership row means an organization owner or admin, who administers
+  // every workspace in it without holding a row anywhere — reading that as
+  // "not an admin" would refuse the person who created the workspace.
+  //
+  // `status` as well as `role`: the context hook already refuses a suspended
+  // membership before any route runs, but that is a guarantee made in another
+  // file, and reading the standing that is right here costs nothing.
+  const memberships = await req.orgs()
+  const ws = memberships.workspaces.find((w) => w.workspaceId === workspaceId)
+  if (ws === undefined) return true
+  if (ws.role === "admin" && ws.status === "active") return true
+
+  const effective = await orgs.getEffectiveSettings(workspaceId)
+  return effective.members_can_create_projects === true
 }
 
 export async function projectRoutes(app: FastifyInstance) {
@@ -136,15 +175,24 @@ export async function projectRoutes(app: FastifyInstance) {
       }
     }
 
-    // Personal context: mine, and only the projects that belong to no
-    // workspace. See the note on GET /v1/workflows — both halves are required,
-    // and this is a no-op until the first workspace exists.
-    const { data, error } = await supabase
+    // `.eq("user_id")` stays in BOTH branches. See the note on
+    // GET /v1/workflows: inside a workspace the finished rule is wider than
+    // this, but the resolver that decides how much wider does not exist yet,
+    // and a scope may under-show and be widened — never over-show.
+    let listQuery = supabase
       .from("projects")
       .select(PROJECT_COLS)
       .eq("user_id", req.userId)
-      .is("workspace_id", null)
-      .order("created_at", { ascending: false })
+
+    if (req.workspaceId) {
+      listQuery = listQuery.eq("workspace_id", req.workspaceId)
+    } else {
+      listQuery = listQuery.is("workspace_id", null)
+    }
+
+    listQuery = listQuery.order("created_at", { ascending: false })
+
+    const { data, error } = await listQuery
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch projects")
@@ -170,6 +218,20 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const { name, description, settings } = parsed.data
 
+    if (refuseIfWorkspaceArchived(req, reply)) return
+
+    // Creating INSIDE a workspace is a permission the organization grants:
+    // admins always, plain members only when the workspace settings say so.
+    // One question, so one function — see mayCreateProjectHere.
+    if (!(await mayCreateProjectHere(req))) {
+      return reply.status(403).send({
+        error: {
+          code: "project_create_not_allowed",
+          message: "Only workspace admins can create projects here.",
+        },
+      })
+    }
+
     // Classify the project's origin (see client-app-stamp.ts). A client app that
     // creates its per-user project writes its settings marker at birth (vcp's
     // ensureVcpProject sets `settings.vcp`), so stamp `app_slug` from it — that is
@@ -185,6 +247,7 @@ export async function projectRoutes(app: FastifyInstance) {
         description: description ?? null,
         settings: settings ?? {},
         app_slug: appSlug,
+        ...(req.workspaceId ? { workspace_id: req.workspaceId } : {}),
       })
       .select(PROJECT_COLS)
       .single()
@@ -394,6 +457,9 @@ export async function projectRoutes(app: FastifyInstance) {
     const result = await ensureDefaultProject(req.userId)
     if ("error" in result) {
       return sendInternalError(reply, req, result.error, "Failed to ensure default project")
+    }
+    if ("personalSpaceDisabled" in result) {
+      return reply.status(403).send({ error: PERSONAL_SPACE_DISABLED_ERROR })
     }
 
     return reply.status(result.created ? 201 : 200).send({

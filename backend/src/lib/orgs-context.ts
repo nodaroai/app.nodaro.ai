@@ -32,6 +32,15 @@ declare module "fastify" {
     /** Organization owning `workspaceId`. */
     orgId?: string
     /**
+     * Whether the selected workspace is archived, i.e. read-only.
+     *
+     * Reading it is still allowed — that is what archiving is for — so lists
+     * are untouched and only write paths consult this. False whenever no
+     * workspace is selected, and false when the plugin is too old to report
+     * it, which is the same permissive answer core gives today.
+     */
+    workspaceArchived?: boolean
+    /**
      * The caller's memberships, loaded on first call and memoized for the
      * request. Resolves to empty when organizations are off. Assigned in
      * `onRequest`, so it is present on EVERY request — including one an
@@ -89,6 +98,32 @@ const IDENTITY_ROUTES: ReadonlySet<string> = new Set([
  */
 export function isPlatformAdminRoute(routePattern: string | undefined): boolean {
   return routePattern !== undefined && routePattern.startsWith("/v1/admin/")
+}
+
+/**
+ * The refusal every WRITE path owes an archived workspace.
+ *
+ * Archiving a workspace makes it read-only. Row policies already enforce that
+ * for anything reading through Supabase directly, but these routes run with
+ * the service role and never meet a row policy, so without this the same
+ * workspace would be read-only in the browser and read-write through the API.
+ *
+ * Reads are deliberately NOT refused. Being able to open an archived
+ * workspace and look at what is inside is the entire difference between
+ * archiving it and deleting it.
+ *
+ * Returns true when it has already sent the refusal, so a caller reads
+ * `if (refuseIfWorkspaceArchived(req, reply)) return`.
+ */
+export function refuseIfWorkspaceArchived(req: FastifyRequest, reply: FastifyReply): boolean {
+  if (!req.workspaceArchived) return false
+  reply.status(409).send({
+    error: {
+      code: "workspace_archived",
+      message: "This workspace is archived. Unarchive it to add new work.",
+    },
+  })
+  return true
 }
 
 export function isIdentityRoute(method: string, routePattern: string | undefined): boolean {
@@ -155,6 +190,10 @@ export function registerOrgsContextHook(app: FastifyInstance): void {
     }
     req.workspaceId = result.workspaceId
     req.orgId = result.orgId
+    // `=== true` rather than a cast: a plugin build that predates the flag
+    // returns undefined, and undefined must read as "not archived" so an
+    // older plugin behaves exactly as it does now instead of failing shut.
+    req.workspaceArchived = result.archived === true
   })
 }
 

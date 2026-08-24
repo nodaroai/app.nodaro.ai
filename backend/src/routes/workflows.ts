@@ -4,7 +4,8 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-
 import { z } from "zod"
 import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, type WorkflowExport } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
-import { ensureDefaultProject } from "../lib/default-project.js"
+import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
+import { getPluginServices } from "../lib/private-plugins/load.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import type { Scope } from "../lib/scopes.js"
@@ -12,6 +13,7 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { sendNotFound } from "../lib/scoped-delete.js"
+import { refuseIfWorkspaceArchived } from "../lib/orgs-context.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -199,6 +201,31 @@ const importWorkflowBody = z.object({
   workflow_json: workflowExportSchema,
 })
 
+const moveWorkflowBody = z.object({
+  projectId: z.string().uuid(),
+})
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/workflows/{id}/move",
+  description:
+    "Move a workflow into another project. Authorized by the workflows:write scope — a move is a workflow write, not a permission of its own.",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: { "application/json": { schema: moveWorkflowBody } },
+    },
+  },
+  responses: {
+    200: { description: "The moved workflow, plus any collaborator grants the move dropped" },
+    400: { description: "The workflow is already in that project" },
+    403: { description: "Not permitted to move this workflow there" },
+    404: { description: "Workflow or project not found" },
+    409: { description: "Blocked — the work belongs to an assignment, or the workspace is archived" },
+  },
+})
+
 const createSubWorkflowBody = z.object({
   name: z.string().min(1).max(200).default("Sub-workflow"),
 })
@@ -284,32 +311,273 @@ async function clientAppExists(slug: string): Promise<{ ok: boolean; error?: unk
  * Precedence: an explicit body `appSlug` wins (already validated); else the
  * settings marker (`settings.vcp` → voice-changer-pro, etc.); else INHERIT the
  * project's slug, so a bare create inside a client app's project is classified
- * as that app's from birth. The project read is scoped by `user_id` and tolerant
- * — an unowned or missing project yields NULL and never blocks the create.
+ * as that app's from birth.
+ *
+ * The project's own slug is passed IN rather than read here. It used to be a
+ * second, `user_id`-scoped read of the same project the route had just
+ * addressed — which meant that inside a workspace, where the project belongs
+ * to the admin who made it and not to the caller, the read missed and every
+ * workflow a member created came out unclassified. `resolveProjectScope` now
+ * reads the project once, for both questions.
  */
 async function resolveCreateAppSlug(
-  userId: string,
-  projectId: string,
   settings: unknown,
   explicitSlug: string | null,
+  projectAppSlug: string | null,
 ): Promise<string | null> {
   if (explicitSlug) return explicitSlug
   const fromSettings = await inferAppSlugFromSettings(settings)
   if (fromSettings) return fromSettings
-  // Inheritance is best-effort: a read failure must never break the create
-  // (the row simply stays native and is reclassified by a later settings write
-  // or the backfill).
-  try {
-    const { data: proj } = await supabase
-      .from("projects")
-      .select("app_slug")
-      .eq("id", projectId)
-      .eq("user_id", userId)
-      .maybeSingle()
-    return (proj?.app_slug as string | null) ?? null
-  } catch {
-    return null
+  return projectAppSlug
+}
+
+/**
+ * May this caller work inside this project?
+ *
+ * The two project-addressed routes cannot use the header the way a flat list
+ * does. They already name a project, and the project's own workspace is the
+ * answer to which scope they are in — so the question is whether the caller's
+ * current scope and the project's scope are the same one.
+ *
+ * Inside a workspace: the project must belong to THAT workspace. Membership
+ * was already established by the context hook, which refuses a workspace the
+ * caller does not belong to before any route runs, so belonging to the
+ * workspace is enough here.
+ *
+ * Outside one: the project must be the caller's own AND personal. A workspace
+ * project must never be reachable without its header — if it were, the header
+ * would stop being the thing that selects scope and become decoration.
+ *
+ * A miss returns null and the caller answers 404 "Project not found", the
+ * same answer a project that does not exist gets: which of the two it was is
+ * not something a stranger should be able to tell apart.
+ */
+async function resolveProjectScope(
+  req: FastifyRequest,
+  userId: string,
+  projectId: string,
+): Promise<{ id: string; appSlug: string | null } | null> {
+  const { data, error } = await supabase
+    // This read IS the scope check: it fetches the project unfiltered and
+    // decides below, because inside a workspace the owning user is not the
+    // caller.
+    // tenant-scope-ignore: the decision is made in TypeScript, not the query.
+    .from("projects")
+    .select("id, app_slug, user_id, workspace_id")
+    .eq("id", projectId)
+    .maybeSingle()
+  if (error || !data) return null
+
+  const project = data as { id: string; app_slug: string | null; user_id: string; workspace_id: string | null }
+  const inScope = req.workspaceId
+    ? project.workspace_id === req.workspaceId
+    : project.user_id === userId && project.workspace_id === null
+  if (!inScope) return null
+  return { id: project.id, appSlug: project.app_slug }
+}
+
+/** A move that must not happen, in the shape the route sends back. */
+interface MoveRefusal {
+  readonly status: 400 | 403 | 404 | 409
+  readonly code: string
+  readonly message: string
+}
+
+/**
+ * The database could not answer, so no decision was reached.
+ *
+ * Distinct from a refusal on purpose: reporting a read failure as "not found"
+ * is a lie that looks like a normal outcome, so nothing pages, nothing is
+ * logged with a stack, and the caller retries against a 404 forever.
+ */
+interface MoveUndecided {
+  readonly dbError: unknown
+}
+
+interface MoveAuthorized {
+  readonly workflow: { id: string; userId: string; workspaceId: string | null; projectId: string | null }
+  readonly targetProject: { id: string; userId: string; workspaceId: string | null }
+}
+
+function isMoveRefusal(r: MoveOutcome): r is MoveRefusal {
+  return "code" in r
+}
+
+function isMoveUndecided(r: MoveOutcome): r is MoveUndecided {
+  return "dbError" in r
+}
+
+type MoveOutcome = MoveRefusal | MoveUndecided | MoveAuthorized
+
+/**
+ * May this caller move this workflow into this project?
+ *
+ * ONE rule, in one place, for both ways a move can be asked for — the move
+ * endpoint and the older `PATCH { projectId }`. Two implementations of a
+ * question this consequential would drift, and the one nobody remembered
+ * would be the permissive one.
+ *
+ * The decision itself is delegated: inside an organization the answer depends
+ * on workspace roles on BOTH sides, which is the settings owner's knowledge,
+ * not core's. When no plugin provides it, the fallback is exactly what this
+ * route did before workspaces existed — the workflow and the target project
+ * must both be the caller's own — so community and business are unchanged.
+ *
+ * Note the target-project check the fallback makes: owning the WORKFLOW is
+ * not enough. Without the second half a caller could park their work inside
+ * a stranger's project, which they cannot see into but can delete.
+ */
+async function authorizeWorkflowMove(
+  req: FastifyRequest,
+  userId: string,
+  workflowId: string,
+  targetProjectId: string,
+): Promise<MoveOutcome> {
+  const { data: wfRow, error: wfErr } = await supabase
+    // Loads the facts the move decision is made from. A workspace admin may
+    // move work they do not own, so filtering by user_id here would decide
+    // the question before asking it.
+    // tenant-scope-ignore: authorization follows, below.
+    .from("workflows")
+    .select("id, user_id, workspace_id, project_id, assignment_id")
+    .eq("id", workflowId)
+    .maybeSingle()
+  if (wfErr) return { dbError: wfErr }
+  if (!wfRow) return { status: 404, code: "not_found", message: "Workflow not found" }
+
+  const { data: projRow, error: projErr } = await supabase
+    // As above — the target project's owner is an INPUT to the decision, not
+    // a filter on it.
+    // tenant-scope-ignore: authorization follows, below.
+    .from("projects")
+    .select("id, user_id, workspace_id")
+    .eq("id", targetProjectId)
+    .maybeSingle()
+  if (projErr) return { dbError: projErr }
+  if (!projRow) return { status: 404, code: "not_found", message: "Project not found" }
+
+  const workflow = {
+    id: wfRow.id as string,
+    userId: wfRow.user_id as string,
+    workspaceId: (wfRow.workspace_id as string | null) ?? null,
+    projectId: (wfRow.project_id as string | null) ?? null,
   }
+  const targetProject = {
+    id: projRow.id as string,
+    userId: projRow.user_id as string,
+    workspaceId: (projRow.workspace_id as string | null) ?? null,
+  }
+
+  // AUTHORIZATION FIRST, and the business refusals after it.
+  //
+  // The other order reads more naturally and leaks: "already in that project"
+  // and "belongs to an assignment" are facts ABOUT the workflow, so answering
+  // them before deciding whether the caller may touch it turns this endpoint
+  // into an oracle. Anyone holding two ids could learn which project a
+  // stranger's workflow sits in (400 vs 403) and whether it was submitted
+  // for an assignment (409 vs 403), without ever being allowed to move it.
+  const orgs = getPluginServices().orgs
+  const verdict = orgs?.canMoveWorkflow
+    ? await orgs.canMoveWorkflow({ userId, workflow, targetProject })
+    : { allowed: workflow.userId === userId && targetProject.userId === userId }
+
+  if (!verdict.allowed) {
+    return { status: 403, code: "not_permitted", message: "You cannot move this workflow there" }
+  }
+
+  // Moving INTO an archived workspace is a write to it. Moving OUT of one is
+  // allowed and deliberately so: rescuing your work is the reason someone
+  // opens an archived workspace at all.
+  //
+  // Core can only see this for the workspace the REQUEST selected, which is
+  // the one a client moving into it would be in. A move into some other
+  // archived workspace is not visible from here, and is refused by the
+  // authorization above declining a workspace the caller is not working in.
+  if (req.workspaceArchived && targetProject.workspaceId === req.workspaceId) {
+    return {
+      status: 409,
+      code: "workspace_archived",
+      message: "This workspace is archived. Unarchive it to add new work.",
+    }
+  }
+
+  // Work handed in against an assignment stops being freely movable: moving it
+  // out from under the assignment is how a submission loses its context.
+  // A second condition — whether it has already been submitted — belongs with
+  // the submissions tables, which do not exist yet; this is deliberately not a
+  // query against a table nobody has created.
+  if ((wfRow as { assignment_id: string | null }).assignment_id !== null) {
+    return {
+      status: 409,
+      code: "move_blocked",
+      message: "This work was created for an assignment and cannot be moved.",
+    }
+  }
+
+  if (workflow.projectId === targetProject.id) {
+    return { status: 400, code: "validation_error", message: "The workflow is already in that project" }
+  }
+
+  return { workflow, targetProject }
+}
+
+/**
+ * Grants that do not survive a move between scopes.
+ *
+ * A collaborator grant was issued about one place. Carrying it into another
+ * silently would keep someone reading work that has moved somewhere they have
+ * no standing, so a move that CHANGES scope clears the grants and reports who
+ * lost access — the caller has to be able to see what their move cost.
+ *
+ * Only when the scope actually changes: moving between two projects of the
+ * same workspace disturbs nothing. Clearing all of them rather than keeping
+ * whoever also belongs to the target is the under-approximation on purpose —
+ * it can drop a grant that could have been kept, and never keeps one that
+ * should have gone. Grants do not exist yet; whoever builds them narrows this.
+ */
+async function dropStaleCollaborators(
+  req: FastifyRequest,
+  workflowId: string,
+  fromWorkspaceId: string | null,
+  toWorkspaceId: string | null,
+): Promise<Array<{ userId: string; name: string | null }>> {
+  if (fromWorkspaceId === toWorkspaceId) return []
+
+  // ONE statement, and the rows it returns are the rows it actually removed.
+  //
+  // Read-then-delete reported what it INTENDED to drop: a failed delete still
+  // answered "these three people lost access" while all three kept it. A
+  // response that is wrong about who can see something is worse than an
+  // error, because nobody goes looking.
+  const { data, error } = await supabase
+    // Reached only after the move was authorized; these are the grants ON
+    // that workflow, whoever holds them.
+    // tenant-scope-ignore: the authorized move is the authorization.
+    .from("workflow_collaborators")
+    .delete()
+    .eq("workflow_id", workflowId)
+    .select("user_id")
+
+  if (error) {
+    // The move itself already committed, so this cannot be unwound. Say so
+    // loudly and claim nothing: grants that outlive a move into another
+    // workspace are a real access-control leak, and the only thing worse
+    // than one is one nobody noticed.
+    req.log.error({ err: error, workflowId }, "[workflows/move] collaborator grants survived the move")
+    return []
+  }
+
+  const droppedIds = (data ?? []).map((r) => r.user_id as string)
+  if (droppedIds.length === 0) return []
+
+  // Named, not just listed as ids: "3 people lost access" is not something
+  // anyone can act on.
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", droppedIds)
+  const names = new Map((profiles ?? []).map((p) => [p.id as string, (p.full_name as string | null) ?? null]))
+  return droppedIds.map((id) => ({ userId: id, name: names.get(id) ?? null }))
 }
 
 /**
@@ -379,8 +647,18 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     // A PROJECT-scoped list: the project's own scope is the answer, so this
     // must NOT filter by workspace_id — a workspace project's workflows belong
-    // in this list. The check that decides whether the caller may see the
-    // project at all arrives with the rest of P9.
+    // in this list. Whether the caller may address this project at all is the
+    // question resolveProjectScope answers.
+    if (!(await resolveProjectScope(req, userId, params.projectId))) {
+      return sendNotFound(reply, "Project not found")
+    }
+
+    // `.eq("user_id")` STAYS, including inside a workspace. Dropping it would
+    // turn this into "every member's work in this project", which is a
+    // visibility decision this route cannot make yet — the resolver that knows
+    // which of a workspace's workflows a given member may see arrives with the
+    // access work, and none of the levers it reads exist yet. A scope may
+    // under-show and be widened later; it may never over-show and be narrowed.
     const { data, error } = await supabase
       // tenant-scope-ignore: project-scoped list; the project carries the scope.
       .from("workflows")
@@ -406,6 +684,19 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!body) return
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
+
+    if (refuseIfWorkspaceArchived(req, reply)) return
+
+    // Until now this route verified NOTHING about the project it was handed —
+    // the only project read was the tolerant slug lookup, which by design
+    // never blocks a create. So the row landed in whatever project id the
+    // caller named, including one belonging to somebody else: their own
+    // workflow, parked in a stranger's project, invisible to that stranger
+    // (their list filters by user_id) but destroyed with it if they ever
+    // deleted the project. Scoping the create closes that as a side effect of
+    // asking the question workspaces made unavoidable.
+    const project = await resolveProjectScope(req, userId, params.projectId)
+    if (!project) return sendNotFound(reply, "Project not found")
 
     // Import / template / SDK writes never pass through the node pickers, so
     // this is where a Cloud-only node would otherwise slip into an edition
@@ -433,7 +724,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     // first PATCH). Inheriting here stamps it at birth so there is no window in
     // which it shows as native. The project read is tolerant: an unowned/ missing
     // project leaves the slug NULL and the insert proceeds as before.
-    const scopedAppSlug = await resolveCreateAppSlug(userId, params.projectId, body.settings, null)
+    const scopedAppSlug = await resolveCreateAppSlug(body.settings, null, project.appSlug)
 
     const { data, error } = await supabase
       .from("workflows")
@@ -538,21 +829,40 @@ export async function workflowRoutes(app: FastifyInstance) {
       }
     }
 
-    // Personal context: mine, and only the rows that belong to no workspace.
-    // BOTH halves are required. `user_id` alone would leak the caller's own
-    // workspace work into their personal list the moment they join one — the
-    // class's work showing up beside their private work, with no way to tell
-    // which is which. Today every row has a NULL workspace_id so this is a
-    // no-op; it has to be in place BEFORE the first workspace exists, not
-    // after someone notices.
-    //
-    // The workspace branch (list what this workspace may see) arrives with the
-    // rest of P9, once the RLS that agrees with it is on production.
     let listQuery = supabase
       .from("workflows")
       .select(WORKFLOW_META_COLS)
       .eq("user_id", userId)
-      .is("workspace_id", null)
+
+    if (req.workspaceId) {
+      // Workspace context: MY work inside this workspace.
+      //
+      // `.eq("user_id")` above stays deliberately. The finished rule is
+      // "everything in this workspace that this member is allowed to see",
+      // and the resolver that decides the second half does not exist yet —
+      // every workflow is private by default, no collaborator grants have
+      // ever been issued, and the settings that widen it have no consumer.
+      // Dropping the filter now would not implement that rule; it would
+      // implement "every workflow in the workspace, visibility ignored",
+      // through the service role, on a route that never meets a row policy —
+      // while a browser reading the same data through those policies would
+      // give the narrower answer. One list, two answers, for as long as this
+      // sat in front of the access work.
+      //
+      // So: a scope may under-show and be widened later; it may never
+      // over-show and be narrowed later. This is a strict subset of what the
+      // caller will be allowed to see, so widening it breaks nothing.
+      listQuery = listQuery.eq("workspace_id", req.workspaceId)
+    } else {
+      // Personal context: mine, and only the rows that belong to no workspace.
+      // BOTH halves are required. `user_id` alone would leak the caller's own
+      // workspace work into their personal list the moment they join one — the
+      // class's work showing up beside their private work, with no way to tell
+      // which is which.
+      listQuery = listQuery.is("workspace_id", null)
+    }
+
+    listQuery = listQuery
       .is("parent_workflow_id", null)
       .order("updated_at", { ascending: false })
       .limit(limit)
@@ -608,27 +918,48 @@ export async function workflowRoutes(app: FastifyInstance) {
       ) as unknown as typeof body.edges
     }
 
+    if (refuseIfWorkspaceArchived(req, reply)) return
+
     let projectId = body.projectId
     // The project's own slug, inherited when the caller gives neither an explicit
     // appSlug nor a settings marker (a bare create inside a client-app project).
     let projectAppSlug: string | null = null
 
     if (projectId) {
-      // Caller specified a project — verify ownership before insert (and read its
-      // slug in the same round-trip, for inheritance).
-      const { data: proj, error: projErr } = await supabase
-        .from("projects")
-        .select("id, app_slug")
-        .eq("id", projectId)
-        .eq("user_id", userId)
-        .maybeSingle()
-      if (projErr) return sendInternalError(reply, req, projErr, "Failed to create workflow")
-      if (!proj) return notFound(reply, "Project not found")
-      projectAppSlug = (proj.app_slug as string | null) ?? null
+      // The ownership check used to be `.eq("user_id", userId)`, which is the
+      // wrong question inside a workspace: the project there belongs to the
+      // admin who created it, so a member creating in their own class project
+      // was told it did not exist.
+      const project = await resolveProjectScope(req, userId, projectId)
+      if (!project) return notFound(reply, "Project not found")
+      projectAppSlug = project.appSlug
+    } else if (req.workspaceId) {
+      // Inside a workspace, "no project given" means the WORKSPACE's landing
+      // project, never the caller's personal default — sending a member's
+      // class work to their private space is the one outcome the workspace
+      // exists to prevent. The workspace owns that pointer, so the plugin is
+      // asked for it rather than core learning the shape of a table it does
+      // not own.
+      const orgs = getPluginServices().orgs
+      const landing = orgs?.workspaceDefaultProject
+        ? await orgs.workspaceDefaultProject(req.workspaceId)
+        : null
+      if (!landing) {
+        return reply.status(409).send({
+          error: {
+            code: "workspace_has_no_default_project",
+            message: "This workspace has no default project. Name a project to create in.",
+          },
+        })
+      }
+      projectId = landing
     } else {
       // Resolve / lazy-create the default project (always native → slug stays NULL).
       const resolved = await ensureDefaultProject(userId)
       if ("error" in resolved) return sendInternalError(reply, req, resolved.error, "Failed to create workflow")
+      if ("personalSpaceDisabled" in resolved) {
+        return reply.status(403).send({ error: PERSONAL_SPACE_DISABLED_ERROR })
+      }
       projectId = resolved.projectId
     }
 
@@ -842,19 +1173,31 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.sourcePrompt !== undefined) updates.source_prompt = body.sourcePrompt
     if (body.thumbnailUrl !== undefined) updates.thumbnail_url = body.thumbnailUrl
 
-    // Cross-project move — verify caller owns the target project, then null
-    // out folder_id (folders are project-scoped; a stale id would orphan).
-    // An explicit folderId in the same request takes precedence and is
-    // validated against the new project below by the FK.
+    // Cross-project move. This predates the move endpoint and keeps working,
+    // but it goes through the SAME authorization — refusing it instead would
+    // break clients that have always used it, and letting it keep its own,
+    // narrower check would leave two answers to one question, with the older
+    // and more permissive one winning by being forgotten.
+    //
+    // folder_id is nulled because folders are project-scoped and a stale id
+    // would orphan the row. An explicit folderId in the same request takes
+    // precedence and the FK validates it against the new project.
+    // Kept in scope past the write: sharing the authorization is only half of
+    // "one rule". A move that changes workspace also drops the collaborator
+    // grants, and a path that authorizes identically but skips the
+    // consequence is a second rule wearing the first one's name.
+    let move: MoveAuthorized | null = null
     if (body.projectId !== undefined) {
-      const { data: targetProject, error: targetErr } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", body.projectId)
-        .eq("user_id", userId)
-        .maybeSingle()
-      if (targetErr) return sendInternalError(reply, req, targetErr, "Failed to update workflow")
-      if (!targetProject) return notFound(reply, "Project not found")
+      const verdict = await authorizeWorkflowMove(req, userId, params.id, body.projectId)
+      if (isMoveUndecided(verdict)) {
+        return sendInternalError(reply, req, verdict.dbError, "Failed to update workflow")
+      }
+      if (isMoveRefusal(verdict)) {
+        return reply.status(verdict.status).send({
+          error: { code: verdict.code, message: verdict.message },
+        })
+      }
+      move = verdict
       updates.project_id = body.projectId
       if (body.folderId === undefined) updates.folder_id = null
     }
@@ -908,6 +1251,21 @@ export async function workflowRoutes(app: FastifyInstance) {
         }
       }
       return notFound(reply, "Workflow not found")
+    }
+
+    // Same consequence as the move endpoint, reported the same way. Reported
+    // only when something was actually dropped, so a plain PATCH keeps the
+    // response shape it has always had.
+    if (move) {
+      const droppedCollaborators = await dropStaleCollaborators(
+        req,
+        params.id,
+        move.workflow.workspaceId,
+        move.targetProject.workspaceId,
+      )
+      if (droppedCollaborators.length > 0) {
+        return { data: toWorkflowFull(data), droppedCollaborators }
+      }
     }
 
     // Late origin stamping: a client app (voice-changer-pro) creates a bare
@@ -1029,14 +1387,11 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const { projectId, workflow_json: wf } = parsed.data
 
-    const { data: project, error: projError } = await supabase
-      .from("projects")
-      .select("id, user_id")
-      .eq("id", projectId)
-      .eq("user_id", userId)
-      .single()
+    if (refuseIfWorkspaceArchived(req, reply)) return
 
-    if (projError || !project) return notFound(reply, "Project not found")
+    if (!(await resolveProjectScope(req, userId, projectId))) {
+      return notFound(reply, "Project not found")
+    }
 
     // Re-create bundled assets, mapping old DB id → new DB id (node_id preserved).
     let assetIdMap: ReadonlyMap<string, string> = new Map()
@@ -1065,6 +1420,13 @@ export async function workflowRoutes(app: FastifyInstance) {
         nodes: remappedNodes,
         edges: migratedEdges,
         settings: wf.settings ?? {},
+        // Where this row came from. The importer is recorded as the original
+        // author because the bundle format carries no author — adding one is
+        // a change to a published wire contract, and an import from an
+        // unsigned file cannot honestly claim anyone else wrote it.
+        source_kind: "import",
+        source_id: null,
+        original_author_id: userId,
       })
       .select(WORKFLOW_FULL_COLS)
       .single()
@@ -1100,6 +1462,56 @@ export async function workflowRoutes(app: FastifyInstance) {
       .send({ data: toWorkflowFull(finalRow), importReport })
   })
 
+  // Move a workflow into another project.
+  //
+  // Authorized by workflows:write — a move IS a workflow write, and a new
+  // OAuth scope is a one-way door: ALL_SCOPES is published in
+  // scopes_supported and handed to dynamically-registered clients, so a scope
+  // added here can never be taken back.
+  app.post("/v1/workflows/:id/move", async (req, reply) => {
+    const userId = authorize(req, reply, "workflows:write")
+    if (!userId) return
+
+    const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
+    if (!params) return
+
+    const body = parseWith(reply, moveWorkflowBody, req.body, "Invalid request")
+    if (!body) return
+
+    const verdict = await authorizeWorkflowMove(req, userId, params.id, body.projectId)
+    if (isMoveUndecided(verdict)) {
+      return sendInternalError(reply, req, verdict.dbError, "Failed to move workflow")
+    }
+    if (isMoveRefusal(verdict)) {
+      return reply.status(verdict.status).send({
+        error: { code: verdict.code, message: verdict.message },
+      })
+    }
+
+    // folder_id is cleared for the same reason PATCH clears it: folders belong
+    // to a project, so an id from the old one would orphan the row.
+    const { data, error } = await supabase
+      // A workspace admin moving a member's work is not the row's user_id,
+      // so this cannot be scoped by it.
+      // tenant-scope-ignore: authorizeWorkflowMove above is the authorization.
+      .from("workflows")
+      .update({ project_id: body.projectId, folder_id: null })
+      .eq("id", params.id)
+      .select(WORKFLOW_FULL_COLS)
+      .single()
+
+    if (error) return sendInternalError(reply, req, error, "Failed to move workflow")
+
+    const droppedCollaborators = await dropStaleCollaborators(
+      req,
+      params.id,
+      verdict.workflow.workspaceId,
+      verdict.targetProject.workspaceId,
+    )
+
+    return reply.send({ data: toWorkflowFull(data), droppedCollaborators })
+  })
+
   // Create a child sub-workflow under a parent
   app.post("/v1/workflows/:parentId/sub-workflows", async (req, reply) => {
     const userId = authorize(req, reply, "workflows:write")
@@ -1115,6 +1527,13 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const body = parseWith(reply, createSubWorkflowBody, req.body ?? {}, "Invalid request")
     if (!body) return
+
+    // The fifth create path, and the one the first pass missed. A sub-workflow
+    // is a new workflow row like any other — it just inherits its project from
+    // its parent instead of naming one — so an archived workspace has to
+    // refuse it too, or "read-only" is only true of the four routes somebody
+    // remembered.
+    if (refuseIfWorkspaceArchived(req, reply)) return
 
     // Import / template / SDK writes never pass through the node pickers, so
     // this is where a Cloud-only node would otherwise slip into an edition

@@ -33,6 +33,10 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  // These routes resolve a default project, which now asks whether the
+  // caller's organization allows a personal space at all. Off here: this file
+  // is about the behaviour every user without an organization gets.
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -151,6 +155,34 @@ afterEach(async () => {
 // GET /v1/projects/:projectId/workflows
 // ---------------------------------------------------------------------------
 
+/**
+ * The project-addressed routes now read the project BEFORE touching
+ * workflows: whether the caller may work inside it is decided from the row,
+ * not filtered out by the query, because inside a workspace the owning user
+ * is not the caller.
+ *
+ * `otherTables` is whatever the test wants every non-`projects` table to
+ * return, so each test keeps mocking only the chain it cares about.
+ */
+function mockProjectScope(
+  otherTables: Record<string, unknown>,
+  project: Record<string, unknown> | null = {
+    id: TEST_PROJECT_ID,
+    app_slug: null,
+    user_id: TEST_USER_ID,
+    workspace_id: null,
+  },
+) {
+  const scopeMaybeSingle = vi.fn().mockResolvedValue({ data: project, error: null })
+  const scopeEq = vi.fn().mockReturnValue({ maybeSingle: scopeMaybeSingle })
+  const scopeSelect = vi.fn().mockReturnValue({ eq: scopeEq })
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    if (table === "projects") return { select: scopeSelect } as never
+    return otherTables as never
+  })
+  return { scopeSelect, scopeEq }
+}
+
 describe("GET /v1/projects/:projectId/workflows", () => {
   it("returns 401 when no auth", async () => {
     const res = await app.inject({
@@ -175,7 +207,7 @@ describe("GET /v1/projects/:projectId/workflows", () => {
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    mockProjectScope({ select: mockSelect })
 
     const res = await app.inject({
       method: "GET",
@@ -193,7 +225,7 @@ describe("GET /v1/projects/:projectId/workflows", () => {
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    mockProjectScope({ select: mockSelect })
 
     const res = await app.inject({
       method: "GET",
@@ -217,7 +249,7 @@ describe("GET /v1/projects/:projectId/workflows", () => {
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    mockProjectScope({ select: mockSelect })
 
     const res = await app.inject({
       method: "GET",
@@ -264,7 +296,7 @@ describe("POST /v1/projects/:projectId/workflows", () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: defaultRow, error: null })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
     const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    mockProjectScope({ insert: mockInsert })
 
     const res = await app.inject({
       method: "POST",
@@ -289,7 +321,7 @@ describe("POST /v1/projects/:projectId/workflows", () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
     const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    mockProjectScope({ insert: mockInsert })
 
     const res = await app.inject({
       method: "POST",
@@ -317,7 +349,7 @@ describe("POST /v1/projects/:projectId/workflows", () => {
     })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
     const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    mockProjectScope({ insert: mockInsert })
 
     const res = await app.inject({
       method: "POST",
@@ -1201,11 +1233,14 @@ describe("POST /v1/workflows/import", () => {
     },
   }
 
+  // `maybeSingle` as well as `single`: the scope read uses it, and a project
+  // that is absent must read as "not in scope" rather than as an error.
   function projectChain(data: unknown, error: unknown = null) {
     return {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data, error }),
+      maybeSingle: vi.fn().mockResolvedValue({ data, error }),
     }
   }
 
@@ -1282,7 +1317,7 @@ describe("POST /v1/workflows/import", () => {
       single: vi.fn().mockResolvedValue({ data: newRow, error: null }),
     }
     vi.mocked(supabase.from)
-      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID }) as never)
+      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null }) as never)
       .mockReturnValueOnce(workflowChain as never)
 
     const res = await app.inject({
@@ -1318,7 +1353,7 @@ describe("POST /v1/workflows/import", () => {
       single: vi.fn().mockResolvedValue({ data: newRow, error: null }),
     }
     vi.mocked(supabase.from)
-      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID }) as never)
+      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null }) as never)
       .mockReturnValueOnce(deriveNameChain() as never) // deriveAvailableName("Hero") → free
       .mockReturnValueOnce(insertIdChain("new-char-1") as never)
       .mockReturnValueOnce(insertIdChain("new-obj-1") as never)

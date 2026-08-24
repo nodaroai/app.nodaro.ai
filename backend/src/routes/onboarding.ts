@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { ensureDefaultProject } from "../lib/default-project.js"
+import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
 import { buildDemoWorkflow } from "../lib/demo-workflow.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -75,6 +75,13 @@ export async function onboardingRoutes(app: FastifyInstance) {
         new Error(resolution.error),
         "Failed to seed demo workflow",
       )
+    }
+    if ("personalSpaceDisabled" in resolution) {
+      // Release the claim: this is not "already seeded", it is "cannot seed
+      // here". Holding it would mean the demo never appears for this user
+      // even after they are given a workspace.
+      await resetSeedClaim(userId)
+      return reply.status(403).send({ error: PERSONAL_SPACE_DISABLED_ERROR })
     }
 
     const demo = buildDemoWorkflow()

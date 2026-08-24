@@ -44,6 +44,20 @@ export async function cloneListing(input: {
 
   const proj = await ensureDefaultProject(userId)
   if ("error" in proj) throw new Error(proj.error)
+  if ("personalSpaceDisabled" in proj) {
+    // A clone lands in the caller's personal space by definition, so an
+    // organization that has closed that space refuses the clone itself.
+    //
+    // `code`, not a message prefix. The first version of this carried the
+    // refusal in the message text and asserted in a comment that the route
+    // matched on it — the route matches on `code`, so the refusal arrived as
+    // a 500 and the user was told the system had broken. Every other refusal
+    // in this file already used `code`; inventing a second dialect for one
+    // of them was the whole mistake.
+    const e = new Error("personal_space_disabled") as Error & { code?: string }
+    e.code = "personal_space_disabled"
+    throw e
+  }
 
   const destPrefix = `user-clones/${userId}/${randomUUID()}/`
   const copiedAssets: Record<string, unknown> = {}

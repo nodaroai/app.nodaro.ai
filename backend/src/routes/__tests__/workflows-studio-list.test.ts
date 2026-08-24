@@ -341,7 +341,10 @@ describe("POST /v1/workflows — appSlug validation", () => {
       },
       error: null,
     })
-    const projectsChain = chain({ data: { id: "p1" }, error: null })
+    const projectsChain = chain({
+      data: { id: "p1", app_slug: null, user_id: TEST_USER_ID, workspace_id: null },
+      error: null,
+    })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
       if (table === "client_apps") return clientAppsChain
       if (table === "projects") return projectsChain

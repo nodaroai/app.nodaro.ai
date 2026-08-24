@@ -87,15 +87,21 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
 
     const { projectId } = parsed.data
 
-    // Personal context: the caller's own callable workflows, and only those
-    // outside any workspace. See GET /v1/workflows for why both halves.
+    // The caller's own callable workflows, in whichever scope they are
+    // working. See GET /v1/workflows for why `.eq("user_id")` stays in both
+    // branches.
     let dbQuery = supabase
       .from("workflows")
       .select("id, name, project_id, nodes, projects(name)")
       .eq("user_id", req.userId)
-      .is("workspace_id", null)
-      .is("parent_workflow_id", null)
-      .limit(200)
+
+    if (req.workspaceId) {
+      dbQuery = dbQuery.eq("workspace_id", req.workspaceId)
+    } else {
+      dbQuery = dbQuery.is("workspace_id", null)
+    }
+
+    dbQuery = dbQuery.is("parent_workflow_id", null).limit(200)
 
     if (projectId) {
       dbQuery = dbQuery.eq("project_id", projectId)

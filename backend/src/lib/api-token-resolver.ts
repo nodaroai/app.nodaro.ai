@@ -18,6 +18,15 @@ export interface ResolvedToken {
   workflowIds: string[]
   rateLimit: number
   tokenHash: string
+  /**
+   * Workspace this token is bound to, if any.
+   *
+   * A bound token acts as an implicit workspace header, so every request it
+   * makes runs inside that workspace whether or not the client says so. An
+   * explicit header on the same request must agree; the context hook refuses
+   * the disagreement rather than guessing which was meant.
+   */
+  workspaceId: string | null
 }
 
 declare module "fastify" {
@@ -28,7 +37,24 @@ declare module "fastify" {
 
 const TOKEN_CACHE_TTL_MS = 60_000
 const tokenCache = new Map<string, { token: ResolvedToken; expiresAt: number }>()
+/** token id → its hash, so a change to a token can find its cache entry. */
+const hashById = new Map<string, string>()
 const lastUsedUpdates = new Map<string, number>()
+
+/**
+ * Forget a token, so the next request re-reads it.
+ *
+ * The cache is keyed by hash and the plaintext is never stored, so a token
+ * cannot be found by id without this index. Without it an edit takes up to a
+ * minute to matter — which for the workspace binding means requests running
+ * in the workspace the token used to be bound to.
+ */
+export function invalidateApiTokenCache(tokenId: string): void {
+  const hash = hashById.get(tokenId)
+  if (!hash) return
+  tokenCache.delete(hash)
+  hashById.delete(tokenId)
+}
 
 export function hashApiToken(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex")
@@ -44,7 +70,7 @@ export async function resolveApiToken(token: string): Promise<ResolvedToken | nu
 
   const { data, error } = await supabase
     .from("api_tokens")
-    .select("id, user_id, workflow_ids, rate_limit, token_hash, is_active")
+    .select("id, user_id, workflow_ids, rate_limit, token_hash, is_active, workspace_id")
     .eq("token_hash", hash)
     .single()
 
@@ -57,9 +83,11 @@ export async function resolveApiToken(token: string): Promise<ResolvedToken | nu
     workflowIds: (data.workflow_ids ?? []) as string[],
     rateLimit: (data.rate_limit as number) ?? 30,
     tokenHash: data.token_hash as string,
+    workspaceId: (data.workspace_id as string | null) ?? null,
   }
 
   tokenCache.set(hash, { token: resolved, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS })
+  hashById.set(resolved.id, hash)
 
   const lastUpdated = lastUsedUpdates.get(data.id) ?? 0
   if (Date.now() - lastUpdated > 300_000) {

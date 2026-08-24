@@ -34,6 +34,17 @@ describe("POST /v1/community/listings/:id/clone", () => {
     const r = await app.inject({ method: "POST", url: "/v1/community/listings/L1/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "character" } })
     expect(r.statusCode).toBe(413); expect(r.json().error.code).toBe("storage_limit_exceeded")
   })
+  it("maps personal_space_disabled to 403, not to a system failure", async () => {
+    // The refusal used to travel as a message PREFIX while this catch matched
+    // on `code`, so an organization closing its members' personal space told
+    // them the platform had broken. Nothing failed loudly; the reply was a 500
+    // with a plausible message.
+    const e = new Error("personal_space_disabled") as Error & { code?: string }
+    e.code = "personal_space_disabled"
+    cloneListing.mockRejectedValue(e)
+    const r = await app.inject({ method: "POST", url: "/v1/community/listings/L1/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "character" } })
+    expect(r.statusCode).toBe(403); expect(r.json().error.code).toBe("personal_space_disabled")
+  })
   it("accepts entityType=creature in the clone enum", async () => {
     cloneListing.mockResolvedValue({ entityType: "creature", id: "cr-new" })
     const r = await app.inject({ method: "POST", url: "/v1/community/listings/L-cr/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "creature" } })

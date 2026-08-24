@@ -7,6 +7,7 @@ vi.mock("../../../../utils/file-validation.js", () => ({
 }))
 vi.mock("../../../../lib/default-project.js", () => ({
   ensureDefaultProject: vi.fn().mockResolvedValue({ projectId: "proj1" }),
+  PERSONAL_SPACE_DISABLED_ERROR: { code: "personal_space_disabled", message: "x" },
 }))
 vi.mock("../../../../lib/entity-naming.js", () => ({ deriveAvailableName: vi.fn().mockResolvedValue("Hero (community)") }))
 vi.mock("../../../../lib/storage.js", () => ({
@@ -15,6 +16,7 @@ vi.mock("../../../../lib/storage.js", () => ({
   r2KeyFromOurUrl: vi.fn().mockReturnValue("key"),
 }))
 import { cloneListing } from "../clone.js"
+import { ensureDefaultProject } from "../../../../lib/default-project.js"
 import { reserveStorageIfWithinLimit, refundStorage } from "../../../../utils/file-validation.js"
 import { copyR2ObjectToPrefix } from "../../../../lib/storage.js"
 
@@ -43,6 +45,22 @@ describe("cloneListing", () => {
     expect(res.id).toBe("new1")
     expect(reserveStorageIfWithinLimit).toHaveBeenCalled()
     expect(rpc).toHaveBeenCalledWith("record_clone", expect.objectContaining({ p_listing_id: "L1", p_user_id: "u1" }))
+  })
+  it("raises a CODED refusal when the caller's organization closed the personal space", async () => {
+    // A clone lands in the personal space by definition, so this refusal is
+    // real product behaviour, not an error. It must reach the route as a
+    // `code` — the route matches on that, and the first version carried the
+    // refusal in the message text instead, so the user was told the platform
+    // had broken. The service half is asserted here; the route half in
+    // routes/__tests__/community.test.ts.
+    vi.mocked(ensureDefaultProject).mockResolvedValueOnce({ personalSpaceDisabled: true } as never)
+    mockSnapshotAndInsert({ name: "Hero", source_image_url: "u" }, true)
+    await expect(
+      cloneListing({ listingId: "L1", entityType: "character", userId: "u1" }),
+    ).rejects.toMatchObject({ code: "personal_space_disabled" })
+    // Nothing was copied or reserved: the refusal happens before any work.
+    expect(reserveStorageIfWithinLimit).not.toHaveBeenCalled()
+    expect(copyR2ObjectToPrefix).not.toHaveBeenCalled()
   })
   it("refunds reservation when the entity insert fails", async () => {
     mockSnapshotAndInsert({ name: "Hero", source_image_url: "u" }, false)

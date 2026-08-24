@@ -1486,6 +1486,30 @@ export interface PluginMemberships {
 export interface PluginRequestContextResult {
   workspaceId?: string
   orgId?: string
+  /**
+   * Whether `workspaceId` names an ARCHIVED workspace.
+   *
+   * An archived workspace still resolves — archiving makes it read-only, it
+   * does not revoke membership, and someone must still be able to open it and
+   * read what is inside. So the flag rides alongside the id rather than
+   * turning into a refusal here.
+   *
+   * Core needs it because "read-only" is enforced in two places that see
+   * different things. A browser reading through Supabase meets the row
+   * policies, which already cap an archived workspace at view. A REST or SDK
+   * caller does not: those routes run with the service role and bypass row
+   * policies entirely, so without this flag archiving would be read-only in
+   * the browser and read-write through the API — the same workspace giving
+   * two different answers about whether it can be written to.
+   *
+   * Optional-by-absence, like every other member of this contract. A plugin
+   * build older than this one never sets it, which core reads as "not
+   * archived" — the same permissive answer core gives today, so an older
+   * plugin keeps working exactly as it does now rather than failing shut on a
+   * field it has never heard of. The enforcement is therefore inert until a
+   * plugin supplies the flag.
+   */
+  archived?: boolean
   /** Present when the request must be refused; core sends it verbatim. */
   reject?: { status: 400 | 403; code: string; message: string }
 }

@@ -10,6 +10,8 @@ vi.mock("@/lib/supabase.js", () => {
   return {
     supabase: {
       from: mockFrom,
+      // The personal-space gate asks the database directly.
+      rpc: vi.fn(),
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-123" } },
@@ -31,6 +33,10 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  // These routes resolve a default project, which now asks whether the
+  // caller's organization allows a personal space at all. Off here: this file
+  // is about the behaviour every user without an organization gets.
+  hasOrganizations: vi.fn(() => false),
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -47,6 +53,7 @@ vi.mock("@/lib/workflow-delete.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { projectRoutes } from "../projects.js"
+import { hasOrganizations } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 import { checkIsAdmin } from "../../lib/admin-check.js"
 import { _resetClientAppStampCacheForTests } from "../../lib/client-app-stamp.js"
@@ -729,6 +736,24 @@ describe("POST /v1/projects/ensure-default", () => {
       url: "/v1/projects/ensure-default",
     })
     expect(res.statusCode).toBe(401)
+  })
+
+  it("refuses when the caller's organization has closed the personal space", async () => {
+    // One of the five places that resolve a default project. The type system
+    // forced each of them to HANDLE the new refusal; it could not check that
+    // each handled it correctly, and one of the five did not — which is why
+    // this branch is now asserted where it is reachable rather than assumed.
+    vi.mocked(hasOrganizations).mockReturnValueOnce(true)
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: false, error: null } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/projects/ensure-default",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("personal_space_disabled")
   })
 
   it("returns 200 with the existing default project when one is found", async () => {

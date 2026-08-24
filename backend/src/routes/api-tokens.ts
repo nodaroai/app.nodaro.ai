@@ -19,8 +19,9 @@ import { randomBytes } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { hasAdmin } from "../lib/config.js"
-import { hashApiToken, resolveApiToken } from "../lib/api-token-resolver.js"
+import { hasAdmin, hasOrganizations } from "../lib/config.js"
+import { hashApiToken, invalidateApiTokenCache, resolveApiToken } from "../lib/api-token-resolver.js"
+import { getPluginServices } from "../lib/private-plugins/load.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
@@ -153,6 +154,8 @@ const updateTokenBody = z.object({
   workflowIds: z.array(z.string().uuid()).max(50).optional(),
   rateLimit: z.number().int().min(1).max(120).optional(),
   isActive: z.boolean().optional(),
+  /** Bind the token to a workspace, or null to unbind it. */
+  workspaceId: z.string().uuid().nullable().optional(),
 })
 
 const tokenIdParams = z.object({
@@ -278,7 +281,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
     const { data, error } = await supabase
       .from("api_tokens")
-      .select("id, name, token_prefix, workflow_ids, rate_limit, is_active, last_used_at, created_at")
+      .select("id, name, token_prefix, workflow_ids, rate_limit, is_active, last_used_at, created_at, workspace_id")
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
 
@@ -327,13 +330,55 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       }
       updates.workflow_ids = bodyParsed.data.workflowIds
     }
+    if (bodyParsed.data.workspaceId !== undefined) {
+      // Unbinding needs no check — a token going back to the personal space
+      // harms nobody.
+      if (bodyParsed.data.workspaceId !== null) {
+        // Asked, not re-derived. The obvious version — look for an active row
+        // in the caller's memberships — is subtly wrong: an organization's
+        // owner or admin is an admin of every workspace in it WITHOUT having a
+        // membership row anywhere, so that check refuses exactly the people
+        // most likely to want a workspace-bound token.
+        //
+        // This is the same question the context hook asks on every request, so
+        // it is asked in the same way, of the same resolver. A binding that
+        // would be refused as a header must be refused here too, or a token
+        // could be bound to something it can never be used with.
+        // The SAME gate the request-context hook uses. Without it a binding
+        // could be accepted while the feature is off, and the header path —
+        // which does check the flag — would ignore it: a token bound to a
+        // workspace it can never actually be used in.
+        const orgs = hasOrganizations() ? getPluginServices().orgs : undefined
+        if (!orgs) {
+          return reply.status(403).send({
+            error: { code: "not_a_member", message: "Not a member of that workspace" },
+          })
+        }
+        const verdict = await orgs.resolveRequestContext({
+          userId: req.userId,
+          headerWorkspaceId: bodyParsed.data.workspaceId,
+          identityRoute: false,
+        })
+        if (verdict.reject || !verdict.workspaceId) {
+          const rejection = verdict.reject ?? {
+            status: 403 as const,
+            code: "not_a_member",
+            message: "Not a member of that workspace",
+          }
+          return reply.status(rejection.status).send({
+            error: { code: rejection.code, message: rejection.message },
+          })
+        }
+      }
+      updates.workspace_id = bodyParsed.data.workspaceId
+    }
 
     const { data, error } = await supabase
       .from("api_tokens")
       .update(updates)
       .eq("id", paramsParsed.data.id)
       .eq("user_id", req.userId)
-      .select("id, name, token_prefix, workflow_ids, rate_limit, is_active, last_used_at, created_at")
+      .select("id, name, token_prefix, workflow_ids, rate_limit, is_active, last_used_at, created_at, workspace_id")
       .single()
 
     if (error) {
@@ -344,6 +389,13 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       }
       return sendInternalError(reply, req, error, "Failed to update token")
     }
+
+    // The resolver caches a token for a minute and is keyed by hash, so
+    // without this the edit does not take effect until the entry expires —
+    // which for a workspace binding means requests still running in the
+    // workspace the token was bound to a moment ago. Deactivating a token had
+    // the same delay.
+    invalidateApiTokenCache(paramsParsed.data.id)
 
     return { data: formatToken(data) }
   })
@@ -376,6 +428,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to delete token")
     }
     if (deletedNothing(data)) return sendNotFound(reply, "Token not found")
+
+    invalidateApiTokenCache(parsed.data.id)
 
     return { success: true }
   })
@@ -859,6 +913,10 @@ function formatToken(row: Record<string, unknown>) {
     isActive: row.is_active,
     lastUsedAt: row.last_used_at,
     createdAt: row.created_at,
+    // Undefined rather than null when the column is not selected, so a
+    // response that does not carry the binding is distinguishable from one
+    // that carries "not bound".
+    workspaceId: row.workspace_id === undefined ? undefined : (row.workspace_id ?? null),
   }
 }
 
