@@ -1,5 +1,37 @@
 # @nodaro/shared
 
+## 2.10.0
+
+### Minor Changes
+
+- 8c4110e: The language registry drops the `flag` emoji field. Flags are countries, languages are not: the mapping is many-to-many and politically loaded — Arabic is spoken across ~25 countries (which flag?), English carries the UK-vs-US problem, and pinning Hebrew to a national flag beside Arabic reads as a statement rather than a convenience. Flag emoji also render inconsistently across platforms and mean nothing to a screen reader.
+
+  Each language is now identified by its endonym (native name) plus its English name — unambiguous, self-identifying (a Hebrew reader finds עברית without reading English), and neutral. `LanguageDefinition.flag` and the per-entry values are removed; the language switcher and editor locale picker no longer render a flag.
+
+- 0134594: Organizations: a ninth preset setting, `policy_survives_suspension`.
+
+  It answers whether an organization's content rules still bind its members
+  while the organization is SUSPENDED. Default `false` in both kind presets,
+  which is the existing behaviour — a stopped organization stops binding, and
+  its members work independently until it resumes.
+
+  An organization whose reason for restricting its members is contractual —
+  work made here belongs to the institution — turns it on, because an unpaid
+  invoice does not void a contract. Today it governs exactly one rule
+  (`personal_space_enabled`); every other preset key governs behaviour inside a
+  workspace, which a suspended organization grants no context for anyway.
+
+- cdef4ed: Organizations reach the SDK.
+
+  `@nodaro/shared` gains the RESPONSE half of the organization wire contract — `OrganizationView`, `OrgMemberView`, `WorkspaceView`, `WorkspaceMemberView`, `InvitationView`, `InvitationDelivery`, `InvitationPreview`, `JoinCodeView`, `OrgAuditEntry`, `OrgPage<T>`, and the `OrganizationSummary` / `WorkspaceSummary` / `MeOrganizations` shapes `GET /v1/me` carries. Contract only: no resolution logic, no access rules, no vocabulary.
+
+  `@nodaro/sdk` gains `client.organizations` and `client.workspaces` covering organizations, members, workspaces, invitations, join codes and the audit log, plus `createClient({ workspaceId })` and `client.withWorkspace(id)` — which returns a NEW client rather than mutating a shared one, so two concurrent operations cannot race over which workspace they are in. `client.me()` is now typed to carry the organizations block, keeping its three states distinct: the fields absent (this instance has no organizations), present and empty (you belong to none), and `organizationsUnavailable` (the lookup failed — keep the selection you had).
+
+  The workspace header decides SCOPE, never ACCESS: it selects which workspace a list reads from and where a create lands, and cannot widen access or move a charge.
+
+- 62bb3dd: Add `SUNO_TRACK_SOURCE_TYPES` — the node types whose output carries Suno chaining ids (`sunoTrackId` / `sunoTaskId`), shared by the canvas resolver, the orchestrator resolver and the editor's "Inherited" hint.
+- f14fa42: Add `workflow-copilot` to the `LlmFeature` union and its default model, so the in-app Workflow Copilot's turns resolve a model and a credit identifier the same way every other LLM feature does.
+
 ## 2.9.0
 
 ### Minor Changes
