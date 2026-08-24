@@ -121,6 +121,37 @@ describe("edit_workflow — write pipeline", () => {
     expect(emitted[0]?.type).toBe("workflow_updated")
   })
 
+  it("overrides the position the model asked for on a node it is creating", async () => {
+    // A model cannot know a node's rendered size — a card here is 200–650px
+    // tall — so its coordinates pile nodes on top of each other. The doctrine
+    // tells it to omit positions; this is what holds when it does not.
+    const result = await runEditWorkflow(ctx, {
+      note: "add a prompt",
+      upsertNodes: [
+        { id: "p1", type: "text-prompt", data: { prompt: "a cat" }, position: { x: 9999, y: 9999 } },
+      ],
+    })
+
+    const args = rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ id: string; position?: { x: number; y: number } }> }
+    expect(args.p_upsert_nodes[0]!.position).not.toEqual({ x: 9999, y: 9999 })
+    expect(result.addedNodeIds).toEqual(["p1"])
+  })
+
+  it("leaves an existing node where the user put it", async () => {
+    graphState.nodes = [
+      { id: "p1", type: "text-prompt", position: { x: 640, y: 480 }, data: { prompt: "a cat" } },
+    ]
+
+    await runEditWorkflow(ctx, {
+      note: "retype the prompt",
+      patchNodes: [{ id: "p1", data: { prompt: "a dog" } }],
+    })
+
+    const args = rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ id: string; position?: { x: number; y: number } }> }
+    // A patch that does not mention position must never move the node.
+    expect(args.p_upsert_nodes[0]!.position).toEqual({ x: 640, y: 480 })
+  })
+
   it("deletes the edges of a deleted node so the graph never dangles", async () => {
     graphState.nodes = [
       { id: "a", type: "text-prompt", data: {} },

@@ -111,6 +111,17 @@ describe("home dock", () => {
     expect(input()).toBeTruthy()
   })
 
+  it("leaves the picked name in the sentence rather than lifting it out", async () => {
+    // The whole point of a mention's POSITION: "@Emma walks in while @George
+    // raises the bottle" says who does what; two chips above the box do not.
+    renderDock()
+    fireEvent.change(input(), { target: { value: "a shot of " } })
+    fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    fireEvent.click(await screen.findByRole("option", { name: /Maya/ }))
+    // Trailing space: the user is mid-sentence and keeps typing.
+    expect(input().value).toBe("a shot of @Maya ")
+  })
+
   it("sends a mention as part of the prompt the hop carries", async () => {
     renderDock()
     fireEvent.change(input(), { target: { value: "a shot of " } })

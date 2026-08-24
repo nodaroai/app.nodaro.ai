@@ -3,9 +3,9 @@ import {
   activeMentionQuery,
   buildWireMessage,
   filterMentions,
+  insertMentionName,
   mentionDisplayName,
   splitWireMessage,
-  stripMentionQuery,
 } from "../mentions"
 import type { CopilotMention } from "../types"
 
@@ -34,13 +34,48 @@ describe("activeMentionQuery", () => {
   })
 })
 
-describe("stripMentionQuery", () => {
-  it("removes the @query the user was typing and reports the new caret", () => {
-    expect(stripMentionQuery("put her in @ma", 14)).toEqual({ text: "put her in ", caret: 11 })
+describe("insertMentionName", () => {
+  it("completes the @query in place, leaving the name in the sentence", () => {
+    // The regression this exists for: picking used to DELETE the query and show
+    // the entity only as a chip above the box, so "an ad with two actors" plus
+    // a detached list of two names told the model nothing about who does what.
+    expect(insertMentionName("put her in @ma", 14, "Maya")).toEqual({
+      text: "put her in @Maya ",
+      caret: 17,
+    })
   })
 
-  it("leaves text alone when no mention is being typed", () => {
-    expect(stripMentionQuery("hello", 5)).toEqual({ text: "hello", caret: 5 })
+  it("does not push a space in front of punctuation", () => {
+    // Mid-sentence, what follows a mention is usually a comma — and
+    // "@Maya , then" is worse than the gluing the space was there to prevent.
+    expect(insertMentionName("@ma, then Rob", 3, "Maya").text).toBe("@Maya, then Rob")
+  })
+
+  it("keeps each mention where the user typed it, so roles survive", () => {
+    const first = insertMentionName("@em walks in while @ge raises it", 3, "Emma Walker")
+    expect(first.text).toBe("@Emma Walker walks in while @ge raises it")
+    const second = insertMentionName(first.text, 31, "George W")
+    expect(second.text).toBe("@Emma Walker walks in while @George W raises it")
+  })
+
+  it("leaves the sentence's own spacing untouched", () => {
+    expect(insertMentionName("@ma and Rob", 3, "Maya").text).toBe("@Maya and Rob")
+    expect(insertMentionName("@ma  ", 3, "Maya").text).toBe("@Maya  ")
+  })
+
+  it("adds one space at the end so the next word does not glue on", () => {
+    // The only place the space belongs: the user is still typing.
+    expect(insertMentionName("a shot of @ma", 13, "Maya").text).toBe("a shot of @Maya ")
+  })
+
+  it("inserts at the caret when the picker was opened without a query", () => {
+    expect(insertMentionName("put her in ", 11, "Maya")).toEqual({ text: "put her in @Maya ", caret: 17 })
+  })
+
+  it("strips a name that could imitate the glossary marker", () => {
+    // The body is the one channel the model is told to obey; a name may not
+    // carry something that reads as a marker of ours.
+    expect(insertMentionName("@x", 2, "[references] boss").text).toBe("@references boss ")
   })
 })
 

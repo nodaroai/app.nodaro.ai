@@ -309,7 +309,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     return { ...node, data: cleaned }
   })
   const normalized = normalizeNodeModelParams(stripped)
-  const positioned = applyLayout(normalized.nodes, fullNodes, fullEdges)
+  const positioned = applyLayout(normalized.nodes, fullNodes, fullEdges, new Set(addedNodeIds))
   const orderedUpserts = orderParentFirst(positioned)
 
   // Handle migration can rewrite EXISTING edges too; anything it changed has
@@ -354,13 +354,29 @@ function knownTypeSet(): Set<string> {
   return knownTypes
 }
 
-/** Give every node without a position one, laid out by graph depth. */
-function applyLayout(upserts: GenericNode[], fullNodes: GenericNode[], fullEdges: EdgeLike[]): GenericNode[] {
-  const needsLayout = upserts.some((n) => !n.position || typeof n.position.x !== "number")
-  if (!needsLayout) return upserts
+/**
+ * Position every node this call CREATES, whatever the model asked for.
+ *
+ * A model-supplied position is not an opinion worth honouring: it cannot know
+ * a node's rendered size (a card here is 200–650px tall), so its coordinates
+ * pile nodes on top of each other. Neither can this grid, which is why the
+ * browser re-runs a size-aware layout after the copilot finishes — but the grid
+ * at least keeps the graph readable for anyone reading the JSON, and it means
+ * a model that ignores the doctrine's "omit positions" cannot make it worse.
+ *
+ * An EXISTING node keeps whatever it has: the user may have placed it by hand,
+ * and a patch that does not mention position must not move it.
+ */
+function applyLayout(
+  upserts: GenericNode[],
+  fullNodes: GenericNode[],
+  fullEdges: EdgeLike[],
+  addedIds: ReadonlySet<string>,
+): GenericNode[] {
+  if (addedIds.size === 0) return upserts
   const positions = layoutPositions(fullNodes, fullEdges)
   return upserts.map((n) =>
-    n.position && typeof n.position.x === "number" ? n : { ...n, position: positions.get(n.id) ?? { x: 0, y: 0 } },
+    addedIds.has(n.id) ? { ...n, position: positions.get(n.id) ?? { x: 0, y: 0 } } : n,
   )
 }
 

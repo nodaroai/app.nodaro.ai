@@ -17,7 +17,7 @@ There are two ways in.
 
 ## What it can do
 
-- **Build.** "A product shot workflow for a sneaker, three angles." It reads the node catalogue and each node's own documentation before it adds anything, then reports what it changed.
+- **Build.** "A product shot workflow for a sneaker, three angles." It reads the node catalogue and each node's own documentation before it adds anything, then reports what it changed. A big workflow arrives in stages rather than all at once, so you can watch it take shape, and the canvas tidies itself when the copilot is done — the same arrangement the **Tidy Up** button produces.
 - **Edit.** "Add a video step after the image", "switch the model to VEO 3.1", "delete the second branch." Changes arrive as an incremental edit — your other nodes are untouched.
 - **Run — with your permission.** The copilot never starts a run by itself. It proposes one, you see the credit estimate, and you decide. See *Ask or Auto* below.
 - **Fix.** After a run it can read the per-node result, diagnose a failure and change the configuration that caused it.

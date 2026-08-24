@@ -29,7 +29,7 @@ import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { CopilotApiError, createCopilotThread } from "@/ee/lib/copilot/api"
 import { COPILOT_MESSAGE_MAX_CHARS } from "@/ee/lib/copilot/constants"
-import { activeMentionQuery, buildWireMessage, stripMentionQuery, toMentions } from "@/ee/lib/copilot/mentions"
+import { activeMentionQuery, buildWireMessage, insertMentionName, toMentions } from "@/ee/lib/copilot/mentions"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
@@ -151,7 +151,9 @@ export default function CopilotHomeComposer() {
   const pick = (mention: CopilotMention) => {
     const el = inputRef.current
     const caret = el?.selectionStart ?? prompt.length
-    const { text, caret: nextCaret } = stripMentionQuery(prompt, caret)
+    // The name stays in the sentence, at the caret — a chip alone tells the
+    // model WHO without telling it WHERE. See `insertMentionName`.
+    const { text, caret: nextCaret } = insertMentionName(prompt, caret, mention.name)
     setMentions((prev) => (prev.some((m) => m.id === mention.id) ? prev : [...prev, mention]))
     setPrompt(text)
     setQuery(null)

@@ -225,11 +225,37 @@ async function send(
     handleStreamError(err, bornIn)
   } finally {
     controller = null
-    if (bornIn === generation) setCopilotState({ streaming: false })
+    if (bornIn === generation) {
+      setCopilotState({ streaming: false })
+      tidyCanvasAfterBuild(workflowId)
+    }
     useCopilotUiStore.getState().setTurnActive(false)
     queryClient.invalidateQueries({ queryKey: queryKeys.copilot.thread(threadId) })
     queryClient.invalidateQueries({ queryKey: queryKeys.credits.all })
   }
+}
+
+/**
+ * Lay the graph out once the copilot has finished adding to it.
+ *
+ * The server positions new nodes on a fixed 340×280 grid, which cannot be
+ * right: a node here is a media card between 200 and 650px, so a large build
+ * lands as an overlapping pile the user has to untangle with Tidy Up by hand.
+ * Only the browser knows the rendered sizes, so only the browser can fix it —
+ * this asks for the SAME size-aware ELK pass that Tidy Up and the Studio-import
+ * layout already run (`needsAutoLayout`), rather than a second implementation.
+ *
+ * Only when nodes were ADDED. A turn that merely retyped a prompt must not
+ * rearrange a canvas the user laid out by hand, and re-running the layout on an
+ * unchanged graph moves nodes for no reason.
+ */
+function tidyCanvasAfterBuild(workflowId: string): void {
+  const added = copilotState().turn.update?.addedNodeIds.length ?? 0
+  if (added === 0) return
+  // The user may have moved on while the turn was finishing; laying out a
+  // workflow they are no longer looking at would be a surprise edit.
+  if (useWorkflowStore.getState().workflowId !== workflowId) return
+  useWorkflowStore.getState().setNeedsAutoLayout(true)
 }
 
 async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<void> {

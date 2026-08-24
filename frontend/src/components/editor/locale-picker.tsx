@@ -73,9 +73,6 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
                 dir={lang.dir}
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className="text-base leading-none shrink-0" aria-hidden="true">
-                    {lang.flag}
-                  </span>
                   <span className="flex flex-col min-w-0">
                     <span className="text-foreground font-medium truncate">{lang.nativeName}</span>
                     {lang.nativeName !== lang.englishName && (

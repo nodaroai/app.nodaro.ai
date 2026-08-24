@@ -52,8 +52,6 @@ export interface LanguageDefinition {
   readonly shortCode: string
   /** Reading direction. */
   readonly dir: LocaleDirection
-  /** Optional flag emoji for visual recognition. */
-  readonly flag: string
 }
 
 /**
@@ -62,18 +60,18 @@ export interface LanguageDefinition {
  * languages, then RTL languages last.
  */
 export const LANGUAGES: ReadonlyArray<LanguageDefinition> = [
-  { id: "en",    englishName: "English",              nativeName: "English",         shortCode: "EN",  dir: "ltr", flag: "🇬🇧" },
-  { id: "es",    englishName: "Spanish",              nativeName: "Español",         shortCode: "ES",  dir: "ltr", flag: "🇪🇸" },
-  { id: "fr",    englishName: "French",               nativeName: "Français",        shortCode: "FR",  dir: "ltr", flag: "🇫🇷" },
-  { id: "de",    englishName: "German",               nativeName: "Deutsch",         shortCode: "DE",  dir: "ltr", flag: "🇩🇪" },
-  { id: "pt-BR", englishName: "Portuguese (Brazil)",  nativeName: "Português",       shortCode: "PT",  dir: "ltr", flag: "🇧🇷" },
-  { id: "ru",    englishName: "Russian",              nativeName: "Русский",         shortCode: "RU",  dir: "ltr", flag: "🇷🇺" },
-  { id: "hi",    englishName: "Hindi",                nativeName: "हिन्दी",          shortCode: "HI",  dir: "ltr", flag: "🇮🇳" },
-  { id: "ja",    englishName: "Japanese",             nativeName: "日本語",          shortCode: "JA",  dir: "ltr", flag: "🇯🇵" },
-  { id: "ko",    englishName: "Korean",               nativeName: "한국어",          shortCode: "KO",  dir: "ltr", flag: "🇰🇷" },
-  { id: "zh-CN", englishName: "Chinese (Simplified)", nativeName: "简体中文",        shortCode: "ZH",  dir: "ltr", flag: "🇨🇳" },
-  { id: "he",    englishName: "Hebrew",               nativeName: "עברית",           shortCode: "HE",  dir: "rtl", flag: "🇮🇱" },
-  { id: "ar",    englishName: "Arabic",               nativeName: "العربية",         shortCode: "AR",  dir: "rtl", flag: "🇸🇦" },
+  { id: "en",    englishName: "English",              nativeName: "English",         shortCode: "EN",  dir: "ltr" },
+  { id: "es",    englishName: "Spanish",              nativeName: "Español",         shortCode: "ES",  dir: "ltr" },
+  { id: "fr",    englishName: "French",               nativeName: "Français",        shortCode: "FR",  dir: "ltr" },
+  { id: "de",    englishName: "German",               nativeName: "Deutsch",         shortCode: "DE",  dir: "ltr" },
+  { id: "pt-BR", englishName: "Portuguese (Brazil)",  nativeName: "Português",       shortCode: "PT",  dir: "ltr" },
+  { id: "ru",    englishName: "Russian",              nativeName: "Русский",         shortCode: "RU",  dir: "ltr" },
+  { id: "hi",    englishName: "Hindi",                nativeName: "हिन्दी",          shortCode: "HI",  dir: "ltr" },
+  { id: "ja",    englishName: "Japanese",             nativeName: "日本語",          shortCode: "JA",  dir: "ltr" },
+  { id: "ko",    englishName: "Korean",               nativeName: "한국어",          shortCode: "KO",  dir: "ltr" },
+  { id: "zh-CN", englishName: "Chinese (Simplified)", nativeName: "简体中文",        shortCode: "ZH",  dir: "ltr" },
+  { id: "he",    englishName: "Hebrew",               nativeName: "עברית",           shortCode: "HE",  dir: "rtl" },
+  { id: "ar",    englishName: "Arabic",               nativeName: "العربية",         shortCode: "AR",  dir: "rtl" },
 ] as const
 
 export const LOCALE_IDS: ReadonlyArray<LocaleId> = LANGUAGES.map((l) => l.id)

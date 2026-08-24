@@ -53,7 +53,7 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
-import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS, toElkLayoutNode } from "@/hooks/use-elk-layout"
+import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS, toElkLayoutNode, whenNodesMeasured } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
@@ -767,6 +767,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     if (!needsAutoLayout) return
     let cancelled = false
     void (async () => {
+      // Nodes that arrived a frame ago are not measured yet, and ELK would
+      // size them 200×120 — see `whenNodesMeasured`. This is what separates a
+      // clean layout from the overlapping pile.
+      await whenNodesMeasured(getNodes, { cancelled: () => cancelled })
+      if (cancelled) return
       const rfNodes = getNodes()
       const rfEdges = getEdges()
       if (rfNodes.length === 0) { setNeedsAutoLayout(false); return }

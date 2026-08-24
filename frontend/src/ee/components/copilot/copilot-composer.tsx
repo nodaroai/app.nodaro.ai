@@ -9,7 +9,7 @@
 import { useRef, useState } from "react"
 import { ArrowUp, AtSign } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
-import { activeMentionQuery, stripMentionQuery } from "@/ee/lib/copilot/mentions"
+import { activeMentionQuery, insertMentionName } from "@/ee/lib/copilot/mentions"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { COPILOT_FEATURE_ID } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
@@ -51,7 +51,9 @@ export function CopilotComposer({ characters, locations, onSend, onStop, disable
   const pick = (mention: CopilotMention) => {
     const el = inputRef.current
     const caret = el?.selectionStart ?? draft.length
-    const { text, caret: nextCaret } = stripMentionQuery(draft, caret)
+    // The name stays in the sentence, at the caret — the chip alone would tell
+    // the model WHO without telling it WHERE. See `insertMentionName`.
+    const { text, caret: nextCaret } = insertMentionName(draft, caret, mention.name)
     addMention(mention)
     setDraft(text)
     setQuery(null)

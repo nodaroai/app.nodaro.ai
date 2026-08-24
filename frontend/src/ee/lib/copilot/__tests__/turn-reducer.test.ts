@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { isTurnOver, reduceTurn, startTurn } from "../turn-reducer"
-import type { CopilotStreamEvent, CopilotTurnState } from "../types"
+import type { CopilotStreamEvent, CopilotTurnState, CopilotWorkflowUpdate } from "../types"
 
 /** Fixed, so a replayed turn is byte-identical run to run. */
 const T0 = 1_700_000_000_000
@@ -82,6 +82,83 @@ describe("reduceTurn", () => {
     expect(state.status).toBe("failed")
     expect(state.error).toEqual({ code: "turn_timeout", message: "This turn took too long and was stopped." })
     expect(isTurnOver(state)).toBe(true)
+  })
+
+  it("adds a staged build up instead of reporting only its last stage", () => {
+    // The doctrine asks for a big graph to be written in stages, so one turn
+    // now emits several of these. Reporting the last one would tell the user
+    // four nodes arrived when twelve did.
+    const stage = (added: string[], version: number, edges: number): CopilotStreamEvent => ({
+      type: "workflow_updated",
+      data: {
+        workflowId: "wf-1",
+        version,
+        addedNodeIds: added,
+        updatedNodeIds: [],
+        removedNodeIds: [],
+        addedNodeTypes: ["generate-image"],
+        nodeCount: 12,
+        edgeCount: edges,
+        adjustments: [],
+      },
+    })
+
+    const state = drive([stage(["a", "b"], 7, 1), stage(["c", "d"], 8, 4), stage([], 9, 11)])
+
+    expect(state.update?.addedNodeIds).toEqual(["a", "b", "c", "d"])
+    // Version, counts and timestamp are already cumulative — newest wins.
+    expect(state.update?.version).toBe(9)
+    expect(state.update?.edgeCount).toBe(11)
+  })
+
+  it("reports a node the turn created and then deleted as neither added nor edited", () => {
+    const event = (data: Partial<CopilotTurnState["update"]> & Record<string, unknown>): CopilotStreamEvent => ({
+      type: "workflow_updated",
+      data: {
+        workflowId: "wf-1",
+        version: 7,
+        addedNodeIds: [],
+        updatedNodeIds: [],
+        removedNodeIds: [],
+        addedNodeTypes: [],
+        nodeCount: 1,
+        edgeCount: 0,
+        adjustments: [],
+        ...data,
+      } as CopilotWorkflowUpdate,
+    })
+
+    const state = drive([
+      event({ addedNodeIds: ["keep", "scrap"] }),
+      event({ updatedNodeIds: ["keep"] }),
+      event({ removedNodeIds: ["scrap"] }),
+    ])
+
+    // The graph is what the user ends up with.
+    expect(state.update?.addedNodeIds).toEqual(["keep"])
+    expect(state.update?.removedNodeIds).toEqual(["scrap"])
+    // "Added then configured" is one add, not an add plus an edit.
+    expect(state.update?.updatedNodeIds).toEqual([])
+  })
+
+  it("starts over when the update is for a different workflow", () => {
+    const forWorkflow = (workflowId: string, added: string[]): CopilotStreamEvent => ({
+      type: "workflow_updated",
+      data: {
+        workflowId,
+        version: 7,
+        addedNodeIds: added,
+        updatedNodeIds: [],
+        removedNodeIds: [],
+        addedNodeTypes: [],
+        nodeCount: 1,
+        edgeCount: 0,
+        adjustments: [],
+      },
+    })
+
+    const state = drive([forWorkflow("wf-1", ["a"]), forWorkflow("wf-2", ["b"])])
+    expect(state.update?.addedNodeIds).toEqual(["b"])
   })
 
   it("is a pure function — the input state is never mutated", () => {
