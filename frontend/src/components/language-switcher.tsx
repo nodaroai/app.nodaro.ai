@@ -48,7 +48,6 @@ function LanguageSwitcherComponent({ collapsed }: { readonly collapsed?: boolean
           <Languages className="size-4 shrink-0" />
           {!collapsed && (
             <span className="flex items-center gap-1.5 min-w-0">
-              <span className="text-base leading-none shrink-0" aria-hidden="true">{current.flag}</span>
               <span className="truncate">{current.nativeName}</span>
             </span>
           )}
@@ -73,7 +72,6 @@ function LanguageSwitcherComponent({ collapsed }: { readonly collapsed?: boolean
                 dir={lang.dir}
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className="text-base leading-none shrink-0" aria-hidden="true">{lang.flag}</span>
                   <span className="flex flex-col min-w-0">
                     <span className="text-foreground font-medium truncate">{lang.nativeName}</span>
                     {lang.nativeName !== lang.englishName && (
