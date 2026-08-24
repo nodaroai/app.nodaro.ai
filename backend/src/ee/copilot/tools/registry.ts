@@ -15,7 +15,7 @@
  */
 import type { McpInvoker, McpToolDef } from "../../../lib/mcp/invoke.js"
 import { FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
-import { EditRejected, runEditWorkflow, type EditWorkflowArgs } from "./edit-workflow.js"
+import { EditRejected, runEditWorkflow, type EditWorkflowArgs, type WiredAsset } from "./edit-workflow.js"
 import { runGetGraph, type GetGraphArgs } from "./get-graph.js"
 import { proposeRun, runGetExecution, type GetExecutionArgs, type RunWorkflowArgs } from "./run-and-execution.js"
 import type { CopilotToolContext, RunProposal } from "./types.js"
@@ -180,6 +180,8 @@ export interface DispatchDeps {
   readonly invoker: McpInvoker
   /** Node types added so far this turn — the Run card lists them for the user. */
   readonly addedNodeTypes: Set<string>
+  /** Files wired onto a node this turn, so the Run card can name them too. */
+  readonly wiredAssets: WiredAsset[]
 }
 
 /** Execute one tool call. Never throws for a model-visible problem — it returns an error result the model can act on. */
@@ -193,6 +195,11 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
       case NATIVE_TOOLS.editWorkflow: {
         const result = await runEditWorkflow(deps.ctx, args as unknown as EditWorkflowArgs)
         for (const type of result.addedNodeTypes) deps.addedNodeTypes.add(type)
+        for (const asset of result.wiredAssets) {
+          if (!deps.wiredAssets.some((a) => a.id === asset.id && a.nodeId === asset.nodeId)) {
+            deps.wiredAssets.push(asset)
+          }
+        }
         const summary = [
           result.addedNodeIds.length ? `added ${result.addedNodeIds.length}` : "",
           result.updatedNodeIds.length ? `updated ${result.updatedNodeIds.length}` : "",
@@ -204,7 +211,7 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
       }
 
       case NATIVE_TOOLS.runWorkflow: {
-        const { proposal, message } = proposeRun(deps.ctx, args as RunWorkflowArgs, [...deps.addedNodeTypes])
+        const { proposal, message } = proposeRun(deps.ctx, args as RunWorkflowArgs, [...deps.addedNodeTypes], deps.wiredAssets)
         return { text: message, isError: false, proposal }
       }
 

@@ -28,6 +28,9 @@ const KIND_UI: Record<MentionKind, { section: string; chip: string; round: boole
   object: { section: S.sectionObjects, chip: S.kindObject, round: false },
   creature: { section: S.sectionCreatures, chip: S.kindCreature, round: true },
   location: { section: S.sectionLocations, chip: S.kindLocation, round: false },
+  image: { section: S.sectionFiles, chip: S.kindImage, round: false },
+  video: { section: S.sectionFiles, chip: S.kindVideo, round: false },
+  audio: { section: S.sectionFiles, chip: S.kindAudio, round: false },
 }
 
 interface CopilotMentionPickerProps {
@@ -61,14 +64,22 @@ export function CopilotMentionPicker({
   insetClassName = "left-3.5 right-3.5",
   loading = false,
 }: CopilotMentionPickerProps) {
-  const sections = useMemo(
-    () =>
-      MENTION_KINDS.map((kind) => ({
-        label: KIND_UI[kind].section,
-        items: filterMentions(mentions.filter((m) => m.kind === kind), query),
-      })),
-    [mentions, query],
-  )
+  const sections = useMemo(() => {
+    // Grouped by SECTION rather than by kind: the three file kinds share one
+    // header, so a library with two images and one clip is one "Files" list
+    // instead of three near-empty ones.
+    const order: string[] = []
+    const byLabel = new Map<string, CopilotMention[]>()
+    for (const kind of MENTION_KINDS) {
+      const label = KIND_UI[kind].section
+      if (!byLabel.has(label)) {
+        byLabel.set(label, [])
+        order.push(label)
+      }
+      byLabel.get(label)!.push(...mentions.filter((m) => m.kind === kind))
+    }
+    return order.map((label) => ({ label, items: filterMentions(byLabel.get(label) ?? [], query) }))
+  }, [mentions, query])
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections])
   const [active, setActive] = useState(0)

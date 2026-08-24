@@ -31,6 +31,7 @@ vi.mock("@/hooks/queries/use-assets-queries", () => ({
   useObjects: () => ({ data: [] }),
   useCreatures: () => ({ data: [] }),
   useLocations: () => ({ data: [] }),
+  useLibraryInfinite: () => ({ data: { pages: [] }, isLoading: false }),
 }))
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 900 }))
 vi.mock("@/ee/hooks/copilot/use-copilot-thread", () => ({

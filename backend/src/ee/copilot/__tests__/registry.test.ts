@@ -29,7 +29,7 @@ function fakeInvoker(extra: string[] = []): McpInvoker & { calls: Array<{ name: 
 const deps = {
   ctx: { userId: "u1", workflowId: "wf1", projectId: "p1", threadId: "t1", turnId: "turn1", fastify: {} as never, emit: vi.fn() },
   invoker: fakeInvoker(),
-  addedNodeTypes: new Set<string>(),
+  addedNodeTypes: new Set<string>(), wiredAssets: [],
 }
 
 describe("buildToolDefinitions", () => {

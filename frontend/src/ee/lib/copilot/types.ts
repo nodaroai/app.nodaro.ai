@@ -163,9 +163,21 @@ export const EMPTY_TURN: CopilotTurnState = {
  * a fifth kind is a compiler error in each place that must handle it — and the
  * picker groups by kind rather than taking a prop per kind.
  */
-export const MENTION_KINDS = ENTITY_NODE_KINDS
+/**
+ * Files, as opposed to saved entities.
+ *
+ * A different family with a different destination: an entity id goes on the
+ * entity node that owns it, a file id goes into `assetId` on an upload node and
+ * the server fills in the rest. Same journey to the model — a name and an id,
+ * never an address.
+ */
+export const MEDIA_MENTION_KINDS = ["image", "video", "audio"] as const
 
-export type MentionKind = EntityNodeKind
+export type MediaMentionKind = (typeof MEDIA_MENTION_KINDS)[number]
+
+export const MENTION_KINDS = [...ENTITY_NODE_KINDS, ...MEDIA_MENTION_KINDS] as const
+
+export type MentionKind = EntityNodeKind | MediaMentionKind
 
 export interface CopilotMention {
   id: string

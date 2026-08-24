@@ -28,11 +28,17 @@ const useCharacters = vi.fn((_projectId?: string, _userId?: string) => CHARACTER
 const useObjects = vi.fn((_projectId?: string, _userId?: string) => OBJECTS)
 const useCreatures = vi.fn((_projectId?: string, _userId?: string) => EMPTY)
 const useLocations = vi.fn((_projectId?: string, _userId?: string) => EMPTY)
+const FILES = {
+  data: { pages: [{ data: [{ id: "f1", type: "image", filename: "cat.png", thumbnailUrl: null }] }] },
+  isLoading: false,
+}
+const useLibraryInfinite = vi.fn((_params: { userId?: string }) => FILES)
 vi.mock("@/hooks/queries/use-assets-queries", () => ({
   useCharacters: (projectId?: string, userId?: string) => useCharacters(projectId, userId),
   useObjects: (projectId?: string, userId?: string) => useObjects(projectId, userId),
   useCreatures: (projectId?: string, userId?: string) => useCreatures(projectId, userId),
   useLocations: (projectId?: string, userId?: string) => useLocations(projectId, userId),
+  useLibraryInfinite: (params: { userId?: string }) => useLibraryInfinite(params),
 }))
 
 const createCopilotThread = vi.fn(async (_body: { prompt: string }) => ({
@@ -70,6 +76,7 @@ beforeEach(() => {
   useObjects.mockReturnValue(OBJECTS)
   useCreatures.mockReturnValue(EMPTY)
   useLocations.mockReturnValue(EMPTY)
+  useLibraryInfinite.mockReturnValue(FILES)
   window.localStorage.clear()
 })
 
@@ -133,6 +140,49 @@ describe("home dock", () => {
     expect(prompt).toContain('[references] object "Kettle" (id: o1)')
   })
 
+  it("offers the user's FILES too, and sends one as an id", async () => {
+    // A file cannot travel as an address — `edit_workflow` refuses that. It
+    // travels as an id, and the server turns it into the node's url.
+    renderDock()
+    fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    fireEvent.click(await screen.findByRole("option", { name: /cat.png/ }))
+    expect(input().value).toBe("@cat.png ")
+
+    fireEvent.click(screen.getByRole("button", { name: /Build it/i }))
+    await waitFor(() => expect(createCopilotThread).toHaveBeenCalled())
+    const { prompt } = createCopilotThread.mock.calls.at(-1)![0]
+    expect(prompt).toContain('[references] image file "cat.png" (id: f1)')
+    // Never the address itself.
+    expect(prompt).not.toContain("http")
+  })
+
+  it("does not offer a file no node can take", async () => {
+    // The library also holds documents. Offering one would send the model an
+    // id it can only fail on, and the failure would arrive as "not a file in
+    // this user's library" — about a file the picker had just shown them.
+    useLibraryInfinite.mockReturnValue({
+      data: {
+        pages: [
+          {
+            data: [
+              { id: "d1", type: "document", filename: "notes.pdf", thumbnailUrl: null },
+              { id: "i1", type: "image", filename: "keep.png", thumbnailUrl: null },
+            ],
+          },
+        ],
+      },
+      isLoading: false,
+    } as never)
+
+    renderDock()
+    fireEvent.click(screen.getByLabelText("Mention something of yours"))
+
+    // The image beside it must still be offered — otherwise this would pass
+    // just as well if the picker had crashed on the document.
+    expect(await screen.findByRole("option", { name: /keep.png/ })).toBeTruthy()
+    expect(screen.queryByRole("option", { name: /notes.pdf/ })).toBeNull()
+  })
+
   it("leaves the picked name in the sentence rather than lifting it out", async () => {
     // The whole point of a mention's POSITION: "@Emma walks in while @George
     // raises the bottle" says who does what; two chips above the box do not.
@@ -183,6 +233,7 @@ describe("home dock", () => {
     for (const q of [useCharacters, useObjects, useCreatures, useLocations]) {
       q.mockReturnValue({ data: [], isLoading: true } as never)
     }
+    useLibraryInfinite.mockReturnValue({ data: { pages: [] }, isLoading: true } as never)
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
     expect(await screen.findByText("Looking…")).toBeTruthy()
@@ -193,6 +244,7 @@ describe("home dock", () => {
     for (const q of [useCharacters, useObjects, useCreatures, useLocations]) {
       q.mockReturnValue({ data: [], isLoading: false } as never)
     }
+    useLibraryInfinite.mockReturnValue({ data: { pages: [] }, isLoading: false } as never)
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
     expect(await screen.findByText("Nothing here yet")).toBeTruthy()

@@ -11,6 +11,7 @@
  *     only when nothing was spent and nothing changed.
  */
 import type Anthropic from "@anthropic-ai/sdk"
+import type { WiredAsset } from "./tools/edit-workflow.js"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { insertAppReport } from "../../lib/app-reports.js"
 import { supabase } from "../../lib/supabase.js"
@@ -96,6 +97,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
   const invoker = createMcpInvoker(server)
 
   const addedNodeTypes = new Set<string>()
+  const wiredAssets: WiredAsset[] = []
   const ctx: CopilotToolContext = {
     userId: input.userId,
     workflowId: input.workflowId,
@@ -164,7 +166,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       userContent: userContent as Anthropic.Messages.ContentBlockParam[],
       budget,
       signal: controller.signal,
-      deps: { ctx: { ...ctx, emit: emitWithVersion }, invoker, addedNodeTypes },
+      deps: { ctx: { ...ctx, emit: emitWithVersion }, invoker, addedNodeTypes, wiredAssets },
       events: {
         onToken: (delta) => input.emit({ type: "token", data: { text: delta } }),
         onToolCall: (event) => input.emit({ type: "tool_call", data: { ...event } }),

@@ -80,6 +80,10 @@ export const COPILOT_STRINGS = {
   kindObject: "Object",
   kindCreature: "Animal",
   kindLocation: "Location",
+  sectionFiles: "Files",
+  kindImage: "Image",
+  kindVideo: "Video",
+  kindAudio: "Audio",
 
   stepsCollapsed: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
   /** What the live pill says before the first tool call names a real step. */

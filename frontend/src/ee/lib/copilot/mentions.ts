@@ -54,6 +54,11 @@ const KIND_LABEL: Record<MentionKind, string> = {
   object: "object",
   creature: "creature",
   location: "location",
+  // For a file the label says what it IS, and the doctrine says where an id
+  // goes — into `assetId` on the matching upload node.
+  image: "image file",
+  video: "video file",
+  audio: "audio file",
 }
 
 const MAX_MENTION_NAME = 120
