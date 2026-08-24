@@ -16,7 +16,7 @@ import { Suspense, lazy, useEffect, type ComponentType } from "react"
 import { Bot, Loader2 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
-import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 
 /**
@@ -83,7 +83,8 @@ export function CopilotCollapsedTab() {
       type="button"
       onClick={openPanel}
       title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
-      className="w-10 flex-none bg-[var(--copilot-panel)] border-r border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
+      style={{ width: COPILOT_TAB_WIDTH }}
+      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
       <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">COPILOT</span>
@@ -93,7 +94,10 @@ export function CopilotCollapsedTab() {
 
 function CopilotPanelFallback() {
   return (
-    <div className="w-[380px] flex-none bg-[var(--copilot-panel)] border-r border-border flex items-center justify-center">
+    <div
+      style={{ width: COPILOT_RAIL_WIDTH }}
+      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex items-center justify-center"
+    >
       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
   )

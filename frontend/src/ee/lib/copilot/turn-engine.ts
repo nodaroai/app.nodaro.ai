@@ -224,6 +224,9 @@ async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<v
     return
   }
   if (event.type === "metadata") {
+    // Remembered past the end of the stream: it is how the panel later tells
+    // its own unfinished turn from another tab's.
+    setCopilotState({ lastTurnId: event.data.turnId })
     copilotState().setRunSettings(event.data.runMode, event.data.autoRunLimitCredits)
     return
   }

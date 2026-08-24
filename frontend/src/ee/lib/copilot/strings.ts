@@ -70,6 +70,8 @@ export const COPILOT_STRINGS = {
   readOnlyTitle: "Read-only",
   readOnlyBlurb: "Editing is off for this workflow",
   otherTabTitle: "Copilot is working in another tab",
+  stillWorkingTitle: "Still working on your last message",
+  stillWorkingBlurb: "The connection dropped but the turn is still running. It will appear here when it lands.",
 
   a11yWorking: "Copilot is working.",
   a11yDone: "Copilot finished.",

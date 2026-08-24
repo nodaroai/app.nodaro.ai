@@ -77,6 +77,15 @@ export interface CopilotStoreState {
   autoFixChain: number
   /** Which execution's outcome has already been acted on. Store-level, so a remount cannot re-report. */
   lastReportedExecutionId: string | null
+  /**
+   * The last turn this tab started, kept after the stream ends.
+   *
+   * A turn outlives its SSE connection: the browser can lose the stream while
+   * the server keeps working. Without this, the panel cannot tell "my own turn
+   * is still going" from "another tab is working", and told the user the
+   * second when the first was true.
+   */
+  lastTurnId: string | null
   proposalDismissed: boolean
 
   activityCollapsed: boolean
@@ -129,6 +138,7 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
   autoRunCount: 0,
   autoFixChain: 0,
   lastReportedExecutionId: null,
+  lastTurnId: null,
   proposalDismissed: false,
   activityCollapsed: false,
   draft: "",
@@ -168,6 +178,7 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
       autoRunCount: 0,
       autoFixChain: 0,
       lastReportedExecutionId: null,
+      lastTurnId: null,
       proposalDismissed: false,
       activityCollapsed: false,
       draft: "",

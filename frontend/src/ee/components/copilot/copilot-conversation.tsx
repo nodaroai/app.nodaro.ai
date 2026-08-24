@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
-import { splitWireMessage } from "@/ee/lib/copilot/mentions"
+import { mentionDisplayName, splitWireMessage } from "@/ee/lib/copilot/mentions"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotActivityRows } from "./copilot-activity"
 import { WorkflowUpdatedCard } from "./copilot-cards"
@@ -143,7 +143,7 @@ function UserBubble({ text }: { text: string }) {
                 key={`${i}:${ref}`}
                 className="inline-flex items-center px-2 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
               >
-                {ref.replace(/^(character|location)\s+/, "").replace(/"/g, "")}
+                {mentionDisplayName(ref)}
               </span>
             ))}
           </div>

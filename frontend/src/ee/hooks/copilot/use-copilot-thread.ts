@@ -45,8 +45,11 @@ export function useCopilotThreadForWorkflow(): { thread: CopilotThread | null; l
 export function useCopilotHistory(threadId: string | null): {
   thread: CopilotThread | null
   messages: DisplayMessage[]
+  /** Someone is mid-turn on the server: this tab, or another one. */
+  busy: { kind: "ours" | "other-tab" } | null
 } {
   const streaming = useCopilotStore((s) => s.streaming)
+  const lastTurnId = useCopilotStore((s) => s.lastTurnId)
 
   const { data } = useQuery({
     queryKey: queryKeys.copilot.thread(threadId ?? "none"),
@@ -55,9 +58,22 @@ export function useCopilotHistory(threadId: string | null): {
     // While a turn streams, the live state is authoritative and refetching only
     // costs a request; the engine invalidates once the turn settles.
     staleTime: streaming ? Infinity : 5_000,
+    // A server-side turn ends on its own schedule. Poll while one is live so
+    // the composer unlocks by itself instead of stranding the user behind a
+    // notice that never clears.
+    refetchInterval: (query) => (query.state.data?.thread.status === "running" && !streaming ? 5_000 : false),
   })
 
-  return { thread: data?.thread ?? null, messages: data?.messages ?? [] }
+  const thread = data?.thread ?? null
+  const busy =
+    thread?.status === "running" && !streaming
+      ? // Our own turn survived its stream — the browser lost the connection,
+        // the server kept working. Saying "another tab" here was the reported
+        // bug, and it is the more alarming of the two messages.
+        { kind: thread.activeTurnId && thread.activeTurnId === lastTurnId ? ("ours" as const) : ("other-tab" as const) }
+      : null
+
+  return { thread, messages: data?.messages ?? [], busy }
 }
 
 /** Ask/Auto + the auto-run credit ceiling. */
