@@ -13,6 +13,7 @@ import { activeMentionQuery, insertMentionName } from "@/ee/lib/copilot/mentions
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { COPILOT_FEATURE_ID } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
 
@@ -162,6 +163,9 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
           >
             <AtSign className="w-3 h-3" strokeWidth={2} />
           </button>
+          {/* An attachment becomes a MENTION — from here on it is the same
+              thing as a file picked with @, and travels the same way. */}
+          <CopilotAttachButton disabled={disabled} onAttached={pick} />
           {/* The two costs a send commits to, in the order they matter: what
               this MESSAGE can cost at most, then what happens about runs. The
               upper bound is a ceiling, not a price — the turn is billed for

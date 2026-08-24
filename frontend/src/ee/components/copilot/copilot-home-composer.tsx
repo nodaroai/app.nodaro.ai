@@ -31,6 +31,7 @@ import { COPILOT_MESSAGE_MAX_CHARS } from "@/ee/lib/copilot/constants"
 import { activeMentionQuery, buildWireMessage, insertMentionName } from "@/ee/lib/copilot/mentions"
 import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
 
@@ -304,6 +305,8 @@ export default function CopilotHomeComposer() {
                 >
                   <AtSign className="w-3 h-3" strokeWidth={2} />
                 </button>
+                {/* Same journey as a picked file: id in, id out. */}
+                <CopilotAttachButton disabled={building} onAttached={pick} />
                 <input
                   ref={inputRef}
                   value={prompt}

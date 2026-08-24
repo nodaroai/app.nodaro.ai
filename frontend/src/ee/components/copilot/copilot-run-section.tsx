@@ -102,6 +102,7 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
         balance={balance?.total ?? null}
         overLimit={runMode === "auto" && !estimateStale && estimate > autoRunLimit}
         ceiling={autoRunLimit}
+        wiredAssets={proposal.wiredAssets ?? []}
         onRun={startProposedRun}
         onSkip={skipProposedRun}
         disabled={isRunning}

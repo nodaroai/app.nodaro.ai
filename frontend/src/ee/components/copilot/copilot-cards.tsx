@@ -6,9 +6,9 @@
  * is skipped when a run starts from here, so this card has to carry everything
  * that dialog would have said: the estimate, what it will run, and a way out.
  */
-import { Check } from "lucide-react"
+import { Check, Paperclip } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
-import type { CopilotWorkflowUpdate } from "@/ee/lib/copilot/types"
+import type { CopilotWiredAsset, CopilotWorkflowUpdate } from "@/ee/lib/copilot/types"
 
 const CARD = "p-3 bg-[var(--copilot-card)] border border-border rounded-[11px] flex flex-col gap-2.5"
 
@@ -65,6 +65,7 @@ export function RunProposalCard({
   balance,
   overLimit,
   ceiling,
+  wiredAssets,
   onRun,
   onSkip,
   disabled,
@@ -76,6 +77,8 @@ export function RunProposalCard({
   balance: number | null
   overLimit: boolean
   ceiling: number
+  /** Files the copilot attached. Named, because this card is the approval. */
+  wiredAssets: CopilotWiredAsset[]
   onRun: () => void
   onSkip: () => void
   disabled?: boolean
@@ -96,6 +99,21 @@ export function RunProposalCard({
         </span>
       </div>
       <div className="text-[11.5px] text-[var(--copilot-dim)]">{detail}</div>
+      {wiredAssets.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[var(--copilot-dim)] font-semibold">
+            {S.proposeUsingFiles}
+          </div>
+          <ul className="flex flex-col gap-0.5">
+            {wiredAssets.map((asset) => (
+              <li key={`${asset.nodeId}:${asset.id}`} className="flex items-center gap-1.5 min-w-0">
+                <Paperclip className="w-3 h-3 flex-none text-[var(--copilot-dim)]" aria-hidden />
+                <span className="text-[11.5px] text-foreground truncate">{asset.filename}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {overLimit && <div className="text-[11.5px] text-[var(--copilot-muted)]">{S.autoOverLimit(estimate, ceiling)}</div>}
       <div className="flex gap-2">
         <button

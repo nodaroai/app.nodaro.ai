@@ -64,9 +64,25 @@ export interface CopilotWorkflowUpdate {
   adjustments: string[]
 }
 
+/** A file this turn wired onto a node. Named on the run card, never counted. */
+export interface CopilotWiredAsset {
+  id: string
+  kind: MediaMentionKind
+  filename: string
+  nodeId: string
+}
+
 export interface CopilotRunProposal {
   workflowId: string
   addedNodeTypes: string[]
+  /**
+   * Files the copilot attached while building this graph.
+   *
+   * On the card because approving a run is the moment the user agrees to spend
+   * credits on THIS graph — and a file they cannot see was wired in is a thing
+   * they did not actually approve.
+   */
+  wiredAssets?: CopilotWiredAsset[]
   note: string | null
 }
 

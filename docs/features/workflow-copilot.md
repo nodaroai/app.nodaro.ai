@@ -24,11 +24,15 @@ There are two ways in.
 
 ## Point at your own saved things
 
-Type `@` in the message box (or press the `@` button) to pick from the characters, objects, animals and locations you have already made. The name is written into your sentence, where you were typing it — because where you put it is part of what you meant: "@Emma walks in while @George raises the bottle" says who does what, which a list of names beside the box does not. The copilot looks each one up and can wire it into the workflow it builds.
+Type `@` in the message box (or press the `@` button) to pick from the characters, objects, animals and locations you have already made — and from your own images, videos and audio, under **Files**. The name is written into your sentence, where you were typing it — because where you put it is part of what you meant: "@Emma walks in while @George raises the bottle" says who does what, which a list of names beside the box does not. The copilot looks each one up and can wire it into the workflow it builds.
 
-Mentions travel as names, never as file addresses — the same rule as *What it will not do* below. Mentioning your uploaded media files and attaching a file from your computer are not available yet.
+To use a file that is not in your library yet, press the paperclip and pick it from your computer. It uploads to your library and is attached to the message in one step, exactly as if you had mentioned it.
+
+Mentions travel as names and ids, never as file addresses — the same rule as *What it will not do* below. When the copilot uses one of your files it puts the **id** on the node and Nodaro fills in the address, so the rule that it can never type a URL holds even while it is wiring your own media.
 
 A character the copilot places this way arrives complete: the picture and the saved variants are read from your library when the workflow runs, so the run uses the right likeness even if the node was added a moment ago and you have not reloaded the page.
+
+**Before a run starts, the card lists every file that was attached to it, by name.** Approving a run is the moment you agree to spend credits on that workflow, so anything the copilot wired in while building it is named there for you to check first.
 
 ## Ask or Auto
 
@@ -56,7 +60,8 @@ It only ever sees things that are yours: the public gallery is out of reach, and
 ## What it will not do
 
 - **Add nodes that send data out of Nodaro.** Webhook Output and the social publishers have to be added by you. This is deliberate: text inside a workflow (a node label, a description, a provider error) is content someone else may have written, and an assistant that could act on it could be talked into shipping your data somewhere.
-- **Type a URL into a node.** Media reaches a node through a connection, a saved character or location, or your own upload.
+- **Type a URL into a node.** Media reaches a node through a connection, a saved character or location, or one of your own files — which the copilot names by id, never by address.
+- **Use a file that is not yours.** It can only reach what is in your own library, and a file it cannot find is refused rather than guessed at.
 - **Start a run on its own**, in Ask mode, or above your limit in Auto mode.
 - **Delete a workflow, publish anything, or touch another workflow** — it can only edit the one you have open.
 
