@@ -20,6 +20,7 @@ export interface NodaroRuntimeConfig {
   readonly supabaseUrl?: string
   readonly supabaseAnonKey?: string
   readonly freecutUrl?: string
+  readonly defaultLocale?: string
 }
 
 declare global {
@@ -112,4 +113,15 @@ export function runtimeFreecutOrigin(): string {
   } catch {
     return ""
   }
+}
+
+/**
+ * The locale a fresh visitor to THIS deployment starts in — env `DEFAULT_LOCALE`
+ * → `/config.js`. Runtime-only: unlike the trio there is no build-time default,
+ * so an unset or blank value returns "" and the caller keeps its own fallback.
+ * Whether the string names a locale we ship is the locale layer's decision, not
+ * ours; it ranks this BELOW a saved choice and ABOVE browser detection.
+ */
+export function runtimeDefaultLocale(): string {
+  return (runtime().defaultLocale ?? "").trim()
 }

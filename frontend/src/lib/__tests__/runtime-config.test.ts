@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -29,6 +29,22 @@ describe("runtime-config getters", () => {
     expect(runtimeSupabaseUrl()).toBe(import.meta.env.VITE_SUPABASE_URL ?? "")
     delete window.__NODARO_RUNTIME__
     expect(runtimeSupabaseAnonKey()).toBe(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "")
+  })
+})
+
+describe("runtimeDefaultLocale (A3 — deployment default locale)", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it("returns the runtime override, trimmed", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "  he  " }
+    expect(runtimeDefaultLocale()).toBe("he")
+  })
+
+  it("returns empty when missing or blank — it is runtime-only, no build-time default", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "   " }
+    expect(runtimeDefaultLocale()).toBe("")
+    delete window.__NODARO_RUNTIME__
+    expect(runtimeDefaultLocale()).toBe("")
   })
 })
 

@@ -225,6 +225,10 @@ services:
       # FreeCut (github.com/nodaroai/freecut — public, MIT) and point here at it.
       # `off` removes the Edit-video action entirely.
       FREECUT_URL: ${FREECUT_URL:-}
+      # The locale a fresh visitor to this install starts in (e.g. "he", "ar",
+      # "de"). A user's own saved choice always wins; an unset/blank/unknown
+      # value falls back to the visitor's browser language. Restart to apply.
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-}
       # nodaro.ai as a provider like the others: a personal API token from
       # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
       NODARO_API_KEY: ${NODARO_API_KEY:-}
