@@ -2,6 +2,7 @@
 
 import { ChevronRight, Home } from "lucide-react"
 import { useSubWorkflowStack } from "@/hooks/use-sub-workflow-stack"
+import { useT } from "@/lib/i18n"
 
 interface SubWorkflowBreadcrumbProps {
   /**
@@ -17,6 +18,7 @@ interface SubWorkflowBreadcrumbProps {
 }
 
 export function SubWorkflowBreadcrumb({ onJumpToRoot, onJumpTo }: SubWorkflowBreadcrumbProps) {
+  const t = useT()
   const rootFrame = useSubWorkflowStack((s) => s.rootFrame)
   const stack = useSubWorkflowStack((s) => s.stack)
 
@@ -25,14 +27,14 @@ export function SubWorkflowBreadcrumb({ onJumpToRoot, onJumpTo }: SubWorkflowBre
 
   return (
     <nav
-      aria-label="Sub-workflow navigation"
+      aria-label={t("crumb.subWorkflowNav")}
       className="flex items-center gap-1 text-sm text-foreground/80 px-3 py-1.5 bg-card/90 border-b border-border dark:text-white/80 dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] backdrop-blur-sm"
     >
       <button
         type="button"
         className="flex items-center gap-1 text-white/70 hover:text-white transition-colors"
         onClick={onJumpToRoot}
-        title="Back to original workflow"
+        title={t("crumb.backToOriginal")}
       >
         <Home className="w-3.5 h-3.5" />
         <span className="max-w-[160px] truncate">{rootFrame.workflowName}</span>

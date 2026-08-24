@@ -27,6 +27,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { LanguageSwitcher } from "@/components/language-switcher"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import {
   Tooltip,
   TooltipContent,
@@ -77,7 +79,7 @@ const MONO_FONT = "'JetBrains Mono Variable','JetBrains Mono',monospace"
 
 interface NavItem {
   readonly href: string
-  readonly label: string
+  readonly label: MessageKey
   readonly icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
   readonly adminOnly?: boolean
   readonly billingOnly?: boolean
@@ -93,39 +95,39 @@ interface NavItem {
 }
 
 interface NavSection {
-  readonly label: string
+  readonly label: MessageKey
   readonly items: readonly NavItem[]
 }
 
 const NAV_SECTIONS: readonly NavSection[] = [
   {
-    label: "WORKSPACE",
+    label: "nav.section.workspace",
     items: [
-      { href: "/projects", label: "Projects", icon: FolderOpen },
-      { href: "/projects", search: "?tab=tutorials", label: "Tutorials", icon: GraduationCap },
-      { href: "/apps", label: "MiniApps", icon: Rocket, hidden: true },
-      { href: "/templates", label: "Templates", icon: LayoutTemplate, hidden: true },
-      { href: "/video-director", label: "Video Director", icon: Clapperboard, hidden: true },
-      { href: "/explore", label: "Explore", icon: Compass, multiUserOnly: true },
+      { href: "/projects", label: "nav.projects", icon: FolderOpen },
+      { href: "/projects", search: "?tab=tutorials", label: "nav.tutorials", icon: GraduationCap },
+      { href: "/apps", label: "nav.miniapps", icon: Rocket, hidden: true },
+      { href: "/templates", label: "nav.templates", icon: LayoutTemplate, hidden: true },
+      { href: "/video-director", label: "nav.videoDirector", icon: Clapperboard, hidden: true },
+      { href: "/explore", label: "nav.explore", icon: Compass, multiUserOnly: true },
     ]
   },
   {
-    label: "ACTIVITY",
+    label: "nav.section.activity",
     items: [
-      { href: "/executions", label: "Executions", icon: History },
-      { href: "/my-files", label: "My Files", icon: Archive },
-      { href: "/_gallery", label: "Gallery", icon: Images },
+      { href: "/executions", label: "nav.executions", icon: History },
+      { href: "/my-files", label: "nav.myFiles", icon: Archive },
+      { href: "/_gallery", label: "nav.gallery", icon: Images },
     ]
   },
   {
-    label: "ACCOUNT",
+    label: "nav.section.account",
     items: [
-      { href: "/integrations", label: "Integrations", icon: Plug },
-      { href: "/pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
-      { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
-      { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
-      { href: "/admin/community-reports", label: "Community Reports", icon: Flag, adminOnly: true },
+      { href: "/integrations", label: "nav.integrations", icon: Plug },
+      { href: "/pricing", label: "nav.pricing", icon: Sparkles, billingOnly: true },
+      { href: "/billing", label: "nav.billing", icon: CreditCard, billingOnly: true },
+      { href: "/settings", label: "nav.settings", icon: Settings },
+      { href: "/admin", label: "nav.admin", icon: Shield, adminOnly: true },
+      { href: "/admin/community-reports", label: "nav.communityReports", icon: Flag, adminOnly: true },
     ]
   },
 ]
@@ -138,12 +140,12 @@ function formatRenewalTime(periodEnd: string): string | null {
   const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
   if (daysLeft < 1) {
     const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
-    if (hoursLeft >= 1) return `in ${hoursLeft} hour${hoursLeft !== 1 ? "s" : ""}`
+    if (hoursLeft >= 1) return tx(hoursLeft !== 1 ? "nav.renewal.hours" : "nav.renewal.hour", { n: hoursLeft })
     const minutesLeft = Math.floor(msLeft / (1000 * 60))
-    if (minutesLeft >= 1) return `in ${minutesLeft} minute${minutesLeft !== 1 ? "s" : ""}`
-    return "in less than a minute"
+    if (minutesLeft >= 1) return tx(minutesLeft !== 1 ? "nav.renewal.minutes" : "nav.renewal.minute", { n: minutesLeft })
+    return tx("nav.renewal.lessThanMinute")
   }
-  if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+  if (daysLeft <= 14) return tx(daysLeft !== 1 ? "nav.renewal.days" : "nav.renewal.day", { n: daysLeft })
   return new Date(periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 }
 
@@ -200,6 +202,7 @@ export function AppSidebar({
   isMobileOpen = false,
   className,
 }: AppSidebarProps) {
+  const t = useT()
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
 
@@ -349,8 +352,8 @@ export function AppSidebar({
               the Projects nav item right below, so no navigation is lost. */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              aria-label="Open a Nodaro app"
-              title="Nodaro apps"
+              aria-label={t("nav.openNodaroApp")}
+              title={t("nav.nodaroApps")}
               className={cn(
                 "flex items-center gap-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
                 isCollapsed ? "justify-center w-full" : "ml-1",
@@ -390,7 +393,7 @@ export function AppSidebar({
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Close sidebar"
+              aria-label={t("nav.closeSidebar")}
               className="h-8 w-8 p-0 md:hidden text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
               onClick={onMobileClose}
             >
@@ -447,14 +450,14 @@ export function AppSidebar({
                   side="right"
                   className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                 >
-                  <p>{creditBalance.total} credits left</p>
+                  <p>{t("nav.creditsLeft", { n: creditBalance.total })}</p>
                   {creditBalance.effectiveTier === "free" ? (
                     creditBalance.dailyLimit != null && (
-                      <p className="text-zinc-500 dark:text-zinc-400">Daily limit &middot; {Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)} credits left</p>
+                      <p className="text-zinc-500 dark:text-zinc-400">{t("nav.dailyLimitCreditsLeft", { n: Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent) })}</p>
                     )
                   ) : creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) ? (
                     <p className="text-zinc-500 dark:text-zinc-400">
-                      Renews {formatRenewalTime(creditBalance.periodEnd)}
+                      {t("nav.renewsAt", { time: formatRenewalTime(creditBalance.periodEnd) ?? "" })}
                     </p>
                   ) : null}
                 </TooltipContent>
@@ -474,10 +477,10 @@ export function AppSidebar({
             // one-time signup grant, nothing refreshes (verified 2026-08-12).
             const subscriptionSubline = isDailyTier
               ? dailyLeft != null
-                ? `${dailyLeft} daily left`
-                : "one-time grant"
+                ? t("nav.dailyLeft", { n: dailyLeft })
+                : t("nav.oneTimeGrant")
               : renewal
-                ? `renews ${renewal}`
+                ? t("nav.renewsLower", { time: renewal })
                 : null
 
             // Credit block from the designer's Pricing mocks (2026-08-12):
@@ -503,7 +506,7 @@ export function AppSidebar({
                 <div style={{ padding: "14px 16px 14px" }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)", fontWeight: 600 }}>
-                      TOTAL CREDITS
+                      {t("nav.totalCredits")}
                     </span>
                     <span style={{ fontSize: 10, color: "var(--blg-t3-dim)", fontFamily: MONO_FONT }}>
                       {planLabel}
@@ -521,7 +524,7 @@ export function AppSidebar({
                     >
                       {creditBalance.total.toLocaleString()}
                     </span>
-                    <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>credits</span>
+                    <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{t("nav.credits")}</span>
                   </div>
                   {/* Two stacked rows, each with its own bar — replaces the
                       side-by-side columns from the first pass. Splitting the
@@ -531,18 +534,18 @@ export function AppSidebar({
                       mock's literals so both themes follow. */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
                     <CreditRow
-                      label="SUBSCRIPTION"
+                      label={t("nav.subscription")}
                       value={creditBalance.subscription}
                       pct={subPct}
                       fill="var(--blg-pink)"
                       subline={subscriptionSubline}
                     />
                     <CreditRow
-                      label="TOP‑UP"
+                      label={t("nav.topup")}
                       value={creditBalance.topup}
                       pct={topupPct}
                       fill="var(--blg-cyan)"
-                      subline="valid 12 months"
+                      subline={t("nav.validTwelveMonths")}
                     />
                   </div>
                 </div>
@@ -575,7 +578,7 @@ export function AppSidebar({
                     <Link
                       to={item.href + (item.search ?? "")}
                       onClick={handleNavClick}
-                      aria-label={item.label}
+                      aria-label={t(item.label)}
                       className={cn(
                         "flex items-center justify-center w-full h-9 transition-all duration-200",
                         isActive
@@ -592,7 +595,7 @@ export function AppSidebar({
                     </Link>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700">
-                    {item.label}
+                    {t(item.label)}
                   </TooltipContent>
                 </Tooltip>
               )
@@ -613,7 +616,7 @@ export function AppSidebar({
               return (
                 <div key={section.label} className="mb-4">
                   <p className="px-3 mb-1 text-[10px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
-                    {section.label}
+                    {t(section.label)}
                   </p>
                   {visibleItems.map((item) => {
                     const isActive = isNavItemActive(item)
@@ -625,7 +628,7 @@ export function AppSidebar({
                         key={item.href + (item.search ?? "")}
                         to={item.href + (item.search ?? "")}
                         onClick={handleNavClick}
-                        aria-label={item.label}
+                        aria-label={t(item.label)}
                         className={cn(
                           "flex items-center gap-3 px-3 py-2 text-sm transition-all duration-200",
                           isActive
@@ -634,7 +637,7 @@ export function AppSidebar({
                         )}
                       >
                         <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-                        <span>{item.label}</span>
+                        <span>{t(item.label)}</span>
                         {showBadge && (
                           <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
                             {pendingReportsCount}
@@ -665,7 +668,7 @@ export function AppSidebar({
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-label="Sign out"
+                      aria-label={t("nav.signOut")}
                       className="h-9 w-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                       onClick={signOut}
                     >
@@ -679,7 +682,7 @@ export function AppSidebar({
                     className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                   >
                     <div className="text-xs">{user.email}</div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Click to sign out</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("nav.clickToSignOut")}</div>
                   </TooltipContent>
                 </Tooltip>
               ) : (
@@ -695,7 +698,7 @@ export function AppSidebar({
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label="Sign out"
+                        aria-label={t("nav.signOut")}
                         className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 flex-shrink-0"
                         onClick={signOut}
                       >
@@ -706,7 +709,7 @@ export function AppSidebar({
                       side="right"
                       className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                     >
-                      Sign out
+                      {t("nav.signOut")}
                     </TooltipContent>
                   </Tooltip>
                 </>
@@ -723,7 +726,7 @@ export function AppSidebar({
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-label="Expand sidebar"
+                      aria-label={t("nav.expandSidebar")}
                       className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                       onClick={toggleCollapsed}
                     >
@@ -734,7 +737,7 @@ export function AppSidebar({
                     side="right"
                     className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                   >
-                    Expand sidebar
+                    {t("nav.expandSidebar")}
                   </TooltipContent>
                 </Tooltip>
               ) : (
@@ -745,10 +748,11 @@ export function AppSidebar({
                   onClick={toggleCollapsed}
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  <span className="text-sm">Collapse</span>
+                  <span className="text-sm">{t("nav.collapse")}</span>
                 </Button>
               )}
             </div>
+            <LanguageSwitcher collapsed={isCollapsed} />
             {!isCollapsed && <ThemeToggle />}
           </div>
 
@@ -768,10 +772,10 @@ export function AppSidebar({
                 className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 title={
                   updateAvailable
-                    ? `Update available: ${updateInfo?.latest?.version ?? ""}`
+                    ? t("nav.updateAvailable", { version: updateInfo?.latest?.version ?? "" })
                     : dialogMode === "current"
-                      ? `What's in ${updateInfo?.latest?.version ?? ""}`
-                      : `What's new in ${updateInfo?.latest?.version ?? ""}`
+                      ? t("nav.whatsIn", { version: updateInfo?.latest?.version ?? "" })
+                      : t("nav.whatsNewIn", { version: updateInfo?.latest?.version ?? "" })
                 }
               >
                 {(updateAvailable || !whatsNewSeen) && (
@@ -813,6 +817,7 @@ interface MobileHeaderProps {
 }
 
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
+  const t = useT()
   const location = useLocation()
   const isDashboard = location.pathname === "/projects"
 
@@ -822,7 +827,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
         <Link
           to="/projects"
           className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 touch-manipulation"
-          aria-label="Back to projects"
+          aria-label={t("nav.backToProjects")}
         >
           <ChevronLeft className="h-5 w-5" />
         </Link>
@@ -830,7 +835,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       <Button
         variant="ghost"
         size="sm"
-        aria-label="Open menu"
+        aria-label={t("nav.openMenu")}
         className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
         onClick={onMenuClick}
       >

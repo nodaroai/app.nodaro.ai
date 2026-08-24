@@ -241,12 +241,12 @@ describe("CATEGORIES", () => {
     expect(ids).not.toContain("Sound")
   })
 
-  it("every category has id, label, icon, and description", () => {
+  it("every category has id, labelKey, icon, and descKey", () => {
     for (const cat of CATEGORIES) {
       expect(cat.id).toBeTruthy()
-      expect(cat.label).toBeTruthy()
+      expect(cat.labelKey).toBeTruthy()
       expect(cat.icon).toBeDefined()
-      expect(cat.description).toBeTruthy()
+      expect(cat.descKey).toBeTruthy()
     }
   })
 

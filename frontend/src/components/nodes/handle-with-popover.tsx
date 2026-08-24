@@ -12,6 +12,8 @@ import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { getDragAncestorSet, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
+import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
+import { useT } from "@/lib/i18n"
 
 // HandlePopover transitively pulls the parameter-picker registry (and ~30
 // picker-preview components + ~30 catalogs) for in-node visuals on picker
@@ -152,6 +154,9 @@ export function HandleWithPopover({
   // `.is-connected` label classes + the `globals.css` rules — shares the
   // exact compact threshold with the Generate Image quick toolbar.
   const compact = useNodeVisuallyCompact(nodeId)
+  const localizeHandleLabel = useLocalizeHandleLabel()
+  const displayLabel = localizeHandleLabel(label)
+  const t = useT()
 
   // Per-pip compatibility check for the in-progress drag. The pip lights up
   // as a valid candidate when ALL of these are true:
@@ -314,8 +319,8 @@ export function HandleWithPopover({
             tabIndex={0}
             role="button"
             aria-haspopup="dialog"
-            aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}${disabled ? " (not used by current model)" : ""}`}
-            title={disabled ? "Not used by the current model — any wired edge will be ignored at runtime." : undefined}
+            aria-label={`${displayLabel}${isConnected ? ` (${t("handle.connected", { n: connections.length })})` : ""}${disabled ? ` (${t("handle.notUsedByModel")})` : ""}`}
+            title={disabled ? t("handle.notUsedByModelTitle") : undefined}
             // `touch-manipulation` disables double-tap zoom delay on iOS so
             // the click→popover-open feels instant on touch devices.
             // `nokey` opts out of React Flow's global keyboard shortcuts
@@ -400,7 +405,7 @@ export function HandleWithPopover({
                 opacity: disabled ? 0.5 : 1,
               }}
             >
-              {label}
+              {displayLabel}
             </span>
           </Handle>
         </PopoverAnchor>

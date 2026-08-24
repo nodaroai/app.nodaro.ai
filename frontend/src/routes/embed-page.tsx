@@ -32,8 +32,10 @@ import {
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { useRunSlots, AppRunnerLayout, RunsSidebar, ORIGINAL_SLOT_ID } from "@/components/app-runner"
+import { useT } from "@/lib/i18n"
 
 export default function EmbedPage() {
+  const t = useT()
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
@@ -274,7 +276,7 @@ export default function EmbedPage() {
               className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
             >
               <Clock className="h-4 w-4 mr-1" />
-              Runs
+              {t("runner.runs")}
             </Button>
           ) : null
         }
@@ -284,17 +286,17 @@ export default function EmbedPage() {
       <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Run</DialogTitle>
+            <DialogTitle>{t("runner.deleteRun")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete this run? This action cannot be undone.
+            {t("runner.deleteRunDesc")}
           </p>
           <DialogFooter className="flex gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

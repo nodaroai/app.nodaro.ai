@@ -5,6 +5,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { getParameterPromptHint } from "@nodaro/prompts"
+import { useT } from "@/lib/i18n"
 import { BaseNode, type HandleConfig } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -360,28 +361,29 @@ function DisplayModeToggle({
   readonly mode: DisplayMode
   readonly onChange: (mode: DisplayMode) => void
 }) {
+  const t = useT()
   return (
     <div
       className="nopan flex gap-0 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50/95 dark:bg-[#161616]/95 backdrop-blur-sm overflow-hidden shadow-sm"
       role="tablist"
-      aria-label="Display mode"
+      aria-label={t("node.displayMode")}
     >
       <ModeButton
         active={mode === "picks"}
         onClick={() => onChange("picks")}
-        label="Picks"
+        label={t("node.modePicks")}
         icon={<Eye className="size-3" />}
       />
       <ModeButton
         active={mode === "prompt"}
         onClick={() => onChange("prompt")}
-        label="Prompt"
+        label={t("node.prompt")}
         icon={<FileText className="size-3" />}
       />
       <ModeButton
         active={mode === "both"}
         onClick={() => onChange("both")}
-        label="Both"
+        label={t("node.modeBoth")}
         icon={<LayersIcon className="size-3" />}
       />
     </div>
@@ -399,6 +401,7 @@ function ModeButton({
   readonly label: string
   readonly icon: ReactNode
 }) {
+  const t = useT()
   return (
     <button
       type="button"
@@ -414,7 +417,7 @@ function ModeButton({
           ? "bg-[#ff0073]/15 text-[#ff0073]"
           : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
       )}
-      title={`Show ${label}`}
+      title={t("node.showLabel", { label })}
     >
       {icon}
       <span>{label}</span>
@@ -423,10 +426,11 @@ function ModeButton({
 }
 
 function PromptPreview({ text }: { readonly text: string }) {
+  const t = useT()
   if (!text || !text.trim()) {
     return (
       <p className="text-muted-foreground text-[10.5px] italic leading-snug">
-        (no prompt — pick something first)
+        {t("node.promptPreviewEmpty")}
       </p>
     )
   }

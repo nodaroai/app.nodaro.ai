@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
@@ -467,6 +469,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   update: (data: Record<string, unknown>) => void
   selectedNodeId: string | undefined
 }) {
+  const t = useT()
   // Phase 1D.1 — Stage 6 (scene_images) query for match-cut verdict display.
   // Runs only when a scene node is selected and its data carries pipeline_id.
   // Polls at 5 s intervals while the panel is open (same cadence as the
@@ -560,7 +563,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         {(nodeData as TextToVideoData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
             <Maximize2 className="w-4 h-4 mr-2" />
-            Expand Director
+            {t("configPanel.expandDirector")}
           </Button>
         )}
       </>
@@ -575,7 +578,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         {(nodeData as GenerateVideoNodeData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
             <Maximize2 className="w-4 h-4 mr-2" />
-            Expand Director
+            {t("configPanel.expandDirector")}
           </Button>
         )}
       </>
@@ -705,6 +708,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
 }
 
 export function ConfigPanel() {
+  const t = useT()
+  const localizeNodeLabel = useLocalizeNodeLabel()
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -994,7 +999,7 @@ export function ConfigPanel() {
     <div className="flex flex-col border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
       <div className="flex items-center justify-between px-4 py-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
-          {getNodeTypeDisplayName(nodeType)} Node Settings
+          {t("configPanel.nodeSettingsTitle", { name: localizeNodeLabel(getNodeTypeDisplayName(nodeType)) })}
         </h3>
         <div className="flex items-center gap-2">
           {/* Fullscreen: preset dropdown on the side (inline in the header row). */}
@@ -1014,8 +1019,8 @@ export function ConfigPanel() {
                 const current = useWorkflowStore.getState().configPanelFullscreen
                 setConfigPanelFullscreen(!current)
               }}
-              title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
-              aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
+              title={isExpanded ? t("configPanel.collapseToSide") : t("configPanel.expandFullScreen")}
+              aria-label={isExpanded ? t("configPanel.collapsePanel") : t("configPanel.expandPanel")}
             >
               {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
@@ -1025,10 +1030,10 @@ export function ConfigPanel() {
             // primary exit affordance — the small X icon was easy to miss
             // against the wider modal chrome.
             <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
-              Close
+              {t("common.close")}
             </Button>
           ) : (
-            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
+            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label={t("configPanel.closePanel")}>
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -1075,9 +1080,9 @@ export function ConfigPanel() {
         // override path used inside a sub-Dialog (modal browser) to close
         // the dialog instead of the panel underneath.
         onDoubleClick={isExpanded && isTileGridPickerType(nodeType) ? (e) => {
-          const t = e.target as HTMLElement | null
-          if (!t) return
-          const tile = t.closest('button[role="radio"], button[role="checkbox"]')
+          const el = e.target as HTMLElement | null
+          if (!el) return
+          const tile = el.closest('button[role="radio"], button[role="checkbox"]')
           if (tile) closeFullscreenSettings()
         } : undefined}
       >
@@ -1095,13 +1100,13 @@ export function ConfigPanel() {
             <div className="flex items-center justify-between px-4 pb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
-                  {getNodeTypeDisplayName(nodeType)}
+                  {localizeNodeLabel(getNodeTypeDisplayName(nodeType))}
                 </span>
                 <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {(selectedNode.data as { label: string }).label}
                 </span>
               </div>
-              <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-gray-400 dark:text-[#64748B]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
+              <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-gray-400 dark:text-[#64748B]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label={t("configPanel.closePanel")}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -1113,7 +1118,7 @@ export function ConfigPanel() {
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-            <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>
+            <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("configPanel.label")}</Label>
             <Input
               id="node-label"
               value={(selectedNode.data as { label: string }).label}
@@ -1124,7 +1129,11 @@ export function ConfigPanel() {
 
           {sources.length > 0 && (
             <div className="text-xs text-gray-500 dark:text-[#94A3B8] bg-gray-100 dark:bg-[#2D2D2D] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#2D2D2D]">
-              <span className="font-medium">{sources.length} connected source{sources.length !== 1 ? "s" : ""}</span>
+              <span className="font-medium">
+                {sources.length === 1
+                  ? t("configPanel.connectedSourcesOne")
+                  : t("configPanel.connectedSourcesMany", { count: sources.length })}
+              </span>
               {": "}
               {sources.map((s) => s.label).join(", ")}
             </div>
@@ -1206,7 +1215,7 @@ export function ConfigPanel() {
 
           {(REPEATABLE_NODE_TYPES.has(nodeType) && (
             <div className="flex items-center gap-2 pt-2">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">Repeat</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{t("configPanel.repeat")}</span>
               <input
                 type="number"
                 min={1}
@@ -1219,7 +1228,7 @@ export function ConfigPanel() {
                 }}
                 className="w-14 h-7 rounded border border-border bg-background text-center text-sm font-mono"
               />
-              <span className="text-xs text-muted-foreground">times</span>
+              <span className="text-xs text-muted-foreground">{t("configPanel.times")}</span>
             </div>
           )) as any /* TS JSX children inference limit */}
 
@@ -1240,7 +1249,7 @@ export function ConfigPanel() {
                   className="w-full"
                   onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}
                 >
-                  Close
+                  {t("common.close")}
                 </Button>
               </div>
             ) : (
@@ -1250,7 +1259,7 @@ export function ConfigPanel() {
                     onClick={() => runSingleNode?.(selectedNode.id)}
                     modelIdentifier={getModelIdentifier(selectedNode, edges)}
                     userId={userId ?? ""}
-                    label="Run This Node"
+                    label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
                     creditOverride={
                       nodeType === "component"
@@ -1274,7 +1283,7 @@ export function ConfigPanel() {
                       ? <Loader2 className="w-4 h-4 animate-spin" />
                       : <Play className="w-4 h-4" />
                     }
-                    {nodeData.executionStatus === "running" ? "Running..." : "Run"}
+                    {nodeData.executionStatus === "running" ? t("configPanel.running") : t("common.run")}
                   </button>
                 )}
 
@@ -1284,13 +1293,13 @@ export function ConfigPanel() {
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running"}
                     className={`w-full flex items-center justify-center gap-2 h-10 rounded-lg font-medium disabled:opacity-50 ${RUN_BUTTON_CLASS}`}
-                    title="Runs this node and all connected downstream nodes in sequence"
+                    title={t("configPanel.runFromHereTooltip")}
                   >
                     {nodeData.executionStatus === "running"
                       ? <Loader2 className="w-4 h-4 animate-spin" />
                       : <FastForward className="w-4 h-4" />
                     }
-                    {nodeData.executionStatus === "running" ? "Running..." : "Run from here"}
+                    {nodeData.executionStatus === "running" ? t("configPanel.running") : t("node.runFromHere")}
                   </button>
                 )}
 
@@ -1300,10 +1309,10 @@ export function ConfigPanel() {
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
                     className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
-                    title="Runs this node and all connected downstream nodes in sequence"
+                    title={t("configPanel.runFromHereTooltip")}
                   >
                     <FastForward className="w-3.5 h-3.5" />
-                    Run from here
+                    {t("node.runFromHere")}
                   </button>
                 )}
 
@@ -1335,7 +1344,7 @@ export function ConfigPanel() {
                 display={nodeData.presentationDisplay as PresentationDisplay ?? {}}
                 onChange={(d) => updateNodeData(selectedNodeId!, { presentationDisplay: d })}
                 showElementSize={nodeType !== "text-prompt"}
-                viewModes={nodeType === "list" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
+                viewModes={nodeType === "list" ? [{ value: "cards", label: t("configPanel.viewCards") }, { value: "table", label: t("configPanel.viewTable") }] : undefined}
               />
             </div>
           )}

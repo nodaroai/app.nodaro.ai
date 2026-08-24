@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { createApiToken } from "@/lib/api"
 import { toast } from "sonner"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * CLI login bridge — `nodaro auth login` opens the browser here with a
@@ -20,28 +21,33 @@ import { toast } from "sonner"
  * - Token is shown to the bridge once and immediately handed off.
  */
 export default function AuthCliPage() {
+  const t = useT()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
 
   const callback = params.get("callback") ?? ""
   const state = params.get("state") ?? ""
-  const device = params.get("device") ?? "this device"
+  // Raw param drives the stored token NAME (locale-independent, so the label a
+  // user sees in Settings → API doesn't depend on the UI language at issue
+  // time); the translated fallback is display-only.
+  const deviceRaw = params.get("device") ?? "this device"
+  const deviceLabel = params.get("device") ?? t("cli.thisDevice")
 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
 
-  const callbackError = validateLoopbackUrl(callback)
+  const callbackErrorKey = validateLoopbackUrl(callback)
   const missingParam = !callback ? "callback" : !state ? "state" : null
 
   // Redirect to login if not authenticated, preserving return URL
   useEffect(() => {
     if (authLoading) return
-    if (!user && !missingParam && !callbackError) {
+    if (!user && !missingParam && !callbackErrorKey) {
       const returnTo = window.location.pathname + window.location.search
       navigate(`/login?return_to=${encodeURIComponent(returnTo)}`)
     }
-  }, [user, authLoading, navigate, missingParam, callbackError])
+  }, [user, authLoading, navigate, missingParam, callbackErrorKey])
 
   function buildCallback(extra: Record<string, string>) {
     const url = new URL(callback)
@@ -51,15 +57,15 @@ export default function AuthCliPage() {
   }
 
   function handleCancel() {
-    if (callbackError || missingParam) return
+    if (callbackErrorKey || missingParam) return
     window.location.href = buildCallback({ error: "access_denied" })
   }
 
   async function handleAuthorize() {
-    if (callbackError || missingParam) return
+    if (callbackErrorKey || missingParam) return
     setSubmitting(true)
     try {
-      const tokenName = `CLI: ${device}`.slice(0, 100)
+      const tokenName = `CLI: ${deviceRaw}`.slice(0, 100)
       const result = await createApiToken({ name: tokenName })
       const token = result.data.token
       setDone(true)
@@ -68,17 +74,21 @@ export default function AuthCliPage() {
         window.location.href = buildCallback({ token })
       }, 600)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to issue token"
+      const message = err instanceof Error ? err.message : t("cli.failedIssueToken")
       toast.error(message)
       setSubmitting(false)
     }
   }
 
-  if (missingParam || callbackError) {
+  if (missingParam || callbackErrorKey) {
     return (
       <ErrorScreen
-        title="Invalid CLI authorization request"
-        detail={missingParam ? `Missing parameter: ${missingParam}` : callbackError!}
+        title={t("cli.invalidRequestTitle")}
+        detail={
+          missingParam
+            ? t("cli.missingParam", { param: missingParam })
+            : t(callbackErrorKey!)
+        }
       />
     )
   }
@@ -94,29 +104,31 @@ export default function AuthCliPage() {
           <Terminal className="h-6 w-6 text-primary" />
         </div>
 
-        <h1 className="mb-2 text-2xl font-semibold">Authorize Nodaro CLI</h1>
+        <h1 className="mb-2 text-2xl font-semibold">{t("cli.authorizeTitle")}</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Sign in <span className="font-medium text-foreground">{user?.email}</span> on{" "}
-          <span className="font-medium text-foreground">{device}</span>?
+          {t("cli.signInAs")}{" "}
+          <span className="font-medium text-foreground">{user?.email}</span>{" "}
+          {t("cli.signInOn")}{" "}
+          <span className="font-medium text-foreground">{deviceLabel}</span>?
         </p>
 
         <div className="mb-6 rounded-md border bg-muted/40 p-4 text-xs text-muted-foreground">
-          The CLI will receive an API token tied to your account. You can revoke it
-          any time from <a href="/settings/api" className="underline">Settings → API</a>.
+          {t("cli.tokenNotice")}{" "}
+          <a href="/settings/api" className="underline">{t("cli.settingsApiLink")}</a>.
         </div>
 
         {done ? (
           <div className="text-center text-sm text-muted-foreground">
             <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-            Returning to terminal…
+            {t("cli.returningToTerminal")}
           </div>
         ) : (
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={handleCancel} disabled={submitting}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button className="flex-1" onClick={handleAuthorize} disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Authorize"}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("cli.authorize")}
             </Button>
           </div>
         )}
@@ -125,14 +137,18 @@ export default function AuthCliPage() {
   )
 }
 
-function validateLoopbackUrl(raw: string): string | null {
+/**
+ * Returns a message KEY (not a rendered string) so the plain, non-hook function
+ * stays locale-agnostic; the caller translates it at the render site.
+ */
+function validateLoopbackUrl(raw: string): MessageKey | null {
   if (!raw) return null
   let url: URL
   try { url = new URL(raw) }
-  catch { return "callback is not a valid URL" }
-  if (url.protocol !== "http:") return "callback must use http://"
+  catch { return "cli.errNotValidUrl" }
+  if (url.protocol !== "http:") return "cli.errMustUseHttp"
   if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") {
-    return "callback must be a loopback address (127.0.0.1 or localhost)"
+    return "cli.errMustBeLoopback"
   }
   return null
 }

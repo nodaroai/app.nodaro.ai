@@ -45,7 +45,9 @@ const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
 const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
 
+import { useT } from "@/lib/i18n"
 export default function SettingsPage() {
+  const t = useT()
   const { user, loading: authLoading } = useAuth()
   const [localTemplates, setLocalTemplates] = useState<Record<string, string>>({})
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
@@ -86,9 +88,9 @@ export default function SettingsPage() {
     if (!user?.id) return
     try {
       await toggleMutation.mutateAsync({ userId: user.id, publicOutputs: !publicOutputs })
-      toast.success(!publicOutputs ? "Outputs are now public" : "Outputs are now private")
+      toast.success(!publicOutputs ? t("settings.outputsPublic") : t("settings.outputsPrivate"))
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update"
+      const message = err instanceof Error ? err.message : t("settings.failedToUpdate")
       toast.error(message)
     }
   }
@@ -97,9 +99,9 @@ export default function SettingsPage() {
     if (!user?.id) return
     try {
       await nodeMenuMutation.mutateAsync({ userId: user.id, showRecentNodes: next })
-      toast.success(next ? "Recent category shown" : "Recent category hidden")
+      toast.success(next ? t("settings.recentShown") : t("settings.recentHidden"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update")
+      toast.error(err instanceof Error ? err.message : t("settings.failedToUpdate"))
     }
   }
 
@@ -107,9 +109,9 @@ export default function SettingsPage() {
     if (!user?.id) return
     try {
       await variableModeMutation.mutateAsync({ userId: user.id, variableDisplayMode: next })
-      toast.success("Prompt variable display updated")
+      toast.success(t("settings.variableDisplayUpdated"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update")
+      toast.error(err instanceof Error ? err.message : t("settings.failedToUpdate"))
     }
   }
 
@@ -138,9 +140,9 @@ export default function SettingsPage() {
     try {
       await templatesMutation.mutateAsync({ userId: user.id, promptTemplates: localTemplates })
       setEditingKey(null)
-      toast.success("Prompt templates saved")
+      toast.success(t("settings.promptTemplatesSaved"))
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save"
+      const message = err instanceof Error ? err.message : t("settings.failedToSave")
       toast.error(message)
     }
   }
@@ -149,7 +151,12 @@ export default function SettingsPage() {
 
   function handleAddTextTemplate() {
     const id = crypto.randomUUID()
-    setTextTemplates((prev) => [...prev, { id, label: "New Template", systemPrompt: "" }])
+    // Seed an empty label rather than a translated one: a localized string
+    // persisted here would freeze into the user's saved data and go stale on a
+    // language switch. The row opens in edit mode with a localized placeholder,
+    // the display falls back to t("settings.untitled"), and empty labels are
+    // dropped on save — so nothing locale-bound is ever stored.
+    setTextTemplates((prev) => [...prev, { id, label: "", systemPrompt: "" }])
     setEditingTextId(id)
   }
 
@@ -195,9 +202,9 @@ export default function SettingsPage() {
       setTextTemplates(cleaned)
       setSavedTextTemplates(cleaned)
       setEditingTextId(null)
-      toast.success("Generate Text templates saved")
+      toast.success(t("settings.generateTextTemplatesSaved"))
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save"
+      const message = err instanceof Error ? err.message : t("settings.failedToSave")
       toast.error(message)
     }
   }
@@ -207,7 +214,7 @@ export default function SettingsPage() {
     const data = hasOverrides
       ? localTemplates
       : {
-          _note: "These are system defaults. Edit the values you want to customize.",
+          _note: t("settings.defaultNote"),
           ...Object.fromEntries(
             Object.entries(SYSTEM_PROMPT_TEMPLATES).map(([k, v]) => [k, v.template]),
           ),
@@ -232,7 +239,7 @@ export default function SettingsPage() {
         const text = await file.text()
         const parsed: unknown = JSON.parse(text)
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error("Expected a JSON object")
+          throw new Error(t("settings.expectedJsonObject"))
         }
         const imported: Record<string, string> = {}
         for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
@@ -241,22 +248,20 @@ export default function SettingsPage() {
           }
         }
         if (Object.keys(imported).length === 0) {
-          toast.error("No valid template overrides found in file")
+          toast.error(t("settings.noValidOverrides"))
           return
         }
         setLocalTemplates(imported)
-        toast.success(`Imported ${Object.keys(imported).length} template overrides`)
+        toast.success(t("settings.importedTemplates", { n: Object.keys(imported).length }))
       } catch {
-        toast.error("Invalid template file")
+        toast.error(t("settings.invalidTemplateFile"))
       }
     }
     input.click()
   }
 
   function handleResetAll() {
-    const confirmed = window.confirm(
-      "Are you sure? This will remove all your custom templates and restore system defaults.",
-    )
+    const confirmed = window.confirm(t("settings.resetAllConfirm"))
     if (!confirmed) return
     setLocalTemplates({})
     setEditingKey(null)
@@ -285,13 +290,13 @@ export default function SettingsPage() {
   if (settingsError) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Settings</h1>
+        <h1 className="text-2xl font-bold mb-6">{t("settings.title")}</h1>
         <div className="rounded-lg border border-red-300 dark:border-red-800 bg-card p-6 text-center">
           <p className="text-sm text-muted-foreground mb-4">
-            We couldn&apos;t load your settings. Please try again.
+            {t("settings.loadError")}
           </p>
           <Button variant="outline" size="sm" onClick={() => refetchSettings()}>
-            Retry
+            {t("settings.retry")}
           </Button>
         </div>
       </div>
@@ -300,7 +305,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold mb-6">{t("settings.title")}</h1>
 
       {/* Gallery Visibility */}
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6">
@@ -312,12 +317,12 @@ export default function SettingsPage() {
               ) : (
                 <Lock className="h-4 w-4 text-muted-foreground" />
               )}
-              <h2 className="text-base font-semibold">Gallery Visibility</h2>
+              <h2 className="text-base font-semibold">{t("settings.galleryVisibility")}</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {publicOutputs
-                ? "New AI-generated outputs will appear in the public gallery by default."
-                : "New outputs will be private by default. This does not change existing items."}
+                ? t("settings.galleryPublicDesc")
+                : t("settings.galleryPrivateDesc")}
             </p>
           </div>
 
@@ -338,16 +343,16 @@ export default function SettingsPage() {
                     {toggleMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : publicOutputs ? (
-                      "Make Private"
+                      t("settings.makePrivate")
                     ) : (
-                      "Make Public"
+                      t("settings.makePublic")
                     )}
                   </Button>
                 </span>
               </TooltipTrigger>
               {!canToggle && (
                 <TooltipContent>
-                  Available on Standard plan and above
+                  {t("settings.availableOnPlan")}
                 </TooltipContent>
               )}
             </Tooltip>
@@ -364,9 +369,9 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <Key className="h-5 w-5 text-muted-foreground" />
             <div>
-              <h2 className="text-base font-semibold">API Tokens</h2>
+              <h2 className="text-base font-semibold">{t("settings.apiTokens")}</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Create tokens to execute workflows programmatically via REST API.
+                {t("settings.apiTokensDesc")}
               </p>
             </div>
           </div>
@@ -385,9 +390,9 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <KeyRound className="h-5 w-5 text-muted-foreground" />
             <div>
-              <h2 className="text-base font-semibold">Provider keys</h2>
+              <h2 className="text-base font-semibold">{t("settings.providerKeys")}</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                KIE.ai, Replicate, ElevenLabs and the other model providers this install can use — paste a key or connect nodaro.ai under Integrations.
+                {t("settings.providerKeysDesc")}
               </p>
             </div>
           </div>
@@ -401,36 +406,36 @@ export default function SettingsPage() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-base font-semibold">Defaults</h2>
+              <h2 className="text-base font-semibold">{t("settings.defaults")}</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              When you create a new AI node, Nodaro remembers your last selection so you don&apos;t have to choose every time. Resetting clears all remembered selections.
+              {t("settings.defaultsDesc")}
             </p>
           </div>
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" disabled={!user?.id}>
-                Reset to defaults
+                {t("settings.resetToDefaults")}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Reset all remembered defaults?</AlertDialogTitle>
+                <AlertDialogTitle>{t("settings.resetDefaultsConfirm")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will erase your remembered model and parameter choices for every AI node type. Existing nodes on your canvases are not affected. New nodes will start from the admin defaults.
+                  {t("settings.defaultsDialogDesc")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     if (!user?.id) return
                     clearMemory(user.id)
-                    toast.success("Remembered defaults cleared")
+                    toast.success(t("settings.defaultsCleared"))
                   }}
                 >
-                  Reset
+                  {t("settings.reset")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -442,16 +447,16 @@ export default function SettingsPage() {
       <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6">
         <div className="flex items-center gap-2 mb-1">
           <LayoutList className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-base font-semibold">Add Node Menu</h2>
+          <h2 className="text-base font-semibold">{t("settings.addNodeMenu")}</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Choose which shortcut categories appear at the top of the Add Node menu in the editor.
+          {t("settings.addNodeMenuDesc")}
         </p>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
-              <label htmlFor="show-recent" className="text-sm font-medium">Recent</label>
-              <p className="text-xs text-muted-foreground mt-0.5">Nodes you added most recently.</p>
+              <label htmlFor="show-recent" className="text-sm font-medium">{t("settings.recent")}</label>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("settings.recentDesc")}</p>
             </div>
             <Switch
               id="show-recent"
@@ -467,19 +472,18 @@ export default function SettingsPage() {
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-2 mb-1">
           <Braces className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-base font-semibold">Prompt Variables</h2>
+          <h2 className="text-base font-semibold">{t("settings.promptVariables")}</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          How <code className="text-xs">{"{Node Name}"}</code> placeholders are shown in prompt fields.
-          This only changes what you see — the value sent to the model is the same either way.
+          {t("settings.promptVariablesDescPre")} <code className="text-xs">{"{Node Name}"}</code> {t("settings.promptVariablesDescPost")}
         </p>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <label htmlFor="variable-display-mode" className="text-sm font-medium">Display mode</label>
+            <label htmlFor="variable-display-mode" className="text-sm font-medium">{t("settings.displayMode")}</label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {variableDisplayMode === "raw" && "Placeholders stay as written."}
-              {variableDisplayMode === "annotated" && "Placeholders show their resolved value alongside the name."}
-              {variableDisplayMode === "resolved" && "Placeholders are replaced by their value, as the model receives it."}
+              {variableDisplayMode === "raw" && t("settings.displayModeRaw")}
+              {variableDisplayMode === "annotated" && t("settings.displayModeAnnotated")}
+              {variableDisplayMode === "resolved" && t("settings.displayModeResolved")}
             </p>
           </div>
           <Select
@@ -505,27 +509,27 @@ export default function SettingsPage() {
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
           <FileText className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-xl font-bold">Prompt Templates</h2>
+          <h2 className="text-xl font-bold">{t("settings.promptTemplates")}</h2>
 
           <div className="flex items-center gap-1 ml-auto">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleExport} aria-label="Export templates">
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleExport} aria-label={t("settings.exportAria")}>
                     <Download className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Export templates as JSON</TooltipContent>
+                <TooltipContent>{t("settings.exportJson")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleImport} aria-label="Import templates">
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleImport} aria-label={t("settings.importAria")}>
                     <Upload className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Import templates from JSON</TooltipContent>
+                <TooltipContent>{t("settings.importJson")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
             {hasAnyOverride && (
@@ -537,20 +541,19 @@ export default function SettingsPage() {
                       size="sm"
                       className="h-8 w-8 p-0 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
                       onClick={handleResetAll}
-                      aria-label="Reset all templates"
+                      aria-label={t("settings.resetAllAria")}
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Reset all templates to defaults</TooltipContent>
+                  <TooltipContent>{t("settings.resetAllDefaults")}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
           </div>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
-          Customize the prompts used when generating images from asset nodes.
-          Click the edit button to modify a template.
+          {t("settings.promptTemplatesDesc")}
         </p>
 
         {/* Asset type groups */}
@@ -594,7 +597,7 @@ export default function SettingsPage() {
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            Save Templates
+            {t("settings.saveTemplates")}
           </Button>
         </div>
       </div>
@@ -603,7 +606,7 @@ export default function SettingsPage() {
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-xl font-bold">Generate Text Templates</h2>
+          <h2 className="text-xl font-bold">{t("settings.generateTextTemplates")}</h2>
           <Button
             variant="outline"
             size="sm"
@@ -612,19 +615,18 @@ export default function SettingsPage() {
             disabled={!user?.id}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
-            Add Template
+            {t("settings.addTemplate")}
           </Button>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
-          Save reusable system prompts for the Generate Text node. Each template
-          appears under &ldquo;My Templates&rdquo; when you configure a Generate Text node.
+          {t("settings.generateTextDesc")}
         </p>
 
         <div className="space-y-4 mb-6">
           {textTemplates.length === 0 ? (
             <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 bg-card p-6 text-center">
               <p className="text-sm text-muted-foreground">
-                No templates yet. Click &ldquo;Add Template&rdquo; to create one.
+                {t("settings.noTemplates")}
               </p>
             </div>
           ) : (
@@ -654,7 +656,7 @@ export default function SettingsPage() {
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            Save Templates
+            {t("settings.saveTemplates")}
           </Button>
         </div>
       </div>
@@ -677,6 +679,7 @@ function TextTemplateCard({
   readonly onChange: (id: string, patch: Partial<GenerateTextTemplate>) => void
   readonly onDelete: (id: string) => void
 }) {
+  const t = useT()
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -685,7 +688,7 @@ function TextTemplateCard({
             <input
               type="text"
               value={template.label}
-              placeholder="Template name"
+              placeholder={t("settings.templateName")}
               onChange={(e) => onChange(template.id, { label: e.target.value })}
               className={cn(
                 "w-full rounded-md border px-2 py-1 text-sm font-semibold",
@@ -696,7 +699,7 @@ function TextTemplateCard({
               autoFocus
             />
           ) : (
-            <h4 className="text-sm font-semibold truncate">{template.label || "Untitled"}</h4>
+            <h4 className="text-sm font-semibold truncate">{template.label || t("settings.untitled")}</h4>
           )}
         </div>
 
@@ -709,7 +712,7 @@ function TextTemplateCard({
               onClick={onCancelEdit}
             >
               <X className="h-3.5 w-3.5 mr-1" />
-              Done
+              {t("settings.done")}
             </Button>
           ) : (
             <Button
@@ -719,7 +722,7 @@ function TextTemplateCard({
               onClick={onStartEdit}
             >
               <Pencil className="h-3.5 w-3.5 mr-1" />
-              Edit
+              {t("common.edit")}
             </Button>
           )}
           <TooltipProvider>
@@ -730,12 +733,12 @@ function TextTemplateCard({
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
                   onClick={() => onDelete(template.id)}
-                  aria-label="Delete template"
+                  aria-label={t("settings.deleteAria")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Delete template</TooltipContent>
+              <TooltipContent>{t("settings.deleteTemplate")}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
@@ -744,11 +747,11 @@ function TextTemplateCard({
       {isEditing ? (
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("settings.systemPrompt")}</label>
             <textarea
               rows={4}
               value={template.systemPrompt}
-              placeholder="You are a helpful assistant that…"
+              placeholder={t("settings.systemPromptPlaceholder")}
               onChange={(e) => onChange(template.id, { systemPrompt: e.target.value })}
               className={cn(
                 "mt-1 w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
@@ -760,13 +763,13 @@ function TextTemplateCard({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Max Tokens (optional)</label>
+              <label className="text-xs font-medium text-muted-foreground">{t("settings.maxTokensOptional")}</label>
               <input
                 type="number"
                 min={1}
                 max={16384}
                 value={template.defaultMaxTokens ?? ""}
-                placeholder="e.g. 4096"
+                placeholder={t("settings.maxTokensPlaceholder")}
                 onChange={(e) => {
                   const v = e.target.value.trim()
                   onChange(template.id, { defaultMaxTokens: v === "" ? undefined : Number(v) })
@@ -794,7 +797,7 @@ function TextTemplateCard({
         </div>
       ) : (
         <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap text-muted-foreground line-clamp-3">
-          {template.systemPrompt || "No system prompt set."}
+          {template.systemPrompt || t("settings.noSystemPrompt")}
         </p>
       )}
     </div>
@@ -824,6 +827,7 @@ function TemplateGroupCard({
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
+  const t = useT()
   const [tab, setTab] = useState<TemplateTab>("description")
 
   const activeKey = tab === "description" ? descriptionKey : generationKey
@@ -848,15 +852,15 @@ function TemplateGroupCard({
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
-              <p><strong>Description</strong> — the text appended to the prompt when this asset is connected to a Generate Image node.</p>
-              <p className="mt-1"><strong>Generation</strong> — the prompt used when generating this asset&apos;s own image (e.g., clicking Run on a {name} node).</p>
+              <p><strong>{t("settings.descriptionTab")}</strong> {t("settings.tooltipDescText")}</p>
+              <p className="mt-1"><strong>{t("settings.generationTab")}</strong> {t("settings.tooltipGenText", { name })}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
         {hasOverride && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
-            Custom
+            {t("settings.custom")}
           </span>
         )}
       </div>
@@ -873,7 +877,7 @@ function TemplateGroupCard({
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
-          Description
+          {t("settings.descriptionTab")}
         </button>
         <button
           type="button"
@@ -885,7 +889,7 @@ function TemplateGroupCard({
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
-          Generation
+          {t("settings.generationTab")}
         </button>
 
         <div className="flex items-center gap-1 ml-auto">
@@ -902,7 +906,7 @@ function TemplateGroupCard({
                     <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Reset to system default</TooltipContent>
+                <TooltipContent>{t("settings.resetToDefault")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
@@ -915,7 +919,7 @@ function TemplateGroupCard({
               onClick={onCancelEdit}
             >
               <X className="h-3.5 w-3.5 mr-1" />
-              Cancel
+              {t("common.cancel")}
             </Button>
           ) : (
             <Button
@@ -925,7 +929,7 @@ function TemplateGroupCard({
               onClick={() => onStartEdit(activeKey)}
             >
               <Pencil className="h-3.5 w-3.5 mr-1" />
-              Edit
+              {t("common.edit")}
             </Button>
           )}
         </div>
@@ -949,7 +953,7 @@ function TemplateGroupCard({
           />
           {info.variables.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              <span className="text-xs text-muted-foreground">Variables:</span>
+              <span className="text-xs text-muted-foreground">{t("settings.variables")}</span>
               {info.variables.map((v) => (
                 <span
                   key={v}
@@ -990,6 +994,7 @@ function TemplateCard({
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
+  const t = useT()
   const info = SYSTEM_PROMPT_TEMPLATES[templateKey]
   if (!info) return null
 
@@ -1004,7 +1009,7 @@ function TemplateCard({
             <h4 className="text-sm font-semibold">{info.label}</h4>
             {hasOverride && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
-                Custom
+                {t("settings.custom")}
               </span>
             )}
           </div>
@@ -1025,7 +1030,7 @@ function TemplateCard({
                     <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Reset to system default</TooltipContent>
+                <TooltipContent>{t("settings.resetToDefault")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
@@ -1038,7 +1043,7 @@ function TemplateCard({
               onClick={onCancelEdit}
             >
               <X className="h-3.5 w-3.5 mr-1" />
-              Cancel
+              {t("common.cancel")}
             </Button>
           ) : (
             <Button
@@ -1048,7 +1053,7 @@ function TemplateCard({
               onClick={onStartEdit}
             >
               <Pencil className="h-3.5 w-3.5 mr-1" />
-              Edit
+              {t("common.edit")}
             </Button>
           )}
         </div>
@@ -1071,7 +1076,7 @@ function TemplateCard({
           />
           {info.variables.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              <span className="text-xs text-muted-foreground">Variables:</span>
+              <span className="text-xs text-muted-foreground">{t("settings.variables")}</span>
               {info.variables.map((v) => (
                 <span
                   key={v}

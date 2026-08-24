@@ -33,19 +33,23 @@ import {
   CommunityCardSkeleton,
 } from "@/ee/components/community/community-card"
 import { CommunityPreviewModal } from "@/ee/components/community/community-preview-modal"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 type EntityType = "character" | "location" | "object" | "creature"
 type ViewMode = "browse" | "favorites"
 type SortMode = "popular" | "newest"
 
-const ENTITY_TABS: { value: EntityType; label: string; icon: LucideIcon }[] = [
-  { value: "character", label: "Characters", icon: User },
-  { value: "location", label: "Locations", icon: MapPin },
-  { value: "object", label: "Objects", icon: Package },
-  { value: "creature", label: "Creatures", icon: PawPrint },
+// `labelKey` (not a rendered label) so this module-level list localizes at
+// the render site.
+const ENTITY_TABS: { value: EntityType; labelKey: MessageKey; icon: LucideIcon }[] = [
+  { value: "character", labelKey: "explore.tabCharacters", icon: User },
+  { value: "location", labelKey: "explore.tabLocations", icon: MapPin },
+  { value: "object", labelKey: "explore.tabObjects", icon: Package },
+  { value: "creature", labelKey: "explore.tabCreatures", icon: PawPrint },
 ]
 
 export default function ExplorePage() {
+  const t = useT()
   const [entityType, setEntityType] = useState<EntityType>("character")
   const [view, setView] = useState<ViewMode>("browse")
   const [searchInput, setSearchInput] = useState("")
@@ -171,9 +175,9 @@ export default function ExplorePage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Explore</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("explore.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Discover community-shared characters, locations, objects, and creatures
+          {t("explore.subtitle")}
         </p>
       </div>
 
@@ -197,7 +201,7 @@ export default function ExplorePage() {
                   onClick={() => setEntityType(tab.value)}
                 >
                   <Icon className="h-3.5 w-3.5" />
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </button>
               )
             })}
@@ -215,7 +219,7 @@ export default function ExplorePage() {
               )}
               onClick={() => setView("browse")}
             >
-              Browse
+              {t("explore.browse")}
             </button>
             <button
               type="button"
@@ -228,7 +232,7 @@ export default function ExplorePage() {
               onClick={() => setView("favorites")}
             >
               <Heart className="h-3.5 w-3.5" />
-              Favorites
+              {t("explore.favorites")}
             </button>
           </div>
 
@@ -239,7 +243,7 @@ export default function ExplorePage() {
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search community..."
+                placeholder={t("explore.searchPlaceholder")}
                 className="pl-9 h-9"
               />
               {searchInput && (
@@ -262,8 +266,8 @@ export default function ExplorePage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="popular">Popular</SelectItem>
-                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="popular">{t("explore.sortPopular")}</SelectItem>
+                <SelectItem value="newest">{t("explore.sortNewest")}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -281,14 +285,14 @@ export default function ExplorePage() {
         <div className="text-center py-16">
           <Compass className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-foreground mb-2">
-            {view === "favorites" ? "No favorites yet" : "Nothing here yet"}
+            {view === "favorites" ? t("explore.emptyFavoritesTitle") : t("explore.emptyBrowseTitle")}
           </h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {view === "favorites"
-              ? "Heart listings you like to save them here."
+              ? t("explore.emptyFavoritesDesc")
               : debouncedSearch
-                ? "Try adjusting your search."
-                : "Be the first to share something with the community!"}
+                ? t("explore.emptySearchDesc")
+                : t("explore.emptyBrowseDesc")}
           </p>
         </div>
       ) : (

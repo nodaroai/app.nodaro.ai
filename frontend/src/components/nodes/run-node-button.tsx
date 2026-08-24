@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { FastForward, Play, Loader2, Trash2, RotateCcw, Save } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { hasCredits } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 import { cancelJob, stopGenerateVideoPro } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { abortNodeRun } from "@/lib/node-run-abort"
@@ -47,6 +48,7 @@ interface RunNodeButtonProps {
 const GRACEFUL_STOP_NODE_TYPES = new Set(["generate-video-pro"])
 
 export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }: RunNodeButtonProps) {
+  const t = useT()
   // Narrow subscription: only PRIMITIVES this button renders/derives from — the
   // current job id, a primitive fingerprint of the edges feeding fan-out
   // (incoming targets + outgoing sources for this node), plus this node's type
@@ -174,11 +176,10 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
     >
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Discard this run?</AlertDialogTitle>
+          <AlertDialogTitle>{t("node.discardRunTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            In-progress jobs usually finish in the background and land in My Library
-            (without appearing on the canvas).
-            {hasCredits() && " If a job can't be completed, its credits are refunded automatically."}
+            {t("node.discardRunDesc")}
+            {hasCredits() && ` ${t("node.discardRunCreditsNote")}`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -186,10 +187,10 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
             checked={dontAskAgain}
             onCheckedChange={(v) => setDontAskAgain(v === true)}
           />
-          Don&apos;t ask again
+          {t("node.dontAskAgain")}
         </label>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => setConfirmAction(null)}>Keep running</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => setConfirmAction(null)}>{t("node.keepRunning")}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={() => {
@@ -199,7 +200,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
               action?.()
             }}
           >
-            Discard
+            {t("node.discard")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -217,32 +218,32 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Stop"
-              title="Stop"
+              aria-label={t("node.stop")}
+              title={t("node.stop")}
               className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
               onClick={(e) => e.stopPropagation()}
             >
               <Loader2 className="w-3 h-3 animate-spin" />
-              Stop
+              {t("node.stop")}
               {hasCredits() && credits !== undefined && credits > 0 && (
-                <span className="ml-1 opacity-80">({totalCredits} CR)</span>
+                <span className="ml-1 opacity-80">{t("node.creditsSuffix", { n: totalCredits })}</span>
               )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={onRunInstead}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              Run instead
+              {t("node.runInstead")}
             </DropdownMenuItem>
             {canStopAndKeep && (
               <DropdownMenuItem onClick={onStopAndKeep}>
                 <Save className="w-4 h-4 mr-2" />
-                Stop &amp; keep what&apos;s rendered
+                {t("node.stopAndKeep")}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem variant="destructive" onClick={onDiscard}>
               <Trash2 className="w-4 h-4 mr-2" />
-              Discard
+              {t("node.discard")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -252,7 +253,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
   }
 
   const Icon = runFromHere ? FastForward : Play
-  const label = runFromHere ? "Run from here" : "Run"
+  const label = runFromHere ? t("node.runFromHere") : t("common.run")
 
   return (
     <>
@@ -266,7 +267,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
       {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
-          ({totalCredits} CR)
+          {t("node.creditsSuffix", { n: totalCredits })}
         </span>
       )}
     </button>

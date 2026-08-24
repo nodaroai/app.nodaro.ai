@@ -22,6 +22,7 @@ import { ClipEditor } from "@/components/pipeline/clip-editor"
 import { CinemaTopBar, FlowGraphModal } from "@/components/pipeline/cinema-top-bar"
 import { AiDirectorPanel } from "@/components/pipeline/ai-director-panel"
 import { ReelPipeline } from "@/components/pipeline/reel-pipeline"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 
 /**
  * Phase 0.x — the standalone "pipeline" tracer with per-stage CONTROL.
@@ -41,8 +42,8 @@ type NarrationLine = { type: string; text: string }
 type Autonomy = "director_ai" | "copilot" | "director_me"
 
 interface AutonomyOption {
-  label: string
-  hint: string
+  labelKey: MessageKey
+  hintKey: MessageKey
   mode: PipelineMode
   /** Auto-advance the production stages (shot_list / scene_images). */
   autoAdvanceProduction: boolean
@@ -52,22 +53,22 @@ interface AutonomyOption {
 
 const AUTONOMY_OPTIONS: Record<Autonomy, AutonomyOption> = {
   director_ai: {
-    label: "AI Director",
-    hint: "Describe it — AI makes the whole film, no stops.",
+    labelKey: "pipe.autonomyAiDirector",
+    hintKey: "pipe.autonomyAiDirectorHint",
     mode: "auto",
     autoAdvanceProduction: true,
     skipScriptCritic: false,
   },
   copilot: {
-    label: "Co-pilot",
-    hint: "AI drafts; you approve the creative calls (cast, props, script).",
+    labelKey: "pipe.autonomyCopilot",
+    hintKey: "pipe.autonomyCopilotHint",
     mode: "manual",
     autoAdvanceProduction: true,
     skipScriptCritic: true,
   },
   director_me: {
-    label: "Director",
-    hint: "You review and approve every stage.",
+    labelKey: "pipe.autonomyDirector",
+    hintKey: "pipe.autonomyDirectorHint",
     mode: "manual",
     autoAdvanceProduction: false,
     skipScriptCritic: true,
@@ -90,10 +91,10 @@ interface EntityCard {
   variants: string[]
 }
 
-const ENTITY_GROUPS: ReadonlyArray<{ type: string; label: string }> = [
-  { type: "character", label: "Cast" },
-  { type: "location", label: "Locations" },
-  { type: "object", label: "Props" },
+const ENTITY_GROUPS: ReadonlyArray<{ type: string; labelKey: MessageKey }> = [
+  { type: "character", labelKey: "pipe.entityCast" },
+  { type: "location", labelKey: "pipe.entityLocations" },
+  { type: "object", labelKey: "pipe.entityProps" },
 ]
 const ENTITY_TYPES = ["character", "object", "location"] as const
 
@@ -138,29 +139,29 @@ const STAGE_ORDER = [
   "animate_audio_edit",
   "post_merge",
 ] as const
-const STAGE_LABELS: Record<string, string> = {
-  script: "Script",
-  characters: "Cast",
-  objects: "Props",
-  locations: "Locations",
-  shot_list: "Shots",
-  scene_images: "Scenes",
-  animate_audio_edit: "Animate",
-  post_merge: "Finish",
+const STAGE_LABELS: Record<string, MessageKey> = {
+  script: "pipe.stageScript",
+  characters: "pipe.entityCast",
+  objects: "pipe.entityProps",
+  locations: "pipe.entityLocations",
+  shot_list: "pipe.stageShots",
+  scene_images: "pipe.stageScenes",
+  animate_audio_edit: "pipe.stageAnimate",
+  post_merge: "pipe.stageFinish",
 }
 
 // Human "what's happening now" line per stage — shown in the status banner so
 // the user always knows the director is working, even when there's no gate to
 // act on (otherwise a generating stage looks frozen).
-const STAGE_ACTIVITY: Record<string, string> = {
-  script: "Drafting the script…",
-  characters: "Generating the cast…",
-  objects: "Generating the props…",
-  locations: "Generating the locations…",
-  shot_list: "Planning the shots…",
-  scene_images: "Creating the scenes…",
-  animate_audio_edit: "Animating and adding audio…",
-  post_merge: "Assembling your film…",
+const STAGE_ACTIVITY: Record<string, MessageKey> = {
+  script: "pipe.actScript",
+  characters: "pipe.actCharacters",
+  objects: "pipe.actObjects",
+  locations: "pipe.actLocations",
+  shot_list: "pipe.actShotList",
+  scene_images: "pipe.actSceneImages",
+  animate_audio_edit: "pipe.actAnimate",
+  post_merge: "pipe.actPostMerge",
 }
 
 // Which entity type each entity-stage tab renders (that type's cards + gate).
@@ -181,15 +182,15 @@ const TERMINAL_STATUSES = ["completed", "failed", "cancelled"]
  * action (e.g. reject hitting a 400/409) is swallowed by `act()` and the click
  * looks dead — which is exactly how the "Redo does nothing" bug presented.
  */
-function friendlyActionError(e: unknown): string {
+function friendlyActionError(e: unknown): MessageKey {
   const raw = e instanceof Error ? e.message : String(e)
   const code = raw.match(/"code":"([^"]+)"/)?.[1]
-  const map: Record<string, string> = {
-    entity_not_awaiting_approval: "This item already moved on — the view refreshed.",
-    entity_already_advanced: "This item already moved on — the view refreshed.",
-    validation_error: "That request was rejected as invalid.",
+  const map: Record<string, MessageKey> = {
+    entity_not_awaiting_approval: "pipe.errAlreadyMoved",
+    entity_already_advanced: "pipe.errAlreadyMoved",
+    validation_error: "pipe.errValidation",
   }
-  return (code && map[code]) || "That action didn't go through — please try again."
+  return (code && map[code]) || "pipe.errGeneric"
 }
 
 function describeEvent(evt: PipelineEvent): string | null {
@@ -199,7 +200,7 @@ function describeEvent(evt: PipelineEvent): string | null {
     case "pipeline:status":
       return `Pipeline ${v("status")}`
     case "stage:status":
-      return `${STAGE_LABELS[v("stageName")] ?? v("stageName")} ${v("status")}`
+      return `${STAGE_LABELS[v("stageName")] ? tx(STAGE_LABELS[v("stageName")]) : v("stageName")} ${v("status")}`
     case "stage:progress":
       return (v("message") || `Working on ${v("stageName")}...`).replace(
         /\s*\([\d.]+\s*[KMG]?B so far\)/i,
@@ -214,7 +215,7 @@ function describeEvent(evt: PipelineEvent): string | null {
     case "pipeline:warning":
       return `! ${v("message") || v("code")}`
     case "pipeline:completed":
-      return "Film complete"
+      return tx("pipe.filmComplete")
     default:
       return null
   }
@@ -295,10 +296,8 @@ function parseScreenplay(output: unknown): Screenplay | null {
   return { cast, scenes }
 }
 
-const PROMPT_PLACEHOLDER =
-  'Describe your film — e.g. "A lighthouse keeper watches the sunrise"'
-
 function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
+  const t = useT()
   const [prompt, setPrompt] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -370,10 +369,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
       })
       onOpen(id)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to start the film")
+      setError(e instanceof Error ? e.message : t("pipe.failedStart"))
       setBusy(false)
     }
-  }, [prompt, busy, onOpen, autonomy, styleId, duration, imageModel, videoModel])
+  }, [prompt, busy, onOpen, autonomy, styleId, duration, imageModel, videoModel, t])
 
   // Approximate cost preview (display only — actual credits are charged per
   // job at generation time). base + per-shot × shots, model-driven.
@@ -383,21 +382,20 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
     <div className="flex h-full flex-col items-center gap-8 overflow-y-auto p-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-2 text-lg font-medium text-foreground">
-          Nodaro Cinema — Pipeline
+          {t("pipe.heading")}
         </h1>
         <p className="mb-4 text-sm text-muted-foreground">
-          Type a prompt; the director drafts a film and pauses at each step so
-          you decide what gets made — before any credits are spent.
+          {t("pipe.tagline")}
         </p>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={PROMPT_PLACEHOLDER}
+          placeholder={t("pipe.promptPlaceholder")}
           rows={3}
           className="w-full resize-none rounded-md border bg-card p-3 text-sm text-foreground outline-none focus:border-[#ff0073]"
         />
         <div className="mt-3">
-          <span className="block text-xs text-muted-foreground">Who directs?</span>
+          <span className="block text-xs text-muted-foreground">{t("pipe.whoDirects")}</span>
           <div className="mt-1 grid grid-cols-3 gap-2">
             {AUTONOMY_ORDER.map((k) => {
               const opt = AUTONOMY_OPTIONS[k]
@@ -415,10 +413,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   }`}
                 >
                   <span className="block text-sm font-medium text-foreground">
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </span>
                   <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
-                    {opt.hint}
+                    {t(opt.hintKey)}
                   </span>
                 </button>
               )
@@ -426,7 +424,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </div>
         <div className="mt-3">
-          <span className="block text-xs text-muted-foreground">Style</span>
+          <span className="block text-xs text-muted-foreground">{t("pipe.style")}</span>
           <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-4">
             <button
               type="button"
@@ -439,10 +437,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
               }`}
             >
               <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[9px] text-muted-foreground">
-                Auto
+                {t("pipe.styleAuto")}
               </div>
               <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
-                Auto
+                {t("pipe.styleAuto")}
               </span>
             </button>
             {STYLE_PRESETS.map((s) => {
@@ -471,7 +469,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
         <div className="mt-3 grid grid-cols-3 gap-3">
           <label className="block text-xs text-muted-foreground">
-            Length
+            {t("pipe.length")}
             <select
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
@@ -489,13 +487,13 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
             </select>
           </label>
           <label className="block text-xs text-muted-foreground">
-            Image model
+            {t("pipe.imageModel")}
             <select
               value={imageModel}
               onChange={(e) => setImageModel(e.target.value)}
               className="mt-1 w-full rounded-md border bg-card p-2 text-sm text-foreground outline-none focus:border-[#ff0073]"
             >
-              <option value="">Auto (recommended)</option>
+              <option value="">{t("pipe.autoRecommended")}</option>
               {PIPELINE_PINNABLE_IMAGE_MODELS.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -504,13 +502,13 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
             </select>
           </label>
           <label className="block text-xs text-muted-foreground">
-            Video model
+            {t("pipe.videoModel")}
             <select
               value={videoModel}
               onChange={(e) => setVideoModel(e.target.value)}
               className="mt-1 w-full rounded-md border bg-card p-2 text-sm text-foreground outline-none focus:border-[#ff0073]"
             >
-              <option value="">Auto (recommended)</option>
+              <option value="">{t("pipe.autoRecommended")}</option>
               {PIPELINE_PINNABLE_VIDEO_MODELS.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -520,7 +518,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
           </label>
         </div>
         <div className="mt-3 flex items-baseline justify-between rounded-md border border-dashed bg-card/50 px-3 py-2">
-          <span className="text-xs text-muted-foreground">Estimated cost</span>
+          <span className="text-xs text-muted-foreground">{t("pipe.estimatedCost")}</span>
           <span className="text-sm text-foreground">
             ≈ {cost.totalCredits.toLocaleString()} credits{" "}
             <span className="text-xs text-muted-foreground">
@@ -536,14 +534,14 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
           disabled={!prompt.trim() || busy}
           className="mt-3 rounded-md bg-[#ff0073] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? "Starting…" : "Create film"}
+          {busy ? t("pipe.starting") : t("pipe.createFilm")}
         </button>
       </div>
 
       {recent.length > 0 && (
         <div className="w-full max-w-xl">
           <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Recent films
+            {t("pipe.recentFilms")}
           </h2>
           <div className="space-y-1">
             {recent.map((p) => (
@@ -554,7 +552,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                 className="flex w-full items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-left text-sm hover:border-[#ff0073]"
               >
                 <span className="truncate text-foreground">
-                  {p.input_prompt || "Untitled film"}
+                  {p.input_prompt || t("pipe.untitledFilm")}
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {p.status}
@@ -581,6 +579,7 @@ function StageTracker({
   selected: string
   onSelect: (stage: string) => void
 }) {
+  const t = useT()
   // "You are here" = the pipeline's authoritative current_stage (engine-set on
   // the row) when known; otherwise fall back to the first stage that's
   // awaiting/running per SSE. The row is the source of truth because SSE
@@ -620,7 +619,7 @@ function StageTracker({
             {/* Live dot marks the stage the engine is actually on, shown when
                 you've navigated to a different tab. */}
             {isCurrent && !isSelected ? "● " : ""}
-            {STAGE_LABELS[s]}
+            {t(STAGE_LABELS[s])}
           </button>
         )
       })}
@@ -671,6 +670,7 @@ function EntityDescGate({
   onUpload: (entityId: string, assetUrl: string, file: File) => void
   onReuse: (entityId: string, assetUrl: string) => void
 }) {
+  const t = useT()
   const [desc, setDesc] = useState(card.description ?? "")
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -690,7 +690,7 @@ function EntityDescGate({
       try {
         setLibrary(await fetchLibraryByType(card.entityType))
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "Couldn't load your library")
+        setErr(e instanceof Error ? e.message : t("pipe.couldntLoadLibrary"))
       } finally {
         setLibLoading(false)
       }
@@ -713,7 +713,7 @@ function EntityDescGate({
       const { url } = await uploadImage(file)
       onUpload(card.entityId, url, file)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Upload failed")
+      setErr(e instanceof Error ? e.message : t("pipe.uploadFailed"))
     } finally {
       setUploading(false)
     }
@@ -733,7 +733,7 @@ function EntityDescGate({
             onClick={() => onGenerate(card.entityId, edited ? desc : undefined)}
             className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           >
-            Generate
+            {t("pipe.generate")}
           </button>
           <button
             type="button"
@@ -741,7 +741,7 @@ function EntityDescGate({
             onClick={() => fileRef.current?.click()}
             className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Upload"}
+            {uploading ? t("pipe.uploading") : t("pipe.upload")}
           </button>
           <button
             type="button"
@@ -749,7 +749,7 @@ function EntityDescGate({
             onClick={() => void toggleReuse()}
             className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
-            Library
+            {t("pipe.library")}
           </button>
           <button
             type="button"
@@ -757,7 +757,7 @@ function EntityDescGate({
             onClick={() => onSkip(card.entityId)}
             className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
-            Skip
+            {t("pipe.skip")}
           </button>
         </span>
       </div>
@@ -765,7 +765,7 @@ function EntityDescGate({
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
         rows={2}
-        placeholder="Description used to generate this — edit before Generate…"
+        placeholder={t("pipe.descPlaceholder")}
         className="w-full rounded-md border bg-background p-2 text-xs text-foreground"
       />
       {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
@@ -781,7 +781,7 @@ function EntityDescGate({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Starter packs
+              {t("pipe.starterPacks")}
             </button>
             <button
               type="button"
@@ -792,15 +792,14 @@ function EntityDescGate({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              My library
+              {t("pipe.myLibrary")}
             </button>
           </div>
 
           {libTab === "featured" ? (
             featured.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No starter packs for this type — Generate, Upload, or pick from My
-                library.
+                {t("pipe.noStarterPacks")}
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -820,15 +819,15 @@ function EntityDescGate({
                   </button>
                 ))}
                 <p className="mt-1 w-full text-[10px] text-muted-foreground">
-                  Fills the description with a starter — then hit Generate.
+                  {t("pipe.starterFillHint")}
                 </p>
               </div>
             )
           ) : libLoading ? (
-            <p className="text-xs text-muted-foreground">Loading your library…</p>
+            <p className="text-xs text-muted-foreground">{t("pipe.loadingLibrary")}</p>
           ) : library.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Nothing saved for this type yet — Generate or Upload instead.
+              {t("pipe.nothingSavedYet")}
             </p>
           ) : (
             <div className="flex gap-2 overflow-x-auto">
@@ -886,6 +885,7 @@ function GatePanel({
   onOpenMedia: (url: string) => void
   viewStage: string
 }) {
+  const t = useT()
   const [redoFor, setRedoFor] = useState<string | null>(null)
   const [redoFeedback, setRedoFeedback] = useState("")
   // Only surface the gate for the tab being viewed. Entity-stage tabs show that
@@ -905,13 +905,12 @@ function GatePanel({
     "rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
   return (
     <div className="mb-6 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 p-4">
-      <div className="mb-2 text-sm font-medium text-foreground">Your turn</div>
+      <div className="mb-2 text-sm font-medium text-foreground">{t("pipe.yourTurn")}</div>
 
       {pendingDesc.length > 0 && (
         <div className="mb-3">
           <div className="mb-2 text-xs text-muted-foreground">
-            Choose what to create — review/edit the description, then Generate
-            (nothing is made until you pick):
+            {t("pipe.chooseWhatToCreate")}
           </div>
           <div className="space-y-2">
             {pendingDesc.map((c) => (
@@ -932,7 +931,7 @@ function GatePanel({
       {awaitingImage.length > 0 && (
         <div className="mb-3">
           <div className="mb-2 text-xs text-muted-foreground">
-            Review generated — click an image to view it full-screen:
+            {t("pipe.reviewGenerated")}
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {awaitingImage.map((c) => (
@@ -944,7 +943,7 @@ function GatePanel({
                   type="button"
                   onClick={() => c.mainAssetUrl && onOpenMedia(c.mainAssetUrl)}
                   className="block w-full cursor-zoom-in"
-                  title="View full-screen"
+                  title={t("pipe.viewFullscreen")}
                 >
                   {c.mainAssetUrl ? (
                     <img
@@ -954,7 +953,7 @@ function GatePanel({
                     />
                   ) : (
                     <div className="flex aspect-square w-full items-center justify-center text-xs text-muted-foreground">
-                      generating…
+                      {t("pipe.generatingEllipsis")}
                     </div>
                   )}
                 </button>
@@ -973,7 +972,7 @@ function GatePanel({
                         onClick={() => actions.approveEntity(c.entityId)}
                         className={`${btn} bg-[#ff0073] text-white`}
                       >
-                        Approve
+                        {t("pipe.approve")}
                       </button>
                       <button
                         type="button"
@@ -983,7 +982,7 @@ function GatePanel({
                         }}
                         className={`${btn} border text-foreground`}
                       >
-                        Redo
+                        {t("pipe.redo")}
                       </button>
                     </span>
                   </div>
@@ -992,7 +991,7 @@ function GatePanel({
                       <input
                         value={redoFeedback}
                         onChange={(e) => setRedoFeedback(e.target.value)}
-                        placeholder="What to change (optional)…"
+                        placeholder={t("pipe.whatToChangeOptional")}
                         className="flex-1 rounded-md border bg-background px-2 py-1 text-xs text-foreground"
                       />
                       <button
@@ -1002,14 +1001,14 @@ function GatePanel({
                           actions.rejectEntity(
                             c.entityId,
                             redoFeedback.trim() ||
-                              "Regenerate this image — give a different take",
+                              t("pipe.regenerateHint"),
                           )
                           setRedoFor(null)
                           setRedoFeedback("")
                         }}
                         className={`${btn} bg-[#ff0073] text-white`}
                       >
-                        Regenerate
+                        {t("pipe.regenerate")}
                       </button>
                     </div>
                   )}
@@ -1025,7 +1024,7 @@ function GatePanel({
           {stageGates.map((g) =>
             g.stageName === "script" && !scriptReady ? (
               <span key={g.stageName} className="text-xs text-muted-foreground">
-                Loading script…
+                {t("pipe.loadingScript")}
               </span>
             ) : (
               <button
@@ -1035,7 +1034,7 @@ function GatePanel({
                 onClick={() => actions.approveGate(g.stageName, g.subGate)}
                 className={`${btn} bg-[#ff0073] text-white`}
               >
-                Approve {STAGE_LABELS[g.stageName] ?? g.stageName} & continue
+                {t("pipe.approveAndContinue", { stage: STAGE_LABELS[g.stageName] ? t(STAGE_LABELS[g.stageName]) : g.stageName })}
               </button>
             ),
           )}
@@ -1052,6 +1051,7 @@ function EntityImage({
   card: EntityCard
   onOpenMedia: (url: string) => void
 }) {
+  const t = useT()
   return (
     <div className="w-48 shrink-0">
       <div className="aspect-square w-full overflow-hidden rounded-md border bg-card">
@@ -1060,7 +1060,7 @@ function EntityImage({
             type="button"
             onClick={() => onOpenMedia(card.mainAssetUrl as string)}
             className="block h-full w-full cursor-zoom-in"
-            title="View full-screen"
+            title={t("pipe.viewFullscreen")}
           >
             <img
               src={card.mainAssetUrl}
@@ -1091,7 +1091,7 @@ function EntityImage({
               type="button"
               onClick={() => onOpenMedia(url)}
               className="h-12 w-12 shrink-0 cursor-zoom-in overflow-hidden rounded border"
-              title="View full-screen"
+              title={t("pipe.viewFullscreen")}
             >
               <img src={url} alt="" className="h-full w-full object-cover" />
             </button>
@@ -1117,6 +1117,7 @@ function ScriptView({
   onRedoScene: (index: number, feedback: string) => void
   onRegenerate: (feedback: string) => void
 }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [drafts, setDrafts] = useState<Record<number, string>>({})
   const [redoFor, setRedoFor] = useState<number | null>(null)
@@ -1156,14 +1157,14 @@ function ScriptView({
         {editing ? (
           <>
             <button type="button" onClick={save} disabled={acting} className={pinkBtn}>
-              Save edits
+              {t("pipe.saveEdits")}
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
               className="rounded-md border px-3 py-1 text-xs text-foreground"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         ) : (
@@ -1173,14 +1174,14 @@ function ScriptView({
               onClick={startEdit}
               className="rounded-md border px-3 py-1 text-xs text-foreground"
             >
-              Edit manually
+              {t("pipe.editManually")}
             </button>
             <button
               type="button"
               onClick={() => setRegenOpen((v) => !v)}
               className="rounded-md border px-3 py-1 text-xs text-foreground"
             >
-              Regenerate script
+              {t("pipe.regenerateScript")}
             </button>
           </>
         )}
@@ -1191,7 +1192,7 @@ function ScriptView({
           <input
             value={regenFeedback}
             onChange={(e) => setRegenFeedback(e.target.value)}
-            placeholder="What to change (e.g. make it funnier, shorter)…"
+            placeholder={t("pipe.whatToChangeExample")}
             className={inputCls}
           />
           <button
@@ -1204,7 +1205,7 @@ function ScriptView({
             }}
             className={pinkBtn}
           >
-            Regenerate
+            {t("pipe.regenerate")}
           </button>
         </div>
       )}
@@ -1212,7 +1213,7 @@ function ScriptView({
       {screenplay.cast.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Cast
+            {t("pipe.entityCast")}
           </div>
           <ul className="space-y-0.5">
             {screenplay.cast.map((c, i) => (
@@ -1243,7 +1244,7 @@ function ScriptView({
                 }}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Redo
+                {t("pipe.redo")}
               </button>
             )}
           </div>
@@ -1259,7 +1260,7 @@ function ScriptView({
           )}
           {!editing && sc.narration && (
             <p className="mt-1 italic text-muted-foreground">
-              Narration: {sc.narration}
+              {t("pipe.narrationLabel", { narration: sc.narration })}
             </p>
           )}
           {!editing &&
@@ -1273,7 +1274,7 @@ function ScriptView({
               <input
                 value={sceneFeedback}
                 onChange={(e) => setSceneFeedback(e.target.value)}
-                placeholder="How to change this scene…"
+                placeholder={t("pipe.howToChangeScene")}
                 className={inputCls}
               />
               <button
@@ -1286,7 +1287,7 @@ function ScriptView({
                 }}
                 className={pinkBtn}
               >
-                Redo scene
+                {t("pipe.redoScene")}
               </button>
             </div>
           )}
@@ -1312,6 +1313,7 @@ function Lightbox({
   onClose: () => void
   onIndex: (i: number) => void
 }) {
+  const t = useT()
   const count = media.length
   const go = useCallback(
     (delta: number) => {
@@ -1345,7 +1347,7 @@ function Lightbox({
           onClick={onClose}
           className="shrink-0 rounded-md border border-white/20 px-3 py-1 text-xs text-white hover:bg-white/10"
         >
-          Close
+          {t("common.close")}
         </button>
       </div>
       <div
@@ -1356,7 +1358,7 @@ function Lightbox({
           <button
             type="button"
             onClick={() => go(-1)}
-            aria-label="Previous"
+            aria-label={t("pipe.previous")}
             className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
           >
             ‹
@@ -1381,7 +1383,7 @@ function Lightbox({
           <button
             type="button"
             onClick={() => go(1)}
-            aria-label="Next"
+            aria-label={t("pipe.next")}
             className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
           >
             ›
@@ -1421,6 +1423,7 @@ function Lightbox({
 }
 
 function PipelineSession({ pipelineId }: { pipelineId: string }) {
+  const t = useT()
   const { lastEvent, connected } = usePipelineEvents(pipelineId)
   const navigate = useNavigate()
   const [lines, setLines] = useState<NarrationLine[]>([])
@@ -1479,7 +1482,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
   const [currentStage, setCurrentStage] = useState<string | null>(null)
   const [selectedStage, setSelectedStage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<MessageKey | null>(null)
   const feedRef = useRef<HTMLDivElement>(null)
   // Last scene count we rebuilt the player at — avoids resetting playback on
   // every 5s poll when the scene count hasn't changed.
@@ -1786,9 +1789,12 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
           (c.status === "pending_description" || c.status === "awaiting_approval"),
       ))
   const activity = currentStage
-    ? STAGE_ACTIVITY[currentStage] ??
-      `Working on ${STAGE_LABELS[currentStage] ?? currentStage}…`
-    : "Working…"
+    ? STAGE_ACTIVITY[currentStage]
+      ? t(STAGE_ACTIVITY[currentStage])
+      : t("pipe.workingOn", {
+          stage: STAGE_LABELS[currentStage] ? t(STAGE_LABELS[currentStage]) : currentStage,
+        })
+    : t("pipe.workingGeneric")
 
   return (
     <div className="flex h-full flex-col">
@@ -1830,7 +1836,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                   onClick={() => setSelectedClip(null)}
                   className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
                 >
-                  Close [X]
+                  {t("pipe.closeX")}
                 </button>
               </div>
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -1859,7 +1865,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
               viewStage === currentStage ? (
                 <div className="mb-4 flex items-center gap-3 rounded-md border bg-card px-3 py-2.5 text-sm">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff0073]" />
-                  <span className="text-foreground">Your turn — review and choose below.</span>
+                  <span className="text-foreground">{t("pipe.yourTurnReview")}</span>
                 </div>
               ) : (
                 <button
@@ -1869,22 +1875,26 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                 >
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff0073]" />
                   <span className="text-foreground">
-                    Your turn on{" "}
-                    {STAGE_LABELS[currentStage ?? ""] ?? "the current step"} — click to open.
+                    {t("pipe.yourTurnOn", {
+                      stage: STAGE_LABELS[currentStage ?? ""]
+                        ? t(STAGE_LABELS[currentStage ?? ""])
+                        : t("pipe.theCurrentStep"),
+                    })}
                   </span>
                 </button>
               )
             ) : stuck ? (
               <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
                 <p className="font-medium text-amber-300">
-                  This film isn't being processed.
+                  {t("pipe.notProcessing")}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  It's {notStarted ? "queued, but nothing has picked it up" : "running, but stalled"}{" "}
-                  for {elapsedSec}s. The Story→Video engine is driven by a background
-                  worker — if it's not running, films sit here forever. Check that the
-                  backend has <code className="text-foreground">EDITION=cloud</code> and
-                  Redis up, then start the pipeline worker:
+                  {t("pipe.stuckDetailPre", {
+                    state: notStarted ? t("pipe.stuckQueued") : t("pipe.stuckRunning"),
+                    seconds: elapsedSec,
+                  })}{" "}
+                  <code className="text-foreground">EDITION=cloud</code>{" "}
+                  {t("pipe.stuckDetailPost")}
                 </p>
                 <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[10px] text-foreground">
 npm run pipeline-worker:dev
@@ -1895,20 +1905,20 @@ npm run pipeline-worker:dev
                 <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#ff0073] border-t-transparent" />
                 <span className="text-foreground">{activity}</span>
                 <span className="text-xs text-muted-foreground">
-                  You'll be asked to review as soon as it's ready — nothing to do right now.
+                  {t("pipe.readyNoActionNeeded")}
                 </span>
               </div>
             ))}
 
           {actionError && (
             <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">
-              {actionError}
+              {t(actionError)}
             </div>
           )}
 
           {error && (
             <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">
-              The film run did not finish: {error}
+              {t("pipe.runDidNotFinish", { error })}
             </div>
           )}
 
@@ -1947,7 +1957,7 @@ npm run pipeline-worker:dev
               />
             ) : (
               <p className="text-sm text-muted-foreground">
-                The script will appear here once it's drafted.
+                {t("pipe.scriptWillAppear")}
               </p>
             ))}
 
@@ -1957,7 +1967,7 @@ npm run pipeline-worker:dev
               if (group.length === 0) {
                 return (
                   <p className="text-sm text-muted-foreground">
-                    {STAGE_LABELS[viewStage]} will appear here as they're made.
+                    {t("pipe.willAppearHere", { stage: t(STAGE_LABELS[viewStage]) })}
                   </p>
                 )
               }
@@ -1977,7 +1987,7 @@ npm run pipeline-worker:dev
               {!isTerminal && animateProgress && animateProgress.totalShots > 0 ? (
                 <div>
                   <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Animating shots…</span>
+                    <span>{t("pipe.animatingShots")}</span>
                     <span className="tabular-nums">
                       {animateProgress.shotsDone} / {animateProgress.totalShots} shots (
                       {animateProgress.percent}%)
@@ -1993,7 +2003,7 @@ npm run pipeline-worker:dev
               ) : totalScenes > 0 && !isTerminal ? (
                 <div>
                   <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Rendering scenes…</span>
+                    <span>{t("pipe.renderingScenes")}</span>
                     <span className="tabular-nums">
                       {completedScenes} / {totalScenes} ready ({sceneProgressPct}%)
                     </span>
@@ -2010,8 +2020,7 @@ npm run pipeline-worker:dev
                 <SceneGraphPlayerPreview sceneGraph={sceneGraph} />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  The first scene will play here the moment it's rendered — you don't
-                  have to wait for the whole film.
+                  {t("pipe.firstSceneWillPlay")}
                 </p>
               )}
             </div>

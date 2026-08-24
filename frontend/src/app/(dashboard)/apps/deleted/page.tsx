@@ -5,10 +5,11 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { getMyApps, restoreApp } from "@/lib/api"
-import { formatRelative } from "@/lib/utils"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT, formatRelative } from "@/lib/i18n"
 
 export default function DeletedAppsPage() {
+  const t = useT()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
@@ -29,15 +30,15 @@ export default function DeletedAppsPage() {
     mutationFn: ({ appId }: { appId: string }) => restoreApp(appId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-apps"] })
-      toast.success("MiniApp restored. It's in your MiniApps list (unpublished).")
+      toast.success(t("apps.deleted.restored"))
     },
-    onError: () => toast.error("Failed to restore MiniApp"),
+    onError: () => toast.error(t("apps.deleted.failedRestore")),
   })
 
   if (!user) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Sign in to view your deleted MiniApps.</p>
+        <p className="text-muted-foreground">{t("apps.deleted.signInToView")}</p>
       </div>
     )
   }
@@ -49,16 +50,16 @@ export default function DeletedAppsPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <Archive className="h-6 w-6 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold">Deleted MiniApps</h1>
+          <h1 className="text-2xl font-semibold">{t("apps.deleted.title")}</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          MiniApps you've deleted from your MiniApps list appear here. Restore a MiniApp to bring it back to your MiniApps list (it'll stay unpublished — you can re-publish from the edit page).
+          {t("apps.deleted.description")}
         </p>
         <Link
           to="/apps"
           className="text-sm text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1"
         >
-          ← Back to MiniApps
+          {t("apps.deleted.backToApps")}
         </Link>
       </div>
 
@@ -68,13 +69,13 @@ export default function DeletedAppsPage() {
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load deleted MiniApps.
+          {t("apps.deleted.failedToLoad")}
         </div>
       ) : apps.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Archive className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm text-muted-foreground">
-            No deleted MiniApps. MiniApps you delete from your MiniApps list will appear here for restoration.
+            {t("apps.deleted.empty")}
           </p>
         </div>
       ) : (
@@ -94,7 +95,7 @@ export default function DeletedAppsPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{app.name}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Deleted {formatRelative(app.deletedAt!)} · /app/{app.slug}
+                  {t("apps.deleted.deletedAt", { time: formatRelative(app.deletedAt!) })} · /app/{app.slug}
                 </div>
               </div>
               <Button
@@ -105,7 +106,7 @@ export default function DeletedAppsPage() {
                 disabled={restoreMutation.isPending}
               >
                 <RotateCcw className="h-4 w-4 mr-1" />
-                Restore
+                {t("apps.deleted.restore")}
               </Button>
             </li>
           ))}

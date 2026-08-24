@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 
 /**
  * Email/password sign-up — the self-host path (GoTrue handles it natively).
@@ -17,6 +18,7 @@ import { isCloud } from "@/lib/edition"
  *     to check their inbox, then sign in.
  */
 export default function SignupPage() {
+  const t = useT()
   const { signUpWithEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -38,7 +40,7 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (password !== confirm) {
-      setError("Passwords do not match")
+      setError(t("signup.passwordMismatch"))
       return
     }
     setPending(true)
@@ -52,7 +54,7 @@ export default function SignupPage() {
         setPending(false)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign up failed")
+      setError(err instanceof Error ? err.message : t("signup.signUpFailed"))
       setPending(false)
     }
   }
@@ -74,28 +76,26 @@ export default function SignupPage() {
           </h1>
           <p className="animate-in fade-in duration-700">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
-              SELF-HOSTED &middot; {window.location.host}
+              {t("auth.selfHostedBadge", { host: window.location.host })}
             </span>
           </p>
         </div>
 
         <div className="rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm p-6 shadow-lg space-y-4">
           <div className="space-y-1.5">
-            <h2 className="text-lg font-semibold">Create your account</h2>
+            <h2 className="text-lg font-semibold">{t("signup.heading")}</h2>
             <p className="text-xs text-muted-foreground">
-              A local account, stored only on this server &mdash; not a
-              nodaro.ai account. You can connect nodaro.ai later.
+              {t("signup.localAccountNotice")}
             </p>
           </div>
 
           {awaitingConfirmation ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Almost there — this install requires email confirmation. Check
-                your inbox for a confirmation link, then sign in.
+                {t("signup.awaitingConfirmation")}
               </p>
               <Button asChild className="w-full">
-                <Link to="/login">Back to sign in</Link>
+                <Link to="/login">{t("signup.backToSignIn")}</Link>
               </Button>
             </div>
           ) : (
@@ -104,30 +104,30 @@ export default function SignupPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
+                placeholder={t("auth.emailPlaceholder")}
                 autoComplete="email"
                 required
-                aria-label="Email"
+                aria-label={t("auth.emailPlaceholder")}
               />
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password (8+ characters)"
+                placeholder={t("signup.passwordPlaceholder")}
                 autoComplete="new-password"
                 minLength={8}
                 required
-                aria-label="Password"
+                aria-label={t("auth.passwordPlaceholder")}
               />
               <Input
                 type="password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirm password"
+                placeholder={t("signup.confirmPasswordPlaceholder")}
                 autoComplete="new-password"
                 minLength={8}
                 required
-                aria-label="Confirm password"
+                aria-label={t("signup.confirmPasswordPlaceholder")}
               />
               {/* Neutral (not brand-pink) on purpose: this creates a LOCAL
                   server account; pink is reserved for Nodaro Cloud actions. */}
@@ -136,7 +136,7 @@ export default function SignupPage() {
                 className="w-full bg-foreground text-background hover:bg-foreground/90"
                 disabled={pending}
               >
-                {pending ? "Creating account..." : "Create account"}
+                {pending ? t("signup.creatingAccount") : t("signup.createAccount")}
               </Button>
             </form>
           )}
@@ -145,9 +145,9 @@ export default function SignupPage() {
 
           {!awaitingConfirmation && (
             <p className="text-xs text-muted-foreground/60 pt-1">
-              Already have an account?{" "}
+              {t("signup.alreadyHaveAccount")}{" "}
               <Link to="/login" className="underline underline-offset-2 hover:text-muted-foreground">
-                Sign in
+                {t("auth.signIn")}
               </Link>
             </p>
           )}

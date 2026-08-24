@@ -3,6 +3,7 @@ import { Layers, AudioWaveform, ExternalLink, Bell, Film, Image as ImageIcon } f
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
@@ -73,9 +74,17 @@ function posterFallback(sig: string): CSSProperties {
   }
 }
 
+/** Per-app localized tagline keys (names stay as brand). */
+const FLAGSHIP_TAGLINE_KEYS: Record<string, MessageKey> = {
+  "studio": "dash.flagshipStudioTagline",
+  "voice-changer-pro": "dash.flagshipVcpTagline",
+}
+
 function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
+  const t = useT()
   const isVideo = app.media?.type === "video"
   const Icon = app.icon
+  const taglineKey = FLAGSHIP_TAGLINE_KEYS[app.id]
 
   const inner = (
     <>
@@ -104,7 +113,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
         {app.media ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/50 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white backdrop-blur-sm">
             {isVideo ? <Film className="h-3 w-3" aria-hidden /> : <ImageIcon className="h-3 w-3" aria-hidden />}
-            {isVideo ? "Video" : "Image"}
+            {isVideo ? t("common.video") : t("common.image")}
           </span>
         ) : (
           <span />
@@ -112,7 +121,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
         {app.status === "live" ? (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Live
+            {t("dash.live")}
           </span>
         ) : (
           <span
@@ -120,7 +129,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
             style={{ backgroundColor: app.sig }}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
-            Coming soon
+            {t("dash.comingSoon")}
           </span>
         )}
       </div>
@@ -139,7 +148,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
             {app.meta && <div className="mt-0.5 font-mono text-[11px] text-white/60">{app.meta}</div>}
           </div>
         </div>
-        <p className="max-w-[46ch] text-sm leading-relaxed text-white/80">{app.tagline}</p>
+        <p className="max-w-[46ch] text-sm leading-relaxed text-white/80">{taglineKey ? t(taglineKey) : app.tagline}</p>
         <span
           className={cn(
             "mt-4 inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[13px] font-semibold transition-colors",
@@ -151,12 +160,12 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           {app.status === "live" ? (
             <>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Open {app.name}
+              {t("dash.openApp", { name: app.name })}
             </>
           ) : (
             <>
               <Bell className="h-3.5 w-3.5" aria-hidden />
-              Notify me
+              {t("dash.notifyMe")}
             </>
           )}
         </span>
@@ -178,7 +187,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
   return (
     <button
       type="button"
-      onClick={() => toast(`You'll find ${app.name} right here the moment it launches.`)}
+      onClick={() => toast(t("dash.flagshipToast", { name: app.name }))}
       className={cardClass}
       style={cardStyle}
     >

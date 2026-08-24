@@ -4,8 +4,10 @@ import { Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
+import { useT } from "@/lib/i18n"
 
 export default function PresentPage() {
+  const t = useT()
   const { shareToken } = useParams<{ shareToken: string }>()
   const navigate = useNavigate()
   const { loading: authLoading } = useAuth()
@@ -34,13 +36,13 @@ export default function PresentPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-2">Workflow Not Found</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("present.workflowNotFound")}</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
           <button
             onClick={() => navigate("/projects")}
             className="text-[#ff0073] hover:underline"
           >
-            Go to Dashboard
+            {t("present.goToDashboard")}
           </button>
         </div>
       </div>

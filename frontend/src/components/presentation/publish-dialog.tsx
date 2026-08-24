@@ -25,10 +25,23 @@ import { publishApp, getAppByWorkflow } from "@/lib/api"
 import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
-import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
+import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro/shared"
 import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
+import { useT, type MessageKey } from "@/lib/i18n"
+
+// `frontend/src/components/presentation/view-mode-selector.tsx` is outside
+// this task's file list, so reuse a local mode→key lookup rather than adding
+// a `labelKey` field to its `VIEW_MODES` export.
+const VIEW_MODE_LABEL_KEY: Record<string, MessageKey> = {
+  horizontal: "viewMode.horizontal",
+  vertical: "viewMode.vertical",
+  gallery: "viewMode.gallery",
+  fullscreen: "viewMode.fullscreen",
+  compare: "viewMode.compare",
+  chat: "viewMode.chat",
+}
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */
 function extractItemNodeIds(items: readonly PresentationItem[]): Set<string> {
@@ -50,6 +63,7 @@ interface PublishDialogProps {
 }
 
 export function PublishDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes }: PublishDialogProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [publishName, setPublishName] = useState("")
   const [publishSlug, setPublishSlug] = useState("")
@@ -324,7 +338,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
-      toast.error("Name is required")
+      toast.error(t("pubTemplate.nameRequired"))
       return
     }
     setPublishing(true)
@@ -383,13 +397,13 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         } : undefined,
       })
       setPublishedSlug(result.slug)
-      toast.success(publishType === "component" ? "Component published!" : "App published!")
+      toast.success(publishType === "component" ? t("pubDialog.componentPublished") : t("pubDialog.appPublished"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to publish")
+      toast.error(err instanceof Error ? err.message : t("pubDialog.publishFailed"))
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings, t])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
@@ -399,10 +413,10 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     if (publishedUrl) {
       navigator.clipboard.writeText(publishedUrl)
       setPublishCopied(true)
-      toast.success("Link copied")
+      toast.success(t("runner.linkCopied"))
       setTimeout(() => setPublishCopied(false), 2000)
     }
-  }, [publishedUrl])
+  }, [publishedUrl, t])
 
   // View mode settings
   const allowedModes = presentationSettings?.shareAllowedModes ?? ALL_VIEW_MODES
@@ -471,19 +485,19 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Rocket className="h-4 w-4 mr-1" />
-          Publish
+          {t("pubDialog.trigger")}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Publish {publishType === "component" ? "Component" : "MiniApp"}</DialogTitle>
+          <DialogTitle>{publishType === "component" ? t("pubDialog.publishComponentTitle") : t("pubDialog.publishMiniAppTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {publishType === "component"
-              ? "Publish as a reusable component that can be used inside other workflows."
-              : "Publish as a standalone MiniApp with its own URL, persistent run history, and versioning."}
+              ? t("pubDialog.subtitleComponent")
+              : t("pubDialog.subtitleApp")}
           </p>
 
           {loadingExisting ? (
@@ -509,7 +523,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 }}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
-                Open {publishType === "component" ? "Component" : "MiniApp"}
+                {publishType === "component" ? t("pubDialog.openComponent") : t("pubDialog.openMiniApp")}
               </Button>
             </>
           ) : (
@@ -523,7 +537,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   }`}
                   onClick={() => setPublishType("app")}
                 >
-                  MiniApp
+                  {t("pubDialog.typeMiniAppLabel")}
                 </button>
                 <button
                   type="button"
@@ -532,55 +546,55 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   }`}
                   onClick={() => setPublishType("component")}
                 >
-                  Component
+                  {t("pubDialog.typeComponentLabel")}
                 </button>
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block">{publishType === "component" ? "Component" : "MiniApp"} Name *</label>
+                <label className="text-sm font-medium mb-1 block">{publishType === "component" ? t("pubDialog.nameLabelComponent") : t("pubDialog.nameLabelMiniApp")}</label>
                 <Input
                   value={publishName}
                   onChange={(e) => setPublishName(e.target.value)}
-                  placeholder="My AI App"
+                  placeholder={t("pubDialog.namePlaceholder")}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">URL Slug</label>
+                <label className="text-sm font-medium mb-1 block">{t("pubDialog.urlSlugLabel")}</label>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-muted-foreground shrink-0">/app/</span>
                   <Input
                     value={publishSlug}
                     onChange={(e) => setPublishSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-                    placeholder="auto-generated"
+                    placeholder={t("pubDialog.slugPlaceholder")}
                     className="text-xs"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">Optional custom slug — leave blank to auto-generate. URL stays the same across versions.</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{t("pubDialog.slugHint")}</p>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Description</label>
+                <label className="text-sm font-medium mb-1 block">{t("apps.descriptionLabel")}</label>
                 <Input
                   value={publishDesc}
                   onChange={(e) => setPublishDesc(e.target.value)}
-                  placeholder="What does this app do?"
+                  placeholder={t("pubDialog.descPlaceholder")}
                 />
               </div>
 
               {/* Component handle configuration */}
               {publishType === "component" && (
                 <div className="space-y-3 border border-border rounded-lg p-3">
-                  <h3 className="text-sm font-medium text-foreground">Component Handles</h3>
+                  <h3 className="text-sm font-medium text-foreground">{t("pubDialog.componentHandlesHeading")}</h3>
 
                   {componentHandles.inputs.length === 0 && componentHandles.outputs.length === 0 && (
                     <div className="flex items-start gap-2 text-xs text-amber-500 bg-amber-500/10 rounded-md p-2.5">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span>No presentation inputs or outputs flagged. Mark nodes as presentation I/O in the workflow editor to define component handles.</span>
+                      <span>{t("pubDialog.noHandlesWarning")}</span>
                     </div>
                   )}
 
                   {componentHandles.inputs.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Inputs</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">{t("preview.inputs")}</p>
                       <div className="space-y-2">
                         {componentHandles.inputs.map((handle) => (
                           <div key={handle.id} className="flex items-center gap-2">
@@ -595,13 +609,13 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                                 }))
                               }}
                               className="h-8 text-xs flex-1"
-                              placeholder="Handle name"
+                              placeholder={t("pubDialog.handleNamePlaceholder")}
                             />
                             <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                               {handle.type}
                             </span>
                             {handle.required && (
-                              <span className="text-[11px] text-amber-500 shrink-0">req</span>
+                              <span className="text-[11px] text-amber-500 shrink-0">{t("pubDialog.requiredBadge")}</span>
                             )}
                             <button
                               type="button"
@@ -621,7 +635,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
                   {componentHandles.outputs.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Outputs</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">{t("preview.outputs")}</p>
                       <div className="space-y-2">
                         {componentHandles.outputs.map((handle) => (
                           <div key={handle.id} className="flex items-center gap-2">
@@ -636,7 +650,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                                 }))
                               }}
                               className="h-8 text-xs flex-1"
-                              placeholder="Handle name"
+                              placeholder={t("pubDialog.handleNamePlaceholder")}
                             />
                             <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                               {handle.type}
@@ -657,7 +671,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                                 }}
                                 className="h-3 w-3"
                               />
-                              preview
+                              {t("pubDialog.previewRadioLabel")}
                             </label>
                             <button
                               type="button"
@@ -686,7 +700,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 >
                   <span className="flex items-center gap-2">
                     <Store className="h-4 w-4" />
-                    Marketplace Settings
+                    {t("pubDialog.marketplaceSettingsHeading")}
                   </span>
                   {showMarketplace ? (
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -700,22 +714,22 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                     {/* List on marketplace toggle */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">List on marketplace</p>
-                        <p className="text-xs text-muted-foreground">Make discoverable in the Apps browse page</p>
+                        <p className="text-sm font-medium">{t("pubTemplate.listOnMarketplace")}</p>
+                        <p className="text-xs text-muted-foreground">{t("pubDialog.listOnMarketplaceDescApps")}</p>
                       </div>
                       <Switch checked={isListed} onCheckedChange={setIsListed} />
                     </div>
 
                     {/* Category */}
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Category</p>
+                      <p className="text-sm font-medium mb-1.5">{t("pubTemplate.categoryLabel")}</p>
                       <Select value={category} onValueChange={setCategory}>
                         <SelectTrigger className="w-full h-9 text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {APP_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            <SelectItem key={cat.value} value={cat.value}>{categoryLabel(cat.value, t)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -723,7 +737,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
                     {/* Output types (multi-select checkboxes) */}
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Output types</p>
+                      <p className="text-sm font-medium mb-1.5">{t("pubTemplate.outputTypesLabel")}</p>
                       <div className="flex items-center gap-2 flex-wrap">
                         {OUTPUT_TYPES.map((ot) => (
                           <label
@@ -740,7 +754,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                               checked={outputTypes.includes(ot.value)}
                               onChange={() => handleToggleOutputType(ot.value)}
                             />
-                            {ot.label}
+                            {outputTypeLabel(ot.value, t)}
                           </label>
                         ))}
                       </div>
@@ -748,7 +762,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
                     {/* Tags */}
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span></p>
+                      <p className="text-sm font-medium mb-1.5">{t("marketplace.tagsLabel")} <span className="text-xs text-muted-foreground font-normal">{t("pubTemplate.tagCount", { n: tags.length })}</span></p>
                       {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-1.5">
                           {tags.map((tag) => (
@@ -768,7 +782,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                         <Input
                           value={tagInput}
                           onChange={(e) => setTagInput(e.target.value)}
-                          placeholder="Add a tag..."
+                          placeholder={t("pubTemplate.tagPlaceholder")}
                           className="h-8 text-xs flex-1"
                           maxLength={30}
                           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTag() } }}
@@ -781,7 +795,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                           onClick={handleAddTag}
                           disabled={!tagInput.trim() || tags.length >= 10}
                         >
-                          Add
+                          {t("pubTemplate.addTag")}
                         </Button>
                       </div>
                     </div>
@@ -789,8 +803,8 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                     {/* RemX support toggle */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">Supports RemX</p>
-                        <p className="text-xs text-muted-foreground">Users can customize and remix this app</p>
+                        <p className="text-sm font-medium">{t("pubDialog.supportsRemixLabel")}</p>
+                        <p className="text-xs text-muted-foreground">{t("pubDialog.supportsRemixDesc")}</p>
                       </div>
                       <Switch checked={supportsRemix} onCheckedChange={setSupportsRemix} />
                     </div>
@@ -801,13 +815,13 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
               {/* View mode settings */}
               {showSettings && (
                 <div className="space-y-3 border-t border-border pt-3">
-                  <h3 className="text-sm font-medium text-foreground">App Settings</h3>
+                  <h3 className="text-sm font-medium text-foreground">{t("pubDialog.appSettingsHeading")}</h3>
 
                   {/* Read-only toggle */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Read-only</p>
-                      <p className="text-xs text-muted-foreground">Users can only see results, not edit inputs</p>
+                      <p className="text-sm font-medium">{t("pubDialog.readOnlyLabel")}</p>
+                      <p className="text-xs text-muted-foreground">{t("pubDialog.readOnlyDesc")}</p>
                     </div>
                     <Switch
                       checked={!!presentationSettings.shareReadOnly}
@@ -817,7 +831,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
                   {/* Allowed view modes */}
                   <div>
-                    <p className="text-sm font-medium mb-2">Allowed view modes</p>
+                    <p className="text-sm font-medium mb-2">{t("pubDialog.allowedViewModesLabel")}</p>
                     <div className="flex items-center gap-1">
                       {VIEW_MODES.map(({ mode, icon: Icon, label }) => {
                         const isActive = allowedSet.has(mode)
@@ -826,7 +840,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             key={mode}
                             type="button"
                             onClick={() => handleToggleMode(mode)}
-                            title={label}
+                            title={VIEW_MODE_LABEL_KEY[mode] ? t(VIEW_MODE_LABEL_KEY[mode]) : label}
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
                                 ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
@@ -842,14 +856,14 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
                   {/* Default view mode */}
                   <div>
-                    <p className="text-sm font-medium mb-1.5">Default view mode</p>
+                    <p className="text-sm font-medium mb-1.5">{t("pubDialog.defaultViewModeLabel")}</p>
                     <Select value={defaultMode} onValueChange={handleDefaultModeChange}>
                       <SelectTrigger className="w-full h-9 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {VIEW_MODES.filter((m) => allowedSet.has(m.mode)).map(({ mode, label }) => (
-                          <SelectItem key={mode} value={mode}>{label}</SelectItem>
+                          <SelectItem key={mode} value={mode}>{VIEW_MODE_LABEL_KEY[mode] ? t(VIEW_MODE_LABEL_KEY[mode]) : label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -857,16 +871,16 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   {/* Compare side defaults */}
                   {showCompareSettings && nodeOptions.length >= 2 && (
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Compare defaults</p>
+                      <p className="text-sm font-medium mb-1.5">{t("pubDialog.compareDefaultsLabel")}</p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Left</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("pubDialog.leftLabel")}</p>
                           <Select
                             value={presentationSettings.compareLeft || undefined}
                             onValueChange={(v) => handleCompareChange("compareLeft", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
-                              <SelectValue placeholder="Select node" />
+                              <SelectValue placeholder={t("pubDialog.selectNodePlaceholder")} />
                             </SelectTrigger>
                             <SelectContent>
                               {nodeOptions.map(({ id, label }) => (
@@ -876,13 +890,13 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                           </Select>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Right</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("pubDialog.rightLabel")}</p>
                           <Select
                             value={presentationSettings.compareRight || undefined}
                             onValueChange={(v) => handleCompareChange("compareRight", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
-                              <SelectValue placeholder="Select node" />
+                              <SelectValue placeholder={t("pubDialog.selectNodePlaceholder")} />
                             </SelectTrigger>
                             <SelectContent>
                               {nodeOptions.map(({ id, label }) => (
@@ -898,16 +912,16 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   {/* Thumbnail node for runs list */}
                   {nodeOptions.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Run thumbnail</p>
+                      <p className="text-sm font-medium mb-1.5">{t("pubDialog.runThumbnailLabel")}</p>
                       <p className="text-xs text-muted-foreground mb-1.5">
-                        Select a node whose output will be shown as a thumbnail in the runs list
+                        {t("pubDialog.runThumbnailHint")}
                       </p>
                       <Select value={thumbnailNodeId} onValueChange={setThumbnailNodeId}>
                         <SelectTrigger className="w-full h-9 text-sm">
-                          <SelectValue placeholder="None" />
+                          <SelectValue placeholder={t("pubDialog.noneOption")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">None</SelectItem>
+                          <SelectItem value="__none__">{t("pubDialog.noneOption")}</SelectItem>
                           {nodeOptions.map(({ id, label }) => (
                             <SelectItem key={id} value={id}>{label}</SelectItem>
                           ))}
@@ -929,7 +943,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 ) : (
                   <Rocket className="h-4 w-4 mr-2" />
                 )}
-                Publish {publishType === "component" ? "Component" : "App"}
+                {publishType === "component" ? t("pubDialog.publishComponentTitle") : t("pubDialog.publishAppSubmit")}
               </Button>
             </>
           )}

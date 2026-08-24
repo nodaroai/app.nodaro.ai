@@ -47,9 +47,11 @@ import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 
 function TemplatesCarousel() {
+  const tr = useT()
   const navigate = useNavigate()
   const [previewTemplate, setPreviewTemplate] = useState<TemplateBrowseCard | null>(null)
   const { data: myProjects = [] } = useProjects()
@@ -80,7 +82,7 @@ function TemplatesCarousel() {
     return (
       <div className="text-center py-10 text-muted-foreground">
         <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
-        <p className="text-xs font-medium">No templates available yet</p>
+        <p className="text-xs font-medium">{tr("dash.noTemplates")}</p>
       </div>
     )
   }
@@ -120,7 +122,7 @@ function TemplatesCarousel() {
           className="flex-shrink-0 w-48 rounded-lg border border-dashed border-border hover:border-zinc-400 transition-colors flex items-center justify-center text-muted-foreground hover:text-foreground"
           onClick={() => navigate("/templates")}
         >
-          <span className="text-xs font-medium">See all templates →</span>
+          <span className="text-xs font-medium">{tr("dash.seeAllTemplatesArrow")}</span>
         </button>
       </div>
 
@@ -140,13 +142,14 @@ function TemplatesCarousel() {
 }
 
 export default function ProjectsPage() {
+  const t = useT()
   const { isAdmin, user } = useAuth()
 
   const greeting = (() => {
     const hour = new Date().getHours()
-    if (hour < 12) return "Good morning"
-    if (hour < 18) return "Good afternoon"
-    return "Good evening"
+    if (hour < 12) return t("dash.goodMorning")
+    if (hour < 18) return t("dash.goodAfternoon")
+    return t("dash.goodEvening")
   })()
 
   const displayName = user?.user_metadata?.full_name?.split(" ")[0]
@@ -390,11 +393,11 @@ export default function ProjectsPage() {
   )
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "apps", label: "Apps", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
-    { id: "miniapps", label: "MiniApps", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
-    { id: "templates", label: "Templates", icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: "tutorials", label: "Tutorials", icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
+    { id: "apps", label: t("dash.apps"), icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+    { id: "miniapps", label: t("dash.miniapps"), icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+    { id: "templates", label: t("dash.templates"), icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "tutorials", label: t("dash.tutorials"), icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "statistics", label: t("dash.statistics"), icon: <BarChart3 className="h-3.5 w-3.5" /> },
   ]
 
   const CARD_SCROLL_PX = 210
@@ -500,7 +503,7 @@ export default function ProjectsPage() {
                 onCheckedChange={handleViewAllChange}
               />
               <Label htmlFor="view-all-projects" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
-                All users
+                {t("exec.allUsers")}
               </Label>
             </div>
           )}
@@ -517,16 +520,16 @@ export default function ProjectsPage() {
                 <Plus className="h-4 w-4 mr-1" />
               )}
               <span className="hidden sm:inline">
-                {isCreating ? "Creating…" : "New Workflow"}
+                {isCreating ? t("dash.creating") : t("dash.newWorkflow")}
               </span>
-              <span className="sm:hidden">{isCreating ? "…" : "New"}</span>
+              <span className="sm:hidden">{isCreating ? t("dash.creatingShort") : t("dash.newShort")}</span>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   size="sm"
                   className="sm:size-default rounded-l-none border-l border-l-background/30 px-2"
-                  aria-label="More create options"
+                  aria-label={t("dash.moreCreateOptions")}
                   disabled={isCreating}
                 >
                   <ChevronDown className="h-4 w-4" />
@@ -535,7 +538,7 @@ export default function ProjectsPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleCreateProject}>
                   <FolderPlus className="h-3.5 w-3.5 mr-2" />
-                  New project
+                  {t("dash.newProject")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -571,7 +574,7 @@ export default function ProjectsPage() {
               onClick={() => navigate("/apps")}
               className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              See all MiniApps <ArrowRight className="h-3 w-3" />
+              {t("dash.seeAllMiniApps")} <ArrowRight className="h-3 w-3" />
             </button>
           )}
           {activeTab === "templates" && (
@@ -580,7 +583,7 @@ export default function ProjectsPage() {
               onClick={() => navigate("/templates")}
               className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              See all templates <ArrowRight className="h-3 w-3" />
+              {t("dash.seeAllTemplates")} <ArrowRight className="h-3 w-3" />
             </button>
           )}
         </div>
@@ -646,7 +649,7 @@ export default function ProjectsPage() {
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 flex flex-col items-center justify-center gap-2 hover:bg-muted transition-colors">
                       <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                      <p className="text-xs font-medium text-muted-foreground">See all MiniApps</p>
+                      <p className="text-xs font-medium text-muted-foreground">{t("dash.seeAllMiniApps")}</p>
                     </div>
                   </button>
                 </div>
@@ -674,7 +677,7 @@ export default function ProjectsPage() {
             ) : (
               <div className="text-center py-10 text-muted-foreground">
                 <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs font-medium">No MiniApps yet</p>
+                <p className="text-xs font-medium">{t("dash.noMiniApps")}</p>
               </div>
             )}
           </div>
@@ -698,22 +701,22 @@ export default function ProjectsPage() {
       {/* Workspace tab strip — flat workflow list (default) vs. project organization */}
       <div className="flex items-center gap-1 mb-3 border-b border-border">
         {([
-          { id: "workflows", label: "My Workflows" },
-          { id: "projects", label: "My Projects" },
-          { id: "studio", label: "Studio Workflows" },
-        ] as const).map((t) => (
+          { id: "workflows", label: t("dash.myWorkflows") },
+          { id: "projects", label: t("dash.myProjects") },
+          { id: "studio", label: t("dash.studioWorkflows") },
+        ] as const).map((tab) => (
           <button
-            key={t.id}
+            key={tab.id}
             type="button"
-            onClick={() => setWorkspaceTab(t.id)}
+            onClick={() => setWorkspaceTab(tab.id)}
             className={cn(
               "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
-              workspaceTab === t.id
+              workspaceTab === tab.id
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -732,14 +735,14 @@ export default function ProjectsPage() {
       <>
       {/* My Projects heading + view toggle + search */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium text-muted-foreground">My Projects</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{t("dash.myProjects")}</h2>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => setViewMode("grid")}
               className={cn("p-1 rounded transition-colors", viewMode === "grid" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
-              aria-label="Grid view"
+              aria-label={t("dash.gridView")}
             >
               <LayoutGrid className="h-5 w-5" />
             </button>
@@ -747,7 +750,7 @@ export default function ProjectsPage() {
               type="button"
               onClick={() => setViewMode("list")}
               className={cn("p-1 rounded transition-colors", viewMode === "list" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
-              aria-label="List view"
+              aria-label={t("dash.listView")}
             >
               <List className="h-5 w-5" />
             </button>
@@ -764,8 +767,8 @@ export default function ProjectsPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={showAll ? "Search projects, users..." : "Search projects..."}
-              aria-label="Search projects and workflows"
+              placeholder={showAll ? t("dash.searchProjectsUsers") : t("dash.searchProjectsPlaceholder")}
+              aria-label={t("dash.searchProjects")}
               className="pl-8 h-8 text-sm w-full"
             />
           </div>
@@ -774,7 +777,7 @@ export default function ProjectsPage() {
 
       {isSearching && workflowResults.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-sm font-medium text-muted-foreground mb-3">Workflows</h2>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3">{t("dash.workflows")}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {workflowResults.map((wf) => (
               <Link
@@ -808,8 +811,8 @@ export default function ProjectsPage() {
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">
             {projects.length === 0
-              ? "No projects yet. Create one to get started."
-              : "No results match your search."}
+              ? t("dash.noProjectsYet")
+              : t("dash.noResults")}
           </p>
         </div>
       ) : (
@@ -817,7 +820,7 @@ export default function ProjectsPage() {
           {viewMode === "list" && (
             <div className="flex items-center gap-3 px-3 mb-1 pb-1 border-b border-border">
               <div className="w-5 flex-shrink-0" />
-              <span className="text-[11px] text-muted-foreground flex-1">Name</span>
+              <span className="text-[11px] text-muted-foreground flex-1">{t("dash.name")}</span>
               <button
                 type="button"
                 onClick={() => handleSort("updated")}
@@ -826,7 +829,7 @@ export default function ProjectsPage() {
                   sortBy === "updated" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Last modified
+                {t("dash.lastModified")}
                 {sortBy === "updated" && (sortDir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />)}
               </button>
               <button
@@ -837,7 +840,7 @@ export default function ProjectsPage() {
                   sortBy === "created" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Created
+                {t("dash.created")}
                 {sortBy === "created" && (sortDir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />)}
               </button>
               <div className="w-7 flex-shrink-0" />

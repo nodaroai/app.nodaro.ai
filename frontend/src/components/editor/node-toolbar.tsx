@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
+import { useT } from "@/lib/i18n"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
 import type { ComponentSelection } from "./component-marketplace-modal"
@@ -28,6 +29,7 @@ export { getNodeOptions }
 
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
+  const t = useT()
   const { isAdmin } = useAuth()
   // Every node type, Parameter pickers included — the same pool the popup
   // browses. Only admin-only nodes stay gated; Cloud-only ones are already
@@ -58,7 +60,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
       {/* Unified My Library - quick access to all assets */}
       <div className="mb-3 flex flex-col gap-1 border-b border-[var(--npk-border)] pb-3">
         <span className="mb-1 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)]">
-          Library
+          {t("toolbar.library")}
         </span>
         <Suspense fallback={null}><UnifiedAssetLibraryButton /></Suspense>
       </div>
@@ -69,14 +71,14 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
           onClick={() => apply(new Set(sections.map((s) => s.id)))}
           className="flex-1 rounded-md border border-[var(--npk-border)] px-2 py-1.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] transition-colors hover:bg-[var(--npk-hover)] hover:text-[var(--npk-t1)]"
         >
-          Expand all
+          {t("toolbar.expandAll")}
         </button>
         <button
           type="button"
           onClick={() => apply(new Set())}
           className="flex-1 rounded-md border border-[var(--npk-border)] px-2 py-1.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] transition-colors hover:bg-[var(--npk-hover)] hover:text-[var(--npk-t1)]"
         >
-          Collapse all
+          {t("toolbar.collapseAll")}
         </button>
       </div>
 
@@ -98,6 +100,7 @@ interface NodeToolbarProps {
 }
 
 export function NodeToolbar({ visible = false }: NodeToolbarProps) {
+  const t = useT()
   const addNode = useWorkflowStore((s) => s.addNode)
   const addNodeAndOpenPicker = useWorkflowStore((s) => s.addNodeAndOpenPicker)
   const { getViewport } = useReactFlow()
@@ -157,7 +160,7 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
       {visible && (
         <div className="absolute top-4 left-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in slide-in-from-left-2 duration-200">
           <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] dark:text-[var(--npk-accent)] mb-1">
-            Add Node
+            {t("toolbar.addNode")}
           </span>
           <NodeList onAdd={handleAddNode} />
         </div>
@@ -183,7 +186,7 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
           {/* Sheet */}
           <div className="absolute bottom-0 left-0 right-0 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border-t border-[var(--npk-border)] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <span className="text-sm font-semibold text-[var(--npk-t1)]">Add Node</span>
+              <span className="text-sm font-semibold text-[var(--npk-t1)]">{t("toolbar.addNode")}</span>
               <Button
                 variant="ghost"
                 size="sm"

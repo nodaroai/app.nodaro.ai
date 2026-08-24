@@ -26,12 +26,14 @@ import {
   sectionTitle,
   statLabel,
 } from "@/ee/components/billing/billing-styles"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * MiniApp earnings — preserved from the previous billing page (self-hides
  * when the user has never earned), rendered in the mock's card chrome.
  */
 function EarningsSection() {
+  const t = useT()
   const { data, isLoading } = useQuery({
     queryKey: ["user-earnings"],
     queryFn: () => getUserEarnings({ limit: 10 }),
@@ -41,16 +43,16 @@ function EarningsSection() {
   if (isLoading || !data || data.totalLifetime === 0) return null
 
   const stats = [
-    { label: "Total Lifetime", value: data.totalLifetime },
-    { label: "This Month", value: data.thisMonth },
-    { label: "Last 30 Days", value: data.last30Days },
+    { label: t("billing.totalLifetime"), value: data.totalLifetime },
+    { label: t("billing.thisMonth"), value: data.thisMonth },
+    { label: t("billing.last30"), value: data.last30Days },
   ]
 
   return (
     <section style={sectionCardSpaced}>
-      <h2 style={{ ...sectionTitle, margin: "0 0 4px" }}>MiniApp Earnings</h2>
+      <h2 style={{ ...sectionTitle, margin: "0 0 4px" }}>{t("billing.earningsTitle")}</h2>
       <p style={{ ...mutedParagraph, margin: "0 0 20px" }}>
-        Earnings are added to your top-up balance and are valid for 12 months.
+        {t("billing.earningsNote")}
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24 }}>
         {stats.map((stat) => (
@@ -94,6 +96,7 @@ function EarningsSection() {
 }
 
 export default function BillingPage() {
+  const t = useT()
   const { user, loading: authLoading } = useAuth()
   const [searchParams] = useSearchParams()
   const qc = useQueryClient()
@@ -119,13 +122,16 @@ export default function BillingPage() {
     return () => clearTimeout(timer)
   }, [searchParams, user?.id, qc])
 
-  // Show toast on success redirect
+  // Show toast on success redirect. Fire-once on the success/topup param — NOT
+  // keyed on `t`: the param is never cleared, so re-running on a locale switch
+  // would re-fire the toast. tx() reads the live locale at fire time, so the
+  // message is still localized without making the effect depend on the locale.
   useEffect(() => {
     const isSuccess = searchParams.get("success") === "true"
     const isTopup = searchParams.get("topup") === "true"
     if (isSuccess || isTopup) {
       toast.success(
-        isTopup ? "Credits added to your account!" : "Subscription activated!",
+        isTopup ? tx("billing.creditsAdded") : tx("billing.subActivated"),
       )
     }
   }, [searchParams])
@@ -137,10 +143,10 @@ export default function BillingPage() {
       if (url) {
         window.open(url, "_blank")
       } else {
-        toast.error("Unable to open subscription management portal")
+        toast.error(t("billing.portalUnavailable"))
       }
     } catch {
-      toast.error("Failed to open subscription management")
+      toast.error(t("billing.portalFailed"))
     }
   }
 
@@ -155,7 +161,7 @@ export default function BillingPage() {
   if (!hasCredits()) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-12">
-        <p className="text-muted-foreground">Billing is not available in this edition.</p>
+        <p className="text-muted-foreground">{t("billing.notAvailable")}</p>
       </div>
     )
   }
@@ -178,17 +184,17 @@ export default function BillingPage() {
             <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-green-500" />
             <p className="text-sm text-green-700 dark:text-green-400">
               {searchParams.get("topup") === "true"
-                ? "Your credit top-up has been processed. Credits will appear shortly."
-                : "Your subscription is now active. Welcome aboard!"}
+                ? t("billing.topupSuccess")
+                : t("billing.subSuccess")}
             </p>
           </div>
         )}
 
         <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.03em", margin: 0 }}>
-          Billing
+          {t("billing.title")}
         </h1>
         <p style={{ fontSize: 15, color: "var(--blg-t2)", margin: "8px 0 36px" }}>
-          Manage your subscription, credits, and payment history.
+          {t("billing.subtitle")}
         </p>
 
         <CurrentPlanCard
@@ -221,7 +227,7 @@ export default function BillingPage() {
             rel="noopener noreferrer"
             className="transition-colors hover:text-muted-foreground"
           >
-            Terms of Service
+            {t("pricing.terms")}
           </a>
           <span>&middot;</span>
           <a
@@ -230,7 +236,7 @@ export default function BillingPage() {
             rel="noopener noreferrer"
             className="transition-colors hover:text-muted-foreground"
           >
-            Privacy Policy
+            {t("pricing.privacy")}
           </a>
           <span>&middot;</span>
           <a
@@ -239,7 +245,7 @@ export default function BillingPage() {
             rel="noopener noreferrer"
             className="transition-colors hover:text-muted-foreground"
           >
-            Refund Policy
+            {t("pricing.refund")}
           </a>
         </div>
       </div>

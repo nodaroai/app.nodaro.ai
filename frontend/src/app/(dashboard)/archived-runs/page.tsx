@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/use-auth"
+import { useT, formatRelative } from "@/lib/i18n"
 import { queryKeys } from "@/lib/query-keys"
 import { optimizedImageUrl } from "@/lib/image"
 import {
@@ -21,20 +22,8 @@ import {
   type ArchivedAppRun,
 } from "@/lib/api"
 
-function formatRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(ms / 60_000)
-  if (min < 1) return "just now"
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const d = Math.floor(hr / 24)
-  if (d < 30) return `${d}d ago`
-  const mo = Math.floor(d / 30)
-  return `${mo}mo ago`
-}
-
 export default function ArchivedRunsPage() {
+  const t = useT()
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [confirmDelete, setConfirmDelete] = useState<ArchivedAppRun | null>(null)
@@ -49,20 +38,20 @@ export default function ArchivedRunsPage() {
     mutationFn: ({ slug, runId }: { slug: string; runId: string }) => restoreAppRun(slug, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.archivedRuns.all })
-      toast.success("Run restored")
+      toast.success(t("archive.runRestored"))
     },
-    onError: () => toast.error("Failed to restore run"),
+    onError: () => toast.error(t("archive.failedRestore")),
   })
 
   const permanentDeleteMutation = useMutation({
     mutationFn: ({ slug, runId }: { slug: string; runId: string }) => permanentlyDeleteAppRun(slug, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.archivedRuns.all })
-      toast.success("Run permanently deleted")
+      toast.success(t("archive.runDeleted"))
       setConfirmDelete(null)
     },
     onError: () => {
-      toast.error("Failed to delete run")
+      toast.error(t("archive.failedDelete"))
       setConfirmDelete(null)
     },
   })
@@ -70,7 +59,7 @@ export default function ArchivedRunsPage() {
   if (!user) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Sign in to view your archived runs.</p>
+        <p className="text-muted-foreground">{t("archive.signInToView")}</p>
       </div>
     )
   }
@@ -82,10 +71,10 @@ export default function ArchivedRunsPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <Archive className="h-6 w-6 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold">Archived runs</h1>
+          <h1 className="text-2xl font-semibold">{t("archive.title")}</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Runs you've archived from any app appear here. Restore them to bring them back, or permanently delete to free up storage. Permanent deletion cannot be undone.
+          {t("archive.description")}
         </p>
       </div>
 
@@ -95,12 +84,12 @@ export default function ArchivedRunsPage() {
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load archived runs.
+          {t("archive.failedToLoad")}
         </div>
       ) : runs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Archive className="h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground">Your archive is empty.</p>
+          <p className="text-sm text-muted-foreground">{t("archive.empty")}</p>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -118,7 +107,7 @@ export default function ArchivedRunsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-medium truncate">{run.name || run.appName || "Untitled run"}</span>
+                  <span className="font-medium truncate">{run.name || run.appName || t("archive.untitledRun")}</span>
                   {run.appSlug && run.appName && run.name && (
                     <Link
                       to={`/app/${run.appSlug}`}
@@ -129,7 +118,7 @@ export default function ArchivedRunsPage() {
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Archived {formatRelative(run.deletedAt)} · ran {formatRelative(run.createdAt)}
+                  {t("archive.archived", { time: formatRelative(run.deletedAt) })} · {t("archive.ran", { time: formatRelative(run.createdAt) })}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -140,7 +129,7 @@ export default function ArchivedRunsPage() {
                   disabled={!run.appSlug || restoreMutation.isPending}
                 >
                   <RotateCcw className="h-4 w-4 mr-1" />
-                  Restore
+                  {t("archive.restore")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -150,7 +139,7 @@ export default function ArchivedRunsPage() {
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 className="h-4 w-4 mr-1" />
-                  Delete forever
+                  {t("archive.deleteForever")}
                 </Button>
               </div>
             </li>
@@ -161,14 +150,14 @@ export default function ArchivedRunsPage() {
       <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Permanently delete run?</DialogTitle>
+            <DialogTitle>{t("archive.deleteForeverTitle")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will permanently delete the run, its inputs, and its generated outputs. This action cannot be undone.
+            {t("archive.deleteForeverDesc")}
           </p>
           <DialogFooter className="flex gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => setConfirmDelete(null)} autoFocus>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -178,7 +167,7 @@ export default function ArchivedRunsPage() {
               }}
               disabled={permanentDeleteMutation.isPending}
             >
-              Delete forever
+              {t("archive.deleteForever")}
             </Button>
           </DialogFooter>
         </DialogContent>

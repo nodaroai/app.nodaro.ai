@@ -55,6 +55,7 @@ import { createClient } from "@/lib/supabase"
 import { ensureNodePositions } from "@/lib/node-position"
 import type { WorkflowExport } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, CreatureNodeData, LocationNodeData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 type EditorTab = "editor" | "present" | "executions" | "cost"
 
@@ -91,6 +92,7 @@ function describeMediaRefNodes(refs: ReadonlyArray<{ nodeId: string; nodeLabel?:
 }
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
+  const t = useT()
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
   const isDirty = useWorkflowStore((s) => s.isDirty)
@@ -137,7 +139,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
   const handleExport = useCallback(async (includeAssets: boolean) => {
     if (!workflowId || workflowId.startsWith("temp-")) {
-      toast.error("Save the workflow before exporting")
+      toast.error(t("editor.saveBeforeExport"))
       return
     }
     setExporting(true)
@@ -159,23 +161,23 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      toast.success(includeAssets ? "Exported workflow with assets" : "Exported workflow template")
+      toast.success(includeAssets ? t("editor.exportedWithAssets") : t("editor.exportedTemplate"))
       // The bundle points at media only THIS install can serve (#866) — say
       // so now, not on someone else's canvas at Run time.
       const unreachable = workflowData.portability?.unreachableMedia ?? []
       if (unreachable.length > 0) {
         const n = unreachable.length
         toast.warning(
-          `${n} media URL${n === 1 ? "" : "s"} in this bundle point at this install and won't load on another instance: ${describeMediaRefNodes(unreachable)}. Upload that media somewhere public before sharing, or expect those nodes to need new inputs.`,
+          t("editor.unreachableExportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
           { duration: 12_000 },
         )
       }
     } catch (err) {
-      toast.error("Export failed: " + (err instanceof Error ? err.message : "Unknown error"))
+      toast.error(t("editor.exportFailed", { error: err instanceof Error ? err.message : "Unknown error" }))
     } finally {
       setExporting(false)
     }
-  }, [workflowId, workflowName])
+  }, [workflowId, workflowName, t])
 
   function parseWorkflowJson(jsonStr: string): ExportedWorkflow {
     const raw = JSON.parse(jsonStr) as Record<string, unknown>
@@ -200,12 +202,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         const data = parseWorkflowJson(event.target?.result as string)
         setPendingImportData(data)
       } catch (err) {
-        toast.error("Invalid file: " + (err instanceof Error ? err.message : "Could not parse JSON"))
+        toast.error(t("editor.invalidFile", { error: err instanceof Error ? err.message : t("editor.couldNotParseJson") }))
       }
     }
     reader.readAsText(file)
     if (fileInputRef.current) fileInputRef.current.value = ""
-  }, [])
+  }, [t])
 
   const handleClipboardImport = useCallback(async () => {
     try {
@@ -213,9 +215,9 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const data = parseWorkflowJson(text)
       setPendingImportData(data)
     } catch (err) {
-      toast.error("Clipboard import failed: " + (err instanceof Error ? err.message : "Could not read clipboard or invalid JSON"))
+      toast.error(t("editor.clipboardImportFailed", { error: err instanceof Error ? err.message : t("editor.couldNotReadClipboard") }))
     }
-  }, [])
+  }, [t])
 
   // Build the portable WorkflowExport payload the backend expects from a parsed
   // file/clipboard blob. Coerces the version (older exports used "1.0") and lets
@@ -241,25 +243,25 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const created = await importWorkflow({ ...toWorkflowExportPayload(data), projectId: projectId! })
       const assetCount = (data.assets?.characters.length ?? 0) + (data.assets?.objects.length ?? 0) + (data.assets?.locations.length ?? 0)
       const report = created.importReport
-      const copied = report?.rehosted ? ` · ${report.rehosted} media file${report.rehosted === 1 ? "" : "s"} copied here` : ""
-      toast.success((assetCount > 0 ? `Imported workflow with ${assetCount} assets` : "Imported workflow") + copied)
+      const copied = report?.rehosted ? t("editor.mediaCopiedSuffix", { n: report.rehosted, suffix: report.rehosted === 1 ? "" : "s" }) : ""
+      toast.success((assetCount > 0 ? t("editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied)
       // Media this instance could not fetch stays as-is and those nodes will
       // not run until it is re-uploaded here (#866).
       const unreachable = report?.unreachable ?? []
       if (unreachable.length > 0) {
         const n = unreachable.length
         toast.warning(
-          `${n} media URL${n === 1 ? "" : "s"} in this bundle point at a private host this instance can't reach: ${describeMediaRefNodes(unreachable)}. Those nodes need their media uploaded here before they can run.`,
+          t("editor.unreachableImportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
           { duration: 12_000 },
         )
       }
       onNavigate?.(`/projects/${created.projectId}/workflows/${created.id}`)
     } catch (err) {
-      toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
+      toast.error(t("editor.importFailed", { error: err instanceof Error ? err.message : "Unknown error" }))
     } finally {
       setImporting(false)
     }
-  }, [projectId, onNavigate])
+  }, [projectId, onNavigate, t])
 
   // Inject mode merges the imported nodes onto the *current* canvas (no new
   // workflow row). Bundled assets are re-created via the backend asset routes;
@@ -273,7 +275,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     if (unreachable.length > 0) {
       const n = unreachable.length
       toast.warning(
-        `${n} media URL${n === 1 ? "" : "s"} in this bundle point at a private host this instance can't reach: ${describeMediaRefNodes(unreachable)}. Those nodes need their media uploaded here before they can run.`,
+        t("editor.unreachableImportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
         { duration: 12_000 },
       )
     }
@@ -405,13 +407,15 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       }
 
       const assetCount = Object.keys(assetIdMap).length
-      toast.success(`Added ${nodesToImport.length} nodes to workflow${assetCount > 0 ? ` with ${assetCount} assets` : ""}`)
+      toast.success(assetCount > 0
+        ? t("editor.addedNodesWithAssets", { n: nodesToImport.length, a: assetCount })
+        : t("editor.addedNodes", { n: nodesToImport.length }))
     } catch (err) {
-      toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
+      toast.error(t("editor.importFailed", { error: err instanceof Error ? err.message : "Unknown error" }))
     } finally {
       setImporting(false)
     }
-  }, [projectId])
+  }, [projectId, t])
 
   const handleImport = useCallback((mode: "new" | "inject") => {
     const data = pendingImportData
@@ -419,14 +423,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     setPendingImportData(null)
     if (mode === "new") {
       if (!projectId) {
-        toast.error("Open a project to import a workflow")
+        toast.error(t("editor.openProjectToImport"))
         return
       }
       void handleImportAsNew(data)
     } else {
       void handleInject(data)
     }
-  }, [pendingImportData, projectId, handleImportAsNew, handleInject])
+  }, [pendingImportData, projectId, handleImportAsNew, handleInject, t])
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 h-[41px] border-b border-gray-200 dark:border-border bg-white dark:bg-card">
@@ -436,7 +440,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Back to project"
+            aria-label={t("editor.backToProject")}
             className="h-8 w-8 p-0 shrink-0"
             onClick={() => onNavigate ? onNavigate(`/projects/${projectId}`) : undefined}
           >
@@ -451,7 +455,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             onClick={() => onNavigate?.("/projects")}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
-            Dashboard
+            {t("crumb.dashboard")}
           </button>
           {project && (
             <>
@@ -470,7 +474,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         <div className="flex items-center gap-0.5 min-w-0">
           <Input
-            aria-label="Workflow name"
+            aria-label={t("editor.workflowName")}
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
             className="w-28 sm:w-48 h-8 text-sm"
@@ -496,7 +500,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               <Button
                 variant="outline"
                 size="sm"
-                aria-label="Prompt Templates"
+                aria-label={t("editor.promptTemplates")}
                 className="relative"
                 onClick={() => setFlowTemplatesOpen(true)}
               >
@@ -506,7 +510,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Prompt Templates</TooltipContent>
+            <TooltipContent>{t("editor.promptTemplates")}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -526,22 +530,22 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           <AlertDialog open onOpenChange={(open) => { if (!open) setPendingImportData(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Import Workflow</AlertDialogTitle>
+                <AlertDialogTitle>{t("editor.importWorkflow")}</AlertDialogTitle>
                 <AlertDialogDescription>
                   {pendingImportData.name ? `"${pendingImportData.name}" — ` : ""}
-                  {pendingImportData.nodes.length} nodes, {pendingImportData.edges.length} connections
-                  {pendingImportData.assets ? ` + assets` : ""}
+                  {t("editor.importCounts", { nodes: pendingImportData.nodes.length, edges: pendingImportData.edges.length })}
+                  {pendingImportData.assets ? ` ${t("editor.plusAssets")}` : ""}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 {!isReadOnly && (
                   <Button variant="outline" onClick={() => handleImport("inject")}>
-                    Add to Current
+                    {t("editor.addToCurrent")}
                   </Button>
                 )}
                 <Button onClick={() => handleImport("new")}>
-                  Import as New
+                  {t("editor.importAsNew")}
                 </Button>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -550,7 +554,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" aria-label="More options" disabled={exporting || importing}>
+            <Button variant="outline" size="sm" aria-label={t("editor.moreOptions")} disabled={exporting || importing}>
               {(exporting || importing) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -562,16 +566,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                {t("editor.export")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onClick={() => handleExport(true)}>
                   <Package className="h-4 w-4 mr-2" />
-                  With Assets
+                  {t("editor.withAssets")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExport(false)}>
                   <FileJson className="h-4 w-4 mr-2" />
-                  Template Only
+                  {t("editor.templateOnly")}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -579,16 +583,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Upload className="h-4 w-4 mr-2" />
-                Import
+                {t("editor.import")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
                   <FileJson className="h-4 w-4 mr-2" />
-                  From File
+                  {t("editor.fromFile")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleClipboardImport}>
                   <ClipboardPaste className="h-4 w-4 mr-2" />
-                  From Clipboard
+                  {t("editor.fromClipboard")}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -620,11 +624,11 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           }
 
           // Button text
-          let buttonText = "Saved"
-          if (isSaving) buttonText = "Saving..."
-          else if (isSaved) buttonText = "Saved"
-          else if (hasError) buttonText = "Retry"
-          else if (isUnsaved) buttonText = "Unsaved"
+          let buttonText = t("editor.saved")
+          if (isSaving) buttonText = t("editor.saving")
+          else if (isSaved) buttonText = t("editor.saved")
+          else if (hasError) buttonText = t("editor.retry")
+          else if (isUnsaved) buttonText = t("editor.unsaved")
 
           return (
             <Button
@@ -635,7 +639,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               aria-label={buttonText}
               className={buttonClassName}
               style={buttonStyle}
-              title={hasError ? saveError ?? "Save failed" : undefined}
+              title={hasError ? saveError ?? t("editor.saveFailed") : undefined}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin sm:mr-1" />
@@ -669,8 +673,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           variant="outline"
           size="sm"
           onClick={() => setVideoAutoplay(!videoAutoplay)}
-          aria-label={videoAutoplay ? "Pause video autoplay" : "Enable video autoplay"}
-          title={videoAutoplay ? "Auto-playing videos" : "Videos paused"}
+          aria-label={videoAutoplay ? t("editor.pauseAutoplay") : t("editor.enableAutoplay")}
+          title={videoAutoplay ? t("editor.autoPlayingVideos") : t("editor.videosPaused")}
           className={videoAutoplay ? "text-white hover:opacity-90" : ""}
           style={videoAutoplay ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
         >

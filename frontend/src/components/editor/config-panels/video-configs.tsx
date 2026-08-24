@@ -75,6 +75,7 @@ import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { FramesAndReferencesTip } from "./frames-references-tip"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
@@ -356,6 +357,7 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
 }
 
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   // Per-field Edit⇄Final toggle (persisted in node data). Provider-less path —
@@ -499,7 +501,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         />
       )}
 
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <ModelSearchSelect
           value={data.provider || "seedance-2-fast"}
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
@@ -523,7 +525,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
         return (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
-            <span className="text-[11px] font-medium text-foreground">Mode: {label}</span>
+            <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {s2.promptSuffix && (
               <span className="text-[10px] leading-snug text-muted-foreground">
                 Appended to prompt: “{s2.promptSuffix}”
@@ -541,12 +543,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {/* VEO mode toggle */}
       {isVeo && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Generation Mode</Label>
+          <Label className="text-xs">{t("vidcfg.generationMode")}</Label>
           <Select value={data.veoMode || "frame-to-frame"} onValueChange={(v) => onUpdate({ veoMode: v as "frame-to-frame" | "reference" })}>
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="frame-to-frame">Frame-to-Frame</SelectItem>
-              <SelectItem value="reference">Reference Mode</SelectItem>
+              <SelectItem value="frame-to-frame">{t("vidcfg.frameToFrame")}</SelectItem>
+              <SelectItem value="reference">{t("vidcfg.referenceMode")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground px-1">
@@ -563,7 +565,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           control which character is "Image 1" vs "Image 2". */}
       {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceImages")} ({connectedRefImages.length}/{maxRefImages})</Label>
           <ConnectedMediaList
             sources={refSources}
             mediaOrder={data.connectedRefImageOrder ?? []}
@@ -576,7 +578,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         </div>
       )}
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -585,7 +587,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -594,7 +596,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               rows={3}
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe the motion or animation you want..."
+              placeholder={t("vidcfg.phDescribeMotion")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -608,7 +610,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {/* Negative Prompt — always visible. Kling family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
       </span>}>
@@ -616,7 +618,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -626,7 +628,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               rows={2}
               value={(data as Record<string, unknown>).negativePrompt as string || ""}
               onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-              placeholder="Things to avoid..."
+              placeholder={t("imgcfg.thingsToAvoid")}
             />
             <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentI2VProvider)} modelLabel={currentI2VProvider} noun="negative prompt" />
           </>
@@ -656,7 +658,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
       <FramesAndReferencesTip
@@ -674,7 +676,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (
         <>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
                 { value: "Auto", label: "Auto (from image)" },
@@ -689,12 +691,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             const opts = getVideoResolutionOptions(currentI2VProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -708,7 +710,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             ) : null
           })()}
           <div>
-            <Label className="text-xs">Seed (optional)</Label>
+            <Label className="text-xs">{t("field.seedOptional")}</Label>
             <Input
               type="number"
               min={10000}
@@ -717,7 +719,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -728,9 +730,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                 onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
                 className="rounded border-muted-foreground/40"
               />
-              <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
+              <label htmlFor="generateAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
             </div>
-            <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+            <p className="text-xs text-muted-foreground px-1">{t("vidcfg.veo31Audio")}</p>
           </div>
           {/* VEO auto-translate — the provider silently translates
               non-English prompts (and lightly rewrites English ones).
@@ -745,21 +747,21 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                 onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
                 className="rounded border-muted-foreground/40"
               />
-              <label htmlFor="i2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+              <label htmlFor="i2v-enableTranslation" className="text-xs">{t("vidcfg.autoTranslateEnglish")}</label>
             </div>
             <p className="text-xs text-muted-foreground px-1">
-              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
+              {t("vidcfg.veoAutoTranslateNote")}
             </p>
           </div>
         </>
       )}
-      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
-            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
                 <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
@@ -783,7 +785,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       )}
       {supportsEndFrame && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">End Frame (optional)</Label>
+          <Label className="text-xs">{t("vidcfg.endFrameOptional")}</Label>
           <p className="text-xs text-muted-foreground px-1">
             Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
           </p>
@@ -803,7 +805,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="loopTrim-enabled" className="text-xs">Loop trim</label>
+          <label htmlFor="loopTrim-enabled" className="text-xs">{t("vidcfg.loopTrim")}</label>
         </div>
         {data.loopTrim?.enabled && (
           <>
@@ -825,7 +827,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               />
             </div>
             <div className="px-1">
-              <label htmlFor="loopTrim-quality" className="text-[10px] text-muted-foreground">Quality</label>
+              <label htmlFor="loopTrim-quality" className="text-[10px] text-muted-foreground">{t("field.quality")}</label>
               <Select
                 value={data.loopTrim.quality ?? "precise"}
                 onValueChange={(v) => onUpdate({
@@ -834,14 +836,14 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               >
                 <SelectTrigger id="loopTrim-quality" className="h-7 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="precise">Precise — frame-precise, slight quality drop</SelectItem>
-                  <SelectItem value="lossless">Lossless — keyframe-only, byte-perfect</SelectItem>
+                  <SelectItem value="precise">{t("vidcfg.trimPrecise")}</SelectItem>
+                  <SelectItem value="lossless">{t("vidcfg.trimLossless")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
               <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
-                Works best when start and end frames are pinned to the same image. Without an end frame, the algorithm picks the best loop point it can find but the result may not be seamless.
+                {t("vidcfg.worksBestSameFrames")}
               </p>
             )}
           </>
@@ -856,19 +858,19 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             onChange={(e) => onUpdate({ motionEnabled: e.target.checked, ...(!e.target.checked ? { motion: undefined } : {}) })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="motionEnabled" className="text-xs">Motion hint (injected into prompt)</label>
+          <label htmlFor="motionEnabled" className="text-xs">{t("vidcfg.motionHint")}</label>
         </div>
         {data.motionEnabled && (
-          <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="motion" label={t("field.motion")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.motion || "moderate"}
               onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
             >
-              <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.motion")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="subtle">Subtle</SelectItem>
-                <SelectItem value="moderate">Moderate</SelectItem>
-                <SelectItem value="dynamic">Dynamic</SelectItem>
+                <SelectItem value="subtle">{t("vidcfg.subtle")}</SelectItem>
+                <SelectItem value="moderate">{t("vidcfg.moderate")}</SelectItem>
+                <SelectItem value="dynamic">{t("vidcfg.dynamic")}</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
@@ -884,7 +886,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="klingSound" className="text-xs">Enable Sound</label>
+          <label htmlFor="klingSound" className="text-xs">{t("vidcfg.enableSound")}</label>
         </div>
       )}
 
@@ -905,7 +907,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {data.provider === "kling-3-omni" && (
         <>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
@@ -913,15 +915,15 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
           </MappableField>
           <div>
-            <Label className="text-xs">Quality</Label>
+            <Label className="text-xs">{t("field.quality")}</Label>
             <Select
               value={data.resolution || "720p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="720p">Standard (720p)</SelectItem>
-                <SelectItem value="1080p">Pro (1080p)</SelectItem>
+                <SelectItem value="720p">{t("vidcfg.standard720p")}</SelectItem>
+                <SelectItem value="1080p">{t("vidcfg.pro1080p")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -933,7 +935,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="kling3OmniAudio" className="text-xs">Generate Audio</label>
+            <label htmlFor="kling3OmniAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}
@@ -941,12 +943,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {data.provider === "grok-i2v" && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -954,16 +956,16 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Mode</Label>
+            <Label className="text-xs">{t("field.mode")}</Label>
             <Select
               value={data.grokMode || "normal"}
               onValueChange={(v) => onUpdate({ grokMode: v as "fun" | "normal" | "spicy" })}
             >
-              <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.mode")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="fun">Fun</SelectItem>
-                <SelectItem value="spicy">Spicy</SelectItem>
+                <SelectItem value="normal">{t("vidcfg.normal")}</SelectItem>
+                <SelectItem value="fun">{t("vidcfg.fun")}</SelectItem>
+                <SelectItem value="spicy">{t("vidcfg.spicy")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -973,12 +975,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {data.provider === "seedance" && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -986,7 +988,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </SelectContent>
             </Select>
           </div>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
                 { value: "16:9", label: "16:9 (Landscape)" },
@@ -1006,7 +1008,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedanceFixedLens" className="text-xs">Fixed Lens (no camera movement)</label>
+            <label htmlFor="seedanceFixedLens" className="text-xs">{t("vidcfg.fixedLens")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1016,7 +1018,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedanceAudio" className="text-xs">Generate Audio</label>
+            <label htmlFor="seedanceAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}
@@ -1024,12 +1026,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {isSeedance2Provider(data.provider) && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentI2VProvider) ?? []).map((o) => (
@@ -1038,7 +1040,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </SelectContent>
             </Select>
           </div>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={SEEDANCE_2_VIDEO_RATIOS}
               value={data.aspectRatio || defaultVideoAspectRatio(currentI2VProvider)}
@@ -1053,7 +1055,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2Audio" className="text-xs">Generate Audio (default on)</label>
+            <label htmlFor="seedance2Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1063,7 +1065,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ webSearch: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2WebSearch" className="text-xs">Enable Web Search</label>
+            <label htmlFor="seedance2WebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1073,7 +1075,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2Nsfw" className="text-xs">NSFW Content Filter</label>
+            <label htmlFor="seedance2Nsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
           </div>
         </>
       )}
@@ -1087,12 +1089,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             const opts = getVideoResolutionOptions(currentI2VProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1102,7 +1104,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </div>
             ) : null
           })()}
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={getAspectRatiosForVideoModel(currentI2VProvider)}
               value={data.aspectRatio || defaultVideoAspectRatio(currentI2VProvider)}
@@ -1117,12 +1119,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {(data.provider === "wan-i2v" || data.provider === "wan-turbo") && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || (data.provider === "wan-turbo" ? "480p" : "720p")}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {data.provider === "wan-turbo" ? (
                 <>
@@ -1142,7 +1144,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {(data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3" || data.provider === "hailuo-standard") && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || (data.provider === "hailuo-standard" ? "512P" : "768P")}
             onValueChange={(v) => {
@@ -1154,7 +1156,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onUpdate(updates)
             }}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {data.provider === "hailuo-standard" ? (
                 <>
@@ -1175,12 +1177,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {(data.provider === "bytedance-lite" || data.provider === "bytedance-pro") && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -1196,10 +1198,10 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="bytedanceCameraFixed" className="text-xs">Camera Fixed</label>
+            <label htmlFor="bytedanceCameraFixed" className="text-xs">{t("vidcfg.cameraFixed")}</label>
           </div>
           <div>
-            <Label className="text-xs">Seed (-1 for random)</Label>
+            <Label className="text-xs">{t("vidcfg.seedNeg1")}</Label>
             <Input
               type="number"
               min={-1}
@@ -1213,12 +1215,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {data.provider === "bytedance-pro-fast" && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || "720p"}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="720p">720p</SelectItem>
               <SelectItem value="1080p">1080p</SelectItem>
@@ -1248,6 +1250,7 @@ export const ImageToVideoConfig = memo(ImageToVideoConfigImpl)
 const V2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
 
 function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -1318,7 +1321,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           mediaType="image"
         />
       )}
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <ModelSearchSelect
           value={provider}
           onChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
@@ -1329,7 +1332,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -1338,7 +1341,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -1347,7 +1350,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               rows={3}
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe what to change or continue..."
+              placeholder={t("vidcfg.phDescribeChangeContinue")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -1361,7 +1364,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {/* Negative Prompt — always visible. Wan family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v || undefined })} target="negative" media="video" />
       </span>}>
@@ -1369,7 +1372,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -1378,7 +1381,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             <TagTextarea
               value={data.negativePrompt || ""}
               onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
-              placeholder="What to avoid..."
+              placeholder={t("vidcfg.phWhatToAvoid")}
               rows={2}
               nodeRefs={nodeRefs}
               referenceImages={refImagesForAutocomplete}
@@ -1419,16 +1422,16 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
 
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
         <>
-          <MappableField field="v2vDuration" label="Duration" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="v2vDuration" label={t("field.duration")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select value={data.v2vDuration || "5"} onValueChange={(v) => onUpdate({ v2vDuration: v as "5" | "10" })}>
-              <SelectTrigger aria-label="Duration"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.duration")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_DURATION_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1436,9 +1439,9 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="v2vResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="v2vResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select value={data.v2vResolution || "1080p"} onValueChange={(v) => onUpdate({ v2vResolution: v as "720p" | "1080p" })}>
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_RESOLUTION_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1460,7 +1463,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ audio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="v2vAudio" className="text-xs">Generate Audio (affects pricing)</label>
+            <label htmlFor="v2vAudio" className="text-xs">{t("vidcfg.generateAudioPricing")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1470,7 +1473,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ multiShots: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="v2vMultiShots" className="text-xs">Multi-shot composition</label>
+            <label htmlFor="v2vMultiShots" className="text-xs">{t("vidcfg.multiShot")}</label>
           </div>
         </>
       )}
@@ -1478,24 +1481,24 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {/* Runway Aleph: Aspect Ratio & Seed */}
       {isAleph && (
         <>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select value={data.aspectRatio || ""} onValueChange={(v) => onUpdate({ aspectRatio: v || undefined })}>
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue placeholder="Auto" /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.aspectRatio")}><SelectValue placeholder={t("vidcfg.phAuto")} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Auto</SelectItem>
+                <SelectItem value="">{t("vidcfg.phAuto")}</SelectItem>
                 {V2V_ALEPH_ASPECT_RATIOS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="seed" label={t("field.seed")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
               min={0}
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Random"
+              placeholder={t("vidcfg.phRandom")}
             />
           </MappableField>
         </>
@@ -1504,25 +1507,25 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {/* Wan 2.7 VideoEdit: Duration, Resolution, Audio Setting, Prompt Extend, Negative Prompt, Seed */}
       {isVideoEdit && (
         <>
-          <MappableField field="videoEditDuration" label="Duration" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="videoEditDuration" label={t("field.duration")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.videoEditDuration || "0"}
               onValueChange={(v) => onUpdate({ videoEditDuration: v as "0" | "5" | "10" })}
             >
-              <SelectTrigger aria-label="Duration"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.duration")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">Auto</SelectItem>
+                <SelectItem value="0">{t("vidcfg.phAuto")}</SelectItem>
                 <SelectItem value="5">5 seconds</SelectItem>
                 <SelectItem value="10">10 seconds</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="v2vResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="v2vResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.v2vResolution || "1080p"}
               onValueChange={(v) => onUpdate({ v2vResolution: v as "720p" | "1080p" })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_RESOLUTION_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1530,15 +1533,15 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="audioSetting" label="Audio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="audioSetting" label={t("field.audio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.audioSetting || "auto"}
               onValueChange={(v) => onUpdate({ audioSetting: v as "auto" | "origin" })}
             >
-              <SelectTrigger aria-label="Audio Setting"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("vidcfg.audioSetting")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Auto (AI-generated)</SelectItem>
-                <SelectItem value="origin">Original audio</SelectItem>
+                <SelectItem value="auto">{t("vidcfg.autoAiGenerated")}</SelectItem>
+                <SelectItem value="origin">{t("vidcfg.originalAudio")}</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
@@ -1550,15 +1553,15 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ promptExtend: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="v2vPromptExtend" className="text-xs">Expand prompt with AI</label>
+            <label htmlFor="v2vPromptExtend" className="text-xs">{t("vidcfg.expandPromptAi")}</label>
           </div>
-          <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="seed" label={t("field.seed")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
               min={0}
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Random"
+              placeholder={t("vidcfg.phRandom")}
             />
           </MappableField>
         </>
@@ -1579,6 +1582,7 @@ const SWITCHX_MODE_HELP: Record<string, string> = {
 }
 
 function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, nodeId }: ConfigProps<SwitchXData> & { nodeId?: string }) {
+  const t = useT()
   const mode = data.alphaMode ?? "auto"
   // Rich prompt UX (matches Generate Video / Video-to-Video): snippets, edit/final
   // toggle, @-reference autocomplete + variables, "generate with AI" helper.
@@ -1621,20 +1625,20 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
     <div className="flex flex-col gap-3">
       <div className="text-[11px] text-muted-foreground/70 -mb-1">Powered by SwitchX · Beeble</div>
 
-      <MappableField field="alphaMode" label="Mode" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="alphaMode" label={t("field.mode")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={mode} onValueChange={(v) => onUpdate({ alphaMode: v as SwitchXData["alphaMode"] })}>
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Auto — mask the subject</SelectItem>
-            <SelectItem value="fill">Fill — restyle whole frame</SelectItem>
-            <SelectItem value="select">Select — keyframe mask</SelectItem>
-            <SelectItem value="custom">Custom — matte video</SelectItem>
+            <SelectItem value="auto">{t("vidcfg.relightAuto")}</SelectItem>
+            <SelectItem value="fill">{t("vidcfg.relightFill")}</SelectItem>
+            <SelectItem value="select">{t("vidcfg.relightSelect")}</SelectItem>
+            <SelectItem value="custom">{t("vidcfg.relightCustom")}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
       <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP[mode]}</p>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="switchx" currentPrompt={data.prompt || ""} onAccept={(prompt) => onUpdate({ prompt })} />
@@ -1643,7 +1647,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -1652,7 +1656,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
               rows={3}
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe the desired look (a connected reference image is strongly recommended)…"
+              placeholder={t("vidcfg.phDescribeLook")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -1664,7 +1668,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
       </MappableField>
 
       {mode === "select" && (
-        <MappableField field="alphaKeyframeIndex" label="Keyframe index" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="alphaKeyframeIndex" label={t("vidcfg.keyframeIndex")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             type="number"
             min={0}
@@ -1675,7 +1679,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
         </MappableField>
       )}
 
-      <MappableField field="maxResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="maxResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={String(data.maxResolution ?? 1080)} onValueChange={(v) => onUpdate({ maxResolution: Number(v) as 720 | 1080 })}>
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -1685,13 +1689,13 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
         </Select>
       </MappableField>
 
-      <MappableField field="seed" label="Seed (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="seed" label={t("field.seedOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
           min={0}
           max={4294967295}
           className="h-8 text-xs"
-          placeholder="Random"
+          placeholder={t("vidcfg.phRandom")}
           value={data.seed ?? ""}
           onChange={(e) => {
             const v = e.target.value.trim()
@@ -1708,6 +1712,7 @@ export const SwitchXConfig = memo(SwitchXConfigImpl)
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 
 function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<MotionTransferData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -1783,7 +1788,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <ModelSearchSelect
           value={provider}
           onChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
@@ -1791,7 +1796,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           ariaLabel="Provider"
         />
       </MappableField>
-      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("field.promptOptionalCap")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, VIDEO_PROMPT_MAX) })} target="prompt" media="video" />
         <PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -1800,7 +1805,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={2 * 1.5}
           />
         ) : (
@@ -1808,7 +1813,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v.slice(0, VIDEO_PROMPT_MAX) })}
-              placeholder="Optional: Describe the motion transfer..."
+              placeholder={t("vidcfg.phOptMotionTransfer")}
               rows={2}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -1822,7 +1827,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
       {/* Negative Prompt — always visible. Kling 2.6/3.0 send it natively as
           `negative_prompt`; Wan Animate gets it appended to the prompt as
           "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePromptOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? ""} onInsert={(v) => onUpdate({ negativePrompt: v.slice(0, VIDEO_PROMPT_MAX) })} target="negative" media="video" />
       </span>}>
@@ -1830,7 +1835,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -1839,7 +1844,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.negativePrompt ?? ""}
               onChange={(v) => onUpdate({ negativePrompt: v.slice(0, VIDEO_PROMPT_MAX) })}
-              placeholder="Optional: Describe what to avoid…"
+              placeholder={t("vidcfg.phOptAvoid")}
               rows={2}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -1851,39 +1856,39 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         )}
       </MappableField>
       {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
-        <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="characterOrientation" label={t("vidcfg.characterOrientation")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
             value={data.characterOrientation || "video"}
             onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
           >
-            <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("vidcfg.characterOrientation")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="image">Image (same as picture{provider === "kling" ? ", max 10s" : ""})</SelectItem>
-              <SelectItem value="video">Video (consistent with video{provider === "kling" ? ", max 30s" : ""})</SelectItem>
+              <SelectItem value="image">{t("vidcfg.orientImage", { suffix: provider === "kling" ? t("vidcfg.orientImageKlingSuffix") : "" })}</SelectItem>
+              <SelectItem value="video">{t("vidcfg.orientVideo", { suffix: provider === "kling" ? t("vidcfg.orientVideoKlingSuffix") : "" })}</SelectItem>
             </SelectContent>
           </Select>
         </MappableField>
       )}
       {provider === "kling-3.0" && (
-        <MappableField field="backgroundSource" label="Background Source" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="backgroundSource" label={t("vidcfg.backgroundSource")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
             value={data.backgroundSource || "input_video"}
             onValueChange={(v) => onUpdate({ backgroundSource: v as MotionTransferData["backgroundSource"] })}
           >
-            <SelectTrigger aria-label="Background Source"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("vidcfg.backgroundSource")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="input_video">Input Video</SelectItem>
-              <SelectItem value="input_image">Input Image</SelectItem>
+              <SelectItem value="input_video">{t("vidcfg.inputVideo")}</SelectItem>
+              <SelectItem value="input_image">{t("vidcfg.inputImage")}</SelectItem>
             </SelectContent>
           </Select>
         </MappableField>
       )}
-      <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.resolution || (provider === "wan-animate-move" || provider === "wan-animate-replace" ? "480p" : "720p")}
           onValueChange={(v) => onUpdate({ resolution: v as MotionTransferData["resolution"] })}
         >
-          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {provider === "wan-animate-move" || provider === "wan-animate-replace" ? (
               <>
@@ -1933,7 +1938,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
     </div>
@@ -1943,6 +1948,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
 export const MotionTransferConfig = memo(MotionTransferConfigImpl)
 
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
+  const t = useT()
   // Topaz uses the "topaz-video" credit row (NOT the "topaz" processing
   // row, which is 1 CR for image processing). Backend route maps the
   // selector → identifier in upscaleCreditModel(); we mirror it here so
@@ -1951,12 +1957,12 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={provider}
           onValueChange={(v) => onUpdate({ provider: v as VideoUpscaleData["provider"] })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {/* The credit cache is never populated without billing, so the
                 hardcoded fallbacks below rendered as real prices on a
@@ -1969,12 +1975,12 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
 
       {provider === "topaz" && (
-        <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="upscaleFactor" label={t("field.upscaleFactor")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
             value={data.upscaleFactor || "2"}
             onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
           >
-            <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
               <SelectItem value="2">2x (recommended)</SelectItem>
@@ -1994,6 +2000,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -2094,7 +2101,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <ModelSearchSelect
           value={currentProvider}
           onChange={(v) => onUpdate({ provider: v })}
@@ -2104,7 +2111,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -2113,7 +2120,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -2122,7 +2129,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               rows={3}
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe the video to generate..."
+              placeholder={t("vidcfg.phDescribeVideoGen")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -2161,17 +2168,17 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
 
-      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
-            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
                 <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
@@ -2199,12 +2206,12 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             const opts = getVideoResolutionOptions(currentProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -2218,7 +2225,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             ) : null
           })()}
           <div>
-            <Label className="text-xs">Seed (optional)</Label>
+            <Label className="text-xs">{t("field.seedOptional")}</Label>
             <Input
               type="number"
               min={10000}
@@ -2227,7 +2234,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -2238,10 +2245,10 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
                 className="rounded border-muted-foreground/40"
               />
-              <label htmlFor="t2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+              <label htmlFor="t2v-enableTranslation" className="text-xs">{t("vidcfg.autoTranslateEnglish")}</label>
             </div>
             <p className="text-xs text-muted-foreground px-1">
-              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim.
+              {t("vidcfg.veoAutoTranslateNoteShort")}
             </p>
           </div>
         </>
@@ -2255,7 +2262,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="t2vKlingSound" className="text-xs">Enable Sound</label>
+          <label htmlFor="t2vKlingSound" className="text-xs">{t("vidcfg.enableSound")}</label>
         </div>
       )}
 
@@ -2280,7 +2287,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         <>
           {connectedRefImages.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Reference Images ({connectedRefImages.length}/{SEEDANCE_2_REF_LIMITS.images})</Label>
+              <Label className="text-xs">{t("vidcfg.referenceImages")} ({connectedRefImages.length}/{SEEDANCE_2_REF_LIMITS.images})</Label>
               <ConnectedMediaList
                 sources={refSources}
                 mediaOrder={data.connectedRefImageOrder ?? []}
@@ -2291,7 +2298,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           )}
           {connectedRefVideos.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Reference Videos ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
+              <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
               <div className="flex flex-col gap-1">
                 {connectedRefVideos.map((s) => (
                   <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2303,7 +2310,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           )}
           {connectedRefAudio.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Reference Audio ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
+              <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
               <div className="flex flex-col gap-1">
                 {connectedRefAudio.map((s) => (
                   <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2324,12 +2331,12 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             const opts = getVideoResolutionOptions(currentProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -2348,12 +2355,12 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       {isSeedance2 && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={(data.resolution as string) || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
@@ -2370,7 +2377,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2T2VAudio" className="text-xs">Generate Audio (default on)</label>
+            <label htmlFor="seedance2T2VAudio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -2380,7 +2387,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               onChange={(e) => onUpdate({ webSearch: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2T2VWebSearch" className="text-xs">Enable Web Search</label>
+            <label htmlFor="seedance2T2VWebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -2390,7 +2397,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="seedance2T2VNsfw" className="text-xs">NSFW Content Filter</label>
+            <label htmlFor="seedance2T2VNsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
           </div>
         </>
       )}
@@ -2400,14 +2407,14 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           undefined, so the run still sends undefined (provider's own default)
           rather than a 16:9 the run wouldn't send. (H3's pure-t2v endpoint has
           no adaptive member — the KIE layer coerces adaptive → 16:9 there.) */}
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
           options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
           value={data.aspectRatio || (isSeedance2 || isMinimaxH3 ? defaultVideoAspectRatio(currentProvider) : undefined)}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
       </span>}>
@@ -2415,7 +2422,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -2425,7 +2432,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               rows={2}
               value={data.negativePrompt}
               onChange={(v) => onUpdate({ negativePrompt: v })}
-              placeholder="Things to avoid..."
+              placeholder={t("imgcfg.thingsToAvoid")}
               nodeRefs={nodeRefs}
               referenceImages={refImagesForAutocomplete}
               displayMode={variableDisplayMode}
@@ -2464,6 +2471,7 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
 function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  const t = useT()
   // Single source for the prompt editor's @-refs / variables / snippets — shared
   // with the inline canvas editor + quick-edit modal so they never drift. Supplies
   // referenceImages (was the local refImagesForAutocomplete via buildVideoRefAutocomplete;
@@ -2680,7 +2688,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         />
       )}
 
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <ModelSearchSelect
           value={currentProvider}
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
@@ -2709,7 +2717,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
         return (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
-            <span className="text-[11px] font-medium text-foreground">Mode: {label}</span>
+            <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {s2.promptSuffix && (
               <span className="text-[10px] leading-snug text-muted-foreground">
                 Appended to prompt: “{s2.promptSuffix}”
@@ -2727,12 +2735,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* VEO mode toggle */}
       {isVeo && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Generation Mode</Label>
+          <Label className="text-xs">{t("vidcfg.generationMode")}</Label>
           <Select value={data.veoMode || "frame-to-frame"} onValueChange={(v) => onUpdate({ veoMode: v as "frame-to-frame" | "reference" })}>
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="frame-to-frame">Frame-to-Frame</SelectItem>
-              <SelectItem value="reference">Reference Mode</SelectItem>
+              <SelectItem value="frame-to-frame">{t("vidcfg.frameToFrame")}</SelectItem>
+              <SelectItem value="reference">{t("vidcfg.referenceMode")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground px-1">
@@ -2746,7 +2754,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Reference images section (Grok / VEO reference mode / Seedance 2). */}
       {(supportsReferences && (!isVeo || isVeoRefMode)) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Reference Images ({connectedRefImages.length}/{isSeedance2 || isMinimaxH3 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceImages")} ({connectedRefImages.length}/{isSeedance2 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages})</Label>
           <ConnectedMediaList
             sources={refSources}
             mediaOrder={data.referenceImageOrder ?? []}
@@ -2762,7 +2770,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Seedance 2 / MiniMax H3 reference videos */}
       {(isSeedance2 || isMinimaxH3) && connectedRefVideos.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Reference Videos ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefVideos.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2776,7 +2784,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Seedance 2 / MiniMax H3 reference audio */}
       {(isSeedance2 || isMinimaxH3) && connectedRefAudio.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Reference Audio ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefAudio.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2787,7 +2795,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </div>
       )}
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -2796,7 +2804,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -2819,7 +2827,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Negative Prompt — always visible. Kling family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
       </span>}>
@@ -2827,7 +2835,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -2837,7 +2845,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               rows={2}
               value={(data as Record<string, unknown>).negativePrompt as string || ""}
               onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-              placeholder="Things to avoid..."
+              placeholder={t("imgcfg.thingsToAvoid")}
             />
             <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
           </>
@@ -2864,7 +2872,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
       <FramesAndReferencesTip
@@ -2882,7 +2890,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {isVeo && (
         <>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
                 { value: "Auto", label: "Auto (from image)" },
@@ -2897,12 +2905,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             const opts = getVideoResolutionOptions(currentProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -2916,7 +2924,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             ) : null
           })()}
           <div>
-            <Label className="text-xs">Seed (optional)</Label>
+            <Label className="text-xs">{t("field.seedOptional")}</Label>
             <Input
               type="number"
               min={10000}
@@ -2925,7 +2933,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -2936,9 +2944,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
                 className="rounded border-muted-foreground/40"
               />
-              <label htmlFor="gv-generateAudio" className="text-xs">Generate Audio</label>
+              <label htmlFor="gv-generateAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
             </div>
-            <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+            <p className="text-xs text-muted-foreground px-1">{t("vidcfg.veo31Audio")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -2949,22 +2957,22 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
                 className="rounded border-muted-foreground/40"
               />
-              <label htmlFor="gv-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+              <label htmlFor="gv-enableTranslation" className="text-xs">{t("vidcfg.autoTranslateEnglish")}</label>
             </div>
             <p className="text-xs text-muted-foreground px-1">
-              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
+              {t("vidcfg.veoAutoTranslateNote")}
             </p>
           </div>
         </>
       )}
-      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
             value={String(allowedDurations.includes(data.duration as number) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
             disabled={currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0}
           >
-            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
                 <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
@@ -2982,7 +2990,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         )}
       </MappableField>
       {currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0 && (
-        <p className="text-[11px] text-muted-foreground">Duration is set automatically from the source clip.</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoFromClip")}</p>
       )}
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
@@ -2991,7 +2999,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       )}
       {supportsEndFrame && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">End Frame (optional)</Label>
+          <Label className="text-xs">{t("vidcfg.endFrameOptional")}</Label>
           <p className="text-xs text-muted-foreground px-1">
             Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
           </p>
@@ -3011,7 +3019,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="gv-loopTrim-enabled" className="text-xs">Loop trim</label>
+          <label htmlFor="gv-loopTrim-enabled" className="text-xs">{t("vidcfg.loopTrim")}</label>
         </div>
         {data.loopTrim?.enabled && (
           <>
@@ -3033,7 +3041,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               />
             </div>
             <div className="px-1">
-              <label htmlFor="gv-loopTrim-quality" className="text-[10px] text-muted-foreground">Quality</label>
+              <label htmlFor="gv-loopTrim-quality" className="text-[10px] text-muted-foreground">{t("field.quality")}</label>
               <Select
                 value={data.loopTrim.quality ?? "precise"}
                 onValueChange={(v) => onUpdate({
@@ -3042,14 +3050,14 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               >
                 <SelectTrigger id="gv-loopTrim-quality" className="h-7 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="precise">Precise — frame-precise, slight quality drop</SelectItem>
-                  <SelectItem value="lossless">Lossless — keyframe-only, byte-perfect</SelectItem>
+                  <SelectItem value="precise">{t("vidcfg.trimPrecise")}</SelectItem>
+                  <SelectItem value="lossless">{t("vidcfg.trimLossless")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
               <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
-                Works best when start and end frames are pinned to the same image. Without an end frame, the algorithm picks the best loop point it can find but the result may not be seamless.
+                {t("vidcfg.worksBestSameFrames")}
               </p>
             )}
           </>
@@ -3064,19 +3072,19 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             onChange={(e) => onUpdate({ motionEnabled: e.target.checked, ...(!e.target.checked ? { motion: undefined } : {}) })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="gv-motionEnabled" className="text-xs">Motion hint (injected into prompt)</label>
+          <label htmlFor="gv-motionEnabled" className="text-xs">{t("vidcfg.motionHint")}</label>
         </div>
         {data.motionEnabled && (
-          <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="motion" label={t("field.motion")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.motion || "moderate"}
               onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
             >
-              <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.motion")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="subtle">Subtle</SelectItem>
-                <SelectItem value="moderate">Moderate</SelectItem>
-                <SelectItem value="dynamic">Dynamic</SelectItem>
+                <SelectItem value="subtle">{t("vidcfg.subtle")}</SelectItem>
+                <SelectItem value="moderate">{t("vidcfg.moderate")}</SelectItem>
+                <SelectItem value="dynamic">{t("vidcfg.dynamic")}</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
@@ -3092,7 +3100,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="gv-klingSound" className="text-xs">Enable Sound</label>
+          <label htmlFor="gv-klingSound" className="text-xs">{t("vidcfg.enableSound")}</label>
         </div>
       )}
 
@@ -3113,7 +3121,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {currentProvider === "kling-3-omni" && (
         <>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
@@ -3121,15 +3129,15 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             />
           </MappableField>
           <div>
-            <Label className="text-xs">Quality</Label>
+            <Label className="text-xs">{t("field.quality")}</Label>
             <Select
               value={data.resolution || "720p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="720p">Standard (720p)</SelectItem>
-                <SelectItem value="1080p">Pro (1080p)</SelectItem>
+                <SelectItem value="720p">{t("vidcfg.standard720p")}</SelectItem>
+                <SelectItem value="1080p">{t("vidcfg.pro1080p")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3141,7 +3149,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-kling3OmniAudio" className="text-xs">Generate Audio</label>
+            <label htmlFor="gv-kling3OmniAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}
@@ -3149,12 +3157,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {currentProvider === "grok-i2v" && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -3162,16 +3170,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Mode</Label>
+            <Label className="text-xs">{t("field.mode")}</Label>
             <Select
               value={data.grokMode || "normal"}
               onValueChange={(v) => onUpdate({ grokMode: v as "fun" | "normal" | "spicy" })}
             >
-              <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.mode")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="fun">Fun</SelectItem>
-                <SelectItem value="spicy">Spicy</SelectItem>
+                <SelectItem value="normal">{t("vidcfg.normal")}</SelectItem>
+                <SelectItem value="fun">{t("vidcfg.fun")}</SelectItem>
+                <SelectItem value="spicy">{t("vidcfg.spicy")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3181,12 +3189,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {currentProvider === "seedance" && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -3194,7 +3202,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </SelectContent>
             </Select>
           </div>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
                 { value: "16:9", label: "16:9 (Landscape)" },
@@ -3214,7 +3222,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-seedanceFixedLens" className="text-xs">Fixed Lens (no camera movement)</label>
+            <label htmlFor="gv-seedanceFixedLens" className="text-xs">{t("vidcfg.fixedLens")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -3224,7 +3232,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-seedanceAudio" className="text-xs">Generate Audio</label>
+            <label htmlFor="gv-seedanceAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}
@@ -3232,12 +3240,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {isSeedance2 && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
@@ -3246,7 +3254,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </SelectContent>
             </Select>
           </div>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={SEEDANCE_2_VIDEO_RATIOS}
               value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
@@ -3261,7 +3269,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-seedance2Audio" className="text-xs">Generate Audio (default on)</label>
+            <label htmlFor="gv-seedance2Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -3271,7 +3279,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ webSearch: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-seedance2WebSearch" className="text-xs">Enable Web Search</label>
+            <label htmlFor="gv-seedance2WebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -3281,7 +3289,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-seedance2Nsfw" className="text-xs">NSFW Content Filter</label>
+            <label htmlFor="gv-seedance2Nsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
           </div>
         </>
       )}
@@ -3295,12 +3303,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             const opts = getVideoResolutionOptions(currentProvider)
             return opts && opts.length > 0 ? (
               <div>
-                <Label className="text-xs">Resolution</Label>
+                <Label className="text-xs">{t("field.resolution")}</Label>
                 <Select
                   value={(data.resolution as string) || opts[0].value}
                   onValueChange={(v) => onUpdate({ resolution: v })}
                 >
-                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -3310,7 +3318,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </div>
             ) : null
           })()}
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={getAspectRatiosForVideoModel(currentProvider)}
               value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
@@ -3325,12 +3333,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {(currentProvider === "wan-i2v" || currentProvider === "wan-turbo") && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || (currentProvider === "wan-turbo" ? "480p" : "720p")}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {currentProvider === "wan-turbo" ? (
                 <>
@@ -3350,7 +3358,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {(currentProvider === "hailuo-2.3-pro" || currentProvider === "hailuo-2.3" || currentProvider === "hailuo-standard") && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || (currentProvider === "hailuo-standard" ? "512P" : "768P")}
             onValueChange={(v) => {
@@ -3362,7 +3370,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onUpdate(updates)
             }}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {currentProvider === "hailuo-standard" ? (
                 <>
@@ -3383,12 +3391,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {(currentProvider === "bytedance-lite" || currentProvider === "bytedance-pro") && (
         <>
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -3404,10 +3412,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="gv-bytedanceCameraFixed" className="text-xs">Camera Fixed</label>
+            <label htmlFor="gv-bytedanceCameraFixed" className="text-xs">{t("vidcfg.cameraFixed")}</label>
           </div>
           <div>
-            <Label className="text-xs">Seed (-1 for random)</Label>
+            <Label className="text-xs">{t("vidcfg.seedNeg1")}</Label>
             <Input
               type="number"
               min={-1}
@@ -3421,12 +3429,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {currentProvider === "bytedance-pro-fast" && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || "720p"}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="720p">720p</SelectItem>
               <SelectItem value="1080p">1080p</SelectItem>
@@ -3442,9 +3450,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               Too many inputs for Gemini Omni: images + 2×videos must be ≤ 7 (currently {geminiQuotaUsed}). The start frame and each reference image count as 1; each source video counts as 2. Remove some inputs before generating.
             </div>
           )}
-          <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select value={(data.resolution as string) || "720p"} onValueChange={(v) => onUpdate({ resolution: v })}>
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(getVideoResolutionOptions("gemini-omni-video") ?? []).map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -3452,7 +3460,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={getAspectRatiosForVideoModel("gemini-omni-video")}
               value={(data.aspectRatio as string) || "16:9"}
@@ -3461,7 +3469,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </MappableField>
           {connectedRefVideos.length > 0 && (
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Source clip trim (seconds, ≤10s window)</label>
+              <label className="text-xs text-muted-foreground">{t("vidcfg.sourceClipTrim")}</label>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -3474,7 +3482,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                     const end = (data.videoTrimEnd as number) ?? start + 10
                     onUpdate({ videoTrimStart: start, videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
                   }}
-                  placeholder="start"
+                  placeholder={t("vidcfg.phStart")}
                 />
                 <Input
                   type="number"
@@ -3485,7 +3493,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                     const end = Math.floor(Number(e.target.value) || 0)
                     onUpdate({ videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
                   }}
-                  placeholder="end"
+                  placeholder={t("vidcfg.phEnd")}
                 />
               </div>
             </div>
@@ -3530,7 +3538,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 id="gv-save-variant"
                 value={data.attachReferenceVideoVariant ?? ""}
                 onChange={(e) => onUpdate({ attachReferenceVideoVariant: e.target.value })}
-                placeholder="e.g. happy, take-2"
+                placeholder={t("vidcfg.phEgHappyTake2")}
                 className="h-7 text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
@@ -3584,6 +3592,7 @@ const GVP_ANCHOR_MODE_HINTS: Record<GvpAnchorChoice, string> = {
 }
 
 function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
   const maxDuration = GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK
@@ -3684,12 +3693,12 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={currentProvider}
           onValueChange={(v) => onUpdate({ provider: v as GenerateVideoProNodeData["provider"] })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {GVP_PROVIDERS.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -3699,7 +3708,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="generate-video-pro" currentPrompt={data.prompt || ""} provider={currentProvider} duration={duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
@@ -3707,7 +3716,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           rows={3}
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe the video you want to generate..."
+          placeholder={t("vidcfg.phDescribeVideoWant")}
           nodeRefs={nodeRefs}
           refMap={refMap}
           snippets={promptSnippets}
@@ -3715,16 +3724,16 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
       </MappableField>
 
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           rows={2}
           value={data.negativePrompt || ""}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-          placeholder="What to avoid (appended to every segment as an Avoid: suffix)..."
+          placeholder={t("vidcfg.phAvoidSuffix")}
         />
       </MappableField>
 
-      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <div className="flex items-center gap-2">
           <input
             type="range"
@@ -3734,7 +3743,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             value={duration}
             onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) })}
             className="flex-1 h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
-            aria-label="Duration (seconds)"
+            aria-label={t("field.durationSeconds")}
           />
           <Input
             type="number"
@@ -3752,12 +3761,12 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </div>
         <p className="text-[10px] text-muted-foreground px-1">
           {maxSegmentSecFor(currentProvider) > 0
-            ? `Above ${maxSegmentSecFor(currentProvider)}s the request is automatically split into multiple stitched segments.`
-            : "Longer requests are automatically split into multiple stitched segments."}
+            ? t("vidcfg.aboveNSecondsSplit", { n: maxSegmentSecFor(currentProvider) })
+            : t("vidcfg.longerRequestsSplit")}
         </p>
       </MappableField>
 
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
           options={aspectOptions}
           value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
@@ -3767,12 +3776,12 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
 
       {resolutionOptions && resolutionOptions.length > 0 && (
         <div>
-          <Label className="text-xs">Resolution</Label>
+          <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
             value={data.resolution || resolutionOptions[0].value}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {resolutionOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -3790,7 +3799,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
           className="rounded border-muted-foreground/40"
         />
-        <label htmlFor="gvp-generateAudio" className="text-xs">Generate Audio (default on)</label>
+        <label htmlFor="gvp-generateAudio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
       </div>
 
       {(data.generateAudio ?? true) && (
@@ -3802,7 +3811,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             onChange={(e) => onUpdate({ noBackgroundMusic: e.target.checked })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="gvp-noBackgroundMusic" className="text-xs">No background music (add later)</label>
+          <label htmlFor="gvp-noBackgroundMusic" className="text-xs">{t("vidcfg.noBackgroundMusic")}</label>
         </div>
       )}
 
@@ -3815,7 +3824,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           payload builder only puts the field on the wire when it is exactly
           "keyframes" (same pattern as the Planner style select above). */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-render-method">Render method</Label>
+        <Label htmlFor="gvp-render-method">{t("vidcfg.renderMethod")}</Label>
         <Select
           value={canExtend ? (data.renderMethod ?? "extend") : "keyframes"}
           disabled={!canExtend}
@@ -3825,8 +3834,8 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="extend">Extend (video chain)</SelectItem>
-            <SelectItem value="keyframes">Keyframes (scene anchors)</SelectItem>
+            <SelectItem value="extend">{t("vidcfg.renderExtend")}</SelectItem>
+            <SelectItem value="keyframes">{t("vidcfg.renderKeyframes")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
@@ -3844,7 +3853,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           run cannot disagree about what was picked. */}
       {keyframesActive && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="gvp-anchor-mode">Anchor frames</Label>
+          <Label htmlFor="gvp-anchor-mode">{t("vidcfg.anchorFrames")}</Label>
           <Select
             value={data.anchorMode ?? "auto"}
             onValueChange={(v) => onUpdate({ anchorMode: v as NonNullable<GenerateVideoProNodeData["anchorMode"]> })}
@@ -3871,7 +3880,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
 
       {/* Planner model — the LLM that splits the script into segment prompts. */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-planner-model">Planner model</Label>
+        <Label htmlFor="gvp-planner-model">{t("vidcfg.plannerModel")}</Label>
         {/* Placeholder MUST name the model the ENGINE actually defaults to when
             plannerModel is unset — that default lives engine-side, not here
             (nothing on this path sends it). When the engine default changes,
@@ -3889,7 +3898,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          Splits your script into per-segment prompts. Default: Claude Opus 4.7.
+          {t("vidcfg.splitsScript")}
         </p>
       </div>
 
@@ -3897,19 +3906,19 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           rebased per segment) vs condensed rewrite (cast sheet +
           timestamp-free beats). Auto picks by input shape. */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-planner-mode">Planner style</Label>
+        <Label htmlFor="gvp-planner-mode">{t("vidcfg.plannerStyle")}</Label>
         <Select value={data.plannerMode ?? "auto"} onValueChange={(v) => onUpdate({ plannerMode: v as "auto" | "fidelity" | "condense" | "anchored" | "hybrid" | "hybrid-plus" | "hybrid-max" })}>
           <SelectTrigger id="gvp-planner-mode" className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Auto — condense analysis input, split everything else</SelectItem>
-            <SelectItem value="fidelity">Faithful split — keep source wording and timing</SelectItem>
-            <SelectItem value="condense">Condensed — short prompts, no timestamps</SelectItem>
-            <SelectItem value="anchored">Slot-anchored — cast header + slot names throughout</SelectItem>
-            <SelectItem value="hybrid">Hybrid — compact beats + label-locked cast (experimental)</SelectItem>
-            <SelectItem value="hybrid-plus">Hybrid Plus — hybrid + Elements identity manifest per segment (experimental)</SelectItem>
-            <SelectItem value="hybrid-max">Hybrid Max — Hybrid Plus, no compression, keeps every analysis detail (experimental)</SelectItem>
+            <SelectItem value="auto">{t("vidcfg.splitAuto")}</SelectItem>
+            <SelectItem value="fidelity">{t("vidcfg.splitFidelity")}</SelectItem>
+            <SelectItem value="condense">{t("vidcfg.splitCondense")}</SelectItem>
+            <SelectItem value="anchored">{t("vidcfg.splitAnchored")}</SelectItem>
+            <SelectItem value="hybrid">{t("vidcfg.splitHybrid")}</SelectItem>
+            <SelectItem value="hybrid-plus">{t("vidcfg.splitHybridPlus")}</SelectItem>
+            <SelectItem value="hybrid-max">{t("vidcfg.splitHybridMax")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
@@ -3926,7 +3935,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           longer = more boundary-motion context for slow moves/tempo, small
           per-join surcharge at the ref rate). */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-context-tail">Continuation context (seconds)</Label>
+        <Label htmlFor="gvp-context-tail">{t("vidcfg.continuationContext")}</Label>
         <Select value={String(data.contextTailSec ?? 2)} onValueChange={(v) => onUpdate({ contextTailSec: Number(v) })}>
           <SelectTrigger id="gvp-context-tail" className="h-9 text-sm">
             <SelectValue />
@@ -4026,7 +4035,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           min={4}
           max={15}
           step={1}
-          placeholder="auto"
+          placeholder={t("vidcfg.phAutoLower")}
           value={data.preferredSegmentSec ?? ""}
           onChange={(e) => {
             const v = e.target.value
@@ -4061,7 +4070,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           previous segment's last KEYFRAME (re-enact warm-up) or its very
           LAST frame; the stitch handles either behavior (mode probe). */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-overlap-anchor">Overlap anchor (experimental)</Label>
+        <Label htmlFor="gvp-overlap-anchor">{t("vidcfg.overlapAnchor")}</Label>
         <Select
           value={data.overlapAnchor ? (data.overlapAnchorMode ?? "keyframe") : "off"}
           onValueChange={(v) => onUpdate(v === "off"
@@ -4072,9 +4081,9 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="off">Off</SelectItem>
-            <SelectItem value="keyframe">Last keyframe — re-enact the overlap, then continue</SelectItem>
-            <SelectItem value="last-frame">Last frame — continue from the very end</SelectItem>
+            <SelectItem value="off">{t("audiocfg.off")}</SelectItem>
+            <SelectItem value="keyframe">{t("vidcfg.overlapKeyframe")}</SelectItem>
+            <SelectItem value="last-frame">{t("vidcfg.overlapLastFrame")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
@@ -4087,7 +4096,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           the pre-roll modes detect that replay and cut cleanly. Legacy = the
           current 8×8 smart cut (unchanged). */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="gvp-smart-cut">Smart cut (experimental)</Label>
+        <Label htmlFor="gvp-smart-cut">{t("vidcfg.smartCut")}</Label>
         <Select
           value={data.smartCutMode ?? "legacy-8x8"}
           onValueChange={(v) => onUpdate({ smartCutMode: v as "legacy-8x8" | "preroll-keep-prev" | "preroll-keep-next" })}
@@ -4096,9 +4105,9 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="legacy-8x8">Best pair — PSNR match the boundary (default)</SelectItem>
-            <SelectItem value="preroll-keep-next" disabled={keyframeAnchored}>Pre-roll keep-next — hide the seam in the overlap</SelectItem>
-            <SelectItem value="preroll-keep-prev" disabled={keyframeAnchored}>Pre-roll keep-prev — keep the previous segment&apos;s original frames</SelectItem>
+            <SelectItem value="legacy-8x8">{t("vidcfg.cutBestPair")}</SelectItem>
+            <SelectItem value="preroll-keep-next" disabled={keyframeAnchored}>{t("vidcfg.cutPrerollKeepNext")}</SelectItem>
+            <SelectItem value="preroll-keep-prev" disabled={keyframeAnchored}>{t("vidcfg.cutPrerollKeepPrev")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
@@ -4114,7 +4123,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           under a pre-roll selection. Blank = the engine's 8/8 default. */}
       {(data.smartCutMode ?? "legacy-8x8") === "legacy-8x8" && (
         <div className="flex flex-col gap-1.5">
-          <Label>Best-pair search window (frames)</Label>
+          <Label>{t("vidcfg.bestPairSearchWindow")}</Label>
           <div className="flex items-center gap-2">
             <div className="flex flex-1 flex-col gap-1">
               <Label htmlFor="gvp-smartCutFramesPrev" className="text-[11px] font-normal text-muted-foreground">
@@ -4222,6 +4231,7 @@ export const EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK = 120
  * audio toggle.
  */
 function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<EditVideoProNodeData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
   const spanStart = Math.max(0, data.spanStart ?? 0)
@@ -4240,12 +4250,12 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={currentProvider}
           onValueChange={(v) => onUpdate({ provider: v as EditVideoProNodeData["provider"] })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {EVP_PROVIDERS.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -4255,7 +4265,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="edit-video-pro" currentPrompt={data.prompt || ""} provider={currentProvider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
@@ -4263,7 +4273,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           rows={3}
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe what should replace the selected span..."
+          placeholder={t("vidcfg.phDescribeReplaceSpan")}
           nodeRefs={nodeRefs}
           refMap={refMap}
           snippets={promptSnippets}
@@ -4272,10 +4282,10 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
 
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Replace Span</Label>
+        <Label className="text-xs">{t("vidcfg.replaceSpan")}</Label>
         {sourceDuration === undefined ? (
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Connect a video and open its preview to enable the slider
+            {t("vidcfg.connectVideoSlider")}
           </p>
         ) : (
           <SpanRangeSlider
@@ -4286,7 +4296,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           />
         )}
         <div className="grid grid-cols-2 gap-2">
-          <MappableField field="spanStart" label="From (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="spanStart" label={t("vidcfg.fromS")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
               step={0.1}
@@ -4300,7 +4310,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               }}
             />
           </MappableField>
-          <MappableField field="spanEnd" label="To (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="spanEnd" label={t("vidcfg.toS")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
               step={0.1}
@@ -4328,7 +4338,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
           className="rounded border-muted-foreground/40"
         />
-        <label htmlFor="evp-generateAudio" className="text-xs">Generate Audio (default on)</label>
+        <label htmlFor="evp-generateAudio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
       </div>
     </div>
   )
@@ -4337,6 +4347,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   // Prompt-only toggle: this panel renders no negative editor (the old preview
   // surfaced the negative for reference only). Provider-less path.
@@ -4384,12 +4395,12 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "veo-extend"}
           onValueChange={(v) => onUpdate({ provider: v as ExtendVideoData["provider"] })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {EXTEND_VIDEO_MODELS.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -4407,7 +4418,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -4430,15 +4441,15 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       {data.provider === "veo-extend" && (
         <div>
-          <Label className="text-xs">Model</Label>
+          <Label className="text-xs">{t("field.model")}</Label>
           <Select
             value={data.model || "fast"}
             onValueChange={(v) => onUpdate({ model: v as "fast" | "quality" })}
           >
-            <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="fast">Fast</SelectItem>
-              <SelectItem value="quality">Quality</SelectItem>
+              <SelectItem value="fast">{t("audiocfg.fast")}</SelectItem>
+              <SelectItem value="quality">{t("field.quality")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -4446,7 +4457,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       {data.provider === "veo-extend" && (
         <div>
-          <Label className="text-xs">Seed (optional)</Label>
+          <Label className="text-xs">{t("field.seedOptional")}</Label>
           <Input
             type="number"
             min={10000}
@@ -4455,18 +4466,18 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             value={(data.seeds as number | undefined) ?? ""}
             onChange={(e) => onUpdate({ seeds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
         </div>
       )}
 
       {data.provider === "runway-extend" && (
         <div>
-          <Label className="text-xs">Quality</Label>
+          <Label className="text-xs">{t("field.quality")}</Label>
           <Select
             value={data.quality || "720p"}
             onValueChange={(v) => onUpdate({ quality: v as "720p" | "1080p" })}
           >
-            <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="720p">720p</SelectItem>
               <SelectItem value="1080p">1080p</SelectItem>
@@ -4478,7 +4489,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       {data.provider === "ltx-2.3-pro" && (
         <>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Extend Mode</Label>
+            <Label className="text-xs">{t("vidcfg.extendMode")}</Label>
             <RadioGroup
               value={data.extendMode || "end"}
               onValueChange={(v) => onUpdate({ extendMode: v as "start" | "end" })}
@@ -4499,7 +4510,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             </RadioGroup>
           </div>
 
-          <MappableField field="duration" label="Duration (seconds to add)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="duration" label={t("vidcfg.durationSecondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
               min={1}
@@ -4514,12 +4525,12 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       {isSeedanceExtend && (
         <>
-          <MappableField field="duration" label="Seconds to add" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="duration" label={t("vidcfg.secondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={String(seedanceDuration)}
               onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
             >
-              <SelectTrigger aria-label="Seconds to add"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("vidcfg.secondsToAdd")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {seedanceDurations.map((s) => (
                   <SelectItem key={s} value={String(s)}>{s} seconds</SelectItem>
@@ -4529,12 +4540,12 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           </MappableField>
 
           <div>
-            <Label className="text-xs">Resolution</Label>
+            <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "720p"}
               onValueChange={(v) => onUpdate({ resolution: v as ExtendVideoData["resolution"] })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {seedanceResolutions.map((r) => {
                   const credits = getCachedCredits(buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r))
@@ -4544,7 +4555,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
                 })}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground mt-1">Matching the source video's resolution gives the cleanest seam.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.matchResSeam")}</p>
           </div>
 
           <div className="flex items-center gap-2 px-1">
@@ -4555,7 +4566,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="extendGenerateAudio" className="text-xs">Generate Audio</label>
+            <label htmlFor="extendGenerateAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}
@@ -4573,6 +4584,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
 
 export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, nodeId }: ConfigProps<SpeechToVideoData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -4612,7 +4624,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
     <div className="flex flex-col gap-3">
       {/* Resolution */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Resolution</Label>
+        <Label className="text-xs text-muted-foreground">{t("field.resolution")}</Label>
         <Select
           value={data.resolution || "480p"}
           onValueChange={(v) => onUpdate({ resolution: v as "480p" | "580p" | "720p" })}
@@ -4629,7 +4641,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       {/* Prompt */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-1.5">
-          <Label className="text-xs text-muted-foreground">Prompt</Label>
+          <Label className="text-xs text-muted-foreground">{t("node.prompt")}</Label>
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
@@ -4644,7 +4656,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={80 / 16}
           />
         ) : (
@@ -4653,7 +4665,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
               rows={3}
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe the speaking scene..."
+              placeholder={t("vidcfg.phDescribeSpeakingScene")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -4685,12 +4697,12 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
 
       {/* Negative Prompt */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v || undefined })} target="negative" media="video" />
       </span>}>
@@ -4698,7 +4710,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={60 / 16}
           />
@@ -4707,7 +4719,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
             <Textarea
               value={data.negativePrompt || ""}
               onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
-              placeholder="What to avoid..."
+              placeholder={t("vidcfg.phWhatToAvoid")}
               className="min-h-[60px] text-sm"
             />
             <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} noun="negative prompt" />
@@ -4727,72 +4739,72 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       {showAdvanced && (
         <div className="flex flex-col gap-3 border-t pt-3 border-muted-foreground/10">
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Seed (optional)</Label>
+            <Label className="text-xs text-muted-foreground">{t("field.seedOptional")}</Label>
             <Input
               type="number"
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Random"
+              placeholder={t("vidcfg.phRandom")}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Num Frames (16-81)</Label>
+            <Label className="text-xs text-muted-foreground">{t("vidcfg.numFrames")}</Label>
             <Input
               type="number"
               value={data.numFrames ?? ""}
               onChange={(e) => onUpdate({ numFrames: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Default"
+              placeholder={t("vidcfg.phDefault")}
               min={16}
               max={81}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">FPS (8-24)</Label>
+            <Label className="text-xs text-muted-foreground">{t("vidcfg.fps824")}</Label>
             <Input
               type="number"
               value={data.fps ?? ""}
               onChange={(e) => onUpdate({ fps: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Default"
+              placeholder={t("vidcfg.phDefault")}
               min={8}
               max={24}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Inference Steps (1-50)</Label>
+            <Label className="text-xs text-muted-foreground">{t("vidcfg.inferenceSteps150")}</Label>
             <Input
               type="number"
               value={data.inferenceSteps ?? ""}
               onChange={(e) => onUpdate({ inferenceSteps: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Default"
+              placeholder={t("vidcfg.phDefault")}
               min={1}
               max={50}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Guidance Scale (0-20)</Label>
+            <Label className="text-xs text-muted-foreground">{t("vidcfg.guidanceScale020")}</Label>
             <Input
               type="number"
               step="0.1"
               value={data.guidanceScale ?? ""}
               onChange={(e) => onUpdate({ guidanceScale: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Default"
+              placeholder={t("vidcfg.phDefault")}
               min={0}
               max={20}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Shift (0-20)</Label>
+            <Label className="text-xs text-muted-foreground">{t("vidcfg.shift020")}</Label>
             <Input
               type="number"
               step="0.1"
               value={data.shift ?? ""}
               onChange={(e) => onUpdate({ shift: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Default"
+              placeholder={t("vidcfg.phDefault")}
               min={0}
               max={20}
             />
@@ -4801,7 +4813,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       )}
 
       <p className="text-xs text-muted-foreground px-1">
-        Generates a talking video from an image and audio using Wan 2.2 Speech-to-Video. Connect a portrait image, speech audio, and prompt.
+        {t("vidcfg.descSpeechToVideo")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -4810,12 +4822,13 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 }
 
 export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: ConfigProps<FaceSwapData> & { nodeId?: string }) {
+  const t = useT()
   useEffect(() => { prefetchModelCredits(["roop-face-swap"]) }, [])
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground px-1">
-        Replaces the face in a video with the face from a reference image.
-        Connect a face image to the orange handle and a video to the pink handle.
+        {t("vidcfg.descFaceSwap1")}
+        {t("vidcfg.descFaceSwap2")}
         Powered by Roop (Replicate) — {getCachedCredits("roop-face-swap") ?? 16} CR per run.
       </p>
 
@@ -4840,7 +4853,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
     </div>
@@ -4855,6 +4868,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
 // locked at 1080p for retake (LTX 2.3 Pro contract).
 // ---------------------------------------------------------------------------
 function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoRetakeData> & { nodeId?: string }) {
+  const t = useT()
   useEffect(() => { prefetchModelCredits(["ltx-2.3-pro"]) }, [])
   const promptSnippets = useSnippetPool("video", "prompt")
   // Prompt-only toggle (video-retake has no negative field). Provider-less.
@@ -4875,7 +4889,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     <div className="flex flex-col gap-3">
       <MappableField
         field="prompt"
-        label="Prompt"
+        label={t("node.prompt")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -4897,7 +4911,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -4905,7 +4919,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             <TagTextarea
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe what should change in the selected range..."
+              placeholder={t("vidcfg.phDescribeChangeRange")}
               rows={3}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -4918,7 +4932,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       </MappableField>
 
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Retake Mode</Label>
+        <Label className="text-xs">{t("vidcfg.retakeMode")}</Label>
         <RadioGroup
           value={data.retakeMode || "replace_audio_and_video"}
           onValueChange={(v) => onUpdate({ retakeMode: v as VideoRetakeData["retakeMode"] })}
@@ -4926,21 +4940,21 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         >
           <div className="flex items-center gap-2">
             <RadioGroupItem value="replace_audio_and_video" id="retake-mode-both" />
-            <Label htmlFor="retake-mode-both" className="text-xs cursor-pointer">Replace both (audio + video)</Label>
+            <Label htmlFor="retake-mode-both" className="text-xs cursor-pointer">{t("vidcfg.replaceBoth")}</Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="replace_audio" id="retake-mode-audio" />
-            <Label htmlFor="retake-mode-audio" className="text-xs cursor-pointer">Replace audio only</Label>
+            <Label htmlFor="retake-mode-audio" className="text-xs cursor-pointer">{t("vidcfg.replaceAudioOnly")}</Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="replace_video" id="retake-mode-video" />
-            <Label htmlFor="retake-mode-video" className="text-xs cursor-pointer">Replace video only</Label>
+            <Label htmlFor="retake-mode-video" className="text-xs cursor-pointer">{t("vidcfg.replaceVideoOnly")}</Label>
           </div>
         </RadioGroup>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <MappableField field="retakeStartTime" label="Start time (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="retakeStartTime" label={t("vidcfg.startTimeS")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             type="number"
             step={0.1}
@@ -4949,7 +4963,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             onChange={(e) => onUpdate({ retakeStartTime: parseFloat(e.target.value) || 0 })}
           />
         </MappableField>
-        <MappableField field="retakeDuration" label="Duration (s, min 2)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="retakeDuration" label={t("vidcfg.durationSMin2")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             type="number"
             step={0.1}
@@ -4960,7 +4974,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         </MappableField>
       </div>
 
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
           value={data.aspectRatio || "16:9"}
           onValueChange={(v) => onUpdate({ aspectRatio: v as VideoRetakeData["aspectRatio"] })}
@@ -4972,21 +4986,21 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       </MappableField>
 
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Resolution</Label>
+        <Label className="text-xs">{t("field.resolution")}</Label>
         <Select value="1080p" disabled>
-          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="1080p">1080p (locked for retake)</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <MappableField field="fps" label="FPS" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="fps" label={t("field.fps")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={String(data.fps ?? 25)}
           onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) as VideoRetakeData["fps"] })}
         >
-          <SelectTrigger aria-label="FPS"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.fps")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="24">24</SelectItem>
             <SelectItem value="25">25</SelectItem>
@@ -5002,7 +5016,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           checked={data.generateAudio ?? true}
           onCheckedChange={(v) => onUpdate({ generateAudio: !!v })}
         />
-        <Label htmlFor="retake-gen-audio" className="text-xs cursor-pointer">Generate audio</Label>
+        <Label htmlFor="retake-gen-audio" className="text-xs cursor-pointer">{t("vidcfg.generateAudioLabel")}</Label>
       </div>
 
       <p className="text-xs text-muted-foreground px-1">
@@ -5037,6 +5051,7 @@ function formatProbedDuration(sec: number): string {
 }
 
 export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysisNodeData>) {
+  const t = useT()
   // Show the quality tier; a legacy raw model id falls back to the default tier.
   const tier = isVideoAnalysisTier(data.llmModel ?? "") ? (data.llmModel as string) : DEFAULT_VIDEO_ANALYSIS_TIER
   // FAIL-SAFE write-back (Provider Enum Sync pitfall 12b): a pre-tier node
@@ -5113,7 +5128,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
     <div className="flex flex-col gap-3">
       {/* Model */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="video-analysis-model">Analysis quality</Label>
+        <Label htmlFor="video-analysis-model">{t("vidcfg.analysisQuality")}</Label>
         <Select value={tier} onValueChange={(v) => onUpdate({ llmModel: v })}>
           <SelectTrigger id="video-analysis-model" className="h-9 text-sm">
             <SelectValue />
@@ -5131,7 +5146,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
 
       {/* Best-of-N result strategy */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="video-analysis-selection">Result selection</Label>
+        <Label htmlFor="video-analysis-selection">{t("vidcfg.resultSelection")}</Label>
         <Select
           value={data.selectionMode === "combine" ? "combine" : "choose"}
           onValueChange={(v) => onUpdate({ selectionMode: v as "choose" | "combine" })}
@@ -5140,8 +5155,8 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="choose">Choose</SelectItem>
-            <SelectItem value="combine">Combine</SelectItem>
+            <SelectItem value="choose">{t("vidcfg.choose")}</SelectItem>
+            <SelectItem value="combine">{t("vidcfg.combine")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
@@ -5178,7 +5193,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
           because they change different things about a recreation: speech is what
           the regenerated video SAYS, on-screen text is what it SHOWS. */}
       <div className="flex flex-col gap-2">
-        <Label>Translate to English</Label>
+        <Label>{t("vidcfg.translateToEnglish")}</Label>
         <div className="flex items-center gap-2">
           <Checkbox
             id="video-analysis-translate-speech"
@@ -5209,12 +5224,12 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
 
       {/* YouTube URL (alternative to a wired video source) */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="video-analysis-url">YouTube URL</Label>
+        <Label htmlFor="video-analysis-url">{t("vidcfg.youtubeUrl")}</Label>
         <Input
           id="video-analysis-url"
           value={url}
           onChange={(e) => onUpdate({ youtubeUrl: e.target.value, probedYoutube: undefined })}
-          placeholder="https://youtube.com/watch?v=… (or wire a video)"
+          placeholder={t("vidcfg.phYoutubeUrl")}
           className="text-sm"
         />
         {probed ? (
@@ -5222,24 +5237,24 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             Duration {formatProbedDuration(probed.durationSec)} — pricing bucket set from this length.
           </p>
         ) : probing ? (
-          <p className="text-[11px] text-muted-foreground">Checking video…</p>
+          <p className="text-[11px] text-muted-foreground">{t("vidcfg.checkingVideo")}</p>
         ) : probeError ? (
           <p className="text-[11px] text-red-500">{probeError}</p>
         ) : (
           <p className="text-[11px] text-muted-foreground">
-            Leave blank and wire a video to the input handle to analyze an uploaded/generated clip instead.
+            {t("vidcfg.analyzeLeaveBlank")}
           </p>
         )}
       </div>
 
       {/* Analysis focus */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="video-analysis-focus">Analysis focus (optional)</Label>
+        <Label htmlFor="video-analysis-focus">{t("vidcfg.analysisFocusOptional")}</Label>
         <Textarea
           id="video-analysis-focus"
           value={data.analysisFocus ?? ""}
           onChange={(e) => onUpdate({ analysisFocus: e.target.value })}
-          placeholder="What should the analysis prioritize? e.g. identify product shots, on-screen text, and scene transitions."
+          placeholder={t("vidcfg.phAnalysisPriority")}
           maxLength={2000}
           rows={4}
           className="text-sm"
@@ -5247,7 +5262,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Breaks a video (max 10 min) into a timestamped scene list. Cost scales with the video&apos;s duration and the chosen model.
+        {t("vidcfg.descVideoAnalysis")}
       </p>
     </div>
   )

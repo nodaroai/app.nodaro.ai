@@ -2,6 +2,7 @@ import { useSearchParams } from "react-router-dom"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
+import { useT } from "@/lib/i18n"
 
 /**
  * Public, no-auth confirmation page for the NEW TAB that Stripe Checkout
@@ -16,6 +17,7 @@ import { NodaroLogo } from "@/components/nodaro-logo"
  * the balance / plan on its own.
  */
 export default function CheckoutCompletePage() {
+  const t = useT()
   const [params] = useSearchParams()
   const cancelled = params.get("status") === "cancelled"
 
@@ -31,19 +33,17 @@ export default function CheckoutCompletePage() {
         )}
 
         <h1 className="mt-4 text-2xl font-semibold">
-          {cancelled ? "Checkout cancelled" : "Payment complete"}
+          {cancelled ? t("checkout.cancelledTitle") : t("checkout.completeTitle")}
         </h1>
 
         <p className="mt-2 max-w-sm text-muted-foreground">
-          {cancelled
-            ? "No charge was made. You can close this tab and try again from the app."
-            : "Thank you! You can close this tab — your plan and credits update automatically in the app."}
+          {cancelled ? t("checkout.cancelledDesc") : t("checkout.completeDesc")}
         </p>
 
         {/* This tab was opened via window.open(), so close() is permitted in
             most browsers; harmless no-op where it's blocked. */}
         <Button className="mt-8" onClick={() => window.close()}>
-          Close this tab
+          {t("checkout.closeTab")}
         </Button>
       </div>
     </div>

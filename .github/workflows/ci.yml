@@ -449,6 +449,19 @@ jobs:
       - name: Check locale sidecar completeness
         run: node scripts/check-locale-completeness.mjs
 
+  chrome-i18n-coverage:
+    name: Chrome i18n Coverage Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Chrome i18n coverage report (non-failing)
+        run: node scripts/check-chrome-i18n-coverage.mjs
+
   check-no-internal-specs:
     name: No Internal Specs In Repo
     runs-on: ubuntu-latest

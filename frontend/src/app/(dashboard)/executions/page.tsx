@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { queryKeys } from "@/lib/query-keys"
 import { useGlobalExecutions } from "@/hooks/queries/use-execution-queries"
 import {
@@ -44,19 +45,39 @@ import { ExecutionDetailModal } from "@/components/editor/execution-detail-modal
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { getJobStatus, type GlobalExecution } from "@/lib/api"
 
-const STATUS_OPTIONS = [
-  { value: "all", label: "All statuses" },
-  { value: "running", label: "Running" },
-  { value: "completed", label: "Completed" },
-  { value: "failed", label: "Failed" },
-  { value: "pending", label: "Pending" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "discarded", label: "Discarded" },
-]
+// Backend job/execution status → localized label key. Single source of truth so
+// every status badge reads the same translations the status filter dropdown does
+// (an unmapped status falls back to its raw string rather than rendering blank).
+const STATUS_LABEL_KEYS: Record<string, MessageKey> = {
+  running: "exec.statusRunning",
+  completed: "exec.statusCompleted",
+  failed: "exec.statusFailed",
+  pending: "exec.statusPending",
+  cancelled: "exec.statusCancelled",
+  discarded: "exec.statusDiscarded",
+  stopping: "exec.statusStopping",
+  timed_out: "exec.statusTimedOut",
+  skipped: "exec.statusSkipped",
+}
+function statusLabel(status: string, t: TFunction): string {
+  const key = STATUS_LABEL_KEYS[status]
+  return key ? t(key) : status
+}
 
 export default function ExecutionsPage() {
+  const t = useT()
   const { isAdmin } = useAuth()
   const qc = useQueryClient()
+
+  const STATUS_OPTIONS = [
+    { value: "all", label: t("exec.allStatuses") },
+    { value: "running", label: t("exec.statusRunning") },
+    { value: "completed", label: t("exec.statusCompleted") },
+    { value: "failed", label: t("exec.statusFailed") },
+    { value: "pending", label: t("exec.statusPending") },
+    { value: "cancelled", label: t("exec.statusCancelled") },
+    { value: "discarded", label: t("exec.statusDiscarded") },
+  ]
 
   const [viewAll, setViewAll] = useState(() => {
     if (!isAdmin) return false
@@ -154,7 +175,7 @@ export default function ExecutionsPage() {
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold">Executions</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{t("exec.title")}</h1>
         <div className="flex items-center gap-3">
           {isAdmin && (
             <div className="flex items-center gap-2">
@@ -164,7 +185,7 @@ export default function ExecutionsPage() {
                 onCheckedChange={handleViewAllChange}
               />
               <Label htmlFor="view-all-executions" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
-                All users
+                {t("exec.allUsers")}
               </Label>
             </div>
           )}
@@ -187,7 +208,7 @@ export default function ExecutionsPage() {
             disabled={isLoading}
           >
             <RefreshCw className={`w-4 h-4 mr-1.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
+            {t("exec.refresh")}
           </Button>
           <div className="flex items-center gap-1">
             <Button
@@ -195,7 +216,7 @@ export default function ExecutionsPage() {
               size="icon"
               onClick={handlePrev}
               disabled={prevCursors.length === 0 || isLoading}
-              aria-label="Previous page"
+              aria-label={t("exec.prevPage")}
               className="h-8 w-8"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -205,7 +226,7 @@ export default function ExecutionsPage() {
               size="icon"
               onClick={handleNext}
               disabled={!nextCursor || isLoading}
-              aria-label="Next page"
+              aria-label={t("exec.nextPage")}
               className="h-8 w-8"
             >
               <ChevronRight className="w-4 h-4" />
@@ -218,16 +239,16 @@ export default function ExecutionsPage() {
       {isLoading && executions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
           <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
-          <p className="text-sm text-muted-foreground">Loading executions...</p>
+          <p className="text-sm text-muted-foreground">{t("exec.loading")}</p>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-24">
           <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Failed to load executions</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("exec.failedToLoad")}</h3>
           <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
           <Button onClick={handleRefresh} variant="outline">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Retry
+            {t("exec.retry")}
           </Button>
         </div>
       ) : (
@@ -237,32 +258,32 @@ export default function ExecutionsPage() {
               <tr className="bg-gray-50 dark:bg-[#121212]">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Status
+                  {t("exec.colStatus")}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Workflow
+                  {t("exec.colWorkflow")}
                 </th>
                 {showAll && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Owner
+                    {t("exec.colOwner")}
                   </th>
                 )}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Trigger
+                  {t("exec.colTrigger")}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Progress
+                  {t("exec.colProgress")}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Duration
+                  {t("exec.colDuration")}
                 </th>
                 {hasCredits() && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Credits
+                    {t("exec.colCredits")}
                   </th>
                 )}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Created
+                  {t("exec.colCreated")}
                 </th>
               </tr>
             </thead>
@@ -270,7 +291,7 @@ export default function ExecutionsPage() {
               {executions.length === 0 ? (
                 <tr>
                   <td colSpan={colCount} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
-                    No workflow executions yet.
+                    {t("exec.empty")}
                   </td>
                 </tr>
               ) : (
@@ -330,6 +351,7 @@ function GlobalExecutionRow({
   onToggle: () => void
   onNodeClick: (nodeId: string, state: NodeState) => void
 }) {
+  const t = useT()
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
   const total = exec.totalNodes ?? 0
@@ -359,7 +381,7 @@ function GlobalExecutionRow({
               STATUS_COLORS[exec.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
             }`}
           >
-            {exec.status === "stopping" ? "stopping" : exec.status}
+            {statusLabel(exec.status, t)}
           </span>
           {exec.errorMessage && exec.status === "failed" && (
             <TooltipProvider>
@@ -381,11 +403,11 @@ function GlobalExecutionRow({
               className="text-sm text-[#ff0073] hover:underline truncate max-w-[200px] block"
               onClick={(e) => e.stopPropagation()}
             >
-              {exec.workflowName ?? "Untitled"}
+              {exec.workflowName ?? t("exec.untitled")}
             </Link>
           ) : (
             <span className="text-sm text-gray-400 dark:text-[#64748B] italic">
-              Deleted workflow
+              {t("exec.deletedWorkflow")}
             </span>
           )}
         </td>
@@ -406,7 +428,7 @@ function GlobalExecutionRow({
             </span>
             {failed > 0 && (
               <span className="text-xs text-red-500 font-medium">
-                ({failed} failed)
+                ({t("exec.failedNodes", { n: failed })})
               </span>
             )}
             {total > 0 && (
@@ -454,11 +476,11 @@ function GlobalExecutionRow({
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="px-8 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Node</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Status</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Duration</th>
+                    <th className="px-8 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colNode")}</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
                     {hasCredits() && (
-                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Credits</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
                     )}
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -491,7 +513,7 @@ function GlobalExecutionRow({
                             <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
                               STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
                             }`}>
-                              {state.status}
+                              {statusLabel(state.status, t)}
                             </span>
                             {state.error && (
                               <TooltipProvider>
@@ -537,11 +559,11 @@ function GlobalExecutionRow({
                             onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
                           >
                             <td className="px-8 py-1 pl-14">
-                              <span className="text-[11px] text-gray-400">Iteration {idx + 1}</span>
+                              <span className="text-[11px] text-gray-400">{t("exec.iteration", { n: idx + 1 })}</span>
                             </td>
                             <td className="px-3 py-1">
                               <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                                completed
+                                {t("exec.statusCompletedLower")}
                               </span>
                             </td>
                             <td className="px-3 py-1" />

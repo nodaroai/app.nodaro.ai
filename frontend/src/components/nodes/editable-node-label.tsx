@@ -5,6 +5,7 @@ import { useStore, useNodeId } from "@xyflow/react"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 
 interface EditableNodeLabelProps {
   label: string
@@ -20,6 +21,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(label)
   const inputRef = useRef<HTMLInputElement>(null)
+  const localizeNode = useLocalizeNodeLabel()
   // Compensate React Flow's canvas scale when we drop below the floor. The
   // label is rendered inside the node, which is already CSS-scaled by RF
   // (`visual = DOM × zoom`). When `zoom < MIN_SCALE`, we apply an additional
@@ -93,7 +95,11 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
           onMouseDown={(e) => e.stopPropagation()}
           title="Click to rename"
         >
-          {label}
+          {/* Display-only localization: a default label flips to the active
+              locale, a custom rename passes through. The edit <input> above
+              deliberately stays on the raw stored `label`/`value` so renaming
+              a default node never persists the translated string as the name. */}
+          {localizeNode(label)}
         </span>
       )}
     </div>

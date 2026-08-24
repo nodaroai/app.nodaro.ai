@@ -7,26 +7,29 @@ import { createClient } from "@/lib/supabase"
 import { getOAuthAppInfo, oauthAuthorize, type OAuthAppInfo } from "@/lib/api"
 import { McpConsentNotice } from "@/components/oauth/McpConsentNotice"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  "workflows:read": "Read your workflows",
-  "workflows:write": "Create and modify workflows",
-  "workflows:execute": "Run workflows on your behalf",
-  "jobs:read": "Read job status and results",
-  "assets:read": "Read your uploaded assets",
-  "assets:write": "Upload assets to your account",
-  "credits:read": "See your credit balance",
-  "apps:read": "Read published apps",
-  "workspaces:read": "See the workspaces you belong to",
-  "workspaces:write": "Choose which workspace it works in",
+// Values are message KEYS, translated at the render site (this map is
+// module-level, so it can't call the `t` hook itself).
+const SCOPE_DESCRIPTIONS: Record<string, MessageKey> = {
+  "workflows:read": "oauth.scope.workflowsRead",
+  "workflows:write": "oauth.scope.workflowsWrite",
+  "workflows:execute": "oauth.scope.workflowsExecute",
+  "jobs:read": "oauth.scope.jobsRead",
+  "assets:read": "oauth.scope.assetsRead",
+  "assets:write": "oauth.scope.assetsWrite",
+  "credits:read": "oauth.scope.creditsRead",
+  "apps:read": "oauth.scope.appsRead",
+  "workspaces:read": "oauth.scope.workspacesRead",
+  "workspaces:write": "oauth.scope.workspacesWrite",
   // Keep in sync with backend ALL_SCOPES (lib/scopes.ts) — a requested scope
   // with no entry here renders as its raw machine string on the consent screen,
   // which is worst for the most sensitive scopes (pipelines:execute spends
   // credits; pipelines:approve approves pipeline stages).
-  "pipelines:read": "Read your pipelines",
-  "pipelines:execute": "Run pipelines on your behalf (this can spend your credits)",
-  "pipelines:approve": "Approve pipeline stages on your behalf",
-  "presets:read": "Read your saved presets",
+  "pipelines:read": "oauth.scope.pipelinesRead",
+  "pipelines:execute": "oauth.scope.pipelinesExecute",
+  "pipelines:approve": "oauth.scope.pipelinesApprove",
+  "presets:read": "oauth.scope.presetsRead",
 }
 
 /**
@@ -41,6 +44,7 @@ function consentReturnTo(): string {
 }
 
 export default function OAuthAuthorizePage() {
+  const t = useT()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
@@ -75,7 +79,9 @@ export default function OAuthAuthorizePage() {
     let cancelled = false
     getOAuthAppInfo(clientId)
       .then((info) => { if (!cancelled) setAppInfo(info) })
-      .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load app info") })
+      // tx() (not the `t` hook) so the error message is localized without adding
+      // `t` to the deps — which would re-fetch the app info on every locale switch.
+      .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : tx("oauth.failedLoadAppInfo")) })
     return () => { cancelled = true }
   }, [clientId, missingParam])
 
@@ -159,7 +165,7 @@ export default function OAuthAuthorizePage() {
       if (result.state) url.searchParams.set("state", result.state)
       window.location.href = url.toString()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Authorization failed"
+      const msg = err instanceof Error ? err.message : t("oauth.authorizationFailed")
       toast.error(msg)
       setSubmitting(false)
     }
@@ -171,10 +177,10 @@ export default function OAuthAuthorizePage() {
         <div className="max-w-md w-full p-6 rounded-lg border bg-card text-card-foreground shadow">
           <div className="flex items-center gap-2 mb-4 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            <h1 className="text-lg font-semibold">Invalid OAuth request</h1>
+            <h1 className="text-lg font-semibold">{t("oauth.invalidRequestTitle")}</h1>
           </div>
           <p className="text-sm text-muted-foreground">
-            Missing or invalid parameter: <code className="text-foreground">{missingParam}</code>
+            {t("oauth.missingParam")} <code className="text-foreground">{missingParam}</code>
           </p>
         </div>
       </div>
@@ -191,10 +197,10 @@ export default function OAuthAuthorizePage() {
         <div className="max-w-md w-full p-6 rounded-lg border bg-card text-card-foreground shadow">
           <div className="flex items-center gap-2 mb-4 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            <h1 className="text-lg font-semibold">Couldn't load app info</h1>
+            <h1 className="text-lg font-semibold">{t("oauth.loadFailedTitle")}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{loadError}</p>
-          <Button variant="outline" className="mt-4" onClick={handleCancel}>Cancel</Button>
+          <Button variant="outline" className="mt-4" onClick={handleCancel}>{t("common.cancel")}</Button>
         </div>
       </div>
     )
@@ -228,7 +234,7 @@ export default function OAuthAuthorizePage() {
         </div>
 
         <p className="text-sm mb-2">
-          <span className="font-medium">{appInfo.name}</span> wants to access your Nodaro account.
+          <span className="font-medium">{appInfo.name}</span> {t("oauth.wantsAccess")}
         </p>
         {appInfo.description && (
           <p className="text-xs text-muted-foreground mb-4">{appInfo.description}</p>
@@ -237,12 +243,12 @@ export default function OAuthAuthorizePage() {
         <McpConsentNotice kind={appInfo.kind ?? "user"} clientName={appInfo.name} />
 
         <div className="my-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Permissions</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">{t("oauth.permissions")}</p>
           <ul className="space-y-2">
             {requestedScopes.map((s) => (
               <li key={s} className="flex items-start gap-2 text-sm">
                 <ShieldCheck className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                <span>{SCOPE_DESCRIPTIONS[s] ?? s}</span>
+                <span>{SCOPE_DESCRIPTIONS[s] ? t(SCOPE_DESCRIPTIONS[s]) : s}</span>
               </li>
             ))}
           </ul>
@@ -251,8 +257,7 @@ export default function OAuthAuthorizePage() {
         {user?.email && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-muted/50 px-3 py-2 text-xs">
             <span className="text-muted-foreground">
-              Connecting as{" "}
-              <span className="font-medium text-foreground">{user.email}</span>
+              {t("oauth.connectingAs", { email: user.email })}
             </span>
             <button
               type="button"
@@ -260,7 +265,7 @@ export default function OAuthAuthorizePage() {
               disabled={submitting || switching}
               className="font-medium text-primary hover:underline disabled:opacity-50"
             >
-              {switching ? "Signing out…" : "Use a different account"}
+              {switching ? t("oauth.signingOut") : t("oauth.useDifferentAccount")}
             </button>
           </div>
         )}
@@ -268,15 +273,15 @@ export default function OAuthAuthorizePage() {
         <div className="flex flex-col gap-2">
           <Button onClick={handleAllow} disabled={submitting || switching}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Allow
+            {t("oauth.allow")}
           </Button>
           <Button variant="outline" onClick={handleCancel} disabled={submitting || switching}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
 
         <p className="text-xs text-muted-foreground mt-4 text-center">
-          You can revoke this access at any time from your account settings.
+          {t("oauth.revokeNotice")}
         </p>
       </div>
     </div>

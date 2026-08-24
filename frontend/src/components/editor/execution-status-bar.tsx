@@ -12,6 +12,7 @@ import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { isNotFound } from "@/lib/api-errors"
+import { useT } from "@/lib/i18n"
 
 interface ExecutionStatusBarProps {
   readonly executionId: string
@@ -43,6 +44,7 @@ export function executionStatusRefetchInterval(
 }
 
 export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: ExecutionStatusBarProps) {
+  const t = useT()
   const [stopping, setStopping] = useState(false)
 
   const { data: exec } = useQuery({
@@ -72,9 +74,9 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
     try {
       await discardWorkflowExecution(executionId)
       onStopped()
-      toast.info("Run discarded — in-flight results will be saved to My Library")
+      toast.info(t("run.runDiscarded"))
     } catch {
-      toast.error("Failed to discard execution")
+      toast.error(t("run.failedToDiscard"))
     } finally {
       setStopping(false)
     }
@@ -83,9 +85,9 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
   const handleStopAfterCurrent = async () => {
     try {
       await stopWorkflowExecution(executionId)
-      toast.info("Will stop after current node finishes")
+      toast.info(t("run.willStopAfterCurrent"))
     } catch {
-      toast.error("Failed to stop execution")
+      toast.error(t("run.failedToStop"))
     }
   }
 
@@ -103,18 +105,18 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
         )}
         <span>
           {isDiscarded
-            ? "Discarded"
+            ? t("run.statusDiscarded")
             : isStopping
-              ? "Stopping..."
+              ? t("run.statusStopping")
               : status === "running"
-                ? "Running"
-                : "Pending"}
+                ? t("run.statusRunning")
+                : t("run.statusPending")}
         </span>
         <span className="opacity-80">
-          {completed}/{total} done
+          {t("run.progressDone", { completed, total })}
         </span>
         {hasCredits() && credits > 0 && (
-          <span className="opacity-70">{credits} CR</span>
+          <span className="opacity-70">{t("run.creditsShort", { credits })}</span>
         )}
       </div>
 
@@ -133,15 +135,15 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuItem onClick={handleDiscard}>
             <Trash2 className="w-4 h-4 mr-2" />
-            Discard (save to Library, off canvas)
+            {t("run.discardMenu")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleStopAfterCurrent}>
             <SkipForward className="w-4 h-4 mr-2" />
-            Stop after current node
+            {t("run.stopAfterCurrentMenu")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onRunInstead?.()}>
             <RotateCcw className="w-4 h-4 mr-2" />
-            Run instead
+            {t("node.runInstead")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

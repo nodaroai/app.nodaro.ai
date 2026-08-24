@@ -33,48 +33,29 @@ import {
   useRotateSecretMutation,
 } from "@/hooks/queries/use-developer-apps-queries"
 import type { DeveloperAppStatus } from "@/lib/api"
-
-const ALL_SCOPES = [
-  "workflows:read",
-  "workflows:write",
-  "workflows:execute",
-  "jobs:read",
-  "assets:read",
-  "assets:write",
-  "credits:read",
-  "apps:read",
-] as const
-type Scope = (typeof ALL_SCOPES)[number]
-
-const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
-  "workflows:read": "Read workflow definitions and metadata",
-  "workflows:write": "Create, update, and delete workflows",
-  "workflows:execute": "Trigger workflow executions on the user's behalf",
-  "jobs:read": "Read job status and results",
-  "assets:read": "Read uploaded media and generated assets",
-  "assets:write": "Upload media and create new assets",
-  "credits:read": "Read credit balance and usage",
-  "apps:read": "Read published apps owned by the user",
-}
+import { useT } from "@/lib/i18n"
+import { ALL_SCOPES, type Scope, SCOPE_DESCRIPTIONS } from "@/lib/dev-app-scopes"
 
 function StatusBadge({ status }: { status: DeveloperAppStatus }) {
+  const t = useT()
   if (status === "active") {
     return (
       <Badge
         variant="secondary"
         className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
       >
-        Active
+        {t("devApps.statusActive")}
       </Badge>
     )
   }
   if (status === "suspended") {
-    return <Badge variant="destructive">Suspended</Badge>
+    return <Badge variant="destructive">{t("devApps.statusSuspended")}</Badge>
   }
-  return <Badge variant="outline">Pending review</Badge>
+  return <Badge variant="outline">{t("devApps.statusPending")}</Badge>
 }
 
 function CopyButton({ text }: { text: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   function handle() {
     navigator.clipboard.writeText(text)
@@ -88,7 +69,7 @@ function CopyButton({ text }: { text: string }) {
       className="h-7 px-2 text-xs"
       onClick={handle}
       type="button"
-      aria-label={`Copy ${text}`}
+      aria-label={t("devApp.copyAria", { text })}
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
     </Button>
@@ -121,6 +102,7 @@ function parseLines(text: string): string[] {
 }
 
 export default function DeveloperAppDetailPage() {
+  const t = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -158,7 +140,7 @@ export default function DeveloperAppDetailPage() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
         <p className="text-muted-foreground">
-          Developer apps require Business or Cloud edition.
+          {t("devApp.editionGate")}
         </p>
       </div>
     )
@@ -180,10 +162,10 @@ export default function DeveloperAppDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t("common.back")}
         </Link>
         <p className="mt-6 text-muted-foreground">
-          App not found, or you don&apos;t have access to it.
+          {t("devApp.notFound")}
         </p>
       </div>
     )
@@ -196,45 +178,45 @@ export default function DeveloperAppDetailPage() {
   async function handleSave() {
     if (!id) return
     if (!name.trim()) {
-      toast.error("Name is required")
+      toast.error(t("devApps.nameRequired"))
       return
     }
     const redirectUris = parseLines(redirectUrisText)
     if (redirectUris.length === 0) {
-      toast.error("At least one redirect URI is required")
+      toast.error(t("devApps.redirectRequired"))
       return
     }
     if (redirectUris.length > 10) {
-      toast.error("Maximum 10 redirect URIs")
+      toast.error(t("devApps.maxRedirects"))
       return
     }
     for (const u of redirectUris) {
       if (!isHttpsOrLocalhostUrl(u)) {
-        toast.error(`Redirect URI must be https:// or http://localhost: ${u}`)
+        toast.error(t("devApps.badRedirect", { uri: u }))
         return
       }
     }
     const allowedOrigins = parseLines(allowedOriginsText)
     if (allowedOrigins.length > 5) {
-      toast.error("Maximum 5 allowed origins")
+      toast.error(t("devApps.maxOrigins"))
       return
     }
     for (const o of allowedOrigins) {
       if (!isHttpsOrLocalhostUrl(o) || !isBareOrigin(o)) {
-        toast.error(`Allowed origin must be a bare https:// or http://localhost URL: ${o}`)
+        toast.error(t("devApps.badOrigin", { origin: o }))
         return
       }
     }
     if (homepageUrl.trim() && !isHttpsOrLocalhostUrl(homepageUrl.trim())) {
-      toast.error("Homepage URL must be https:// or http://localhost")
+      toast.error(t("devApp.homepageInvalid"))
       return
     }
     if (logoUrl.trim() && !isHttpsOrLocalhostUrl(logoUrl.trim())) {
-      toast.error("Logo URL must be https:// or http://localhost")
+      toast.error(t("devApp.logoInvalid"))
       return
     }
     if (scopes.length === 0) {
-      toast.error("At least one scope is required")
+      toast.error(t("devApp.scopeRequired"))
       return
     }
 
@@ -251,9 +233,9 @@ export default function DeveloperAppDetailPage() {
           scopesRequested: scopes,
         },
       })
-      toast.success("App updated")
+      toast.success(t("devApp.appUpdated"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update app")
+      toast.error(err instanceof Error ? err.message : t("devApp.failedUpdate"))
     }
   }
 
@@ -265,7 +247,7 @@ export default function DeveloperAppDetailPage() {
       setConfirmRotate(false)
       setAcknowledged(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to rotate secret")
+      toast.error(err instanceof Error ? err.message : t("devApp.failedRotate"))
     }
   }
 
@@ -273,10 +255,10 @@ export default function DeveloperAppDetailPage() {
     if (!id) return
     try {
       await deleteMutation.mutateAsync(id)
-      toast.success("App deleted")
+      toast.success(t("devApps.appDeleted"))
       navigate("/settings/developer-apps")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete app")
+      toast.error(err instanceof Error ? err.message : t("devApps.failedDelete"))
     }
   }
 
@@ -296,7 +278,7 @@ export default function DeveloperAppDetailPage() {
             <StatusBadge status={appRow.status} />
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage credentials, redirect URIs, and requested scopes.
+            {t("devApp.subtitle")}
           </p>
         </div>
       </div>
@@ -305,7 +287,7 @@ export default function DeveloperAppDetailPage() {
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4 mb-6 space-y-3">
         <div>
           <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-            Client ID
+            {t("devApps.clientId")}
           </Label>
           <div className="mt-1 flex items-center gap-2">
             <code className="flex-1 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all">
@@ -317,9 +299,9 @@ export default function DeveloperAppDetailPage() {
 
         <div className="flex items-center justify-between gap-4 pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <div className="text-sm">
-            <p className="font-medium">Client Secret</p>
+            <p className="font-medium">{t("devApps.clientSecret")}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Hidden — rotate to generate a new one. Old secret stops working immediately.
+              {t("devApp.secretHiddenHint")}
             </p>
           </div>
           <Button
@@ -333,17 +315,17 @@ export default function DeveloperAppDetailPage() {
             ) : (
               <RotateCw className="h-4 w-4 mr-2" />
             )}
-            Rotate
+            {t("devApp.rotate")}
           </Button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-muted-foreground">
           <div>
-            <span className="block text-[10px] uppercase tracking-wide">Created</span>
+            <span className="block text-[10px] uppercase tracking-wide">{t("devApp.createdAt")}</span>
             <span>{new Date(appRow.createdAt).toLocaleString()}</span>
           </div>
           <div>
-            <span className="block text-[10px] uppercase tracking-wide">Updated</span>
+            <span className="block text-[10px] uppercase tracking-wide">{t("devApp.updatedAt")}</span>
             <span>{new Date(appRow.updatedAt).toLocaleString()}</span>
           </div>
         </div>
@@ -352,7 +334,7 @@ export default function DeveloperAppDetailPage() {
       {/* Edit form */}
       <div className="space-y-4">
         <div>
-          <Label htmlFor="edit-name">Name</Label>
+          <Label htmlFor="edit-name">{t("devApps.nameLabel")}</Label>
           <Input
             id="edit-name"
             value={name}
@@ -363,7 +345,7 @@ export default function DeveloperAppDetailPage() {
         </div>
 
         <div>
-          <Label htmlFor="edit-desc">Description</Label>
+          <Label htmlFor="edit-desc">{t("devApps.descLabel")}</Label>
           <Textarea
             id="edit-desc"
             value={description}
@@ -376,7 +358,7 @@ export default function DeveloperAppDetailPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="edit-homepage">Homepage URL</Label>
+            <Label htmlFor="edit-homepage">{t("devApp.homepageLabel")}</Label>
             <Input
               id="edit-homepage"
               type="url"
@@ -387,7 +369,7 @@ export default function DeveloperAppDetailPage() {
             />
           </div>
           <div>
-            <Label htmlFor="edit-logo">Logo URL</Label>
+            <Label htmlFor="edit-logo">{t("devApp.logoLabel")}</Label>
             <Input
               id="edit-logo"
               type="url"
@@ -400,7 +382,7 @@ export default function DeveloperAppDetailPage() {
         </div>
 
         <div>
-          <Label htmlFor="edit-redirects">Redirect URIs (one per line)</Label>
+          <Label htmlFor="edit-redirects">{t("devApps.redirectsLabel")}</Label>
           <Textarea
             id="edit-redirects"
             value={redirectUrisText}
@@ -409,12 +391,12 @@ export default function DeveloperAppDetailPage() {
             className="mt-1 font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Must be https:// or http://localhost. Up to 10.
+            {t("devApps.redirectsHint")}
           </p>
         </div>
 
         <div>
-          <Label htmlFor="edit-origins">Allowed origins (one per line)</Label>
+          <Label htmlFor="edit-origins">{t("devApps.originsLabel")}</Label>
           <Textarea
             id="edit-origins"
             value={allowedOriginsText}
@@ -423,12 +405,12 @@ export default function DeveloperAppDetailPage() {
             className="mt-1 font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Bare origin URLs (no path). Used for CORS. Up to 5.
+            {t("devApps.originsHint")}
           </p>
         </div>
 
         <div>
-          <Label>Requested scopes</Label>
+          <Label>{t("devApps.scopesLabel")}</Label>
           <div className="mt-2 space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
             {ALL_SCOPES.map((s) => (
               <div key={s} className="flex items-start gap-2">
@@ -443,7 +425,7 @@ export default function DeveloperAppDetailPage() {
                 >
                   <code className="text-xs font-mono">{s}</code>
                   <span className="block text-xs text-muted-foreground mt-0.5">
-                    {SCOPE_DESCRIPTIONS[s]}
+                    {t(SCOPE_DESCRIPTIONS[s])}
                   </span>
                 </Label>
               </div>
@@ -459,7 +441,7 @@ export default function DeveloperAppDetailPage() {
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 className="h-4 w-4 mr-2" />
-            Delete app
+            {t("devApp.deleteApp")}
           </Button>
           <Button
             onClick={handleSave}
@@ -471,7 +453,7 @@ export default function DeveloperAppDetailPage() {
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            Save changes
+            {t("devApp.saveChanges")}
           </Button>
         </div>
       </div>
@@ -480,15 +462,14 @@ export default function DeveloperAppDetailPage() {
       <Dialog open={confirmRotate} onOpenChange={(open) => !open && setConfirmRotate(false)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Rotate client secret?</DialogTitle>
+            <DialogTitle>{t("devApp.rotateTitle")}</DialogTitle>
             <DialogDescription>
-              The current client secret will stop working immediately. Any deployed integrations
-              using it will need to be updated with the new secret.
+              {t("devApp.rotateDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmRotate(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -498,7 +479,7 @@ export default function DeveloperAppDetailPage() {
               {rotateMutation.isPending && (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               )}
-              Rotate
+              {t("devApp.rotate")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -524,15 +505,14 @@ export default function DeveloperAppDetailPage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New client secret</DialogTitle>
+            <DialogTitle>{t("devApp.newSecretTitle")}</DialogTitle>
           </DialogHeader>
           {rotatedSecret && (
             <div className="space-y-4">
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800 dark:text-amber-300">
-                  <strong>This is the only time you&apos;ll see this secret.</strong> Save it now
-                  in a secure place — it cannot be recovered.
+                  <strong>{t("devApp.newSecretWarningStrong")}</strong> {t("devApp.newSecretWarningRest")}
                 </div>
               </div>
 
@@ -552,7 +532,7 @@ export default function DeveloperAppDetailPage() {
                   onCheckedChange={(v) => setAcknowledged(v === true)}
                 />
                 <Label htmlFor="ack-rotate" className="text-sm leading-tight cursor-pointer">
-                  I&apos;ve saved my new client secret in a secure place.
+                  {t("devApp.ackRotate")}
                 </Label>
               </div>
 
@@ -564,7 +544,7 @@ export default function DeveloperAppDetailPage() {
                   }}
                   disabled={!acknowledged}
                 >
-                  Done
+                  {t("devApps.done")}
                 </Button>
               </DialogFooter>
             </div>
@@ -576,15 +556,14 @@ export default function DeveloperAppDetailPage() {
       <Dialog open={confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(false)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete this app?</DialogTitle>
+            <DialogTitle>{t("devApp.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              This will permanently delete the developer app and revoke all access tokens issued
-              to it. Users that previously authorized it will need to reconnect.
+              {t("devApps.deleteDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -594,7 +573,7 @@ export default function DeveloperAppDetailPage() {
               {deleteMutation.isPending && (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               )}
-              Delete
+              {t("devApps.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

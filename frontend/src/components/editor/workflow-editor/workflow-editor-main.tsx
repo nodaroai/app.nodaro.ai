@@ -104,6 +104,7 @@ import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config";
 import { ConnectProviderWatcher } from "./connect-provider-watcher"
 import { CopilotPanelSlot, CopilotToolbarButton } from "./copilot-panel-slot"
+import { useT } from "@/lib/i18n";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
@@ -118,6 +119,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
+  const t = useT();
   const { user } = useAuth();
   const { save, load, saving, loading } = useWorkflowPersistence(projectId);
   const fetchProjects = useProjectsStore((s) => s.fetchProjects);
@@ -1210,7 +1212,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               }`}
             >
               <Layers className="w-4 h-4" />
-              Editor
+              {t("editorTab.editor")}
             </button>
             <button
               type="button"
@@ -1222,7 +1224,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               }`}
             >
               <Monitor className="w-4 h-4" />
-              Present
+              {t("editorTab.present")}
             </button>
             <button
               type="button"
@@ -1234,7 +1236,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               }`}
             >
               <History className="w-4 h-4" />
-              Executions
+              {t("nav.executions")}
               {activeJobCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
                   {activeJobCount}
@@ -1254,7 +1256,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               }`}
             >
               <DollarSign className="w-4 h-4" />
-              Cost
+              {t("editorTab.cost")}
             </button>
             )}
             <CopilotToolbarButton />
@@ -1316,15 +1318,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     style={{ backgroundColor: "#ff0073" }}
                   >
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Executing workflow
+                    {t("run.executingWorkflowBtn")}
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
                         className="rounded-lg bg-background h-9 px-2 gap-1"
-                        title="Stop current execution"
-                        aria-label="Stop current execution"
+                        title={t("run.stopCurrentExecution")}
+                        aria-label={t("run.stopCurrentExecution")}
                       >
                         <Square className="w-3.5 h-3.5" />
                         <ChevronDown className="w-3 h-3" />
@@ -1335,7 +1337,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                         onClick={() => withSingleDiscardConfirm(handleSingleNodeDiscard)}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Discard (save to Library, off canvas)
+                        {t("run.discardMenu")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => withSingleDiscardConfirm(() => {
@@ -1344,7 +1346,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                         })}
                       >
                         <RotateCcw className="w-4 h-4 mr-2" />
-                        Run instead
+                        {t("node.runInstead")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1358,7 +1360,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     onClick={() => window.open(studioWorkflowUrl(useWorkflowStore.getState().workflowId ?? ""), "_blank", "noopener")}
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    Open in Studio
+                    {t("run.openInStudio")}
                   </Button>
                   <Button
                     size="lg"
@@ -1366,7 +1368,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     className={`rounded-full px-6 ${RUN_BUTTON_GLASS_CLASS}`}
                   >
                     <Copy className="w-4 h-4 mr-2" />
-                    Clone &amp; Remix
+                    {t("run.cloneRemix")}
                   </Button>
                 </>
               ) : (
@@ -1381,10 +1383,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   ) : (
                     <Play className="w-4 h-4 mr-2" />
                   )}
-                  Execute workflow
+                  {t("run.executeWorkflow")}
                   {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
                     <span className="ml-2 opacity-80">
-                      ({workflowCreditEstimate} CR)
+                      {t("node.creditsSuffix", { n: workflowCreditEstimate })}
                     </span>
                   )}
                 </Button>
@@ -1462,10 +1464,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard this run?</AlertDialogTitle>
+            <AlertDialogTitle>{t("node.discardRunTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              In-progress jobs can&apos;t be cancelled — they&apos;ll finish and be saved to My
-              Library, but won&apos;t appear on the canvas.
+              {t("run.discardRunDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -1473,10 +1474,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               checked={singleDiscardDontAsk}
               onCheckedChange={(v) => setSingleDiscardDontAsk(v === true)}
             />
-            Don&apos;t ask again
+            {t("node.dontAskAgain")}
           </label>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setSingleDiscardConfirm(null)}>Keep running</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setSingleDiscardConfirm(null)}>{t("run.keepRunning")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (singleDiscardDontAsk) suppressDiscardConfirm();
@@ -1485,7 +1486,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 action?.();
               }}
             >
-              Discard
+              {t("run.discardAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

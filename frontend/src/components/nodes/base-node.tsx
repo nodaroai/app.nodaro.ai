@@ -4,6 +4,7 @@ import { memo, useState, useEffect, useLayoutEffect, useRef, useCallback, type R
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
+import { useLocalizeHandleLabel, useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
@@ -169,6 +170,8 @@ function BaseNodeComponent({
   onChromeHeightChange,
   enableZoomHandle,
 }: BaseNodeProps) {
+  const localizeHandleLabel = useLocalizeHandleLabel()
+  const localizeNode = useLocalizeNodeLabel()
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
   const rightCount = handles.filter((h) => h.position === Position.Right).length
@@ -735,7 +738,10 @@ function BaseNodeComponent({
           >
             {icon}
           </button>
-          <span className="flex-1 truncate">{label}</span>
+          {/* Localize the header title: a default label matching an English
+              node name flips to the active locale; a user's custom rename
+              passes through untouched (see i18n/labels.ts). */}
+          <span className="flex-1 truncate">{localizeNode(label)}</span>
           {listProgress && (
             <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
               {listProgress}
@@ -911,7 +917,7 @@ function BaseNodeComponent({
               )}
               style={{ top: h.top, transform: "translateY(-50%)" }}
             >
-              {h.label}
+              {localizeHandleLabel(h.label)}
             </span>
           )}
         </div>

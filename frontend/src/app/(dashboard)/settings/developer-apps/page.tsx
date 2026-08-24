@@ -34,43 +34,25 @@ import {
   useDeleteDeveloperAppMutation,
 } from "@/hooks/queries/use-developer-apps-queries"
 import type { DeveloperApp, DeveloperAppStatus } from "@/lib/api"
-
-// Mirror of backend ALL_SCOPES (backend/src/lib/scopes.ts).
-// Kept in sync manually — no shared package import on the frontend yet.
-const ALL_SCOPES = [
-  "workflows:read",
-  "workflows:write",
-  "workflows:execute",
-  "jobs:read",
-  "assets:read",
-  "assets:write",
-  "credits:read",
-  "apps:read",
-] as const
-type Scope = (typeof ALL_SCOPES)[number]
-
-const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
-  "workflows:read": "Read workflow definitions and metadata",
-  "workflows:write": "Create, update, and delete workflows",
-  "workflows:execute": "Trigger workflow executions on the user's behalf",
-  "jobs:read": "Read job status and results",
-  "assets:read": "Read uploaded media and generated assets",
-  "assets:write": "Upload media and create new assets",
-  "credits:read": "Read credit balance and usage",
-  "apps:read": "Read published apps owned by the user",
-}
+import { useT } from "@/lib/i18n"
+import { ALL_SCOPES, type Scope, SCOPE_DESCRIPTIONS } from "@/lib/dev-app-scopes"
 
 function StatusBadge({ status }: { status: DeveloperAppStatus }) {
+  const t = useT()
   if (status === "active") {
-    return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Active</Badge>
+    return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{t("devApps.statusActive")}</Badge>
   }
   if (status === "suspended") {
-    return <Badge variant="destructive">Suspended</Badge>
+    return <Badge variant="destructive">{t("devApps.statusSuspended")}</Badge>
   }
-  return <Badge variant="outline">Pending review</Badge>
+  return <Badge variant="outline">{t("devApps.statusPending")}</Badge>
 }
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const t = useT()
+  // Default resolved inside the component, not as a param default — a default
+  // param is evaluated outside hook scope and would stay untranslated.
+  const effectiveLabel = label ?? t("devApps.copy")
   const [copied, setCopied] = useState(false)
   function handle() {
     navigator.clipboard.writeText(text)
@@ -84,7 +66,7 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
       className="h-7 px-2 text-xs"
       onClick={handle}
       type="button"
-      aria-label={`${label} ${text}`}
+      aria-label={`${effectiveLabel} ${text}`}
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
     </Button>
@@ -92,6 +74,7 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
 }
 
 export default function DeveloperAppsPage() {
+  const t = useT()
   const { loading: authLoading } = useAuth()
   const { data: apps, isLoading } = useDeveloperApps()
   const createMutation = useCreateDeveloperAppMutation()
@@ -113,7 +96,7 @@ export default function DeveloperAppsPage() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
         <p className="text-muted-foreground">
-          Developer apps require Business or Cloud edition.
+          {t("devApp.editionGate")}
         </p>
       </div>
     )
@@ -166,37 +149,37 @@ export default function DeveloperAppsPage() {
 
   async function handleCreate() {
     if (!name.trim()) {
-      toast.error("Name is required")
+      toast.error(t("devApps.nameRequired"))
       return
     }
     const redirectUris = parseLines(redirectUrisText)
     if (redirectUris.length === 0) {
-      toast.error("At least one redirect URI is required")
+      toast.error(t("devApps.redirectRequired"))
       return
     }
     if (redirectUris.length > 10) {
-      toast.error("Maximum 10 redirect URIs")
+      toast.error(t("devApps.maxRedirects"))
       return
     }
     for (const u of redirectUris) {
       if (!isHttpsOrLocalhostUrl(u)) {
-        toast.error(`Redirect URI must be https:// or http://localhost: ${u}`)
+        toast.error(t("devApps.badRedirect", { uri: u }))
         return
       }
     }
     const allowedOrigins = parseLines(allowedOriginsText)
     if (allowedOrigins.length > 5) {
-      toast.error("Maximum 5 allowed origins")
+      toast.error(t("devApps.maxOrigins"))
       return
     }
     for (const o of allowedOrigins) {
       if (!isHttpsOrLocalhostUrl(o) || !isBareOrigin(o)) {
-        toast.error(`Allowed origin must be a bare https:// or http://localhost URL: ${o}`)
+        toast.error(t("devApps.badOrigin", { origin: o }))
         return
       }
     }
     if (scopes.length === 0) {
-      toast.error("Select at least one scope")
+      toast.error(t("devApps.selectScope"))
       return
     }
 
@@ -211,7 +194,7 @@ export default function DeveloperAppsPage() {
       setCreatedApp({ clientId: result.clientId, clientSecret: result.clientSecret })
       resetCreateForm()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create app")
+      toast.error(err instanceof Error ? err.message : t("devApps.failedCreate"))
     }
   }
 
@@ -219,9 +202,9 @@ export default function DeveloperAppsPage() {
     try {
       await deleteMutation.mutateAsync(id)
       setDeletingId(null)
-      toast.success("App deleted")
+      toast.success(t("devApps.appDeleted"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete app")
+      toast.error(err instanceof Error ? err.message : t("devApps.failedDelete"))
     }
   }
 
@@ -243,10 +226,9 @@ export default function DeveloperAppsPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Developer Apps</h1>
+          <h1 className="text-2xl font-bold">{t("devApps.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Register OAuth apps that can request user consent to act on their behalf via the
-            Nodaro API.
+            {t("devApps.subtitle")}
           </p>
         </div>
       </div>
@@ -257,7 +239,7 @@ export default function DeveloperAppsPage() {
           <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center">
             <KeyRound className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
-              No developer apps yet. Create one to get started.
+              {t("devApps.empty")}
             </p>
           </div>
         )}
@@ -277,7 +259,7 @@ export default function DeveloperAppsPage() {
                   <code className="text-xs px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground font-mono break-all">
                     {appRow.clientId}
                   </code>
-                  <CopyButton text={appRow.clientId} label="Copy client ID" />
+                  <CopyButton text={appRow.clientId} label={t("devApps.copyClientId")} />
                 </div>
                 {appRow.description && (
                   <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
@@ -292,14 +274,14 @@ export default function DeveloperAppsPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                  <span>Created {new Date(appRow.createdAt).toLocaleDateString()}</span>
+                  <span>{t("devApps.created", { date: new Date(appRow.createdAt).toLocaleDateString() })}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
                 <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
                   <Link to={`/settings/developer-apps/${appRow.id}`}>
-                    View
+                    {t("devApps.view")}
                     <ExternalLink className="h-3 w-3 ml-1" />
                   </Link>
                 </Button>
@@ -308,7 +290,7 @@ export default function DeveloperAppsPage() {
                   size="sm"
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500"
                   onClick={() => setDeletingId(appRow.id)}
-                  aria-label={`Delete ${appRow.name}`}
+                  aria-label={t("devApps.deleteAria", { name: appRow.name })}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -325,10 +307,10 @@ export default function DeveloperAppsPage() {
         className="bg-[#ff0073] hover:bg-[#e00067] text-white"
       >
         <Plus className="h-4 w-4 mr-2" />
-        Create App
+        {t("devApps.createApp")}
       </Button>
       {(apps ?? []).length >= 5 && (
-        <p className="text-xs text-muted-foreground mt-2">Maximum 5 developer apps reached.</p>
+        <p className="text-xs text-muted-foreground mt-2">{t("devApps.maxReached")}</p>
       )}
 
       {/* Create / Created Dialog */}
@@ -352,11 +334,10 @@ export default function DeveloperAppsPage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>{createdApp ? "App Created" : "Create Developer App"}</DialogTitle>
+            <DialogTitle>{createdApp ? t("devApps.appCreated") : t("devApps.createDialogTitle")}</DialogTitle>
             {!createdApp && (
               <DialogDescription>
-                Register an OAuth app. Each user that authorizes it will be prompted to consent
-                to the requested scopes.
+                {t("devApps.createDialogDesc")}
               </DialogDescription>
             )}
           </DialogHeader>
@@ -366,35 +347,34 @@ export default function DeveloperAppsPage() {
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800 dark:text-amber-300">
-                  <strong>This is the only time you&apos;ll see this secret.</strong> Save it now
-                  in a secure place — it cannot be recovered. You can rotate it later if lost.
+                  <strong>{t("devApps.secretWarningStrong")}</strong> {t("devApps.secretWarningRest")}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-                  Client ID
+                  {t("devApps.clientId")}
                 </Label>
                 <div className="relative">
                   <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
                     {createdApp.clientId}
                   </code>
                   <div className="absolute right-1 top-1">
-                    <CopyButton text={createdApp.clientId} label="Copy client ID" />
+                    <CopyButton text={createdApp.clientId} label={t("devApps.copyClientId")} />
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-                  Client Secret
+                  {t("devApps.clientSecret")}
                 </Label>
                 <div className="relative">
                   <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
                     {createdApp.clientSecret}
                   </code>
                   <div className="absolute right-1 top-1">
-                    <CopyButton text={createdApp.clientSecret} label="Copy client secret" />
+                    <CopyButton text={createdApp.clientSecret} label={t("devApps.copyClientSecret")} />
                   </div>
                 </div>
               </div>
@@ -406,37 +386,37 @@ export default function DeveloperAppsPage() {
                   onCheckedChange={(v) => setAcknowledged(v === true)}
                 />
                 <Label htmlFor="ack" className="text-sm leading-tight cursor-pointer">
-                  I&apos;ve saved my client secret in a secure place.
+                  {t("devApps.ackLabel")}
                 </Label>
               </div>
 
               <DialogFooter>
                 <Button onClick={closeCreateDialog} disabled={!acknowledged}>
-                  Done
+                  {t("devApps.done")}
                 </Button>
               </DialogFooter>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="app-name">Name</Label>
+                <Label htmlFor="app-name">{t("devApps.nameLabel")}</Label>
                 <Input
                   id="app-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Acme Automation"
+                  placeholder={t("devApps.namePlaceholder")}
                   maxLength={100}
                   className="mt-1"
                 />
               </div>
 
               <div>
-                <Label htmlFor="app-desc">Description (optional)</Label>
+                <Label htmlFor="app-desc">{t("devApps.descLabel")}</Label>
                 <Textarea
                   id="app-desc"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What does your app do?"
+                  placeholder={t("devApps.descPlaceholder")}
                   maxLength={500}
                   rows={2}
                   className="mt-1"
@@ -444,7 +424,7 @@ export default function DeveloperAppsPage() {
               </div>
 
               <div>
-                <Label htmlFor="app-redirects">Redirect URIs (one per line)</Label>
+                <Label htmlFor="app-redirects">{t("devApps.redirectsLabel")}</Label>
                 <Textarea
                   id="app-redirects"
                   value={redirectUrisText}
@@ -454,12 +434,12 @@ export default function DeveloperAppsPage() {
                   className="mt-1 font-mono text-xs"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Must be https:// or http://localhost. Up to 10.
+                  {t("devApps.redirectsHint")}
                 </p>
               </div>
 
               <div>
-                <Label htmlFor="app-origins">Allowed origins (one per line, optional)</Label>
+                <Label htmlFor="app-origins">{t("devApps.originsLabel")}</Label>
                 <Textarea
                   id="app-origins"
                   value={allowedOriginsText}
@@ -469,12 +449,12 @@ export default function DeveloperAppsPage() {
                   className="mt-1 font-mono text-xs"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Bare origin URLs (no path). Used for CORS. Up to 5.
+                  {t("devApps.originsHint")}
                 </p>
               </div>
 
               <div>
-                <Label>Requested scopes</Label>
+                <Label>{t("devApps.scopesLabel")}</Label>
                 <div className="mt-2 space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
                   {ALL_SCOPES.map((s) => (
                     <div key={s} className="flex items-start gap-2">
@@ -489,7 +469,7 @@ export default function DeveloperAppsPage() {
                       >
                         <code className="text-xs font-mono">{s}</code>
                         <span className="block text-xs text-muted-foreground mt-0.5">
-                          {SCOPE_DESCRIPTIONS[s]}
+                          {t(SCOPE_DESCRIPTIONS[s])}
                         </span>
                       </Label>
                     </div>
@@ -499,7 +479,7 @@ export default function DeveloperAppsPage() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={closeCreateDialog}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   onClick={handleCreate}
@@ -509,7 +489,7 @@ export default function DeveloperAppsPage() {
                   {createMutation.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   )}
-                  Create App
+                  {t("devApps.createApp")}
                 </Button>
               </DialogFooter>
             </div>
@@ -521,15 +501,12 @@ export default function DeveloperAppsPage() {
       <Dialog open={!!deletingId} onOpenChange={() => setDeletingId(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete App</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the developer app and revoke all access tokens issued
-              to it. Users that previously authorized it will need to reconnect.
-            </DialogDescription>
+            <DialogTitle>{t("devApps.deleteTitle")}</DialogTitle>
+            <DialogDescription>{t("devApps.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeletingId(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -537,7 +514,7 @@ export default function DeveloperAppsPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Delete
+              {t("devApps.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>
