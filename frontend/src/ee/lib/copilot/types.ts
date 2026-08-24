@@ -16,6 +16,12 @@ export interface CopilotThread {
   id: string
   workflowId: string
   runMode: CopilotRunMode
+  /**
+   * This conversation may build nodes that post to the user's connected
+   * accounts. Off unless they say otherwise, and optional so a thread from a
+   * server that predates the column reads as off rather than undefined.
+   */
+  allowPublishing?: boolean
   autoRunLimitCredits: number
   userTurnCount: number
   lastMessageAt: string | null
@@ -97,6 +103,8 @@ export type CopilotStreamEvent =
         baseVersion: number | null
         runMode: CopilotRunMode
         autoRunLimitCredits: number
+        /** Absent from a server that predates it — reads as "leave it alone". */
+        allowPublishing?: boolean
       }
     }
   | { type: "token"; data: { text: string } }

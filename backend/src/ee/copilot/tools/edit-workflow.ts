@@ -192,7 +192,12 @@ interface Prepared {
  * time, so a rebase after a version conflict re-merges patches onto the
  * current node rather than re-sending a stale copy.
  */
-function prepare(args: EditWorkflowArgs, stored: StoredGraph, assets: ReadonlyMap<string, ResolvedAsset>): Prepared {
+function prepare(
+  args: EditWorkflowArgs,
+  stored: StoredGraph,
+  assets: ReadonlyMap<string, ResolvedAsset>,
+  allowPublishing: boolean,
+): Prepared {
   const existingById = new Map(stored.nodes.map((n) => [n.id, n]))
   const deleteNodeIds = [...new Set(args.deleteNodeIds ?? [])]
   const deleteSet = new Set(deleteNodeIds)
@@ -208,7 +213,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph, assets: ReadonlyMa
     if (/_iter_\d+$/.test(input.id)) {
       throw new EditRejected(`Node id "${input.id}" is reserved for list-expansion clones. Pick another id.`)
     }
-    if (isDeniedNodeType(input.type)) {
+    if (isDeniedNodeType(input.type, { allowPublishing })) {
       throw new EditRejected(
         `I can't add a "${input.type}" node — nodes that send data out of Nodaro (webhooks, social publishing) have to be added by you on the canvas.`,
       )
@@ -243,7 +248,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph, assets: ReadonlyMa
     // Same gate as the upsert path: an existing outbound node must not be
     // RE-POINTED either (a patched chatId publishes the user's media to
     // someone else's channel).
-    if (isDeniedNodeType(existing.type)) {
+    if (isDeniedNodeType(existing.type, { allowPublishing })) {
       throw new EditRejected(
         `I can't change the "${existing.type}" node "${patch.id}" — nodes that send data out of Nodaro are yours to configure.`,
       )
@@ -459,7 +464,7 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
       }
       if (ids.length > 0) assets = await resolveCopilotAssetRefs(ids, ctx.userId)
     }
-    const prepared = prepare(args, stored, assets)
+    const prepared = prepare(args, stored, assets, ctx.allowPublishing)
 
     const { data, error } = await supabase.rpc("apply_workflow_delta", {
       p_workflow_id: ctx.workflowId,

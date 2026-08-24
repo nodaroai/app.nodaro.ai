@@ -40,6 +40,10 @@ vi.mock("../store.js", () => ({
   nextSeq: async () => 1,
   touchTurnHeartbeat: vi.fn(),
   updateTurnProgress: vi.fn(),
+  // The real one: OFF unless the thread explicitly says otherwise. Stubbing
+  // it true here would quietly grant this fixture an exemption it never asked
+  // for.
+  threadAllowsPublishing: (t: { allow_publishing?: boolean }) => t.allow_publishing === true,
 }))
 vi.mock("../agent-loop.js", () => ({
   runAgentLoop: async () => {

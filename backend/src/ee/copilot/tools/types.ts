@@ -4,6 +4,13 @@ import type { WiredAsset } from "./edit-workflow.js"
 
 export interface CopilotToolContext {
   readonly userId: string
+  /**
+   * Whether this THREAD may author social-publishing nodes — the user's own
+   * per-conversation choice, never a default and never global. It lifts the
+   * publishers only; a webhook or a scraper names its own destination and no
+   * toggle reaches those.
+   */
+  readonly allowPublishing: boolean
   readonly workflowId: string
   readonly projectId: string
   readonly threadId: string

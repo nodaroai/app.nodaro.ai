@@ -107,7 +107,9 @@ export interface CopilotStoreState {
   setNotice: (notice: string | null) => void
   setInsufficient: (value: { required: number; balance: number } | null) => void
   setBridge: (patch: Partial<CopilotEditorBridge>) => void
-  setRunSettings: (mode: CopilotRunMode, limit: number) => void
+  setRunSettings: (mode: CopilotRunMode, limit: number, allowPublishing?: boolean) => void
+  /** This thread may author publishing nodes. Off until the user says so. */
+  allowPublishing: boolean
   /** Called when the editor loads a different workflow — everything resets. */
   resetForWorkflow: (workflowId: string | null) => void
 }
@@ -132,6 +134,7 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
   turn: EMPTY_TURN,
   streaming: false,
   runMode: "ask",
+  allowPublishing: false,
   autoRunLimit: DEFAULT_AUTO_RUN_LIMIT,
   runPhase: "idle",
   executionId: null,
@@ -164,7 +167,8 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
       const unchanged = (Object.keys(next) as Array<keyof CopilotEditorBridge>).every((k) => next[k] === s.bridge[k])
       return unchanged ? s : { bridge: next }
     }),
-  setRunSettings: (runMode, autoRunLimit) => set({ runMode, autoRunLimit }),
+  setRunSettings: (runMode, autoRunLimit, allowPublishing) =>
+    set({ runMode, autoRunLimit, ...(allowPublishing === undefined ? {} : { allowPublishing }) }),
 
   resetForWorkflow: (workflowId) => {
     if (get().workflowId === workflowId) return

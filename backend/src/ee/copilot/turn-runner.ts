@@ -36,6 +36,7 @@ import {
   nextSeq,
   touchTurnHeartbeat,
   updateTurnProgress,
+  threadAllowsPublishing,
   type CopilotThread,
   type CopilotTurn,
 } from "./store.js"
@@ -100,6 +101,10 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
   const wiredAssets: WiredAsset[] = []
   const ctx: CopilotToolContext = {
     userId: input.userId,
+    // The user’s own per-thread choice. Absent means the column has not been
+    // promoted yet (migrations run on push to main, staging shares the
+    // production database) — and absent must read as OFF.
+    allowPublishing: threadAllowsPublishing(input.thread),
     workflowId: input.workflowId,
     projectId: input.projectId,
     threadId: input.thread.id,

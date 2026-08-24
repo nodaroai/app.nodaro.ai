@@ -64,7 +64,7 @@ export function getCopilotThread(threadId: string): Promise<{ thread: CopilotThr
 
 export function updateCopilotThread(
   threadId: string,
-  patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number },
+  patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number; allowPublishing?: boolean },
 ): Promise<{ thread: CopilotThread }> {
   return request<{ thread: CopilotThread }>(`/v1/copilot/threads/${encodeURIComponent(threadId)}`, {
     method: "PATCH",

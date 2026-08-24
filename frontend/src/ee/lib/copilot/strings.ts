@@ -80,6 +80,11 @@ export const COPILOT_STRINGS = {
   kindObject: "Object",
   kindCreature: "Animal",
   kindLocation: "Location",
+  allowPublishing: "Let it build posting steps",
+  // Says what it can do AND what it still cannot, because the second half is
+  // what makes the first safe to agree to.
+  allowPublishingOn: "It can add posting steps. It still cannot choose the account, the channel, or who sees the post.",
+  allowPublishingOff: "Posting steps are yours to add on the canvas.",
   sectionFiles: "Files",
   proposeUsingFiles: "Using your files",
   attach: "Attach a file",

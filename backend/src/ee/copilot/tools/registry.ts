@@ -211,7 +211,12 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
       }
 
       case NATIVE_TOOLS.runWorkflow: {
-        const { proposal, message } = proposeRun(deps.ctx, args as RunWorkflowArgs, [...deps.addedNodeTypes], deps.wiredAssets)
+        const { proposal, message } = await proposeRun(
+          deps.ctx,
+          args as RunWorkflowArgs,
+          [...deps.addedNodeTypes],
+          deps.wiredAssets,
+        )
         return { text: message, isError: false, proposal }
       }
 

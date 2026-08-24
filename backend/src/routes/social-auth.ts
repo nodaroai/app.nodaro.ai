@@ -4,6 +4,7 @@ import { z } from "zod"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { supabase } from "../lib/supabase.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
 import { generateAuthUrl, exchangeCodeForTokens, type TokenSet } from "../services/social/oauth.js"
@@ -239,6 +240,56 @@ export async function socialAuthRoutes(app: FastifyInstance) {
 
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })
     return { connections: data || [] }
+  })
+
+  // PUT /v1/social/connections/:id/default — publish here by default
+  //
+  // Which account a publish node uses when it names none. That case is the
+  // NORMAL one for anything the Copilot builds: it is forbidden to write a
+  // destination, so it says which platform and leaves the account alone. Before
+  // this the fallback was unordered, so a user holding two accounts on one
+  // platform published to an arbitrary one.
+  app.put("/v1/social/connections/:id/default", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
+    // Same rule as disconnect: no social scope exists, so an OAuth app must not
+    // be able to redirect the owner's publishing to another of their accounts.
+    if (rejectProgrammaticAuth(req, reply, SOCIAL_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+
+    const { id } = req.params as { id: string }
+
+    // Read it first: the platform is needed to clear the previous default, and
+    // reading it through `user_id` is also how we refuse someone else's row.
+    const { data: row, error: readError } = await supabase
+      .from("social_connections")
+      .select("id, platform")
+      .eq("user_id", userId)
+      .eq("id", id)
+      .maybeSingle()
+    if (readError) return sendInternalError(reply, req, readError, "Failed to set the default account")
+    if (!row) return sendNotFound(reply, "Connection not found")
+
+    // Two statements and not a transaction, deliberately. The invariant that
+    // matters — at most one default per (user, platform) — is enforced by a
+    // partial unique index, not by this ordering. A crash between them leaves
+    // NO default, which is a defined state: the publisher falls back to
+    // oldest-first, and the next attempt fixes it.
+    const { error: clearError } = await supabase
+      .from("social_connections")
+      .update({ is_default: false })
+      .eq("user_id", userId)
+      .eq("platform", (row as { platform: string }).platform)
+      .eq("is_default", true)
+    if (clearError) return sendInternalError(reply, req, clearError, "Failed to set the default account")
+
+    const { error: setError } = await supabase
+      .from("social_connections")
+      .update({ is_default: true })
+      .eq("user_id", userId)
+      .eq("id", id)
+    if (setError) return sendInternalError(reply, req, setError, "Failed to set the default account")
+
+    return reply.send({ data: { id, isDefault: true } })
   })
 
   // DELETE /v1/social/connections/:id — disconnect a specific connection

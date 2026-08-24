@@ -17,11 +17,34 @@ export interface CopilotThread {
   user_id: string
   workflow_id: string
   run_mode: RunMode
+  /**
+   * The user let this thread author social-publishing nodes.
+   *
+   * OPTIONAL because of when migrations run: they apply on push to `main`, and
+   * staging shares the production database — so between a dev merge and the
+   * promotion, this code runs against a schema without the column. Absent reads
+   * as false, which is the safe direction.
+   */
+  allow_publishing?: boolean
   auto_run_limit_credits: number
   user_turn_count: number
   archived_at: string | null
   last_message_at: string | null
   created_at: string
+}
+
+/**
+ * Whether this thread may author publishing nodes.
+ *
+ * A named function and not an inline `?? false`, because the DEFAULT is the
+ * whole point and it needs somewhere to be tested. Absent means one of two
+ * things — a thread created before the column existed, or a read taken on
+ * staging before the migration was promoted — and both must mean OFF. An
+ * exemption that switches itself on when a column is missing is not an
+ * exemption.
+ */
+export function threadAllowsPublishing(thread: Pick<CopilotThread, "allow_publishing">): boolean {
+  return thread.allow_publishing === true
 }
 
 export interface CopilotTurn {
@@ -61,8 +84,11 @@ export interface CopilotMessageRow {
   created_at: string
 }
 
-const THREAD_COLUMNS =
-  "id, user_id, workflow_id, run_mode, auto_run_limit_credits, user_turn_count, archived_at, last_message_at, created_at"
+// A star select, deliberately: naming `allow_publishing` explicitly would make
+// every thread read 500 on staging until the migration is promoted, which takes
+// the whole copilot down. A missing column is simply absent from the row.
+// Nothing on this table is secret, so there is nothing to narrow away from.
+const THREAD_COLUMNS = "*"
 const TURN_COLUMNS =
   "id, thread_id, user_id, status, heartbeat_at, model_id, job_id, base_version, final_version, iterations, tool_calls, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, credits_charged, cancel_requested_at, error, started_at, finished_at"
 
@@ -113,7 +139,7 @@ export async function createThread(userId: string, workflowId: string): Promise<
 export async function updateThreadSettings(
   threadId: string,
   userId: string,
-  patch: { run_mode?: RunMode; auto_run_limit_credits?: number },
+  patch: { run_mode?: RunMode; auto_run_limit_credits?: number; allow_publishing?: boolean },
 ): Promise<CopilotThread | null> {
   const { data } = await supabase
     .from("copilot_threads")

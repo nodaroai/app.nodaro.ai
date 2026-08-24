@@ -122,10 +122,18 @@ export default function CopilotPanel({
     void sendCopilotMessage(text)
   }
 
-  const setSettings = (patch: { runMode?: "ask" | "auto"; autoRunLimitCredits?: number }) => {
+  const setSettings = (patch: {
+    runMode?: "ask" | "auto"
+    autoRunLimitCredits?: number
+    allowPublishing?: boolean
+  }) => {
     // Local first so the toggle responds with no thread and with no network.
     const current = useCopilotStore.getState()
-    current.setRunSettings(patch.runMode ?? current.runMode, patch.autoRunLimitCredits ?? current.autoRunLimit)
+    current.setRunSettings(
+      patch.runMode ?? current.runMode,
+      patch.autoRunLimitCredits ?? current.autoRunLimit,
+      patch.allowPublishing ?? current.allowPublishing,
+    )
     if (threadId) settings.mutate(patch)
   }
 

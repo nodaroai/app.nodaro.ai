@@ -34,7 +34,7 @@ export function useCopilotThreadForWorkflow(): { thread: CopilotThread | null; l
   useEffect(() => {
     if (resolved && resolved.id !== storedThreadId) {
       setCopilotState({ threadId: resolved.id, workflowId: resolved.workflowId })
-      copilotState().setRunSettings(resolved.runMode, resolved.autoRunLimitCredits)
+      copilotState().setRunSettings(resolved.runMode, resolved.autoRunLimitCredits, resolved.allowPublishing ?? false)
     }
   }, [resolved, storedThreadId])
 
@@ -76,17 +76,17 @@ export function useCopilotHistory(threadId: string | null): {
   return { thread, messages: data?.messages ?? [], busy }
 }
 
-/** Ask/Auto + the auto-run credit ceiling. */
+/** Ask/Auto, the auto-run credit ceiling, and permission to publish. */
 export function useCopilotSettings(threadId: string | null) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number }) => {
+    mutationFn: (patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number; allowPublishing?: boolean }) => {
       if (!threadId) throw new Error("no thread")
       return updateCopilotThread(threadId, patch)
     },
     onSuccess: ({ thread }) => {
-      copilotState().setRunSettings(thread.runMode, thread.autoRunLimitCredits)
+      copilotState().setRunSettings(thread.runMode, thread.autoRunLimitCredits, thread.allowPublishing ?? false)
       queryClient.setQueryData(queryKeys.copilot.forWorkflow(thread.workflowId), { thread })
       queryClient.invalidateQueries({ queryKey: queryKeys.copilot.thread(thread.id) })
     },

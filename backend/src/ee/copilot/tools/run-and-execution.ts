@@ -25,12 +25,12 @@ export interface RunWorkflowArgs {
  * destination lock. The model configures nodes through `edit_workflow`, or
  * not at all.
  */
-export function proposeRun(
+export async function proposeRun(
   ctx: CopilotToolContext,
   args: RunWorkflowArgs,
   addedNodeTypes: string[],
   wiredAssets: readonly WiredAsset[] = [],
-): { proposal: RunProposal; message: string } {
+): Promise<{ proposal: RunProposal; message: string }> {
   const proposal: RunProposal = {
     addedNodeTypes,
     wiredAssets: [...wiredAssets],

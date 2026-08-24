@@ -14,11 +14,16 @@ import type { CopilotRunMode } from "@/ee/lib/copilot/types"
 
 interface CopilotHeaderProps {
   onClose: () => void
-  onChangeSettings: (patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number }) => void
+  onChangeSettings: (patch: {
+    runMode?: CopilotRunMode
+    autoRunLimitCredits?: number
+    allowPublishing?: boolean
+  }) => void
 }
 
 export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps) {
   const runMode = useCopilotStore((s) => s.runMode)
+  const allowPublishing = useCopilotStore((s) => s.allowPublishing)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
   const [draftLimit, setDraftLimit] = useState(String(autoRunLimit))
 
@@ -97,6 +102,24 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
           {runMode === "auto" ? S.modeHintAuto : S.modeHintAsk}
         </span>
       </div>
+
+      {/* A checkbox and not a segmented track: unlike Ask/Auto these are not two
+          named behaviours, they are a permission the user grants. Off is the
+          absence of it, and it should look like one. */}
+      <label className="flex items-start gap-2 cursor-pointer group">
+        <input
+          type="checkbox"
+          checked={allowPublishing}
+          onChange={(e) => onChangeSettings({ allowPublishing: e.target.checked })}
+          className="mt-[2px] w-3.5 h-3.5 flex-none rounded-[4px] accent-[var(--copilot-mention)] cursor-pointer"
+        />
+        <span className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[11.5px] text-foreground leading-tight">{S.allowPublishing}</span>
+          <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">
+            {allowPublishing ? S.allowPublishingOn : S.allowPublishingOff}
+          </span>
+        </span>
+      </label>
     </div>
   )
 }

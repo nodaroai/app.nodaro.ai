@@ -37,6 +37,7 @@ const ctx = {
   projectId: "p1",
   threadId: "t1",
   turnId: "turn1",
+  allowPublishing: false,
   fastify: {} as never,
   emit: () => undefined,
 } as CopilotToolContext

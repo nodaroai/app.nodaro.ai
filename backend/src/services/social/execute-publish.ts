@@ -72,19 +72,49 @@ async function markReconnectNeeded(connectionId: string, needed: boolean): Promi
     .eq("id", connectionId)
 }
 
+/**
+ * Which account to publish to when the node names none.
+ *
+ * Chosen in JS rather than by `.order("is_default")`, and that is not a style
+ * preference: migrations apply on push to `main` while staging shares the
+ * production database, so between a merge and the promotion this code runs
+ * against a table without the column. A SQL order on a column that does not
+ * exist is an error on EVERY publish; reading a missing field is just
+ * `undefined`.
+ *
+ * Oldest-first is the tiebreak, and it replaces something worse: the previous
+ * `limit(1)` had no ordering at all, so a user holding two accounts on one
+ * platform published to an arbitrary one — a real bug, independent of any of
+ * this.
+ */
+export function pickDefaultConnection(rows: readonly SocialConnectionRow[]): SocialConnectionRow | undefined {
+  if (rows.length === 0) return undefined
+  const chosen = rows.find((row) => (row as { is_default?: boolean }).is_default === true)
+  if (chosen) return chosen
+  // `created_at` is on the table but not on the narrowed row type; read it
+  // structurally rather than widening a type the rest of this file relies on.
+  const at = (row: SocialConnectionRow) => String((row as { created_at?: string }).created_at ?? "")
+  return [...rows].sort((a, b) => at(a).localeCompare(at(b)))[0]
+}
+
 export async function executePublish(input: ExecutePublishInput): Promise<ExecutePublishSuccess> {
   const provider = getProvider(input.platform)
   if (!provider) throw new NotConnectedError(`Unknown platform ${input.platform}`)
 
-  // Load connection — by id if provided, otherwise first match for platform.
+  // Load connection — by id if named, otherwise the user's default for this
+  // platform. "Named none" is not an oversight: the Copilot is forbidden to
+  // write a destination, so a node it built says which platform and leaves the
+  // account to the user. This is where that choice is honoured.
   let query = supabase
     .from("social_connections")
     .select("*")
     .eq("user_id", input.userId)
     .eq("platform", input.platform)
-  query = input.connectionId ? query.eq("id", input.connectionId) : query.limit(1)
+  if (input.connectionId) query = query.eq("id", input.connectionId)
   const { data: rows, error: connErr } = await query
-  const connection = (rows?.[0] as SocialConnectionRow | undefined) ?? undefined
+  const connection = input.connectionId
+    ? ((rows?.[0] as SocialConnectionRow | undefined) ?? undefined)
+    : pickDefaultConnection((rows ?? []) as SocialConnectionRow[])
   if (connErr || !connection) {
     throw new NotConnectedError(
       `No ${input.platform} account connected. Please connect in Settings > Integrations.`,
