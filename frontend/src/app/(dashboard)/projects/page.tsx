@@ -496,9 +496,6 @@ export default function ProjectsPage() {
       {/* Community: "this install can't generate yet" until a key or the
           connection exists — dismissible, per user (#706). Renders null on cloud. */}
       <ProviderSetupCallout userId={user?.id} />
-      {/* The one control on this page that MAKES something, rather than
-          listing what already exists. Renders nothing without credits. */}
-      <CopilotHomeSlot />
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting}{displayName ? `, ${displayName}` : ""}
@@ -881,6 +878,12 @@ export default function ProjectsPage() {
         workflowName={moveTarget?.name ?? null}
         currentProjectId={moveTarget?.projectId ?? null}
       />
+
+      {/* The one control on this page that MAKES something, rather than listing
+          what already exists. A fixed dock at the bottom of the viewport, so it
+          goes LAST: what it puts in the flow here is the spacer that keeps it
+          off the final row of cards. Renders nothing without credits. */}
+      <CopilotHomeSlot />
     </div>
   )
 }

@@ -114,6 +114,26 @@ export function mentionDisplayName(ref: string): string {
   return /"([^"]*)"/.exec(ref)?.[1] ?? ref.replace(/\s*\(id: [^)]*\)\s*$/, "").trim()
 }
 
+interface EntityLike {
+  id: string
+  name: string
+  sourceImageUrl?: string | null
+}
+
+/**
+ * A character/location row as the picker wants it. Shared by both composers —
+ * the editor rail scopes its lists to the open project, the home dock has no
+ * project and asks for all of the user's, and the shape is the same either way.
+ */
+export function toMentions(items: EntityLike[] | undefined, kind: CopilotMention["kind"]): CopilotMention[] {
+  return (items ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    kind,
+    imageUrl: item.sourceImageUrl ?? null,
+  }))
+}
+
 export function filterMentions<T extends { name: string }>(items: readonly T[], query: string): T[] {
   const q = query.trim().toLowerCase()
   if (!q) return [...items]
