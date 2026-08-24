@@ -37,7 +37,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
-import type { AudioFxPreset, SurroundDirection } from "@nodaro/shared"
+import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
 
 // ============================================================================
 // Job / handler shapes
@@ -1520,6 +1520,45 @@ export interface PluginOrgsService {
     workspaces: unknown[]
     lastWorkspaceId: string | null
   }>
+
+  /**
+   * A workspace's settings with the preset inheritance already resolved
+   * (workspace override → organization override → kind preset).
+   *
+   * Core asks rather than reads because the settings tables and the
+   * inheritance rule are the plugin's, and a second implementation of that
+   * rule in core would be a second answer to the same question.
+   *
+   * Optional-by-absence like every member here: a plugin build older than this
+   * one simply will not have it, so core must check before calling
+   * (`orgs?.getEffectiveSettings?.(…)`) and fall back rather than throw.
+   */
+  getEffectiveSettings?(workspaceId: string): Promise<PresetSettings>
+
+  /**
+   * The project new work lands in when a workspace is selected and the caller
+   * named none. Null only if the project was deleted out from under the
+   * workspace — `create_workspace_with_project` gives every workspace one, and
+   * the foreign key is ON DELETE SET NULL. Core's create path must handle the
+   * null rather than 500.
+   */
+  workspaceDefaultProject?(workspaceId: string): Promise<string | null>
+
+  /**
+   * May this user move this workflow into this project?
+   *
+   * The creator may; a workspace admin of BOTH sides may; a personal↔workspace
+   * move is treated as "creator only, no admin clause". Core cannot answer
+   * this — it turns on memberships and effective settings the plugin owns.
+   */
+  canMoveWorkflow?(input: CanMoveWorkflowInput): Promise<{ allowed: boolean; reason?: string }>
+}
+
+/** Facts `canMoveWorkflow` decides on. Core loads them; the plugin judges. */
+export interface CanMoveWorkflowInput {
+  userId: string
+  workflow: { id: string; userId: string; workspaceId: string | null }
+  targetProject: { id: string; userId: string; workspaceId: string | null }
 }
 
 /**

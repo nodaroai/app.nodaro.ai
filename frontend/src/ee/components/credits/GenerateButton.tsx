@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Loader2 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useModelCreditCost, useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 
@@ -27,11 +28,12 @@ export function GenerateButton({
   isRunning = false,
   modelIdentifier,
   userId,
-  label = "Generate",
+  label,
   children,
   creditOverride,
   multiplier = 1,
 }: GenerateButtonProps) {
+  const t = useT()
   const { data: lookedUp } = useModelCreditCost(modelIdentifier)
   const baseCost = creditOverride ?? lookedUp
   const totalCost = baseCost != null ? baseCost * Math.max(multiplier, 1) : undefined
@@ -46,10 +48,13 @@ export function GenerateButton({
   const buttonContent = (
     <>
       {isRunning && <Loader2 className="w-4 h-4 animate-spin" />}
-      {isRunning ? "Processing..." : (children ?? label)}
+      {isRunning ? t("credits.processing") : (children ?? label ?? t("credits.generate"))}
       {showCreditInfo && !isRunning && (
         <span className="ml-1 opacity-80">
-          ({totalCost} {totalCost === 1 ? "credit" : "credits"})
+          {t("credits.amount", {
+            n: totalCost as number,
+            unit: totalCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),
+          })}
         </span>
       )}
     </>
@@ -72,7 +77,7 @@ export function GenerateButton({
           <span className="w-full">{button}</span>
         </TooltipTrigger>
         <TooltipContent>
-          Insufficient credits (need {totalCost}, have {totalBalance})
+          {t("credits.insufficientTooltip", { need: totalCost as number, have: totalBalance })}
         </TooltipContent>
       </Tooltip>
     )

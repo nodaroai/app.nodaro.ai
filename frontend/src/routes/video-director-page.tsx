@@ -3,47 +3,54 @@ import { Link } from "react-router-dom"
 import { runVideoDirector, getJobStatusLean } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 type Genre = "explainer" | "product-launch"
 
 interface GenreOption {
   value: Genre
-  label: string
-  hint: string
-  placeholder: string
+  labelKey: MessageKey
+  hintKey: MessageKey
+  placeholderKey: MessageKey
 }
 
+// Message KEYS, not sentences — this list is module-level so it can't call the
+// `t` hook; the render site translates.
 const GENRE_OPTIONS: GenreOption[] = [
   {
     value: "explainer",
-    label: "Explainer",
-    hint: "Narrated overview that teaches an idea, process, or product.",
-    placeholder: "What should it explain? e.g. How a CDN works",
+    labelKey: "vd.genreExplainer",
+    hintKey: "vd.genreExplainerHint",
+    placeholderKey: "vd.genreExplainerPlaceholder",
   },
   {
     value: "product-launch",
-    label: "Product Launch",
-    hint: "High-energy reveal that builds excitement for a new product.",
-    placeholder: "Describe the product, audience, and tone.",
+    labelKey: "vd.genreProductLaunch",
+    hintKey: "vd.genreProductLaunchHint",
+    placeholderKey: "vd.genreProductLaunchPlaceholder",
   },
 ]
 
+const MAX_BRIEF = 8000
+
 /**
- * Maps numeric progress values (10→30→50→70→80→100) to human-readable step labels.
- * Kept as a pure helper so it's easy to unit-test.
+ * Maps numeric progress values (10→30→50→70→80→100) to a step message KEY.
+ * Returns a key rather than a sentence so the mapping stays pure and
+ * locale-independent — the caller translates it.
  */
-export function progressToStepLabel(progress: number): string {
-  if (progress <= 10) return "Authoring script…"
-  if (progress <= 30) return "Generating speech…"
-  if (progress <= 50) return "Aligning captions…"
-  if (progress <= 70) return "Resolving shot sequence…"
-  if (progress <= 80) return "Rendering video…"
-  return "Finishing up…"
+export function progressToStepLabel(progress: number): MessageKey {
+  if (progress <= 10) return "vd.stepAuthoring"
+  if (progress <= 30) return "vd.stepSpeech"
+  if (progress <= 50) return "vd.stepCaptions"
+  if (progress <= 70) return "vd.stepShots"
+  if (progress <= 80) return "vd.stepRendering"
+  return "vd.stepFinishing"
 }
 
 type Phase = "idle" | "running" | "completed" | "failed"
 
 export default function VideoDirectorPage() {
+  const t = useT()
   const [genre, setGenre] = useState<Genre>("explainer")
   const [brief, setBrief] = useState("")
   const [phase, setPhase] = useState<Phase>("idle")
@@ -82,7 +89,7 @@ export default function VideoDirectorPage() {
       jobId = result.jobId
     } catch (err) {
       setPhase("failed")
-      setErrorMessage(err instanceof Error ? err.message : "Failed to start video director")
+      setErrorMessage(err instanceof Error ? err.message : t("vd.failedStart"))
       return
     }
 
@@ -102,15 +109,15 @@ export default function VideoDirectorPage() {
         } else if (job.status === "failed") {
           stopPolling()
           setPhase("failed")
-          setErrorMessage(job.error_message ?? "Video generation failed.")
+          setErrorMessage(job.error_message ?? t("vd.generationFailed"))
         }
       } catch (err) {
         stopPolling()
         setPhase("failed")
-        setErrorMessage(err instanceof Error ? err.message : "Polling error")
+        setErrorMessage(err instanceof Error ? err.message : t("vd.pollingError"))
       }
     }, 2500)
-  }, [genre, brief, phase, stopPolling])
+  }, [genre, brief, phase, stopPolling, t])
 
   const handleReset = useCallback(() => {
     stopPolling()
@@ -126,14 +133,14 @@ export default function VideoDirectorPage() {
   return (
     <div className="flex h-full flex-col items-center gap-8 overflow-y-auto p-8">
       <div className="w-full max-w-xl">
-        <h1 className="mb-2 text-lg font-medium text-foreground">Video Director</h1>
+        <h1 className="mb-2 text-lg font-medium text-foreground">{t("vd.title")}</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Turn a brief into a finished, narrated video.
+          {t("vd.subtitle")}
         </p>
 
         {/* Genre selector */}
         <div className="mb-4">
-          <span className="mb-1 block text-xs text-muted-foreground">Genre</span>
+          <span className="mb-1 block text-xs text-muted-foreground">{t("vd.genre")}</span>
           <div className="grid grid-cols-2 gap-2">
             {GENRE_OPTIONS.map((opt) => {
               const active = genre === opt.value
@@ -151,10 +158,10 @@ export default function VideoDirectorPage() {
                   }`}
                 >
                   <span className="block text-sm font-medium text-foreground">
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </span>
                   <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
-                    {opt.hint}
+                    {t(opt.hintKey)}
                   </span>
                 </button>
               )
@@ -165,32 +172,32 @@ export default function VideoDirectorPage() {
         {/* Brief textarea */}
         <div className="mb-4">
           <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vd-brief">
-            Brief
+            {t("vd.brief")}
           </label>
           <Textarea
             id="vd-brief"
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             disabled={isRunning}
-            placeholder={selectedGenreOption.placeholder}
-            maxLength={8000}
+            placeholder={t(selectedGenreOption.placeholderKey)}
+            maxLength={MAX_BRIEF}
             rows={4}
             className="resize-none bg-card"
           />
           <div className="mt-0.5 text-right text-[10px] text-muted-foreground">
-            {brief.length} / 8000
+            {t("vd.charCount", { n: brief.length, max: MAX_BRIEF })}
           </div>
         </div>
 
         {/* Credit / time note */}
         <p className="mb-4 text-xs text-muted-foreground">
-          Costs credits and takes approximately 2–4 minutes to complete.
+          {t("vd.creditNote")}
         </p>
 
         {/* Generate / progress / result area */}
         {phase === "idle" && (
           <Button onClick={handleGenerate} disabled={!brief.trim()}>
-            Generate
+            {t("vd.generate")}
           </Button>
         )}
 
@@ -203,7 +210,7 @@ export default function VideoDirectorPage() {
                 aria-hidden
               />
               <span className="text-sm text-foreground">
-                {progressToStepLabel(progress)}
+                {t(progressToStepLabel(progress))}
               </span>
             </div>
             {/* Progress bar */}
@@ -230,22 +237,22 @@ export default function VideoDirectorPage() {
                 to="/my-files"
                 className="rounded-md border px-4 py-2 text-sm text-foreground hover:border-primary/50"
               >
-                View in My Files →
+                {t("vd.viewInMyFiles")}
               </Link>
-              <Button onClick={handleReset}>Make another</Button>
+              <Button onClick={handleReset}>{t("vd.makeAnother")}</Button>
             </div>
           </div>
         )}
 
         {phase === "completed" && !videoUrl && (
           <div className="rounded-md border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-muted-foreground">
-            Video generated but the URL was not returned. Check{" "}
+            {t("vd.noUrlPre")}{" "}
             <Link to="/my-files" className="text-primary hover:underline">
-              My Files
+              {t("vd.myFiles")}
             </Link>{" "}
-            for your output.
+            {t("vd.noUrlPost")}
             <div className="mt-3">
-              <Button onClick={handleReset}>Make another</Button>
+              <Button onClick={handleReset}>{t("vd.makeAnother")}</Button>
             </div>
           </div>
         )}
@@ -253,9 +260,9 @@ export default function VideoDirectorPage() {
         {phase === "failed" && (
           <div className="rounded-md border border-red-500/40 bg-red-500/5 p-4">
             <p className="mb-3 text-sm text-red-400">
-              {errorMessage ?? "Video generation failed. Please try again."}
+              {errorMessage ?? t("vd.failedGeneric")}
             </p>
-            <Button onClick={handleReset}>Try again</Button>
+            <Button onClick={handleReset}>{t("vd.tryAgain")}</Button>
           </div>
         )}
       </div>

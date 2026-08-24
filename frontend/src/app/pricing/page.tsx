@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { TopupSection } from "./topup-section"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * Theme-aware pricing page, ported 1:1 from the designer's Pricing mocks
@@ -28,11 +29,11 @@ const CYAN = "var(--blg-cyan)"
 const MONO = "'JetBrains Mono Variable','JetBrains Mono',monospace"
 
 /** Audience lines from the mock's plan data, keyed by tier id. */
-const TIER_AUDIENCE: Record<string, string> = {
-  basic: "For hobbyists and side projects",
-  standard: "For active creators",
-  pro: "For professionals & teams",
-  business: "For agencies & studios",
+const TIER_AUDIENCE_KEY: Record<string, MessageKey> = {
+  basic: "pricing.audience.basic",
+  standard: "pricing.audience.standard",
+  pro: "pricing.audience.pro",
+  business: "pricing.audience.business",
 }
 
 /** Credits get their own mono line on the card, so drop the feature restating them. */
@@ -61,6 +62,8 @@ function SectionHeaderRow({ dotColor, labelColor, label, note, margin }: Section
 }
 
 export default function PricingPage() {
+  const t = useT()
+
   // Editions without billing have nothing to sell here — and the ?plan=
   // effect below auto-starts a Stripe checkout with no click, which 404s on a
   // self-host and surfaces as a bare "Not Found" toast (community grind,
@@ -68,11 +71,9 @@ export default function PricingPage() {
   if (!hasCredits()) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
-        <h1 className="text-xl font-semibold">Plans aren't part of this edition</h1>
+        <h1 className="text-xl font-semibold">{t("pricing.notPartOfEdition")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          This is a self-hosted Nodaro install — there is no subscription to buy.
-          To generate with our models, connect nodaro.ai from Integrations, or add
-          your own provider API keys.
+          {t("pricing.selfHostNotice")}
         </p>
       </div>
     )
@@ -99,7 +100,7 @@ export default function PricingPage() {
     try {
       await startLoadCheckout(amountUsd)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open checkout")
+      toast.error(err instanceof Error ? err.message : t("pricing.failedOpenCheckout"))
       setLoadingTopup(false)
     }
   }
@@ -149,7 +150,7 @@ export default function PricingPage() {
     try {
       if (isActiveSub) {
         await changePlanMutation.mutateAsync({ userId: user.id, priceId })
-        toast.success("Plan changed successfully! Changes will apply shortly.")
+        toast.success(t("pricing.planChanged"))
         navigate("/billing?success=true")
       } else {
         // New subscription → Stripe Checkout (opens in a new tab when embedded,
@@ -157,7 +158,7 @@ export default function PricingPage() {
         await startCheckout({ priceId, mode: "subscription" })
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong"
+      const message = err instanceof Error ? err.message : t("pricing.somethingWentWrong")
       toast.error(message)
     } finally {
       setLoadingTier(null)
@@ -165,10 +166,10 @@ export default function PricingPage() {
   }
 
   function getButtonLabel(tierId: string): string {
-    if (loadingTier === tierId) return "Processing..."
-    if (tierId === currentTierId) return "Current Plan"
-    if (currentTierId) return "Switch Plan"
-    return PRICING_TIERS.find((t) => t.id === tierId)?.cta ?? "Subscribe"
+    if (loadingTier === tierId) return t("pricing.processing")
+    if (tierId === currentTierId) return t("pricing.currentPlan")
+    if (currentTierId) return t("pricing.switchPlan")
+    return PRICING_TIERS.find((tr) => tr.id === tierId)?.cta ?? t("pricing.cta.subscribe")
   }
 
   const annual = billingCycle === "annual"
@@ -200,16 +201,17 @@ export default function PricingPage() {
           >
             <div>
               <h1 style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.03em", margin: 0 }}>
-                Pricing
+                {t("pricing.pageTitle")}
               </h1>
               <p style={{ fontSize: 15, color: "var(--blg-t2)", margin: "8px 0 0", maxWidth: 560 }}>
                 {currentPlanName && (
                   <>
-                    You&apos;re on{" "}
-                    <span style={{ color: "var(--blg-t1)", fontWeight: 600 }}>{currentPlanName}</span>.{" "}
+                    {t("pricing.onPlanPrefix")}{" "}
+                    <span style={{ color: "var(--blg-t1)", fontWeight: 600 }}>{currentPlanName}</span>
+                    {t("pricing.onPlanSuffix")}{" "}
                   </>
                 )}
-                Subscribe for a monthly credit allocation, or keep loading top-up credits.
+                {t("pricing.subscribeSubtitle")}
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -227,13 +229,13 @@ export default function PricingPage() {
                   color: annual ? "var(--blg-t2-dim)" : "var(--blg-t1)",
                 }}
               >
-                Monthly
+                {t("pricing.monthly")}
               </button>
               <button
                 type="button"
                 role="switch"
                 aria-checked={annual}
-                aria-label="Bill annually"
+                aria-label={t("pricing.billAnnuallyAria")}
                 onClick={() => setBillingCycle(annual ? "monthly" : "annual")}
                 style={{
                   width: 52,
@@ -264,7 +266,7 @@ export default function PricingPage() {
                   color: annual ? "var(--blg-t1)" : "var(--blg-t2-dim)",
                 }}
               >
-                Annual
+                {t("pricing.annual")}
               </button>
               {hasAnnualSavings && (
                 <span
@@ -279,7 +281,7 @@ export default function PricingPage() {
                     padding: "5px 11px",
                   }}
                 >
-                  2 MONTHS FREE
+                  {t("pricing.twoMonthsFreeBadge")}
                 </span>
               )}
             </div>
@@ -289,8 +291,8 @@ export default function PricingPage() {
           <SectionHeaderRow
             dotColor={PINK}
             labelColor="var(--blg-pink-text)"
-            label="SUBSCRIPTION PLANS"
-            note="monthly credit allocation · resets each cycle"
+            label={t("pricing.subscriptionPlansLabel")}
+            note={t("pricing.subscriptionPlansNote")}
             margin="0 0 16px"
           />
 
@@ -342,12 +344,12 @@ export default function PricingPage() {
                         display: "block",
                       }}
                     >
-                      ● MOST POPULAR
+                      {t("pricing.mostPopularBadge")}
                     </span>
                   )}
                   <div style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.02em" }}>{tier.name}</div>
                   <div style={{ fontSize: 13, color: "var(--blg-t2-dim)", marginTop: 5 }}>
-                    {TIER_AUDIENCE[tier.id] ?? ""}
+                    {TIER_AUDIENCE_KEY[tier.id] ? t(TIER_AUDIENCE_KEY[tier.id]) : ""}
                   </div>
 
                   <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 26 }}>
@@ -366,11 +368,11 @@ export default function PricingPage() {
                     <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.04em" }}>
                       ${displayPrice}
                     </span>
-                    <span style={{ fontSize: 14, color: "var(--blg-t2)" }}>/mo</span>
+                    <span style={{ fontSize: 14, color: "var(--blg-t2)" }}>{t("pricing.perMonthShort")}</span>
                   </div>
                   <div style={{ fontFamily: MONO, fontSize: 12.5, letterSpacing: "0.06em", marginTop: 10 }}>
                     <span style={{ color: PINK, fontWeight: 700 }}>{tier.credits.toLocaleString()}</span>
-                    <span style={{ color: "var(--blg-t2-mono)" }}> CREDITS / MO</span>
+                    <span style={{ color: "var(--blg-t2-mono)" }}> {t("pricing.creditsPerMoBadge")}</span>
                   </div>
                   <div
                     style={{
@@ -382,8 +384,8 @@ export default function PricingPage() {
                     }}
                   >
                     {annual
-                      ? `$${tier.priceAnnual * 12}/YR · SAVE $${savingsDollars}`
-                      : "BILLED MONTHLY"}
+                      ? t("pricing.perYearSaveBadge", { amount: tier.priceAnnual * 12, savings: savingsDollars })
+                      : t("pricing.billedMonthlyBadge")}
                   </div>
 
                   <div style={{ height: 1, background: "var(--prc-divider)", margin: "22px 0 20px" }} />
@@ -461,24 +463,24 @@ export default function PricingPage() {
                     marginBottom: 9,
                   }}
                 >
-                  ● FREE TIER
+                  {t("pricing.freeTierBadge")}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 600 }}>
                   {user ? (
                     <>
-                      You&apos;re on this plan —{" "}
+                      {t("pricing.onThisPlanPrefix")}{" "}
                       <span style={{ fontWeight: 800 }}>
-                        {freeTier.credits.toLocaleString()} free credits
+                        {t("pricing.freeCreditsCount", { credits: freeTier.credits.toLocaleString() })}
                       </span>{" "}
-                      included at signup.
+                      {t("pricing.includedAtSignup")}
                     </>
                   ) : (
                     <>
-                      Try everything with{" "}
+                      {t("pricing.tryEverythingPrefix")}{" "}
                       <span style={{ fontWeight: 800 }}>
-                        {freeTier.credits.toLocaleString()} free credits
+                        {t("pricing.freeCreditsCount", { credits: freeTier.credits.toLocaleString() })}
                       </span>{" "}
-                      — no credit card.
+                      {t("pricing.noCreditCardSuffix")}
                     </>
                   )}
                 </div>
@@ -509,7 +511,7 @@ export default function PricingPage() {
                     flexShrink: 0,
                   }}
                 >
-                  CURRENT PLAN
+                  {t("pricing.currentPlanBadge")}
                 </span>
               ) : (
                 <button
@@ -540,8 +542,8 @@ export default function PricingPage() {
           <SectionHeaderRow
             dotColor={CYAN}
             labelColor="var(--prc-cyan-text)"
-            label="TOP-UP CREDITS"
-            note="no subscription · valid for 12 months · used after your monthly allocation"
+            label={t("pricing.topupCreditsLabel")}
+            note={t("pricing.topupCreditsNote")}
             margin="46px 0 16px"
           />
           <TopupSection
@@ -550,9 +552,7 @@ export default function PricingPage() {
             onLoad={handleLoadCredits}
           />
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Credits without an active subscription are redeemable through the
-            developer surfaces (API, SDK, CLI, MCP). The web studio is included
-            with every subscription above.
+            {t("pricing.topupDeveloperNotice")}
           </p>
 
           {/* Legal links */}
@@ -572,7 +572,7 @@ export default function PricingPage() {
               rel="noopener noreferrer"
               style={{ color: "var(--blg-t2-dim)", textDecoration: "none" }}
             >
-              Terms of Service
+              {t("pricing.terms")}
             </a>
             <span>·</span>
             <a
@@ -581,7 +581,7 @@ export default function PricingPage() {
               rel="noopener noreferrer"
               style={{ color: "var(--blg-t2-dim)", textDecoration: "none" }}
             >
-              Privacy Policy
+              {t("pricing.privacy")}
             </a>
             <span>·</span>
             <a
@@ -590,7 +590,7 @@ export default function PricingPage() {
               rel="noopener noreferrer"
               style={{ color: "var(--blg-t2-dim)", textDecoration: "none" }}
             >
-              Refund Policy
+              {t("pricing.refund")}
             </a>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useT } from "@/lib/i18n"
 import { Star, Loader2, FolderOpen } from "lucide-react"
 import {
   Dialog,
@@ -31,6 +32,7 @@ export function MoveWorkflowDialog({
   workflowName,
   currentProjectId,
 }: MoveWorkflowDialogProps) {
+  const t = useT()
   const { data: projects = [], isLoading } = useProjects()
   const moveWorkflowToProject = useProjectsStore((s) => s.moveWorkflowToProject)
   const [moving, setMoving] = useState<string | null>(null)
@@ -52,9 +54,11 @@ export function MoveWorkflowDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Move workflow</DialogTitle>
+          <DialogTitle>{t("dialog.moveWorkflow")}</DialogTitle>
           <DialogDescription>
-            {workflowName ? `Move "${workflowName}" to a different project.` : "Pick a destination project."}
+            {workflowName
+              ? t("dialog.moveWorkflowDescNamed", { name: workflowName })
+              : t("dialog.moveWorkflowDescGeneric")}
           </DialogDescription>
         </DialogHeader>
 
@@ -64,7 +68,7 @@ export function MoveWorkflowDialog({
           </div>
         ) : eligible.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            No other projects to move to. Create another project first.
+            {t("dialog.noOtherProjects")}
           </div>
         ) : (
           <div className="max-h-72 overflow-y-auto py-1">

@@ -8,6 +8,7 @@ import { isCloud } from "@/lib/edition"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
+import { useT } from "@/lib/i18n"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -23,6 +24,7 @@ function consumeRedirect(): string {
 }
 
 export default function LoginPage() {
+  const t = useT()
   const { signInWithGoogle, signInWithEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -103,7 +105,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed")
+      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
       setPending(false)
     }
   }
@@ -116,7 +118,7 @@ export default function LoginPage() {
       await signInWithEmail(email, password)
       navigate(consumeRedirect(), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed")
+      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
       setPending(false)
     }
   }
@@ -140,12 +142,12 @@ export default function LoginPage() {
           </h1>
           {isCloud() ? (
             <p className="text-base text-muted-foreground animate-in fade-in duration-700">
-              Visual workflows for AI video generation
+              {t("auth.tagline")}
             </p>
           ) : (
             <p className="animate-in fade-in duration-700">
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
-                SELF-HOSTED &middot; {window.location.host}
+                {t("auth.selfHostedBadge", { host: window.location.host })}
               </span>
             </p>
           )}
@@ -154,12 +156,10 @@ export default function LoginPage() {
         {/* Login card */}
         <div className="rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm p-6 shadow-lg space-y-4">
           <div className="space-y-1.5">
-            <h2 className="text-lg font-semibold">{isCloud() ? "Sign in" : "Sign in to this server"}</h2>
+            <h2 className="text-lg font-semibold">{isCloud() ? t("auth.signIn") : t("auth.signInToServer")}</h2>
             {!isCloud() && (
               <p className="text-xs text-muted-foreground">
-                Your local account on this server &mdash; not a nodaro.ai
-                account. Connecting nodaro.ai happens afterwards, in
-                Integrations.
+                {t("auth.localAccountNotice")}
               </p>
             )}
           </div>
@@ -171,29 +171,29 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
+                  placeholder={t("auth.emailPlaceholder")}
                   autoComplete="email"
                   required
-                  aria-label="Email"
+                  aria-label={t("auth.emailPlaceholder")}
                 />
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  placeholder={t("auth.passwordPlaceholder")}
                   autoComplete="current-password"
                   required
-                  aria-label="Password"
+                  aria-label={t("auth.passwordPlaceholder")}
                 />
                 <Button type="submit" className="w-full" disabled={pending}>
-                  {pending ? "Signing in..." : "Sign in"}
+                  {pending ? t("auth.signingIn") : t("auth.signIn")}
                 </Button>
               </form>
 
               {googleAvailable && (
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground/60">or</span>
+                  <span className="text-xs text-muted-foreground/60">{t("auth.or")}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -207,7 +207,7 @@ export default function LoginPage() {
               onClick={handleGoogleSignIn}
               disabled={pending}
             >
-              {pending ? "Redirecting..." : "Continue with Google"}
+              {pending ? t("auth.redirecting") : t("auth.continueWithGoogle")}
             </Button>
           )}
 
@@ -217,18 +217,18 @@ export default function LoginPage() {
 
           {showEmailAuth ? (
             <p className="text-xs text-muted-foreground/60 pt-1">
-              New here?{" "}
+              {t("auth.newHere")}{" "}
               <Link to="/signup" className="underline underline-offset-2 hover:text-muted-foreground">
-                Create an account
+                {t("auth.createAccount")}
               </Link>
               <span className="mx-2">&middot;</span>
               <Link to="/setup" className="underline underline-offset-2 hover:text-muted-foreground">
-                Install setup
+                {t("auth.installSetup")}
               </Link>
             </p>
           ) : (
             <p className="text-xs text-muted-foreground/60 pt-1">
-              Start free with up to {FREE_TIER_CREDITS.toLocaleString()} credits. No credit card required.
+              {t("auth.freeCredits", { credits: FREE_TIER_CREDITS.toLocaleString() })}
             </p>
           )}
         </div>
@@ -237,15 +237,15 @@ export default function LoginPage() {
       {/* Legal footer */}
       <div className="absolute bottom-6 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
         <a href="https://nodaro.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
-          Terms of Service
+          {t("legal.terms")}
         </a>
         <span>&middot;</span>
         <a href="https://nodaro.ai/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
-          Privacy Policy
+          {t("legal.privacy")}
         </a>
         <span>&middot;</span>
         <a href="https://nodaro.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
-          Refund Policy
+          {t("legal.refund")}
         </a>
       </div>
     </div>

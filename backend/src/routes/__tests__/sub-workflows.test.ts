@@ -131,7 +131,8 @@ describe("GET /v1/workflows/callable", () => {
 
   it("returns empty array when no workflows", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -157,7 +158,8 @@ describe("GET /v1/workflows/callable", () => {
     }
 
     const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -183,7 +185,8 @@ describe("GET /v1/workflows/callable", () => {
     }
 
     const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -218,7 +221,8 @@ describe("GET /v1/workflows/callable", () => {
 
     const mockEq2 = vi.fn().mockResolvedValue({ data: [workflow], error: null })
     const mockLimit = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq1 = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -253,7 +257,8 @@ describe("GET /v1/workflows/callable", () => {
     }
 
     const mockLimit = vi.fn().mockResolvedValue({ data: [wf1, wf2], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -279,7 +284,8 @@ describe("GET /v1/workflows/callable", () => {
     }
 
     const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -298,7 +304,8 @@ describe("GET /v1/workflows/callable", () => {
 
   it("returns 500 on DB error", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: null, error: { message: "DB down" } })
-    const mockIs = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)

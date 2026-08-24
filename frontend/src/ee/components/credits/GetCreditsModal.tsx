@@ -15,6 +15,7 @@ import {
   type BillingCycle,
 } from "@/lib/pricing-data"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 
 interface GetCreditsModalProps {
   open: boolean
@@ -31,13 +32,14 @@ export function GetCreditsModal({
   balance,
   required,
 }: GetCreditsModalProps) {
+  const t = useT()
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const isFree = tier === "free"
 
   // Show tiers above current as upgrade options
-  const currentTierIndex = PRICING_TIERS.findIndex((t) => t.id === tier)
+  const currentTierIndex = PRICING_TIERS.findIndex((pt) => pt.id === tier)
   const upgradeTiers = PRICING_TIERS.filter(
     (_, i) => i > currentTierIndex && PRICING_TIERS[i].priceIdMonthly !== null,
   )
@@ -47,7 +49,7 @@ export function GetCreditsModal({
     try {
       await startCheckout({ priceId, mode })
     } catch {
-      toast.error("Failed to open checkout")
+      toast.error(t("pricing.failedOpenCheckout"))
     } finally {
       setLoadingId(null)
     }
@@ -59,12 +61,20 @@ export function GetCreditsModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Sparkles className="w-5 h-5 text-[#ff0073]" />
-            Get More Credits
+            {t("credits.getMoreCreditsTitle")}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            This app costs <strong>{required}</strong> credits per run.
-            You have <strong>{balance}</strong> credits
-            {required > 0 ? <> — enough for <strong>{Math.floor(balance / required)}</strong> more {Math.floor(balance / required) === 1 ? "run" : "runs"}</> : ""}.
+            {t("credits.appCostPrefix")} <strong>{required}</strong> {t("credits.appCostSuffix")}
+            {" "}{t("credits.youHavePrefix")} <strong>{balance}</strong> {t("credits.unit.other")}
+            {required > 0 ? (
+              <>
+                {" "}{t("credits.enoughForPrefix")} <strong>{Math.floor(balance / required)}</strong>{" "}
+                {[
+                  t("credits.more"),
+                  Math.floor(balance / required) === 1 ? t("credits.runUnit.one") : t("credits.runUnit.other"),
+                ].filter(Boolean).join(" ")}
+              </>
+            ) : ""}.
           </p>
         </DialogHeader>
 
@@ -75,7 +85,7 @@ export function GetCreditsModal({
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <Crown className="w-4 h-4 text-[#ff0073]" />
-                  {isFree ? "Subscribe for Monthly Credits" : "Upgrade Your Plan"}
+                  {isFree ? t("credits.subscribeMonthlyTitle") : t("credits.upgradePlanTitle")}
                 </h3>
                 <div className="flex items-center bg-muted rounded-full p-0.5 text-xs">
                   <button
@@ -87,7 +97,7 @@ export function GetCreditsModal({
                         : "text-muted-foreground"
                     }`}
                   >
-                    Monthly
+                    {t("pricing.monthly")}
                   </button>
                   <button
                     type="button"
@@ -98,19 +108,19 @@ export function GetCreditsModal({
                         : "text-muted-foreground"
                     }`}
                   >
-                    Annual
+                    {t("pricing.annual")}
                   </button>
                 </div>
               </div>
 
               <div className="grid gap-2">
-                {upgradeTiers.slice(0, 3).map((t) => {
-                  const price = getTierPrice(t, billingCycle)
-                  const priceId = getTierPriceId(t, billingCycle)
-                  const isHighlighted = t.highlighted
+                {upgradeTiers.slice(0, 3).map((upTier) => {
+                  const price = getTierPrice(upTier, billingCycle)
+                  const priceId = getTierPriceId(upTier, billingCycle)
+                  const isHighlighted = upTier.highlighted
                   return (
                     <div
-                      key={t.id}
+                      key={upTier.id}
                       className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
                         isHighlighted
                           ? "border-[#ff0073]/30 bg-[#ff0073]/5"
@@ -119,19 +129,19 @@ export function GetCreditsModal({
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{t.name}</span>
+                          <span className="font-medium text-sm">{upTier.name}</span>
                           {isHighlighted && (
                             <span className="text-[10px] font-medium text-[#ff0073] bg-[#ff0073]/10 px-1.5 py-0.5 rounded-full">
-                              Popular
+                              {t("pricing.popular")}
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t.credits.toLocaleString()} credits/mo
+                          {t("pricing.creditsPerMoShort", { n: upTier.credits.toLocaleString() })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-semibold">${price}/mo</span>
+                        <span className="text-sm font-semibold">${price}{t("pricing.perMonthShort")}</span>
                         <button
                           type="button"
                           onClick={() => priceId && handleCheckout(priceId, "subscription")}
@@ -139,7 +149,7 @@ export function GetCreditsModal({
                           className="h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                         >
                           {loadingId === priceId && <Loader2 className="w-3 h-3 animate-spin" />}
-                          Subscribe
+                          {t("pricing.cta.subscribe")}
                         </button>
                       </div>
                     </div>
@@ -153,7 +163,7 @@ export function GetCreditsModal({
           <div className="space-y-3">
             <h3 className="text-sm font-medium flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              Buy Credit Packs
+              {t("credits.buyPacksTitle")}
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {TOPUP_PACKAGES.map((pkg) => (
@@ -170,13 +180,13 @@ export function GetCreditsModal({
                 >
                   {pkg.popular && (
                     <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
-                      Popular
+                      {t("pricing.popular")}
                     </span>
                   )}
                   <span className="text-lg font-bold">{pkg.credits}</span>
-                  <span className="text-xs text-muted-foreground">credits</span>
+                  <span className="text-xs text-muted-foreground">{t("credits.unit.other")}</span>
                   <span className="mt-1 text-sm font-semibold">${pkg.price}</span>
-                  <span className="text-[10px] text-muted-foreground">{pkg.perCredit}/cr</span>
+                  <span className="text-[10px] text-muted-foreground">{pkg.perCredit}{t("credits.perCreditSuffix")}</span>
                 </button>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Sparkles, Ratio, Maximize2, Copy } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import { PromptEditButton } from "./prompt-edit-button"
 import { RunNodeButton } from "./run-node-button"
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
@@ -59,6 +60,7 @@ export interface NodeRunStripControlsProps {
 }
 
 export function NodeRunStripControls(props: NodeRunStripControlsProps) {
+  const t = useT()
   const onOpen = props.onOpenChange
   return (
     <>
@@ -67,7 +69,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
       {props.isMulti ? (
         <span
           className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] cursor-default whitespace-nowrap text-neutral-900/70 dark:text-white/70"
-          title="Multi-provider — open settings to edit cohort"
+          title={t("node.multiProvider")}
         >
           <Sparkles className="w-3 h-3 opacity-70" />
           {props.modelLabel}
@@ -84,7 +86,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
           triggerIcon={<Sparkles className="opacity-70" />}
           triggerClassName={`${props.ghostTriggerClass} max-w-[180px]`}
           contentClassName="node-menu-surface"
-          ariaLabel="Model"
+          ariaLabel={t("node.model")}
         />
       )}
 
@@ -121,7 +123,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
       )}
 
       <Select disabled={props.isRunning} value={String(props.repeatCount)} onValueChange={props.onRepeatChange} onOpenChange={onOpen}>
-        <SelectTrigger className={props.ghostTriggerClass} title="Versions per run">
+        <SelectTrigger className={props.ghostTriggerClass} title={t("node.versionsPerRun")}>
           <Copy className="opacity-70" />
           <SelectValue>× {props.repeatCount}</SelectValue>
         </SelectTrigger>

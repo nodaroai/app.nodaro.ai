@@ -26,8 +26,10 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 import { updateAppRunInputs } from "@/lib/api"
 import { resolveViewMode } from "@/components/presentation/resolve-view-mode"
+import { useT } from "@/lib/i18n"
 
 export default function AppRunnerPage() {
+  const t = useT()
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
@@ -108,10 +110,10 @@ export default function AppRunnerPage() {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-2">MiniApp Not Found</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("runner.appNotFound")}</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
           <Link to="/projects" className="text-[#ff0073] hover:underline">
-            Go to Dashboard
+            {t("present.goToDashboard")}
           </Link>
         </div>
       </div>
@@ -135,17 +137,17 @@ export default function AppRunnerPage() {
     <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Move to archive</DialogTitle>
+          <DialogTitle>{t("runner.moveToArchive")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          This run will be moved to your archive. You can restore it or permanently delete it from <Link to="/archived-runs" className="underline">Archived runs</Link>.
+          {t("runner.archiveDescPre")} <Link to="/archived-runs" className="underline">{t("runner.archivedRuns")}</Link>.
         </p>
         <DialogFooter className="flex gap-2 sm:justify-end">
           <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
-            Move to archive
+            {t("runner.moveToArchive")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -195,7 +197,7 @@ export default function AppRunnerPage() {
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl bg-card/60 backdrop-blur-md border border-border/50 shadow-lg">
             <Loader2 className="h-6 w-6 animate-spin text-[#ff0073]" />
-            <span className="text-sm text-muted-foreground">Loading run...</span>
+            <span className="text-sm text-muted-foreground">{t("runner.loadingRun")}</span>
           </div>
         </div>
       ) : (
@@ -220,7 +222,7 @@ export default function AppRunnerPage() {
                 className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
               >
                 <Clock className="h-4 w-4 mr-1" />
-                Runs
+                {t("runner.runs")}
               </Button>
             ) : null
           }
@@ -232,7 +234,7 @@ export default function AppRunnerPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                    aria-label="Run actions"
+                    aria-label={t("runner.runActions")}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
@@ -243,20 +245,20 @@ export default function AppRunnerPage() {
                       const url = new URL(window.location.href)
                       url.searchParams.set("run", runSlots.activeSlotId!)
                       navigator.clipboard.writeText(url.toString()).then(
-                        () => toast.success("Link copied"),
-                        () => toast.error("Failed to copy link"),
+                        () => toast.success(t("runner.linkCopied")),
+                        () => toast.error(t("runner.failedCopyLink")),
                       )
                     }}
                   >
                     <LinkIcon className="h-4 w-4 mr-2" />
-                    Copy link to this run
+                    {t("runner.copyLinkToRun")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => runSlots.handleRequestDelete(runSlots.activeSlotId!)}
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Move to archive
+                    {t("runner.moveToArchive")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -81,6 +81,12 @@ const BOOLEAN_SETTINGS: readonly BooleanSetting[] = [
     whenNo: "Sharing stays with the person who owns the work.",
   },
   {
+    key: "policy_survives_suspension",
+    question: "Do the organization's rules still apply while it is suspended?",
+    whenYes: "Members stay subject to these settings for as long as the suspension lasts.",
+    whenNo: "Members work independently, without the organization's limits, until it resumes.",
+  },
+  {
     key: "member_caps_enabled",
     question: "Are there per-member spending limits?",
     whenYes: "Each member has their own limit. Takes effect once billing is enabled for organizations.",

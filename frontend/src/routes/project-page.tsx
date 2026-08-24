@@ -27,8 +27,10 @@ import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
 import { isStudioProject } from "@/lib/studio"
+import { useT } from "@/lib/i18n"
 
 export default function ProjectPage() {
+  const t = useT()
   const { id } = useParams<{ id: string }>()
   const { isAdmin } = useAuth()
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
@@ -84,9 +86,9 @@ export default function ProjectPage() {
   if (!project) {
     return (
       <div className="p-6 text-center text-muted-foreground">
-        <p>Project not found.</p>
+        <p>{t("project.notFound")}</p>
         <Link to="/projects" className="text-primary underline text-sm mt-2 block">
-          Back to projects
+          {t("nav.backToProjects")}
         </Link>
       </div>
     )
@@ -104,19 +106,19 @@ export default function ProjectPage() {
           <div className="flex items-center gap-2">
             {project.isDefault && (
               <span
-                title="Auto-created — your default workspace"
+                title={t("project.autoCreated")}
                 className="flex-shrink-0"
               >
                 <Star
                   className="h-4 w-4 text-[#ff0073] fill-[#ff0073]"
-                  aria-label="Default workspace"
+                  aria-label={t("project.defaultWorkspace")}
                 />
               </span>
             )}
             <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
             {readOnly && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
-                View only
+                {t("project.viewOnly")}
               </Badge>
             )}
           </div>
@@ -134,11 +136,11 @@ export default function ProjectPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={openRenameDialog}>
                 <Pencil className="h-3.5 w-3.5 mr-2" />
-                Rename
+                {t("project.rename")}
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
                 <Settings className="h-3.5 w-3.5 mr-2" />
-                Settings
+                {t("project.settings")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -147,9 +149,9 @@ export default function ProjectPage() {
 
       <Tabs defaultValue="workflows">
         <TabsList>
-          <TabsTrigger value="workflows">Workflows</TabsTrigger>
-          <TabsTrigger value="assets">Assets</TabsTrigger>
-          <TabsTrigger value="jobs">Jobs</TabsTrigger>
+          <TabsTrigger value="workflows">{t("project.tabWorkflows")}</TabsTrigger>
+          <TabsTrigger value="assets">{t("project.tabAssets")}</TabsTrigger>
+          <TabsTrigger value="jobs">{t("project.tabJobs")}</TabsTrigger>
         </TabsList>
         <TabsContent value="workflows" className="mt-4">
           <WorkflowsTab projectId={id!} readOnly={readOnly} />
@@ -165,20 +167,20 @@ export default function ProjectPage() {
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Rename Project</DialogTitle>
+            <DialogTitle>{t("project.renameTitle")}</DialogTitle>
             <DialogDescription>
-              Enter a new name for this project.
+              {t("project.renameDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="project-name" className="sr-only">
-              Project name
+              {t("project.namePlaceholder")}
             </Label>
             <Input
               id="project-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Project name"
+              placeholder={t("project.namePlaceholder")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !renaming) {
                   handleRename()
@@ -189,10 +191,10 @@ export default function ProjectPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)} disabled={renaming}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
-              {renaming ? "Renaming..." : "Rename"}
+              {renaming ? t("project.renaming") : t("project.rename")}
             </Button>
           </DialogFooter>
         </DialogContent>

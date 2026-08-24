@@ -31,6 +31,8 @@ import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
+import { useLocalizePresetGroup, useLocalizePresetCopy } from "@/lib/i18n/labels"
 
 /** Asset/entity nodes are DB-backed (own galleries) — no config preset applies. Gated by category
  *  so new entity node types are excluded automatically. */
@@ -125,6 +127,14 @@ interface InnerProps extends PresetDropdownProps {
 }
 
 function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, zoom = 1, className, onOpenChange }: InnerProps) {
+  const t = useT()
+  const localizePresetGroup = useLocalizePresetGroup()
+  const localizeCopy = useLocalizePresetCopy()
+  // Display name for a merged preset: factory copy is localized, user names are
+  // the user's own data (passed through). Single source of truth so the picker
+  // row, the apply toast and the confirm dialog never disagree about the name.
+  const presetDisplayName = (p: Pick<MergedPreset, "id" | "name" | "source">) =>
+    p.source === "factory" ? localizeCopy(p.id, p.name).name : p.name
   const { user } = useAuth()
   const captured = useMemo(() => extractPresetData(data), [data])
 
@@ -201,8 +211,20 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const q = search.trim().toLowerCase()
   const searching = q.length > 0
   const factoryMatches = useMemo(
-    () => factory.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)),
-    [factory, q],
+    () =>
+      factory.filter((p) => {
+        if (!q) return true
+        // Match the localized copy the row actually shows AND the English
+        // catalog name, so a factory preset is findable by either spelling.
+        const copy = localizeCopy(p.id, p.name, p.description)
+        return (
+          copy.name.toLowerCase().includes(q) ||
+          (copy.description ?? "").toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q) ||
+          (p.description ?? "").toLowerCase().includes(q)
+        )
+      }),
+    [factory, q, localizeCopy],
   )
   // When searching, present a flat list of matching user presets (ignore folder collapse). When
   // not searching, present the organized tree.
@@ -246,16 +268,16 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
 
   const applyPreset = (p: MergedPreset) => {
     if (isRunning) {
-      toast.error("Can't apply a preset while the node is running.")
+      toast.error(t("preset.cantApplyRunning"))
       return
     }
     updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id))
-    toast.success(`Applied preset "${p.name}"`)
+    toast.success(t("preset.applied", { name: presetDisplayName(p) }))
   }
 
   const onSelect = (p: MergedPreset) => {
     if (isRunning) {
-      toast.error("Can't apply a preset while the node is running.")
+      toast.error(t("preset.cantApplyRunning"))
       return
     }
     if (presetDataMatches(data, p.data)) {
@@ -277,11 +299,11 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     try {
       const created = await create.mutateAsync({ nodeType, name, data: captured })
       updateNodeData(nodeId, { __activePresetId: created.id })
-      toast.success(`Saved preset "${name}"`)
+      toast.success(t("preset.saved", { name }))
       setOpenState(false)
     } catch (e) {
-      if (e instanceof NodePresetNameTakenError) toast.error("A preset with that name already exists.")
-      else toast.error("Failed to save preset.")
+      if (e instanceof NodePresetNameTakenError) toast.error(t("preset.nameTaken"))
+      else toast.error(t("preset.failedSave"))
     }
   }
 
@@ -289,30 +311,30 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     if (!activePreset || activePreset.source !== "user") return
     try {
       await update.mutateAsync({ id: activePreset.id, patch: { data: captured } })
-      toast.success(`Updated preset "${activePreset.name}"`)
+      toast.success(t("preset.updated", { name: activePreset.name }))
     } catch {
-      toast.error("Failed to update preset.")
+      toast.error(t("preset.failedUpdate"))
     }
   }
 
   // Clear the active preset and restore the node's default config ("go back to no preset").
   const doReset = () => {
     if (isRunning) {
-      toast.error("Can't reset while the node is running.")
+      toast.error(t("preset.cantResetRunning"))
       return
     }
     const defaultData = NODE_DEF_MAP.get(nodeType)?.defaultData as Record<string, unknown> | undefined
     updateNodeData(nodeId, buildResetToDefaultData(data, defaultData))
-    toast.success("Reset to default")
+    toast.success(t("preset.wasReset"))
   }
 
   const doDelete = async (p: MergedPreset) => {
     try {
       await remove.mutateAsync(p.id)
       if (p.id === activeId) updateNodeData(nodeId, { __activePresetId: undefined })
-      toast.success("Deleted")
+      toast.success(t("preset.deleted"))
     } catch {
-      toast.error("Failed to delete preset.")
+      toast.error(t("preset.failedDelete"))
     }
   }
 
@@ -337,13 +359,13 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     try {
       const env = parseNodePresetExport(JSON.parse(await file.text()))
       const count = await importMany.mutateAsync(env.presets)
-      toast.success(`Imported ${count} preset${count === 1 ? "" : "s"}`)
+      toast.success(t("preset.imported", { n: count }))
     } catch {
-      toast.error("Invalid preset file.")
+      toast.error(t("preset.invalidFile"))
     }
   }
 
-  const triggerLabel = activePreset ? activePreset.name : "PRESET"
+  const triggerLabel = activePreset ? presetDisplayName(activePreset) : t("preset.trigger")
   const canOverride = !!activePreset && activePreset.source === "user"
 
   // Node-variant sizing scales with `zoom` so the trigger tracks the node title (text-[11px], which
@@ -370,8 +392,8 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            title="Presets"
-            aria-label="Presets"
+            title={t("preset.presets")}
+            aria-label={t("preset.presets")}
             style={np ? { fontSize: np.font, height: np.h, paddingLeft: np.px, paddingRight: np.px, gap: np.gap, borderRadius: np.radius } : undefined}
             className={cn(
               "inline-flex items-center border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors",
@@ -401,7 +423,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
         <PopoverContent align="start" className="w-[40rem] p-0" onClick={(e) => e.stopPropagation()}>
           <div className="border-b border-gray-200 p-2 dark:border-[#2D2D2D]">
             <Input
-              placeholder="Search presets…"
+              placeholder={t("preset.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-8"
@@ -413,7 +435,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             {!searching && favoriteRows.length > 0 && (
               <>
                 <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  <Star className="h-3 w-3 shrink-0" /> Favorites
+                  <Star className="h-3 w-3 shrink-0" /> {t("preset.favorites")}
                 </div>
                 {favoriteRows.map((p) => (
                   <PresetRow
@@ -432,7 +454,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             {/* USER (custom) presets first — flat when searching, organized tree when browsing. */}
             {(searching ? userMatches.length > 0 : tree.length > 0) && (
               <>
-                <GroupLabel>My Presets</GroupLabel>
+                <GroupLabel>{t("preset.myPresets")}</GroupLabel>
                 {searching
                   ? userMatches.map((p) => (
                       <PresetRow
@@ -504,7 +526,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             {/* FACTORY presets second — organized into folders/sections. */}
             {(searching ? factoryMatches.length > 0 : factory.length > 0) && (
               <>
-                <GroupLabel>Factory</GroupLabel>
+                <GroupLabel>{t("preset.factory")}</GroupLabel>
                 {searching ? (
                   factoryMatches.map((p) => (
                     <PresetRow
@@ -534,11 +556,11 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                             >
                               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                              <span className="truncate text-sm font-medium">{g.group}</span>
+                              <span className="truncate text-sm font-medium">{localizePresetGroup(g.group ?? "")}</span>
                               <span className="ml-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
                             </button>
                           ) : (
-                            <GroupLabel>{g.group}</GroupLabel>
+                            <GroupLabel>{localizePresetGroup(g.group ?? "")}</GroupLabel>
                           )}
                           {!isCollapsed &&
                             g.presets.map((p) => (
@@ -562,7 +584,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
 
             {(searching ? userMatches.length === 0 && factoryMatches.length === 0 : tree.length === 0 && factory.length === 0) && (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {searching ? "No presets match your search." : "No presets yet. Configure this node, then “Save as new”."}
+                {searching ? t("preset.noMatch") : t("preset.noneYet")}
               </div>
             )}
           </div>
@@ -571,7 +593,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
               <div className="flex gap-1">
                 <Input
                   autoFocus
-                  placeholder="Preset name…"
+                  placeholder={t("preset.namePlaceholder")}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
@@ -580,12 +602,12 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                   className="h-8"
                 />
                 <Button size="sm" className="h-8" onClick={() => void doSaveNew()} disabled={!newName.trim() || create.isPending}>
-                  Save
+                  {t("preset.save")}
                 </Button>
               </div>
             ) : (
               <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2" onClick={() => setSaving(true)}>
-                <Plus className="h-3.5 w-3.5" /> Save as new
+                <Plus className="h-3.5 w-3.5" /> {t("preset.saveAsNew")}
               </Button>
             )}
             {canOverride && !saving && (
@@ -599,12 +621,12 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                   setOpenState(false)
                 }}
               >
-                <Check className="h-3.5 w-3.5" /> Override “{activePreset?.name}”
+                <Check className="h-3.5 w-3.5" /> {t("preset.override", { name: activePreset?.name ?? "" })}
               </Button>
             )}
             <div className="flex gap-1">
               <Button variant="ghost" size="sm" className="h-8 flex-1 gap-2" onClick={() => fileRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5" /> Import
+                <Upload className="h-3.5 w-3.5" /> {t("preset.import")}
               </Button>
               <Button
                 variant="ghost"
@@ -613,7 +635,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                 onClick={doExport}
                 disabled={userMerged.length === 0}
               >
-                <Download className="h-3.5 w-3.5" /> Export
+                <Download className="h-3.5 w-3.5" /> {t("preset.export")}
               </Button>
             </div>
             <Button
@@ -625,7 +647,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                 setOpenState(false)
               }}
             >
-              <RotateCcw className="h-3.5 w-3.5" /> Reset to default
+              <RotateCcw className="h-3.5 w-3.5" /> {t("preset.resetToDefault")}
             </Button>
             <Button
               variant="ghost"
@@ -636,7 +658,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                 setOpenState(false)
               }}
             >
-              <Settings2 className="h-3.5 w-3.5" /> Manage presets…
+              <Settings2 className="h-3.5 w-3.5" /> {t("preset.managePresets")}
             </Button>
             <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} />
           </div>
@@ -655,13 +677,13 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
           {confirm?.kind === "select" ? (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Apply preset “{confirm.preset.name}”?</AlertDialogTitle>
+                <AlertDialogTitle>{t("preset.applyTitle", { name: presetDisplayName(confirm.preset) })}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will overwrite this node’s current settings.
+                  {t("preset.applyDesc")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     const p = confirm.preset
@@ -669,47 +691,47 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                     applyPreset(p)
                   }}
                 >
-                  Apply
+                  {t("preset.apply")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>
           ) : confirm?.kind === "override" ? (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Overwrite preset “{activePreset?.name}”?</AlertDialogTitle>
+                <AlertDialogTitle>{t("preset.overwriteTitle", { name: activePreset?.name ?? "" })}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  The preset will be updated with this node’s current settings.
+                  {t("preset.overwriteDesc")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     setConfirm(null)
                     void doOverride()
                   }}
                 >
-                  Overwrite
+                  {t("preset.overwrite")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>
           ) : confirm?.kind === "reset" ? (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Reset to default?</AlertDialogTitle>
+                <AlertDialogTitle>{t("preset.resetTitle")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This clears the selected preset and restores this node’s default settings.
+                  {t("preset.resetDesc")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     setConfirm(null)
                     doReset()
                   }}
                 >
-                  Reset
+                  {t("preset.reset")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>
@@ -745,6 +767,13 @@ function PresetRow({
   isFavorite: boolean
   onToggleFavorite: () => void
 }) {
+  const t = useT()
+  const localizeCopy = useLocalizePresetCopy()
+  // Factory presets carry English copy in the catalog; user presets are the
+  // user's own words and pass through untouched.
+  const copy = preset.source === "factory"
+    ? localizeCopy(preset.id, preset.name, preset.description)
+    : { name: preset.name, description: preset.description }
   return (
     <div
       className={cn(
@@ -756,9 +785,9 @@ function PresetRow({
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
         <Check className={cn("h-3.5 w-3.5 shrink-0", active ? "opacity-100 text-[#ff0073]" : "opacity-0")} />
         <span className="min-w-0">
-          <span className="block truncate text-sm">{preset.name}</span>
-          {preset.description && (
-            <span className="block truncate text-[11px] text-muted-foreground">{preset.description}</span>
+          <span className="block truncate text-sm">{copy.name}</span>
+          {copy.description && (
+            <span className="block truncate text-[11px] text-muted-foreground">{copy.description}</span>
           )}
         </span>
       </button>
@@ -766,7 +795,7 @@ function PresetRow({
           (factory + user), so it must NOT be gated behind onDelete. */}
       <button
         type="button"
-        aria-label={isFavorite ? "Unfavorite" : "Favorite"}
+        aria-label={isFavorite ? t("preset.unfavorite") : t("preset.favorite")}
         className={cn(
           "shrink-0 text-muted-foreground hover:text-[#ff0073]",
           isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100",
@@ -781,7 +810,7 @@ function PresetRow({
       {onDelete && (
         <button
           type="button"
-          aria-label={`Delete ${preset.name}`}
+          aria-label={t("preset.deleteAria", { name: copy.name })}
           className="shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation()

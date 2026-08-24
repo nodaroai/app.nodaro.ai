@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { useCopilotRailWidth } from "@/hooks/use-copilot-ui-store"
 import {
   Tooltip,
   TooltipContent,
@@ -143,8 +144,13 @@ export function CanvasToolbar({
   const { sidebarWidth } = useSidebar()
   const isMobile = useIsMobile()
   const navigate = useNavigate()
-  // Position to the right of the sidebar + 12px gap
-  const leftPosition = sidebarWidth + 12
+  // This bar is `position: fixed`, so it does not participate in the editor's
+  // flex row and has to be told about anything occupying the left edge. The
+  // Copilot rail is a real column there; without its width the bar floats on
+  // top of the chat.
+  const copilotRailWidth = useCopilotRailWidth()
+  // Position to the right of the sidebar and the rail + 12px gap
+  const leftPosition = sidebarWidth + copilotRailWidth + 12
 
   return (
     <>

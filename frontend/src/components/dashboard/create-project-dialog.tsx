@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useT } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ export function CreateProjectDialog({
   onOpenChange,
   onCreate,
 }: CreateProjectDialogProps) {
+  const t = useT()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
@@ -40,35 +42,35 @@ export function CreateProjectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Project</DialogTitle>
+          <DialogTitle>{t("dialog.createProject")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="project-name">Name</Label>
+            <Label htmlFor="project-name">{t("dash.name")}</Label>
             <Input
               id="project-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Video Project"
+              placeholder={t("dash.projectNamePlaceholder")}
               autoFocus
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="project-desc">Description (optional)</Label>
+            <Label htmlFor="project-desc">{t("preset.descriptionOptional")}</Label>
             <Textarea
               id="project-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this project about?"
+              placeholder={t("dash.projectDescPlaceholder")}
               rows={3}
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim()}>
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </form>

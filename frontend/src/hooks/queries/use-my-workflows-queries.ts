@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
 import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
-import { STUDIO_APP_SLUG, readShowClientAppsFlag } from "./use-client-apps-queries"
+import { STUDIO_APP_SLUG, isMissingColumnError, readShowClientAppsFlag } from "./use-client-apps-queries"
 
 export interface MyWorkflow {
   readonly id: string
@@ -12,6 +12,12 @@ export interface MyWorkflow {
   readonly folderId: string | null
   readonly name: string
   readonly thumbnailUrl: string | null
+  /**
+   * Distinct node types in the flow, for the cover placeholder. `null` on an
+   * environment whose database has not applied migration 337 yet — the
+   * placeholder treats that exactly like an empty flow.
+   */
+  readonly nodeTypes: readonly string[] | null
   readonly createdAt: string
   readonly updatedAt: string
   /** Set only by the admin "all users" Studio view; the owner's email. */
@@ -24,6 +30,7 @@ interface DbWorkflowRow {
   readonly folder_id: string | null
   readonly name: string
   readonly thumbnail_url: string | null
+  readonly cover_node_types?: string[] | null
   readonly created_at: string
   readonly updated_at: string
   // PostgREST embedded selection: { ...projects(id, name, is_default?) }.
@@ -47,13 +54,56 @@ function toMyWorkflow(row: DbWorkflowRow): MyWorkflow {
     folderId: row.folder_id,
     name: row.name,
     thumbnailUrl: row.thumbnail_url,
+    nodeTypes: row.cover_node_types ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
 const WORKFLOW_COLS =
+  "id, project_id, folder_id, name, thumbnail_url, cover_node_types, created_at, updated_at"
+
+/**
+ * The same list without `cover_node_types` (migration 337). Selecting a column
+ * PostgREST does not know about fails the whole request, so an environment that
+ * has not applied the migration yet must still be able to list workflows —
+ * covers simply fall back to the empty-flow default there.
+ */
+const WORKFLOW_COLS_LEGACY =
   "id, project_id, folder_id, name, thumbnail_url, created_at, updated_at"
+
+/**
+ * Column sets from richest to poorest.
+ *
+ * PostgREST fails the WHOLE request when a select names a column it does not
+ * know, so a self-hosted database that is behind on migrations would otherwise
+ * see an empty dashboard rather than a slightly plainer one. Each step down
+ * drops exactly one migration's column: 337's `cover_node_types` (covers fall
+ * back to the empty-flow default) and 116's `projects.is_default` (the default
+ * project loses its badge).
+ */
+const SELECT_LADDER = [
+  `${WORKFLOW_COLS}, projects(id, name, is_default)`,
+  `${WORKFLOW_COLS}, projects(id, name)`,
+  `${WORKFLOW_COLS_LEGACY}, projects(id, name, is_default)`,
+  `${WORKFLOW_COLS_LEGACY}, projects(id, name)`,
+]
+
+type WorkflowQuery = (cols: string) => PromiseLike<{ data: unknown; error: unknown }>
+
+async function selectFirstThatWorks(baseQuery: WorkflowQuery): Promise<DbWorkflowRow[]> {
+  let lastError: unknown = null
+  for (const cols of SELECT_LADDER) {
+    const { data, error } = await baseQuery(cols)
+    if (!error) return (data ?? []) as DbWorkflowRow[]
+    // Step down ONLY for "that column does not exist". Retrying on any error
+    // would turn an expired session or a network blip into three more failing
+    // round-trips and then a plainer dashboard, with nothing to say why.
+    if (!isMissingColumnError(error)) throw error
+    lastError = error
+  }
+  throw lastError
+}
 
 /**
  * Flat, owner-scoped list of every workflow the caller owns, joined with
@@ -88,9 +138,6 @@ export function useMyWorkflows() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return []
 
-      const fullSelect = `${WORKFLOW_COLS}, projects(id, name, is_default)`
-      const fallbackSelect = `${WORKFLOW_COLS}, projects(id, name)`
-
       // Native-only is the DEFAULT and stays that way (see the doc comment above:
       // listed apps have their own tabs). The ONE exception is the admin "show
       // client-app content" override: when an admin opts in, we DROP the native
@@ -110,17 +157,8 @@ export function useMyWorkflows() {
         return q.order("updated_at", { ascending: false }).limit(200)
       }
 
-      const primary = await baseQuery(fullSelect)
-      if (!primary.error) {
-        return (primary.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
-      }
-
-      // PostgREST error code PGRST204 / 42703 → column doesn't exist.
-      // The fallback omits `is_default`; if that also fails the problem
-      // isn't migration-state and we surface it.
-      const fallback = await baseQuery(fallbackSelect)
-      if (fallback.error) throw fallback.error
-      return (fallback.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
+      const rows = await selectFirstThatWorks(baseQuery)
+      return rows.map(toMyWorkflow)
     },
     staleTime: 30_000,
   })
@@ -140,9 +178,6 @@ export function useMyStudioWorkflows() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return []
 
-      const fullSelect = `${WORKFLOW_COLS}, projects(id, name, is_default)`
-      const fallbackSelect = `${WORKFLOW_COLS}, projects(id, name)`
-
       const baseQuery = (cols: string) =>
         supabase
           .from("workflows")
@@ -153,13 +188,7 @@ export function useMyStudioWorkflows() {
           .order("updated_at", { ascending: false })
           .limit(200)
 
-      const primary = await baseQuery(fullSelect)
-      if (!primary.error) {
-        return (primary.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
-      }
-      const fallback = await baseQuery(fallbackSelect)
-      if (fallback.error) throw fallback.error
-      return (fallback.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
+      return (await selectFirstThatWorks(baseQuery)).map(toMyWorkflow)
     },
     staleTime: 30_000,
   })
@@ -202,6 +231,10 @@ export function useAllStudioWorkflows(enabled: boolean) {
           folderId: (row.folderId as string | null) ?? null,
           name: row.name as string,
           thumbnailUrl: (row.thumbnailUrl as string | null) ?? null,
+          // The REST list does not carry node types, so the admin Studio grid
+          // falls back to the empty-flow cover — honest for a view of other
+          // people's work, which is not a place to pick covers anyway.
+          nodeTypes: null,
           createdAt: row.createdAt as string,
           updatedAt: row.updatedAt as string,
           ownerEmail: (row.ownerEmail as string | null) ?? null,

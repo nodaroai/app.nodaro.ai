@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { WorkflowThumbnail } from "./workflow-thumbnail"
+import { useT } from "@/lib/i18n"
 import { useAuth } from "@/hooks/use-auth"
 import { useMyWorkflows, type MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 import { useDemoSeed } from "@/hooks/use-demo-seed"
@@ -24,6 +25,7 @@ interface MyWorkflowsViewProps {
 }
 
 export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }: MyWorkflowsViewProps) {
+  const t = useT()
   const { data: workflows = [], isLoading } = useMyWorkflows()
   const { user } = useAuth()
   // First-time users get the Welcome Demo seeded into their default project.
@@ -61,7 +63,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
     return (
       <div className="text-center py-20">
         <p className="text-sm text-muted-foreground mb-4">
-          No workflows yet. Create your first one to get started.
+          {t("dash.noWorkflowsYet")}
         </p>
         <Button onClick={onCreateWorkflow} disabled={isCreating}>
           {isCreating ? (
@@ -69,7 +71,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
           ) : (
             <Plus className="h-4 w-4 mr-1" />
           )}
-          {isCreating ? "Creating…" : "New Workflow"}
+          {isCreating ? t("dash.creating") : t("dash.newWorkflow")}
         </Button>
       </div>
     )
@@ -78,14 +80,14 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
   return (
     <>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium text-muted-foreground">My Workflows</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{t("dash.myWorkflows")}</h2>
         <div className="relative w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search workflows..."
-            aria-label="Search workflows"
+            placeholder={t("dash.searchWorkflows")}
+            aria-label={t("dash.searchWorkflows")}
             className="pl-8 h-8 text-sm w-full"
           />
         </div>
@@ -93,7 +95,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
-          <p className="text-sm">No workflows match your search.</p>
+          <p className="text-sm">{t("dash.noWorkflowsMatch")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -108,14 +110,14 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
               >
                 {/* First row (xl:grid-cols-5) is the LCP candidate — fetch it
                     at high priority. */}
-                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} priority={i < 5} />
+                <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} priority={i < 5} />
                 <div className="px-3 py-2">
                   <p className="text-sm font-medium truncate">{wf.name}</p>
                   <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
                     {wf.projectIsDefault && (
                       <Star
                         className="h-2.5 w-2.5 text-[#ff0073] fill-[#ff0073] flex-shrink-0"
-                        aria-label="Default workspace"
+                        aria-label={t("dash.defaultWorkspace")}
                       />
                     )}
                     <span className="truncate">{wf.projectName}</span>
@@ -131,7 +133,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
                       variant="secondary"
                       size="sm"
                       className="h-7 w-7 p-0 shadow-sm"
-                      aria-label={`Workflow options for ${wf.name}`}
+                      aria-label={t("dash.workflowOptions", { name: wf.name })}
                     >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
@@ -139,14 +141,14 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => onMoveWorkflow(wf)}>
                       <FolderInput className="h-3.5 w-3.5 mr-2" />
-                      Move to project
+                      {t("dialog.moveToProject")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => handleDelete(wf.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-2" />
-                      Delete
+                      {t("common.delete")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

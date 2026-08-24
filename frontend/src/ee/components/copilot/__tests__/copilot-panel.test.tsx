@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 
 const workflowState = {
   workflowId: "wf-1" as string | null,
@@ -66,9 +67,11 @@ const props = {
 function renderPanel() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <QueryClientProvider client={client}>
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
       <CopilotPanel {...props} />
-    </QueryClientProvider>,
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -136,18 +139,22 @@ describe("the editor bridge", () => {
     const second = vi.fn(async () => ({ executionId: "exec-1" }))
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const { rerender } = render(
+      <MemoryRouter>
       <QueryClientProvider client={client}>
         <CopilotPanel {...props} run={first} creditEstimate={10} />
-      </QueryClientProvider>,
+        </QueryClientProvider>
+    </MemoryRouter>,
     )
     const registered = useCopilotStore.getState().bridge.run
 
     // The editor hands down a new arrow on every render. The registered
     // callback must not be rebuilt (that would churn the bridge)…
     rerender(
+      <MemoryRouter>
       <QueryClientProvider client={client}>
         <CopilotPanel {...props} run={second} creditEstimate={99} />
-      </QueryClientProvider>,
+        </QueryClientProvider>
+    </MemoryRouter>,
     )
     expect(useCopilotStore.getState().bridge.run).toBe(registered)
 
@@ -173,9 +180,11 @@ describe("the editor bridge", () => {
     workflowState.isReadOnly = true
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
+      <MemoryRouter>
       <QueryClientProvider client={client}>
         <CopilotPanel {...props} run={null} save={null} />
-      </QueryClientProvider>,
+        </QueryClientProvider>
+    </MemoryRouter>,
     )
     expect(useCopilotStore.getState().bridge.run).toBeNull()
   })

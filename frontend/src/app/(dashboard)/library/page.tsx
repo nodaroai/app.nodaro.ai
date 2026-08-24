@@ -27,6 +27,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
+import { useT } from "@/lib/i18n"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -69,6 +70,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
   onToggleSelect,
   onDelete,
 }: LibraryAssetCardProps) {
+  const t = useT()
   return (
     <div
       className={`group relative rounded-lg border transition-colors overflow-hidden ${
@@ -143,7 +145,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
       {/* Info */}
       <div className="p-3 space-y-1.5">
         <p className="text-xs font-medium truncate" title={asset.filename}>
-          {asset.filename || "Untitled"}
+          {asset.filename || t("exec.untitled")}
         </p>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -170,7 +172,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
             }}
           >
             <Trash2 className="h-3 w-3 mr-1" />
-            Delete
+            {t("lib.delete")}
           </Button>
         </div>
       </div>
@@ -179,6 +181,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
 })
 
 export default function LibraryPage() {
+  const t = useT()
   const { user } = useAuth()
   const [filter, setFilter] = useState<TypeFilter>("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -250,13 +253,13 @@ export default function LibraryPage() {
         next.delete(assetId)
         return next
       })
-      toast.success("File deleted")
+      toast.success(t("lib.fileDeleted"))
     } catch (err) {
-      toast.error("Delete failed", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(t("lib.deleteFailed"), {
+        description: err instanceof Error ? err.message : t("lib.unknownError"),
       })
     }
-  }, [user?.id, deleteMutation])
+  }, [user?.id, deleteMutation, t])
 
   const handleDeleteSelected = useCallback(async () => {
     if (!user?.id || selected.size === 0) return
@@ -275,8 +278,8 @@ export default function LibraryPage() {
 
     setSelected(new Set())
     setDeleting(false)
-    toast.success(`Deleted ${deletedCount} file${deletedCount !== 1 ? "s" : ""}`)
-  }, [user?.id, selected, deleteMutation])
+    toast.success(t("lib.deletedFiles", { n: deletedCount }))
+  }, [user?.id, selected, deleteMutation, t])
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
@@ -321,12 +324,19 @@ export default function LibraryPage() {
 
   const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
 
+  const FILTER_LABELS: Record<string, string> = {
+    all: t("lib.filterAll"),
+    image: t("lib.filterImage"),
+    video: t("lib.filterVideo"),
+    audio: t("lib.filterAudio"),
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <FolderOpen className="h-6 w-6 text-[#ff0073]" />
-          <h1 className="text-2xl font-bold">My Files</h1>
+          <h1 className="text-2xl font-bold">{t("lib.title")}</h1>
         </div>
       </div>
 
@@ -338,7 +348,7 @@ export default function LibraryPage() {
       <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
         <div className="flex items-center gap-3">
           <HardDrive className="h-5 w-5 text-[#ff0073]" />
-          <h2 className="text-lg font-semibold">Storage</h2>
+          <h2 className="text-lg font-semibold">{t("lib.storage")}</h2>
           <span className="text-sm text-muted-foreground ml-auto">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
           </span>
@@ -355,20 +365,20 @@ export default function LibraryPage() {
             />
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{usagePercent}% used</span>
-            <span>{formatBytes(Math.max(0, storageLimit - storageUsed))} available</span>
+            <span>{t("lib.used", { percent: usagePercent })}</span>
+            <span>{t("lib.available", { size: formatBytes(Math.max(0, storageLimit - storageUsed)) })}</span>
           </div>
         </div>
 
         {usagePercent > 70 && (
           <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              {usagePercent >= 90 ? "Storage almost full! Upgrade for more space." : "Running low on storage. Consider upgrading."}
+              {usagePercent >= 90 ? t("lib.storageWarningFull") : t("lib.storageWarningLow")}
             </p>
             <Link to="/pricing">
               <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
                 <ArrowUpRight className="h-3 w-3 mr-1" />
-                Upgrade
+                {t("lib.upgrade")}
               </Button>
             </Link>
           </div>
@@ -379,18 +389,18 @@ export default function LibraryPage() {
       {/* Filter Tabs + Actions */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-1 p-1 bg-muted rounded-lg">
-          {TYPE_FILTERS.map((t) => (
+          {TYPE_FILTERS.map((type) => (
             <button
-              key={t}
+              key={type}
               type="button"
-              onClick={() => setFilter(t)}
+              onClick={() => setFilter(type)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-colors ${
-                filter === t
+                filter === type
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t}
+              {FILTER_LABELS[type]}
             </button>
           ))}
         </div>
@@ -403,7 +413,7 @@ export default function LibraryPage() {
               onClick={toggleSelectAll}
               className="text-xs"
             >
-              {selected.size === assets.length ? "Deselect All" : "Select All"}
+              {selected.size === assets.length ? t("lib.deselectAll") : t("lib.selectAll")}
             </Button>
           )}
           {selected.size > 0 && (
@@ -418,7 +428,7 @@ export default function LibraryPage() {
               ) : (
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
               )}
-              Delete {selected.size} Selected
+              {t("lib.deleteSelected", { n: selected.size })}
             </Button>
           )}
         </div>
@@ -432,10 +442,10 @@ export default function LibraryPage() {
       ) : assets.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
           <FolderOpen className="h-10 w-10 opacity-40" />
-          <p className="text-sm">No files found</p>
+          <p className="text-sm">{t("lib.noFiles")}</p>
           {filter !== "all" && (
             <Button variant="ghost" size="sm" onClick={() => setFilter("all")}>
-              Show all types
+              {t("lib.showAllTypes")}
             </Button>
           )}
         </div>
@@ -480,7 +490,7 @@ export default function LibraryPage() {
             {loadingMore ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : null}
-            Load More
+            {t("lib.loadMore")}
           </Button>
         </div>
       )}

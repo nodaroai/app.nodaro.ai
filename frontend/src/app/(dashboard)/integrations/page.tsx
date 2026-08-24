@@ -6,6 +6,7 @@ import { PlatformCard } from "@/components/integrations/platform-card"
 import { NodaroCloudCard } from "@/components/integrations/nodaro-cloud-card"
 import { ModelProvidersCard } from "@/components/integrations/model-providers-card"
 import { HeygenCatalogCard } from "@/components/integrations/heygen-catalog-card"
+import { useT } from "@/lib/i18n"
 import { getSocialConnections, getSocialProviders, type SocialProviderInfo } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import type { SocialConnection } from "@/types/nodes"
@@ -17,6 +18,7 @@ import type { SocialConnection } from "@/types/nodes"
  * (show-don't-hide, so self-hosters discover what's possible).
  */
 export default function IntegrationsPage() {
+  const t = useT()
   const [providers, setProviders] = useState<SocialProviderInfo[]>([])
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,11 +45,9 @@ export default function IntegrationsPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Integrations</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("nav.integrations")}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {isCloud()
-            ? "Connect your social media accounts to publish directly from workflows."
-            : "How this install reaches models — the nodaro.ai connection and your own provider keys — and the social accounts your workflows publish to."}
+          {isCloud() ? t("integ.subtitle") : t("integ.subtitleSelfHosted")}
         </p>
       </div>
 

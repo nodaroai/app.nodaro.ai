@@ -1,3 +1,4 @@
+import { escapeLikeArgument } from "./_like-escape.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -273,8 +274,20 @@ function registerReadTools({ server, session }: RegisterCharacterToolsOpts): voi
         "to get the actual asset URLs for a specific expression or pose, " +
         "then pass those URLs as reference images to `generate_image` / " +
         "`image_to_image` / `generate_video`. Sorted by most-recently updated " +
-        "first. Archived characters are excluded.",
+        "first. Archived characters are excluded. Pass `search` to find a " +
+        "character BY NAME — without it this returns only the most recently " +
+        "updated page, so a caller with hundreds of characters cannot reach " +
+        "the rest.",
       inputSchema: {
+        search: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it.",
+          ),
         limit: z
           .number()
           .int()
@@ -287,13 +300,18 @@ function registerReadTools({ server, session }: RegisterCharacterToolsOpts): voi
     },
     async (args) => {
       const limit = args.limit ?? 50
-      const { data, error } = await supabase
+      let query = supabase
         .from("characters")
         .select(SUMMARY_COLUMNS)
         .eq("user_id", session.userId)
         .is("deleted_at", null)
-        .order("updated_at", { ascending: false })
-        .limit(limit)
+      // Escaped: `%` and `_` are wildcards in ILIKE, and a bare `,` or `)`
+      // would break out of PostgREST's filter grammar. The row set is already
+      // scoped to this user, so the worst a crafted string could do is widen
+      // the caller's own search — but a filter that parses is not something to
+      // leave to chance.
+      if (args.search) query = query.ilike("name", `%${escapeLikeArgument(args.search)}%`)
+      const { data, error } = await query.order("updated_at", { ascending: false }).limit(limit)
       if (error) return err(`Error: ${error.message}`)
       // PostgREST's TS inference can't represent the `alias:expr` projection
       // we use for the SQL-side `jsonb_array_length` counts (it falls back to

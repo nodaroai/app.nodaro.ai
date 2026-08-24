@@ -12,12 +12,14 @@
 import { useEffect, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
 import { useCharacters, useLocations } from "@/hooks/queries/use-assets-queries"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
 import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
+import { useCopilotHandoff } from "@/ee/hooks/copilot/use-copilot-handoff"
 import type { CopilotMention } from "@/ee/lib/copilot/types"
 import { CopilotComposer } from "./copilot-composer"
 import { CopilotConversation } from "./copilot-conversation"
@@ -67,7 +69,9 @@ export default function CopilotPanel({
   const turnUserText = useCopilotStore((s) => s.turn.userText)
 
   const { thread } = useCopilotThreadForWorkflow()
-  const { thread: liveThread, messages } = useCopilotHistory(threadId)
+  const { messages, busy } = useCopilotHistory(threadId)
+  // Arriving from the home page: send what the user typed there, once.
+  useCopilotHandoff(thread, workflowId)
   const settings = useCopilotSettings(threadId)
 
   const { data: characters } = useCharacters(projectId, userId)
@@ -113,7 +117,7 @@ export default function CopilotPanel({
     }
   }, [workflowId])
 
-  const otherTabBusy = liveThread?.status === "running" && !streaming
+
 
   const send = (text: string) => {
     void sendCopilotMessage(text)
@@ -129,8 +133,9 @@ export default function CopilotPanel({
   return (
     <aside
       aria-label={S.title}
+      style={fullScreen ? undefined : { width: COPILOT_RAIL_WIDTH }}
       className={`bg-[var(--copilot-panel)] flex flex-col min-h-0 ${
-        fullScreen ? "absolute inset-0 z-40" : "w-[380px] flex-none border-r border-border"
+        fullScreen ? "absolute inset-0 z-40" : "flex-none border-r border-border"
       }`}
     >
       <CopilotHeader onClose={onClose} onChangeSettings={setSettings} />
@@ -163,9 +168,20 @@ export default function CopilotPanel({
         {streaming ? S.a11yWorking : turnStatus === "completed" ? S.a11yDone : ""}
       </div>
 
-      {otherTabBusy && (
-        <div className="flex-none px-3.5 py-2 border-t border-border text-[11.5px] text-[var(--copilot-muted)]">
-          {S.otherTabTitle}
+      {busy && (
+        <div className="flex-none px-3.5 py-2.5 border-t border-border flex items-start gap-2">
+          <span
+            className="mt-1 w-2.5 h-2.5 flex-none rounded-full border-2 border-primary/25 border-t-primary animate-spin"
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <div className="text-[11.5px] font-medium text-foreground">
+              {busy.kind === "ours" ? S.stillWorkingTitle : S.otherTabTitle}
+            </div>
+            {busy.kind === "ours" && (
+              <div className="text-[11px] text-[var(--copilot-muted)]">{S.stillWorkingBlurb}</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -180,7 +196,7 @@ export default function CopilotPanel({
           locations={toMentions(locations, "location")}
           onSend={send}
           onStop={() => void stopCopilotTurn()}
-          disabled={Boolean(thread) && otherTabBusy}
+          disabled={busy !== null}
         />
       )}
     </aside>

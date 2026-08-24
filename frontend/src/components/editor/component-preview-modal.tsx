@@ -4,9 +4,10 @@ import { createPortal } from "react-dom"
 import { Puzzle, X, Heart, Sparkles, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { APP_CATEGORIES, CATEGORY_COLORS, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
+import { CATEGORY_COLORS, OUTPUT_TYPE_ICON, getCategoryLabelKey } from "@/lib/app-categories"
 import type { AppBrowseCard } from "@/lib/api"
 import type { ComponentMetadata } from "@nodaro/shared"
+import { useT } from "@/lib/i18n"
 
 interface ComponentPreviewModalProps {
   card: AppBrowseCard | null
@@ -25,6 +26,7 @@ export function ComponentPreviewModal({
   onAdd,
   onClose,
 }: ComponentPreviewModalProps) {
+  const t = useT()
   const addBtnRef = useRef<HTMLButtonElement>(null)
 
   const handleKeyDown = useCallback(
@@ -57,9 +59,9 @@ export function ComponentPreviewModal({
   const settings = meta.exposedSettings ?? []
   const hasAnyMetadata = inputs.length + outputs.length + settings.length > 0
 
-  const categoryLabel = APP_CATEGORIES.find((c) => c.value === card.category)?.label ?? "Other"
+  const categoryLabelKey = getCategoryLabelKey(card.category)
   const categoryColor = CATEGORY_COLORS[card.category] ?? CATEGORY_COLORS.other
-  const creatorLabel = card.creatorDisplayName || "Community"
+  const creatorLabel = card.creatorDisplayName || t("preview.community")
 
   return createPortal(
     <div
@@ -88,12 +90,12 @@ export function ComponentPreviewModal({
                 {card.name}
               </h2>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-                <span className="truncate">by {creatorLabel}</span>
+                <span className="truncate">{t("preview.by", { name: creatorLabel })}</span>
                 <span>·</span>
                 <CreditCost credits={card.estimatedCredits} icon="sm" className="gap-0.5" />
                 <span>·</span>
                 <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
-                  {categoryLabel}
+                  {t(categoryLabelKey)}
                 </span>
               </div>
             </div>
@@ -102,7 +104,7 @@ export function ComponentPreviewModal({
                 type="button"
                 className="p-2 rounded-full hover:bg-muted transition-colors"
                 onClick={() => onToggleFavorite(card.id)}
-                aria-label={isFavorited ? "Unfavorite" : "Favorite"}
+                aria-label={isFavorited ? t("preview.unfavorite") : t("preview.favorite")}
               >
                 <Heart
                   className={cn(
@@ -115,7 +117,7 @@ export function ComponentPreviewModal({
                 type="button"
                 className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={t("common.close")}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -128,7 +130,7 @@ export function ComponentPreviewModal({
             </p>
           ) : (
             <p className="text-sm italic text-muted-foreground/70 mt-3">
-              No description provided.
+              {t("preview.noDescription")}
             </p>
           )}
         </div>
@@ -139,14 +141,14 @@ export function ComponentPreviewModal({
           <div className="order-2 md:order-1 space-y-4">
             {!hasAnyMetadata && (
               <p className="text-xs text-muted-foreground italic">
-                No metadata published for this component.
+                {t("preview.noMetadata")}
               </p>
             )}
 
             {inputs.length > 0 && (
               <section>
                 <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Inputs
+                  {t("preview.inputs")}
                 </h3>
                 <ul className="space-y-1.5">
                   {inputs.map((h) => (
@@ -159,7 +161,7 @@ export function ComponentPreviewModal({
                       </span>
                       {h.required && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide shrink-0">
-                          Required
+                          {t("preview.required")}
                         </span>
                       )}
                     </li>
@@ -171,7 +173,7 @@ export function ComponentPreviewModal({
             {outputs.length > 0 && (
               <section>
                 <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Outputs
+                  {t("preview.outputs")}
                 </h3>
                 <ul className="space-y-1.5">
                   {outputs.map((h) => (
@@ -191,7 +193,7 @@ export function ComponentPreviewModal({
             {settings.length > 0 && (
               <section>
                 <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Settings ({settings.length})
+                  {t("preview.settingsCount", { n: settings.length })}
                 </h3>
                 <ul className="space-y-1.5">
                   {settings.map((s) => (
@@ -232,7 +234,7 @@ export function ComponentPreviewModal({
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/50">
                   <Sparkles className="w-8 h-8 mb-2" />
-                  <p className="text-xs">No preview available</p>
+                  <p className="text-xs">{t("preview.noPreview")}</p>
                 </div>
               )}
             </div>
@@ -247,7 +249,7 @@ export function ComponentPreviewModal({
             className="text-white hover:opacity-90"
             style={{ backgroundColor: "#ff0073" }}
           >
-            + Add to Workflow
+            + {t("preview.addToWorkflow")}
           </Button>
         </div>
       </div>

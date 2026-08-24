@@ -23,7 +23,7 @@ import { hasCredits } from "@/lib/edition"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
-import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
+import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON, categoryLabel } from "@/lib/app-categories"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
 import { ComponentPreviewModal } from "./component-preview-modal"
 import {
@@ -33,6 +33,7 @@ import {
   type AppBrowseParams,
 } from "@/hooks/queries/use-app-marketplace-queries"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,32 +124,32 @@ function publishedAppToBrowseCard(app: PublishedApp): AppBrowseCard {
 
 type TabId = "browse" | "my-components" | "favorites"
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "browse", label: "Browse" },
-  { id: "my-components", label: "My Components" },
-  { id: "favorites", label: "Favorites" },
+const TABS: { id: TabId; labelKey: MessageKey }[] = [
+  { id: "browse", labelKey: "marketplace.tabBrowse" },
+  { id: "my-components", labelKey: "marketplace.tabMyComponents" },
+  { id: "favorites", labelKey: "marketplace.tabFavorites" },
 ]
 
-const COMPACT_TABS: { id: TabId; label: string }[] = [
-  { id: "browse", label: "Browse" },
-  { id: "my-components", label: "Mine" },
-  { id: "favorites", label: "Favs" },
+const COMPACT_TABS: { id: TabId; labelKey: MessageKey }[] = [
+  { id: "browse", labelKey: "marketplace.tabBrowse" },
+  { id: "my-components", labelKey: "marketplace.tabMineShort" },
+  { id: "favorites", labelKey: "marketplace.tabFavsShort" },
 ]
 
 const SORT_OPTIONS = [
-  { value: "popular", label: "Most Popular" },
-  { value: "newest", label: "Newest" },
-  { value: "most-favorited", label: "Most Favorited" },
+  { value: "popular", labelKey: "marketplace.sortPopular" as MessageKey },
+  { value: "newest", labelKey: "marketplace.sortNewest" as MessageKey },
+  { value: "most-favorited", labelKey: "marketplace.sortMostFavorited" as MessageKey },
 ] as const
 
 type SortValue = (typeof SORT_OPTIONS)[number]["value"]
 
-const OUTPUT_TYPE_FILTERS: { key: string | undefined; label: string }[] = [
-  { key: undefined, label: "All" },
-  { key: "image", label: "Image" },
-  { key: "video", label: "Video" },
-  { key: "audio", label: "Audio" },
-  { key: "text", label: "Text" },
+const OUTPUT_TYPE_FILTERS: { key: string | undefined; labelKey: MessageKey }[] = [
+  { key: undefined, labelKey: "marketplace.filterAll" },
+  { key: "image", labelKey: "out.image" },
+  { key: "video", labelKey: "out.video" },
+  { key: "audio", labelKey: "out.audio" },
+  { key: "text", labelKey: "out.text" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ function ComponentListItem({
   isHighlighted: boolean
   onMouseEnter: () => void
 }) {
+  const t = useT()
   const outputTypes = card.outputTypes ?? []
   return (
     <button
@@ -190,11 +192,11 @@ function ComponentListItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{card.name}</div>
-        <div className="text-[10px] text-[#94A3B8] truncate">{card.description || card.creatorDisplayName || "Community"}</div>
+        <div className="text-[10px] text-[#94A3B8] truncate">{card.description || card.creatorDisplayName || t("preview.community")}</div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
-        {outputTypes.slice(0, 2).map((t) => (
-          <span key={t} className="text-[#94A3B8]">{OUTPUT_TYPE_ICON[t] ?? <FileText className="w-3 h-3" />}</span>
+        {outputTypes.slice(0, 2).map((ot) => (
+          <span key={ot} className="text-[#94A3B8]">{OUTPUT_TYPE_ICON[ot] ?? <FileText className="w-3 h-3" />}</span>
         ))}
       </div>
       {card.estimatedCredits > 0 && (
@@ -212,6 +214,7 @@ function ComponentListItem({
 // ---------------------------------------------------------------------------
 
 export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, variant = "popup", position }: ComponentMarketplaceModalProps) {
+  const t = useT()
   const isFullscreen = variant === "fullscreen"
   const [activeTab, setActiveTab] = useState<TabId>("browse")
   const [searchInput, setSearchInput] = useState("")
@@ -225,8 +228,8 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchInput), 300)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(timer)
   }, [searchInput])
 
   useEffect(() => {
@@ -302,7 +305,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
-      toast.success("Updated")
+      toast.success(t("marketplace.toastUpdated"))
     },
   })
   const toggleActiveMutation = useMutation({
@@ -323,9 +326,9 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
       setEditComp(null)
-      toast.success("Component updated")
+      toast.success(t("marketplace.toastComponentUpdated"))
     },
-    onError: (err: Error) => { toast.error(err.message || "Failed to update") },
+    onError: (err: Error) => { toast.error(err.message || t("marketplace.toastUpdateFailed")) },
   })
 
   const scrollRef = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage })
@@ -421,8 +424,8 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               <Puzzle className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Components</h2>
-              <p className="text-xs text-muted-foreground">Browse reusable workflow components from the community</p>
+              <h2 className="text-lg font-semibold text-foreground">{t("marketplace.title")}</h2>
+              <p className="text-xs text-muted-foreground">{t("marketplace.subtitle")}</p>
             </div>
           </div>
           <button
@@ -449,7 +452,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                     : "text-muted-foreground hover:text-foreground hover:bg-muted",
                 )}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             ))}
           </div>
@@ -459,7 +462,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
-                placeholder="Search components..."
+                placeholder={t("marketplace.searchPlaceholder")}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-8 h-8 text-sm"
@@ -472,7 +475,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               </SelectTrigger>
               <SelectContent>
                 {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  <SelectItem key={opt.value} value={opt.value}>{t(opt.labelKey)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -490,7 +493,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                 }
                 return (
                   <button
-                    key={filter.label}
+                    key={filter.labelKey}
                     type="button"
                     onClick={() => setOutputTypeFilter(filter.key)}
                     className={cn(
@@ -499,7 +502,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                       !isActive && "hover:text-foreground",
                     )}
                   >
-                    {filter.label}
+                    {t(filter.labelKey)}
                   </button>
                 )
               })}
@@ -520,17 +523,17 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               <Puzzle className="w-10 h-10 mb-3 opacity-40" />
               <p className="text-sm font-medium">
                 {activeTab === "my-components"
-                  ? "You haven't published any components yet"
+                  ? t("marketplace.emptyMyComponents")
                   : activeTab === "favorites"
-                    ? "No favorited components"
-                    : "No components found"}
+                    ? t("marketplace.emptyFavorites")
+                    : t("marketplace.emptyBrowse")}
               </p>
               <p className="text-xs mt-1 opacity-70">
                 {activeTab === "browse" && debouncedSearch
-                  ? "Try different search terms"
+                  ? t("marketplace.emptyTrySearch")
                   : activeTab === "my-components"
-                    ? "Publish a workflow as a component to see it here"
-                    : "Components will appear here as creators publish them"}
+                    ? t("marketplace.emptyPublishHint")
+                    : t("marketplace.emptyBrowseHint")}
               </p>
             </div>
           ) : activeTab === "my-components" ? (
@@ -554,9 +557,9 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                             : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
                         )}
                         onClick={() => toggleListMutation.mutate({ appId: comp.id, isListed: !comp.isListed })}
-                        title={comp.isListed ? "Click to unlist" : "Click to list on marketplace"}
+                        title={comp.isListed ? t("marketplace.clickUnlist") : t("marketplace.clickList")}
                       >
-                        {comp.isListed ? "Listed" : "Unlisted"}
+                        {comp.isListed ? t("marketplace.listed") : t("marketplace.unlisted")}
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">v{comp.version}</span>
                     </div>
@@ -568,18 +571,18 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                     </div>
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
-                    <span>{comp.totalRunCount ?? 0} runs</span>
-                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix="CR/run" />
-                    {(comp.favoriteCount ?? 0) > 0 && <span>{comp.favoriteCount} favs</span>}
+                    <span>{t("marketplace.runsCount", { n: comp.totalRunCount ?? 0 })}</span>
+                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix={t("marketplace.crPerRun")} />
+                    {(comp.favoriteCount ?? 0) > 0 && <span>{t("marketplace.favsCount", { n: comp.favoriteCount })}</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <a href={`/app/${comp.slug}`} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                        <ExternalLink className="h-3 w-3 mr-1" /> Open
+                        <ExternalLink className="h-3 w-3 mr-1" /> {t("marketplace.open")}
                       </Button>
                     </a>
                     <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditComp(comp)}>
-                      <Pencil className="h-3 w-3 mr-1" /> Edit
+                      <Pencil className="h-3 w-3 mr-1" /> {t("common.edit")}
                     </Button>
                     <Button
                       variant={comp.isActive === false ? "default" : "outline"}
@@ -587,7 +590,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                       className="h-7 px-2 text-xs ml-auto"
                       onClick={() => toggleActiveMutation.mutate({ appId: comp.id, isActive: comp.isActive === false })}
                     >
-                      {comp.isActive === false ? "Restore" : "Archive"}
+                      {comp.isActive === false ? t("marketplace.restore") : t("marketplace.archive")}
                     </Button>
                   </div>
                 </div>
@@ -602,7 +605,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   )}
                   {archivedComps.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-3">Archived</h3>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3">{t("marketplace.archivedHeader")}</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
                         {archivedComps.map(renderCard)}
                       </div>
@@ -682,7 +685,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
           <div className="flex items-center gap-2">
             <Puzzle className="w-4 h-4 text-purple-400" />
-            <span className="text-sm font-semibold text-[#1E293B] dark:text-white">Components</span>
+            <span className="text-sm font-semibold text-[#1E293B] dark:text-white">{t("marketplace.title")}</span>
           </div>
           <button
             type="button"
@@ -707,7 +710,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   : "text-muted-foreground hover:text-foreground hover:bg-muted",
               )}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -719,7 +722,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search components..."
+              placeholder={t("marketplace.searchPlaceholder")}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className={cn(
@@ -746,12 +749,12 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               <Puzzle className="w-8 h-8 mb-2 opacity-40" />
               <p className="text-xs">
                 {activeTab === "my-components"
-                  ? "No components published yet"
+                  ? t("marketplace.emptyMyComponentsShort")
                   : activeTab === "favorites"
-                    ? "No favorites"
+                    ? t("marketplace.emptyFavoritesShort")
                     : debouncedSearch
-                      ? "No results"
-                      : "No components available"}
+                      ? t("marketplace.emptyResultsShort")
+                      : t("marketplace.emptyBrowseShort")}
               </p>
             </div>
           ) : (
@@ -783,15 +786,15 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
           <div className="flex items-center gap-3 text-[10px] text-[#94A3B8]">
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">↑↓</kbd>
-              Navigate
+              {t("addnode.navigate")}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">↵</kbd>
-              Select
+              {t("addnode.select")}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">Esc</kbd>
-              Close
+              {t("addnode.close")}
             </span>
           </div>
         </div>
@@ -818,6 +821,7 @@ function ComponentEditDialog({
   onSave: (appId: string, data: Record<string, unknown>) => void
   isSaving: boolean
 }) {
+  const t = useT()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState("other")
@@ -881,31 +885,31 @@ function ComponentEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Component</DialogTitle>
+          <DialogTitle>{t("marketplace.editTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="text-sm font-medium mb-1 block">Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Component name" />
+            <Label className="text-sm font-medium mb-1 block">{t("marketplace.nameLabel")}</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("marketplace.namePlaceholder")} />
           </div>
           <div>
-            <Label className="text-sm font-medium mb-1 block">Description</Label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this component do?" />
+            <Label className="text-sm font-medium mb-1 block">{t("marketplace.descriptionLabel")}</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("marketplace.descPlaceholder")} />
           </div>
           <div>
-            <Label className="text-sm font-medium mb-1.5 block">Category</Label>
+            <Label className="text-sm font-medium mb-1.5 block">{t("marketplace.categoryLabel")}</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-full h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {APP_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  <SelectItem key={cat.value} value={cat.value}>{categoryLabel(cat.value, t)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-sm font-medium mb-1.5 block">
-              Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span>
+              {t("marketplace.tagsLabel")} <span className="text-xs text-muted-foreground font-normal">{t("marketplace.tagsCount", { n: tags.length })}</span>
             </Label>
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1.5">
@@ -923,7 +927,7 @@ function ComponentEditDialog({
               <Input
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                placeholder="Add a tag..."
+                placeholder={t("marketplace.addTagPlaceholder")}
                 className="h-8 text-xs flex-1"
                 maxLength={30}
                 onKeyDown={(e) => {
@@ -951,14 +955,14 @@ function ComponentEditDialog({
                 }}
                 disabled={!tagInput.trim() || tags.length >= 10}
               >
-                Add
+                {t("marketplace.addTag")}
               </Button>
             </div>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Listed on marketplace</p>
-              <p className="text-xs text-muted-foreground">Make discoverable in the component browser</p>
+              <p className="text-sm font-medium">{t("marketplace.listedTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("marketplace.listedDesc")}</p>
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
           </div>
@@ -967,8 +971,8 @@ function ComponentEditDialog({
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">Monetization</p>
-                  <p className="text-xs text-muted-foreground">Charge a markup when others use this component</p>
+                  <p className="text-sm font-medium">{t("marketplace.monetizationTitle")}</p>
+                  <p className="text-xs text-muted-foreground">{t("marketplace.monetizationDesc")}</p>
                 </div>
                 <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
               </div>
@@ -976,16 +980,16 @@ function ComponentEditDialog({
                 <div className="space-y-3 pl-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Flat fee (CR)</Label>
+                      <Label className="text-xs">{t("marketplace.flatFeeLabel")}</Label>
                       <Input type="number" min={0} value={monetizationFlatFee} onChange={(e) => setMonetizationFlatFee(Math.max(0, Number(e.target.value) || 0))} className="h-8 text-xs mt-1" />
                     </div>
                     <div>
-                      <Label className="text-xs">Percentage (%)</Label>
+                      <Label className="text-xs">{t("marketplace.percentLabel")}</Label>
                       <Input type="number" min={0} max={500} value={monetizationPercent} onChange={(e) => setMonetizationPercent(Math.min(500, Math.max(0, Number(e.target.value) || 0)))} className="h-8 text-xs mt-1" />
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Base cost: {baseCredits} CR | Users will pay: {calculatedCredits} CR
+                    {t("marketplace.costSummary", { base: baseCredits, pay: calculatedCredits })}
                   </p>
                 </div>
               )}
@@ -999,7 +1003,7 @@ function ComponentEditDialog({
             style={{ backgroundColor: "#ff0073" }}
           >
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save Changes
+            {t("marketplace.saveChanges")}
           </Button>
         </div>
       </DialogContent>

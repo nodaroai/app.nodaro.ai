@@ -34,10 +34,32 @@ describe("WorkflowThumbnail", () => {
     expect(container.querySelector("img")).not.toBeNull()
   })
 
-  it("renders a placeholder when there is no thumbnail", () => {
-    const { container } = render(<WorkflowThumbnail thumbnailUrl={null} />)
+  it("renders a designed placeholder when there is no thumbnail", () => {
+    const { container, getByText } = render(<WorkflowThumbnail thumbnailUrl={null} />)
     expect(container.querySelector("video")).toBeNull()
+    // No <img> on purpose: the placeholder is CSS and inline SVG, so it can
+    // never degrade into the browser's broken-image icon.
     expect(container.querySelector("img")).toBeNull()
+    expect(getByText("No cover yet")).toBeTruthy()
+  })
+
+  it("gives a flow its own look, and one shared look to flows with nothing in them", () => {
+    const look = (nodeTypes: string[] | null) =>
+      render(<WorkflowThumbnail thumbnailUrl={null} nodeTypes={nodeTypes} />)
+        .container.querySelector("[data-variant]")
+        ?.getAttribute("data-variant")
+
+    expect(look(["image-to-video"])).not.toBe(look(["generate-image"]))
+    // An unknown graph and an empty one look the same — neither is a guess.
+    expect(look([])).toBe(look(null))
+  })
+
+  it("never lets a chosen cover be overridden by the placeholder", () => {
+    const { container, queryByText } = render(
+      <WorkflowThumbnail thumbnailUrl="https://cdn.nodaro.ai/images/wf.png" nodeTypes={["generate-image"]} />,
+    )
+    expect(container.querySelector("img")).not.toBeNull()
+    expect(queryByText("No cover yet")).toBeNull()
   })
 
   it("prioritizes the fetch for above-the-fold (priority) image thumbnails", () => {

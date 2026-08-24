@@ -17,6 +17,7 @@ import type { NodePreset, NodePresetGroup } from "@/lib/api"
 import { buildPresetTree, type PresetTreeNode } from "@/lib/preset-tree"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 
 interface ManageDialogProps {
   readonly nodeType: string
@@ -26,6 +27,7 @@ interface ManageDialogProps {
 }
 
 export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId }: ManageDialogProps) {
+  const t = useT()
   const { user } = useAuth()
   const { data: presets = [] } = useNodePresets(nodeType, user?.id)
   const { data: groups = [] } = useNodePresetGroups(nodeType, user?.id)
@@ -55,7 +57,11 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
   }
 
   const addGroup = (kind: "folder" | "section") => {
-    void createGroup.mutateAsync({ nodeType, name: kind === "folder" ? "New folder" : "New section", kind, sortOrder: tree.length })
+    // The group name is user data that persists and rendered back verbatim (the
+    // backend requires a non-empty name), so seed a stable, locale-neutral
+    // default rather than t(...) — a translated seed would freeze into the row
+    // and read as the wrong language after a switch. The user renames it inline.
+    void createGroup.mutateAsync({ nodeType, name: kind === "folder" ? "New Folder" : "New Section", kind, sortOrder: tree.length })
   }
 
   const moveToGroup = (preset: NodePreset, groupId: string | null) => {
@@ -71,25 +77,25 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Manage presets</DialogTitle>
+          <DialogTitle>{t("preset.manageTitle")}</DialogTitle>
           <DialogDescription>
-            Organize your custom presets into folders and sections, add tags, and reorder them.
+            {t("preset.manageDesc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => addGroup("folder")}>
-            <FolderPlus className="h-4 w-4" /> New folder
+            <FolderPlus className="h-4 w-4" /> {t("preset.newFolder")}
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => addGroup("section")}>
-            <ListPlus className="h-4 w-4" /> New section
+            <ListPlus className="h-4 w-4" /> {t("preset.newSection")}
           </Button>
         </div>
 
         <div className="max-h-[55vh] space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2 dark:border-[#2D2D2D]">
           {tree.length === 0 && (
             <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-              No custom presets yet. Save one from a node, then organize it here.
+              {t("preset.noneYetManage")}
             </div>
           )}
           {tree.map((node, i) =>
@@ -103,14 +109,15 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
                   onDown={() => moveRoot(i, 1)}
                   onRename={(name) => void updateGroup.mutateAsync({ id: node.group.id, patch: { name } })}
                   onDelete={() => {
-                    if (window.confirm(`Delete ${node.group.kind} “${node.group.name}”? Its presets move back to the top level.`)) {
-                      void removeGroup.mutateAsync(node.group.id).then(() => toast.success("Deleted"))
+                    const confirmKey = node.group.kind === "folder" ? "preset.deleteFolderConfirm" : "preset.deleteSectionConfirm"
+                    if (window.confirm(t(confirmKey, { name: node.group.name }))) {
+                      void removeGroup.mutateAsync(node.group.id).then(() => toast.success(t("preset.deleted")))
                     }
                   }}
                 />
                 <div className="space-y-1 px-2 pb-2 pl-6">
                   {node.presets.length === 0 && (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Empty — move presets here.</div>
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("preset.emptyMovePresets")}</div>
                   )}
                   {node.presets.map((p, pi) => (
                     <PresetRow
@@ -124,7 +131,7 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
                       onDown={() => moveInGroup(node, pi, 1)}
                       onPatch={(patch) => void update.mutateAsync({ id: p.id, patch })}
                       onMove={(gid) => moveToGroup(p, gid)}
-                      onDelete={() => void remove.mutateAsync(p.id).then(() => toast.success("Deleted"))}
+                      onDelete={() => void remove.mutateAsync(p.id).then(() => toast.success(t("preset.deleted")))}
                     />
                   ))}
                 </div>
@@ -141,14 +148,14 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
                 onDown={() => moveRoot(i, 1)}
                 onPatch={(patch) => void update.mutateAsync({ id: node.preset.id, patch })}
                 onMove={(gid) => moveToGroup(node.preset, gid)}
-                onDelete={() => void remove.mutateAsync(node.preset.id).then(() => toast.success("Deleted"))}
+                onDelete={() => void remove.mutateAsync(node.preset.id).then(() => toast.success(t("preset.deleted")))}
               />
             ),
           )}
         </div>
 
         <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
+          <Button onClick={() => onOpenChange(false)}>{t("preset.done")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -156,12 +163,13 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
 }
 
 function ReorderButtons({ canUp, canDown, onUp, onDown }: { canUp: boolean; canDown: boolean; onUp: () => void; onDown: () => void }) {
+  const t = useT()
   return (
     <div className="flex shrink-0 flex-col">
-      <button type="button" aria-label="Move up" disabled={!canUp} onClick={onUp} className="text-muted-foreground hover:text-foreground disabled:opacity-25">
+      <button type="button" aria-label={t("preset.moveUp")} disabled={!canUp} onClick={onUp} className="text-muted-foreground hover:text-foreground disabled:opacity-25">
         <ChevronUp className="h-3.5 w-3.5" />
       </button>
-      <button type="button" aria-label="Move down" disabled={!canDown} onClick={onDown} className="text-muted-foreground hover:text-foreground disabled:opacity-25">
+      <button type="button" aria-label={t("preset.moveDown")} disabled={!canDown} onClick={onDown} className="text-muted-foreground hover:text-foreground disabled:opacity-25">
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -185,6 +193,7 @@ function GroupRow({
   onRename: (name: string) => void
   onDelete: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState(group.name)
   const commit = () => {
     const n = name.trim()
@@ -203,7 +212,7 @@ function GroupRow({
         className="h-7 flex-1 font-medium"
       />
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{group.kind}</span>
-      <button type="button" aria-label={`Delete ${group.name}`} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">
+      <button type="button" aria-label={t("preset.deleteAria", { name: group.name })} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -233,6 +242,7 @@ function PresetRow({
   onMove: (groupId: string | null) => void
   onDelete: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState(preset.name)
   const [description, setDescription] = useState(preset.description ?? "")
 
@@ -255,19 +265,19 @@ function PresetRow({
           <Select value={preset.groupId ?? "__root__"} onValueChange={(v) => onMove(v === "__root__" ? null : v)}>
             <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__root__">Top level</SelectItem>
+              <SelectItem value="__root__">{t("preset.topLevel")}</SelectItem>
               {groups.map((g) => (
                 <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <button type="button" aria-label={`Delete ${preset.name}`} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">
+          <button type="button" aria-label={t("preset.deleteAria", { name: preset.name })} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
         <Input
           value={description}
-          placeholder="Description (optional)"
+          placeholder={t("preset.descriptionOptional")}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => {
             if (description !== (preset.description ?? "")) onPatch({ description })
@@ -281,14 +291,15 @@ function PresetRow({
 }
 
 function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const t = useT()
   const [draft, setDraft] = useState("")
   const add = () => {
-    const t = draft.trim()
-    if (!t || tags.includes(t) || tags.length >= 32) {
+    const tag = draft.trim()
+    if (!tag || tags.includes(tag) || tags.length >= 32) {
       setDraft("")
       return
     }
-    onChange([...tags, t])
+    onChange([...tags, tag])
     setDraft("")
   }
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -299,10 +310,10 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string
   }
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px]">
-          {t}
-          <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))} className="opacity-60 hover:opacity-100">
+      {tags.map((tag) => (
+        <span key={tag} className="inline-flex items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px]">
+          {tag}
+          <button type="button" aria-label={t("preset.removeTag", { tag })} onClick={() => onChange(tags.filter((x) => x !== tag))} className="opacity-60 hover:opacity-100">
             <X className="h-3 w-3" />
           </button>
         </span>
@@ -312,7 +323,7 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKey}
         onBlur={add}
-        placeholder="add tag…"
+        placeholder={t("preset.addTag")}
         className="h-6 min-w-[72px] flex-1 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground"
       />
     </div>

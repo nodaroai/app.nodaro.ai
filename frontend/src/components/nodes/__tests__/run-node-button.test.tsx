@@ -29,10 +29,14 @@ vi.mock("@/lib/edition", () => ({ hasCredits: () => false }))
 vi.mock("@/components/editor/workflow-editor/node-input-resolver", () => ({
   getListInputForNode: () => null,
 }))
-vi.mock("@nodaro/shared", () => ({
-  REPEATABLE_NODE_TYPES: new Set<string>(),
-  getEffectiveRepeatCount: () => 1,
-}))
+vi.mock("@nodaro/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+  return {
+    ...actual,
+    REPEATABLE_NODE_TYPES: new Set<string>(),
+    getEffectiveRepeatCount: () => 1,
+  }
+})
 
 vi.mock("lucide-react", () => {
   const I = (p: Record<string, unknown>) => <span data-testid="mock-icon" {...p} />

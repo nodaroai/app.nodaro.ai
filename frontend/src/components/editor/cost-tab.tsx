@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
 import { isCloud } from "@/lib/edition"
 import { isValidUuid } from "@/lib/uuid"
+import { useT } from "@/lib/i18n"
 import {
   Tooltip,
   TooltipContent,
@@ -145,6 +146,7 @@ interface CostTabProps {
 }
 
 export function CostTab({ className = "" }: CostTabProps) {
+  const t = useT()
   const { isAdmin } = useAuth()
   const nodes = useWorkflowStore((s) => s.nodes)
   const jobIds = useMemo(() => collectJobIds(nodes), [nodes])
@@ -156,9 +158,9 @@ export function CostTab({ className = "" }: CostTabProps) {
     return (
       <div className={`flex flex-col items-center justify-center h-full bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <BarChart3 className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
-        <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">No Executions Yet</h3>
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">{t("cost.empty.title")}</h3>
         <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
-          Run nodes in your workflow to see cost breakdown here.
+          {t("cost.empty.body")}
         </p>
       </div>
     )
@@ -169,7 +171,7 @@ export function CostTab({ className = "" }: CostTabProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0] uppercase tracking-wider">
-          Workflow Cost
+          {t("cost.title")}
         </h2>
         <div className="flex items-center gap-2">
           {/* Admin toggle: credits vs dollars */}
@@ -194,7 +196,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>{showDollars ? "Showing dollars -- click for credits" : "Showing credits -- click for dollars"}</p>
+                  <p>{showDollars ? t("cost.toggleDollars") : t("cost.toggleCredits")}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -221,7 +223,7 @@ export function CostTab({ className = "" }: CostTabProps) {
       {/* Error state */}
       {error && (
         <div className="mx-6 mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
-          <p className="text-sm text-red-600 dark:text-red-400">{error instanceof Error ? error.message : "Failed to fetch cost summary"}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{error instanceof Error ? error.message : t("cost.loadError")}</p>
         </div>
       )}
 
@@ -235,7 +237,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                 {showDollars ? formatDollars(summary.total_cost_usd) : formatCredits(summary.total_credits)}
               </span>
               <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-                total from {summary.total_jobs} {summary.total_jobs === 1 ? "run" : "runs"}
+                {summary.total_jobs === 1 ? t("cost.totalFromRun") : t("cost.totalFromRuns", { n: summary.total_jobs })}
               </span>
             </div>
           </div>
@@ -246,19 +248,19 @@ export function CostTab({ className = "" }: CostTabProps) {
               <thead>
                 <tr className="border-b border-gray-100 dark:border-[#2D2D2D]">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Type
+                    {t("cost.col.type")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Model
+                    {t("cost.col.model")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Runs
+                    {t("cost.col.runs")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    {showDollars ? "$/Run" : "CR/Run"}
+                    {showDollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Total
+                    {t("cost.col.total")}
                   </th>
                 </tr>
               </thead>
@@ -295,7 +297,7 @@ export function CostTab({ className = "" }: CostTabProps) {
               <tfoot>
                 <tr className="border-t border-gray-200 dark:border-[#2D2D2D]">
                   <td className="px-4 py-3 font-semibold text-gray-700 dark:text-[#E2E8F0]">
-                    Total
+                    {t("cost.col.total")}
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right font-mono font-semibold text-gray-700 dark:text-[#E2E8F0]">

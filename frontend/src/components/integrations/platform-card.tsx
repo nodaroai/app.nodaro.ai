@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2, Unlink, Plus, AlertTriangle, RefreshCw, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send, Share2, MessageCircle, Cloud, PenLine, BookOpen, Globe, Users, Pin, Gamepad2, AtSign, Hash } from "lucide-react"
 import { getSocialAuthUrl, disconnectSocial, connectTelegram, connectSocialCustom, type SocialProviderInfo } from "@/lib/api"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 import { isCloud } from "@/lib/edition"
 import type { SocialConnection } from "@/types/nodes"
 
@@ -73,6 +74,7 @@ interface PlatformCardProps {
 }
 
 export function PlatformCard({ provider, connections, onConnectionChange }: PlatformCardProps) {
+  const t = useT()
   const [connecting, setConnecting] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
   const [telegramDialogOpen, setTelegramDialogOpen] = useState(false)
@@ -122,12 +124,12 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       const handler = (e: MessageEvent) => {
         if (e.data?.type === "social-auth-success" && e.data.platform === provider.id) {
           cleanup()
-          toast.success(`Connected to ${provider.label}!`)
+          toast.success(t("integ.connectedTo", { name: provider.label }))
           onConnectionChange()
           setConnecting(false)
         } else if (e.data?.type === "social-auth-error") {
           cleanup()
-          toast.error(e.data.message || "Connection failed")
+          toast.error(e.data.message || t("integ.connectionFailed"))
           setConnecting(false)
         }
       }
@@ -141,48 +143,48 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
         }
       }, 1000)
     } catch {
-      toast.error("Failed to start connection")
+      toast.error(t("integ.toastConnectFailed"))
       setConnecting(false)
     }
-  }, [provider, onConnectionChange, openFieldsDialog])
+  }, [provider, onConnectionChange, openFieldsDialog, t])
 
   const handleDisconnect = useCallback(async (connectionId: string) => {
     setDisconnectingId(connectionId)
     try {
       await disconnectSocial(connectionId)
-      toast.success(`Disconnected from ${provider.label}`)
+      toast.success(t("integ.disconnectedFrom", { name: provider.label }))
       onConnectionChange()
     } catch {
-      toast.error("Failed to disconnect")
+      toast.error(t("integ.toastDisconnectFailed"))
     } finally {
       setDisconnectingId(null)
     }
-  }, [provider.label, onConnectionChange])
+  }, [provider.label, onConnectionChange, t])
 
   const handleTelegramConnect = useCallback(async () => {
     setDialogError(null)
     setDialogBusy(true)
     try {
       await connectTelegram(botToken)
-      toast.success("Connected to Telegram!")
+      toast.success(t("integ.toastConnectedTelegram"))
       setTelegramDialogOpen(false)
       setBotToken("")
       onConnectionChange()
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Failed to connect bot")
+      setDialogError(err instanceof Error ? err.message : t("integ.failedConnectBot"))
     } finally {
       setDialogBusy(false)
     }
-  }, [botToken, onConnectionChange])
+  }, [botToken, onConnectionChange, t])
 
   const fieldValidationError = useMemo(() => {
     for (const f of provider.customFields ?? []) {
       const value = (fieldValues[f.key] ?? "").trim()
-      if (!value) return `${f.label} is required`
-      if (f.validation && !new RegExp(f.validation).test(value)) return `${f.label} is invalid`
+      if (!value) return t("integ.fieldRequired", { field: f.label })
+      if (f.validation && !new RegExp(f.validation).test(value)) return t("integ.fieldInvalid", { field: f.label })
     }
     return null
-  }, [provider.customFields, fieldValues])
+  }, [provider.customFields, fieldValues, t])
 
   const handleFieldsConnect = useCallback(async () => {
     setDialogError(null)
@@ -191,24 +193,28 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       const trimmed: Record<string, string> = {}
       for (const [k, v] of Object.entries(fieldValues)) trimmed[k] = v.trim()
       const result = await connectSocialCustom(provider.id, trimmed)
-      toast.success(`Connected to ${provider.label}${result.username ? ` as ${result.username}` : ""}!`)
+      toast.success(
+        result.username
+          ? t("integ.connectedToAs", { name: provider.label, username: result.username })
+          : t("integ.connectedTo", { name: provider.label }),
+      )
       setFieldsDialogOpen(false)
       onConnectionChange()
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Failed to connect")
+      setDialogError(err instanceof Error ? err.message : t("integ.connectionFailed"))
     } finally {
       setDialogBusy(false)
     }
-  }, [provider.id, provider.label, fieldValues, onConnectionChange])
+  }, [provider.id, provider.label, fieldValues, onConnectionChange, t])
 
   return (
     <div className={`rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-5 flex flex-col gap-4 relative${unavailable ? " opacity-60" : ""}`}>
       {unavailable && (
         <div
           className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#333] text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
-          title={!comingSoon && provider.missingEnv?.length ? `Missing: ${provider.missingEnv.join(", ")}` : undefined}
+          title={!comingSoon && provider.missingEnv?.length ? t("integ.missing", { env: provider.missingEnv.join(", ") }) : undefined}
         >
-          {comingSoon ? "Coming soon" : "Requires setup"}
+          {comingSoon ? t("dash.comingSoon") : t("integ.requiresSetup")}
         </div>
       )}
       <div className="flex items-center gap-3">
@@ -223,7 +229,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
 
       {unavailable && !comingSoon && provider.missingEnv && provider.missingEnv.length > 0 && (
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          Set <code className="font-mono">{provider.missingEnv.join(", ")}</code> on this deployment to enable.
+          {t("integ.setToEnablePre")}<code className="font-mono">{provider.missingEnv.join(", ")}</code>{t("integ.setToEnablePost")}
         </p>
       )}
 
@@ -251,12 +257,12 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                   )}
                   <div className="min-w-0">
                     <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                      {conn.display_name || conn.platform_username || "Connected"}
+                      {conn.display_name || conn.platform_username || t("integ.connected")}
                     </span>
                     {needsReconnect && (
                       <span className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
                         <AlertTriangle className="h-3 w-3 shrink-0" />
-                        Session expired — reconnect to keep publishing
+                        {t("integ.sessionExpired")}
                       </span>
                     )}
                   </div>
@@ -273,7 +279,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                       {connecting
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
-                      Reconnect
+                      {t("integ.reconnect")}
                     </Button>
                   )}
                   <Button
@@ -306,14 +312,14 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       >
         {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
         {unavailable ? (
-          comingSoon ? "Coming soon" : "Requires setup"
+          comingSoon ? t("dash.comingSoon") : t("integ.requiresSetup")
         ) : connections.length > 0 ? (
           <>
             <Plus className="h-4 w-4 mr-2" />
-            Add another account
+            {t("integ.addAnother")}
           </>
         ) : (
-          "Connect"
+          t("integ.connect")
         )}
       </Button>
 
@@ -327,9 +333,9 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Connect Telegram Bot</DialogTitle>
+            <DialogTitle>{t("integ.connectTelegramBot")}</DialogTitle>
             <DialogDescription>
-              Create a bot via{" "}
+              {t("integ.telegramDescPre")}
               <a
                 href="https://web.telegram.org/k/#@BotFather"
                 target="_blank"
@@ -337,8 +343,8 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                 className="text-[#ff0073] underline underline-offset-2 hover:text-[#e0005f] font-medium"
               >
                 @BotFather
-              </a>{" "}
-              on Telegram (send it <code className="text-xs">/newbot</code> and follow the steps), then paste the bot token below.
+              </a>
+              {t("integ.telegramDescMid")}<code className="text-xs">/newbot</code>{t("integ.telegramDescPost")}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-2">
@@ -355,7 +361,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
               className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
             >
               {dialogBusy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Connect
+              {t("integ.connect")}
             </Button>
           </div>
         </DialogContent>
@@ -369,9 +375,9 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Connect {provider.label}</DialogTitle>
+            <DialogTitle>{t("integ.connectProvider", { name: provider.label })}</DialogTitle>
             <DialogDescription>
-              Your credential is validated against {provider.label} and stored encrypted.
+              {t("integ.credentialValidated", { name: provider.label })}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-2">
@@ -398,7 +404,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
               className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
             >
               {dialogBusy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Connect
+              {t("integ.connect")}
             </Button>
           </div>
         </DialogContent>

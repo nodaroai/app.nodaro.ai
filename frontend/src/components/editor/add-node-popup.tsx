@@ -52,6 +52,8 @@ import {
 } from "./add-node-popup/picker-section-list";
 import { searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nodaro/shared"
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useT, type MessageKey } from "@/lib/i18n";
+import { useLocalizeNodeLabel, useLocalizeNodeGroup } from "@/lib/i18n/labels";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
@@ -101,38 +103,40 @@ export const COMMON_NODE_TYPES: ReadonlySet<SceneNodeType> = new Set(
   COMMON_TAB_SECTIONS.flatMap((s) => s.types),
 );
 
+// label/description are MessageKeys, localized at the render site (CATEGORIES
+// is a module-level const — it can't call the useT hook itself).
 export const CATEGORIES = [
   {
     id: VIRTUAL_CATEGORY_IDS.recent,
-    label: "RECENT",
+    labelKey: "nodecat.Recent" as MessageKey,
     icon: <Clock className="h-4 w-4" />,
-    description: "Recently added nodes",
+    descKey: "addnode.catDescRecent" as MessageKey,
   },
   // "Common" is deliberately NOT a category here — it's the popup's Common
   // tab (see the tablist above the search box). The All tab shows this list.
   {
     id: "AI",
-    label: "AI",
+    labelKey: "nodecat.AI" as MessageKey,
     icon: <BookOpen className="h-4 w-4" />,
-    description: "Image, Video, Voice, Music",
+    descKey: "addnode.catDescAI" as MessageKey,
   },
   {
     id: "Input",
-    label: "INPUT",
+    labelKey: "nodecat.Input" as MessageKey,
     icon: <Download className="h-4 w-4" />,
-    description: "Text, Images, Video",
+    descKey: "addnode.catDescInput" as MessageKey,
   },
   {
     id: "Triggers",
-    label: "TRIGGERS",
+    labelKey: "nodecat.Triggers" as MessageKey,
     icon: <Webhook className="h-4 w-4" />,
-    description: "Webhook, Schedule, Telegram",
+    descKey: "addnode.catDescTriggers" as MessageKey,
   },
   {
     id: "Data",
-    label: "DATA",
+    labelKey: "nodecat.Data" as MessageKey,
     icon: <Filter className="h-4 w-4" />,
-    description: "Scrape, Filter, Dedupe, Extract",
+    descKey: "addnode.catDescData" as MessageKey,
   },
   // Parameter category section is hidden — all Parameter-typed nodes are
   // already filtered out of `visibleNodes` (search for `n.category !== "Parameter"`),
@@ -146,49 +150,71 @@ export const CATEGORIES = [
   // },
   {
     id: "Pickers",
-    label: "PICKERS",
+    labelKey: "nodecat.Pickers" as MessageKey,
     icon: <SlidersHorizontal className="h-4 w-4" />,
-    description: "Camera, Look, Subject, Object, Sound",
+    descKey: "addnode.catDescPickers" as MessageKey,
   },
   {
     id: "Processing",
-    label: "PROCESSING",
+    labelKey: "nodecat.Processing" as MessageKey,
     icon: <Merge className="h-4 w-4" />,
-    description: "Combine, Merge, Trim",
+    descKey: "addnode.catDescProcessing" as MessageKey,
   },
   {
     id: "Assets",
-    label: "ASSETS",
+    labelKey: "nodecat.Assets" as MessageKey,
     icon: <UserPlus className="h-4 w-4" />,
-    description: "Character, Face, Object, Location",
+    descKey: "addnode.catDescAssets" as MessageKey,
   },
   {
     id: "Output",
-    label: "OUTPUT",
+    labelKey: "nodecat.Output" as MessageKey,
     icon: <HardDrive className="h-4 w-4" />,
-    description: "Save, Webhook",
+    descKey: "addnode.catDescOutput" as MessageKey,
   },
   {
     id: "Workflow",
-    label: "WORKFLOW",
+    labelKey: "nodecat.Workflow" as MessageKey,
     icon: <Workflow className="h-4 w-4" />,
-    description: "Sub-Workflows, Teleport",
+    descKey: "addnode.catDescWorkflow" as MessageKey,
   },
   {
     id: "Component",
-    label: "COMPONENT",
+    labelKey: "nodecat.Component" as MessageKey,
     icon: <Puzzle className="h-4 w-4" />,
-    description: "Reusable Components",
+    descKey: "addnode.catDescComponent" as MessageKey,
   },
   // Models is a popup-only virtual root: it opens the series → variants model
   // browser (same as the Models tab). categoryRank pins it last in the All tab.
   {
     id: VIRTUAL_CATEGORY_IDS.models,
-    label: "MODELS",
+    labelKey: "nodecat.Models" as MessageKey,
     icon: <Layers className="h-4 w-4" />,
-    description: "Image, Video & Audio models",
+    descKey: "addnode.catDescModels" as MessageKey,
   },
 ].sort((a, b) => categoryRank(a.id) - categoryRank(b.id));
+
+/**
+ * Node-category display name -> message key. Explicit map (not a template
+ * literal + cast) so a renamed category is a compile error, not a raw
+ * "nodecat.Foo" leaking into the UI. Unknown categories fall back to the
+ * original string.
+ */
+const NODE_CATEGORY_KEYS: Record<string, MessageKey> = {
+  Recent: "nodecat.Recent",
+  Common: "nodecat.Common",
+  Input: "nodecat.Input",
+  Triggers: "nodecat.Triggers",
+  Data: "nodecat.Data",
+  Parameter: "nodecat.Parameter",
+  Pickers: "nodecat.Pickers",
+  AI: "nodecat.AI",
+  Processing: "nodecat.Processing",
+  Assets: "nodecat.Assets",
+  Output: "nodecat.Output",
+  Workflow: "nodecat.Workflow",
+  Component: "nodecat.Component",
+};
 
 /** Filter a node pool by a search query (label / type / category / keywords)
  *  and rank the matches: direct-match tier first (edge-drop context), then
@@ -198,6 +224,10 @@ export function searchNodeOptions(
   pool: ReadonlyArray<NodeOption>,
   query: string,
   directTypes: ReadonlySet<string> = EMPTY_SET,
+  // The popup renders localized names, so search must match them too — otherwise
+  // a Hebrew user sees "יצירת תמונה" but can only find it by typing the English
+  // "Generate Image". Pass the localizer and the visible name becomes findable.
+  localize?: (label: string) => string,
 ): NodeOption[] {
   const q = query.toLowerCase();
   const directTier = (n: NodeOption) => (directTypes.has(n.type) ? 0 : 1);
@@ -206,6 +236,7 @@ export function searchNodeOptions(
     .filter(
       (node) =>
         node.label.toLowerCase().includes(q) ||
+        (localize?.(node.label).toLowerCase().includes(q) ?? false) ||
         node.type.toLowerCase().includes(q) ||
         node.category.toLowerCase().includes(q) ||
         (node.keywords?.some((kw) => kw.toLowerCase().includes(q)) ?? false),
@@ -223,8 +254,9 @@ export function searchNodeOptionsSectioned(
   query: string,
   tab: AddNodeMenuTab,
   directTypes: ReadonlySet<string> = EMPTY_SET,
+  localize?: (label: string) => string,
 ): { own: NodeOption[]; other: NodeOption[] } {
-  const ranked = searchNodeOptions(pool, query, directTypes);
+  const ranked = searchNodeOptions(pool, query, directTypes, localize);
   // "all"/"models" are flat at the node level (all matches in `own`); the popup
   // interleaves model hits around them per SEARCH_BLOCK_ORDER below.
   if (tab === "all" || tab === "models") return { own: ranked, other: [] };
@@ -262,7 +294,7 @@ export const SEARCH_BLOCK_ORDER: Record<AddNodeMenuTab, readonly SearchBlock[]> 
 
 /** "From other tabs" is deliberately explicit: a search must never look like
  *  a dead end just because the match lives on a different tab. */
-const SEARCH_BLOCK_HEADER: Record<SearchBlock, string> = { nodeOwn: "Nodes", models: "Models", nodeOther: "From other tabs" };
+const SEARCH_BLOCK_HEADER: Record<SearchBlock, MessageKey> = { nodeOwn: "addnode.blockNodes", models: "addnode.blockModels", nodeOther: "addnode.blockOther" };
 
 /** The model kind a media tab PRIORITIZES in search (sorts first, never filters);
  *  undefined = no kind preference (Models/All/Common show every model in order). */
@@ -341,6 +373,16 @@ export function AddNodePopup({
   autoConnectCtx,
   onPickType,
 }: AddNodePopupProps) {
+  const t = useT();
+  // Unknown category -> render the raw English rather than mislabelling it.
+  const nodeCategory = (c: string): string => {
+    const key = NODE_CATEGORY_KEYS[c];
+    return key ? t(key) : c;
+  };
+  // Node display names come from NODE_OPTIONS (English canonical); this maps
+  // them through the shared node-label table so the list matches the canvas.
+  const localizeNode = useLocalizeNodeLabel();
+  const localizeGroup = useLocalizeNodeGroup();
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
   const openPickerForNode = useWorkflowStore((s) => s.openPickerForNode);
@@ -557,7 +599,7 @@ export function AddNodePopup({
   // Edge-drop has a real two-tier vocabulary (a "Direct Match" section vs
   // "Compatible"); Tab-auto-connect instead marks every node that can wire to the
   // focused node in EITHER direction, which reads better as "connects" than "direct".
-  const matchLabel = isFiltered ? "direct" : "connects";
+  const matchLabel = isFiltered ? t("addnode.badgeDirect") : t("addnode.badgeConnects");
 
   const optionByType = useMemo(() => {
     const map = new Map<SceneNodeType, NodeOption>();
@@ -583,8 +625,9 @@ export function AddNodePopup({
       searchQuery,
       searchTab,
       directMatchTypes,
+      localizeNode,
     );
-  }, [searchActive, effectivePool, browsePool, isFiltered, searchQuery, searchTab, directMatchTypes]);
+  }, [searchActive, effectivePool, browsePool, isFiltered, searchQuery, searchTab, directMatchTypes, localizeNode]);
 
   // ALL matching models (never filtered by tab) — just ordered so the active
   // media tab's own kind leads. Suppressed in edge-drop (connection-driven).
@@ -650,9 +693,9 @@ export function AddNodePopup({
     if (!recent.length) return built;
     return {
       ...built,
-      sections: [{ id: "common-recent", label: "Recent", options: recent }, ...built.sections],
+      sections: [{ id: "common-recent", label: t("nodecat.Recent"), options: recent }, ...built.sections],
     };
-  }, [activeTab, effectivePool, browsePool, isFiltered, showRecentNodes, history, optionByType]);
+  }, [activeTab, effectivePool, browsePool, isFiltered, showRecentNodes, history, optionByType, t]);
 
   // Generation Settings rows under the model tree. They keep their own cursor
   // because the tree owns the arrows on that tab and hands the index over once
@@ -877,11 +920,11 @@ export function AddNodePopup({
               className="flex items-center gap-2 hover:text-[var(--npk-accent)] transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              {selectedCategory}
+              {nodeCategory(selectedCategory)}
             </button>
           ) : isFiltered && connectionContext ? (
             <div className="flex items-center gap-2">
-              <span>Connect to</span>
+              <span>{t("addnode.connectTo")}</span>
               {(() => {
                 // Tint the chip in the handle's own type color when known
                 // (`connectionContext.color` is the pip's `--pip-color`);
@@ -909,11 +952,11 @@ export function AddNodePopup({
             </div>
           ) : autoConnectCtx ? (
             <span className="flex items-center gap-1.5">
-              <span>Connecting new node to</span>
+              <span>{t("addnode.connectingNewNodeTo")}</span>
               <span className="text-[var(--npk-accent)]">{autoConnectCtx.focusedLabel}</span>
             </span>
           ) : (
-            "What do you want to do?"
+            t("addnode.whatCreate")
           )}
         </h3>
       </div>
@@ -930,7 +973,7 @@ export function AddNodePopup({
             <input
               ref={searchInputRef}
               type="text"
-              placeholder={inModelsView ? "Search models & nodes..." : "Search nodes..."}
+              placeholder={inModelsView ? t("addnode.searchModelsNodes") : t("addnode.searchNodes")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
@@ -954,14 +997,14 @@ export function AddNodePopup({
             <div className="flex items-center gap-3 shrink-0 ml-auto">
               <ToggleLabel
                 icon={<Link2 className="w-3.5 h-3.5 text-[var(--npk-accent)]" />}
-                label="Auto Connect"
+                label={t("addnode.autoConnect")}
                 checked={autoConnect}
                 onChange={(v) => {
                   setAutoConnect(v)
                   setAutoConnectPref(v)
                 }}
-                ariaLabel="Auto-connect"
-                title="Auto-connect the new node to the focused node"
+                ariaLabel={t("addnode.autoConnectAria")}
+                title={t("addnode.autoConnectHint")}
               />
             </div>
           )}
@@ -1025,7 +1068,7 @@ export function AddNodePopup({
                   return (
                     <div key={block} className="mb-2.5">
                       <div className="sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
-                        {SEARCH_BLOCK_HEADER[block]}
+                        {t(SEARCH_BLOCK_HEADER[block])}
                       </div>
                       {rows.map((r, i) =>
                         r.kind === "model" ? (
@@ -1078,7 +1121,7 @@ export function AddNodePopup({
               <>
                 <div className="text-[12px] uppercase tracking-wider text-[var(--npk-match-dim)] font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--npk-match)]" />
-                  Direct Match
+                  {t("addnode.directMatch")}
                 </div>
                 {compatibilityNodes.direct.map((node, index) => (
                   <button
@@ -1098,8 +1141,8 @@ export function AddNodePopup({
                       {node.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-base font-medium text-[var(--npk-t1)] truncate">{node.label}</div>
-                      <div className="text-sm text-[var(--npk-muted)]">{node.category}</div>
+                      <div className="text-base font-medium text-[var(--npk-t1)] truncate">{localizeNode(node.label)}</div>
+                      <div className="text-sm text-[var(--npk-muted)]">{nodeCategory(node.category)}</div>
                     </div>
                     <MatchBadge label={matchLabel} />
                   </button>
@@ -1109,7 +1152,7 @@ export function AddNodePopup({
             {compatibilityNodes.compatible.length > 0 && (
               <>
                 <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
-                  Compatible
+                  {t("addnode.compatible")}
                 </div>
                 {compatibilityNodes.compatible.map((node, rawIndex) => {
                   const index = compatibilityNodes.direct.length + rawIndex;
@@ -1131,8 +1174,8 @@ export function AddNodePopup({
                         {node.icon}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-base font-medium text-[var(--npk-t2)] truncate">{node.label}</div>
-                        <div className="text-sm text-[var(--npk-muted)]">{node.category}</div>
+                        <div className="text-base font-medium text-[var(--npk-t2)] truncate">{localizeNode(node.label)}</div>
+                        <div className="text-sm text-[var(--npk-muted)]">{nodeCategory(node.category)}</div>
                       </div>
                     </button>
                   );
@@ -1143,7 +1186,7 @@ export function AddNodePopup({
         ) : selectedCategory ? (
           categoryNodes.length === 0 ? (
             <div className="px-4 py-8 text-center text-base text-[var(--npk-muted)]">
-              No nodes here yet — they&apos;ll appear as you use them.
+              {t("addnode.noNodesYet")}
             </div>
           ) : (
           // Category nodes — with optional group sub-headers
@@ -1160,7 +1203,10 @@ export function AddNodePopup({
                       <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
                     )}
                     <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
-                      {familyLabel(node.group)}
+                      {(() => {
+                        const label = familyLabel(node.group)
+                        return label ? localizeGroup(label) : label
+                      })()}
                     </div>
                   </>
                 )}
@@ -1185,7 +1231,7 @@ export function AddNodePopup({
                     {node.icon}
                   </span>
                   <span className="text-base text-[var(--npk-t1)]">
-                    {node.label}
+                    {localizeNode(node.label)}
                   </span>
                   {directMatchTypes.has(node.type) && (
                     <MatchBadge label={matchLabel} className="ml-auto" />
@@ -1202,7 +1248,7 @@ export function AddNodePopup({
           // with what is drawn.
           pickerSections.sections.length === 0 && pickerSections.controls.length === 0 ? (
             <div className="px-4 py-8 text-center text-[13.5px] text-[var(--npk-muted)]">
-              No nodes available here in this edition.
+              {t("addnode.noNodesEdition")}
             </div>
           ) : (
             <PickerSectionList
@@ -1246,9 +1292,9 @@ export function AddNodePopup({
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold uppercase tracking-wider text-[var(--npk-t1)]">
-                  {cat.label}
+                  {t(cat.labelKey)}
                 </div>
-                <div className="text-sm text-[var(--npk-muted)]">{cat.description}</div>
+                <div className="text-sm text-[var(--npk-muted)]">{t(cat.descKey)}</div>
               </div>
               <ChevronRight className="w-4 h-4 text-[var(--npk-muted)]" />
             </button>
@@ -1264,33 +1310,33 @@ export function AddNodePopup({
             <kbd className="px-1 py-0.5 bg-[var(--npk-key)] rounded border border-[var(--npk-border)]">
               ↑↓
             </kbd>
-            Navigate
+            {t("addnode.navigate")}
           </span>
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-[var(--npk-key)] rounded border border-[var(--npk-border)]">
               ↵
             </kbd>
-            Select
+            {t("addnode.select")}
           </span>
           {!isFiltered && (
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-[var(--npk-key)] rounded border border-[var(--npk-border)]">
                 ⇥
               </kbd>
-              Tabs
+              {t("addnode.tabs")}
             </span>
           )}
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-[var(--npk-key)] rounded border border-[var(--npk-border)]">
               Esc
             </kbd>
-            Close
+            {t("addnode.close")}
           </span>
           {/* Count of what is actually on screen right now — derived, never a
               hardcoded catalog total, so it stays honest as families collapse
               or the edition hides Cloud-only nodes. */}
           <span className="ml-auto tabular-nums text-[var(--npk-faint)]">
-            {renderedNodeCount} {renderedNodeCount === 1 ? "node" : "nodes"}
+            {renderedNodeCount} {renderedNodeCount === 1 ? t("addnode.unitNode") : t("addnode.unitNodes")}
           </span>
         </div>
       </div>

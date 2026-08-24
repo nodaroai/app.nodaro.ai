@@ -70,12 +70,26 @@ function extractBearerToken(req: FastifyRequest): string | null {
 }
 
 /** Returns invalid workflow IDs not owned by the user, or empty array if all valid. */
+/**
+ * Which of these workflow ids may this token be bound to?
+ *
+ * Personal workflows only, and that is a decision rather than an oversight: a
+ * personal API token is a long-lived credential its owner can paste anywhere,
+ * so letting one reach work that belongs to a workspace would make a leaked
+ * token everyone's problem instead of one person's. Opening that up is a
+ * product decision for whoever wants it, not a side effect of scoping.
+ *
+ * The `.is("workspace_id", null)` is a no-op today (nothing carries a
+ * workspace yet) and closes the question before it can be answered by
+ * accident.
+ */
 async function validateWorkflowOwnership(userId: string, workflowIds: string[]): Promise<string[]> {
   if (workflowIds.length === 0) return []
   const { data: owned } = await supabase
     .from("workflows")
     .select("id")
     .eq("user_id", userId)
+    .is("workspace_id", null)
     .in("id", workflowIds)
 
   const ownedIds = new Set((owned ?? []).map((w) => w.id))
@@ -404,11 +418,14 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       const query = req.query as Record<string, string>
       const limit = Math.min(Math.max(parseInt(query.limit ?? "50", 10) || 50, 1), 100)
 
-      // Load workflows owned by user (scoped by token if configured)
+      // Load workflows owned by user (scoped by token if configured).
+      // Personal only — see validateWorkflowOwnership for why a token never
+      // reaches workspace work.
       let dbQuery = supabase
         .from("workflows")
         .select("id, name, description, project_id, version, thumbnail_url, created_at, updated_at, nodes")
         .eq("user_id", resolved.userId)
+        .is("workspace_id", null)
         .order("updated_at", { ascending: false })
         .limit(limit + 1)
 
@@ -447,6 +464,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           .from("workflows")
           .select("id, name")
           .eq("user_id", resolved.userId)
+          .is("workspace_id", null)
           .in("id", Array.from(subWorkflowIds))
 
         for (const sw of subWfs ?? []) {

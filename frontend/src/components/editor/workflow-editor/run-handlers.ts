@@ -28,6 +28,7 @@ import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { buildVariantResults } from "./variant-results";
 import { sunoVariantFields } from "@/lib/suno-ids";
+import { tx } from "@/lib/i18n";
 
 // Phase 1 runs at most one whole-workflow stream at a time. We keep its teardown
 // here so a Discard / Run-instead can fully stop the OLD stream (abort its SSE +
@@ -52,9 +53,9 @@ function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const names = underMin.map((n) => {
     const label = (n.data as Record<string, unknown>).label as string || "Table"
     const minRows = ((n.data as Record<string, unknown>).minRows as number) ?? 0
-    return `${label} (needs ${minRows}+ rows)`
+    return `${label} ${tx("run.needsRows", { count: minRows })}`
   })
-  toast.warning(`Under minimum rows: ${names.join(", ")}`)
+  toast.warning(tx("run.underMinRows", { names: names.join(", ") }))
 }
 
 /**
@@ -281,14 +282,12 @@ export async function handleRun(
 
   const executableNodes = nodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
-    toast.error(
-      "No executable nodes found. Add Generate Image, Image to Video, or Video to Video nodes.",
-    );
+    toast.error(tx("run.noExecutableNodes"));
     return;
   }
 
   if (!workflowId) {
-    toast.error("Save the workflow before running.");
+    toast.error(tx("run.saveBeforeRunning"));
     return;
   }
 
@@ -357,8 +356,8 @@ export async function handleRun(
     await save(projectId);
   }
 
-  toast.info("Executing workflow...", {
-    description: `${executableNodes.length} node(s) to run`,
+  toast.info(tx("run.executingWorkflow"), {
+    description: tx("run.nodesToRun", { count: executableNodes.length }),
   });
 
   try {
@@ -372,15 +371,15 @@ export async function handleRun(
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
-      toast.info("Workflow is already running — reattaching...");
+      toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
       streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
     markNodesStatus(executableIds, undefined);
-    toast.error("Failed to start workflow", {
-      description: err instanceof Error ? err.message : "Unknown error",
+    toast.error(tx("run.failedToStartWorkflow"), {
+      description: err instanceof Error ? err.message : tx("run.unknownError"),
     });
   }
 }
@@ -403,7 +402,7 @@ export async function handleRunSingleNode(
   if (!node) return;
 
   if (!isExecutableNode(node)) {
-    toast.error("This node type cannot be run individually.");
+    toast.error(tx("run.nodeTypeCannotRunIndividually"));
     return;
   }
 
@@ -466,9 +465,9 @@ export async function handleRunSingleNode(
       // 4b: an exclusive node on an unconnected install — surface the SAME
       // structured refusal the backend sent, with the connect CTA attached.
       if (err instanceof NodaroConnectionRequiredError) {
-        toast.error("Connect nodaro.ai to run this node", {
+        toast.error(tx("run.connectNodaroToRun"), {
           description: err.message,
-          action: { label: "Connect", onClick: () => { window.location.href = "/integrations"; } },
+          action: { label: tx("run.connect"), onClick: () => { window.location.href = "/integrations"; } },
         });
       }
       // Error already surfaced via toast in executeNode. If the node never left
@@ -529,7 +528,7 @@ export async function handleRunFromHere(
 
   const workflowId = useWorkflowStore.getState().workflowId;
   if (!workflowId) {
-    toast.error("Save the workflow before running.");
+    toast.error(tx("run.saveBeforeRunning"));
     return;
   }
 
@@ -542,7 +541,7 @@ export async function handleRunFromHere(
     (n) => downstream.has(n.id) && isExecutableNode(n),
   );
   if (executableNodes.length === 0) {
-    toast.error("No executable nodes found downstream.");
+    toast.error(tx("run.noExecutableDownstream"));
     return;
   }
 
@@ -568,8 +567,8 @@ export async function handleRunFromHere(
     await save(projectId);
   }
 
-  toast.info("Running from here...", {
-    description: `${executableNodes.length} node(s) to run`,
+  toast.info(tx("run.runningFromHere"), {
+    description: tx("run.nodesToRun", { count: executableNodes.length }),
   });
 
   try {
@@ -579,15 +578,15 @@ export async function handleRunFromHere(
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
-      toast.info("Workflow is already running — reattaching...");
+      toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
       streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
     markNodesStatus(executableIds, undefined);
-    toast.error("Failed to start execution", {
-      description: err instanceof Error ? err.message : "Unknown error",
+    toast.error(tx("run.failedToStartExecution"), {
+      description: err instanceof Error ? err.message : tx("run.unknownError"),
     });
   }
   } finally {
@@ -617,7 +616,7 @@ export async function handleRunSelected(
   const { nodes } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);
   if (selectedNodes.length === 0) {
-    toast.error("No nodes selected.");
+    toast.error(tx("run.noNodesSelected"));
     return;
   }
 
@@ -627,13 +626,13 @@ export async function handleRunSelected(
 
   const workflowId = useWorkflowStore.getState().workflowId;
   if (!workflowId) {
-    toast.error("Save the workflow before running.");
+    toast.error(tx("run.saveBeforeRunning"));
     return;
   }
 
   const executableNodes = selectedNodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
-    toast.error("No executable nodes in selection.");
+    toast.error(tx("run.noExecutableInSelection"));
     return;
   }
   warnUnderMinRows(selectedNodes);
@@ -659,8 +658,8 @@ export async function handleRunSelected(
     await save(projectId);
   }
 
-  toast.info("Running selected nodes...", {
-    description: `${executableNodes.length} node(s) to run`,
+  toast.info(tx("run.runningSelected"), {
+    description: tx("run.nodesToRun", { count: executableNodes.length }),
   });
 
   try {
@@ -670,15 +669,15 @@ export async function handleRunSelected(
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
-      toast.info("Workflow is already running — reattaching...");
+      toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
       streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
     markNodesStatus(executableIds, undefined);
-    toast.error("Failed to start execution", {
-      description: err instanceof Error ? err.message : "Unknown error",
+    toast.error(tx("run.failedToStartExecution"), {
+      description: err instanceof Error ? err.message : tx("run.unknownError"),
     });
   }
 }
@@ -754,14 +753,14 @@ export function restorePollingForRunningJobs(
             applyRestoredJobCompletion(nodeId, nodeType, job, jobId);
           } else if (job.status === "failed") {
             ctx.untrackInterval(poll);
-            const errMsg = job.error_message ?? "Unknown error";
+            const errMsg = job.error_message ?? tx("run.unknownError");
             updateNodeData(nodeId, {
               executionStatus: "failed",
               errorMessage: errMsg,
               currentJobId: undefined,
               currentJobProgress: undefined,
             });
-            toast.error("Job failed", { description: errMsg });
+            toast.error(tx("run.jobFailed"), { description: errMsg });
           } else if (job.status === "cancelled") {
             ctx.untrackInterval(poll);
             updateNodeData(nodeId, {
@@ -849,7 +848,7 @@ function applyRestoredJobCompletion(
       currentJobId: undefined,
       currentJobProgress: undefined,
     });
-    toast.success("Background job completed");
+    toast.success(tx("run.backgroundJobCompleted"));
     return;
   }
 
@@ -900,7 +899,7 @@ function applyRestoredJobCompletion(
   }
 
   updateNodeData(nodeId, updates);
-  toast.success("Background job completed");
+  toast.success(tx("run.backgroundJobCompleted"));
 }
 
 // ---------------------------------------------------------------------------
@@ -961,7 +960,7 @@ export function streamBackendExecution(
     abandoned = true;
     revertActiveNodesToIdle();
     cleanup();
-    toast.info("Run discarded — in-flight results will be saved to My Library");
+    toast.info(tx("run.runDiscarded"));
   };
 
   // Track the abort controller so it gets cleaned up on workflow switch
@@ -996,7 +995,7 @@ export function streamBackendExecution(
           // Non-critical — SSE already applied what it had.
         }
         cleanup();
-        toast.success("Backend execution completed");
+        toast.success(tx("run.backendCompleted"));
       },
       onFailed: (data) => {
         if (finished) return;
@@ -1006,7 +1005,7 @@ export function streamBackendExecution(
         // still "pending" — settle those instead of leaving them spinning.
         revertActiveNodesToIdle();
         cleanup();
-        toast.error("Backend execution failed", {
+        toast.error(tx("run.backendFailed"), {
           description: (data.errorMessage as string) ?? undefined,
         });
       },
@@ -1014,7 +1013,7 @@ export function streamBackendExecution(
         if (finished) return;
         revertActiveNodesToIdle();
         cleanup();
-        toast.info("Backend execution cancelled");
+        toast.info(tx("run.backendCancelled"));
       },
       onDiscarded,
     },
@@ -1067,15 +1066,15 @@ export function streamBackendExecution(
         if (exec.status !== "completed") revertActiveNodesToIdle();
         cleanup();
         if (exec.status === "completed") {
-          toast.success("Backend execution completed");
+          toast.success(tx("run.backendCompleted"));
         } else if (exec.status === "failed") {
-          toast.error("Backend execution failed", {
+          toast.error(tx("run.backendFailed"), {
             description: exec.errorMessage,
           });
         } else if (exec.status === "cancelled") {
-          toast.info("Backend execution cancelled");
+          toast.info(tx("run.backendCancelled"));
         } else {
-          toast.error("Backend execution timed out");
+          toast.error(tx("run.backendTimedOut"));
         }
         return;
       }
@@ -1095,7 +1094,7 @@ export function streamBackendExecution(
           if (opts.isRestore) {
             console.debug("[restore] execution no longer active — keeping last-known canvas state");
           } else {
-            toast.error("Backend execution no longer exists");
+            toast.error(tx("run.backendNoLongerExists"));
           }
           return;
         }
@@ -1111,24 +1110,24 @@ export function streamBackendExecution(
           applyStates(finalStates);
           if (finalExec.status === "completed") {
             cleanup();
-            toast.success("Backend execution completed");
+            toast.success(tx("run.backendCompleted"));
             return;
           }
           if (finalExec.status === "failed") {
             revertActiveNodesToIdle();
             cleanup();
-            toast.error("Backend execution failed", { description: finalExec.errorMessage });
+            toast.error(tx("run.backendFailed"), { description: finalExec.errorMessage });
             return;
           }
           if (finalExec.status === "cancelled") {
             revertActiveNodesToIdle();
             cleanup();
-            toast.info("Backend execution cancelled");
+            toast.info(tx("run.backendCancelled"));
             return;
           }
         } catch { /* final check also failed */ }
         cleanup();
-        toast.error("Lost connection to backend execution");
+        toast.error(tx("run.lostConnection"));
         return;
       }
     }

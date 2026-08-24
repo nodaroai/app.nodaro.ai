@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useT } from "@/lib/i18n"
 
 // Cloud serves MCP from its own subdomain; a self-host serves it from the
 // instance the user is already looking at. Handing a self-hoster the cloud URL
@@ -15,6 +16,7 @@ const MCP_URL = isCloud()
   : `${window.location.origin}/mcp`
 
 export default function McpPage() {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -47,10 +49,9 @@ export default function McpPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-6 py-16 text-center">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Nodaro × MCP</h1>
+        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{t("mcp.title")}</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Drive Nodaro tools from Claude.ai, Cursor, Cline, Continue.dev, Goose,
-          or any MCP-compatible AI client.
+          {t("mcp.subtitle")}
         </p>
 
         <div className="mt-8 inline-flex items-center gap-2 rounded-lg border bg-card px-4 py-3 font-mono text-sm shadow-sm">
@@ -59,22 +60,21 @@ export default function McpPage() {
             size="sm"
             variant="ghost"
             onClick={handleCopy}
-            aria-label="Copy MCP URL to clipboard"
+            aria-label={t("mcp.copyUrlAria")}
           >
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
         </div>
 
         <p className="mt-6 text-sm text-muted-foreground">
-          Paste into your MCP client's "Add custom connector" dialog. Sign in with
-          your Nodaro account, consent, and start generating.
+          {t("mcp.pasteHint")}
         </p>
 
         <a
           href="https://nodaroai.github.io/app.nodaro.ai/mcp/"
           className="mt-8 inline-block underline text-sm"
         >
-          Read the docs →
+          {t("mcp.readDocs")}
         </a>
       </main>
     </div>

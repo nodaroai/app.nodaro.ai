@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Pencil, Paintbrush, type LucideIcon } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
 import { getPromptFields, nodeHasPromptField } from "@/lib/prompt-fields"
 import { AiAvatarScriptModal } from "@/components/nodes/ai-avatar-script-modal"
 import type { AiAvatarData } from "@/types/nodes"
@@ -35,6 +36,7 @@ interface PromptEditButtonProps {
  *    settings, so the button stays functional and the left slot is consistent.
  */
 export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
+  const t = useT()
   const nodeType = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId)?.type)
   const speechMode = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === nodeId)
@@ -63,13 +65,13 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
     <>
       <button
         type="button"
-        title={isAiAvatarText ? `Edit script (${sc})` : `Edit prompt (${sc})`}
-        aria-label={isAiAvatarText ? "Edit script" : "Edit prompt"}
+        title={isAiAvatarText ? t("node.editScriptShortcut", { sc }) : t("node.editPromptShortcut", { sc })}
+        aria-label={isAiAvatarText ? t("node.editScript") : t("node.editPrompt")}
         onClick={handleClick}
         className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[10px] font-medium whitespace-nowrap text-primary hover:bg-primary/10"
       >
         <Icon className="w-3 h-3" />
-        {!compact && <span>{isAiAvatarText ? "Script" : "Prompt"}</span>}
+        {!compact && <span>{isAiAvatarText ? t("node.script") : t("node.prompt")}</span>}
       </button>
 
       {/* Focused script editor — mounted for ai-avatar nodes while open

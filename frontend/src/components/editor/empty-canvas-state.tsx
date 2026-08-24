@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import type { SceneNodeType } from "@/types/nodes";
+import { useT, type MessageKey } from "@/lib/i18n";
 
 /**
  * Empty-canvas first-run surface. Shown only when the active Flow page has zero
@@ -25,8 +26,8 @@ import type { SceneNodeType } from "@/types/nodes";
 interface HeroCard {
   readonly key: string;
   readonly nodeType: SceneNodeType;
-  readonly title: string;
-  readonly subtitle: string;
+  readonly titleKey: MessageKey;
+  readonly subtitleKey: MessageKey;
   readonly Icon: typeof ImageIcon;
   /** Tailwind classes for the icon tile — kept per-card so the empty-state
    *  inherits the same color language as the node it spawns. */
@@ -39,8 +40,8 @@ const HERO_CARDS: readonly HeroCard[] = [
   {
     key: "image",
     nodeType: "generate-image",
-    title: "Image",
-    subtitle: "Generate from a prompt",
+    titleKey: "canvas.heroImage",
+    subtitleKey: "canvas.generateFromPrompt",
     Icon: ImageIcon,
     iconWrap: "bg-violet-500/10 dark:bg-violet-500/15",
     iconColor: "text-violet-500 dark:text-violet-400",
@@ -48,8 +49,8 @@ const HERO_CARDS: readonly HeroCard[] = [
   {
     key: "video",
     nodeType: "generate-video",
-    title: "Video",
-    subtitle: "Generate from a prompt",
+    titleKey: "canvas.heroVideo",
+    subtitleKey: "canvas.generateFromPrompt",
     Icon: Video,
     iconWrap: "bg-emerald-500/10 dark:bg-emerald-500/15",
     iconColor: "text-emerald-500 dark:text-emerald-400",
@@ -79,6 +80,7 @@ export function EmptyCanvasState({
   onOpenTemplates,
   onOpenTutorials,
 }: EmptyCanvasStateProps) {
+  const t = useT();
   return (
     // Wrapper is click-through so the empty canvas stays pannable around the
     // content; only the interactive cluster captures pointer events.
@@ -100,14 +102,14 @@ export function EmptyCanvasState({
 
       <div className="pointer-events-auto relative flex w-full max-w-[680px] flex-col items-center px-4">
         <span className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-          Page 1 · Empty canvas
+          {t("canvas.pageEmpty")}
         </span>
 
         <h1 className="bg-gradient-to-b from-slate-900 to-slate-500 dark:from-white dark:to-slate-400 bg-clip-text text-center text-4xl font-semibold tracking-tight text-transparent">
-          Make something
+          {t("canvas.makeSomething")}
         </h1>
         <p className="mt-2 text-center text-[15px] text-slate-500 dark:text-slate-400">
-          Start from a prompt
+          {t("canvas.startFromPrompt")}
         </p>
 
         {/* Hero create cards */}
@@ -125,8 +127,8 @@ export function EmptyCanvasState({
               <span className={`mb-8 flex h-11 w-11 items-center justify-center rounded-xl ${card.iconWrap}`}>
                 <card.Icon className={`h-5 w-5 ${card.iconColor}`} />
               </span>
-              <span className="text-[15px] font-semibold text-slate-900 dark:text-white">{card.title}</span>
-              <span className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">{card.subtitle}</span>
+              <span className="text-[15px] font-semibold text-slate-900 dark:text-white">{t(card.titleKey)}</span>
+              <span className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">{t(card.subtitleKey)}</span>
             </button>
           ))}
         </div>
@@ -143,8 +145,8 @@ export function EmptyCanvasState({
             <Upload className="h-4 w-4" />
           </span>
           <span className="flex flex-col">
-            <span className="text-[13px] font-semibold text-slate-900 dark:text-white">Have a file already?</span>
-            <span className="text-[12px] text-slate-500 dark:text-slate-400">Upload or browse your assets</span>
+            <span className="text-[13px] font-semibold text-slate-900 dark:text-white">{t("canvas.haveFile")}</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400">{t("canvas.uploadOrBrowse")}</span>
           </span>
           <ArrowRight className="ml-auto h-4 w-4 text-slate-300 transition-colors group-hover:text-[#ff0073] dark:text-slate-600" />
         </button>
@@ -155,27 +157,27 @@ export function EmptyCanvasState({
             <DropdownMenuTrigger asChild>
               <button type="button" className={PILL_CLASS}>
                 <FolderOpen className="h-3.5 w-3.5" />
-                Browse assets
+                {t("canvas.browseAssets")}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-44">
               <DropdownMenuItem onClick={onOpenMyLibrary}>
                 <FolderOpen className="mr-2 h-4 w-4" />
-                My Library
+                {t("canvas.myLibrary")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenMediaLibrary}>
                 <Images className="mr-2 h-4 w-4" />
-                Media Library
+                {t("canvas.mediaLibrary")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <button type="button" className={PILL_CLASS} onClick={onOpenTemplates}>
             <LayoutGrid className="h-3.5 w-3.5" />
-            Templates
+            {t("canvas.templates")}
           </button>
           <button type="button" className={PILL_CLASS} onClick={onOpenTutorials}>
             <GraduationCap className="h-3.5 w-3.5" />
-            Tutorials
+            {t("canvas.tutorials")}
           </button>
         </div>
       </div>

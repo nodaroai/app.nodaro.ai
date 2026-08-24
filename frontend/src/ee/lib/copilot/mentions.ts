@@ -1,13 +1,15 @@
 /**
  * `@` mentions.
  *
- * A mention is a CHIP, not a URL. The wire message carries the entity's name
- * and kind as plain text and the model resolves it with `list_characters` /
- * `list_locations` — the two entity tools on its allowlist. That is deliberate:
- * `edit_workflow` rejects model-authored media addresses, so handing the model
- * a URL here would either be useless or a hole in that boundary. Media files
- * and uploaded attachments need server-side id resolution and are not part of
- * this release.
+ * A mention is a CHIP, not a URL. The wire message carries the entity's kind,
+ * name and ID — never an address. `edit_workflow` rejects model-authored media
+ * addresses, so a URL here would either be useless or a hole in that boundary,
+ * while an ID is safe by construction: every entity tool scopes its lookup to
+ * the session's own user, so a mention can only address the sender's own
+ * assets.
+ *
+ * Media files and uploaded attachments still need server-side resolution and
+ * are not part of this release.
  */
 import type { CopilotMention } from "./types"
 
@@ -62,14 +64,30 @@ function cleanName(name: string): string {
   )
 }
 
+/** Only a plain identifier reaches the wire — never something that reads as a directive. */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
+
 /**
  * What actually goes over the wire. The references line is appended rather than
  * interpolated so the user's own sentence reaches the model unedited.
+ *
+ * The ID is what makes a mention work at all. Without it the model has to FIND
+ * the entity by name, and the listing tools return a bounded, most-recently-
+ * updated page — a user with 347 characters got "I could not find them" for
+ * anything outside the newest few. With it, the model calls `get_character`
+ * once and is done. An ID is safe to hand over where a URL would not be: every
+ * entity tool scopes its lookup to the session's own user, so a mention can
+ * only ever address the sender's own assets.
  */
 export function buildWireMessage(text: string, mentions: readonly CopilotMention[]): string {
   const body = text.trim()
   if (mentions.length === 0) return body
-  const refs = mentions.map((m) => `${KIND_LABEL[m.kind]} "${cleanName(m.name)}"`).join("; ")
+  const refs = mentions
+    .map((m) => {
+      const named = `${KIND_LABEL[m.kind]} "${cleanName(m.name)}"`
+      return SAFE_ID.test(m.id) ? `${named} (id: ${m.id})` : named
+    })
+    .join("; ")
   const line = `[references] ${refs}`
   return body ? `${body}\n\n${line}` : line
 }
@@ -84,6 +102,16 @@ export function splitWireMessage(message: string): { text: string; refs: string[
     .map((r) => r.trim())
     .filter(Boolean)
   return { text: message.slice(0, idx), refs }
+}
+
+/**
+ * The name to show on a chip, out of a stored reference.
+ *
+ * A reference on the wire is `character "Maya" (id: …)` — written for the
+ * model. A person should see "Maya".
+ */
+export function mentionDisplayName(ref: string): string {
+  return /"([^"]*)"/.exec(ref)?.[1] ?? ref.replace(/\s*\(id: [^)]*\)\s*$/, "").trim()
 }
 
 export function filterMentions<T extends { name: string }>(items: readonly T[], query: string): T[] {

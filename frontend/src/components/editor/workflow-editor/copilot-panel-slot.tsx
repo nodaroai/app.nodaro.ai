@@ -13,10 +13,11 @@
  * in a module-level engine, not in this subtree.)
  */
 import { Suspense, lazy, useEffect, type ComponentType } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Bot, Loader2 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
-import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 
 /**
@@ -34,6 +35,17 @@ function resolvePanel() {
   return lazyPanel
 }
 
+/**
+ * Handoff arrivals already acted on, so closing the rail sticks.
+ *
+ * Keyed by THREAD id, while the handoff hook's own set is keyed by WORKFLOW
+ * id. They are deliberately separate questions — "has this rail been opened
+ * for this arrival" versus "has this workflow been handed off" — and the only
+ * thing that keeps them from diverging visibly is that the parameter is
+ * consumed once. Anything that starts preserving it needs to revisit both.
+ */
+const honouredArrivals = new Set<string>()
+
 export interface CopilotPanelSlotProps {
   projectId: string | undefined
   save: ((projectId: string) => Promise<{ success: boolean; error?: string }>) | null
@@ -49,6 +61,21 @@ export interface CopilotPanelSlotProps {
 }
 
 export function CopilotPanelSlot(props: CopilotPanelSlotProps) {
+  // A reload on the handoff URL must reopen the rail, or the user lands on a
+  // closed panel with a turn starting behind it.
+  //
+  // Once per thread id, NOT "while the parameter is present": the panel
+  // subtree unmounts on an editor tab switch, so re-reading the URL would
+  // reopen a rail the user had deliberately closed, every time they came back.
+  const [searchParams] = useSearchParams()
+  const arrivingFor = searchParams.get("copilot")
+  const openPanel = useCopilotUiStore((s) => s.openPanel)
+  useEffect(() => {
+    if (!arrivingFor || honouredArrivals.has(arrivingFor)) return
+    honouredArrivals.add(arrivingFor)
+    openPanel()
+  }, [arrivingFor, openPanel])
+
   const open = useCopilotUiStore((s) => s.open)
   const everOpened = useCopilotUiStore((s) => s.everOpened)
   const closePanel = useCopilotUiStore((s) => s.closePanel)
@@ -83,7 +110,8 @@ export function CopilotCollapsedTab() {
       type="button"
       onClick={openPanel}
       title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
-      className="w-10 flex-none bg-[var(--copilot-panel)] border-r border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
+      style={{ width: COPILOT_TAB_WIDTH }}
+      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
       <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">COPILOT</span>
@@ -93,7 +121,10 @@ export function CopilotCollapsedTab() {
 
 function CopilotPanelFallback() {
   return (
-    <div className="w-[380px] flex-none bg-[var(--copilot-panel)] border-r border-border flex items-center justify-center">
+    <div
+      style={{ width: COPILOT_RAIL_WIDTH }}
+      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex items-center justify-center"
+    >
       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
   )

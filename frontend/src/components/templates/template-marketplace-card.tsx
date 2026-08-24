@@ -5,7 +5,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { cn } from "@/lib/utils"
 import type { TemplateBrowseCard } from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity, formatCount } from "@/lib/template-utils"
-import { APP_CATEGORIES, OUTPUT_TYPE_COLORS, CATEGORY_COLORS } from "@/lib/app-categories"
+import { OUTPUT_TYPE_COLORS, CATEGORY_COLORS, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
+import { useT } from "@/lib/i18n"
 
 interface TemplateMarketplaceCardProps {
   template: TemplateBrowseCard
@@ -20,7 +21,8 @@ export function TemplateMarketplaceCard({
   onToggleFavorite,
   onOpenPreview,
 }: TemplateMarketplaceCardProps) {
-  const categoryLabel = APP_CATEGORIES.find((c) => c.value === template.category)?.label ?? "Other"
+  const t = useT()
+  const categoryLabelKey = getCategoryLabelKey(template.category)
   const categoryColor = CATEGORY_COLORS[template.category] ?? CATEGORY_COLORS.other
   const complexity = COMPLEXITY_CONFIG[template.complexity as Complexity]
 
@@ -81,17 +83,17 @@ export function TemplateMarketplaceCard({
         {/* Category + output type badges */}
         <div className="flex items-center gap-1 flex-wrap">
           <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
-            {categoryLabel}
+            {t(categoryLabelKey)}
           </span>
-          {template.outputTypes.slice(0, 3).map((t) => (
+          {template.outputTypes.slice(0, 3).map((outType) => (
             <span
-              key={t}
+              key={outType}
               className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
-                OUTPUT_TYPE_COLORS[t] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+                OUTPUT_TYPE_COLORS[outType] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
               )}
             >
-              {t}
+              {outputTypeLabel(outType, t)}
             </span>
           ))}
         </div>
@@ -128,7 +130,7 @@ export function TemplateMarketplaceCard({
             ))}
             {template.providersUsed.length > 3 && (
               <span className="text-[10px] text-white/50">
-                +{template.providersUsed.length - 3} more
+                {t("templates.moreProviders", { n: template.providersUsed.length - 3 })}
               </span>
             )}
           </div>
@@ -137,7 +139,7 @@ export function TemplateMarketplaceCard({
         {/* Creator */}
         {template.creatorDisplayName && (
           <p className="text-[10px] text-white/50 truncate">
-            by {template.creatorDisplayName}
+            {t("preview.by", { name: template.creatorDisplayName })}
           </p>
         )}
       </div>

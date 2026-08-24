@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -146,6 +147,7 @@ function expandLocationSourceForAutocomplete(
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
 function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+  const t = useT()
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
 
   // Single source for the prompt editor's @-refs / variables / snippets — shared
@@ -394,7 +396,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   return (
     <div className="flex flex-col gap-3">
       {/* Provider — primary decision, determines which model-specific fields appear below */}
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <MultiProviderPicker
           providers={providersList}
           options={IMAGE_GEN_MODELS}
@@ -408,7 +410,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         />
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
         <PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -417,7 +419,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -426,7 +428,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               rows={3}
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder="Describe the image to generate..."
+              placeholder={t("imgcfg.describeImage")}
               referenceImages={referenceImages}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -436,7 +438,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           </>
         )}
       </MappableField>
-      <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="style" label={t("field.style")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
           onValueChange={(v) => {
@@ -453,13 +455,13 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           }}
           disabled={styleNodeConnected}
         >
-          <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.style")}><SelectValue placeholder={t("imgcfg.noStyle")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__">No style</SelectItem>
+            <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
             {IMAGE_STYLE_PRESETS.map((p) => (
               <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
             ))}
-            <SelectItem value="__custom__">Custom...</SelectItem>
+            <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>
           </SelectContent>
         </Select>
         {isCustomStyle && !styleNodeConnected && (
@@ -467,7 +469,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             className="mt-1.5"
             value={data.style}
             onChange={(e) => onUpdate({ style: e.target.value })}
-            placeholder="Describe your style..."
+            placeholder={t("imgcfg.describeStyle")}
             autoFocus
           />
         )}
@@ -477,7 +479,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
       </span>}>
@@ -485,7 +487,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -495,14 +497,14 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               rows={2}
               value={data.negativePrompt}
               onChange={(v) => onUpdate({ negativePrompt: v })}
-              placeholder="Things to avoid..."
+              placeholder={t("imgcfg.thingsToAvoid")}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
               refMap={refMap}
               snippets={negativeSnippets}
             />
             <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
-            <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
       </MappableField>
@@ -518,7 +520,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       {/* Assets section (characters, locations, objects) — descriptions work for all models */}
       <div className="pt-1">
         <Separator className="mb-3" />
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assets</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.assets")}</label>
         <div className="flex flex-col gap-1.5 mt-2">
           {attachedChars.map((char) => (
             <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30">
@@ -541,7 +543,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                     {char.category === "location" ? "location" : char.category === "object" ? "object" : char.referenceImageUrl ? "ref" : "desc"}
                   </span>
                   {char.type === "description" && !char.referenceImageUrl && (
-                    <span className="text-[8px] text-orange-500" title="Needs reference image for reuse">needs ref</span>
+                    <span className="text-[8px] text-orange-500" title={t("imgcfg.needsRefTitle")}>{t("imgcfg.needsRef")}</span>
                   )}
                 </div>
                 {char.type === "description" && char.description && (
@@ -558,7 +560,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             </div>
           ))}
           {attachedChars.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60">No assets attached. Add characters, locations, or objects for visual consistency.</p>
+            <p className="text-[10px] text-muted-foreground/60">{t("imgcfg.noAssetsAttached")}</p>
           )}
         </div>
 
@@ -587,7 +589,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onClick={() => handleDefineNewAsset("character")}
                 >
                   <UserCircle className="w-4 h-4 text-pink-500" />
-                  <span>Character</span>
+                  <span>{t("field.character")}</span>
                 </button>
                 <button
                   type="button"
@@ -595,7 +597,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onClick={() => handleDefineNewAsset("object")}
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
-                  <span>Object</span>
+                  <span>{t("field.object")}</span>
                 </button>
                 <button
                   type="button"
@@ -603,7 +605,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onClick={() => handleDefineNewAsset("location")}
                 >
                   <MapPin className="w-4 h-4 text-cyan-500" />
-                  <span>Location</span>
+                  <span>{t("field.location")}</span>
                 </button>
               </div>
             )}
@@ -614,9 +616,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       {/* Model-specific settings — these change based on selected provider */}
       <div className="pt-1">
         <Separator className="mb-3" />
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.modelSettings")}</label>
         <div className="flex flex-col gap-3 mt-2">
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
               value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
@@ -624,12 +626,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             />
           </MappableField>
           {resolutionOptions && (
-            <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
-                <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {resolutionOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -639,12 +641,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             </MappableField>
           )}
           {qualityOptions && (
-            <MappableField field="quality" label="Quality" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <MappableField field="quality" label={t("field.quality")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.quality || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
-                <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -680,7 +682,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 onSuppressCanonical={(slug) =>
                   onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
                 }
-                label="Injected references"
+                label={t("field.injectedReferences")}
               />
               {/* Legacy ReferenceImageList kept for the upload UI + per-row
                   manual ref removal. The InjectedReferenceList above shows
@@ -701,35 +703,35 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           )}
           {supportsRenderingSpeed && (
             <div>
-              <Label className="text-xs">Rendering Speed</Label>
+              <Label className="text-xs">{t("field.renderingSpeed")}</Label>
               <Select
                 value={data.renderingSpeed || "BALANCED"}
                 onValueChange={(v) => onUpdate({ renderingSpeed: v })}
               >
-                <SelectTrigger aria-label="Rendering Speed" className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.renderingSpeed")} className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="TURBO">Turbo (Faster, lower cost)</SelectItem>
-                  <SelectItem value="BALANCED">Balanced (Default)</SelectItem>
-                  <SelectItem value="QUALITY">Quality (Best, higher cost)</SelectItem>
+                  <SelectItem value="TURBO">{t("imgcfg.speedTurbo")}</SelectItem>
+                  <SelectItem value="BALANCED">{t("imgcfg.speedBalanced")}</SelectItem>
+                  <SelectItem value="QUALITY">{t("imgcfg.speedQuality")}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Affects generation speed and credit cost</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
             </div>
           )}
           {currentProvider === "ideogram-v3" && (
             <>
               <div>
-                <Label className="text-xs">Style Type</Label>
+                <Label className="text-xs">{t("field.styleType")}</Label>
                 <Select
                   value={data.styleType || "AUTO"}
                   onValueChange={(v) => onUpdate({ styleType: v })}
                 >
-                  <SelectTrigger aria-label="Style Type" className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("field.styleType")} className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="AUTO">Auto</SelectItem>
-                    <SelectItem value="GENERAL">General</SelectItem>
-                    <SelectItem value="REALISTIC">Realistic</SelectItem>
-                    <SelectItem value="DESIGN">Design</SelectItem>
+                    <SelectItem value="AUTO">{t("imgcfg.styleAuto")}</SelectItem>
+                    <SelectItem value="GENERAL">{t("imgcfg.styleGeneral")}</SelectItem>
+                    <SelectItem value="REALISTIC">{t("imgcfg.styleRealistic")}</SelectItem>
+                    <SelectItem value="DESIGN">{t("imgcfg.styleDesign")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -741,14 +743,14 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onChange={(e) => onUpdate({ expandPrompt: e.target.checked })}
                   className="rounded border-border"
                 />
-                <Label htmlFor="expandPrompt" className="text-xs cursor-pointer">Expand Prompt</Label>
-                <p className="text-[10px] text-muted-foreground">Auto-enhance prompt for better results</p>
+                <Label htmlFor="expandPrompt" className="text-xs cursor-pointer">{t("field.expandPrompt")}</Label>
+                <p className="text-[10px] text-muted-foreground">{t("imgcfg.autoEnhance")}</p>
               </div>
             </>
           )}
           {strengthConfig && (
             <div>
-              <Label className="text-xs">Strength</Label>
+              <Label className="text-xs">{t("field.strength")}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="range"
@@ -763,12 +765,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Lower = closer to original, higher = more creative</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
             </div>
           )}
           {guidanceScaleConfig && (
             <div>
-              <Label className="text-xs">Guidance Scale</Label>
+              <Label className="text-xs">{t("field.guidanceScale")}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="range"
@@ -783,12 +785,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Higher = stricter prompt adherence</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
             </div>
           )}
           {supportsSeed && (
             <div>
-              <Label className="text-xs">Seed</Label>
+              <Label className="text-xs">{t("field.seed")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -798,9 +800,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   const val = e.target.value
                   onUpdate({ seed: val === "" ? undefined : parseInt(val, 10) })
                 }}
-                placeholder="Random (leave empty)"
+                placeholder={t("imgcfg.seedRandom")}
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">Fixed seed for reproducible results</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
             </div>
           )}
         </div>
@@ -814,7 +816,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       {sourceImageUrl && (
         <div className="pt-1">
           <Separator className="mb-3" />
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inpainting Mask</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.inpaintingMask")}</label>
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
@@ -846,7 +848,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 Paint Mask
               </button>
             )}
-            <p className="text-[10px] text-muted-foreground">White areas in the mask will be edited, black areas preserved</p>
+            <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
           </div>
           <Suspense fallback={null}>
             <MaskPainterModal
@@ -874,7 +876,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             isOpen={showAssetLibrary}
             onClose={() => setShowAssetLibrary(false)}
             onSelect={handleAssetSelected}
-            title="Select Asset from Library"
+            title={t("imgcfg.selectAsset")}
             excludeIds={attachedIds}
           />
         </Suspense>
@@ -893,6 +895,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 export const GenerateImageConfig = memo(GenerateImageConfigImpl)
 
 function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("image", "prompt")
   const negativeSnippets = useSnippetPool("image", "negative")
   useEffect(() => { prefetchModelCredits(MODIFY_IMAGE_MODELS.map((m) => m.value)) }, [])
@@ -1314,7 +1317,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <ModelSearchSelect
           value={data.provider || "nano-banana"}
           onChange={(v) => onUpdate({ provider: v as ModifyImageData["provider"] })}
@@ -1335,7 +1338,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -1354,7 +1357,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           </>
         )}
       </MappableField>
-      <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="style" label={t("field.style")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
           onValueChange={(v) => {
@@ -1371,13 +1374,13 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           }}
           disabled={styleNodeConnected}
         >
-          <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.style")}><SelectValue placeholder={t("imgcfg.noStyle")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__">No style</SelectItem>
+            <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
             {IMAGE_STYLE_PRESETS.map((p) => (
               <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
             ))}
-            <SelectItem value="__custom__">Custom...</SelectItem>
+            <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>
           </SelectContent>
         </Select>
         {isCustomStyle && !styleNodeConnected && (
@@ -1385,7 +1388,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             className="mt-1.5"
             value={data.style ?? ""}
             onChange={(e) => onUpdate({ style: e.target.value })}
-            placeholder="Describe your style..."
+            placeholder={t("imgcfg.describeStyle")}
             autoFocus
           />
         )}
@@ -1395,7 +1398,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
       </span>}>
@@ -1403,7 +1406,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2 * 1.5}
           />
@@ -1413,14 +1416,14 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               rows={2}
               value={data.negativePrompt ?? ""}
               onChange={(v) => onUpdate({ negativePrompt: v })}
-              placeholder="Things to avoid..."
+              placeholder={t("imgcfg.thingsToAvoid")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
               snippets={negativeSnippets}
             />
             <PromptLengthCounter value={data.negativePrompt ?? ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
-            <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
       </MappableField>
@@ -1456,7 +1459,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         onSuppressCanonical={(slug) =>
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
-        label="Injected references"
+        label={t("field.injectedReferences")}
         primaryLabel={isNanoBananaEdit ? "Image to Edit" : "Main Image"}
       />
 
@@ -1479,7 +1482,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       {/* Assets section (characters, locations, objects) */}
       <div className="pt-1">
         <Separator className="mb-3" />
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assets</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.assets")}</label>
         <div className="flex flex-col gap-1.5 mt-2">
           {attachedChars.map((char) => (
             <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30">
@@ -1516,7 +1519,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             </div>
           ))}
           {attachedChars.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60">No assets attached. Add characters, locations, or objects for visual consistency.</p>
+            <p className="text-[10px] text-muted-foreground/60">{t("imgcfg.noAssetsAttached")}</p>
           )}
         </div>
         <div className="flex gap-1.5 mt-2">
@@ -1543,7 +1546,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   onClick={() => handleDefineNewAsset("character")}
                 >
                   <UserCircle className="w-4 h-4 text-pink-500" />
-                  <span>Character</span>
+                  <span>{t("field.character")}</span>
                 </button>
                 <button
                   type="button"
@@ -1551,7 +1554,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   onClick={() => handleDefineNewAsset("object")}
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
-                  <span>Object</span>
+                  <span>{t("field.object")}</span>
                 </button>
                 <button
                   type="button"
@@ -1559,7 +1562,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   onClick={() => handleDefineNewAsset("location")}
                 >
                   <MapPin className="w-4 h-4 text-cyan-500" />
-                  <span>Location</span>
+                  <span>{t("field.location")}</span>
                 </button>
               </div>
             )}
@@ -1571,7 +1574,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       {supportsMask && (
         <div className="pt-1">
           <Separator className="mb-3" />
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inpainting Mask</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.inpaintingMask")}</label>
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
@@ -1605,7 +1608,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 {sourceImageUrl ? "Paint Mask" : "Connect an image first"}
               </button>
             )}
-            <p className="text-[10px] text-muted-foreground">White areas in the mask will be edited, black areas preserved</p>
+            <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
           </div>
           {sourceImageUrl && (
             <Suspense fallback={null}>
@@ -1624,9 +1627,9 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       {/* Model-specific settings — hidden for nano-banana-edit except aspect ratio and seed */}
       <div className="pt-1">
         <Separator className="mb-3" />
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.modelSettings")}</label>
         <div className="flex flex-col gap-3 mt-2">
-          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
               value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
@@ -1634,12 +1637,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             />
           </MappableField>
           {resolutionOptions && (
-            <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
-                <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {resolutionOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1649,12 +1652,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             </MappableField>
           )}
           {qualityOptions && (
-            <MappableField field="quality" label="Quality" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <MappableField field="quality" label={t("field.quality")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.quality || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
-                <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -1665,7 +1668,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           )}
           {strengthConfig && (
             <div>
-              <Label className="text-xs">Strength</Label>
+              <Label className="text-xs">{t("field.strength")}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="range"
@@ -1680,12 +1683,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Lower = closer to original, higher = more creative</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
             </div>
           )}
           {guidanceScaleConfig && (
             <div>
-              <Label className="text-xs">Guidance Scale</Label>
+              <Label className="text-xs">{t("field.guidanceScale")}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="range"
@@ -1700,29 +1703,29 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Higher = stricter prompt adherence</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
             </div>
           )}
           {supportsRenderingSpeed && (
             <div>
-              <Label className="text-xs">Rendering Speed</Label>
+              <Label className="text-xs">{t("field.renderingSpeed")}</Label>
               <Select
                 value={data.renderingSpeed || "BALANCED"}
                 onValueChange={(v) => onUpdate({ renderingSpeed: v })}
               >
-                <SelectTrigger aria-label="Rendering Speed" className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("field.renderingSpeed")} className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="TURBO">Turbo (Faster, lower cost)</SelectItem>
-                  <SelectItem value="BALANCED">Balanced (Default)</SelectItem>
-                  <SelectItem value="QUALITY">Quality (Best, higher cost)</SelectItem>
+                  <SelectItem value="TURBO">{t("imgcfg.speedTurbo")}</SelectItem>
+                  <SelectItem value="BALANCED">{t("imgcfg.speedBalanced")}</SelectItem>
+                  <SelectItem value="QUALITY">{t("imgcfg.speedQuality")}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Affects generation speed and credit cost</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
             </div>
           )}
           {supportsSeed && (
             <div>
-              <Label className="text-xs">Seed</Label>
+              <Label className="text-xs">{t("field.seed")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -1732,14 +1735,14 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   const val = e.target.value
                   onUpdate({ seed: val === "" ? undefined : parseInt(val, 10) })
                 }}
-                placeholder="Random (leave empty)"
+                placeholder={t("imgcfg.seedRandom")}
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">Fixed seed for reproducible results</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
             </div>
           )}
           {!isNanoBananaEdit && supportsRefImage && (
             <div>
-              <Label className="text-xs">Reference Image</Label>
+              <Label className="text-xs">{t("field.referenceImage")}</Label>
               {data.referenceImageUrl ? (
                 <div className="flex items-center gap-2 mt-1">
                   <CachedImage src={data.referenceImageUrl} alt="Reference" className="w-16 h-16 rounded object-cover" thumbnail thumbnailWidth={128} />
@@ -1754,7 +1757,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     {uploadingRefImage ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
                     Upload Reference
                   </Button>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Optional image to guide generation style</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.refImageHint")}</p>
                 </div>
               )}
             </div>
@@ -1768,7 +1771,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             isOpen={showAssetLibrary}
             onClose={() => setShowAssetLibrary(false)}
             onSelect={handleAssetSelected}
-            title="Select Asset from Library"
+            title={t("imgcfg.selectAsset")}
             excludeIds={attachedIds}
           />
         </Suspense>
@@ -1784,17 +1787,18 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 export const ModifyImageConfig = memo(ModifyImageConfigImpl)
 
 export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<UpscaleImageData>) {
+  const t = useT()
   useEffect(() => { prefetchModelCredits(UPSCALE_IMAGE_MODELS.map((m) => m.value)) }, [])
   const isTopaz = data.provider === "topaz-image-upscale"
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "recraft-upscale"}
           onValueChange={(v) => onUpdate({ provider: v as UpscaleImageData["provider"] })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {UPSCALE_IMAGE_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.description} />
@@ -1805,12 +1809,12 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
 
       {isTopaz && (
         <>
-          <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="upscaleFactor" label={t("field.upscaleFactor")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.upscaleFactor || "2"}
               onValueChange={(v) => onUpdate({ upscaleFactor: v })}
             >
-              <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">1x (Enhance only)</SelectItem>
                 <SelectItem value="2">2x</SelectItem>
@@ -1818,19 +1822,19 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
               </SelectContent>
             </Select>
           </MappableField>
-          <MappableField field="targetResolution" label="Target Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="targetResolution" label={t("field.targetResolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.targetResolution || "2K"}
               onValueChange={(v) => onUpdate({ targetResolution: v as "2K" | "4K" | "8K" })}
             >
-              <SelectTrigger aria-label="Target Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.targetResolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {TOPAZ_IMAGE_RESOLUTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Higher resolution costs more credits</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.higherResCost")}</p>
           </MappableField>
         </>
       )}
@@ -1860,6 +1864,7 @@ export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundDat
 }
 
 export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<GenerateMaskData> & { nodeId?: string }) {
+  const t = useT()
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
   // Edit⇄Final toggle for the mask prompt. Provider-less (Grounded SAM has no
   // buildImagePrompt assembly); persistence key = "prompt".
@@ -1879,7 +1884,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-medium text-muted-foreground">Describe what to mask</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("imgcfg.describeWhatToMask")}</label>
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
@@ -1889,7 +1894,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final mask prompt preview — nothing to mask yet"
+            placeholder={t("imgcfg.maskPromptPreviewEmpty")}
             minHeightRem={2 * 1.5}
           />
         ) : (
@@ -1908,7 +1913,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">Detection threshold</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("imgcfg.detectionThreshold")}</label>
           <span className="text-xs text-muted-foreground">{(data.threshold ?? 0.3).toFixed(2)}</span>
         </div>
         <input
@@ -1920,7 +1925,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) })}
           className="w-full accent-[#ff0073]"
         />
-        <p className="text-[10px] text-muted-foreground">Lower = more permissive, higher = stricter matching</p>
+        <p className="text-[10px] text-muted-foreground">{t("imgcfg.matchHint")}</p>
       </div>
     </div>
   )

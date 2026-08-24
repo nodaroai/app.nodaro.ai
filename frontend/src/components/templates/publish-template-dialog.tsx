@@ -20,11 +20,12 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { publishTemplate, getMyTemplates, type WorkflowTemplate } from "@/lib/api"
-import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
+import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
 import { COMPLEXITY_CONFIG } from "@/lib/template-utils"
 import { queryKeys } from "@/lib/query-keys"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { useT } from "@/lib/i18n"
 
 interface PublishTemplateDialogProps {
   workflowId: string
@@ -64,6 +65,7 @@ export function PublishTemplateDialog({
   open,
   onOpenChange,
 }: PublishTemplateDialogProps) {
+  const t = useT()
   const queryClient = useQueryClient()
 
   // Form state
@@ -149,19 +151,19 @@ export function PublishTemplateDialog({
     mutationFn: (data: Parameters<typeof publishTemplate>[0]) =>
       publishTemplate(data),
     onSuccess: () => {
-      toast.success("Template published!")
+      toast.success(t("pubTemplate.publishSuccess"))
       queryClient.invalidateQueries({ queryKey: queryKeys.templateMarketplace.all })
       queryClient.invalidateQueries({ queryKey: ["my-templates"] })
       onOpenChange(false)
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to publish template")
+      toast.error(err.message || t("pubTemplate.publishFailed"))
     },
   })
 
   const handleSubmit = useCallback(() => {
     if (!name.trim()) {
-      toast.error("Name is required")
+      toast.error(t("pubTemplate.nameRequired"))
       return
     }
     mutation.mutate({
@@ -174,7 +176,7 @@ export function PublishTemplateDialog({
       tags: tags.length > 0 ? tags : undefined,
       isListed,
     })
-  }, [workflowId, name, description, markdownDescription, category, outputTypes, tags, isListed, mutation])
+  }, [workflowId, name, description, markdownDescription, category, outputTypes, tags, isListed, mutation, t])
 
   // Tag handling
   const handleAddTag = useCallback(() => {
@@ -201,37 +203,37 @@ export function PublishTemplateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isUpdate ? "Update Template" : "Publish as Template"}</DialogTitle>
+          <DialogTitle>{isUpdate ? t("pubTemplate.updateTitle") : t("pubTemplate.publishTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Publish this workflow as a reusable template on the marketplace.
+            {t("pubTemplate.desc")}
           </p>
 
           {/* Name */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Name *</label>
+            <label className="text-sm font-medium mb-1 block">{t("pubTemplate.nameLabel")}</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value.slice(0, 100))}
-              placeholder="My Awesome Workflow"
+              placeholder={t("pubTemplate.namePlaceholder")}
               maxLength={100}
             />
             {slugPreview && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                Slug: <span className="font-mono">{slugPreview}</span>
+                {t("pubTemplate.slugLabel")} <span className="font-mono">{slugPreview}</span>
               </p>
             )}
           </div>
 
           {/* Description */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Short Description</label>
+            <label className="text-sm font-medium mb-1 block">{t("pubTemplate.shortDescLabel")}</label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, 500))}
-              placeholder="Short description for card display"
+              placeholder={t("pubTemplate.shortDescPlaceholder")}
               maxLength={500}
             />
           </div>
@@ -239,16 +241,16 @@ export function PublishTemplateDialog({
           {/* Markdown Description */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">Full Description</label>
+              <label className="text-sm font-medium">{t("pubTemplate.fullDescLabel")}</label>
               <button
                 type="button"
                 onClick={() => setMarkdownPreview(!markdownPreview)}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {markdownPreview ? (
-                  <><EyeOff className="h-3.5 w-3.5" />Edit</>
+                  <><EyeOff className="h-3.5 w-3.5" />{t("common.edit")}</>
                 ) : (
-                  <><Eye className="h-3.5 w-3.5" />Preview</>
+                  <><Eye className="h-3.5 w-3.5" />{t("pubTemplate.previewToggle")}</>
                 )}
               </button>
             </div>
@@ -274,14 +276,14 @@ export function PublishTemplateDialog({
                     {markdownDescription}
                   </Markdown>
                 ) : (
-                  <p className="text-muted-foreground italic text-sm">Nothing to preview</p>
+                  <p className="text-muted-foreground italic text-sm">{t("pubTemplate.nothingToPreview")}</p>
                 )}
               </div>
             ) : (
               <textarea
                 value={markdownDescription}
                 onChange={(e) => setMarkdownDescription(e.target.value)}
-                placeholder="Detailed description (supports Markdown)..."
+                placeholder={t("pubTemplate.markdownPlaceholder")}
                 rows={6}
                 className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y"
               />
@@ -290,7 +292,7 @@ export function PublishTemplateDialog({
 
           {/* Category */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Category</label>
+            <label className="text-sm font-medium mb-1 block">{t("pubTemplate.categoryLabel")}</label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-full h-9 text-sm">
                 <SelectValue />
@@ -298,7 +300,7 @@ export function PublishTemplateDialog({
               <SelectContent>
                 {APP_CATEGORIES.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
+                    {categoryLabel(cat.value, t)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -307,7 +309,7 @@ export function PublishTemplateDialog({
 
           {/* Output Types */}
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Output types</label>
+            <label className="text-sm font-medium mb-1.5 block">{t("pubTemplate.outputTypesLabel")}</label>
             <div className="flex items-center gap-2 flex-wrap">
               {OUTPUT_TYPES.map((ot) => (
                 <label
@@ -325,7 +327,7 @@ export function PublishTemplateDialog({
                     checked={outputTypes.includes(ot.value)}
                     onChange={() => handleToggleOutputType(ot.value)}
                   />
-                  {ot.label}
+                  {outputTypeLabel(ot.value, t)}
                 </label>
               ))}
             </div>
@@ -334,9 +336,9 @@ export function PublishTemplateDialog({
           {/* Tags */}
           <div>
             <label className="text-sm font-medium mb-1.5 block">
-              Tags{" "}
+              {t("marketplace.tagsLabel")}{" "}
               <span className="text-xs text-muted-foreground font-normal">
-                ({tags.length}/10)
+                {t("pubTemplate.tagCount", { n: tags.length })}
               </span>
             </label>
             {tags.length > 0 && (
@@ -362,7 +364,7 @@ export function PublishTemplateDialog({
               <Input
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                placeholder="Add a tag..."
+                placeholder={t("pubTemplate.tagPlaceholder")}
                 className="h-8 text-xs flex-1"
                 maxLength={30}
                 onKeyDown={(e) => {
@@ -380,7 +382,7 @@ export function PublishTemplateDialog({
                 onClick={handleAddTag}
                 disabled={!tagInput.trim() || tags.length >= 10}
               >
-                Add
+                {t("pubTemplate.addTag")}
               </Button>
             </div>
           </div>
@@ -388,9 +390,9 @@ export function PublishTemplateDialog({
           {/* List on marketplace toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">List on marketplace</p>
+              <p className="text-sm font-medium">{t("pubTemplate.listOnMarketplace")}</p>
               <p className="text-xs text-muted-foreground">
-                Make discoverable on the Templates browse page
+                {t("pubTemplate.listOnMarketplaceDesc")}
               </p>
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
@@ -399,11 +401,15 @@ export function PublishTemplateDialog({
           {/* Computed info section */}
           <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2.5">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Workflow Info
+              {t("pubTemplate.workflowInfoHeading")}
             </h4>
 
             <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-              <span>{nodeCount} node{nodeCount !== 1 ? "s" : ""}</span>
+              <span>
+                {nodeCount === 1
+                  ? t("pubTemplate.nodeCountOne", { n: nodeCount })
+                  : t("pubTemplate.nodeCountOther", { n: nodeCount })}
+              </span>
               <span
                 className={cn(
                   "px-2 py-0.5 rounded border text-xs font-medium",
@@ -412,13 +418,13 @@ export function PublishTemplateDialog({
               >
                 {complexityConfig.label}
               </span>
-              <span className="italic">Credits: auto-calculated on publish</span>
+              <span className="italic">{t("pubTemplate.creditsAutoCalc")}</span>
             </div>
 
             {detectedNodeTypes.length > 0 && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-1 font-medium">
-                  Detected node types
+                  {t("pubTemplate.detectedNodeTypes")}
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {detectedNodeTypes.map((type) => (
@@ -436,7 +442,7 @@ export function PublishTemplateDialog({
             {detectedProviders.length > 0 && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-1 font-medium">
-                  Detected providers
+                  {t("pubTemplate.detectedProviders")}
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {detectedProviders.map((provider) => (
@@ -462,7 +468,7 @@ export function PublishTemplateDialog({
             {mutation.isPending && (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             )}
-            {isUpdate ? "Update Template" : "Publish Template"}
+            {isUpdate ? t("pubTemplate.updateTitle") : t("pubTemplate.submitPublish")}
           </Button>
         </div>
       </DialogContent>

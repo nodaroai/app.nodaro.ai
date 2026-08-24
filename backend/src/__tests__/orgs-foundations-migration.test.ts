@@ -3,7 +3,13 @@
  * are cheap to prove from the SQL text and expensive to discover in
  * production:
  *
- *   1. The SQL `kind_preset()` literal equals the pinned preset table below.
+ *   1. The SQL `kind_preset()` literal equals the pinned preset table below,
+ *      read from the LAST migration that defines it — not from this one.
+ *      `kind_preset` is CREATE OR REPLACE'd by later migrations as the preset
+ *      shape grows, and a guard pinned to 332 would keep passing while the
+ *      definition that actually runs drifted away from it. Its key SET is
+ *      derived from `PRESET_SETTING_KEYS`, so adding a key to the wire
+ *      contract without a migration fails here rather than in production.
  *      The server-side TypeScript copy is pinned to the same literal in its
  *      own repo; until a cross-repo parity job exists, each side guards
  *      itself against an accidental edit.
@@ -21,10 +27,39 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { MEMBER_STATUSES, ORG_KINDS, ORG_ROLES, ORG_STATUSES, WORKSPACE_ROLES } from "@nodaro/shared"
+import { readdirSync } from "node:fs"
+import {
+  MEMBER_STATUSES,
+  ORG_KINDS,
+  ORG_ROLES,
+  ORG_STATUSES,
+  PRESET_SETTING_KEYS,
+  WORKSPACE_ROLES,
+} from "@nodaro/shared"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..")
-const MIGRATION = readFileSync(join(REPO_ROOT, "supabase/migrations/332_orgs_foundations.sql"), "utf8")
+const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")
+const MIGRATION = readFileSync(join(MIGRATIONS_DIR, "332_orgs_foundations.sql"), "utf8")
+
+/**
+ * The last migration that defines `kind_preset`, and its SQL.
+ *
+ * Everything else in this file is about 332 specifically. The preset literal
+ * is not: it is CREATE OR REPLACE'd as the preset shape grows, and pinning the
+ * superseded copy would be a guard that cannot see the thing it guards.
+ */
+function latestKindPresetSql(): { file: string; sql: string } {
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => /^\d+_.*\.sql$/.test(f))
+    .sort()
+  let found: { file: string; sql: string } | null = null
+  for (const f of files) {
+    const text = readFileSync(join(MIGRATIONS_DIR, f), "utf8").replace(/--[^\n]*/g, "")
+    if (/CREATE OR REPLACE FUNCTION\s+(?:public\.)?kind_preset\s*\(/.test(text)) found = { file: f, sql: text }
+  }
+  if (!found) throw new Error("no migration defines kind_preset")
+  return found
+}
 const TENANT_SCOPE_SCRIPT = readFileSync(join(REPO_ROOT, "backend/scripts/check-tenant-scope.mjs"), "utf8")
 
 const sql = MIGRATION.replace(/--[^\n]*/g, "")
@@ -59,6 +94,7 @@ const EXPECTED_KIND_PRESETS = {
     personal_space_enabled: true,
     workspace_admins_can_invite: true,
     collaborators_can_invite: false,
+    policy_survives_suspension: false,
   },
   team: {
     admin_access: "view",
@@ -69,18 +105,33 @@ const EXPECTED_KIND_PRESETS = {
     personal_space_enabled: true,
     workspace_admins_can_invite: true,
     collaborators_can_invite: true,
+    policy_survives_suspension: false,
   },
 } as const
 
 /** Pinned: 8 chars of Crockford base32 minus vowels. */
 const EXPECTED_JOIN_CODE_PATTERN = "^[0-9BCDFGHJKMNPQRSTVWXYZ]{8}$"
 
-describe("332_orgs_foundations — kind_preset literal", () => {
+describe("kind_preset literal — read from whichever migration defines it LAST", () => {
+  const latest = latestKindPresetSql()
+
   it("each kind's SQL literal deep-equals the pinned preset", () => {
     for (const kind of ["school", "team"] as const) {
-      const m = sql.match(new RegExp(`WHEN '${kind}'\\s+THEN\\s+'(\\{[^']*\\})'::jsonb`))
-      expect(m, `kind_preset() has no '${kind}' branch`).toBeTruthy()
-      expect(JSON.parse(m![1])).toEqual(EXPECTED_KIND_PRESETS[kind])
+      const m = latest.sql.match(new RegExp(`WHEN '${kind}'\\s+THEN\\s+'(\\{[^']*\\})'::jsonb`))
+      expect(m, `${latest.file}: kind_preset() has no '${kind}' branch`).toBeTruthy()
+      expect(JSON.parse(m![1]), `${latest.file}: '${kind}' preset drifted`).toEqual(EXPECTED_KIND_PRESETS[kind])
+    }
+  })
+
+  it("its keys are exactly the wire contract's resolvable keys", () => {
+    // Derived, not counted: adding a key to PresetSettingsSchema without a
+    // migration that teaches kind_preset about it fails HERE, where it is
+    // cheap, rather than as a NULL setting in production.
+    for (const kind of ["school", "team"] as const) {
+      const m = latest.sql.match(new RegExp(`WHEN '${kind}'\\s+THEN\\s+'(\\{[^']*\\})'::jsonb`))
+      expect(Object.keys(JSON.parse(m![1])).sort(), `${latest.file}: '${kind}' key set`).toEqual(
+        [...PRESET_SETTING_KEYS].sort(),
+      )
     }
   })
 })

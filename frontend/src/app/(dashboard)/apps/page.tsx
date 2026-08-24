@@ -61,7 +61,9 @@ import { CreditCost } from "@/components/ui/credit-cost"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
-import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS } from "@/lib/app-categories"
+import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS, categoryLabel, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
+import { useT } from "@/lib/i18n"
+
 import {
   useAppBrowseInfinite,
   useAppFavorites,
@@ -74,6 +76,7 @@ import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 type ViewMode = "browse" | "my-apps" | "favorites"
 
 export default function AppsPage() {
+  const t = useT()
   const { user } = useAuth()
   const qc = useQueryClient()
   const { data: appSettings } = useAppSettings()
@@ -90,8 +93,8 @@ export default function AppsPage() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchInput), 300)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(timer)
   }, [searchInput])
 
   // Browse params
@@ -151,10 +154,10 @@ export default function AppsPage() {
     mutationFn: () => updateMonetizationDefaults({ flatFee: defaultFlatFee, percent: defaultPercent }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["monetization-defaults"] })
-      toast.success("Monetization defaults saved")
+      toast.success(t("apps.monetizationSaved"))
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to save defaults")
+      toast.error(err.message || t("apps.failedSaveDefaults"))
     },
   })
 
@@ -172,10 +175,10 @@ export default function AppsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: queryKeys.appMarketplace.all })
-      toast.success("MiniApp deleted. Recover it from Deleted MiniApps.")
+      toast.success(t("apps.deletedWithRecovery"))
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete MiniApp")
+      toast.error(err.message || t("apps.failedDelete"))
     },
   })
 
@@ -209,23 +212,23 @@ export default function AppsPage() {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
       setEditApp(null)
-      toast.success("MiniApp updated")
+      toast.success(t("apps.updated"))
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update MiniApp")
+      toast.error(err.message || t("apps.failedUpdate"))
     },
   })
 
   const handleCopyUrl = useCallback((slug: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/app/${slug}`)
-    toast.success("URL copied")
-  }, [])
+    toast.success(t("apps.urlCopied"))
+  }, [t])
 
   const handleCopyEmbed = useCallback((slug: string) => {
     const embedCode = `<iframe src="${window.location.origin}/embed/${slug}" width="100%" height="600" frameborder="0" allow="clipboard-write"></iframe>`
     navigator.clipboard.writeText(embedCode)
-    toast.success("Embed code copied")
-  }, [])
+    toast.success(t("apps.embedCodeCopied"))
+  }, [t])
 
   // Infinite scroll observer
   useEffect(() => {
@@ -253,14 +256,14 @@ export default function AppsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">MiniApps</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("apps.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Discover and run AI-powered MiniApps, or manage your own
+            {t("apps.subtitle")}
           </p>
         </div>
         <Link to="/apps/deleted" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <Archive className="h-3 w-3" />
-          Deleted MiniApps
+          {t("apps.deletedMiniApps")}
         </Link>
       </div>
 
@@ -279,7 +282,7 @@ export default function AppsPage() {
               )}
               onClick={() => setViewMode("browse")}
             >
-              Browse
+              {t("apps.tabBrowse")}
             </button>
             {user && (
               <>
@@ -294,7 +297,7 @@ export default function AppsPage() {
                   onClick={() => setViewMode("my-apps")}
                 >
                   <User className="h-3.5 w-3.5" />
-                  My MiniApps
+                  {t("apps.tabMy")}
                 </button>
                 <button
                   type="button"
@@ -307,7 +310,7 @@ export default function AppsPage() {
                   onClick={() => setViewMode("favorites")}
                 >
                   <Heart className="h-3.5 w-3.5" />
-                  Favorites
+                  {t("apps.tabFavorites")}
                 </button>
               </>
             )}
@@ -319,15 +322,15 @@ export default function AppsPage() {
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Settings className="h-3.5 w-3.5 mr-1.5" />
-                  Monetization Defaults
+                  {t("apps.monetizationDefaults")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-64">
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium">Default Pricing</h4>
-                  <p className="text-xs text-muted-foreground">Applied to new MiniApps when monetization is first enabled.</p>
+                  <h4 className="text-sm font-medium">{t("apps.defaultPricing")}</h4>
+                  <p className="text-xs text-muted-foreground">{t("apps.defaultPricingDesc")}</p>
                   <div>
-                    <Label className="text-xs">Flat Fee (CR)</Label>
+                    <Label className="text-xs">{t("apps.flatFee")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -336,7 +339,7 @@ export default function AppsPage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Percentage (%)</Label>
+                    <Label className="text-xs">{t("apps.percentage")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -351,7 +354,7 @@ export default function AppsPage() {
                     onClick={() => saveDefaultsMutation.mutate()}
                     disabled={saveDefaultsMutation.isPending}
                   >
-                    {saveDefaultsMutation.isPending ? "Saving..." : "Save Defaults"}
+                    {saveDefaultsMutation.isPending ? t("apps.saving") : t("apps.saveDefaults")}
                   </Button>
                 </div>
               </PopoverContent>
@@ -365,7 +368,7 @@ export default function AppsPage() {
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search MiniApps..."
+                placeholder={t("apps.searchPlaceholder")}
                 className="pl-9 h-9"
               />
               {searchInput && (
@@ -388,9 +391,9 @@ export default function AppsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="popular">Popular</SelectItem>
-                <SelectItem value="newest">Newest</SelectItem>
-                <SelectItem value="most-favorited">Most Favorited</SelectItem>
+                <SelectItem value="popular">{t("apps.sortPopular")}</SelectItem>
+                <SelectItem value="newest">{t("apps.sortNewest")}</SelectItem>
+                <SelectItem value="most-favorited">{t("apps.sortFavorited")}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -410,7 +413,7 @@ export default function AppsPage() {
               )}
               onClick={() => setSelectedCategory(undefined)}
             >
-              All
+              {t("apps.filterAll")}
             </button>
             {APP_CATEGORIES.map((cat) => (
               <button
@@ -424,7 +427,7 @@ export default function AppsPage() {
                 )}
                 onClick={() => setSelectedCategory(selectedCategory === cat.value ? undefined : cat.value)}
               >
-                {cat.label}
+                {categoryLabel(cat.value, t)}
               </button>
             ))}
 
@@ -444,7 +447,7 @@ export default function AppsPage() {
                 )}
                 onClick={() => setSelectedOutputType(selectedOutputType === ot.value ? undefined : ot.value)}
               >
-                {ot.label}
+                {outputTypeLabel(ot.value, t)}
               </button>
             ))}
           </div>
@@ -464,14 +467,14 @@ export default function AppsPage() {
           <div className="text-center py-16">
             <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              {viewMode === "favorites" ? "No favorites yet" : "No MiniApps found"}
+              {viewMode === "favorites" ? t("apps.emptyFavoritesTitle") : t("apps.emptyBrowseTitle")}
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {viewMode === "favorites"
-                ? "Heart MiniApps you like to save them here."
+                ? t("apps.emptyFavoritesDesc")
                 : debouncedSearch || selectedCategory || selectedOutputType
-                  ? "Try adjusting your search or filters."
-                  : "Be the first to publish a MiniApp to the marketplace!"}
+                  ? t("apps.emptyBrowseFilteredDesc")
+                  : t("apps.emptyBrowseAllDesc")}
             </p>
           </div>
         ) : (
@@ -517,13 +520,13 @@ export default function AppsPage() {
           <AlertDialog open={deleteConfirmApp !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmApp(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete this MiniApp?</AlertDialogTitle>
+                <AlertDialogTitle>{t("apps.deleteTitle")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  It'll be hidden from the marketplace and from your MiniApps list. You can restore it any time from your Deleted MiniApps. The MiniApp's earnings, analytics, and run history are preserved.
+                  {t("apps.deleteDesc")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   onClick={() => {
@@ -533,7 +536,7 @@ export default function AppsPage() {
                     }
                   }}
                 >
-                  Delete
+                  {t("common.delete")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -567,16 +570,16 @@ function MyAppsGrid({
   onEdit: (app: PublishedApp) => void
   onDelete: (app: PublishedApp) => void
 }) {
+  const t = useT()
   const visibleApps = (apps ?? []).filter((a) => a.deletedAt == null)
 
   if (!apps || visibleApps.length === 0) {
     return (
       <div className="text-center py-16">
         <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-        <h2 className="text-lg font-semibold text-foreground mb-2">No published MiniApps yet</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-2">{t("apps.emptyMyTitle")}</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Publish a workflow as a MiniApp from the presentation mode share dialog.
-          MiniApps get their own URL, persistent run history, and analytics.
+          {t("apps.emptyMyDesc")}
         </p>
       </div>
     )
@@ -607,7 +610,7 @@ function MyAppsGrid({
 
       {inactiveApps.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">Inactive</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">{t("apps.inactive")}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
             {inactiveApps.map((app) => (
               <MyAppCard
@@ -648,10 +651,12 @@ function MyAppCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const t = useT()
   const [showEmbed, setShowEmbed] = useState(false)
   const [newOrigin, setNewOrigin] = useState("")
   const origins = app.allowedOrigins ?? []
   const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label
+  const categoryLabelKey = getCategoryLabelKey(app.category)
 
   const handleAddOrigin = () => {
     const trimmed = newOrigin.trim()
@@ -662,7 +667,7 @@ function MyAppCard({
     }
     origin = origin.replace(/\/+$/, "")
     if (origins.includes(origin)) {
-      toast.error("Domain already added")
+      toast.error(t("apps.domainAlreadyAdded"))
       return
     }
     onUpdateOrigins([...origins, origin])
@@ -690,9 +695,9 @@ function MyAppCard({
                 : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
             )}
             onClick={() => onToggleListed(!app.isListed)}
-            title={app.isListed ? "Click to unlist from marketplace" : "Click to list on marketplace"}
+            title={app.isListed ? t("apps.clickToUnlist") : t("apps.clickToList")}
           >
-            {app.isListed ? "Listed" : "Unlisted"}
+            {app.isListed ? t("apps.listed") : t("apps.unlisted")}
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
             v{app.version}
@@ -709,7 +714,7 @@ function MyAppCard({
         <div className="flex items-center gap-1 flex-wrap mb-3">
           {app.category !== "other" && categoryLabel && (
             <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", CATEGORY_COLORS[app.category] ?? "bg-zinc-500/10 text-zinc-500")}>
-              {categoryLabel}
+              {t(categoryLabelKey)}
             </span>
           )}
           {app.tags?.slice(0, 2).map((tag) => (
@@ -733,18 +738,18 @@ function MyAppCard({
 
       {/* Stats row */}
       <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
-        <span>{app.runCount ?? app.totalRunCount ?? 0} runs</span>
+        <span>{t("apps.runs", { n: app.runCount ?? app.totalRunCount ?? 0 })}</span>
         {app.monetizationEnabled && hasCredits() ? (
           <span className="text-xs text-muted-foreground">
-            Base: <CreditCost credits={app.baseEstimatedCredits ?? 0} /> | Total:{" "}
+            {t("apps.baseLabel")} <CreditCost credits={app.baseEstimatedCredits ?? 0} /> {t("apps.totalLabel")}{" "}
             <CreditCost credits={app.estimatedCredits ?? 0} />
           </span>
         ) : (
           // Pre-#645 this else branch rendered the figure UNGATED — the one
           // leak the per-site pass missed. The component self-gates.
-          <CreditCost credits={app.estimatedCredits ?? 0} suffix="CR/run" />
+          <CreditCost credits={app.estimatedCredits ?? 0} suffix={t("apps.crRunSuffix")} />
         )}
-        {app.favoriteCount > 0 && <span>{app.favoriteCount} favorites</span>}
+        {app.favoriteCount > 0 && <span>{t("apps.favorites", { n: app.favoriteCount })}</span>}
       </div>
 
       {/* Actions */}
@@ -752,14 +757,14 @@ function MyAppCard({
         <a href={`/app/${app.slug}`} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
             <ExternalLink className="h-3 w-3 mr-1" />
-            Open
+            {t("apps.open")}
           </Button>
         </a>
         {app.projectId && (
           <Link to={`/projects/${app.projectId}/workflows/${app.workflowId}`}>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
               <Workflow className="h-3 w-3 mr-1" />
-              Workflow
+              {t("apps.workflow")}
             </Button>
           </Link>
         )}
@@ -770,22 +775,22 @@ function MyAppCard({
           onClick={() => onCopyUrl(app.slug)}
         >
           <Copy className="h-3 w-3 mr-1" />
-          URL
+          {t("apps.url")}
         </Button>
         <Button
           variant="outline"
           size="sm"
           className="h-7 px-2 text-xs"
           onClick={() => setShowEmbed(!showEmbed)}
-          title="Embed settings"
+          title={t("apps.embedSettings")}
         >
           <Code2 className="h-3 w-3 mr-1" />
-          Embed
+          {t("apps.embed")}
         </Button>
         <Link to={`/apps/${app.id}/analytics`}>
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
             <BarChart3 className="h-3 w-3 mr-1" />
-            Analytics
+            {t("apps.analytics")}
           </Button>
         </Link>
         <Button
@@ -793,17 +798,17 @@ function MyAppCard({
           size="sm"
           className="h-7 px-2 text-xs"
           onClick={onEdit}
-          title="Edit MiniApp settings"
+          title={t("apps.editMiniAppSettingsTitle")}
         >
           <Pencil className="h-3 w-3 mr-1" />
-          Edit
+          {t("apps.edit")}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           className="h-7 w-7 p-0"
           onClick={() => onToggle(!app.isActive)}
-          title={app.isActive ? "Deactivate" : "Reactivate"}
+          title={app.isActive ? t("apps.deactivate") : t("apps.reactivate")}
         >
           {app.isActive ? (
             <ToggleRight className="h-4 w-4 text-emerald-500" />
@@ -816,7 +821,7 @@ function MyAppCard({
           size="sm"
           className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
           onClick={onDelete}
-          title="Delete MiniApp"
+          title={t("apps.deleteMiniApp")}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -827,10 +832,10 @@ function MyAppCard({
         <div className="mt-3 pt-3 border-t border-border space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Shield className="h-3 w-3" />
-            Allowed Embed Domains
+            {t("apps.allowedDomains")}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Add domains that can embed this MiniApp. Embedding is blocked until at least one domain is added.
+            {t("apps.embedDomainDesc")}
           </p>
 
           {origins.length > 0 && (
@@ -869,7 +874,7 @@ function MyAppCard({
               disabled={!newOrigin.trim()}
             >
               <Plus className="h-3 w-3 mr-1" />
-              Add
+              {t("apps.add")}
             </Button>
           </div>
 
@@ -881,7 +886,7 @@ function MyAppCard({
               onClick={() => onCopyEmbed(app.slug)}
             >
               <Copy className="h-3 w-3 mr-1" />
-              Copy Embed Code
+              {t("apps.copyEmbedCode")}
             </Button>
           )}
         </div>
@@ -914,6 +919,7 @@ function EditAppDialog({
   onSave: (appId: string, data: Record<string, unknown>) => void
   isSaving: boolean
 }) {
+  const t = useT()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState("other")
@@ -969,11 +975,11 @@ function EditAppDialog({
       setMonetizationFlatFee(defaults.flatFee)
       setMonetizationPercent(defaults.percent)
     } catch {
-      toast.error("Failed to load defaults")
+      toast.error(t("apps.failedLoadDefaults"))
     } finally {
       setLoadingDefaults(false)
     }
-  }, [])
+  }, [t])
 
   const baseCredits = app?.baseEstimatedCredits ?? 0
   const calculatedCredits = monetizationEnabled
@@ -1000,7 +1006,7 @@ function EditAppDialog({
   const handleSave = useCallback(() => {
     if (!app) return
     if (!name.trim()) {
-      toast.error("Name is required")
+      toast.error(t("apps.nameRequired"))
       return
     }
     const mediaUrl = previewMediaUrl.trim() || null
@@ -1021,7 +1027,7 @@ function EditAppDialog({
       data.monetizationPercent = monetizationPercent
     }
     onSave(app.id, data)
-  }, [app, name, description, category, outputTypes, tags, previewMediaUrl, supportsRemix, isListed, monetizationEnabled, monetizationFlatFee, monetizationPercent, onSave])
+  }, [app, name, description, category, outputTypes, tags, previewMediaUrl, supportsRemix, isListed, monetizationEnabled, monetizationFlatFee, monetizationPercent, onSave, t])
 
   if (!app) return null
 
@@ -1029,40 +1035,40 @@ function EditAppDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit MiniApp</DialogTitle>
+          <DialogTitle>{t("apps.editDialogTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Name */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Name *</label>
+            <label className="text-sm font-medium mb-1 block">{t("apps.nameLabel")}</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="MiniApp name"
+              placeholder={t("apps.namePlaceholder")}
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Description</label>
+            <label className="text-sm font-medium mb-1 block">{t("apps.descriptionLabel")}</label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this MiniApp do?"
+              placeholder={t("apps.descriptionPlaceholder")}
             />
           </div>
 
           {/* Category */}
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Category</label>
+            <label className="text-sm font-medium mb-1.5 block">{t("apps.categoryLabel")}</label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-full h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {APP_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  <SelectItem key={cat.value} value={cat.value}>{categoryLabel(cat.value, t)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1070,7 +1076,7 @@ function EditAppDialog({
 
           {/* Output types */}
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Output types</label>
+            <label className="text-sm font-medium mb-1.5 block">{t("apps.outputTypesLabel")}</label>
             <div className="flex items-center gap-2 flex-wrap">
               {OUTPUT_TYPES.map((ot) => (
                 <label
@@ -1087,7 +1093,7 @@ function EditAppDialog({
                     checked={outputTypes.includes(ot.value)}
                     onChange={() => handleToggleOutputType(ot.value)}
                   />
-                  {ot.label}
+                  {outputTypeLabel(ot.value, t)}
                 </label>
               ))}
             </div>
@@ -1096,7 +1102,7 @@ function EditAppDialog({
           {/* Tags */}
           <div>
             <label className="text-sm font-medium mb-1.5 block">
-              Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span>
+              {t("apps.tagsLabel")} <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span>
             </label>
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1.5">
@@ -1117,7 +1123,7 @@ function EditAppDialog({
               <Input
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                placeholder="Add a tag..."
+                placeholder={t("apps.addTag")}
                 className="h-8 text-xs flex-1"
                 maxLength={30}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTag() } }}
@@ -1130,23 +1136,23 @@ function EditAppDialog({
                 onClick={handleAddTag}
                 disabled={!tagInput.trim() || tags.length >= 10}
               >
-                Add
+                {t("apps.add")}
               </Button>
             </div>
           </div>
 
           {/* Preview media URL */}
           <div>
-            <label className="text-sm font-medium mb-1 block">Preview media URL</label>
+            <label className="text-sm font-medium mb-1 block">{t("apps.previewMediaLabel")}</label>
             <Input
               value={previewMediaUrl}
               onChange={(e) => setPreviewMediaUrl(e.target.value)}
-              placeholder="https://..."
+              placeholder={t("apps.previewMediaPlaceholder")}
               className="text-xs"
             />
             {previewMediaUrl.trim() && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                Detected type: {detectMediaType(previewMediaUrl.trim()) ?? "image"}
+                {t("apps.detectedType")} {detectMediaType(previewMediaUrl.trim()) ?? "image"}
               </p>
             )}
           </div>
@@ -1154,8 +1160,8 @@ function EditAppDialog({
           {/* Supports remix toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Supports remix</p>
-              <p className="text-xs text-muted-foreground">Users can customize and remix this MiniApp</p>
+              <p className="text-sm font-medium">{t("apps.supportsRemix")}</p>
+              <p className="text-xs text-muted-foreground">{t("apps.supportsRemixDesc")}</p>
             </div>
             <Switch checked={supportsRemix} onCheckedChange={setSupportsRemix} />
           </div>
@@ -1163,8 +1169,8 @@ function EditAppDialog({
           {/* Listed on marketplace toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Listed on marketplace</p>
-              <p className="text-xs text-muted-foreground">Make discoverable in the MiniApps browse page</p>
+              <p className="text-sm font-medium">{t("apps.listedMarketplace")}</p>
+              <p className="text-xs text-muted-foreground">{t("apps.listedMarketplaceDesc")}</p>
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
           </div>
@@ -1174,8 +1180,8 @@ function EditAppDialog({
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">Monetization</p>
-                  <p className="text-xs text-muted-foreground">Charge a markup when others run your MiniApp</p>
+                  <p className="text-sm font-medium">{t("apps.monetization")}</p>
+                  <p className="text-xs text-muted-foreground">{t("apps.monetizationDesc")}</p>
                 </div>
                 <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
               </div>
@@ -1184,7 +1190,7 @@ function EditAppDialog({
                 <div className="space-y-3 pl-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Flat fee (CR)</Label>
+                      <Label className="text-xs">{t("apps.flatFee")}</Label>
                       <Input
                         type="number"
                         min={0}
@@ -1194,7 +1200,7 @@ function EditAppDialog({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Percentage (%)</Label>
+                      <Label className="text-xs">{t("apps.percentage")}</Label>
                       <Input
                         type="number"
                         min={0}
@@ -1207,7 +1213,7 @@ function EditAppDialog({
                   </div>
 
                   <p className="text-[11px] text-muted-foreground">
-                    If this MiniApp costs {baseCredits} CR to run, users will pay {calculatedCredits} CR
+                    {t("apps.monetizationCalc", { base: baseCredits, total: calculatedCredits })}
                   </p>
 
                   <Button
@@ -1219,7 +1225,7 @@ function EditAppDialog({
                     disabled={loadingDefaults}
                   >
                     {loadingDefaults && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
-                    Use my defaults
+                    {t("apps.useMyDefaults")}
                   </Button>
                 </div>
               )}
@@ -1234,7 +1240,7 @@ function EditAppDialog({
             style={{ backgroundColor: "#ff0073" }}
           >
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save Changes
+            {t("apps.saveChanges")}
           </Button>
         </div>
       </DialogContent>

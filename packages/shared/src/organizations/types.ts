@@ -112,6 +112,23 @@ export const PresetSettingsSchema = z.object({
   workspace_admins_can_invite: z.boolean(),
   /** Whether an editor collaborator may invite further collaborators. */
   collaborators_can_invite: z.boolean(),
+  /**
+   * When the organization is SUSPENDED, do its content rules still bind its
+   * members?
+   *
+   * Today this governs exactly one rule — `personal_space_enabled` — and that
+   * is not an accident: every other key above governs behaviour INSIDE a
+   * workspace, and a suspended organization grants no workspace context at
+   * all, so those are already moot.
+   *
+   * The name is general because an organization is deciding a principle here,
+   * not one checkbox's fate. Default `false`, which is today's behaviour: a
+   * suspended organization stops binding, and its members work independently
+   * until it resumes. An organization whose reason for disabling the personal
+   * space is contractual — the work made here belongs to the institution —
+   * turns this on, because an unpaid invoice does not void a contract.
+   */
+  policy_survives_suspension: z.boolean(),
 })
 export type PresetSettings = z.infer<typeof PresetSettingsSchema>
 export type PresetSettingKey = keyof PresetSettings

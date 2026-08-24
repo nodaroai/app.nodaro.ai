@@ -1,3 +1,4 @@
+import { escapeLikeArgument } from "./_like-escape.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -233,8 +234,18 @@ function registerReadTools({ server, session }: RegisterLocationToolsOpts): void
         "as reference images to `generate_image` / `image_to_image` / " +
         "`generate_video`. Sorted by most-recently created first. Archived " +
         "locations are excluded by default — pass `archived: true` to list " +
-        "the archive instead.",
+        "the archive instead. Pass `search` to find a location BY NAME rather " +
+        "than reading the whole list.",
       inputSchema: {
+        search: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "Case-insensitive substring of the location's name. Use this when the user named a location.",
+          ),
         archived: z
           .boolean()
           .optional()
@@ -254,6 +265,9 @@ function registerReadTools({ server, session }: RegisterLocationToolsOpts): void
       query = wantArchived
         ? query.not("deleted_at", "is", null)
         : query.is("deleted_at", null)
+      // See the note in `characters.ts`: ILIKE wildcards and PostgREST's own
+      // filter punctuation are escaped before they reach the query.
+      if (args.search) query = query.ilike("name", `%${escapeLikeArgument(args.search)}%`)
       const { data, error } = await query
       if (error) return err(`Error: ${error.message}`)
       // PostgREST's TS inference can't represent the full projection cleanly

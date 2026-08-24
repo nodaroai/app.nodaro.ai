@@ -52,6 +52,23 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     ],
     serviceRole: [],
   },
+  // P9: the personal-space gate. org_setting is the organization-level twin
+  // of 332s effective_setting and gates on membership, so authenticated may
+  // call it. personal_space_enabled_for takes a USER id, so it is service_role
+  // only — granted broadly it answers "does user X belong to an organization
+  // that disabled the personal space" for anyone who asks. kind_preset is
+  // restated here but is plain SQL, not a definer, so it is not classified.
+  "340_orgs_personal_space.sql": {
+    authenticated: ["ensure_default_project", "org_setting"],
+    serviceRole: ["personal_space_enabled_for"],
+  },
+  // P9: a workspace gets its landing project in one transaction. The function
+  // performs no authorization of its own — the plugin route does that before
+  // calling it — so it must never be reachable by a client.
+  "341_orgs_workspace_project.sql": {
+    authenticated: [],
+    serviceRole: ["create_workspace_with_project"],
+  },
   // Content scoping, part b: backfills and four trigger functions. Three are
   // SECURITY DEFINER (they read projects / organizations past the caller's
   // RLS); all four return trigger, so none is classified — a trigger function

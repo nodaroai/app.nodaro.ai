@@ -6,6 +6,7 @@ import { Handle, Position } from "@xyflow/react"
 import type { AggregateableType } from "@nodaro/shared"
 import { AGGREGATE_HANDLE_COLORS } from "./handle-colors"
 import { handleTypeIcon } from "@/lib/handle-type-icon"
+import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
 
 const COLOR_MAP = {
   cyan: { bg: "bg-[#38BDF8]", shadow: "shadow-sky-500/30" },
@@ -33,6 +34,8 @@ interface HandleIconProps {
 
 function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%", label, children }: HandleIconProps) {
   const { bg, shadow } = COLOR_MAP[color]
+  const localizeHandleLabel = useLocalizeHandleLabel()
+  const displayLabel = label ? localizeHandleLabel(label) : label
   return (
     <div
       className={`absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full ${bg} shadow-lg ${shadow}`}
@@ -48,9 +51,9 @@ function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%"
             transform: "translateY(-50%)",
             maxWidth: "110px",
           }}
-          title={label}
+          title={displayLabel}
         >
-          {label}
+          {displayLabel}
         </span>
       )}
       {children}

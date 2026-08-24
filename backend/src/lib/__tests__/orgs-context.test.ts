@@ -56,8 +56,12 @@ async function buildApp(): Promise<FastifyInstance> {
   return app
 }
 
+// NonNullable, because the service's newer members are OPTIONAL — a plugin
+// build older than the app simply will not have them, and core is written to
+// check before calling. `PluginOrgsService[K]` for such a member includes
+// `undefined`, which is not a callable for vi.fn to stand in for.
 type OrgsStub = {
-  [K in keyof PluginOrgsService]: ReturnType<typeof vi.fn<PluginOrgsService[K]>>
+  [K in keyof PluginOrgsService]-?: ReturnType<typeof vi.fn<NonNullable<PluginOrgsService[K]>>>
 }
 
 function orgsService(over: Partial<PluginOrgsService> = {}): OrgsStub {

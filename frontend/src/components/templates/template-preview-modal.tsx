@@ -34,8 +34,9 @@ import {
 import { useTemplateDetail } from "@/hooks/queries/use-template-marketplace-queries"
 import { nodeTypes } from "@/components/nodes"
 import { COMPLEXITY_CONFIG, getNodeTypeLabel, formatCount } from "@/lib/template-utils"
-import { APP_CATEGORIES, OUTPUT_TYPE_COLORS, CATEGORY_COLORS } from "@/lib/app-categories"
+import { OUTPUT_TYPE_COLORS, CATEGORY_COLORS, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
 import "@xyflow/react/dist/style.css"
+import { useT } from "@/lib/i18n"
 
 interface TemplatePreviewModalProps {
   template: TemplateBrowseCard | null
@@ -78,6 +79,7 @@ export function TemplatePreviewModal({
   onToggleFavorite,
   projects,
 }: TemplatePreviewModalProps) {
+  const t = useT()
   const navigate = useNavigate()
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "")
   const [isCloning, setIsCloning] = useState(false)
@@ -128,20 +130,19 @@ export function TemplatePreviewModal({
     setIsCloning(true)
     try {
       const result = await cloneTemplate(template.slug, selectedProjectId, template.name)
-      toast.success("Template cloned!")
+      toast.success(t("templates.cloneSuccess"))
       onClose()
       navigate(`/projects/${result.projectId}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clone template")
+      toast.error(err instanceof Error ? err.message : t("templates.cloneFailed"))
     } finally {
       setIsCloning(false)
     }
-  }, [template, selectedProjectId, navigate, onClose])
+  }, [template, selectedProjectId, navigate, onClose, t])
 
   if (!template) return null
 
-  const categoryLabel =
-    APP_CATEGORIES.find((c) => c.value === template.category)?.label ?? "Other"
+  const categoryLabelKey = getCategoryLabelKey(template.category)
   const categoryColor = CATEGORY_COLORS[template.category] ?? CATEGORY_COLORS.other
   const complexity =
     COMPLEXITY_CONFIG[template.complexity as keyof typeof COMPLEXITY_CONFIG]
@@ -160,7 +161,7 @@ export function TemplatePreviewModal({
         {/* Close button */}
         <button
           type="button"
-          aria-label="Close preview"
+          aria-label={t("templates.closePreview")}
           className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-colors"
           onClick={onClose}
         >
@@ -182,7 +183,7 @@ export function TemplatePreviewModal({
             </ReactFlowProvider>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              No workflow preview available
+              {t("templates.noWorkflowPreview")}
             </div>
           )}
         </div>
@@ -199,7 +200,7 @@ export function TemplatePreviewModal({
             {/* Creator */}
             {template.creatorDisplayName && (
               <p className="text-xs text-muted-foreground -mt-3">
-                by {template.creatorDisplayName}
+                {t("preview.by", { name: template.creatorDisplayName })}
               </p>
             )}
 
@@ -211,17 +212,17 @@ export function TemplatePreviewModal({
                   categoryColor,
                 )}
               >
-                {categoryLabel}
+                {t(categoryLabelKey)}
               </span>
-              {template.outputTypes.map((t) => (
+              {template.outputTypes.map((outType) => (
                 <span
-                  key={t}
+                  key={outType}
                   className={cn(
                     "text-xs px-2 py-0.5 rounded-full border font-medium capitalize",
-                    OUTPUT_TYPE_COLORS[t] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+                    OUTPUT_TYPE_COLORS[outType] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
                   )}
                 >
-                  {t}
+                  {outputTypeLabel(outType, t)}
                 </span>
               ))}
             </div>
@@ -240,7 +241,7 @@ export function TemplatePreviewModal({
               )}
               <span className="flex items-center gap-1">
                 <Layers className="h-3.5 w-3.5" />
-                {template.nodeCount} nodes
+                {t("templates.nodes", { n: template.nodeCount })}
               </span>
               <CreditCost credits={template.estimatedCredits} icon="md" />
               <span className="flex items-center gap-1">
@@ -313,7 +314,7 @@ export function TemplatePreviewModal({
             {template.nodeTypesUsed.length > 0 && (
               <div className="border-t border-border pt-4">
                 <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-                  Nodes Used
+                  {t("templates.nodesUsedHeading")}
                 </h3>
                 <div className="flex flex-wrap gap-1.5">
                   {template.nodeTypesUsed.map((type) => (
@@ -332,7 +333,7 @@ export function TemplatePreviewModal({
             {template.providersUsed.length > 0 && (
               <div className="border-t border-border pt-4">
                 <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-                  Providers
+                  {t("templates.providersHeading")}
                 </h3>
                 <div className="flex flex-wrap gap-1.5">
                   {template.providersUsed.map((provider) => (
@@ -351,7 +352,7 @@ export function TemplatePreviewModal({
             {template.tags.length > 0 && (
               <div className="border-t border-border pt-4">
                 <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-                  Tags
+                  {t("templates.tagsHeading")}
                 </h3>
                 <div className="flex flex-wrap gap-1.5">
                   {template.tags.map((tag) => (
@@ -390,7 +391,7 @@ export function TemplatePreviewModal({
             {/* Project selector */}
             <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
               <SelectTrigger className="flex-1 min-w-0">
-                <SelectValue placeholder="Select project" />
+                <SelectValue placeholder={t("templates.selectProject")} />
               </SelectTrigger>
               <SelectContent>
                 {projects.map((p) => (
@@ -412,7 +413,7 @@ export function TemplatePreviewModal({
               ) : (
                 <Copy className="h-4 w-4 mr-2" />
               )}
-              Clone to Project
+              {t("templates.cloneToProject")}
             </Button>
           </div>
         </div>

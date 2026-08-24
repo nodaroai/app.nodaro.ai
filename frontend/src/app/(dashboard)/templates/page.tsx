@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { getMyTemplates, updateTemplate, deleteTemplate, cloneTemplate, type WorkflowTemplate, type TemplateBrowseCard } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
-import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
+import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
 import { COMPLEXITY_CONFIG, type Complexity } from "@/lib/template-utils"
 import {
   useTemplateBrowseInfinite,
@@ -26,6 +27,7 @@ import { useProjects } from "@/hooks/queries/use-projects-queries"
 type ViewMode = "browse" | "my-templates" | "favorites"
 
 export default function TemplatesPage() {
+  const t = useT()
   const { user } = useAuth()
   const qc = useQueryClient()
 
@@ -104,10 +106,10 @@ export default function TemplatesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-templates"] })
       qc.invalidateQueries({ queryKey: ["template-marketplace"] })
-      toast.success("Template deleted")
+      toast.success(t("templates.deleted"))
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete template")
+      toast.error(err.message || t("templates.failedDelete"))
     },
   })
 
@@ -137,9 +139,9 @@ export default function TemplatesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Templates</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("templates.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Discover workflow templates or manage your own
+            {t("templates.subtitle")}
           </p>
         </div>
       </div>
@@ -159,7 +161,7 @@ export default function TemplatesPage() {
               )}
               onClick={() => setViewMode("browse")}
             >
-              Browse
+              {t("templates.tabBrowse")}
             </button>
             {user && (
               <>
@@ -174,7 +176,7 @@ export default function TemplatesPage() {
                   onClick={() => setViewMode("my-templates")}
                 >
                   <User className="h-3.5 w-3.5" />
-                  My Templates
+                  {t("templates.tabMy")}
                 </button>
                 <button
                   type="button"
@@ -187,7 +189,7 @@ export default function TemplatesPage() {
                   onClick={() => setViewMode("favorites")}
                 >
                   <Heart className="h-3.5 w-3.5" />
-                  Favorites
+                  {t("templates.tabFavorites")}
                 </button>
               </>
             )}
@@ -200,7 +202,7 @@ export default function TemplatesPage() {
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search templates..."
+                placeholder={t("templates.searchPlaceholder")}
                 className="pl-9 h-9"
               />
               {searchInput && (
@@ -223,9 +225,9 @@ export default function TemplatesPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="popular">Popular</SelectItem>
-                <SelectItem value="newest">Newest</SelectItem>
-                <SelectItem value="most-favorited">Most Favorited</SelectItem>
+                <SelectItem value="popular">{t("templates.sortPopular")}</SelectItem>
+                <SelectItem value="newest">{t("templates.sortNewest")}</SelectItem>
+                <SelectItem value="most-favorited">{t("templates.sortFavorited")}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -245,7 +247,7 @@ export default function TemplatesPage() {
               )}
               onClick={() => setSelectedCategory(undefined)}
             >
-              All
+              {t("templates.filterAll")}
             </button>
             {APP_CATEGORIES.map((cat) => (
               <button
@@ -259,7 +261,7 @@ export default function TemplatesPage() {
                 )}
                 onClick={() => setSelectedCategory(selectedCategory === cat.value ? undefined : cat.value)}
               >
-                {cat.label}
+                {categoryLabel(cat.value, t)}
               </button>
             ))}
 
@@ -279,7 +281,7 @@ export default function TemplatesPage() {
                 )}
                 onClick={() => setSelectedOutputType(selectedOutputType === ot.value ? undefined : ot.value)}
               >
-                {ot.label}
+                {outputTypeLabel(ot.value, t)}
               </button>
             ))}
 
@@ -322,14 +324,14 @@ export default function TemplatesPage() {
           <div className="text-center py-16">
             <LayoutTemplate className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              {viewMode === "favorites" ? "No favorites yet" : "No templates found"}
+              {viewMode === "favorites" ? t("templates.emptyFavoritesTitle") : t("templates.emptyBrowseTitle")}
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {viewMode === "favorites"
-                ? "Heart templates you like to save them here."
+                ? t("templates.emptyFavoritesDesc")
                 : debouncedSearch || selectedCategory || selectedOutputType || selectedComplexity
-                  ? "Try adjusting your search or filters."
-                  : "Be the first to publish a workflow template!"}
+                  ? t("templates.emptyBrowseFilteredDesc")
+                  : t("templates.emptyBrowseAllDesc")}
             </p>
           </div>
         ) : (
@@ -391,14 +393,14 @@ function MyTemplatesGrid({
   onDelete: (templateId: string) => void
   isDeleting: boolean
 }) {
+  const t = useT()
   if (!templates || templates.length === 0) {
     return (
       <div className="text-center py-16">
         <LayoutTemplate className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-        <h2 className="text-lg font-semibold text-foreground mb-2">No templates yet</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-2">{t("templates.emptyMyTitle")}</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Publish a workflow as a template from the workflow editor share dialog.
-          Templates let others clone your workflow into their own projects.
+          {t("templates.emptyMyDesc")}
         </p>
       </div>
     )
@@ -432,6 +434,7 @@ function MyTemplateCard({
   onDelete: () => void
   isDeleting: boolean
 }) {
+  const t = useT()
   const complexity = COMPLEXITY_CONFIG[template.complexity as Complexity]
 
   return (
@@ -451,9 +454,9 @@ function MyTemplateCard({
                 : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
             )}
             onClick={() => onToggleListed(!template.isListed)}
-            title={template.isListed ? "Click to unlist from marketplace" : "Click to list on marketplace"}
+            title={template.isListed ? t("templates.clickToUnlist") : t("templates.clickToList")}
           >
-            {template.isListed ? "Listed" : "Unlisted"}
+            {template.isListed ? t("templates.listed") : t("templates.unlisted")}
           </span>
           {/* Complexity badge */}
           {complexity && (
@@ -472,15 +475,15 @@ function MyTemplateCard({
       <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Copy className="h-3 w-3" />
-          {template.cloneCount} clones
+          {t("templates.clones", { n: template.cloneCount })}
         </span>
         <span className="flex items-center gap-1">
           <Heart className="h-3 w-3" />
-          {template.favoriteCount} favorites
+          {t("templates.favorites", { n: template.favoriteCount })}
         </span>
         <span className="flex items-center gap-1">
           <Layers className="h-3 w-3" />
-          {template.nodeCount} nodes
+          {t("templates.nodes", { n: template.nodeCount })}
         </span>
       </div>
 
@@ -491,7 +494,7 @@ function MyTemplateCard({
           size="sm"
           className="h-7 w-7 p-0"
           onClick={() => onToggleListed(!template.isListed)}
-          title={template.isListed ? "Unlist" : "List"}
+          title={template.isListed ? t("templates.unlist") : t("templates.list")}
         >
           {template.isListed ? (
             <ToggleRight className="h-4 w-4 text-emerald-500" />
@@ -505,7 +508,7 @@ function MyTemplateCard({
           className="h-7 w-7 p-0 text-destructive hover:text-destructive"
           onClick={onDelete}
           disabled={isDeleting}
-          title="Delete template"
+          title={t("templates.deleteTemplate")}
         >
           {isDeleting ? (
             <Loader2 className="h-4 w-4 animate-spin" />

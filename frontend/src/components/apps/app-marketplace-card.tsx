@@ -5,7 +5,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import type { AppBrowseCard } from "@/lib/api"
-import { APP_CATEGORIES, OUTPUT_TYPE_COLORS, CATEGORY_COLORS } from "@/lib/app-categories"
+import { OUTPUT_TYPE_COLORS, CATEGORY_COLORS, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
+import { useT } from "@/lib/i18n"
 
 interface AppMarketplaceCardProps {
   app: AppBrowseCard
@@ -27,8 +28,9 @@ function formatCount(n: number): string {
 }
 
 export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAutoplay = true, onSelect, onPreview }: AppMarketplaceCardProps) {
+  const t = useT()
   const navigate = useNavigate()
-  const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label ?? "Other"
+  const categoryLabelKey = getCategoryLabelKey(app.category)
   const categoryColor = CATEGORY_COLORS[app.category] ?? CATEGORY_COLORS.other
 
   return (
@@ -85,17 +87,17 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
         {/* Category + output type badges */}
         <div className="flex items-center gap-1 flex-wrap">
           <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
-            {categoryLabel}
+            {t(categoryLabelKey)}
           </span>
-          {app.outputTypes.slice(0, 3).map((t) => (
+          {app.outputTypes.slice(0, 3).map((outType) => (
             <span
-              key={t}
+              key={outType}
               className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
-                OUTPUT_TYPE_COLORS[t] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+                OUTPUT_TYPE_COLORS[outType] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
               )}
             >
-              {t}
+              {outputTypeLabel(outType, t)}
             </span>
           ))}
         </div>
@@ -118,7 +120,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
         {/* Creator */}
         {app.creatorDisplayName && (
           <p className="text-[10px] text-white/50 truncate">
-            by {app.creatorDisplayName}
+            {t("preview.by", { name: app.creatorDisplayName })}
           </p>
         )}
       </div>

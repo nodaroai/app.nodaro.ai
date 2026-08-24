@@ -33,6 +33,7 @@ import { Workflow } from "lucide-react"
 import type { ReactNode } from "react"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 const SENSOR_OPTIONS = { activationConstraint: { distance: 4 } } as const
 
@@ -114,6 +115,7 @@ export function HandlePopover({
   onClose,
   color,
 }: HandlePopoverProps) {
+  const t = useT()
   const connections = useHandleConnections(nodeId, handleId, direction)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -482,10 +484,10 @@ export function HandlePopover({
     : null
   const overflowFrom = handleLimit && enriched.length > handleLimit.limit ? handleLimit.limit : null
   const countLabel = enriched.length === 0
-    ? "Nothing connected"
+    ? t("handle.nothingConnected")
     : handleLimit
-      ? `${enriched.length} of ${handleLimit.limit} max`
-      : `${enriched.length} connected`
+      ? t("handle.ofMax", { n: enriched.length, max: handleLimit.limit })
+      : t("handle.connected", { n: enriched.length })
 
   const showCandidates = candidates.length > 0
 
@@ -510,8 +512,8 @@ export function HandlePopover({
             {onAddNew && (
               <button
                 type="button"
-                aria-label="Add new node"
-                title="Add new node"
+                aria-label={t("handle.addNewNode")}
+                title={t("handle.addNewNode")}
                 className="px-2 py-1 rounded hover:bg-accent text-sm font-medium flex items-center gap-1"
                 onClick={() => {
                   onAddNew()
@@ -519,14 +521,14 @@ export function HandlePopover({
                 }}
               >
                 <Plus className="w-3 h-3" />
-                Add
+                {t("handle.add")}
               </button>
             )}
             {enriched.length > 1 && (
               <button
                 type="button"
-                aria-label="Disconnect all"
-                title="Disconnect all"
+                aria-label={t("handle.disconnectAll")}
+                title={t("handle.disconnectAll")}
                 className="p-1 rounded hover:bg-accent hover:text-destructive opacity-70 hover:opacity-100"
                 onClick={handleDisconnectAll}
               >
@@ -591,7 +593,7 @@ export function HandlePopover({
           <>
             {enriched.length > 0 && <div className="border-t border-border my-2" />}
             <div className="px-1.5 pb-1 text-[12px] uppercase tracking-wide text-muted-foreground/70">
-              Optional ({candidates.length})
+              {t("handle.optionalCount", { n: candidates.length })}
             </div>
             <ul className="flex flex-col gap-0.5">
               {candidates.map((c) => (
@@ -610,7 +612,7 @@ export function HandlePopover({
             </ul>
             {hasDynamicOutputCandidates && (
               <div className="px-1.5 pt-1.5 text-[12px] text-muted-foreground/70 italic">
-                Drag from list/loop nodes for column outputs.
+                {t("handle.dragForColumnOutputs")}
               </div>
             )}
           </>
@@ -660,13 +662,14 @@ interface ConnectionRowProps {
 }
 
 function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHandle, isOverflow }: ConnectionRowProps) {
+  const t = useT()
   return (
     <li
       className={cn(
         "group flex items-center gap-2 px-1.5 py-1 text-sm rounded hover:bg-accent",
         isOverflow && "opacity-50",
       )}
-      title={isOverflow ? "Past model's max — won't be used by the current model. Reorder above or switch model to include." : undefined}
+      title={isOverflow ? t("handle.pastModelMax") : undefined}
       onMouseEnter={() => onHoverEdge(connection.edgeId)}
       onMouseLeave={() => onHoverEdge(null)}
     >
@@ -687,8 +690,8 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           type="button"
-          aria-label={`Focus ${connection.otherNodeLabel}`}
-          title="Focus"
+          aria-label={t("handle.focusNode", { label: connection.otherNodeLabel })}
+          title={t("handle.focus")}
           className="p-1 hover:bg-background rounded"
           onClick={(e) => {
             e.stopPropagation()
@@ -699,8 +702,8 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
         </button>
         <button
           type="button"
-          aria-label={`Disconnect ${connection.otherNodeLabel}`}
-          title="Disconnect"
+          aria-label={t("handle.disconnectNode", { label: connection.otherNodeLabel })}
+          title={t("handle.disconnect")}
           className="p-1 hover:bg-background hover:text-destructive rounded"
           onClick={(e) => {
             e.stopPropagation()
@@ -721,6 +724,7 @@ function SortableConnectionRow(
     onGripFocus: (edgeId: string) => void
   },
 ) {
+  const t = useT()
   const { position, isTabStop, onGripFocus, ...rowProps } = props
   // `rowProps` already includes `isOverflow` via ConnectionRowProps spread.
   const edgeId = props.connection.edgeId
@@ -770,7 +774,7 @@ function SortableConnectionRow(
             {...listeners}
             tabIndex={isTabStop ? 0 : -1}
             onFocus={() => onGripFocus(edgeId)}
-            aria-label={`Drag to reorder (position ${position})`}
+            aria-label={t("handle.dragToReorder", { n: position })}
             className="flex items-center gap-0.5 text-[12px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
           >
             <span className="font-medium tabular-nums">{position}</span>
@@ -790,6 +794,7 @@ interface CandidateRowProps {
 }
 
 function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowProps) {
+  const t = useT()
   return (
     <li className="group flex items-center gap-2 px-1.5 py-1 text-sm rounded hover:bg-accent/60 opacity-60 hover:opacity-100 transition-opacity">
       <ThumbnailButton
@@ -820,8 +825,8 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           type="button"
-          aria-label={`Focus ${candidate.nodeLabel}`}
-          title="Focus"
+          aria-label={t("handle.focusNode", { label: candidate.nodeLabel })}
+          title={t("handle.focus")}
           className="p-1 hover:bg-background rounded"
           onClick={(e) => {
             e.stopPropagation()
@@ -832,8 +837,8 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
         </button>
         <button
           type="button"
-          aria-label={`Connect ${candidate.nodeLabel}`}
-          title="Connect"
+          aria-label={t("handle.connectNode", { label: candidate.nodeLabel })}
+          title={t("handle.connect")}
           className="p-1 hover:bg-background hover:text-primary rounded"
           onClick={(e) => {
             e.stopPropagation()
@@ -850,12 +855,13 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
 // ─── Model-max overflow divider ────────────────────────────────────────────
 
 function OverflowDivider({ providerLabel }: { providerLabel: string }) {
+  const t = useT()
   return (
     <li
       aria-hidden
       className="pointer-events-none px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground/60 border-t border-dashed border-border/70 mt-1"
     >
-      Beyond {providerLabel}'s max — won't be used
+      {t("handle.beyondProviderMax", { provider: providerLabel })}
     </li>
   )
 }
@@ -875,6 +881,7 @@ function ThumbnailButton({
   label: string
   onJump: () => void
 }) {
+  const t = useT()
   // Preview only shows while the cursor is OVER the thumbnail itself; moving
   // anywhere else (including over the preview image — it's pointer-events-none)
   // hides it. The preview is portaled to document.body and positioned with
@@ -924,8 +931,8 @@ function ThumbnailButton({
       <button
         ref={btnRef}
         type="button"
-        aria-label={`Focus ${label}`}
-        title="Click to focus"
+        aria-label={t("handle.focusNode", { label })}
+        title={t("handle.clickToFocus")}
         className={cn(
           "w-8 h-8 rounded overflow-hidden bg-muted flex items-center justify-center",
           "ring-0 hover:ring-2 hover:ring-primary/60 transition-shadow cursor-pointer",
