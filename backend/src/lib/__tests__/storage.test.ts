@@ -7,8 +7,10 @@ const mocks = vi.hoisted(() => {
   const deleteCalls: unknown[] = []
   const deleteObjectsCalls: unknown[] = []
   const uploadBodies: unknown[] = []
+  const copyCalls: unknown[] = []
+  const headCalls: unknown[] = []
   const safeFetchMock = vi.fn()
-  return { mockSend, putCalls, deleteCalls, deleteObjectsCalls, uploadBodies, safeFetchMock }
+  return { mockSend, putCalls, deleteCalls, deleteObjectsCalls, uploadBodies, copyCalls, headCalls, safeFetchMock }
 })
 
 vi.mock("@aws-sdk/client-s3", () => {
@@ -33,11 +35,25 @@ vi.mock("@aws-sdk/client-s3", () => {
       mocks.deleteObjectsCalls.push(params)
     }
   }
+  class MockCopyObjectCommand {
+    constructor(params: unknown) {
+      Object.assign(this, params)
+      mocks.copyCalls.push(params)
+    }
+  }
+  class MockHeadObjectCommand {
+    constructor(params: unknown) {
+      Object.assign(this, params)
+      mocks.headCalls.push(params)
+    }
+  }
   return {
     S3Client: MockS3Client,
     PutObjectCommand: MockPutObjectCommand,
     DeleteObjectCommand: MockDeleteObjectCommand,
     DeleteObjectsCommand: MockDeleteObjectsCommand,
+    CopyObjectCommand: MockCopyObjectCommand,
+    HeadObjectCommand: MockHeadObjectCommand,
   }
 })
 
@@ -97,7 +113,40 @@ import {
   r2KeyFromOurUrl,
   mediaObjectKey,
   tmpObjectKey,
+  copyRecastObject,
 } from "@/lib/storage.js"
+
+describe("copyRecastObject (recast fork)", () => {
+  beforeEach(() => {
+    mocks.copyCalls.length = 0
+    mocks.headCalls.length = 0
+    mocks.mockSend.mockResolvedValue({ ContentLength: 4242 })
+  })
+
+  it("copies R2-to-R2 to the fork key with an audio-correct ContentType and returns the source size", async () => {
+    const result = await copyRecastObject("https://r2.test.com/audios/orig-music-s1.wav", "audios/fork-x9f-music-s1.wav")
+    expect(result).toEqual({ url: "https://r2.test.com/audios/fork-x9f-music-s1.wav", bytes: 4242 })
+    expect(mocks.copyCalls).toHaveLength(1)
+    expect(mocks.copyCalls[0]).toMatchObject({
+      Bucket: "test-bucket",
+      Key: "audios/fork-x9f-music-s1.wav",
+      CopySource: "/test-bucket/audios/orig-music-s1.wav",
+      ContentType: "audio/wav",
+      MetadataDirective: "REPLACE",
+    })
+  })
+
+  it("sets video/mp4 for an mp4 dest and image/png for a png dest", async () => {
+    await copyRecastObject("https://r2.test.com/videos/orig-seg1.mp4", "videos/fork-x1-seg1.mp4")
+    await copyRecastObject("https://r2.test.com/images/orig-board.png", "images/fork-x2-board.png")
+    expect((mocks.copyCalls[0] as { ContentType: string }).ContentType).toBe("video/mp4")
+    expect((mocks.copyCalls[1] as { ContentType: string }).ContentType).toBe("image/png")
+  })
+
+  it("throws on a foreign (non-R2) source URL rather than silently pointing at it", async () => {
+    await expect(copyRecastObject("https://evil.example.com/x.wav", "audios/fork-x.wav")).rejects.toThrow()
+  })
+})
 
 describe("mediaObjectKey (#754)", () => {
   it("pluralizes the type and defaults the extension per media type", () => {
