@@ -601,6 +601,15 @@ export interface PluginStorageToolkit {
   deleteFromR2(key: string): Promise<void>
   /** Host-aware inverse of `r2Url`; rejects foreign/user-owned URLs. */
   r2KeyFromOurUrl(url: string): string | null
+  /** Mirrors `copyRecastObject` (`lib/storage.ts`) — physically copies one
+   *  recast-owned R2 object to a fork-owned `destKey` (R2-to-R2, audio-aware
+   *  ContentType); returns the fork URL + source byte size. Recast fork only. */
+  copyRecastObject(sourceUrl: string, destKey: string): Promise<{ url: string; bytes: number }>
+  /** Mirrors `reserveStorageIfWithinLimit` (`utils/file-validation.ts`) — atomically
+   *  reserve `bytes` against the user's quota; false if it would exceed the cap. */
+  reserveStorage(userId: string, bytes: number): Promise<boolean>
+  /** Mirrors `refundStorage` (`utils/file-validation.ts`) — release a prior reservation. */
+  refundStorage(userId: string, bytes: number): Promise<void>
   /**
    * Mirrors `storeImportedImageBuffer` (`lib/media-import.ts`) — the buffer
    * half of the image-import pipeline: sharp decode gate (HEIC→JPEG

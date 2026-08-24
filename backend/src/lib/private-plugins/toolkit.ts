@@ -34,7 +34,9 @@ import {
   deleteFromR2,
   r2KeyFromOurUrl,
   mediaObjectKey,
+  copyRecastObject,
 } from "../storage.js"
+import { reserveStorageIfWithinLimit, refundStorage } from "../../utils/file-validation.js"
 import { storeImportedImageBuffer } from "../media-import.js"
 import { markProviderCallStart } from "../reconcile/persistence.js"
 import { sendInternalError } from "../http-errors.js"
@@ -1024,6 +1026,9 @@ export function buildToolkit(): PluginToolkit {
       r2KeyFromOurUrl,
       storeImportedImageBuffer,
       mediaObjectKey,
+      copyRecastObject,
+      reserveStorage: reserveStorageIfWithinLimit,
+      refundStorage,
     },
     jobs: {
       storeRecastAudioBase,
