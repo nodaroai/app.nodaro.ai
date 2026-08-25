@@ -48,6 +48,14 @@ describe("COPILOT_DOCTRINE", () => {
     expect(COPILOT_DOCTRINE).toContain("Never remember secrets")
   })
 
+  it("tells the model how a character variant is reached — tokens, never a URL", () => {
+    // The @slug:N:variant grammar is the only model-writable path to a
+    // specific angle/expression; without this rule the model either cannot
+    // honor "the back angle of Iris" or reaches for an address.
+    expect(COPILOT_DOCTRINE).toContain("@slug:N:variant")
+    expect(COPILOT_DOCTRINE).toContain("get_character")
+  })
+
   it("tells the model the recipe catalog exists", () => {
     // get_recipe is allowlisted but self-describing only at the tool level; the
     // LEARN step is what makes the model actually reach for a proven playbook
