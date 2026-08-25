@@ -1,7 +1,7 @@
 ---
 name: product-photoshoot
 description: A full ad campaign from ONE product image — nine ad archetypes fanned out from a single shared reference, with two intake paths depending on whether the photo is your product or only inspiration
-triggers: ["product photoshoot", "product ads", "ads for my product", "product ad campaign", "make something similar to this product", "product marketing shots", "turn my product photo into ads", "recreate a product I saw"]
+triggers: ["product photoshoot", "product ads", "ads for my product", "product ad campaign", "make something similar to this product", "product marketing shots", "turn my product photo into ads", "recreate a product I saw", "product shot workflow", "ad creatives for my brand", "ad creatives"]
 version: 1
 ---
 

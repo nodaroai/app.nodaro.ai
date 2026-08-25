@@ -1,7 +1,7 @@
 ---
 name: person-node-basics
 description: Design a person with the Person picker node instead of prose — attributes (age, ethnicity blend, build, eyes, hair, skin, facial geometry) compose the character prompt; stack Backdrop, Framing and Mood on the same look input for full scene control
-triggers: ["create a person", "design a character look", "model photo", "define facial features", "person node", "a woman in her 20s with", "specific face", "ethnicity blend", "character from attributes"]
+triggers: ["create a person", "design a character look", "model photo", "define facial features", "person node", "a woman in her 20s with", "specific face", "ethnicity blend", "character from attributes", "character set", "a set of characters"]
 version: 1
 ---
 
