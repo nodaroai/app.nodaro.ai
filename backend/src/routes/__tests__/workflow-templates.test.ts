@@ -325,3 +325,83 @@ describe("extractNodeTypes — normalizes legacy aliases (facet-drift guard)", (
     expect(types).not.toContain("reduce")
   })
 })
+
+describe("POST /v1/templates/:slug/clone — baked demo outputs survive the clone", () => {
+  const TEST_PROJECT_ID = "00000000-0000-4000-8000-000000000030"
+  // A snapshot node with baked results — exactly what a tutorial template ships
+  // so its walkthrough shows real media instead of empty grey boxes.
+  const bakedNode = {
+    id: "scene-image",
+    type: "generate-image",
+    data: {
+      prompt: "a lighthouse at dusk",
+      generatedImageUrl: "https://cdn.nodaro.ai/demo/lighthouse.png",
+      generatedResults: [{ url: "https://cdn.nodaro.ai/demo/lighthouse.png", jobId: "demo-1" }],
+    },
+  }
+
+  it("carries the template's baked generatedResults into the cloned workflow's nodes", async () => {
+    const captureInsert: { value: Record<string, unknown> | null } = { value: null }
+    let tmplCall = 0
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "workflow_templates") {
+        tmplCall++
+        if (tmplCall === 1) {
+          // Load template: select("*").eq("slug", _).eq("is_active", true).maybeSingle()
+          const maybeSingle = vi.fn().mockResolvedValue({
+            data: {
+              id: "tpl-1", name: "Welcome Demo", clone_count: 0,
+              snapshot_nodes: [bakedNode], snapshot_edges: [], snapshot_settings: {},
+              preview_media_url: "https://cdn.nodaro.ai/demo/lighthouse.png",
+            },
+            error: null,
+          })
+          const eq2 = vi.fn().mockReturnValue({ maybeSingle })
+          const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+          const select = vi.fn().mockReturnValue({ eq: eq1 })
+          return { select } as never
+        }
+        // clone_count increment: update(_).eq("id", _)  (awaited, no select)
+        const eq = vi.fn().mockResolvedValue({ data: null, error: null })
+        return { update: vi.fn().mockReturnValue({ eq }) } as never
+      }
+      if (table === "projects") {
+        // select("id, user_id").eq("id", _).single()
+        const single = vi.fn().mockResolvedValue({
+          data: { id: TEST_PROJECT_ID, user_id: TEST_USER_ID }, error: null,
+        })
+        const eq = vi.fn().mockReturnValue({ single })
+        const select = vi.fn().mockReturnValue({ eq })
+        return { select } as never
+      }
+      if (table === "workflows") {
+        // insert(row).select("id").single()
+        const insert = vi.fn().mockImplementation((row: Record<string, unknown>) => {
+          captureInsert.value = row
+          const single = vi.fn().mockResolvedValue({ data: { id: "wf-new" }, error: null })
+          return { select: vi.fn().mockReturnValue({ single }) }
+        })
+        return { insert } as never
+      }
+      return {} as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/templates/welcome-demo/clone",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: TEST_PROJECT_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captureInsert.value).not.toBeNull()
+    const nodes = captureInsert.value!.nodes as Array<{ data: Record<string, unknown> }>
+    // The invariant: baked demo output survives the clone. If someone re-wires
+    // stripExecutionData into this path, generatedResults disappears and this fails.
+    expect(nodes[0].data.generatedResults).toEqual([
+      { url: "https://cdn.nodaro.ai/demo/lighthouse.png", jobId: "demo-1" },
+    ])
+    expect(nodes[0].data.generatedImageUrl).toBe("https://cdn.nodaro.ai/demo/lighthouse.png")
+  })
+})

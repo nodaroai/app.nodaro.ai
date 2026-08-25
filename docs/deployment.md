@@ -119,6 +119,7 @@ added to `config.ts` without a row here.
 | `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue |
 | `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `DEFAULT_LOCALE` | `""` (browser detection) | The locale a fresh visitor starts in — e.g. `he`, `ar`, `de`, `fr`, `es`, `hi`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `en`. Written into `/config.js` at boot; a user's own saved choice always wins, and an unset/blank/unrecognised value falls back to the visitor's browser language. Restart to apply |
+| `NODARO_TUTORIAL_PACKS` | `""` (built-in tutorials only) | Business / self-host — comma-separated directories of extra tutorial packs (each: a `manifest.json` + one `*.json` per tutorial), mounted read-only into the container. Additive; a malformed pack is skipped and logged, never corrupting the built-in tutorials. Restart to apply. See [tutorials.md](./tutorials.md) for the pack format |
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |

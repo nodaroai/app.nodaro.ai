@@ -235,6 +235,11 @@ services:
       # and always serves the stock surface (set EDITION=business to use it).
       # Restart to apply. Unset = full default surface.
       NODARO_SURFACE_PROFILE: ${NODARO_SURFACE_PROFILE:-}
+      # Extra tutorial packs (business/self-host). Comma-separated directories,
+      # each a manifest.json + *.json tutorials, mounted read-only into the
+      # container. Empty = the built-in tutorials only. A malformed pack is
+      # skipped and logged; it never corrupts the base seed. Restart to apply.
+      NODARO_TUTORIAL_PACKS: ${NODARO_TUTORIAL_PACKS:-}
       # nodaro.ai as a provider like the others: a personal API token from
       # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
       NODARO_API_KEY: ${NODARO_API_KEY:-}

@@ -114,6 +114,31 @@ The workflows are seeded from the repo, but the images, videos, and audio
 they display are fetched from Nodaro's CDN, so a walkthrough's media needs
 an internet connection to render.
 
+## Operator tutorial packs (self-host)
+
+Self-hosted **business** installs can add their own tutorials without
+rebuilding the image. Point `NODARO_TUTORIAL_PACKS` at one or more directories
+(comma-separated), each containing:
+
+- `manifest.json` — the pack's `name`, the `categories` its tutorials use
+  (`slug` + `name`, optional `sortOrder`), and optional `locale`, `version`,
+  and `forbiddenPromptTerms`.
+- one `*.json` per tutorial — a workflow snapshot with its nodes, edges, and
+  **baked demo outputs** (the real run the tutorial teaches). When a viewer
+  clones the tutorial, those baked results come with it, so the copy opens
+  showing the finished run rather than empty boxes.
+
+Packs are **additive**: they add tutorials to the built-in set and never change
+it. Each tutorial's category must be declared in the pack's `manifest.json`
+(the category is created automatically on first boot). Every referenced media
+asset must be a public `https://` URL so the tutorial loads on any machine.
+
+A pack that fails validation — invalid JSON, an undeclared category, a
+non-public asset URL, or a slug that collides with an existing tutorial — is
+**skipped whole and logged**; it can never corrupt the built-in tutorials.
+Restart the container to pick up pack changes. Cloud installs are seeded
+separately and ignore this variable.
+
 ## See also
 
 - [Embed App Guide](./embed-app-guide.md) — ship your own workflows as runnable MiniApps

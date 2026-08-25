@@ -86,28 +86,6 @@ function calculateComplexity(
   return "simple"
 }
 
-/** Execution data keys to strip from snapshot nodes. */
-const EXECUTION_DATA_KEYS = [
-  "result", "status", "progress",
-  "generatedImageUrl", "generatedVideoUrl", "generatedAudioUrl",
-  "generatedText", "generatedItems", "generatedResults",
-  "__listResults", "__listTotal", "__listCompleted",
-]
-
-/** Deep clone nodes and remove execution-related data. */
-function stripExecutionData(nodes: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  return nodes.map((node) => {
-    const cloned = JSON.parse(JSON.stringify(node)) as Record<string, unknown>
-    const data = cloned.data as Record<string, unknown> | undefined
-    if (data) {
-      for (const key of EXECUTION_DATA_KEYS) {
-        delete data[key]
-      }
-    }
-    return cloned
-  })
-}
-
 /** Derive a preview media URL from snapshot nodes. */
 function derivePreviewMedia(
   nodes: Array<Record<string, unknown>>,
@@ -752,8 +730,11 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your project" } })
     }
 
-    // Strip execution data from snapshot nodes
-    const cleanNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
+    // Baked demo outputs are preserved on purpose: a tutorial clone must open
+    // showing the real run it teaches, not empty grey boxes (spec B5 §5.5).
+    // Do NOT reintroduce a strip step here — the clone-preserves-baked-results
+    // guard test in workflow-templates.test.ts pins this.
+    const snapshotNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
 
     // Create new workflow in target project. Inherit the template's durable
     // preview URL as the cloned workflow's thumbnail so the workflow card is
@@ -766,7 +747,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         project_id: projectId,
         user_id: userId,
         name: workflowName,
-        nodes: cleanNodes,
+        nodes: snapshotNodes,
         edges: template.snapshot_edges || [],
         settings: template.snapshot_settings || {},
         template_id: template.id,

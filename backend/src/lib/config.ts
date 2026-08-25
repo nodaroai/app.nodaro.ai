@@ -171,6 +171,17 @@ export const envSchema = z.object({
    * getter's test hook must be able to bypass). Business+ only — see d2.
    */
   NODARO_SURFACE_PROFILE: z.string().optional(),
+  /**
+   * Comma-separated list of directories holding operator-supplied tutorial
+   * packs. Each directory: a manifest.json (name, categories, optional
+   * locale/version/forbiddenPromptTerms) plus one *.json per tutorial (the
+   * TutorialTemplateDoc shape). Read fresh from process.env by
+   * loadTutorialPacks() (config snapshots env at import; the loader needs a
+   * test seam) — documented here for the env surface. Business/self-host only:
+   * Cloud never seeds. A malformed pack is skipped whole and logged; the base
+   * tutorials always seed. Unset/blank = base tutorials only. Restart to apply.
+   */
+  NODARO_TUTORIAL_PACKS: z.string().default(""),
   /** Comma-separated list of allowed CORS origins (e.g. "https://app.nodaro.ai,http://localhost:3000") */
   CORS_ORIGIN: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().default(""),
