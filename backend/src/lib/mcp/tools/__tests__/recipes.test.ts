@@ -88,6 +88,16 @@ describe("recipe catalog", () => {
     expect(body!).toContain("the foreign photo touches ONLY the describe node")
   })
 
+  it("song-from-reference leads with the ownership fork — analysis, never a cover, for foreign songs", () => {
+    const body = loadRecipe("song-from-reference")
+    expect(body).toBeTruthy()
+    // The load-bearing lesson (incident 2026-08-25: a released song wired
+    // into suno-cover was refused by catalog matching AFTER the pipeline ran).
+    expect(body!).toContain("whose recording is it?")
+    expect(body!).toContain("Do NOT build a cover from it")
+    expect(body!).toContain("field-style")
+  })
+
   it("bundled reference files load through loadRecipeFile", () => {
     for (const [recipe, rel] of [
       ["one-character-any-scene", "references/prompts.md"],
