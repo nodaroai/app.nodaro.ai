@@ -249,29 +249,23 @@ export function useAdminJobs(
     queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
     queryFn: async (): Promise<AdminJob[]> => {
       const supabase = createClient()
-      let query = supabase
-        .from("jobs")
-        .select("id, status, job_type, credits, provider, provider_cost, display_cost, error_message, input_data, output_data, created_at, started_at, completed_at, user_id, workflow_id, workflow_execution_id, source, source_detail, provider_kind, provider_task_id, reconcile_attempts, reconcile_last_error, provider_call_started_at") as unknown as {
-          order: (col: string, opts: { ascending: boolean }) => typeof query
-          range: (from: number, to: number) => typeof query
-          eq: (col: string, val: string) => typeof query
-          not: (col: string, op: string, val: string) => typeof query
-          then: Promise<{ data: JobRow[] | null; error: Error | null }>["then"]
-        }
-      query = query
-        .order("created_at", { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-      if (statusFilter) query = query.eq("status", statusFilter)
-      if (userIdFilter) query = query.eq("user_id", userIdFilter)
+      // `jobs` is no longer column-readable from the browser: migration 347
+      // revoked table-level SELECT from `authenticated` down to the four columns
+      // Realtime needs, so provider_cost / display_cost (and 17 other fields
+      // this table renders) are service-role-only. The listing comes over REST
+      // from GET /v1/admin/jobs (requireAdmin). The enrichment reads below are
+      // unaffected — those tables keep their admin RLS policies.
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+      if (statusFilter) params.set("status", statusFilter)
+      if (userIdFilter) params.set("userId", userIdFilter)
       if (excludeUserIds && excludeUserIds.length > 0) {
-        // Direct interpolation is safe because excludeUserIds always comes from
-        // useAllAdminUsersLite (UUIDs only — no commas, no parens, no quotes).
-        // PostgREST URL length caps this at ~200 admin user-ids; not a concern
-        // at our scale (single-digit admin count).
-        query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
+        params.set("excludeUserIds", excludeUserIds.join(","))
       }
-      const { data: jobs, error } = await (query as unknown as PromiseLike<{ data: JobRow[] | null; error: Error | null }>)
-      if (error) throw error
+      const res = await fetch(`/v1/admin/jobs?${params.toString()}`, {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch jobs")
+      const { data: jobs } = (await res.json()) as { data: JobRow[] }
       if (!jobs || jobs.length === 0) return []
       const userIds = [...new Set(jobs.map((j) => j.user_id))]
       // Orchestrator-created rows carry only workflow_execution_id (their
