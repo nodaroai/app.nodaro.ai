@@ -90,7 +90,7 @@ const YT_DLP_BIN = resolveYtDlpBin()
  * YouTube quality regresses to 360p, suspect a pin leaking into the base args
  * before believing the platform is throttling us.
  */
-const YT_SPOOF_ARGS = [
+export const YT_SPOOF_ARGS = [
   "--add-header", "referer:youtube.com",
   "--add-header", "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 ] as const
@@ -528,7 +528,20 @@ export function reencodeToH264(
  */
 const DOWNLOAD_STALL_TIMEOUT_MS = 90_000
 
-function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void): Promise<void> {
+/**
+ * Exported for the AUDIO extractor (`providers/audio/youtube-extractor.ts`),
+ * which rides this exact spawn so the two lanes can never disagree about
+ * binary, error shape, or stall handling. `idleTimeoutMs` exists for that
+ * caller: `--extract-audio` has a SILENT ffmpeg conversion phase after the
+ * download finishes, so the 90s download-stall default would SIGKILL a healthy
+ * long extraction mid-convert — audio passes the 10-min ffmpeg convention.
+ */
+export function spawnYtDlpDownload(
+  args: string[],
+  onProgress?: (pct: number) => void,
+  opts?: { idleTimeoutMs?: number },
+): Promise<void> {
+  const idleTimeoutMs = opts?.idleTimeoutMs ?? DOWNLOAD_STALL_TIMEOUT_MS
   return new Promise<void>((resolve, reject) => {
     const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
     let stderrBuf = ""
@@ -545,8 +558,8 @@ function spawnYtDlpDownload(args: string[], onProgress?: (pct: number) => void):
       clearTimeout(watchdog)
       watchdog = setTimeout(() => {
         proc.kill("SIGKILL")
-        finish(() => reject(new Error(`yt-dlp stalled (no output for ${DOWNLOAD_STALL_TIMEOUT_MS / 1000}s)`)))
-      }, DOWNLOAD_STALL_TIMEOUT_MS)
+        finish(() => reject(new Error(`yt-dlp stalled (no output for ${idleTimeoutMs / 1000}s)`)))
+      }, idleTimeoutMs)
     }
     kick()
 

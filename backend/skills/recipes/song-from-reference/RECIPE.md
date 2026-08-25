@@ -1,8 +1,8 @@
 ---
 name: song-from-reference
-description: A song similar to an existing one — a YouTube link or an uploaded track becomes the audio reference for a Suno cover, with an honest fork between covering the song and chasing its vibe
+description: A song similar to an existing one — a YouTube link or an uploaded track becomes the audio reference for a Suno cover, with a style-analysis fallback that composes an original song when the cover is refused
 triggers: ["similar song", "a song like this", "cover this song", "make a song from this link", "youtube song reference", "remake this track", "same vibe as this song"]
-version: 1
+version: 2
 ---
 
 # Song From Reference
@@ -17,12 +17,18 @@ hoping is the fallback, not the plan.
   the `suno-cover` graph below. This is the strongest interpretation of
   "similar to THIS song" because the model actually hears the reference.
 - **A new song in its vibe** → still the `suno-cover` graph, with a prompt that
-  pushes distance ("same energy and tempo, different melody and lyrics") — or,
-  when the user can name the vibe in words (genre, mood, instruments), the
-  picker-stack path in the `suno-music-basics` recipe with no audio reference
-  at all.
+  pushes distance ("same energy and tempo, different melody and lyrics") — or
+  the style-analysis path below, which composes an ORIGINAL song from a
+  description of the reference and never touches the source audio.
 - If the user just says "similar" with a link, default to the cover graph and
   say which interpretation you took.
+
+**Expect the cover to be refused sometimes.** A well-known commercial song can
+be recognized by the music provider and rejected on rights grounds — that is a
+policy refusal, not a bug. When a cover run fails with a rights or content
+message (or the audio cannot be fetched at all), switch to the style-analysis
+path without being asked; it is the designed fallback, and it also avoids
+copying the original in the first place.
 
 ## Getting the reference audio into the graph
 
@@ -58,6 +64,34 @@ The reference decides what the song IS; the prompt decides what it becomes.
 - The output is a full song on `suno-cover`'s `audio` output — wire it onward
   (a video's soundtrack, a trim, a mashup) like any audio.
 
+## The style-analysis path — when the cover is refused, or to stay original
+
+Analyze the actual song into a STYLE BRIEF, then compose from the brief. The
+analyzer hears the real audio (the platform feeds the YouTube link straight to
+a multimodal model — no download step is involved, so this path is also immune
+to fetch failures), but the song that comes out is an original composition.
+
+1. `video-analysis` node (Cloud editions) with:
+   - `youtubeUrl` — the user's pasted link (same URL rule as above; the source
+     must be under ten minutes).
+   - `analysisFocus` — a music-only brief instruction, for example: "Describe
+     ONLY the music: genre and subgenre, tempo and rhythmic feel, mood and
+     energy arc, instrumentation and production character, vocal type and
+     delivery, era. Write it as a style brief for composing a NEW song in this
+     style. Do not transcribe lyrics and do not describe the melody note by
+     note."
+2. `video-analysis` `text → in` into a `text-prompt` node — the editable brief
+   (trim it; briefs work best under a few hundred words).
+3. `text-prompt` `prompt → field-style` into `suno-generate` — `field-style`
+   is the free-text style seat (the `audio-style` input accepts picker nodes
+   only, not text). Give `suno-generate` a short `prompt` of its own for what
+   the NEW song is about (subject, lyrics language). The brief styles it; the
+   prompt gives it something to say.
+
+Never transcribe or reuse the original lyrics — the brief describes character,
+not content. If the user has no Cloud analysis available, fall back to asking
+them to describe the style in words (the `suno-music-basics` picker stacks).
+
 ## Prompting the cover
 
 Name the destination, not the source — the model already hears the source.
@@ -71,6 +105,9 @@ and tempo; new melody, new lyrics about the open road".
 
 ## Debugging
 
+- The cover run failed with a rights or content-policy message → the provider
+  recognized the source; switch to the style-analysis path (see above) and say
+  why.
 - The cover sounds identical to the reference → the prompt named no
   destination; add concrete genre, instrumentation and voice direction.
 - The reference node produced nothing at run time → the audio was never
