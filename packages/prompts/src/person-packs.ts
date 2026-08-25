@@ -139,10 +139,17 @@ function personEntriesFromDims(
  * in the picker exactly as it hides them in the catalogs projection.
  */
 export function getRegisteredPeople(): readonly RegisteredPersonEntry[] {
+  const personCatalogPacks = getRegisteredCatalogPacks().filter((p) => p.catalogId === "person")
+  // Mainline identity on the empty path, matching every sibling getter below
+  // (`extra.length === 0 ? BASE : [...]`): with no person packs registered this
+  // returns the base PEOPLE reference ITSELF, not a copy — the overlay
+  // boot-smoke pins "inert boot" on exactly that identity, and an
+  // unconditional copy here is what broke the combined tree after two
+  // separately-green merges.
+  if (personCatalogPacks.length === 0) return PEOPLE
   let people: RegisteredPersonEntry[] = [...PEOPLE]
   const packsById = new Map(personPacks.map((p) => [p.id, p]))
-  for (const pack of getRegisteredCatalogPacks()) {
-    if (pack.catalogId !== "person") continue
+  for (const pack of personCatalogPacks) {
     if (pack.mode === "extend") {
       // Prefer full Person entries from the source person-pack; fall back to
       // reconstructing from the projected dimensions for a direct extend pack.
