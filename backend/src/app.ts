@@ -155,6 +155,7 @@ import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
 import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
+import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
 import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
@@ -505,6 +506,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
   if (hasAdmin()) await app.register(adminPickerGapsRoutes)
+  if (hasAdmin()) await app.register(adminCopilotGapsRoutes)
   if (hasAdmin()) await app.register(adminAppReportsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)

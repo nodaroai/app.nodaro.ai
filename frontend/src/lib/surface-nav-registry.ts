@@ -98,6 +98,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "credit-audit",
   "credit-anomalies",
   "picker-gaps",
+  "copilot-gaps",
   "kie-credits",
   "subscriptions",
   "llm-models",

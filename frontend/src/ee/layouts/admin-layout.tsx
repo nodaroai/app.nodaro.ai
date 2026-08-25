@@ -27,6 +27,7 @@ import {
   Sliders,
   FolderTree,
   Puzzle,
+  GraduationCap,
   Blocks,
   Building2,
   Inbox,
@@ -41,7 +42,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { hasOrganizations, isFeatureEnabled } from "@/lib/edition"
+import { hasCredits, hasOrganizations, isFeatureEnabled } from "@/lib/edition"
 
 const STORAGE_KEY = "nodaro-admin-sidebar-collapsed"
 
@@ -62,6 +63,7 @@ const ADMIN_NAV = [
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
   { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
   { href: "/admin/picker-gaps", label: "Picker Gaps", icon: Puzzle },
+  ...(hasCredits() ? [{ href: "/admin/copilot-gaps", label: "Copilot Gaps", icon: GraduationCap }] : []),
   { href: "/admin/app-reports", label: "App Reports", icon: Inbox },
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
