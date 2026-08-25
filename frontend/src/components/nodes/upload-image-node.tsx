@@ -22,6 +22,8 @@ import { imageNodeSizing } from "./video-node-defaults"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { UploadImageData, GeneratedResult } from "@/types/nodes"
+import { runtimeUploadModerationEnabled } from "@/lib/runtime-config"
+import { useUploadModeration, UploadModerationOverlay } from "./upload-moderation"
 
 const HANDLES = [
   { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -132,6 +134,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
         activeResultIndex: newIndex,
       })
       setShowAddOverlay(false)
+      moderate(url)
     },
   })
   const useFull = useFullResolution(id)
@@ -146,6 +149,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
   const upstreamImageAspect = useUpstreamImageAspect(id)
+  const moderationEnabled = runtimeUploadModerationEnabled()
+  const { moderate } = useUploadModeration(id, moderationEnabled, nodeData.moderationStatus)
 
   // Legacy + upstream migration: when externalUrl/url is set but no result
   // exists yet (legacy workflow state, or upstream connected post-mount via
@@ -220,6 +225,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
     })
     setPendingUrl("")
     setShowAddOverlay(false)
+    moderate(url)
   }
 
   const handleSwitchActive = (i: number) => {
@@ -229,11 +235,17 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
       activeResultIndex: i,
       url: target.url,
       thumbnailUrl: target.thumbnailUrl ?? "",
+      moderationStatus: undefined,
+      moderationReason: undefined,
     })
   }
 
   const handleDeleteResult = (indexToDelete: number) => {
     const updates = computeDeleteResultUpdates(results, activeIndex, indexToDelete, "url")
+    // A blocked/ok verdict was for the deleted image — clear it so it never
+    // renders over whichever image becomes active.
+    updates.moderationStatus = undefined
+    updates.moderationReason = undefined
     // If we just emptied the stack, clear externalUrl/r2Url too so the empty
     // state renders the picker rather than a phantom legacy URL.
     if (((updates.generatedResults as GeneratedResult[]) ?? []).length === 0) {
@@ -321,6 +333,12 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                   thumbnail={!useFull}
                   thumbnailWidth={320}
                   onLoadDimensions={handleLoadDimensions}
+                />
+                <UploadModerationOverlay
+                  enabled={moderationEnabled}
+                  status={nodeData.moderationStatus}
+                  reason={nodeData.moderationReason}
+                  onRemove={() => handleDeleteResult(activeIndex)}
                 />
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button type="button" aria-label="Add another image"

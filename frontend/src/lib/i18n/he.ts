@@ -1939,5 +1939,12 @@ export const he: ChromeDict = {
   "run.creditsShort": "{credits} קר׳",
   "run.discardMenu": "מחיקה (שמירה בספרייה, מחוץ ללוח)",
   "run.stopAfterCurrentMenu": "עצירה לאחר הרכיב הנוכחי",
+
+  // Upload-image moderation
+  "node.moderation.checking": "בודק תמונה…",
+  "node.moderation.blockedTitle": "לא ניתן לעבד את התמונה",
+  "node.moderation.blockedReason": "ייתכן שהיא מפרה את מדיניות התוכן שלנו",
+  "node.moderation.ready": "מוכן לעיבוד",
+  "node.moderation.remove": "הסר תמונה",
 }
 

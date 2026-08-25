@@ -725,6 +725,24 @@ export async function removeBackground(
   return editImage(imageUrl, undefined, "recraft-remove-bg")
 }
 
+// --- Upload-time image moderation (G3) -------------------------------------
+// Calls the deployment's moderation plugin route (POST /v1/moderate-image,
+// provided via @nodaroai/cloud-plugins registerRoutes — NOT a core route).
+// Advisory + fail-OPEN: this throws on a non-200 / network error and the
+// caller (upload-image-node) swallows it, clearing status rather than
+// blocking the upload. The upload-image node only calls this when
+// runtimeUploadModerationEnabled() is true, so mainline (no plugin) never
+// reaches it.
+export async function moderateImage(url: string): Promise<{ ok: boolean; reason?: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/moderate-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) throw new Error(`moderate-image failed: ${res.status}`)
+  return (await res.json()) as { ok: boolean; reason?: string }
+}
+
 export async function generateCharacter(data: {
   name: string
   description?: string

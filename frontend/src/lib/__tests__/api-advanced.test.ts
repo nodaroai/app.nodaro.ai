@@ -27,6 +27,7 @@ import {
   renderVideoWithSceneGraph,
   transcribeApi,
   imageToTextApi,
+  moderateImage,
 } from "../api"
 
 function mockFetchJson(data: unknown, status = 200) {
@@ -829,5 +830,31 @@ describe("auth header injection", () => {
     }
 
     expect(fetch).toHaveBeenCalled()
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/*  moderateImage (G3 upload moderation)                               */
+/* ------------------------------------------------------------------ */
+describe("moderateImage (G3 upload moderation)", () => {
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it("POSTs the url to /v1/moderate-image and returns the verdict", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: false, reason: "policy" }),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const res = await moderateImage("https://cdn.test/a.png")
+    expect(res).toEqual({ ok: false, reason: "policy" })
+    const [path, init] = fetchMock.mock.calls[0]
+    expect(path).toBe("/v1/moderate-image")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ url: "https://cdn.test/a.png" })
+  })
+
+  it("throws on a non-200 (the node catches this → fail-open)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }))
+    await expect(moderateImage("https://cdn.test/a.png")).rejects.toThrow()
   })
 })

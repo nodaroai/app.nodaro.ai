@@ -314,6 +314,18 @@ export type UploadImageData = {
   }
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
+  /**
+   * Upload-time content-moderation status for the ACTIVE result image.
+   * Written only when a moderation capability is configured
+   * (runtimeUploadModerationEnabled()); undefined otherwise. Persists in
+   * workflow JSON, so an imported workflow may carry a stale value — the
+   * upload-image node clears it on mount when it is a non-terminal
+   * "checking", and both the moderation call and the overlay render are
+   * gated on the runtime flag so mainline stays inert.
+   */
+  moderationStatus?: "checking" | "ok" | "blocked"
+  /** Optional human-readable reason a "blocked" verdict carries (if the provider returns one). */
+  moderationReason?: string
 }
 
 export type UploadVideoData = {

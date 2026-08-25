@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -68,5 +68,25 @@ describe("no direct reads of the three runtime-configurable VITE_* values", () =
       .filter((f) => /import\.meta\.env\.VITE_(API_URL|SUPABASE_URL|SUPABASE_ANON_KEY)\b/.test(readFileSync(f, "utf8")))
       .map((f) => f.slice(SRC.length + 1))
     expect(offenders, `read the baked value directly (use runtimeApiUrl / runtimeSupabaseUrl / runtimeSupabaseAnonKey / runtimeFreecutUrl): ${offenders.join(", ")}`).toEqual([])
+  })
+})
+
+describe("runtimeUploadModerationEnabled (G3 — upload-moderation capability gate)", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it("is true only when the runtime flag is explicitly true", () => {
+    window.__NODARO_RUNTIME__ = { moderation: { uploadImage: true } }
+    expect(runtimeUploadModerationEnabled()).toBe(true)
+  })
+
+  it("is false when the moderation block is absent (mainline default)", () => {
+    expect(runtimeUploadModerationEnabled()).toBe(false)
+  })
+
+  it("is false when the flag is present but not true", () => {
+    window.__NODARO_RUNTIME__ = { moderation: { uploadImage: false } }
+    expect(runtimeUploadModerationEnabled()).toBe(false)
+    window.__NODARO_RUNTIME__ = { moderation: {} }
+    expect(runtimeUploadModerationEnabled()).toBe(false)
   })
 })

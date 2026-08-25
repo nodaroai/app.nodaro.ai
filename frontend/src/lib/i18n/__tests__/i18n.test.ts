@@ -56,3 +56,21 @@ describe("i18n translate()", () => {
     expect(registered).toEqual(new Set(LOCALE_IDS))
   })
 })
+
+describe("node.moderation.* keys (G3)", () => {
+  const KEYS = [
+    "node.moderation.checking",
+    "node.moderation.blockedTitle",
+    "node.moderation.blockedReason",
+    "node.moderation.ready",
+    "node.moderation.remove",
+  ] as const
+
+  it("all five keys exist in the canonical English dict", () => {
+    for (const k of KEYS) expect(typeof en[k as keyof typeof en]).toBe("string")
+  })
+
+  it("all five keys are translated in Hebrew", () => {
+    for (const k of KEYS) expect(typeof he[k as keyof typeof he]).toBe("string")
+  })
+})

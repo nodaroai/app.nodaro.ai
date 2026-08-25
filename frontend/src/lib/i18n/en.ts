@@ -1945,6 +1945,13 @@ export const en = {
   "run.creditsShort": "{credits} CR",
   "run.discardMenu": "Discard (save to Library, off canvas)",
   "run.stopAfterCurrentMenu": "Stop after current node",
+
+  // ── Upload-image moderation (G3) ─────────────────────────────────────────
+  "node.moderation.checking": "Checking image…",
+  "node.moderation.blockedTitle": "This image can't be used",
+  "node.moderation.blockedReason": "It may violate our content policy",
+  "node.moderation.ready": "Ready to use",
+  "node.moderation.remove": "Remove image",
 } as const
 
 export type MessageKey = keyof typeof en

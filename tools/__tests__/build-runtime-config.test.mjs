@@ -69,3 +69,19 @@ test("CLI entry: malformed surface JSON never leaks a log line into stdout (conf
   // The degrade notice belongs on stderr (which the Dockerfile does NOT redirect).
   assert.match(res.stderr, /surface profile ignored/)
 })
+
+test("RUNTIME_UPLOAD_MODERATION=true → moderation.uploadImage true", () => {
+  const cfg = buildRuntimeConfig({ RUNTIME_UPLOAD_MODERATION: "true" })
+  assert.deepEqual(cfg.moderation, { uploadImage: true })
+})
+
+test("moderation flag is edition-independent (community may wire it)", () => {
+  const cfg = buildRuntimeConfig({ EDITION: "community", RUNTIME_UPLOAD_MODERATION: "true" })
+  assert.deepEqual(cfg.moderation, { uploadImage: true })
+})
+
+test("absent / falsey RUNTIME_UPLOAD_MODERATION → no moderation key (mainline inert)", () => {
+  assert.ok(!("moderation" in buildRuntimeConfig({})))
+  assert.ok(!("moderation" in buildRuntimeConfig({ RUNTIME_UPLOAD_MODERATION: "" })))
+  assert.ok(!("moderation" in buildRuntimeConfig({ RUNTIME_UPLOAD_MODERATION: "false" })))
+})
