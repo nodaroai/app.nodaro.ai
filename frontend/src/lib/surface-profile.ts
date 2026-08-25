@@ -5,7 +5,17 @@
  * here; the backend is the authority.
  */
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community"
-export type DashboardTabKey = "workflows" | "projects" | "apps" | "templates" | "gallery"
+export const DASHBOARD_TAB_KEYS = [
+  "workflows",
+  "projects",
+  "apps",
+  "miniapps",
+  "templates",
+  "tutorials",
+  "statistics",
+  "gallery",
+] as const
+export type DashboardTabKey = (typeof DASHBOARD_TAB_KEYS)[number]
 export type AuthMethod = "email" | "google" | "sso"
 
 export interface SurfaceSibling {
@@ -20,7 +30,7 @@ export interface SurfaceProfile {
   models: { deny: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string }
+  brand: { productName: string; description?: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -61,4 +71,17 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     voice: { ...d.voice, ...o.voice },
     catalogPolicy: o.catalogPolicy ?? d.catalogPolicy,
   }
+}
+
+/**
+ * The raw brand product name a deployment ACTUALLY configured, or undefined
+ * when none is set — the exact presence check the pre-paint script in
+ * index.html uses (`s.brand && s.brand.productName`). Distinct from the merged
+ * profile's `brand.productName`, which defaults to "Nodaro": a guard that must
+ * leave the static <title>/<meta> byte-identical on a default (non-surface)
+ * deployment reads this, never the defaulting surfaceBrandName(). Keep this
+ * guard in lockstep with index.html's inline script.
+ */
+export function runtimeConfiguredBrandName(): string | undefined {
+  return runtimeSurface().brand?.productName || undefined
 }

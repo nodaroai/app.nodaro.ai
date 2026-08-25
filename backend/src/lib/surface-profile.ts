@@ -20,7 +20,17 @@ import { isBusiness, isCloud } from "./config.js"
  */
 
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community"
-export type DashboardTabKey = "workflows" | "projects" | "apps" | "templates" | "gallery"
+export const DASHBOARD_TAB_KEYS = [
+  "workflows",
+  "projects",
+  "apps",
+  "miniapps",
+  "templates",
+  "tutorials",
+  "statistics",
+  "gallery",
+] as const
+export type DashboardTabKey = (typeof DASHBOARD_TAB_KEYS)[number]
 export type AuthMethod = "email" | "google" | "sso"
 
 export interface SurfaceSibling {
@@ -35,7 +45,7 @@ export interface SurfaceProfile {
   models: { deny: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string }
+  brand: { productName: string; description?: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -56,7 +66,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
 }
 
 const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community"])
-const TAB_KEYS = z.enum(["workflows", "projects", "apps", "templates", "gallery"])
+const TAB_KEYS = z.enum([...DASHBOARD_TAB_KEYS])
 const AUTH_METHODS = z.enum(["email", "google", "sso"])
 
 /**
@@ -122,7 +132,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   siblings: z
     .object({ apps: z.array(z.object({ label: z.string(), url: z.string() })).catch([]) })
     .catch({ apps: [] }),
-  brand: z.object({ productName: z.string().min(1) }).catch({ productName: "Nodaro" }),
+  brand: z.object({ productName: z.string().min(1), description: z.string().optional() }).catch({ productName: "Nodaro" }),
   locale: z.object({ default: z.string().optional(), picker: z.boolean() }).catch({ picker: true }),
   outputs: z.object({ allowPublic: lenientPublicFlag }).catch({ allowPublic: true }),
   voice: z.object({ allowedGenders: stringArray() }).catch({ allowedGenders: [] }),

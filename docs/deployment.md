@@ -486,14 +486,24 @@ it never turns on a surface the edition gates off. Fields (all optional; each
 array empty = "keep the default"):
 
 - `nav.hide`: `["gallery","explore","pricing","templates","apps","community"]`
-- `dashboard.tabs`: explicit ordered whitelist of dashboard tabs
+- `dashboard.tabs`: one ordered whitelist governing **both** dashboard tab groups —
+  the workspace strip (`workflows`, `projects`) and the app-discovery strip
+  (`apps`, `miniapps`, `templates`, `tutorials`, `statistics`). Each group renders
+  the intersection of this list with its own tabs, in the list's order; a group
+  whose intersection is empty is not rendered at all. So list every tab you want
+  to keep across both strips — e.g. `["workflows","projects","statistics","tutorials"]`
+  keeps the two workspace tabs and trims the app-discovery strip to Statistics and
+  Tutorials. Full key set: `["workflows","projects","apps","miniapps","templates","tutorials","statistics","gallery"]`
 - `nodes.deny` / `models.deny`: node types / model ids to remove everywhere — the
   picker, `GET /v1/nodes`, `GET /v1/models`, the MCP tools, and at run time (a
   denied node fails with `node_not_available`)
 - `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel`)
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher
-- `brand.productName`: replaces the wordmark and the document title
+- `brand.productName`: replaces the wordmark and the document title (absent =
+  the static `<title>` shipped in `index.html` is left untouched)
+- `brand.description`: replaces the `<meta name="description">` (absent = the
+  built-in default is kept)
 - `locale.default` / `locale.picker`
 - `outputs.allowPublic`: `false` forces every output private regardless of the
   user's preference

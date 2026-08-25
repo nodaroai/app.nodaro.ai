@@ -56,6 +56,13 @@ describe("parseSurfaceProfile — env string → profile", () => {
   })
 })
 
+describe("dashboard.tabs — app-discovery keys are representable", () => {
+  it("keeps statistics/tutorials/miniapps instead of dropping them", () => {
+    const p = parseSurfaceProfile(JSON.stringify({ dashboard: { tabs: ["statistics", "tutorials"] } }))
+    expect(p.dashboard.tabs).toEqual(["statistics", "tutorials"])
+  })
+})
+
 describe("S2 — deny arrays degrade element-wise, never whole-field", () => {
   it("keeps valid string members and drops non-strings (nodes.deny)", () => {
     // The bug: z.array(z.string()) rejected the WHOLE array on one non-string,
