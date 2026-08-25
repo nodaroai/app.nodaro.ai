@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { VoiceMatchSchema, type VoiceMatch } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
+import { isVoiceGenderAllowed } from "../../../lib/voice-policy.js"
 
 /**
  * Static ElevenLabs premade voice catalog used by the Voice Matcher LLM.
@@ -61,6 +62,16 @@ const ELEVENLABS_VOICES: readonly VoiceCatalogEntry[] = [
   { voice_id: "River",                name: "River",   gender: "non-binary", age_bracket: "young", accent: "American",      descriptors: ["calm", "thoughtful", "neutral"] },
 ]
 
+/**
+ * B4c: the voice candidates the deployment permits. `isVoiceGenderAllowed` is
+ * unrestricted by default (voice.allowedGenders is []), so this returns the full
+ * catalog on mainline; a male-only lock drops female + non-binary (River →
+ * "neutral") entries before the LLM ever sees them. ee → core import is legal.
+ */
+export function eligibleVoiceCandidates(): readonly VoiceCatalogEntry[] {
+  return ELEVENLABS_VOICES.filter((c) => isVoiceGenderAllowed(c.gender))
+}
+
 export interface RunVoiceMatcherArgs {
   supabase: SupabaseClient
   pipelineId: string
@@ -82,7 +93,7 @@ export async function runVoiceMatcher(args: RunVoiceMatcherArgs): Promise<VoiceM
   const systemPrompt =
     getPipelinePrompt(PIPELINE_PROMPT_KEYS.voiceMatcherBase) +
     "\n\nAVAILABLE VOICES:\n" +
-    JSON.stringify(ELEVENLABS_VOICES, null, 2)
+    JSON.stringify(eligibleVoiceCandidates(), null, 2)
   const userPrompt = `CAST MEMBER:
 - key: ${args.castKey}
 - name: ${args.castName}

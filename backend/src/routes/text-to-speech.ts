@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
 
 /**
  * Resolve the effective TTS provider when the caller omits `provider` entirely.
@@ -71,6 +72,19 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // B4c: reject a PREMADE voice whose gender the deployment disallows. Custom /
+    // library / unknown-gender voices pass here (clone/design/remix are gated by
+    // nodes.deny). Unrestricted deployments are byte-identical (isVoiceGenderAllowed
+    // returns true when allowedGenders is []).
+    if (parsed.data.voiceType !== "custom" && parsed.data.voiceType !== "library") {
+      const g = premadeVoiceGender(parsed.data.voice)
+      if (g !== undefined && !isVoiceGenderAllowed(g)) {
+        return reply.status(400).send({
+          error: { code: "voice_not_available", message: "The selected voice is not available on this deployment." },
+        })
+      }
     }
 
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check

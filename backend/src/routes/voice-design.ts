@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { VOICE_DESIGN_MODELS, DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isNodeDenied, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
@@ -45,6 +46,13 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // B4c: reuse B1's nodes.deny — inert when "voice-design" isn't denied.
+    if (isNodeDenied("voice-design")) {
+      return reply.status(403).send({
+        error: { code: "node_not_available", message: deniedNodeRejectionMessage(["voice-design"]) },
       })
     }
 

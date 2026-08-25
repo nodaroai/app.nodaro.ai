@@ -13,6 +13,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
 import { resolveVideoReferenceCore, resolveReferenceTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
@@ -603,6 +604,15 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           }
         }
       }
+    }
+
+    // B4b: apply any registered video PromptPolicy at the server-authoritative
+    // final prompt (covers structured assembly, identity injection, and the
+    // legacy verbatim path). Mirror into parsed.data so buildJobInputData records
+    // exactly what the worker receives. No policy registered = identity.
+    if (prompt !== undefined) {
+      prompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+      parsed.data.prompt = prompt
     }
 
     // Ref-only exemption from the imageUrl requirement is CATALOG-driven, not a

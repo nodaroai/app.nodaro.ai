@@ -495,12 +495,31 @@ array empty = "keep the default"):
 - `locale.default` / `locale.picker`
 - `outputs.allowPublic`: `false` forces every output private regardless of the
   user's preference
+- `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
+  restrict voice pickers, policy-owned default voices, and TTS / speech requests to
+  these voice genders. Empty (`[]`) = all genders. Enforced backend-side: the
+  `/v1/voices` list and the ElevenLabs shared-voices library are filtered (and the
+  library query gender is forced to the allowed set), a premade voice of a
+  disallowed gender is refused at request validation with `voice_not_available`,
+  every default/fallback voice resolves to the first allowed-gender voice, and the
+  Suno vocal-gender tags in the editor hide the disallowed side. Pair with
+  `nodes.deny: ["voice-clone","voice-design","voice-remix"]` to remove the
+  voice-creation nodes (whose output gender is not knowable up front).
 
 Example:
 
 ```bash
-NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false}}
+NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]}}
 ```
+
+**Prompt policy (modesty / content clauses).** A deployment that needs to fold a
+fixed clause into every image / video / audio prompt (or force the Suno vocal
+gender) registers a backend `PromptPolicy` at the composition root — it is applied
+server-side, after prompt assembly, so a client cannot bypass it. This is **code
+the deployment owns, not an environment variable**; with none registered, prompt
+assembly is byte-identical to stock. (There is deliberately no env-var switch for
+the clause — the clause text is the deployment's own, kept out of the shipped
+packages rather than read from the environment.)
 
 Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
 not this JSON.

@@ -67,6 +67,7 @@ import { textToSpeechRoutes, resolveOmittedTtsProvider } from "../text-to-speech
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { getMaxTtsChars } from "@nodaro/shared"
+import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -240,6 +241,46 @@ describe("POST /v1/text-to-speech", () => {
         provider: "elevenlabs-v3",
       })
     )
+  })
+
+  describe("voice.allowedGenders enforcement (B4c)", () => {
+    // Gate is open (config mock: isCloud → true). Drive the profile via the env
+    // the memoized getter reads fresh; reset the memo before/after each case.
+    beforeEach(() => {
+      process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+      __resetSurfaceProfileCacheForTests()
+    })
+    afterEach(() => {
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    })
+
+    it("rejects a premade female voice under a male-only lock", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "hello", voice: "Rachel", voiceType: "premade", userId: "00000000-0000-4000-8000-000000000001" },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("voice_not_available")
+    })
+
+    it("allows a premade male voice, and any custom voice", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      const male = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "hi", voice: "Adam", voiceType: "premade", userId: "00000000-0000-4000-8000-000000000001" },
+      })
+      expect(male.statusCode).toBe(200)
+      mockJobInsert({ data: { id: "job-2" }, error: null })
+      const custom = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "hi", voice: "someClonedId", voiceType: "custom", userId: "00000000-0000-4000-8000-000000000001" },
+      })
+      expect(custom.statusCode).toBe(200)
+    })
   })
 
   // ── length-aware omitted-provider default (non-lossy) ────────────────────

@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, afterEach } from "vitest"
 import {
   SUNO_TAGS,
   SUNO_SUGGESTION_ITEMS,
   SUNO_LYRICS_SUGGESTION_ITEMS,
   SUNO_STYLE_SUGGESTION_ITEMS,
+  getVocalGenderTags,
 } from "@/lib/suno-tags"
 
 describe("SUNO_TAGS", () => {
@@ -127,5 +128,33 @@ describe("SUNO_STYLE_SUGGESTION_ITEMS", () => {
     )
     expect(bpm120).toBeDefined()
     expect(bpm120!.label).toBe("120 BPM")
+  })
+})
+
+describe("Vocal-Gender tag filtering (B4c)", () => {
+  afterEach(() => {
+    delete (window as unknown as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__
+  })
+
+  it("shows every Vocal-Gender tag when unrestricted (default)", () => {
+    const tags = getVocalGenderTags().map((t) => t.tag)
+    expect(tags).toContain("[Male Vocal]")
+    expect(tags).toContain("[Female Vocal]")
+    expect(tags).toContain("[Girl]")
+    expect(tags).toContain("[Duet]")
+  })
+
+  it("hides the female-coded vocal tags under a male-only lock", () => {
+    ;(window as unknown as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__ = {
+      surface: { voice: { allowedGenders: ["male"] } },
+    }
+    const tags = getVocalGenderTags().map((t) => t.tag)
+    expect(tags).toContain("[Male Vocal]")
+    expect(tags).toContain("[Boy]")
+    expect(tags).not.toContain("[Female Vocal]")
+    expect(tags).not.toContain("[Girl]")
+    // Mixed-gender tags are not gender-coded → always shown.
+    expect(tags).toContain("[Duet]")
+    expect(tags).toContain("[Choir]")
   })
 })

@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 
 import { callLLM } from "../call-llm.js"
-import { runVoiceMatcher } from "../voice-matcher.js"
+import { runVoiceMatcher, eligibleVoiceCandidates } from "../voice-matcher.js"
+import { config } from "../../../../lib/config.js"
+import { __resetSurfaceProfileCacheForTests } from "../../../../lib/surface-profile.js"
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  __resetSurfaceProfileCacheForTests()
+})
+afterEach(() => __resetSurfaceProfileCacheForTests())
 
 describe("runVoiceMatcher", () => {
   it("uses Haiku + specialist role + voice_match task", async () => {
@@ -69,6 +75,27 @@ describe("runVoiceMatcher", () => {
       expect(result.voice_design_prompt).toContain("Robotic")
     } else {
       throw new Error("expected custom voice_source")
+    }
+  })
+
+  it("only offers allowed-gender candidates to the matcher (B4c)", () => {
+    // Unrestricted by default: the full catalog is offered.
+    expect(eligibleVoiceCandidates().some((c) => c.gender === "female")).toBe(true)
+    expect(eligibleVoiceCandidates().some((c) => c.gender === "non-binary")).toBe(true)
+
+    // Business edition + male-only lock → female + non-binary (→ "neutral") drop.
+    const prevEdition = config.EDITION
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    __resetSurfaceProfileCacheForTests()
+    try {
+      const candidates = eligibleVoiceCandidates()
+      expect(candidates.length).toBeGreaterThan(0)
+      expect(candidates.every((c) => c.gender === "male")).toBe(true)
+    } finally {
+      config.EDITION = prevEdition
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
     }
   })
 })

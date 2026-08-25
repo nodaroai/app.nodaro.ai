@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
@@ -192,6 +193,12 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       parsed.data.prompt = prompt
       parsed.data.referenceImageUrls = referenceImageUrls
     }
+
+    // B4b: apply any registered video PromptPolicy at the server-authoritative
+    // final prompt (structured assembly + flat path). Mirror into parsed.data so
+    // buildJobInputData records what the worker receives. Inert by default.
+    prompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+    parsed.data.prompt = prompt
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
     const modelIdentifier = buildVideoCreditModelIdentifier(

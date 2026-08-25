@@ -89,6 +89,7 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/s
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
+import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -278,6 +279,48 @@ describe("POST /v1/generate-video", () => {
         prompt: "camera slowly zooms in",
       })
     )
+  })
+
+  describe("PromptPolicy (B4b)", () => {
+    afterEach(() => clearPromptPolicies())
+
+    it("applies a registered video PromptPolicy to the direct-route prompt", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      registerPromptPolicy({
+        id: "vid",
+        apply: (a) => (a.kind === "video" ? { ...a, prompt: `${a.prompt} VID` } : a),
+      })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          imageUrl: "https://example.com/image.png",
+          prompt: "a dog runs",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "kling",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a dog runs VID")
+    })
+
+    it("is byte-identical when no policy is registered", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          imageUrl: "https://example.com/image.png",
+          prompt: "a dog runs",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "kling",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a dog runs")
+    })
   })
 
   it("passes endFrameUrl through to job and queue", async () => {

@@ -15,6 +15,8 @@ import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRejectionMessage } from "../../lib/surface-deny.js"
+import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
+import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
@@ -1599,6 +1601,19 @@ function collectIdentityLockClause(consumerNodeId: string, ctx: PayloadBuildCont
 }
 
 /**
+ * B4b: run any registered PromptPolicy over an orchestrator image-assembly
+ * result (`{ prompt, nativeNegativePrompt }` from `assembleImageInput` /
+ * `buildImagePrompt`). One helper at every image-assembly site keeps the
+ * server-authority hook DRY and drift-resistant — hooking only some sites
+ * re-opens the "server is the authority" hole for the unhooked cases. No policy
+ * registered = identity, so mainline is byte-identical.
+ */
+function withImagePromptPolicy<T extends { prompt: string; nativeNegativePrompt?: string }>(r: T): T {
+  const pp = applyPromptPolicies({ prompt: r.prompt, negativePrompt: r.nativeNegativePrompt ?? "", kind: "image" })
+  return { ...r, prompt: pp.prompt, nativeNegativePrompt: pp.negativePrompt || undefined }
+}
+
+/**
  * Compose a video-generation prompt: merge user prompt + cinematography hints
  * + identity-lock clause. Used by both the legacy image-to-video / text-to-video
  * cases AND the new generate-video case so all three emit identical text.
@@ -1631,7 +1646,11 @@ function composeVideoPrompt(args: {
   }
   const identityClause = collectIdentityLockClause(args.nodeId, args.buildCtx)
   if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-  return p
+  // B4b: apply any registered PromptPolicy at the single orchestrator video
+  // funnel (i2v/t2v/v2v/gvp all pass through here). An absent prompt stays
+  // undefined — no policy on nothing. No policy registered = identity.
+  if (p === undefined) return p
+  return applyPromptPolicies({ prompt: p, negativePrompt: "", kind: "video" }).prompt
 }
 
 /**
@@ -1881,7 +1900,7 @@ export function buildPayload(
       // `userPrompt` with NO `direction`/`structured` (composer is a no-op) →
       // byte-identical to the previous inline `buildImagePrompt` calls. No
       // `throwOnEmpty` — the orchestrator never rejected an empty prompt here.
-      const result = useConnectedRefs
+      const rawImageResult = useConnectedRefs
         ? assembleImageInput({
             userPrompt: rawPrompt,
             provider: effectiveProvider,
@@ -1933,6 +1952,7 @@ export function buildPayload(
             suppressedCanonicalCharacterIds: generateSuppressed,
             suppressedCanonicalLocationIds: generateSuppressedLoc,
           })
+      const result = withImagePromptPolicy(rawImageResult)
 
       return {
         jobName: "generate-image",
@@ -2083,6 +2103,19 @@ export function buildPayload(
         if (identityClause) editPrompt = editPrompt ? `${editPrompt} ${identityClause}` : identityClause
       }
 
+      // B4b: fold any registered image PromptPolicy over the FINAL edit prompt +
+      // negative prompt — the same server-authority hook the generate-image /
+      // image-to-image / modify-image siblings run via withImagePromptPolicy.
+      // edit-image was the one image-assembly site left unhooked, so a registered
+      // modesty policy was cleanly bypassed by a workflow edit-image node. Applied
+      // AFTER the cinematography + identity clauses (policy is the last transform,
+      // as at the video funnel). No policy registered = identity (mainline byte-
+      // identical); an absent prompt stays absent (no policy on nothing).
+      const editNegative = typeof data.negativePrompt === "string" ? data.negativePrompt : undefined
+      const editPolicied =
+        editPrompt !== undefined
+          ? withImagePromptPolicy({ prompt: editPrompt, nativeNegativePrompt: editNegative })
+          : { prompt: editPrompt as string | undefined, nativeNegativePrompt: editNegative }
       const targetResolution = data.targetResolution as string | undefined
       return {
         jobName: "edit-image",
@@ -2091,12 +2124,12 @@ export function buildPayload(
         payload: {
           jobId,
           imageUrl: mainImageUrl,
-          prompt: editPrompt,
+          prompt: editPolicied.prompt,
           provider,
           upscaleFactor: data.upscaleFactor,
           targetResolution,
           aspectRatio: data.aspectRatio,
-          negativePrompt: data.negativePrompt,
+          negativePrompt: editPolicied.nativeNegativePrompt,
           style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
           seed: data.seed,
           referenceImageUrls: editRefUrls,
@@ -2193,7 +2226,7 @@ export function buildPayload(
       const i2iRefOrder = readStringArray(data.referenceOrder)
       const i2iSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
       const i2iSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
-      const i2iResult = i2iUseConnectedRefs
+      const rawI2iResult = i2iUseConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
             provider,
@@ -2225,6 +2258,7 @@ export function buildPayload(
             suppressedCanonicalCharacterIds: i2iSuppressed,
             suppressedCanonicalLocationIds: i2iSuppressedLoc,
           })
+      const i2iResult = withImagePromptPolicy(rawI2iResult)
 
       return {
         jobName: "image-to-image",
@@ -2410,7 +2444,7 @@ export function buildPayload(
         const modRefOrder = readStringArray(data.referenceOrder)
         const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
         const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
-        const i2iResult = modUseConnectedRefs
+        const rawModResult = modUseConnectedRefs
           ? buildImagePrompt({
               prompt: rawPrompt,
               provider,
@@ -2442,6 +2476,7 @@ export function buildPayload(
               suppressedCanonicalCharacterIds: modSuppressed,
               suppressedCanonicalLocationIds: modSuppressedLoc,
             })
+        const i2iResult = withImagePromptPolicy(rawModResult)
 
         return {
           jobName: "image-to-image",
@@ -3756,6 +3791,29 @@ export function buildPayload(
       const provider = effectiveDispatchProvider(type, data, resolvedInputs) || "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
       const ttsText = promptFor("text-to-speech")
+      // The EFFECTIVE voice + type this node will DISPATCH — computed once with
+      // the same precedence the payload below uses, so the value we vet is byte-
+      // identical to the value we send.
+      const effectiveVoice = resolvedInputs.voice || data.voiceId || data.voice
+      const effectiveVoiceType = resolvedInputs.voiceType || data.voiceType || "premade"
+      // B4c: voice-gender dispatch backstop. `voice.allowedGenders` was enforced
+      // ONLY at the direct /v1/text-to-speech route — the orchestrator/worker TTS
+      // path had NO backstop, so an auto-wired Character voice (input-resolver) or
+      // an imported/MCP-authored premade voice of a DISALLOWED gender reached the
+      // provider under a gender lock. This is the B1 model-deny bypass class:
+      // vet the EFFECTIVE voice (not just data.voiceId) and reject a disallowed
+      // premade gender at run time, mirroring model-deny's thrown shape. Custom /
+      // library / unknown-gender voices pass (clone/design/remix are gated by
+      // nodes.deny). Inert by default: isVoiceGenderAllowed returns true when
+      // allowedGenders is [].
+      if (effectiveVoiceType !== "custom" && effectiveVoiceType !== "library") {
+        const g = premadeVoiceGender(typeof effectiveVoice === "string" ? effectiveVoice : undefined)
+        if (g !== undefined && !isVoiceGenderAllowed(g)) {
+          const err = new Error("The selected voice is not available on this deployment.") as Error & { code?: string }
+          err.code = "voice_not_available"
+          throw err
+        }
+      }
       return {
         jobName: "text-to-speech",
         queueName: "video-generation",
@@ -3763,9 +3821,9 @@ export function buildPayload(
         payload: {
           jobId,
           text: ttsText,
-          voice: resolvedInputs.voice || data.voiceId || data.voice,
+          voice: effectiveVoice,
           provider,
-          voiceType: resolvedInputs.voiceType || data.voiceType || "premade",
+          voiceType: effectiveVoiceType,
           stability: data.stability,
           similarityBoost: data.similarityBoost,
           style: data.style,

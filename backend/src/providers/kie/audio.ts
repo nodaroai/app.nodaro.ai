@@ -19,6 +19,8 @@ import {
 } from "./client.js"
 import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
+import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 
 // ---------------------------------------------------------------------------
 // KIE.ai voice resolution
@@ -40,7 +42,7 @@ let voiceIdToName: Map<string, string> | null = null
  * Register the live voice list so KIE can resolve UUIDs → names.
  * Called from the voices route after fetching from ElevenLabs API.
  */
-export function registerVoiceLookup(voices: Array<{ voice_id: string; name: string }>) {
+export function registerVoiceLookup(voices: ReadonlyArray<{ voice_id: string; name: string }>) {
   voiceIdToName = new Map(voices.map((v) => [v.voice_id, v.name]))
 }
 
@@ -65,7 +67,11 @@ export function isKieAcceptedVoice(voice: string | undefined): boolean {
  * - Fall back to "Rachel" if unresolvable.
  */
 function resolveVoiceForKie(voice: string | undefined): string {
-  if (!voice) return "Rachel"
+  // B4c: the empty-voice default is policy-owned — the first allowed-gender
+  // premade voice by NAME (KIE accepts premade names directly). Byte-identical
+  // to "Rachel" when voice.allowedGenders is []. The KIE-accepted-name
+  // pass-through below is unchanged; only this default moves through the policy.
+  if (!voice) return defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel")
 
   // Already an accepted name
   if (KIE_ACCEPTED_VOICE_NAMES.has(voice)) return voice

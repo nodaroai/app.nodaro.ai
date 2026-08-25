@@ -74,6 +74,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 import { textToVideoRoutes } from "../text-to-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -207,6 +208,31 @@ describe("POST /v1/text-to-video", () => {
         duration: 5,
       })
     )
+  })
+
+  describe("PromptPolicy (B4b)", () => {
+    afterEach(() => clearPromptPolicies())
+
+    it("applies a registered video PromptPolicy to the direct-route prompt", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      registerPromptPolicy({
+        id: "vid",
+        apply: (a) => (a.kind === "video" ? { ...a, prompt: `${a.prompt} VID` } : a),
+      })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-video",
+        payload: {
+          prompt: "a cat walking",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "kling",
+          duration: 5,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a cat walking VID")
+    })
   })
 
   it("assembles connectedReferences server-side into the queued prompt + referenceImageUrls", async () => {
