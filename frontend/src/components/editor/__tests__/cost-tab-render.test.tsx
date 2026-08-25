@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react"
 
 vi.mock("@/hooks/use-billing-surface", () => ({
   useBillingSurface: () => ({
-    surface: { providerId: "nodaro-cloud", displayUnit: "credits", mountCostTab: true, canReport: true, canAccount: true, canQuote: false, contract: 1 },
+    surface: { providerId: "nodaro-cloud", displayUnit: "credits", mountCostTab: true, canReport: true, canAccount: true, canQuote: false, contract: 2 },
     isLoading: false,
   }),
 }))

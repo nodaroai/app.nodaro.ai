@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest"
 import {
   BILLING_CONTRACT_VERSION, noneBillingProvider, getBillingProvider,
-  setBillingProvider, clearBillingProvider, billingSurface, type BillingProvider,
+  setBillingProvider, clearBillingProvider, billingSurface,
+  type BillingProvider, type AccountSummary,
 } from "../billing-provider.js"
 
 afterEach(() => clearBillingProvider())
@@ -35,5 +36,60 @@ describe("billing-provider core seam", () => {
     expect(s.canReport).toBe(true)
     expect(s.canAccount).toBe(true)
     expect(s.canQuote).toBe(true)
+  })
+
+  it("advertises contract version 2", () => {
+    expect(BILLING_CONTRACT_VERSION).toBe(2)
+    expect(billingSurface().contract).toBe(2)
+  })
+
+  it("accepts a provider returning the rich v2 account shape", async () => {
+    const richAccount: AccountSummary = {
+      plan: "payg",
+      balance: 1200,
+      dailyAllowance: null,
+      unit: "credits",
+      periodStart: "2026-08-01T00:00:00.000Z",
+      generations: 42,
+      spent: { amount: 12.5, currency: "ILS" },
+      payg: {
+        enabled: true,
+        reserve: 300,
+        rate: { creditsPerUnit: 100, currency: "ILS" },
+        monthlyCap: { amount: 200, currency: "ILS" },
+      },
+      daily: { limit: 500, used: 120, remaining: 380, resetsAt: "2026-08-26T21:00:00.000Z" },
+      reserveValue: { amount: 3, currency: "ILS" },
+      byCategory: [
+        { category: "image", count: 30, amount: 300, spent: { amount: 3, currency: "ILS" } },
+        { category: "video", count: 12, amount: 900, spent: null },
+      ],
+    }
+    const rich: BillingProvider = {
+      id: "rich-test",
+      displayUnit: "credits",
+      async report() { return new Map() },
+      async account() { return richAccount },
+    }
+    setBillingProvider(rich)
+    const a = await getBillingProvider().account("u")
+    expect(a?.payg?.enabled).toBe(true)
+    expect(a?.daily?.limit).toBe(500)
+    expect(a?.byCategory?.[1].spent).toBeNull()
+  })
+
+  it("still accepts a subset-only account (nodaro-cloud shape stays valid)", async () => {
+    const subset: BillingProvider = {
+      id: "subset-test",
+      displayUnit: "credits",
+      async report() { return new Map() },
+      async account() {
+        return { plan: "pro", balance: 42, dailyAllowance: 100, unit: "credits" }
+      },
+    }
+    setBillingProvider(subset)
+    const a = await getBillingProvider().account("u")
+    expect(a).toEqual({ plan: "pro", balance: 42, dailyAllowance: 100, unit: "credits" })
+    expect(a?.payg).toBeUndefined()
   })
 })

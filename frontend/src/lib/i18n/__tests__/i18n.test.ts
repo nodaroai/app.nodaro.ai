@@ -55,6 +55,11 @@ describe("i18n translate()", () => {
     const registered = new Set(registeredChromeLocales())
     expect(registered).toEqual(new Set(LOCALE_IDS))
   })
+
+  it("resolves the generic usage keys in English", () => {
+    expect(translate("en", "usage.dailyBlocked")).toBe("Not included")
+    expect(translate("en", "usage.breakdown")).toBe("Breakdown")
+  })
 })
 
 describe("node.moderation.* keys (G3)", () => {

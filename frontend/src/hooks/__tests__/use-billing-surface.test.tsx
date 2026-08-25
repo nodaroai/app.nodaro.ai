@@ -5,7 +5,7 @@ import React from "react"
 
 vi.mock("@/lib/api", () => ({
   getBillingSurface: vi.fn(async () => ({
-    contract: 1, providerId: "nodaro-cloud", displayUnit: "credits",
+    contract: 2, providerId: "nodaro-cloud", displayUnit: "credits",
     canReport: true, canQuote: false, canAccount: true, mountCostTab: true,
   })),
 }))

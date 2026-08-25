@@ -20,7 +20,7 @@ describe("getBillingSurface", () => {
   it("GETs /v1/billing/surface and returns data", async () => {
     mockGetSession.mockResolvedValue({ data: { session: null } })
     const mock = okJson({ data: {
-      contract: 1, providerId: "nodaro-cloud", displayUnit: "credits",
+      contract: 2, providerId: "nodaro-cloud", displayUnit: "credits",
       canReport: true, canQuote: false, canAccount: true, mountCostTab: true,
     } })
     vi.stubGlobal("fetch", mock)

@@ -1024,11 +1024,39 @@ through it.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/billing/surface` | **Public** (no token) | Deployment-level projection — no per-user data, cacheable. Returns `{ data: { contract, providerId, displayUnit, canReport, canQuote, canAccount, mountCostTab } }`. On a keyless / community install `providerId` is `"none"` and `mountCostTab` is `false` (no cost view). |
-| `GET` | `/v1/billing/account` | Bearer token | Per-user account summary from the registered provider: `{ data: { plan, balance, dailyAllowance, unit } \| null }`. `data: null` means the metering authority could not answer — clients MUST render that distinctly and never as a zero balance. |
+| `GET` | `/v1/billing/account` | Bearer token | Per-user account summary (`AccountSummary`) from the registered provider: `{ data: AccountSummary \| null }`. `data: null` means the metering authority could not answer — clients MUST render that distinctly and never as a zero balance. |
 
-`contract` is the billing-surface contract version (an integer). `displayUnit`
-is the unit a cost view should default to (e.g. `"usd"` or `"credits"`) — it
-follows the registered metering authority, not the edition.
+`contract` is the billing-surface contract version (an integer, currently `2`).
+`displayUnit` is the unit a cost view should default to (e.g. `"usd"` or
+`"credits"`) — it follows the registered metering authority, not the edition.
+
+**`AccountSummary` shape.** The four base fields are always present: `plan`
+(a plain string; `"unknown"` is a real answer), `balance` (`number | null`),
+`dailyAllowance` (`number | null`), and `unit`. Contract v2 adds a set of
+**optional, nullable** rich fields a provider MAY expose; a provider that omits
+one is saying "no such concept", and a client renders only the fields it
+receives:
+
+- `periodStart` — ISO start of the current usage period.
+- `generations` — count of generations this period.
+- `spent` — money spent this period, as `{ amount, currency }` (an ISO-4217
+  currency code); `null` = unavailable.
+- `payg` — pay-as-you-go state `{ enabled, reserve, rate, monthlyCap }`
+  (`monthlyCap` is a `{ amount, currency }` money figure); omitted/`null` when
+  the provider has no PAYG concept.
+- `daily` — structured daily cap `{ limit, used, remaining, resetsAt }`
+  (`resetsAt` is an ISO-8601 instant). `limit: 0` is a real value meaning
+  "blocked", never "no limit"; when `daily` is present, prefer it over the
+  scalar `dailyAllowance`.
+- `reserveValue` — money value of the PAYG reserve, as `{ amount, currency }`;
+  `null` when not priced.
+- `byCategory` — per-category usage rows
+  `{ category, count, amount, spent }[]`, where `amount` is `number | null` and
+  `spent` is a `{ amount, currency }` money figure or `null`.
+
+Every money figure and per-category `amount` is `number | null` / a nullable
+money object: a `null` means **unavailable**, never `0`. Render a `null`
+distinctly (e.g. an em dash), never as a free/zero cost.
 
 **Cost summary response (`POST /v1/jobs/cost-summary`).** The money fields
 `total_credits` and `total_cost_usd` (top-level and per breakdown row) are

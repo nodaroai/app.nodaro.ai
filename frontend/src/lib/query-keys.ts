@@ -16,6 +16,9 @@ export const queryKeys = {
   // Billing
   billing: {
     all: ["billing"] as const,
+    // Per-user account summary. Scoped by userId so a same-browser account
+    // switch (no page reload) never serves user A's cached account to user B.
+    account: (userId: string) => ["billing", "account", userId] as const,
     subscription: (userId: string) => ["billing", "subscription", userId] as const,
     transactions: (userId: string) => ["billing", "transactions", userId] as const,
     storage: (userId: string) => ["billing", "storage", userId] as const,

@@ -21,6 +21,10 @@ describe("queryKeys", () => {
       expect(queryKeys.billing.all).toEqual(["billing"])
     })
 
+    it("builds account key", () => {
+      expect(queryKeys.billing.account("u1")).toEqual(["billing", "account", "u1"])
+    })
+
     it("builds subscription key", () => {
       expect(queryKeys.billing.subscription("u1")).toEqual(["billing", "subscription", "u1"])
     })
