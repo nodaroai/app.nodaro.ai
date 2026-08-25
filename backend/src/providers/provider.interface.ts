@@ -67,9 +67,11 @@ export interface ReconcileOpts {
   /** OUR Nodaro key (money-bearing) forwarded to the egress seam
    *  (providers/egress.ts). `null`/omitted for non-billing calls. */
   modelKey?: string | null
-  /** Billing dimensions the wire body implies (resolution/duration/…),
-   *  read by the egress decorator for the body-based price read. */
-  dimensions?: Record<string, string | number | undefined>
+  /** Billing dimensions the wire body implies (resolution/audio/videoInput/
+   *  duration/characters/…), read by the egress decorator for the body-based
+   *  price read. Booleans allowed (audio / videoInput two-state cost levers),
+   *  mirroring EgressCall.dimensions in providers/egress.ts. */
+  dimensions?: Record<string, string | number | boolean | undefined>
 }
 
 // Standard options passed to all operations

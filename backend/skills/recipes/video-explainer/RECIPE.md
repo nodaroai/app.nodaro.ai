@@ -1,8 +1,8 @@
 ---
 name: video-explainer
 description: Narrated non-photoreal animated explainer video on Nodaro — style-key lock, per-block clips, one voice, audio-led assembly
-triggers: ["explainer video", "explain X in a video", "animated explainer", "narrated explainer", "explain this in a video", "make a video explaining", "how-it-works video", "concept video"]
-version: 1
+triggers: ["explainer video", "explain X in a video", "animated explainer", "narrated explainer", "explain this in a video", "make a video explaining", "how-it-works video", "concept video", "script to narrated video", "narrated video from a script", "turn my script into a video"]
+version: 2
 ---
 
 # Video Explainer
@@ -13,6 +13,14 @@ one silent clip per block in the SAME engine + key, voice every block in ONE pic
 voice, then hand the ordered pairs to `assemble_narrated_video` — which fits voice to
 clip automatically. You author the words, the style, and the shots; the assembler owns
 the fit policy. Do not re-implement it by hand.
+
+**Graph-building agents (the in-app Workflow Copilot):** you cannot call the
+generation verbs this recipe names — do NOT attempt them. Build the SAME pipeline as
+a graph instead: a script/text node for the narration blocks, one text-to-speech node
+per block (same voice on all), one clip-generation node per block (same engine, the
+style key wired as the reference), and finish in ONE `assemble-narrated-video` NODE
+with the voice takes and clips wired in block order. Every hard rule below still
+applies; read each "call X" as "add the X node".
 
 ## Hard rules (read first — violating any one breaks the pipeline)
 

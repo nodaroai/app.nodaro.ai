@@ -39,6 +39,7 @@ export function buildRuntimeConfig(env) {
     freecutUrl: pick(env.RUNTIME_FREECUT_URL),
     defaultLocale: pick(env.RUNTIME_DEFAULT_LOCALE),
     surface: parseSurface(env.RUNTIME_SURFACE_PROFILE, env.EDITION),
+    moderation: env.RUNTIME_UPLOAD_MODERATION === "true" ? { uploadImage: true } : undefined,
   }
   for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
   return cfg

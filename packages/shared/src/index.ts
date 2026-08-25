@@ -511,6 +511,7 @@ export {
   PARAMETER_NODE_TYPES,
   HINT_EXEMPT_PARAMETER_TYPES,
   getParameterValue,
+  setRegisteredPersonPackFields,
 } from "./parameter-node-value.js"
 
 export {
@@ -746,6 +747,8 @@ export {
   getLocaleDirection,
   ensureLocaleCatalogLoaded,
   registerSidecarLoaders,
+  registerCatalogSidecars,
+  resetCatalogSidecars,
   resolveLabel,
   resolveDescription,
   entryMatchesQuery,

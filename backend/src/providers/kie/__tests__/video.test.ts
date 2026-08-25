@@ -614,3 +614,59 @@ describe("imageToVideo — happyhorse-ref2v identity binding", () => {
     expect(input.prompt).toBe("cinematic")
   })
 })
+
+// ---------------------------------------------------------------------------
+// G9 egress dimensions — the priced dimensions the create site hands the egress
+// decorator (via runKieTask's reconcileOpts). runKieTask is mocked, so these
+// assert on the 5th-arg `dimensions` built from the REAL deriveKieEgressDimensions.
+// ---------------------------------------------------------------------------
+
+const dimsOfLastKieCall = (): Record<string, unknown> =>
+  (mocks.mockRunKieTask.mock.calls.at(-1)![4] as { dimensions: Record<string, unknown> }).dimensions
+
+describe("egress dimensions — audio (sound) lever surfaces", () => {
+  it("kling-2.6 i2v with the native `sound` toggle surfaces audio:true", async () => {
+    await provider.imageToVideo("https://img.png", "cinematic", "kling", 5, undefined, { sound: true })
+    expect(dimsOfLastKieCall()).toMatchObject({ audio: true })
+  })
+
+  it("kling-2.6 t2v with the native `sound` toggle surfaces audio:false when disabled", async () => {
+    await provider.textToVideo("a dog", "kling", 5, "16:9", { sound: false })
+    expect(dimsOfLastKieCall()).toMatchObject({ audio: false })
+  })
+})
+
+describe("egress dimensions — standard V2V video_urls surfaces videoInput", () => {
+  it("wan 2.6 v2v (video_urls array) surfaces videoInput:true", async () => {
+    await provider.videoToVideo("https://x/v.mp4", "make it cinematic", "wan", {})
+    expect(dimsOfLastKieCall()).toMatchObject({ videoInput: true })
+  })
+})
+
+describe("egress dimensions — kling-motion sites synthesize resolution from `mode`", () => {
+  it("kling-3.0 motion control surfaces resolution (from mode) + videoInput", async () => {
+    await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", {
+      provider: "kling-3.0",
+      resolution: "1080p",
+    })
+    expect(dimsOfLastKieCall()).toMatchObject({ resolution: "1080p", videoInput: true })
+  })
+
+  it("kling-2.6 motion control surfaces resolution (from mode) + videoInput", async () => {
+    await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", {
+      provider: "kling",
+      resolution: "720p",
+    })
+    expect(dimsOfLastKieCall()).toMatchObject({ resolution: "720p", videoInput: true })
+  })
+
+  it("the generic `mode` value never leaks in as a resolution on its own", async () => {
+    // Sanity: the synthesized dimension is the tier value, and no stray `mode`
+    // key rides into the priced dimensions.
+    await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", {
+      provider: "kling",
+      resolution: "1080p",
+    })
+    expect(dimsOfLastKieCall()).not.toHaveProperty("mode")
+  })
+})

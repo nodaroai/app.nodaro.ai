@@ -9,6 +9,17 @@ export interface TutorialTemplateDoc {
   outputTypes?: string[]
   tags?: string[]
   complexity?: string
+  /** Money/facet metadata the Tutorials tab surfaces on the card. Authored on
+   *  the doc rather than derived: estimated credits depends on EE credit code
+   *  (`ee/billing/credits.ts`) core must not import, so all three are declared
+   *  by the content and passed through by the seeder. Absent → DB-safe defaults
+   *  (0 / [] / []). */
+  estimatedCredits?: number
+  nodeTypesUsed?: string[]
+  providersUsed?: string[]
+  /** Overrides the seeder's default attribution ("Nodaro") for THIS tutorial.
+   *  Normally set pack-wide via the manifest (see loadTutorialPacks). */
+  creatorDisplayName?: string | null
   previewMediaUrl?: string | null
   previewMediaType?: string | null
   /** Looked up by slug — migration 114 seeds the base categories; a pack
@@ -27,6 +38,9 @@ export interface TutorialPackCategory {
   slug: string
   name: string
   sortOrder?: number
+  /** Optional blurb shown under the category header. Written to
+   *  tutorial_categories.description (column exists — migration 114). */
+  description?: string | null
 }
 
 export interface TutorialPackManifest {
@@ -37,6 +51,10 @@ export interface TutorialPackManifest {
   /** Optional content locale (e.g. "he"). Advisory metadata; logged, not wired
    *  to filtering (the schema has no per-row locale column). */
   locale?: string
+  /** Pack-wide creator attribution. Stamped onto every doc that does not set
+   *  its own creatorDisplayName. Data-driven — a pack declares who authored it
+   *  (e.g. "Acme Team") instead of the base "Nodaro". */
+  creatorDisplayName?: string
   /** Every category any of this pack's templates map into. A template whose
    *  tutorialCategorySlug is absent here is an ERROR. */
   categories: TutorialPackCategory[]
@@ -58,6 +76,7 @@ export interface LoadedPack {
   name: string
   dir: string
   locale?: string
+  creatorDisplayName?: string
   categories: TutorialPackCategory[]
   docs: TutorialTemplateDoc[]
 }

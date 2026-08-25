@@ -27,7 +27,7 @@ vi.mock("@/hooks/use-billing-surface", () => ({
 function surfaceWith(mountCostTab: boolean) {
   return {
     surface: {
-      contract: 1, providerId: mountCostTab ? "nodaro-cloud" : "none",
+      contract: 2, providerId: mountCostTab ? "nodaro-cloud" : "none",
       displayUnit: mountCostTab ? "credits" : "usd",
       canReport: mountCostTab, canQuote: false, canAccount: mountCostTab, mountCostTab,
     },

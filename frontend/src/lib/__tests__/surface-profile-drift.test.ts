@@ -42,3 +42,22 @@ describe("surface-profile drift", () => {
     expect(fe).toEqual(be)
   })
 })
+
+function tabKeys(src: string): string[] {
+  const start = src.indexOf("DASHBOARD_TAB_KEYS")
+  expect(start, "DASHBOARD_TAB_KEYS must be present").toBeGreaterThan(-1)
+  const open = src.indexOf("[", start)
+  const close = src.indexOf("]", open)
+  return [...src.slice(open + 1, close).matchAll(/"([a-z]+)"/g)].map((m) => m[1]).sort()
+}
+
+describe("dashboard tab-key drift", () => {
+  it("frontend and backend DASHBOARD_TAB_KEYS list the same members", () => {
+    const fe = tabKeys(readFileSync(FE, "utf8"))
+    const be = tabKeys(readFileSync(BE, "utf8"))
+    expect(fe).toEqual(be)
+    expect(fe).toContain("statistics")
+    expect(fe).toContain("tutorials")
+    expect(fe).toContain("miniapps")
+  })
+})

@@ -1,5 +1,6 @@
 import {
   runtimeSurfaceProfile,
+  runtimeConfiguredBrandName,
   type NavKey,
   type DashboardTabKey,
   type AuthMethod,
@@ -31,6 +32,21 @@ export function surfaceSiblings(codeDefault: readonly SurfaceSibling[]): readonl
 
 export function surfaceBrandName(): string {
   return runtimeSurfaceProfile().brand.productName
+}
+
+/**
+ * The brand product name ONLY when a deployment actually configured one (raw
+ * presence), else undefined — unlike surfaceBrandName(), which defaults to
+ * "Nodaro". Mirrors the pre-paint guard in index.html so chrome that overrides
+ * the document title/meta leaves the static values untouched on a default
+ * deployment (byte-identical when the surface env is unset).
+ */
+export function surfaceConfiguredBrandName(): string | undefined {
+  return runtimeConfiguredBrandName()
+}
+
+export function surfaceBrandDescription(): string | undefined {
+  return runtimeSurfaceProfile().brand.description
 }
 
 export function surfaceAuthMethods(codeDefault: readonly AuthMethod[]): readonly AuthMethod[] {

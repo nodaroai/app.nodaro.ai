@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, afterEach } from "vitest"
 import {
   PARAMETER_NODE_TYPES,
   getParameterValue,
 } from "../parameter-node-value.js"
+import { setRegisteredPersonPackFields } from "../index.js"
 
 describe("PARAMETER_NODE_TYPES", () => {
   it("includes the existing parameter node types", () => {
@@ -133,5 +134,21 @@ describe("parameter-node-value — furniture", () => {
 
   it("getParameterValue returns undefined when furniture field is missing", () => {
     expect(getParameterValue({}, "furniture")).toBeUndefined()
+  })
+})
+
+describe("getParameterValue person pack-dimension fallback (G4)", () => {
+  afterEach(() => setRegisteredPersonPackFields([]))
+
+  it("returns undefined for an unregistered pack field", () => {
+    expect(getParameterValue({ sectorAttire: "attire-modest-suit" }, "person")).toBeUndefined()
+  })
+  it("resolves a registered pack field when no base dimension is set", () => {
+    setRegisteredPersonPackFields(["sectorAttire"])
+    expect(getParameterValue({ sectorAttire: "attire-modest-suit" }, "person")).toBe("attire-modest-suit")
+  })
+  it("base dimensions still win over pack fields", () => {
+    setRegisteredPersonPackFields(["sectorAttire"])
+    expect(getParameterValue({ type: "man", sectorAttire: "attire-modest-suit" }, "person")).toBe("man")
   })
 })

@@ -144,7 +144,7 @@ function baseDoc(over: Record<string, unknown> = {}) {
 async function packDoc(dir: string, slug: string) {
   await writeFile(join(dir, `${slug}.json`), JSON.stringify({
     slug, name: slug, markdownDescription: "p1",
-    tutorialCategorySlug: "sai-basics", tutorialSortOrder: 0,
+    tutorialCategorySlug: "demo-basics", tutorialSortOrder: 0,
     nodes: [{ id: "n1", type: "generate-image", data: { generatedResults: [{ url: "https://cdn.example.com/a.png" }] } }],
     edges: [],
   }))
@@ -196,42 +196,83 @@ describe("tutorial seeder — operator-supplied packs", () => {
     expect(store.workflow_templates.map((r) => r.slug)).toEqual(["welcome-demo"])
   })
 
-  it("ensures a pack's category then seeds its tutorial active", async () => {
-    const dir = join(packRoot, "sai")
+  it("writes estimated_credits / node_types_used / providers_used / creator_display_name and a category description", async () => {
+    const dir = join(packRoot, "demo")
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, "manifest.json"), JSON.stringify({
-      name: "SAI", categories: [{ slug: "sai-basics", name: "SAI Basics", sortOrder: 0 }],
+      name: "Demo",
+      creatorDisplayName: "Acme Team",
+      categories: [{ slug: "demo-basics", name: "Demo Basics", description: "Basic tutorials" }],
     }))
-    await packDoc(dir, "sai-welcome")
+    await writeFile(join(dir, "demo-a.json"), JSON.stringify({
+      slug: "demo-a", name: "A", tutorialCategorySlug: "demo-basics", tutorialSortOrder: 0,
+      nodes: [{ id: "n1", type: "generate-image", data: {
+        generatedResults: [{ url: "https://cdn.example.com/a.png" }],
+      } }],
+      edges: [],
+      estimatedCredits: 42, nodeTypesUsed: ["generate-image"], providersUsed: ["nano-banana"],
+    }))
+    process.env.NODARO_TUTORIAL_PACKS = dir
+
+    await seed()
+
+    const cat = store.tutorial_categories.find((c) => c.slug === "demo-basics")
+    expect(cat?.description).toBe("Basic tutorials")
+    const row = store.workflow_templates.find((r) => r.slug === "demo-a")
+    expect(row?.estimated_credits).toBe(42)
+    expect(row?.node_types_used).toEqual(["generate-image"])
+    expect(row?.providers_used).toEqual(["nano-banana"])
+    expect(row?.creator_display_name).toBe("Acme Team")
+  })
+
+  it("defaults the facets to DB-safe empties and creator to the system name when a doc omits them", async () => {
+    // base-only run (beforeEach clears the packs env); the base welcome-demo doc
+    // sets none of the new fields, so it must fall back to 0 / [] / [] / "Nodaro".
+    await seed()
+
+    const row = store.workflow_templates.find((r) => r.slug === "welcome-demo")
+    expect(row?.estimated_credits).toBe(0)
+    expect(row?.node_types_used).toEqual([])
+    expect(row?.providers_used).toEqual([])
+    expect(row?.creator_display_name).toBe("Nodaro")
+  })
+
+  it("ensures a pack's category then seeds its tutorial active", async () => {
+    const dir = join(packRoot, "demo")
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, "manifest.json"), JSON.stringify({
+      name: "Demo", categories: [{ slug: "demo-basics", name: "Demo Basics", sortOrder: 0 }],
+    }))
+    await packDoc(dir, "demo-welcome")
     process.env.NODARO_TUTORIAL_PACKS = dir
 
     await seed()
 
     // Category created (select-then-insert), template seeded active.
-    expect(store.tutorial_categories.some((c) => c.slug === "sai-basics")).toBe(true)
-    const row = store.workflow_templates.find((r) => r.slug === "sai-welcome")!
+    expect(store.tutorial_categories.some((c) => c.slug === "demo-basics")).toBe(true)
+    const row = store.workflow_templates.find((r) => r.slug === "demo-welcome")!
     expect(row).toBeTruthy()
     expect(row.is_active).toBe(true)
     expect(row.listed_in).toEqual(["tutorial"])
   })
 
   it("keeps a hidden pack tutorial hidden across a content reseed (OPERATOR_OWNED_COLUMNS)", async () => {
-    const dir = join(packRoot, "sai")
+    const dir = join(packRoot, "demo")
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, "manifest.json"), JSON.stringify({
-      name: "SAI", categories: [{ slug: "sai-basics", name: "SAI Basics" }],
+      name: "Demo", categories: [{ slug: "demo-basics", name: "Demo Basics" }],
     }))
-    await packDoc(dir, "sai-welcome")
+    await packDoc(dir, "demo-welcome")
     process.env.NODARO_TUTORIAL_PACKS = dir
 
     await seed()
-    const row = () => store.workflow_templates.find((r) => r.slug === "sai-welcome")!
+    const row = () => store.workflow_templates.find((r) => r.slug === "demo-welcome")!
     row().is_active = false // operator hides it
 
     // Reword the pack tutorial (new fingerprint) and reseed.
-    await writeFile(join(dir, "sai-welcome.json"), JSON.stringify({
-      slug: "sai-welcome", name: "SAI Welcome v2", markdownDescription: "p2",
-      tutorialCategorySlug: "sai-basics", tutorialSortOrder: 0,
+    await writeFile(join(dir, "demo-welcome.json"), JSON.stringify({
+      slug: "demo-welcome", name: "Demo Welcome v2", markdownDescription: "p2",
+      tutorialCategorySlug: "demo-basics", tutorialSortOrder: 0,
       nodes: [{ id: "n1", type: "generate-image", data: { generatedResults: [{ url: "https://cdn.example.com/a.png" }] } }],
       edges: [],
     }))

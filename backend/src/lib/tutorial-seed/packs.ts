@@ -111,10 +111,19 @@ export async function loadTutorialPacks(opts: {
     }
 
     for (const s of localSlugs) seenSlugs.add(s)
+    // Pack-wide attribution: a doc without its own creatorDisplayName inherits
+    // the manifest's (e.g. "Acme Team"). Base in-tree templates never take this
+    // path, so they keep the seeder's default owner name.
+    if (manifest.creatorDisplayName) {
+      for (const d of docs) {
+        if (d.creatorDisplayName == null) d.creatorDisplayName = manifest.creatorDisplayName
+      }
+    }
     accepted.push({
       name: manifest.name,
       dir,
       locale: manifest.locale,
+      creatorDisplayName: manifest.creatorDisplayName,
       categories: manifest.categories,
       docs,
     })

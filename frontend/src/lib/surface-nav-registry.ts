@@ -56,6 +56,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/library/locations",
   "/integrations",
   "/billing",
+  "/usage",
   "/settings",
   "/settings/api",
   "/settings/developer-apps",

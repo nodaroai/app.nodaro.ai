@@ -1,7 +1,7 @@
 ---
 node_type: upload-image
-generated_at: 2026-08-15T21:55:05.650Z
-generated_from: 150c80ac9
+generated_at: 2026-08-25T08:41:49.526Z
+generated_from: dcf5458cc
 ---
 
 # Upload Image
@@ -34,6 +34,8 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `generatedResults?: readonly GeneratedResult[]`
 - `activeResultIndex?: number`
+- `moderationStatus?: "checking" | "ok" | "blocked"`
+- `moderationReason?: string`
 
 **Default data:**
 ```json

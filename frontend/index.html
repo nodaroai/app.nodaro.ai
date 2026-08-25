@@ -28,6 +28,10 @@
         try {
           var s = (window.__NODARO_RUNTIME__ || {}).surface;
           if (s && s.brand && s.brand.productName) document.title = s.brand.productName;
+          if (s && s.brand && s.brand.description) {
+            var m = document.querySelector('meta[name="description"]');
+            if (m) m.setAttribute("content", s.brand.description);
+          }
         } catch (e) {}
       })();
     </script>

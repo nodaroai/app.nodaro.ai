@@ -216,6 +216,13 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // runtime routes the scanner can't see. They now ALSO have a static route
   // file — backend/src/routes/nodaro-exclusive.ts, the self-hosted relay —
   // so the scanner resolves them and the entries were removed.
+  //
+  // a5 (2026-08-25): moderate-image is a cloud-plugins-provided route —
+  // registered at runtime via @nodaroai/cloud-plugins `registerRoutes()`, which
+  // the static scanner can't see. It has NO core/ee route by design (the
+  // moderation implementation stays private, like the other plugin routes), so
+  // it is intentionally absent from core and allowlisted here.
+  "/v1/moderate-image",
 ])
 
 // ---------------------------------------------------------------------------

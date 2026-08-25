@@ -449,6 +449,33 @@ export const en = {
   "cost.col.perRunCredits": "CR/Run",
   "cost.col.total": "Total",
 
+  // ── Usage / billing account summary (generic, provider-driven) ───────────
+  "usage.title": "Usage",
+  "usage.subtitle": "Your account usage and balance.",
+  "usage.loadError": "Could not load usage.",
+  "usage.unavailable": "Unavailable",
+  "usage.unavailableNote": "We could not reach the billing service. This is not a spend of zero.",
+  "usage.plan": "Plan",
+  "usage.balance": "Balance",
+  "usage.spent": "Spent this period",
+  "usage.generations": "Generations",
+  "usage.periodFrom": "Since {date}",
+  "usage.approx": "≈ {amount}",
+  "usage.monthlyCap": "cap {cap}",
+  "usage.reserve": "Reserve",
+  "usage.dailyCap": "Daily cap",
+  "usage.dailyUsedOf": "{used} of {limit}",
+  "usage.dailyNone": "No daily limit",
+  "usage.dailyBlocked": "Not included",
+  "usage.dailyResets": "Resets {when}",
+  "usage.breakdown": "Breakdown",
+  "usage.empty": "No usage yet.",
+  "usage.paygOn": "Pay-as-you-go is on: generation continues after the pool empties, billed to your card.",
+  "usage.catImage": "Image",
+  "usage.catVideo": "Video",
+  "usage.catAudio": "Audio",
+  "usage.catOther": "Other",
+
   // ── Node run strip (cross-cutting — appears under every node) ────────────
   "node.runFromHere": "Run from here",
   "node.stop": "Stop",
@@ -1945,6 +1972,13 @@ export const en = {
   "run.creditsShort": "{credits} CR",
   "run.discardMenu": "Discard (save to Library, off canvas)",
   "run.stopAfterCurrentMenu": "Stop after current node",
+
+  // ── Upload-image moderation (G3) ─────────────────────────────────────────
+  "node.moderation.checking": "Checking image…",
+  "node.moderation.blockedTitle": "This image can't be used",
+  "node.moderation.blockedReason": "It may violate our content policy",
+  "node.moderation.ready": "Ready to use",
+  "node.moderation.remove": "Remove image",
 } as const
 
 export type MessageKey = keyof typeof en

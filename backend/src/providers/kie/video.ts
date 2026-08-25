@@ -31,6 +31,7 @@ import {
   MAX_POLL_ATTEMPTS_LIP_SYNC_LONG,
 } from "./client.js"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
+import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { kling3Generate } from "./kling3-client.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -680,7 +681,7 @@ async function runKling3(
     klingElements: options?.klingElements,
     motionPrompt: options?.motionPrompt,
     onProgress: options?.onProgress,
-  }, { ...reconcileOpts, modelKey: "kling-3.0", dimensions: { duration: String(snappedDuration) } })
+  }, { ...reconcileOpts, modelKey: "kling-3.0", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ audio: sound, resolution: mode, duration: Number(snappedDuration) }) } })
 
   // Audit log for Kling 3.0 (known to have variable duration/audio pricing)
   logCreditAudit({
@@ -808,7 +809,7 @@ async function runGeminiOmni(
   console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(geminiInput, null, 2))
   const { resultJson, taskId: gTaskId, providerMs } = await runKieTask(
     modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
-    { ...reconcileOpts, modelKey, dimensions: { duration: String(snappedDuration) } },
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(geminiInput) } },
   )
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
@@ -995,7 +996,7 @@ export class KieVideoProvider
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,
         },
-        { ...reconcileOpts, modelKey: provider, dimensions: { duration: snappedDuration } },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ resolution: options?.resolution, duration: snappedDuration }) } },
       )
 
       const videoUrl =
@@ -1031,7 +1032,7 @@ export class KieVideoProvider
         duration: snapped,
         imageUrl,
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { duration: snapped } })
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(runwayInput) } })
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -1294,7 +1295,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: provider, dimensions: { duration } },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const videoUrl =
@@ -1390,7 +1391,7 @@ export class KieVideoProvider
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,
         },
-        { ...reconcileOpts, modelKey: provider, dimensions: { duration: snappedDuration } },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ resolution: options?.resolution, duration: snappedDuration }) } },
       )
 
       const videoUrl =
@@ -1426,7 +1427,7 @@ export class KieVideoProvider
         duration: snapped,
         ...(aspectRatio && { aspectRatio }),
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { duration: snapped } })
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(runwayInput) } })
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -1523,7 +1524,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: provider, dimensions: { duration } },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const videoUrl =
@@ -1644,7 +1645,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        { ...reconcileOpts, modelKey: provider },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1678,7 +1679,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        { ...reconcileOpts, modelKey: provider },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1727,7 +1728,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: provider },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const outputUrl =
@@ -1842,12 +1843,17 @@ export class KieVideoProvider
         JSON.stringify(input, null, 2)
       )
 
+      // `mode` here is the resolution tier ("720p"/"1080p", a real 20→40 cr/sec
+      // lever), NOT the generic `mode` the helper deliberately ignores. Synthesize
+      // `{ resolution: mode }` at the call site (mirrors runKling3), so the tier
+      // reaches the egress decorator; the body's `video_urls` still surfaces
+      // videoInput generically.
       const { resultJson, providerMs } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        { ...reconcileOpts, modelKey: provider },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ ...input, resolution: motionMode }) } },
       )
 
       const outputUrl =
@@ -1895,7 +1901,7 @@ export class KieVideoProvider
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
         options?.onProgress,
-        { ...reconcileOpts, modelKey: provider },
+        { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
       )
 
       const outputUrl =
@@ -1939,12 +1945,16 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
+    // `input.mode` is the resolution tier ("720p"/"1080p", a real 20→40 cr/sec
+    // lever), NOT the generic `mode` the helper ignores. Synthesize
+    // `{ resolution }` at the call site (mirrors runKling3) so the tier reaches
+    // the decorator; `video_urls` still surfaces videoInput generically.
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: provider },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ ...input, resolution }) } },
     )
 
     const outputUrl =
@@ -2007,7 +2017,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: "topaz" },
+      { ...reconcileOpts, modelKey: "topaz", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const outputUrl =
@@ -2081,7 +2091,7 @@ export class KieVideoProvider
       input,
       pollAttempts,
       undefined,
-      { ...reconcileOpts, modelKey: provider },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const videoUrl =
@@ -2160,7 +2170,7 @@ export class KieVideoProvider
       input,
       pollAttempts,
       undefined,
-      { ...reconcileOpts, modelKey: provider },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const outUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
@@ -2257,7 +2267,7 @@ export class KieVideoProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       options?.onProgress,
-      { ...reconcileOpts, modelKey: "wan-s2v" },
+      { ...reconcileOpts, modelKey: "wan-s2v", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const videoUrl =

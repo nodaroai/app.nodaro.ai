@@ -10,7 +10,10 @@ import { hasCredits } from "./config.js"
  * never `import(…)` calls; mirror of middleware/credit-guard.ts).
  *
  * Typed + versioned (spec d1, product line): BILLING_CONTRACT_VERSION lets an
- * overlay-registered provider assert it was built against this contract.
+ * overlay-registered provider assert it was built against this contract. v2 adds
+ * the optional rich account fields (PAYG, structured daily cap, per-category,
+ * currency money); all are nullable so the `none` and `nodaro-cloud` providers
+ * stay valid unchanged.
  *
  * The three rules (§5.2), enforced by TYPES here: money is `number | null`
  * (null = the authority could not say — NEVER 0); `plan` is a plain string
@@ -19,7 +22,7 @@ import { hasCredits } from "./config.js"
  * authority, not isCloud().
  */
 
-export const BILLING_CONTRACT_VERSION = 1
+export const BILLING_CONTRACT_VERSION = 2
 
 export interface JobSpec {
   jobId?: string
@@ -45,12 +48,67 @@ export interface Charge {
   secondaryUnit?: string
 }
 
+/** A figure priced in a customer's own currency. `currency` is an ISO-4217
+ *  code (e.g. "USD", "ILS"); the display formats it via Intl. */
+export interface MoneyAmount {
+  amount: number
+  currency: string
+}
+
+/** Pay-as-you-go state. Omitted/null when the provider has no PAYG concept. */
+export interface PaygState {
+  enabled: boolean
+  /** Reserve credits spent after the pool empties; null = unknown. */
+  reserve: number | null
+  /** The customer's own credits-per-currency-unit rate; null = no rate. */
+  rate: { creditsPerUnit: number; currency: string } | null
+  /** The customer's own recurring auto-charge ceiling; null = none. */
+  monthlyCap: MoneyAmount | null
+}
+
+/** A structured allowance that resets on a cadence the provider owns.
+ *  `limit: 0` is a real value meaning "blocked" (never treat as absent). */
+export interface DailyAllowanceDetail {
+  limit: number
+  used: number
+  remaining: number
+  /** ISO-8601 instant when the counter next resets (provider owns the tz). */
+  resetsAt: string
+}
+
+/** One row of the usage breakdown. `category` is a provider key the view
+ *  maps to a label (unknown keys fall back to a generic label). */
+export interface UsageCategory {
+  category: string
+  count: number
+  /** Spend in the display unit; null = unavailable (rule 1), never 0. */
+  amount: number | null
+  /** Optional money view of this category's spend; null when not priced. */
+  spent: MoneyAmount | null
+}
+
 export interface AccountSummary {
   /** "unknown" is a real answer and survives to the screen — never re-derived. */
   plan: string
   balance: number | null
   dailyAllowance: number | null
   unit: string
+  // --- contract v2 rich fields; all optional, all nullable ---
+  /** ISO start of the current billing/usage period. */
+  periodStart?: string | null
+  /** Count of generations this period. */
+  generations?: number | null
+  /** Money spent this period (provider currency); null = unavailable. */
+  spent?: MoneyAmount | null
+  /** Pay-as-you-go state; omitted/null = provider has no PAYG concept. */
+  payg?: PaygState | null
+  /** Structured daily cap w/ reset instant. When present the view prefers it
+   *  over the scalar `dailyAllowance`. */
+  daily?: DailyAllowanceDetail | null
+  /** Money value of the PAYG reserve; null = not priced. */
+  reserveValue?: MoneyAmount | null
+  /** Per-category usage breakdown; omitted/null = no breakdown. */
+  byCategory?: readonly UsageCategory[] | null
 }
 
 export interface BillingProvider {

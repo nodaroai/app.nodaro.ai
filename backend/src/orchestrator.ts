@@ -6,6 +6,7 @@
  */
 
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
+import { loadOverlay } from "./lib/overlay/load.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[orchestrator] Unhandled rejection:", err)
@@ -14,6 +15,13 @@ process.on("uncaughtException", (err) => {
   console.error("[orchestrator] Uncaught exception:", err)
   process.exit(1)
 })
+
+// This standalone process runs the workflow DAG, whose payload-builder applies
+// the registered prompt policies — so it must load any deployment-supplied
+// overlay before the worker starts consuming executions. The in-process
+// orchestrator worker in server.ts is already covered by buildApp's loadOverlay.
+// No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
+await loadOverlay()
 
 const worker = createOrchestratorWorker()
 

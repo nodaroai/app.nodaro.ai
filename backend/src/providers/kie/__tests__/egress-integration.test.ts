@@ -5,10 +5,17 @@ import type { EgressCall } from "../../egress.js"
 
 // Mutable base so each test can point the module-level KIE_API_BASE at its
 // own loopback server. The mock object is read fresh at module import time.
-const cfg: { KIE_API_KEY: string; NODE_ENV: string; KIE_API_BASE_URL: string } = {
+const cfg: {
+  KIE_API_KEY: string; NODE_ENV: string; KIE_API_BASE_URL: string
+  SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string
+} = {
   KIE_API_KEY: "test-key",
   NODE_ENV: "test",
   KIE_API_BASE_URL: "http://127.0.0.1:1",
+  // video.ts pulls in credit-audit → supabase client at import; a valid-shaped
+  // URL lets createClient construct (no query runs in these decorate-only tests).
+  SUPABASE_URL: "http://127.0.0.1:1",
+  SUPABASE_SERVICE_ROLE_KEY: "test-key",
 }
 vi.mock("@/lib/config.js", () => ({
   config: cfg,
@@ -29,6 +36,147 @@ async function loopback(
 }
 
 afterEach(() => vi.resetModules())
+
+describe("video create sites — full egress dimensions from the wire body (G9)", () => {
+  it("a generic seedance t2v create call surfaces resolution + audio + duration in dimensions", async () => {
+    const srv = await loopback((req, _body, res) => {
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(
+        req.url?.includes("recordInfo")
+          ? JSON.stringify({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["http://x/v.mp4"] }) } })
+          : JSON.stringify({ code: 200, data: { taskId: "sd-1" } }),
+      )
+    })
+    cfg.KIE_API_BASE_URL = srv.base
+    vi.resetModules()
+    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const { KieVideoProvider } = await import("../video.js")
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+    try {
+      await new KieVideoProvider().textToVideo("a dog", "seedance", 8, "16:9", { resolution: "1080p" }, { modelKey: "seedance" })
+      const call = seen.find((c) => c.operation === "jobs.createTask")
+      expect(call).toBeDefined()
+      expect(call!.dimensions.resolution).toBe("1080p")
+      expect(call!.dimensions.audio).toBe(false) // seedance extraParams generate_audio:false
+      expect(call!.dimensions.duration).toBe(8)
+      expect(call!.dimensions.durationLabel).toBe("8s")
+    } finally {
+      clearEgressDecorator()
+      await srv.close()
+    }
+  })
+
+  it("a VEO t2v create call surfaces resolution + duration in dimensions", async () => {
+    const srv = await loopback((req, _body, res) => {
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(
+        req.url?.includes("/veo/generate")
+          ? JSON.stringify({ code: 200, data: { taskId: "veo-t2v" } })
+          : JSON.stringify({ code: 200, data: { successFlag: 1, response: { resultUrls: ["http://x/v.mp4"] } } }),
+      )
+    })
+    cfg.KIE_API_BASE_URL = srv.base
+    vi.resetModules()
+    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const { KieVideoProvider } = await import("../video.js")
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+    try {
+      await new KieVideoProvider().textToVideo("a dog", "veo3", 8, "16:9", { resolution: "1080p" }, { modelKey: "veo3" })
+      const call = seen.find((c) => c.operation === "veo.generate")
+      expect(call).toBeDefined()
+      expect(call!.dimensions.resolution).toBe("1080p")
+      expect(call!.dimensions.duration).toBe(8)
+      expect(call!.dimensions.durationLabel).toBe("8s")
+    } finally {
+      clearEgressDecorator()
+      await srv.close()
+    }
+  })
+})
+
+describe("audio create sites — full egress dimensions from the wire body (G9)", () => {
+  it("a dialogue create call surfaces summed characters in dimensions", async () => {
+    const srv = await loopback((req, _body, res) => {
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(
+        req.url?.includes("recordInfo")
+          ? JSON.stringify({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["http://x/a.mp3"] }) } })
+          : JSON.stringify({ code: 200, data: { taskId: "dlg-1" } }),
+      )
+    })
+    cfg.KIE_API_BASE_URL = srv.base
+    vi.resetModules()
+    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const { KieAudioProvider } = await import("../audio.js")
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+    try {
+      await new KieAudioProvider().generateDialogue(
+        [{ text: "ab", voice: "Rachel" }, { text: "cde", voice: "Rachel" }],
+        {},
+        { modelKey: "elevenlabs-dialogue" },
+      ).catch(() => {})
+      const call = seen.find((c) => c.modelKey === "elevenlabs-dialogue")
+      expect(call).toBeDefined()
+      expect(call!.dimensions.characters).toBe(5)
+    } finally {
+      clearEgressDecorator()
+      await srv.close()
+    }
+  })
+
+  it("a TTS create call still surfaces characters", async () => {
+    const srv = await loopback((req, _body, res) => {
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(
+        req.url?.includes("recordInfo")
+          ? JSON.stringify({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["http://x/a.mp3"] }) } })
+          : JSON.stringify({ code: 200, data: { taskId: "tts-1" } }),
+      )
+    })
+    cfg.KIE_API_BASE_URL = srv.base
+    vi.resetModules()
+    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const { KieAudioProvider } = await import("../audio.js")
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+    try {
+      await new KieAudioProvider().textToSpeech("hello world", "Rachel", "elevenlabs-turbo", {}, { modelKey: "elevenlabs-turbo" }).catch(() => {})
+      const call = seen.find((c) => c.operation === "jobs.createTask")
+      expect(call).toBeDefined()
+      expect(call!.dimensions.characters).toBe(11)
+    } finally {
+      clearEgressDecorator()
+      await srv.close()
+    }
+  })
+})
+
+describe("providerFetch — boolean dimensions ride through to the decorator (widened type)", () => {
+  it("passes a boolean dimension through to the decorator unchanged", async () => {
+    vi.resetModules()
+    const { providerFetch, setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const seen: Array<Record<string, unknown>> = []
+    setEgressDecorator({ decorate: (call) => { seen.push(call.dimensions); return null } })
+    try {
+      // 127.0.0.1:1 refuses immediately; decorate() runs BEFORE fetch, so the
+      // assertion is on the captured dimensions, not the (failing) network call.
+      await providerFetch(
+        {
+          provider: "kie", operation: "test", modelKey: "seedance-2",
+          body: {}, dimensions: { resolution: "4K", videoInput: true, audio: false },
+        },
+        "http://127.0.0.1:1/x",
+        {},
+      ).catch(() => {})
+    } finally {
+      clearEgressDecorator()
+    }
+    expect(seen[0]).toEqual({ resolution: "4K", videoInput: true, audio: false })
+  })
+})
 
 describe("createKieTask — routes through the egress seam with a body-based price read", () => {
   it("captures OUR modelKey (≠ provider id) and the exact wire body in the EgressCall", async () => {

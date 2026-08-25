@@ -52,6 +52,7 @@ import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { surfaceTabs } from "@/lib/surface-selectors"
+import { UPPER_DASHBOARD_TABS, resolveActiveUpperTab, type UpperDashboardTab } from "../dashboard-upper-tabs"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 
 function TemplatesCarousel() {
@@ -391,8 +392,7 @@ export default function ProjectsPage() {
     })
   }, [filteredProjects, sortBy, sortDir])
 
-  type Tab = "apps" | "miniapps" | "templates" | "tutorials" | "statistics"
-  const TABS: readonly Tab[] = ["apps", "miniapps", "templates", "tutorials", "statistics"]
+  type Tab = UpperDashboardTab
 
   // The URL is the single source of truth for which tab is open, NOT a piece of
   // local state seeded from it. Seeding once looked simpler but broke the moment
@@ -402,8 +402,13 @@ export default function ProjectsPage() {
   // this page — sidebar, breadcrumb, back button, a pasted link — agrees.
   // An unknown value falls back to Apps.
   const [searchParams, setSearchParams] = useSearchParams()
-  const requestedTab = searchParams.get("tab") as Tab | null
-  const activeTab: Tab = requestedTab && TABS.includes(requestedTab) ? requestedTab : "apps"
+  const requestedTab = searchParams.get("tab")
+  // B1: the deployment surface profile can narrow the app-discovery strip.
+  // Empty profile → all tabs (code default); a whitelist → its intersection,
+  // in whitelist order. When the profile hides every upper tab the strip and
+  // its panels do not render (visibleUpperTabs is empty, activeTab undefined).
+  const visibleUpperTabs = surfaceTabs(UPPER_DASHBOARD_TABS)
+  const activeTab = resolveActiveUpperTab(visibleUpperTabs, requestedTab)
 
   // Tab clicks replace rather than push: a tab is a view of one page, so the
   // back button should leave the page rather than walk the tabs.
@@ -417,13 +422,14 @@ export default function ProjectsPage() {
     [searchParams, setSearchParams],
   )
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "apps", label: t("dash.apps"), icon: <LayoutGrid className="h-3.5 w-3.5" /> },
-    { id: "miniapps", label: t("dash.miniapps"), icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
-    { id: "templates", label: t("dash.templates"), icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: "tutorials", label: t("dash.tutorials"), icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: "statistics", label: t("dash.statistics"), icon: <BarChart3 className="h-3.5 w-3.5" /> },
-  ]
+  const TAB_DEFS: Record<Tab, { label: string; icon: React.ReactNode }> = {
+    apps: { label: t("dash.apps"), icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+    miniapps: { label: t("dash.miniapps"), icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+    templates: { label: t("dash.templates"), icon: <BookOpen className="h-3.5 w-3.5" /> },
+    tutorials: { label: t("dash.tutorials"), icon: <BookOpen className="h-3.5 w-3.5" /> },
+    statistics: { label: t("dash.statistics"), icon: <BarChart3 className="h-3.5 w-3.5" /> },
+  }
+  const tabs = visibleUpperTabs.map((id) => ({ id, ...TAB_DEFS[id] }))
 
   const CARD_SCROLL_PX = 210
 
@@ -575,7 +581,10 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Unified container with pill tabs inside */}
+      {/* Unified container with pill tabs inside. Hidden entirely (not just
+          empty) when the surface profile whitelists none of the upper
+          app-discovery tabs; unset profile → all tabs, so this is byte-identical. */}
+      {visibleUpperTabs.length > 0 && (
       <div className="mb-6 rounded-xl bg-muted/50 overflow-hidden group/apps">
         {/* Header: tabs + see all link */}
         <div className="flex items-center justify-between p-2">
@@ -726,6 +735,7 @@ export default function ProjectsPage() {
           <TutorialsTab />
         )}
       </div>
+      )}
 
       {/* Workspace tab strip — flat workflow list (default) vs. project organization */}
       <div className="flex items-center gap-1 mb-3 border-b border-border">

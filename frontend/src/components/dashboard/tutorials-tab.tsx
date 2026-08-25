@@ -261,7 +261,7 @@ function flowToTemplateBrowseCard(flow: FlowTutorialItem): TemplateBrowseCard {
     previewMediaUrl: flow.previewMediaUrl,
     previewMediaType: flow.previewMediaType,
     creatorId: "",
-    creatorDisplayName: null,
+    creatorDisplayName: flow.creatorDisplayName ?? null,
     cloneCount: 0,
     favoriteCount: 0,
     createdAt: flow.createdAt,

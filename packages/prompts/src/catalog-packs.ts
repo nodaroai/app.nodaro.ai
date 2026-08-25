@@ -1,5 +1,6 @@
 import type { PickerCatalog, PickerOption, PickerDimension } from "./picker-catalogs.js"
 import type { LocaleId, LocaleCatalogMap } from "@nodaro/shared"
+import { registerCatalogSidecars, resetCatalogSidecars } from "@nodaro/shared"
 
 export type CatalogPackMode = "replace" | "extend" | "deny"
 
@@ -34,9 +35,13 @@ export function registerCatalogPack(pack: CatalogPack): void {
   if (packs.some((p) => p.id === pack.id)) throw new Error(`duplicate catalog pack id "${pack.id}"`)
   packs = [...packs, pack]
   version++
+  // Push this pack's localized sidecars into the shared app-UI localizer (G10)
+  // so pack-added entries resolve in `resolveLabel`/`resolveDescription`/search.
+  // One generic point covers every pack, incl. the person extend fan-out.
+  registerCatalogSidecars(pack.catalogId, pack.sidecars)
 }
 export function getRegisteredCatalogPacks(): readonly CatalogPack[] { return packs }
-export function resetCatalogPacks(): void { packs = []; version++ }
+export function resetCatalogPacks(): void { packs = []; version++; resetCatalogSidecars() }
 export function catalogPacksVersion(): number { return version }
 
 function cloneCatalog(c: PickerCatalog): PickerCatalog {

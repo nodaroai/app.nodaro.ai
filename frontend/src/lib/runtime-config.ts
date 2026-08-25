@@ -28,6 +28,14 @@ export interface NodaroRuntimeConfig {
    * validated JSON, and consumers merge it over the code default.
    */
   readonly surface?: Partial<import("./surface-profile").SurfaceProfile>
+  /**
+   * Upload-moderation capability (G3). Set by the /config.js writer from env
+   * RUNTIME_UPLOAD_MODERATION when a deployment wires a moderation plugin
+   * route (POST /v1/moderate-image, provided via @nodaroai/cloud-plugins
+   * registerRoutes — never in core). Absent on mainline: the upload-image
+   * node then never calls moderation and never renders the overlay.
+   */
+  readonly moderation?: { readonly uploadImage?: boolean }
 }
 
 declare global {
@@ -131,4 +139,15 @@ export function runtimeFreecutOrigin(): string {
  */
 export function runtimeDefaultLocale(): string {
   return (runtime().defaultLocale ?? "").trim()
+}
+
+/**
+ * Whether this deployment has an upload-image moderation provider wired
+ * (G3). The upload-image node checks this BEFORE calling moderation AND
+ * before rendering the moderation overlay, so an install with no moderation
+ * plugin behaves identically to pre-feature mainline — even if a node in an
+ * imported workflow carries a persisted moderationStatus.
+ */
+export function runtimeUploadModerationEnabled(): boolean {
+  return runtime().moderation?.uploadImage === true
 }

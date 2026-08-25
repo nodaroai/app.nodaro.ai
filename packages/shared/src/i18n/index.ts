@@ -31,6 +31,33 @@ function cacheKey(catalog: I18nCatalogId, locale: LocaleId): string {
 }
 
 /**
+ * Pack-sidecar overlay: localized strings contributed by registered catalog
+ * packs (e.g. an extension pack's `sidecars.he`), keyed `<catalog>:<locale>`.
+ * Consulted by `getLocalizedEntry` when the file sidecar lacks an id. Empty on
+ * mainline. Populated by `@nodaro/prompts` at pack registration — the content
+ * (the translated strings) lives in the pack (the deployment overlay), never
+ * in this Apache package.
+ */
+const packSidecars = new Map<string, LocaleCatalogMap>()
+
+export function registerCatalogSidecars(
+  catalog: string,
+  sidecars: Partial<Record<LocaleId, LocaleCatalogMap>> | undefined,
+): void {
+  if (!sidecars) return
+  for (const locale of Object.keys(sidecars) as LocaleId[]) {
+    const map = sidecars[locale]
+    if (!map) continue
+    const key = `${catalog}:${locale}`
+    packSidecars.set(key, { ...(packSidecars.get(key) ?? {}), ...map })
+  }
+}
+
+export function resetCatalogSidecars(): void {
+  packSidecars.clear()
+}
+
+/**
  * Lazy-load a sidecar catalog. Returns `null` if the locale is `en` (no
  * sidecar — English lives in the canonical catalog file) or if no sidecar
  * file exists for that (catalog, locale) pair.
@@ -82,9 +109,12 @@ export function getLocalizedEntry(
   locale: LocaleId,
 ): LocalizedEntry | undefined {
   if (locale === "en") return undefined
-  const map = cache.get(cacheKey(catalog, locale))
-  if (!map) return undefined
-  return map[id]
+  const key = cacheKey(catalog, locale)
+  const fromFile = cache.get(key)?.[id]
+  if (fromFile) return fromFile
+  // Fall back to a pack-registered sidecar overlay (G10). File sidecars win;
+  // pack sidecars cover ids the deployment overlay added. Empty on mainline.
+  return packSidecars.get(key)?.[id]
 }
 
 /**

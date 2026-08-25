@@ -21,13 +21,13 @@ async function writePack(
 }
 
 const manifest = (over: Partial<TutorialPackManifest> = {}): TutorialPackManifest => ({
-  name: "SAI",
-  categories: [{ slug: "sai-basics", name: "SAI Basics", sortOrder: 0 }],
+  name: "Demo",
+  categories: [{ slug: "demo-basics", name: "Demo Basics", sortOrder: 0 }],
   ...over,
 })
 
 const doc = (slug: string, over: Record<string, unknown> = {}) => ({
-  slug, name: slug, tutorialCategorySlug: "sai-basics", tutorialSortOrder: 0,
+  slug, name: slug, tutorialCategorySlug: "demo-basics", tutorialSortOrder: 0,
   nodes: [{ id: "n1", type: "generate-image", data: {
     generatedResults: [{ url: "https://cdn.example.com/a.png" }],
   } }],
@@ -48,11 +48,35 @@ describe("loadTutorialPacks", () => {
   it("loads a valid pack's docs + categories, ignoring manifest.json as a template", async () => {
     const root = await scratch()
     try {
-      await writePack(join(root, "p1"), manifest(), [doc("sai-welcome")])
+      await writePack(join(root, "p1"), manifest(), [doc("demo-welcome")])
       const packs = await loadTutorialPacks({ baseSlugs: new Set(), env: join(root, "p1") })
       expect(packs).toHaveLength(1)
-      expect(packs[0].docs.map((d) => d.slug)).toEqual(["sai-welcome"])
-      expect(packs[0].categories).toEqual([{ slug: "sai-basics", name: "SAI Basics", sortOrder: 0 }])
+      expect(packs[0].docs.map((d) => d.slug)).toEqual(["demo-welcome"])
+      expect(packs[0].categories).toEqual([{ slug: "demo-basics", name: "Demo Basics", sortOrder: 0 }])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("stamps the manifest creatorDisplayName onto docs that omit it, and keeps category descriptions", async () => {
+    const root = await scratch()
+    try {
+      await writePack(
+        join(root, "p1"),
+        manifest({
+          creatorDisplayName: "Acme Team",
+          categories: [{ slug: "demo-basics", name: "Demo Basics", description: "Basic tutorials" }],
+        }),
+        [doc("demo-a"), doc("demo-b", { creatorDisplayName: "Jordan" })],
+      )
+      const packs = await loadTutorialPacks({ baseSlugs: new Set(), env: join(root, "p1") })
+      expect(packs).toHaveLength(1)
+      expect(packs[0].creatorDisplayName).toBe("Acme Team")
+      expect(packs[0].categories[0].description).toBe("Basic tutorials")
+      const a = packs[0].docs.find((d) => d.slug === "demo-a")
+      const b = packs[0].docs.find((d) => d.slug === "demo-b")
+      expect(a?.creatorDisplayName).toBe("Acme Team") // inherited from manifest
+      expect(b?.creatorDisplayName).toBe("Jordan")    // per-doc override wins
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -95,11 +119,11 @@ describe("loadTutorialPacks", () => {
     const warn = vi.fn()
     try {
       await writePack(join(root, "p1"), manifest(), [doc("dup")])
-      await writePack(join(root, "p2"), manifest({ name: "SAI2" }), [doc("dup")])
+      await writePack(join(root, "p2"), manifest({ name: "Demo2" }), [doc("dup")])
       const packs = await loadTutorialPacks({
         baseSlugs: new Set(), env: `${join(root, "p1")},${join(root, "p2")}`, warn,
       })
-      expect(packs.map((p) => p.name)).toEqual(["SAI"])
+      expect(packs.map((p) => p.name)).toEqual(["Demo"])
       expect(warn.mock.calls.some((c) => String(c[0]).includes("slug_conflict"))).toBe(true)
     } finally {
       await rm(root, { recursive: true, force: true })
