@@ -521,7 +521,11 @@ server-side, after prompt assembly, so a client cannot bypass it. This is **code
 the deployment owns, not an environment variable**; with none registered, prompt
 assembly is byte-identical to stock. (There is deliberately no env-var switch for
 the clause — the clause text is the deployment's own, kept out of the shipped
-packages rather than read from the environment.)
+packages rather than read from the environment.) The clause lives in the
+deployment's own registered `PromptPolicy` module, applied by the backend
+registry in `backend/src/lib/prompt-policy.ts`; the published `@nodaro/prompts`
+package stays content-free, enforced by its `content-free-contract` guard test
+(the package source may not read `process.env`).
 
 Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
 not this JSON.
