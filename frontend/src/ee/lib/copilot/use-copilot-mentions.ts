@@ -16,7 +16,7 @@
  */
 import { useMemo } from "react"
 import { useCharacters, useCreatures, useLibraryInfinite, useLocations, useObjects } from "@/hooks/queries/use-assets-queries"
-import { toMentions } from "./mentions"
+import { characterMentionVariants, toMentions } from "./mentions"
 import { MEDIA_MENTION_KINDS, MENTION_KINDS, type CopilotMention, type MediaMentionKind } from "./types"
 import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared"
 
@@ -71,7 +71,20 @@ export function useCopilotMentions(
   const libraryLoading = library.isLoading
 
   return useMemo(() => {
-    const entityMentions = ENTITY_NODE_KINDS.flatMap((kind, i) => toMentions(entityLists[i], kind))
+    const entityMentions = ENTITY_NODE_KINDS.flatMap((kind, i) => {
+      const base = toMentions(entityLists[i], kind)
+      if (kind !== "character") return base
+      // The characters LIST already carries every variant bucket (same mapper
+      // as the detail route), so the picker's drill-in costs zero fetches —
+      // reshape it onto the mention here.
+      const rows = (entityLists[i] ?? []) as unknown as Array<Record<string, unknown>>
+      const byId = new Map(rows.map((row) => [String(row.id), row]))
+      return base.map((mention) => {
+        const row = byId.get(mention.id)
+        const variants = row ? characterMentionVariants(row) : []
+        return variants.length > 0 ? { ...mention, variants } : mention
+      })
+    })
 
     const files: CopilotMention[] = []
     for (const page of libraryPages ?? []) {

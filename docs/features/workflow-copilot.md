@@ -24,7 +24,9 @@ There are two ways in.
 
 ## Point at your own saved things
 
-Type `@` in the message box (or press the `@` button) to pick from the characters, objects, animals and locations you have already made — and from your own images, videos and audio, under **Files**. The name is written into your sentence, where you were typing it — because where you put it is part of what you meant: "@Emma walks in while @George raises the bottle" says who does what, which a list of names beside the box does not. The copilot looks each one up and can wire it into the workflow it builds.
+Type `@` in the message box (or press the `@` button) to pick from the characters, objects, animals and locations you have already made — and from your own images, videos and audio, under **Files**. The picker is organized in tabs, one per kind, each with its count; typing narrows the current tab, and a match on another tab shows up as a one-click hint so nothing you own is ever invisible. The expand button opens a full-size browser with large previews when you want to see what you are choosing. The name is written into your sentence, where you were typing it — because where you put it is part of what you meant: "@Emma walks in while @George raises the bottle" says who does what, which a list of names beside the box does not. The copilot looks each one up and can wire it into the workflow it builds.
+
+A character row with saved looks carries a small arrow: open it to pick a specific **angle, expression, pose or outfit** instead of the default portrait. The pick lands in your sentence as plain words — `@Iris (the "back" angle)` — and the copilot turns that into the right configuration when it builds.
 
 To use a file that is not in your library yet, press the paperclip and pick it from your computer. It uploads to your library and is attached to the message in one step, exactly as if you had mentioned it.
 

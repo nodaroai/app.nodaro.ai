@@ -11,7 +11,7 @@
  * Media files and uploaded attachments still need server-side resolution and
  * are not part of this release.
  */
-import type { CopilotMention, MentionKind } from "./types"
+import type { CopilotMention, CopilotMentionVariant, MentionKind } from "./types"
 
 /** The `@query` the caret is currently sitting in, or null. */
 export function activeMentionQuery(text: string, caret: number): { query: string; start: number } | null {
@@ -35,7 +35,18 @@ export function activeMentionQuery(text: string, caret: number): { query: string
  * The `@` is kept so the user can still see which words are linked — a plain
  * name in the middle of their own prose is indistinguishable from typing it.
  */
-export function insertMentionName(text: string, caret: number, name: string): { text: string; caret: number } {
+export function insertMentionName(
+  text: string,
+  caret: number,
+  name: string,
+  /**
+   * A variant pick appends prose right after the mention — `@Iris (the "back"
+   * angle)` — because the WIRE stays name+id: the doctrine teaches the model
+   * to turn that phrase into an `@slug:N:variant` prompt token itself, so no
+   * format anywhere had to change.
+   */
+  variantSuffix = "",
+): { text: string; caret: number } {
   const active = activeMentionQuery(text, caret)
   const start = active ? active.start : caret
   const before = text.slice(0, start)
@@ -44,8 +55,14 @@ export function insertMentionName(text: string, caret: number, name: string): { 
   // without gluing the next word on. Mid-sentence it must not be added: what
   // follows a mention there is usually punctuation, and "@Maya , then" is worse
   // than the problem the space solves.
-  const token = `@${cleanName(name)}${after.length === 0 ? " " : ""}`
+  const token = `@${cleanName(name)}${variantSuffix}${after.length === 0 ? " " : ""}`
   return { text: before + token + after, caret: before.length + token.length }
+}
+
+/** The prose a variant pick appends after the mention. Empty for no variant. */
+export function variantSuffix(variant: { name: string; bucketNoun: string } | undefined): string {
+  if (!variant) return ""
+  return ` (the "${cleanName(variant.name)}" ${variant.bucketNoun})`
 }
 
 /** How a kind is named TO THE MODEL, so it knows which tool resolves the id. */
@@ -164,6 +181,41 @@ export function toMentions(items: EntityLike[] | undefined, kind: MentionKind): 
     kind,
     imageUrl: item.sourceImageUrl ?? null,
   }))
+}
+
+/**
+ * The character buckets the drill-in offers, in display order, each with the
+ * singular noun the inserted prose uses. The list endpoint already returns
+ * every bucket (same mapper as the detail route), so this is a pure reshape —
+ * no fetch behind the chevron.
+ */
+const CHARACTER_VARIANT_BUCKETS: ReadonlyArray<{ key: string; noun: string }> = [
+  { key: "angles", noun: "angle" },
+  { key: "bodyAngles", noun: "body angle" },
+  { key: "expressions", noun: "expression" },
+  { key: "poses", noun: "pose" },
+  { key: "outfitVariations", noun: "outfit" },
+  { key: "lightingVariations", noun: "lighting" },
+  { key: "detailCloseups", noun: "detail close-up" },
+]
+
+export function characterMentionVariants(row: Record<string, unknown>): CopilotMentionVariant[] {
+  const out: CopilotMentionVariant[] = []
+  for (const { key, noun } of CHARACTER_VARIANT_BUCKETS) {
+    const items = row[key]
+    if (!Array.isArray(items)) continue
+    for (const item of items as Array<{ name?: unknown; url?: unknown }>) {
+      const name = typeof item?.name === "string" ? item.name.trim() : ""
+      if (!name) continue
+      out.push({
+        bucket: key,
+        bucketNoun: noun,
+        name,
+        imageUrl: typeof item?.url === "string" ? item.url : null,
+      })
+    }
+  }
+  return out
 }
 
 export function filterMentions<T extends { name: string }>(items: readonly T[], query: string): T[] {
