@@ -14,7 +14,7 @@ import { cancelCharacterTraining, deleteCharacterLora } from "../providers/repli
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
-import { decodeKeysetCursor, encodeKeysetCursor, keysetFilter } from "../lib/keyset-cursor.js"
+import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -382,13 +382,7 @@ export async function characterRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to list characters")
     }
 
-    const rows = data ?? []
-    const hasMore = rows.length > limit
-    const page = hasMore ? rows.slice(0, limit) : rows
-    const last = page[page.length - 1]
-    const nextCursor =
-      hasMore && last ? encodeKeysetCursor({ createdAt: last.created_at, id: last.id }) : null
-
+    const { page, nextCursor } = sliceKeysetPage((data ?? []) as CharacterRow[], limit)
     return { characters: page.map(toCamel), nextCursor }
   })
 

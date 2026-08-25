@@ -11,6 +11,7 @@ import { requireAppScope } from "../lib/scope-prehandler.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
 
 // Reference-photo entry — descriptive metadata in Phase 1 (the catalog of kinds
 // is open-ended for creatures, unlike locations which enforces an enum). The
@@ -150,7 +151,20 @@ const listCreaturesQuery = z.object({
   // Default view hides archived rows. `?archived=true` flips the filter for
   // the Studio's "Archived" tab.
   archived: z.enum(["true", "false"]).optional(),
+  // Opt-IN pagination, mirroring /v1/characters. Deliberately NO default:
+  // a default limit on a route whose existing callers never follow cursors
+  // is exactly how /v1/characters came to silently show 100 of a user's
+  // library (#462's default + a frontend that read one page). Absent limit =
+  // the exact legacy response; present limit = a page plus `nextCursor`.
+  limit: z.coerce.number().int().positive().max(500).optional(),
+  cursor: z.string().max(512).optional(),
 })
+  // A cursor is meaningless outside a paginated read — refusing the combo
+  // keeps "legacy response" and "page" from ever blending into a filtered
+  // unbounded fetch nobody designed.
+  .refine((q) => q.cursor === undefined || q.limit !== undefined, {
+    message: "cursor requires limit",
+  })
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
@@ -235,14 +249,28 @@ export async function creatureRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, archived } = parsed.data
+    const { projectId, archived, limit, cursor: rawCursor } = parsed.data
     const userId = req.userId
     const wantArchived = archived === "true"
+
+    // An undecodable cursor is a 400, NOT a silent fall-through to page 1 —
+    // a rolling-load client handed page 1 for a "next page" request would
+    // append the same rows forever instead of surfacing the bug.
+    const cursor = rawCursor ? decodeKeysetCursor(rawCursor) : null
+    if (rawCursor && !cursor) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid cursor" },
+      })
+    }
 
     let query = supabase
       .from("creatures")
       .select(SELECT_COLUMNS)
       .order("created_at", { ascending: false })
+      // The tie-break that makes the ordering TOTAL: rows inserted in one
+      // transaction share a created_at, and without `id` the keyset boundary
+      // cannot land between two specific rows.
+      .order("id", { ascending: false })
 
     if (projectId) {
       query = query.eq("project_id", projectId)
@@ -257,14 +285,26 @@ export async function creatureRoutes(app: FastifyInstance) {
       query = query.is("deleted_at", null)
     }
 
+    if (cursor) query = query.or(keysetFilter(cursor))
+    // Over-fetch by one to learn whether another page exists without a second
+    // round-trip; `sliceKeysetPage` removes the probe row again.
+    if (limit !== undefined) query = query.limit(limit + 1)
+
     const { data, error } = await query
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to list creatures")
     }
 
-    const creatures = (data ?? []).map((c) => toCamel(c as CreatureRow))
-    return { creatures }
+    // Legacy callers (no `limit`) get the exact response they always did —
+    // no `nextCursor` field, so nothing can mistake "unpaginated" for "last
+    // page". Paginated callers get the page and the cursor.
+    if (limit === undefined) {
+      const creatures = (data ?? []).map((c) => toCamel(c as CreatureRow))
+      return { creatures }
+    }
+    const { page, nextCursor } = sliceKeysetPage((data ?? []) as CreatureRow[], limit)
+    return { creatures: page.map((c) => toCamel(c)), nextCursor }
   })
 
   // ---------------------------------------------------------------------------

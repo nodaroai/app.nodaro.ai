@@ -82,3 +82,26 @@ export function encodeKeysetCursor(c: KeysetCursor): string {
 export function keysetFilter(c: KeysetCursor): string {
   return `created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`
 }
+
+/**
+ * The probe-slice-encode step every keyset-paginated list shares.
+ *
+ * The route over-fetches by ONE row (`.limit(limit + 1)`): the extra row is
+ * how it learns another page exists without a second round-trip. This helper
+ * is the other half — slice the probe off so a page never exceeds the
+ * caller's limit, and mint the cursor from the last row that stays. Keeping
+ * it in one place is what stops a fifth list route from hand-rolling the
+ * slice and getting the boundary row wrong.
+ */
+export function sliceKeysetPage<T extends { created_at: string; id: string }>(
+  rows: T[],
+  limit: number,
+): { page: T[]; nextCursor: string | null } {
+  const hasMore = rows.length > limit
+  const page = hasMore ? rows.slice(0, limit) : rows
+  const last = page[page.length - 1]
+  return {
+    page,
+    nextCursor: hasMore && last ? encodeKeysetCursor({ createdAt: last.created_at, id: last.id }) : null,
+  }
+}

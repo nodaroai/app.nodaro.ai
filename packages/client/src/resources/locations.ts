@@ -194,6 +194,14 @@ export interface UpdateLocationResult {
 export interface ListLocationsParams {
   /** When true, return archived locations instead of active ones. */
   archived?: boolean
+  /**
+   * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
+   * full legacy listing with no `nextCursor`; supplied, the response is one
+   * page plus `nextCursor` — keep passing it back until it is `null`.
+   */
+  limit?: number
+  /** Opaque cursor from a prior page's `nextCursor` (fetches the next page). */
+  cursor?: string
 }
 
 /**
@@ -394,9 +402,11 @@ export class LocationsResource {
    * List the caller's locations. By default returns active locations only;
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
    */
-  list(params: ListLocationsParams = {}): Promise<{ locations: Location[] }> {
+  list(params: ListLocationsParams = {}): Promise<{ locations: Location[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
+    if (params.limit !== undefined) query.limit = String(params.limit)
+    if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/locations", { query })
   }
 
@@ -407,7 +417,7 @@ export class LocationsResource {
    *
    * `archived` is omitted from the param type — it's always set to `true` here.
    */
-  listArchived(params: Omit<ListLocationsParams, "archived"> = {}): Promise<{ locations: Location[] }> {
+  listArchived(params: Omit<ListLocationsParams, "archived"> = {}): Promise<{ locations: Location[]; nextCursor?: string | null }> {
     return this.list({ ...params, archived: true })
   }
 

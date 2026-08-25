@@ -297,14 +297,16 @@ describe("getCharacters", () => {
     expect(url).toContain("userId=user-1")
   })
 
-  it("sends no query params when none provided", async () => {
+  it("without filters, only the drain's own page-size param goes over the wire", async () => {
     noSession()
     const mock = mockFetchJson({ characters: [] })
     vi.stubGlobal("fetch", mock)
 
     await getCharacters()
 
-    expect(mock.mock.calls[0][0]).toBe("/v1/characters")
+    // The drain always asks at the server's cap; what must NOT appear is a
+    // filter the caller never gave.
+    expect(mock.mock.calls[0][0]).toBe("/v1/characters?limit=500")
   })
 
   it("throws on error", async () => {
@@ -378,14 +380,14 @@ describe("getFaces", () => {
     expect(url).toContain("userId=user-1")
   })
 
-  it("sends no query params when none provided", async () => {
+  it("without filters, only the drain's own page-size param goes over the wire", async () => {
     noSession()
     const mock = mockFetchJson({ faces: [] })
     vi.stubGlobal("fetch", mock)
 
     await getFaces()
 
-    expect(mock.mock.calls[0][0]).toBe("/v1/faces")
+    expect(mock.mock.calls[0][0]).toBe("/v1/faces?limit=500")
   })
 })
 

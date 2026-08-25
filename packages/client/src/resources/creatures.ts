@@ -260,6 +260,14 @@ export interface ListCreaturesParams {
   archived?: boolean
   /** Optional project filter — server-scoped to the caller's user. */
   projectId?: string
+  /**
+   * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
+   * full legacy listing with no `nextCursor`; supplied, the response is one
+   * page plus `nextCursor` — keep passing it back until it is `null`.
+   */
+  limit?: number
+  /** Opaque cursor from a prior page's `nextCursor` (fetches the next page). */
+  cursor?: string
 }
 
 /**
@@ -423,10 +431,12 @@ export class CreaturesResource {
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
    * Optional `projectId` scopes the result to a single project.
    */
-  list(params: ListCreaturesParams = {}): Promise<{ creatures: Creature[] }> {
+  list(params: ListCreaturesParams = {}): Promise<{ creatures: Creature[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
     if (params.projectId) query.projectId = params.projectId
+    if (params.limit !== undefined) query.limit = String(params.limit)
+    if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/creatures", { query })
   }
 
@@ -437,7 +447,7 @@ export class CreaturesResource {
    *
    * `archived` is omitted from the param type — it's always set to `true` here.
    */
-  listArchived(params: Omit<ListCreaturesParams, "archived"> = {}): Promise<{ creatures: Creature[] }> {
+  listArchived(params: Omit<ListCreaturesParams, "archived"> = {}): Promise<{ creatures: Creature[]; nextCursor?: string | null }> {
     return this.list({ ...params, archived: true })
   }
 

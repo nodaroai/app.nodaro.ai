@@ -1160,11 +1160,7 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  const qs = params.toString()
-  return apiJson(`/v1/faces${qs ? `?${qs}` : ""}`, {
-    method: "GET",
-    label: "Failed to fetch faces",
-  })
+  return drainEntityPages("/v1/faces", "faces", params, "Failed to fetch faces")
 }
 
 export async function deleteFace(faceId: string): Promise<{ success: boolean }> {
@@ -1234,12 +1230,11 @@ export async function getCharacterUsage(
 
 /** List of archived characters for the library's "Archive" tab. */
 export async function listArchivedCharacters(projectId?: string): Promise<{ characters: DbCharacter[] }> {
-  const qs = new URLSearchParams({ archived: "true" })
-  if (projectId) qs.set("projectId", projectId)
-  return apiJson(`/v1/characters?${qs.toString()}`, {
-    method: "GET",
-    label: "Failed to load archived characters",
-  })
+  const params = new URLSearchParams({ archived: "true" })
+  if (projectId) params.set("projectId", projectId)
+  // Drained like the active list: the archive of a long-lived account is
+  // BIGGER than its live library, not smaller.
+  return drainEntityPages("/v1/characters", "characters", params, "Failed to load archived characters")
 }
 
 /**
@@ -1314,15 +1309,56 @@ export interface DbCharacter {
   updatedAt: string
 }
 
+/**
+ * One page fetched at the server's cap, cursor followed until the server says
+ * done. Every entity list fn below drains through this.
+ *
+ * WHY DRAIN AND NOT ONE PAGE: /v1/characters defaults to 100 rows, and every
+ * consumer of these fns — My Library, the copilot's @ picker, the galleries,
+ * the asset modal — filters and searches CLIENT-side over what it got. A page
+ * is a silent lie to all of them: the owner sat at exactly 100 characters
+ * shown and could not know whether that was everything (it was the cap). The
+ * objects/creatures/locations routes were worse — unpaginated, truncating at
+ * the database gateway's row ceiling instead.
+ *
+ * The page cap exists for ONE reason: a server bug that returns a
+ * non-advancing cursor must not loop forever. It is far above any real
+ * library (20 pages × 500 = 10,000 entities); hitting it is reported, not
+ * swallowed, because a drain that quietly stops draining is the bug this
+ * helper replaces.
+ */
+const ENTITY_PAGE_LIMIT = 500
+const ENTITY_MAX_PAGES = 20
+
+async function drainEntityPages<K extends string, T>(
+  path: string,
+  key: K,
+  baseParams: URLSearchParams,
+  label: string,
+): Promise<Record<K, T[]>> {
+  const all: T[] = []
+  let cursor: string | null = null
+  for (let page = 0; page < ENTITY_MAX_PAGES; page++) {
+    const params = new URLSearchParams(baseParams)
+    params.set("limit", String(ENTITY_PAGE_LIMIT))
+    if (cursor) params.set("cursor", cursor)
+    const res = await apiJson<Record<K, T[]> & { nextCursor?: string | null }>(
+      `${path}?${params.toString()}`,
+      { method: "GET", label },
+    )
+    all.push(...(res[key] ?? []))
+    cursor = res.nextCursor ?? null
+    if (!cursor) return { [key]: all } as Record<K, T[]>
+  }
+  console.warn(`[api] ${path}: stopped after ${ENTITY_MAX_PAGES} pages (${all.length} rows) — cursor still advancing`)
+  return { [key]: all } as Record<K, T[]>
+}
+
 export async function getCharacters(projectId?: string, userId?: string): Promise<{ characters: DbCharacter[] }> {
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  const qs = params.toString()
-  return apiJson(`/v1/characters${qs ? `?${qs}` : ""}`, {
-    method: "GET",
-    label: "Failed to fetch characters",
-  })
+  return drainEntityPages("/v1/characters", "characters", params, "Failed to fetch characters")
 }
 
 export async function getCharacterById(characterId: string): Promise<DbCharacter | null> {
@@ -1930,11 +1966,7 @@ export async function getObjects(
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   if (opts?.archived) params.set("archived", "true")
-  const qs = params.toString()
-  return apiJson(`/v1/objects${qs ? `?${qs}` : ""}`, {
-    method: "GET",
-    label: "Failed to fetch objects",
-  })
+  return drainEntityPages("/v1/objects", "objects", params, "Failed to fetch objects")
 }
 
 /**
@@ -2266,11 +2298,7 @@ export async function getCreatures(
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   if (opts?.archived) params.set("archived", "true")
-  const qs = params.toString()
-  return apiJson(`/v1/creatures${qs ? `?${qs}` : ""}`, {
-    method: "GET",
-    label: "Failed to fetch creatures",
-  })
+  return drainEntityPages("/v1/creatures", "creatures", params, "Failed to fetch creatures")
 }
 
 /**
@@ -2554,12 +2582,9 @@ export async function permanentDeleteLocation(
 export async function listArchivedLocations(
   projectId?: string,
 ): Promise<{ locations: DbLocation[] }> {
-  const qs = new URLSearchParams({ archived: "true" })
-  if (projectId) qs.set("projectId", projectId)
-  return apiJson(`/v1/locations?${qs.toString()}`, {
-    method: "GET",
-    label: "Failed to load archived locations",
-  })
+  const params = new URLSearchParams({ archived: "true" })
+  if (projectId) params.set("projectId", projectId)
+  return drainEntityPages("/v1/locations", "locations", params, "Failed to load archived locations")
 }
 
 export interface DbLocation {
@@ -2613,11 +2638,7 @@ export async function getLocations(projectId?: string, userId?: string): Promise
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  const qs = params.toString()
-  return apiJson(`/v1/locations${qs ? `?${qs}` : ""}`, {
-    method: "GET",
-    label: "Failed to fetch locations",
-  })
+  return drainEntityPages("/v1/locations", "locations", params, "Failed to fetch locations")
 }
 
 export async function getLocationById(locationId: string): Promise<DbLocation | null> {

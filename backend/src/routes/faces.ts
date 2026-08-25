@@ -4,6 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 const upsertFaceBody = z.object({
@@ -26,7 +27,18 @@ const deleteFaceParams = z.object({
 const listFacesQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
+  // Opt-IN pagination, the /v1/characters contract — see objects.ts for why
+  // there is deliberately NO default. Absent limit = the exact legacy
+  // response; present limit = a page plus `nextCursor`.
+  limit: z.coerce.number().int().positive().max(500).optional(),
+  cursor: z.string().max(512).optional(),
 })
+  // A cursor is meaningless outside a paginated read — refusing the combo
+  // keeps "legacy response" and "page" from ever blending into a filtered
+  // unbounded fetch nobody designed.
+  .refine((q) => q.cursor === undefined || q.limit !== undefined, {
+    message: "cursor requires limit",
+  })
 
 export async function faceRoutes(app: FastifyInstance) {
   // List faces for a user (optionally filter by project)
@@ -41,13 +53,23 @@ export async function faceRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
+    const { projectId, limit, cursor: rawCursor } = parsed.data
     const userId = req.userId
+
+    // An undecodable cursor is a 400, NOT a silent fall-through to page 1.
+    const cursor = rawCursor ? decodeKeysetCursor(rawCursor) : null
+    if (rawCursor && !cursor) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid cursor" },
+      })
+    }
 
     let query = supabase
       .from("faces")
       .select("id, user_id, node_id, project_id, name, description, style, source_image_url, expressions, created_at, updated_at")
       .order("created_at", { ascending: false })
+      // The tie-break that makes the ordering total.
+      .order("id", { ascending: false })
 
     if (projectId) {
       query = query.eq("project_id", projectId)
@@ -55,6 +77,8 @@ export async function faceRoutes(app: FastifyInstance) {
     if (userId) {
       query = query.eq("user_id", userId)
     }
+    if (cursor) query = query.or(keysetFilter(cursor))
+    if (limit !== undefined) query = query.limit(limit + 1)
 
     const { data, error } = await query
 
@@ -63,7 +87,7 @@ export async function faceRoutes(app: FastifyInstance) {
     }
 
     // Transform snake_case to camelCase for frontend
-    const faces = (data ?? []).map((f) => ({
+    const toCamel = (f: NonNullable<typeof data>[number]) => ({
       id: f.id,
       userId: f.user_id,
       nodeId: f.node_id,
@@ -75,9 +99,15 @@ export async function faceRoutes(app: FastifyInstance) {
       expressions: f.expressions,
       createdAt: f.created_at,
       updatedAt: f.updated_at,
-    }))
+    })
 
-    return { faces }
+    // Legacy callers (no `limit`) get the exact response they always did —
+    // no `nextCursor` field. Paginated callers get the page and the cursor.
+    if (limit === undefined) {
+      return { faces: (data ?? []).map(toCamel) }
+    }
+    const { page, nextCursor } = sliceKeysetPage(data ?? [], limit)
+    return { faces: page.map(toCamel), nextCursor }
   })
 
   // Get single face by ID

@@ -90,9 +90,14 @@ function mockListChain(result: { data: unknown; error: unknown }) {
   const chainable: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
   }
+  // Pagination legs. `order` chains twice now (created_at, then the id
+  // tie-break), so it lives ON the chainable rather than one level up.
+  chainable.or = vi.fn().mockReturnThis()
+  chainable.limit = vi.fn().mockReturnThis()
+  chainable.order = vi.fn().mockReturnValue(chainable)
   chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => Promise.resolve(result).then(resolve)
-  const mockOrder = vi.fn().mockReturnValue(chainable)
-  const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+  const mockOrder = chainable.order as ReturnType<typeof vi.fn>
+  const mockSelect = vi.fn().mockReturnValue(chainable)
   return { mockSelect, mockOrder, chainable }
 }
 
@@ -407,5 +412,67 @@ describe("DELETE /v1/faces/:id", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+})
+
+/**
+ * Opt-in keyset pagination — the /v1/characters contract, the fifth list to
+ * adopt it. Legacy (no limit) stays byte-identical: no .limit() on the
+ * builder, no nextCursor field.
+ */
+describe("GET /v1/faces — pagination", () => {
+  const rowsOf = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(100000000000 + i).slice(-12)}`,
+      created_at: `2026-08-01T00:00:${String(10 + i).slice(-2)}+00:00`,
+    }))
+
+  it("without ?limit: no limit on the builder and NO nextCursor field (legacy)", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: rowsOf(3), error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const res = await app.inject({ method: "GET", url: "/v1/faces" })
+    expect(res.statusCode).toBe(200)
+    expect(chainable.limit).not.toHaveBeenCalled()
+    expect(res.json()).not.toHaveProperty("nextCursor")
+  })
+
+  it("?limit=N over-fetches by one, slices the probe, and mints nextCursor", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: rowsOf(3), error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const res = await app.inject({ method: "GET", url: "/v1/faces?limit=2" })
+    expect(chainable.limit).toHaveBeenCalledWith(3)
+    expect(res.json().faces).toHaveLength(2)
+    expect(res.json().nextCursor).toEqual(expect.any(String))
+  })
+
+  it("a returned cursor round-trips into the keyset predicate", async () => {
+    const first = mockListChain({ data: rowsOf(3), error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: first.mockSelect } as never)
+    const page1 = await app.inject({ method: "GET", url: "/v1/faces?limit=2" })
+    const cursor = page1.json().nextCursor as string
+
+    const second = mockListChain({ data: rowsOf(1), error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: second.mockSelect } as never)
+    const page2 = await app.inject({ method: "GET", url: "/v1/faces?limit=2&cursor=" + encodeURIComponent(cursor) })
+    expect(page2.statusCode).toBe(200)
+    expect(second.chainable.or).toHaveBeenCalledWith(expect.stringContaining("created_at.lt."))
+  })
+
+  it("an undecodable cursor is a 400, not a silent page 1", async () => {
+    const { mockSelect } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const res = await app.inject({ method: "GET", url: "/v1/faces?limit=2&cursor=%%%garbage" })
+    expect(res.statusCode).toBe(400)
+  })
+  it("cursor without limit is a 400 — not a filtered unbounded legacy fetch", async () => {
+    // A WELL-FORMED cursor, deliberately: a junk one 400s at decode anyway,
+    // which would let the schema-level refusal vanish without this test
+    // noticing (it did — the first version of this test survived exactly
+    // that mutation).
+    const valid = "eyJjcmVhdGVkQXQiOiIyMDI2LTA4LTAxVDAwOjAwOjAwKzAwOjAwIiwiaWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ=="
+    const { mockSelect } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const res = await app.inject({ method: "GET", url: "/v1/faces?cursor=" + encodeURIComponent(valid) })
+    expect(res.statusCode).toBe(400)
   })
 })
