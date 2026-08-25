@@ -28,7 +28,7 @@ function fakeInvoker(extra: string[] = []): McpInvoker & { calls: Array<{ name: 
 
 const deps = {
   ctx: { userId: "u1", workflowId: "wf1", projectId: "p1", threadId: "t1", turnId: "turn1",
-  allowPublishing: false, fastify: {} as never, emit: vi.fn() },
+  allowPublishing: false, userLinks: new Set<string>(), fastify: {} as never, emit: vi.fn() },
   invoker: fakeInvoker(),
   addedNodeTypes: new Set<string>(), wiredAssets: [],
 }

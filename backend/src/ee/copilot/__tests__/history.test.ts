@@ -3,7 +3,7 @@
  * a `tool_use` without its `tool_result` in the next message is a 400.
  */
 import { describe, expect, it } from "vitest"
-import { buildHistory, buildUserContent } from "../history.js"
+import { buildHistory, buildUserContent, extractUserLinks } from "../history.js"
 import type { CopilotMessageRow } from "../store.js"
 
 let seq = 0
@@ -137,5 +137,45 @@ describe("vision turns", () => {
       { type: "image", source: { type: "url", url: "https://cdn.example/a.png" } },
       { type: "text", text: "hi" },
     ])
+  })
+})
+
+describe("extractUserLinks", () => {
+  const row = (role: "user" | "assistant", content: unknown[]): CopilotMessageRow =>
+    ({ role, content } as unknown as CopilotMessageRow)
+
+  it("harvests links from user prose — prior user rows and the current message", () => {
+    const rows = [
+      row("user", [{ type: "text", text: "use https://youtu.be/abc for the vibe" }]),
+      row("assistant", [{ type: "text", text: "see https://assistant.example/never" }]),
+    ]
+    const links = extractUserLinks(rows, "and https://www.youtube.com/watch?v=xyz please")
+    expect(links.has("https://youtu.be/abc")).toBe(true)
+    expect(links.has("https://www.youtube.com/watch?v=xyz")).toBe(true)
+    expect([...links].some((l) => l.includes("assistant.example"))).toBe(false)
+  })
+
+  it("strips trailing punctuation from a pasted link", () => {
+    expect(extractUserLinks([], "song: https://youtu.be/abc, thanks!").has("https://youtu.be/abc")).toBe(true)
+  })
+
+  it("never harvests from tool results, the context preamble, or the glossary", () => {
+    // The provenance claim itself: user-role ROWS also carry tool_result
+    // blocks and the per-turn context snapshot, and the trailing glossary is
+    // machine-appended — none of that is the user's own prose.
+    const rows = [
+      row("user", [
+        { type: "text", text: "<workflow-context-n1>\nnode url https://leak.example/preamble\n</workflow-context-n1>" },
+        { type: "tool_result", tool_use_id: "t1", content: [{ type: "text", text: "https://leak.example/tool" }] },
+        { type: "text", text: "the real ask" },
+      ]),
+    ]
+    const links = extractUserLinks(rows, 'do it\n\n[references] character "https://leak.example/glossary" (id: x)')
+    expect(links.size).toBe(0)
+  })
+
+  it("caps the harvest", () => {
+    const many = Array.from({ length: 50 }, (_, i) => `https://example.test/${i}`).join(" ")
+    expect(extractUserLinks([], many).size).toBe(32)
   })
 })

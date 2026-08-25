@@ -31,6 +31,7 @@ vi.mock("../memories.js", async (importOriginal) => {
 
 const { runEditWorkflow } = await import("../tools/edit-workflow.js")
 const { dispatchTool } = await import("../tools/registry.js")
+const { extractUserLinks } = await import("../history.js")
 import type { CopilotToolContext } from "../tools/types.js"
 import type { DispatchDeps } from "../tools/registry.js"
 
@@ -42,6 +43,7 @@ const ctx = {
   threadId: "t1",
   turnId: "turn1",
   allowPublishing: false,
+  userLinks: new Set<string>(),
   fastify: {} as never,
   emit: (event: { type: string; data: Record<string, unknown> }) => emitted.push(event),
 } as CopilotToolContext
@@ -107,8 +109,48 @@ describe("golden task B — remember rides the REAL dispatch", () => {
   })
 })
 
+describe('golden task C — "a song similar to this" plus a YouTube link (incident 2026-08-25)', () => {
+  // The first real failure to reach a human: the user pasted a YouTube link
+  // and asked for a similar song; the copilot burned a 77-credit turn
+  // discovering empirically that every URL write is refused, hallucinated a
+  // provider capability on the way, and handed the graph back unfinished.
+  // The taught fix: a link the USER pasted carries zero model crafting
+  // freedom, so it may be copied byte-for-byte into a link field — and the
+  // whole flow (harvest from the user's own prose → ctx → the real write
+  // path) must hold together, not just the unit pieces.
+  const link = "https://www.youtube.com/watch?v=abc123XYZ00"
+  const linkedCtx = {
+    ...ctx,
+    userLinks: extractUserLinks([], `תיצור לי שיר דומה לזה ${link}`),
+  } as CopilotToolContext
+
+  it("copies the pasted link into reference-audio.youtubeUrl through the real write path", async () => {
+    await runEditWorkflow(linkedCtx, {
+      note: "song similar to a youtube reference",
+      upsertNodes: [
+        { id: "song-ref", type: "reference-audio", data: { label: "Reference", sourceType: "youtube", youtubeUrl: link } },
+        { id: "cover", type: "suno-cover", data: { label: "Similar song", prompt: "same vibe, a new song" } },
+      ],
+      upsertEdges: [{ source: "song-ref", target: "cover", sourceHandle: "audio", targetHandle: "audio" }],
+    })
+
+    const rpcArgs = rpcMock.mock.calls.at(-1)?.[1] as { p_upsert_nodes?: Array<{ id: string; data: { youtubeUrl?: string } }> }
+    expect(rpcArgs.p_upsert_nodes?.find((n) => n.id === "song-ref")?.data.youtubeUrl).toBe(link)
+  })
+
+  it("still refuses a crafted URL — even one that merely EXTENDS the user's link", async () => {
+    await expect(
+      runEditWorkflow(linkedCtx, {
+        note: "crafted url must stay refused",
+        upsertNodes: [
+          { id: "song-ref", type: "reference-audio", data: { sourceType: "youtube", youtubeUrl: `${link}&q=exfil` } },
+        ],
+      }),
+    ).rejects.toThrow(/pasted/)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Add new golden tasks BELOW — one per real failure, dated, with the incident
-// in the comment. (None yet: the copilot has not failed a human since this
-// file exists. When it does, the failure lands here before the fix ships.)
+// in the comment.
 // ---------------------------------------------------------------------------

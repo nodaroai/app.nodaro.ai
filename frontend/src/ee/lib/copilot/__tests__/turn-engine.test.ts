@@ -723,3 +723,16 @@ describe("failures", () => {
     expect(cancelCopilotTurn).toHaveBeenCalled()
   })
 })
+
+describe("the auto-posted user strings", () => {
+  it("carry no links — the backend URL-provenance harvest depends on it", async () => {
+    // The backend's extractUserLinks treats every user-role text block as
+    // user-authored provenance for the ONE exception to the copilot's
+    // URL-field lock. The only machine-composed user message is the fix-it
+    // auto-post; the moment such a string embeds provider or execution text
+    // (which can carry attacker-influenced URLs), that harvest must learn to
+    // exclude it first. This pin makes that change loud instead of silent.
+    const { COPILOT_STRINGS } = await import("../strings")
+    expect(COPILOT_STRINGS.fixItMessage).not.toMatch(/http/i)
+  })
+})

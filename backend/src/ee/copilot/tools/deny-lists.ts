@@ -84,11 +84,40 @@ const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
 /**
  * A field the model may not introduce or change. Media reaches a node through
  * an edge, a saved entity or the user's upload — never through a value the
- * model typed. Pattern-matched rather than listed: the engine reads ~38
+ * model INVENTED. Pattern-matched rather than listed: the engine reads ~38
  * distinct `*Url` keys, and a hand-kept list was already missing most of them.
+ * The one exception is `isUserProvidedLink` below.
  */
 export function isLockedField(key: string): boolean {
   return /urls?$/i.test(key) || NAMED_DESTINATION_FIELDS.has(key)
+}
+
+/**
+ * The ONE exception to the field lock: a link the USER themselves pasted into
+ * the chat (harvested by `extractUserLinks` from user-authored prose only) may
+ * be copied — byte for byte — into a genuine `*Url` field. The lock defends
+ * against model-CRAFTED destinations (`https://evil.com/?q=<secrets>` is an
+ * exfiltration channel); a verbatim copy of the user's own link carries zero
+ * crafting freedom, so it is exactly as safe as the user typing it into the
+ * node panel by hand.
+ *
+ * Deliberately narrow:
+ *   - `*Url` keys only — a named destination (`endpoint`, `channel`,
+ *     `privacy`, …) stays locked even for a value found in user text.
+ *   - Scalar strings only — array fields (`imageUrls`) and the array-walk
+ *     leaves stay strict.
+ *   - http(s) values only, matched exactly (plus a trailing-punctuation
+ *     variant, since the harvest strips `.,;:!?`).
+ *   - Denied NODE TYPES are unaffected — a webhook or scraper cannot be
+ *     authored no matter whose URL it would carry.
+ */
+function isUserProvidedLink(key: string, value: unknown, userLinks?: ReadonlySet<string>): boolean {
+  if (!userLinks || userLinks.size === 0) return false
+  if (!/urls?$/i.test(key)) return false
+  if (typeof value !== "string") return false
+  const trimmed = value.trim()
+  if (!/^https?:\/\//i.test(trimmed)) return false
+  return userLinks.has(trimmed) || userLinks.has(trimmed.replace(/[.,;:!?]+$/, ""))
 }
 
 /**
@@ -140,24 +169,31 @@ function lockedLeaves(value: unknown, path: string, out: Array<[string, string]>
   }
 }
 
+export interface LockedFieldOpts {
+  readonly path?: string
+  /** Links the user pasted in this thread — see history.ts `extractUserLinks`. */
+  readonly userLinks?: ReadonlySet<string>
+}
+
 /**
  * Locked fields whose value the model introduced or changed versus `before` —
  * walked recursively, so a destination nested inside a config object counts.
  * Preserving a value that already exists on the node is allowed (it is the
- * user's own).
+ * user's own), and so is a verbatim user-pasted link (`isUserProvidedLink`).
  */
 export function changedLockedUrlFields(
   before: Record<string, unknown> | undefined,
   after: Record<string, unknown>,
-  path = "",
+  opts: LockedFieldOpts = {},
 ): string[] {
+  const path = opts.path ?? ""
   const changed: string[] = []
   for (const [key, next] of Object.entries(after)) {
     const here = path ? `${path}.${key}` : key
     const prev = isPlainObject(before) ? before[key] : undefined
 
     if (isPlainObject(next)) {
-      changed.push(...changedLockedUrlFields(isPlainObject(prev) ? prev : undefined, next, here))
+      changed.push(...changedLockedUrlFields(isPlainObject(prev) ? prev : undefined, next, { ...opts, path: here }))
       continue
     }
 
@@ -183,6 +219,7 @@ export function changedLockedUrlFields(
     if (next === undefined || next === null || next === "") continue
     if (Array.isArray(next) && next.length === 0) continue
     if (prev !== undefined && JSON.stringify(prev) === JSON.stringify(next)) continue
+    if (isUserProvidedLink(key, next, opts.userLinks)) continue
     changed.push(here)
   }
   return changed

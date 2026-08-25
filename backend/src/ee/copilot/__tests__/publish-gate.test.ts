@@ -30,6 +30,7 @@ function ctxWith(allowPublishing: boolean): CopilotToolContext {
     threadId: "t1",
     turnId: "turn1",
     allowPublishing,
+    userLinks: new Set<string>(),
     fastify: {} as never,
     emit: (event: { type: string; data: Record<string, unknown> }) => emitted.push(event),
   } as CopilotToolContext

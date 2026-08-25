@@ -23,7 +23,7 @@ import { COPILOT_SCOPES, COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL
 import { resolveTurnBudget } from "./budget.js"
 import { buildSystemPrompt } from "./system-prompt.js"
 import { buildContextPreamble } from "./context-snapshot.js"
-import { buildHistory, buildUserContent, extractImageRefIds } from "./history.js"
+import { buildHistory, buildUserContent, extractImageRefIds, extractUserLinks } from "./history.js"
 import { runAgentLoop, type LoopResult } from "./agent-loop.js"
 import { buildToolDefinitions } from "./tools/registry.js"
 import { registerTurnAbort, unregisterTurnAbort } from "./cancel-registry.js"
@@ -102,19 +102,6 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
 
   const addedNodeTypes = new Set<string>()
   const wiredAssets: WiredAsset[] = []
-  const ctx: CopilotToolContext = {
-    userId: input.userId,
-    // The user’s own per-thread choice. Absent means the column has not been
-    // promoted yet (migrations run on push to main, staging shares the
-    // production database) — and absent must read as OFF.
-    allowPublishing: threadAllowsPublishing(input.thread),
-    workflowId: input.workflowId,
-    projectId: input.projectId,
-    threadId: input.thread.id,
-    turnId: input.turn.id,
-    fastify: input.fastify,
-    emit: input.emit,
-  }
 
   let finalVersion: number | null = null
   const emitWithVersion: TurnEmit = (event) => {
@@ -153,6 +140,25 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       listRecentMessages(input.thread.id, TURN_CAPS.historyMessageLimit),
       buildToolDefinitions(invoker),
     ])
+
+    const ctx: CopilotToolContext = {
+      userId: input.userId,
+      // The user’s own per-thread choice. Absent means the column has not been
+      // promoted yet (migrations run on push to main, staging shares the
+      // production database) — and absent must read as OFF.
+      allowPublishing: threadAllowsPublishing(input.thread),
+      // Provenance for the one URL-lock exception: links the USER pasted in
+      // this thread's messages (their prose only — never tool results, the
+      // context preamble, or the machine glossary). Built after the history
+      // load because the prior turns' prose is part of that provenance.
+      userLinks: extractUserLinks(priorRows, input.message),
+      workflowId: input.workflowId,
+      projectId: input.projectId,
+      threadId: input.thread.id,
+      turnId: input.turn.id,
+      fastify: input.fastify,
+      emit: input.emit,
+    }
 
     // Vision: the message's own [references] glossary names the attached
     // files; image ids that resolve as the CALLER'S OWN become image blocks,

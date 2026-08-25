@@ -96,11 +96,11 @@ export function buildHistory(rows: readonly CopilotMessageRow[]): Anthropic.Mess
  * owner-scoped resolver, and a foreign id simply fails to resolve.
  */
 export function extractImageRefIds(message: string): string[] {
-  const idx = message.lastIndexOf("\n\n[references] ")
-  const line = idx === -1 && message.startsWith("[references] ")
-    ? message.slice("[references] ".length)
+  const idx = message.lastIndexOf(GLOSSARY_MARKER)
+  const line = idx === -1 && message.startsWith(GLOSSARY_PREFIX)
+    ? message.slice(GLOSSARY_PREFIX.length)
     : idx !== -1
-      ? message.slice(idx + "\n\n[references] ".length)
+      ? message.slice(idx + GLOSSARY_MARKER.length)
       : null
   if (!line) return []
   const firstLine = line.split("\n", 1)[0] ?? ""
@@ -112,6 +112,61 @@ export function extractImageRefIds(message: string): string[] {
     if (ids.length >= TURN_CAPS.maxVisionImages) break
   }
   return ids
+}
+
+const GLOSSARY_MARKER = "\n\n[references] "
+const GLOSSARY_PREFIX = "[references] "
+
+/** The prose half of a message — the trailing machine-appended glossary removed. */
+function proseBeforeGlossary(message: string): string {
+  if (message.startsWith(GLOSSARY_PREFIX)) return ""
+  const idx = message.lastIndexOf(GLOSSARY_MARKER)
+  return idx === -1 ? message : message.slice(0, idx)
+}
+
+const LINK_RE = /https?:\/\/[^\s<>"'`)\]}]+/g
+const TRAILING_PUNCT_RE = /[.,;:!?]+$/
+const USER_LINK_CAP = 32
+
+/**
+ * Links the USER pasted, harvested from their own prose — never from tool
+ * results, the context preamble, or the machine-appended `[references]`
+ * glossary. This set backs the ONE exception to the copilot's URL-field lock:
+ * the model may copy one of these, byte for byte, into a link field
+ * (deny-lists' `isUserProvidedLink`); every other URL write stays refused, so
+ * the model keeps zero crafting freedom over destinations.
+ *
+ * The provenance claim holds because user-role rows carry no machine-relayed
+ * text: tool results are `tool_result` blocks (dropped by the type filter
+ * here), the per-turn context snapshot opens with `<workflow-context`
+ * (dropped), the glossary is cut, and the only auto-posted user message is the
+ * FIXED fix-it string — pinned URL-free by the frontend strings test. If run
+ * outcomes ever start embedding provider text into user messages, that pin
+ * fails and this harvest must learn to exclude them first.
+ */
+export function extractUserLinks(
+  rows: readonly CopilotMessageRow[],
+  currentMessage: string,
+): ReadonlySet<string> {
+  const texts: string[] = []
+  for (const row of rows) {
+    if (row.role !== "user" || !Array.isArray(row.content)) continue
+    for (const block of row.content as Array<{ type?: string; text?: string }>) {
+      if (block?.type !== "text" || typeof block.text !== "string") continue
+      if (block.text.startsWith("<workflow-context")) continue
+      texts.push(block.text)
+    }
+  }
+  texts.push(currentMessage)
+  const links = new Set<string>()
+  for (const text of texts) {
+    for (const match of proseBeforeGlossary(text).matchAll(LINK_RE)) {
+      const link = match[0]!.replace(TRAILING_PUNCT_RE, "")
+      if (link.length > "https://".length) links.add(link)
+      if (links.size >= USER_LINK_CAP) return links
+    }
+  }
+  return links
 }
 
 /**

@@ -83,6 +83,7 @@ function copilotDeps(invoker: ReturnType<typeof createMcpInvoker>) {
       threadId: "t1",
       turnId: "turn1",
   allowPublishing: false,
+  userLinks: new Set<string>(),
       fastify: {} as never,
       emit: vi.fn(),
     },

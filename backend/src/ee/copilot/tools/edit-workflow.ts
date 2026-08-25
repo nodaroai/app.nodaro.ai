@@ -197,6 +197,7 @@ function prepare(
   stored: StoredGraph,
   assets: ReadonlyMap<string, ResolvedAsset>,
   allowPublishing: boolean,
+  userLinks: ReadonlySet<string>,
 ): Prepared {
   const existingById = new Map(stored.nodes.map((n) => [n.id, n]))
   const deleteNodeIds = [...new Set(args.deleteNodeIds ?? [])]
@@ -220,10 +221,10 @@ function prepare(
     }
     const existing = existingById.get(input.id)
     const data = { ...(input.data ?? {}) }
-    const locked = changedLockedUrlFields(existing?.data as Record<string, unknown> | undefined, data)
+    const locked = changedLockedUrlFields(existing?.data as Record<string, unknown> | undefined, data, { userLinks })
     if (locked.length > 0) {
       throw new EditRejected(
-        `I can't set ${locked.join(", ")} on "${input.id}". Media reaches a node through an edge, a saved character/location, or the user's upload — not a URL I type.`,
+        `I can't set ${locked.join(", ")} on "${input.id}". Media reaches a node through an edge, a saved character/location, or the user's upload — and a link only when the user pasted that exact link in this chat. Otherwise ask them for it, or point them to the node's panel.`,
       )
     }
     rejectInventedFileSyntax(input.type, input.id, data)
@@ -256,9 +257,11 @@ function prepare(
     if (deleteSet.has(patch.id)) throw new EditRejected(`"${patch.id}" is both patched and deleted in the same call.`)
     if (upserts.some((n) => n.id === patch.id)) throw new EditRejected(`"${patch.id}" appears in both upsertNodes and patchNodes.`)
     const merged = { ...((existing.data as Record<string, unknown> | undefined) ?? {}), ...(patch.data ?? {}) }
-    const locked = changedLockedUrlFields(existing.data as Record<string, unknown> | undefined, merged)
+    const locked = changedLockedUrlFields(existing.data as Record<string, unknown> | undefined, merged, { userLinks })
     if (locked.length > 0) {
-      throw new EditRejected(`I can't change ${locked.join(", ")} on "${patch.id}".`)
+      throw new EditRejected(
+        `I can't change ${locked.join(", ")} on "${patch.id}" — I can only write a link the user themselves pasted in this chat, byte for byte.`,
+      )
     }
     rejectInventedFileSyntax(String(existing.type), patch.id, merged)
     upserts.push({
@@ -464,7 +467,7 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
       }
       if (ids.length > 0) assets = await resolveCopilotAssetRefs(ids, ctx.userId)
     }
-    const prepared = prepare(args, stored, assets, ctx.allowPublishing)
+    const prepared = prepare(args, stored, assets, ctx.allowPublishing, ctx.userLinks)
 
     const { data, error } = await supabase.rpc("apply_workflow_delta", {
       p_workflow_id: ctx.workflowId,
