@@ -84,3 +84,17 @@ describe("node type catalog", () => {
     expect(suggestNodeTypes("zzzzzzzzzz")).toEqual([])
   })
 })
+
+describe("the owner's taught character lane", () => {
+  it("character.image → generate-image.references is a PUBLISHED pair — no warning", () => {
+    // Four entity types rendered an `image` source pip the generated map did
+    // not declare, so the copilot was warned off the exact wiring the owner
+    // teaches for multi-character scenes. The map now declares it.
+    const result = validateWorkflowEdges(
+      [...nodes, { id: "char", type: "character" }],
+      [{ id: "e1", source: "char", sourceHandle: "image", target: "img", targetHandle: "references" }],
+    )
+    expect(result.ok).toBe(true)
+    expect(result.warnings).toEqual([])
+  })
+})

@@ -1771,3 +1771,56 @@ describe("buildIdentityDirectives — locationReferencePhotoKind subject-line an
   })
 })
 
+
+describe("the provider reference cap slices by ATTACH priority, not raw order", () => {
+  // Incident 2026-08-25 ("two characters wired, one sent"): the raw candidate
+  // list interleaves each character's canonical with its whole variant array,
+  // and a raw slice at the provider cap (nano-banana-pro = 8) let one
+  // variant-rich character evict the character wired after it ENTIRELY —
+  // even though unmentioned variants never attach and the provider was sent
+  // two URLs total.
+  const characterRefs = (slug: string, name: string, url: string, variantCount: number) => [
+    {
+      id: `${slug}_canonical`, defaultName: name, source: "wired-character" as const, url,
+      characterSlug: slug, variantSlug: undefined, characterCanonicalDescription: `about ${name}`,
+      variantDescription: null, variantDisplayName: "canonical",
+    },
+    ...Array.from({ length: variantCount }, (_, i) => ({
+      id: `${slug}_v${i}`, defaultName: `${name} / v${i}`, source: "wired-character" as const,
+      url: `${url}?v=${i}`, characterSlug: slug, variantSlug: `v${i}`,
+      characterCanonicalDescription: `about ${name}`, variantDescription: null, variantDisplayName: `v${i}`,
+    })),
+  ]
+
+  it("a variant-rich first character no longer evicts the second", () => {
+    const refs = [
+      ...characterRefs("ava", "Ava", "https://cdn.test/ava.png", 9),
+      ...characterRefs("ben", "Ben", "https://cdn.test/ben.png", 0),
+    ]
+    for (const referenceFormat of ["hybrid", "legacy"] as const) {
+      const r = buildImagePrompt({
+        prompt: "two people at the beach.",
+        provider: "nano-banana-pro",
+        referenceFormat,
+        connectedReferences: refs as never,
+      })
+      expect(r.referenceImageUrls, referenceFormat).toEqual(
+        expect.arrayContaining(["https://cdn.test/ava.png", "https://cdn.test/ben.png"]),
+      )
+    }
+  })
+
+  it("the cap itself still holds when canonicals alone exceed it", () => {
+    const refs = Array.from({ length: 10 }, (_, i) =>
+      characterRefs(`c${i}`, `C${i}`, `https://cdn.test/c${i}.png`, 0),
+    ).flat()
+    const r = buildImagePrompt({
+      prompt: "a crowd.",
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+      connectedReferences: refs as never,
+    })
+    expect((r.referenceImageUrls ?? []).length).toBeLessThanOrEqual(8)
+    expect((r.referenceImageUrls ?? []).length).toBe(8)
+  })
+})

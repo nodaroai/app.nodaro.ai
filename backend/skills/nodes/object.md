@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-08-15T21:55:08.657Z
-generated_from: 150c80ac9
+generated_at: 2026-08-25T18:44:26.415Z
+generated_from: 273c2bef2
 ---
 
 # Object
@@ -11,7 +11,7 @@ generated_from: 150c80ac9
 **Category:** object
 **Credit cost:** 5
 **Inputs (target handles):** `in`, `type`
-**Outputs (source handles):** `objectRef`
+**Outputs (source handles):** `objectRef`, `image`
 
 **Required data fields:**
 - `label: string`
