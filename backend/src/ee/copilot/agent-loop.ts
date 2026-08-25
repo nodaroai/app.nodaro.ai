@@ -13,7 +13,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
-import { COPILOT_MODEL_ID, COPILOT_REASONING_EFFORT, TURN_CAPS } from "./constants.js"
+import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, TURN_CAPS, type CopilotTierSpec } from "./constants.js"
 import { estimateNextCallUsd, wouldExceedBudget, type TurnBudget } from "./budget.js"
 import { newUntrustedNonce, wrapUntrusted } from "./untrusted.js"
 import { toolLabel } from "./tool-labels.js"
@@ -46,6 +46,8 @@ export interface LoopEvents {
 }
 
 export interface LoopInput {
+  /** The thread's model ladder rung. Defaults to standard when absent. */
+  tier?: CopilotTierSpec
   system: string
   tools: ToolDefinition[]
   /** Prior turns, already trimmed to the history budget. */
@@ -84,6 +86,7 @@ function promptChars(system: string, messages: Anthropic.Messages.MessageParam[]
 
 export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
   const client = getAnthropicClient()
+  const tier = input.tier ?? COPILOT_TIERS[DEFAULT_COPILOT_TIER]
   const nonce = newUntrustedNonce()
   const deadline = Date.now() + TURN_CAPS.wallClockMs
   const usage: LoopUsage = { ...EMPTY_USAGE }
@@ -112,7 +115,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
     const messages = [...input.history, ...turnMessages]
     // From the second iteration on the prefix is a cache hit — pricing it at
     // the full input rate would end turns early over money never spent.
-    const nextCallUsd = estimateNextCallUsd(COPILOT_MODEL_ID, promptChars(input.system, messages), iterations > 0)
+    const nextCallUsd = estimateNextCallUsd(tier.registryId, promptChars(input.system, messages), iterations > 0)
     if (wouldExceedBudget(input.budget, usage.costUsd, nextCallUsd)) return finish("budget")
 
     // Cache breakpoints: the system prefix (stable per process) and the last
@@ -124,13 +127,16 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
 
     const stream = client.messages.stream(
       {
-        model: COPILOT_MODEL_ID,
+        model: tier.anthropicModelId,
         max_tokens: TURN_CAPS.maxTokensPerCall,
         system: cachedSystem,
         messages: withBreakpoint,
         tools: input.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
-        thinking: { type: "adaptive" as const },
-        output_config: { effort: COPILOT_REASONING_EFFORT },
+        // Economy (Haiku) declares no reasoning efforts — sending one anyway
+        // is an API error, so the thinking block rides only with an effort.
+        ...(tier.reasoningEffort
+          ? { thinking: { type: "adaptive" as const }, output_config: { effort: tier.reasoningEffort } }
+          : {}),
       } as unknown as Anthropic.Messages.MessageCreateParamsStreaming,
       { timeout: Math.max(30_000, deadline - Date.now()) },
     )
@@ -153,7 +159,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
     input.signal.removeEventListener("abort", abortStream)
 
     iterations += 1
-    accumulateUsage(usage, final.usage)
+    accumulateUsage(usage, final.usage, tier.registryId)
     await input.events.onIteration({ iterations, toolCalls, usage })
 
     turnMessages.push({ role: "assistant", content: final.content })
@@ -226,7 +232,7 @@ function errorResult(
 }
 
 /** Anthropic usage fields are disjoint; cache reads/writes are billed off the input rate. */
-function accumulateUsage(target: LoopUsage, raw: Anthropic.Messages.Usage): void {
+function accumulateUsage(target: LoopUsage, raw: Anthropic.Messages.Usage, tierRegistryId: string): void {
   const input = raw.input_tokens ?? 0
   const output = raw.output_tokens ?? 0
   const cacheRead = (raw as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0
@@ -236,7 +242,7 @@ function accumulateUsage(target: LoopUsage, raw: Anthropic.Messages.Usage): void
   target.cacheReadTokens += cacheRead
   target.cacheWriteTokens += cacheWrite
   target.costUsd += calculateLlmCost(
-    COPILOT_MODEL_ID,
+    tierRegistryId,
     { inputTokens: input, outputTokens: output, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite },
     "direct",
   )

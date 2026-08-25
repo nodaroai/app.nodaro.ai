@@ -19,7 +19,7 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { commitJobCredits } from "../../workers/shared.js"
 import { buildMcpServer } from "../../lib/mcp/server.js"
 import { createMcpInvoker } from "../../lib/mcp/invoke.js"
-import { COPILOT_MODEL_ID, COPILOT_SCOPES, HEARTBEAT_INTERVAL_MS, TURN_CAPS } from "./constants.js"
+import { COPILOT_SCOPES, COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL_MS, TURN_CAPS, type CopilotModelTier } from "./constants.js"
 import { resolveTurnBudget } from "./budget.js"
 import { buildSystemPrompt } from "./system-prompt.js"
 import { buildContextPreamble } from "./context-snapshot.js"
@@ -60,6 +60,8 @@ export interface RunTurnInput {
   nodes: unknown
   edges: unknown
   message: string
+  /** The thread's model ladder rung — resolved by the route from the thread row. */
+  tier: CopilotModelTier
   usageLogId: string | null
   reservedCredits: number
   emit: TurnEmit
@@ -187,6 +189,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     })
 
     result = await runAgentLoop({
+      tier: COPILOT_TIERS[input.tier ?? DEFAULT_COPILOT_TIER],
       system: buildSystemPrompt(),
       tools,
       history: buildHistory(priorRows),

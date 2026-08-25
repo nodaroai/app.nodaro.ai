@@ -17,6 +17,13 @@ export const COPILOT_STRINGS = {
   ceilingPrefix: "up to",
   ceilingSuffix: "cr",
   ceilingLabel: "Auto-run credit limit",
+  tierLabel: "Model",
+  tierEconomy: "Fast",
+  tierStandard: "Smart",
+  tierPremium: "Max",
+  tierHintEconomy: "Cheapest and quickest — weaker at building; best for small edits",
+  tierHintStandard: "The default — builds well at a fair price",
+  tierHintPremium: "The strongest model — for complex builds; costs the most",
   close: "Close Copilot",
 
   homeTagline: "describe it, and it gets built on the canvas",

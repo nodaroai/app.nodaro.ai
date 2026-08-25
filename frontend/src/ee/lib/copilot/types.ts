@@ -12,6 +12,9 @@ import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared"
 
 export type CopilotRunMode = "ask" | "auto"
 
+/** The thread's model ladder rung — mirrors the backend enum verbatim. */
+export type CopilotModelTier = "economy" | "standard" | "premium"
+
 export interface CopilotThread {
   id: string
   workflowId: string
@@ -22,6 +25,8 @@ export interface CopilotThread {
    * server that predates the column reads as off rather than undefined.
    */
   allowPublishing?: boolean
+  /** The model ladder rung. Absent from a server that predates it — standard. */
+  modelTier?: CopilotModelTier
   autoRunLimitCredits: number
   userTurnCount: number
   lastMessageAt: string | null
@@ -115,6 +120,7 @@ export type CopilotStreamEvent =
         autoRunLimitCredits: number
         /** Absent from a server that predates it — reads as "leave it alone". */
         allowPublishing?: boolean
+        modelTier?: CopilotModelTier
       }
     }
   | { type: "token"; data: { text: string } }

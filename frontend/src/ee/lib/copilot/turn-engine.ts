@@ -206,7 +206,12 @@ async function send(
   try {
     const headers = await getAuthHeaders()
     const stream = streamRequest<CopilotStreamEvent>(`/v1/copilot/threads/${encodeURIComponent(threadId)}/messages`, {
-      body: { message: wire, baseVersion: useWorkflowStore.getState().loadedVersion ?? undefined },
+      body: {
+        message: wire,
+        baseVersion: useWorkflowStore.getState().loadedVersion ?? undefined,
+        // The guard-time ceiling hint; the server's thread row stays authoritative.
+        tier: copilotState().modelTier,
+      },
       baseUrl: runtimeApiUrl(),
       headers,
       signal: controller.signal,
@@ -275,6 +280,7 @@ async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<v
       event.data.runMode,
       event.data.autoRunLimitCredits,
       event.data.allowPublishing,
+      event.data.modelTier,
     )
     return
   }
@@ -446,11 +452,11 @@ async function syncRunSettings(threadId: string, thread: CopilotThread): Promise
   const { runMode, autoRunLimit } = copilotState()
   if (thread.runMode === runMode && thread.autoRunLimitCredits === autoRunLimit) return
   try {
-    await updateCopilotThread(threadId, { runMode, autoRunLimitCredits: autoRunLimit })
+    await updateCopilotThread(threadId, { runMode, autoRunLimitCredits: autoRunLimit, modelTier: copilotState().modelTier })
   } catch {
     // Not worth failing the send over — the turn still runs in the mode the
     // server has, and the metadata event will correct the UI.
-    copilotState().setRunSettings(thread.runMode, thread.autoRunLimitCredits)
+    copilotState().setRunSettings(thread.runMode, thread.autoRunLimitCredits, thread.allowPublishing, thread.modelTier)
   }
 }
 

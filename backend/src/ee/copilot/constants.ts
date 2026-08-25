@@ -5,8 +5,53 @@
 import type { Scope } from "../../lib/scopes.js"
 
 export const COPILOT_FEATURE = "workflow-copilot" as const
-export const COPILOT_MODEL_ID = "claude-sonnet-5" as const
-export const COPILOT_REASONING_EFFORT = "high" as const
+
+/**
+ * The model ladder — the v1 plan's dormant design, activated. THREE tiers,
+ * Claude-family only (the loop runs on the direct Anthropic SDK; KIE's proxy
+ * mangles tool_use, and a cross-vendor loop would be a different loop), chosen
+ * PER THREAD (the cached prompt prefix is per model — a per-message flip would
+ * pay a full prefix rewrite every time).
+ *
+ * `registryId` prices the call (LLM_MODELS / calculateLlmCost); `anthropicModelId`
+ * is what the SDK is asked for; `creditId` scales the reservation ceiling.
+ * Economy carries NO reasoning effort — the registry declares none for Haiku.
+ */
+export type CopilotModelTier = "economy" | "standard" | "premium"
+
+export interface CopilotTierSpec {
+  readonly registryId: string
+  readonly anthropicModelId: string
+  readonly reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max"
+  readonly creditId: string
+}
+
+export const COPILOT_TIERS: Record<CopilotModelTier, CopilotTierSpec> = {
+  economy: {
+    registryId: "claude-haiku-4.5",
+    anthropicModelId: "claude-haiku-4-5-20251001",
+    creditId: "workflow-copilot:economy",
+  },
+  standard: {
+    registryId: "claude-sonnet-5",
+    anthropicModelId: "claude-sonnet-5",
+    reasoningEffort: "high",
+    creditId: "workflow-copilot",
+  },
+  premium: {
+    registryId: "claude-opus-5",
+    anthropicModelId: "claude-opus-5",
+    reasoningEffort: "xhigh",
+    creditId: "workflow-copilot:premium",
+  },
+}
+
+export const DEFAULT_COPILOT_TIER: CopilotModelTier = "standard"
+
+/** Anything not exactly a known tier is standard — fail closed to the default. */
+export function resolveCopilotTier(value: unknown): CopilotModelTier {
+  return value === "economy" || value === "premium" ? value : DEFAULT_COPILOT_TIER
+}
 
 /** Per-turn caps. The USD budget is derived from the credit reservation at run time. */
 export const TURN_CAPS = {

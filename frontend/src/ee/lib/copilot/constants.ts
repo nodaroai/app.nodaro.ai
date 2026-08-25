@@ -7,6 +7,13 @@
  */
 export const COPILOT_FEATURE_ID = "workflow-copilot"
 
+/** The composer's price badge follows the thread's rung — composite ids match the backend ladder. */
+export function copilotFeatureId(tier: "economy" | "standard" | "premium" | undefined): string {
+  if (tier === "economy") return "workflow-copilot:economy"
+  if (tier === "premium") return "workflow-copilot:premium"
+  return COPILOT_FEATURE_ID
+}
+
 /**
  * The longest one message may be, matching `THREAD_CAPS.messageMaxChars` on the
  * backend — the Zod cap on both `POST /threads` (`prompt`) and

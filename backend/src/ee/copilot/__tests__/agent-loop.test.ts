@@ -164,3 +164,32 @@ describe("runAgentLoop", () => {
     expect(result.usage.costUsd).toBeGreaterThan(0)
   })
 })
+
+describe("the model ladder in the loop", () => {
+  it("premium streams Opus at xhigh; economy streams Haiku with NO thinking block", async () => {
+    const { COPILOT_TIERS } = await import("../constants.js")
+
+    streamMock.mockReturnValue(scriptStream({ content: [textBlock("done")] }, "done"))
+    await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.premium })
+    const premiumParams = streamMock.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect(premiumParams.model).toBe(COPILOT_TIERS.premium.anthropicModelId)
+    expect(premiumParams.output_config).toEqual({ effort: "xhigh" })
+
+    streamMock.mockReturnValue(scriptStream({ content: [textBlock("done")] }, "done"))
+    await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.economy })
+    const economyParams = streamMock.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect(economyParams.model).toBe(COPILOT_TIERS.economy.anthropicModelId)
+    // Haiku declares no efforts — sending thinking/output_config is an API error.
+    expect(economyParams.thinking).toBeUndefined()
+    expect(economyParams.output_config).toBeUndefined()
+  })
+
+  it("defaults to the standard rung when no tier is passed — every old caller unchanged", async () => {
+    const { COPILOT_TIERS } = await import("../constants.js")
+    streamMock.mockReturnValue(scriptStream({ content: [textBlock("done")] }, "done"))
+    await runAgentLoop(baseInput())
+    const params = streamMock.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect(params.model).toBe(COPILOT_TIERS.standard.anthropicModelId)
+    expect(params.output_config).toEqual({ effort: "high" })
+  })
+})
