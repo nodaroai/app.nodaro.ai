@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { getWorkflowCostSummary } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
-import { hasCredits } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspaceScope } from "@/hooks/use-workspace-scope"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import type { CharacterDefinition } from "@/types/nodes"
 
 export interface ImportableWorkflow {
@@ -13,6 +13,10 @@ export interface ImportableWorkflow {
 }
 
 export function useWorkflowCostSummary(jobIds: readonly string[]) {
+  // Gate on the deployment billing surface (B2), not hasCredits(): the Cost view
+  // renders whenever a metering authority is registered (nodaro-cloud, or an
+  // external overlay provider), not only for Nodaro's own credit ledger.
+  const { surface } = useBillingSurface()
   return useQuery({
     // scope-key-ok: keyed by the job ids themselves, and jobs carry no
     // workspace of their own until the billing work stamps them.
@@ -21,7 +25,7 @@ export function useWorkflowCostSummary(jobIds: readonly string[]) {
       const { data } = await getWorkflowCostSummary(jobIds)
       return data
     },
-    enabled: jobIds.length > 0 && hasCredits(),
+    enabled: jobIds.length > 0 && surface.mountCostTab,
     staleTime: 60_000,
   })
 }

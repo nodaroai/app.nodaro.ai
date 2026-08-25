@@ -11,7 +11,7 @@
  * the auto-wire feature.
  */
 import { describe, it, expect } from "vitest"
-import { buildPayload } from "../payload-builder.js"
+import { buildPayload, effectiveDispatchProvider } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
@@ -32,5 +32,16 @@ describe("buildPayload — text-to-speech voice auto-wire", () => {
     const result = buildPayload(n, "job1", {}, "usage1")
     expect(result.payload.voice).toBe("node-default")
     expect(result.payload.provider).toBe("elevenlabs-v3")
+  })
+
+  it("dispatches the character-auto-wired provider via effectiveDispatchProvider (single source with the deny check)", () => {
+    // No data.provider — the character node auto-wires resolvedInputs.provider.
+    const n = node("n1", "text-to-speech", { voiceId: "Rachel", textSource: "direct", directText: "hi" })
+    const resolvedInputs = { provider: "elevenlabs-v3", voice: "Rachel" }
+    const built = buildPayload(n, "job-1", resolvedInputs)
+    // The provider actually dispatched (modelIdentifier + payload.provider) must be
+    // exactly what the surface deny check reads via effectiveDispatchProvider.
+    expect(built.modelIdentifier).toBe(effectiveDispatchProvider("text-to-speech", n.data, resolvedInputs))
+    expect(built.payload.provider).toBe("elevenlabs-v3")
   })
 })

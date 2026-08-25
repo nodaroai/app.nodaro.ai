@@ -3747,7 +3747,13 @@ export function buildPayload(
       // An upstream Character node's voice (resolvedInputs.voice/.provider/.voiceType,
       // auto-wired in input-resolver) wins over the node's own config when present —
       // the character is the source of truth for "this character's voice".
-      const provider = (resolvedInputs.provider as string | undefined) || (data.provider as string) || "elevenlabs-v3"
+      //
+      // Single source of truth with the surface model-deny check above
+      // (effectiveDispatchProvider, :1656): the deny check and the egress
+      // modelKey (worker → ttsModelKey(job.data.provider)) must read ONE helper
+      // so a future edit to one cannot desync the other. §5.3 hard gate. The
+      // helper's `||` precedence mirrors the old inline byte-for-byte.
+      const provider = effectiveDispatchProvider(type, data, resolvedInputs) || "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
       const ttsText = promptFor("text-to-speech")
       return {

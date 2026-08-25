@@ -50,6 +50,9 @@ beforeAll(async () => {
   app.get("/v1/gallery", async () => ({ data: [] }))
   app.get("/v1/download/test", async () => ({ ok: true }))
   app.post("/v1/billing/stripe-webhook", async () => ({ ok: true }))
+  // B2 billing surface (public — deployment config, no per-user data) + account (authed)
+  app.get("/v1/billing/surface", async () => ({ data: { providerId: "none" } }))
+  app.get("/v1/billing/account", async () => ({ data: null }))
 
   // Protected routes
   app.get("/v1/jobs/123", async () => ({ data: {} }))
@@ -106,6 +109,16 @@ describe("auth middleware", () => {
       expect((await app.inject({ method: "DELETE", url: "/v1/invitations/abcdef" })).statusCode).toBe(401)
       expect((await app.inject({ method: "POST", url: "/v1/invitations/abcdef/resend" })).statusCode).toBe(401)
       expect((await app.inject({ method: "POST", url: "/v1/invitations/abcdef/accept" })).statusCode).toBe(401)
+    })
+
+    it("allows GET /v1/billing/surface without a token (deployment config, no per-user data)", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/billing/surface" })
+      expect(res.statusCode).not.toBe(401)
+    })
+
+    it("keeps GET /v1/billing/account authenticated (per-user data)", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/billing/account" })
+      expect(res.statusCode).toBe(401)
     })
   })
 

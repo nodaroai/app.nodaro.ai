@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
+import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared"
 
@@ -139,6 +140,7 @@ import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
+import { billingSurfaceRoutes } from "./routes/billing-surface.js"
 import { sunoRoutes } from "./routes/suno.js"
 import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
 import { billingRoutes } from "./ee/routes/billing.js"
@@ -471,6 +473,11 @@ export async function buildApp() {
   await app.register(transcribeRoutes)
   if (hasCredits()) await app.register(adminCreditsRoutes)  // CreditsService + TIER_CREDITS
   await app.register(workflowCostRoutes)
+  // B2: core billing surface/account routes (all editions — none provider is inert).
+  await app.register(billingSurfaceRoutes)
+  // B2: register the credit-bearing billing provider in cloud (no-op otherwise).
+  // Dynamic import inside the shim keeps ee/ out of community/business bundles.
+  await registerNodaroCloudBillingProvider()
   await app.register(sunoRoutes)
   if (hasCredits()) await app.register(stripeWebhookRoutes)
   if (hasCredits()) await app.register(billingRoutes)

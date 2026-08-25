@@ -67,6 +67,7 @@ import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
+import { useBillingSurface } from "@/hooks/use-billing-surface";
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
@@ -121,6 +122,9 @@ interface WorkflowEditorProps {
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const t = useT();
   const { user } = useAuth();
+  // B2: the Cost tab trigger mounts whenever a metering authority is registered
+  // (nodaro-cloud, or an external overlay provider), not only under hasCredits().
+  const { surface: billingSurface } = useBillingSurface();
   const { save, load, saving, loading } = useWorkflowPersistence(projectId);
   const fetchProjects = useProjectsStore((s) => s.fetchProjects);
   const createWorkflowWithContent = useProjectsStore((s) => s.createWorkflowWithContent);
@@ -1243,9 +1247,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 </span>
               )}
             </button>
-            {/* Its query is hasCredits()-gated, so without billing this tab
-                shows "No Executions Yet" forever, even after dozens of runs. */}
-            {hasCredits() && (
+            {/* Gated on the deployment billing surface: the tab (and its query)
+                mount iff a metering authority is registered, so without billing
+                it never shows "No Executions Yet" forever after dozens of runs. */}
+            {billingSurface.mountCostTab && (
             <button
               type="button"
               onClick={() => setActiveTab("cost")}

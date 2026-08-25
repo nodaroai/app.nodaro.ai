@@ -144,6 +144,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/shots/", prefix: true },
   { path: "/v1/download", prefix: true },
   { path: "/v1/billing/stripe-webhook" },
+  // B2: deployment-level billing surface — no per-user data, must answer tokenless
+  // (login/marketing surfaces + the community-smoke probe). /v1/billing/account
+  // stays authed (it reads req.userId).
+  { method: "GET", path: "/v1/billing/surface" },
   { path: "/v1/image-proxy" },
   { path: "/v1/credits/model-cost" },
   { path: "/v1/credits/model-costs" },

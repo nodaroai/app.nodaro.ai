@@ -981,6 +981,29 @@ purchase history with receipt links, Stripe portal) are **first-party-only**:
 they reject API and OAuth-app tokens and are used from a logged-in Nodaro
 session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
 
+## 12b. Billing surface
+
+Two endpoints let a client render cost and usage views without hard-coding
+"is this deployment metered?" — the deployment tells you which billing
+provider is registered and answers per-job / per-account cost lookups
+through it.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/billing/surface` | **Public** (no token) | Deployment-level projection — no per-user data, cacheable. Returns `{ data: { contract, providerId, displayUnit, canReport, canQuote, canAccount, mountCostTab } }`. On a keyless / community install `providerId` is `"none"` and `mountCostTab` is `false` (no cost view). |
+| `GET` | `/v1/billing/account` | Bearer token | Per-user account summary from the registered provider: `{ data: { plan, balance, dailyAllowance, unit } \| null }`. `data: null` means the metering authority could not answer — clients MUST render that distinctly and never as a zero balance. |
+
+`contract` is the billing-surface contract version (an integer). `displayUnit`
+is the unit a cost view should default to (e.g. `"usd"` or `"credits"`) — it
+follows the registered metering authority, not the edition.
+
+**Cost summary response (`POST /v1/jobs/cost-summary`).** The money fields
+`total_credits` and `total_cost_usd` (top-level and per breakdown row) are
+`number | null`, and the response carries an `unavailable` count (jobs the
+metering authority could not price). A `null` total means **no** job in the
+batch had a known charge — it is NOT `0`. Render a `null` value distinctly
+(e.g. an em dash), never as a free/zero cost.
+
 ## 13. Job batch polling
 
 Two endpoints let you poll multiple job statuses in a single round trip

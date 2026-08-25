@@ -16,6 +16,7 @@ import {
   sunoVoiceRegenerate,
   sunoVoiceGenerate,
   sunoVoiceRecordInfo,
+  sunoCreditType,
 } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
@@ -49,12 +50,6 @@ async function userOwnsVoiceTask(
 
 const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5_5")
 const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default("V5_5")
-
-function sunoModelCreditType(model: string | undefined, fallback: string): string {
-  if (model === "V5_5") return "suno-v5_5"
-  if (model === "V5") return "suno-v5"
-  return fallback
-}
 
 const personaModelEnum = z.enum(["voice_persona", "style_persona"])
 
@@ -251,7 +246,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return sunoModelCreditType(body?.model as string, "suno-generate")
+        return sunoCreditType(body?.model as string, "suno-generate")
       }),
     },
     async (req, reply) => {
@@ -304,7 +299,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, error, "Failed to create job")
       }
 
-      const creditType = sunoModelCreditType(model, "suno-generate")
+      const creditType = sunoCreditType(model, "suno-generate")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -339,7 +334,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return sunoModelCreditType(body?.model as string, "suno-cover")
+        return sunoCreditType(body?.model as string, "suno-cover")
       }),
     },
     async (req, reply) => {
@@ -379,7 +374,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, error, "Failed to create job")
       }
 
-      const creditType = sunoModelCreditType(model, "suno-cover")
+      const creditType = sunoCreditType(model, "suno-cover")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -411,7 +406,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return sunoModelCreditType(body?.model as string, "suno-extend")
+        return sunoCreditType(body?.model as string, "suno-extend")
       }),
     },
     async (req, reply) => {
@@ -452,7 +447,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, error, "Failed to create job")
       }
 
-      const creditType = sunoModelCreditType(model, "suno-extend")
+      const creditType = sunoCreditType(model, "suno-extend")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId

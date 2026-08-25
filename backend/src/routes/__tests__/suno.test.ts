@@ -73,7 +73,8 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
-vi.mock("@/providers/kie/suno-client.js", () => ({
+vi.mock("@/providers/kie/suno-client.js", async (importActual) => ({
+  ...(await importActual<typeof import("@/providers/kie/suno-client.js")>()),
   sunoStyleBoost: mockSunoStyleBoost,
 }))
 

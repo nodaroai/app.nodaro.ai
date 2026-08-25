@@ -439,6 +439,7 @@ export const en = {
   "cost.toggleCredits": "Showing credits -- click for dollars",
   "cost.totalFromRun": "total from 1 run",
   "cost.totalFromRuns": "total from {n} runs",
+  "cost.unavailable": "{n} unavailable",
   "cost.col.type": "Type",
   "cost.col.model": "Model",
   "cost.col.runs": "Runs",

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
-import { isCloud } from "@/lib/edition"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { isValidUuid } from "@/lib/uuid"
 import { useT } from "@/lib/i18n"
 import {
@@ -55,14 +55,17 @@ function formatNodeType(type: string): string {
   return NODE_TYPE_LABELS[type] ?? type.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
-function formatCredits(credits: number): string {
-  // The Cost tab only mounts behind the hasCredits() tab gate in
-  // workflow-editor-main.tsx — community never reaches this file.
-  // credit-gated: mount-gated by the Cost tab trigger
+// Null-aware money formatters (§5.2 rule 1): `null` = the metering authority
+// could not answer, and MUST render distinctly (an em dash) — never as $0 / 0 CR,
+// which would tell someone a paid generation was free.
+function formatCreditsN(credits: number | null): string {
+  if (credits == null) return "—"
+  // credit-gated: the Cost tab is mount-gated by the billing surface (mountCostTab).
   return `${credits} CR`
 }
 
-function formatDollars(usd: number): string {
+function formatDollarsN(usd: number | null): string {
+  if (usd == null) return "—"
   if (usd === 0) return "$0"
   if (usd < 0.01) return `$${usd.toFixed(4)}`
   return `$${usd.toFixed(3)}`
@@ -151,7 +154,10 @@ export function CostTab({ className = "" }: CostTabProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const jobIds = useMemo(() => collectJobIds(nodes), [nodes])
   const { data: summary, isLoading: loading, error, refetch } = useWorkflowCostSummary(jobIds)
-  const [showDollars, setShowDollars] = useState(!isCloud())
+  // Rule 3 — the display unit follows the metering authority, not isCloud():
+  // a credits authority defaults to credits, everyone else to their own unit.
+  const { surface } = useBillingSurface()
+  const [showDollars, setShowDollars] = useState(surface.displayUnit !== "credits")
 
   // Empty state - no executions at all (or no job IDs so query is disabled)
   if (shouldShowEmptyState({ loading, summary, error })) {
@@ -234,11 +240,16 @@ export function CostTab({ className = "" }: CostTabProps) {
           <div className="mb-6 p-5 rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
             <div className="flex items-baseline gap-3">
               <span className="text-3xl font-bold text-[#ff0073] font-mono">
-                {showDollars ? formatDollars(summary.total_cost_usd) : formatCredits(summary.total_credits)}
+                {showDollars ? formatDollarsN(summary.total_cost_usd) : formatCreditsN(summary.total_credits)}
               </span>
               <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
                 {summary.total_jobs === 1 ? t("cost.totalFromRun") : t("cost.totalFromRuns", { n: summary.total_jobs })}
               </span>
+              {summary.unavailable > 0 && (
+                <span className="text-sm text-amber-600 dark:text-amber-400">
+                  {t("cost.unavailable", { n: summary.unavailable })}
+                </span>
+              )}
             </div>
           </div>
 
@@ -284,12 +295,13 @@ export function CostTab({ className = "" }: CostTabProps) {
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
                       {showDollars
-                        ? formatDollars(item.runs > 0 ? item.total_cost_usd / item.runs : 0)
-                        : // credit-gated: Cost tab mounts behind the hasCredits() tab gate.
-                          `${item.avg_credits_per_run} CR`}
+                        ? formatDollarsN(item.runs > 0 && item.total_cost_usd != null ? item.total_cost_usd / item.runs : null)
+                        : item.avg_credits_per_run == null
+                          ? "—"
+                          : `${item.avg_credits_per_run} CR` /* credit-gated: Cost tab mounts behind the billing-surface gate */}
                     </td>
                     <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-medium">
-                      {showDollars ? formatDollars(item.total_cost_usd) : formatCredits(item.total_credits)}
+                      {showDollars ? formatDollarsN(item.total_cost_usd) : formatCreditsN(item.total_credits)}
                     </td>
                   </tr>
                 ))}
@@ -305,7 +317,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-bold">
-                    {showDollars ? formatDollars(summary.total_cost_usd) : formatCredits(summary.total_credits)}
+                    {showDollars ? formatDollarsN(summary.total_cost_usd) : formatCreditsN(summary.total_credits)}
                   </td>
                 </tr>
               </tfoot>

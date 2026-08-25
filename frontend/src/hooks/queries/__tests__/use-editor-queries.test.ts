@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mockUseQuery = vi.fn()
 const mockGetWorkflowCostSummary = vi.fn()
 const mockCreateClient = vi.fn()
-const mockHasCredits = vi.fn()
+const mockUseBillingSurface = vi.fn()
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (opts: unknown) => mockUseQuery(opts),
@@ -18,9 +18,22 @@ vi.mock("@/lib/supabase", () => ({
   createClient: () => mockCreateClient(),
 }))
 
-vi.mock("@/lib/edition", () => ({
-  hasCredits: () => mockHasCredits(),
+// The cost query gates on the deployment billing surface (B2), not hasCredits().
+// Mock the hook so useWorkflowCostSummary's own useQuery is still calls[0].
+vi.mock("@/hooks/use-billing-surface", () => ({
+  useBillingSurface: () => mockUseBillingSurface(),
 }))
+
+function surfaceWith(mountCostTab: boolean) {
+  return {
+    surface: {
+      contract: 1, providerId: mountCostTab ? "nodaro-cloud" : "none",
+      displayUnit: mountCostTab ? "credits" : "usd",
+      canReport: mountCostTab, canQuote: false, canAccount: mountCostTab, mountCostTab,
+    },
+    isLoading: false,
+  }
+}
 
 vi.mock("@/lib/query-keys", () => ({
   queryKeys: {
@@ -47,7 +60,7 @@ import {
 describe("useWorkflowCostSummary", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasCredits.mockReturnValue(true)
+    mockUseBillingSurface.mockReturnValue(surfaceWith(true))
   })
 
   it("passes correct query key with sorted job IDs", () => {
@@ -60,7 +73,7 @@ describe("useWorkflowCostSummary", () => {
     )
   })
 
-  it("is enabled when jobIds is non-empty and hasCredits is true", () => {
+  it("is enabled when jobIds is non-empty and the surface mounts the Cost tab", () => {
     mockUseQuery.mockReturnValue({ data: null })
     useWorkflowCostSummary(["job-1"])
     const opts = mockUseQuery.mock.calls[0][0]
@@ -74,16 +87,16 @@ describe("useWorkflowCostSummary", () => {
     expect(opts.enabled).toBe(false)
   })
 
-  it("is disabled when hasCredits returns false", () => {
-    mockHasCredits.mockReturnValue(false)
+  it("is disabled when the surface does not mount the Cost tab (provider none)", () => {
+    mockUseBillingSurface.mockReturnValue(surfaceWith(false))
     mockUseQuery.mockReturnValue({ data: null })
     useWorkflowCostSummary(["job-1"])
     const opts = mockUseQuery.mock.calls[0][0]
     expect(opts.enabled).toBe(false)
   })
 
-  it("is disabled when jobIds is empty and hasCredits is false", () => {
-    mockHasCredits.mockReturnValue(false)
+  it("is disabled when jobIds is empty and the surface does not mount the Cost tab", () => {
+    mockUseBillingSurface.mockReturnValue(surfaceWith(false))
     mockUseQuery.mockReturnValue({ data: null })
     useWorkflowCostSummary([])
     const opts = mockUseQuery.mock.calls[0][0]

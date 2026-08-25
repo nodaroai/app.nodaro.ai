@@ -221,7 +221,7 @@ describe("cancelAllJobs", () => {
 // ---------------------------------------------------------------------------
 
 describe("getWorkflowCostSummary", () => {
-  it("returns zeroed summary for empty jobIds without making a fetch", async () => {
+  it("returns an empty summary for empty jobIds without making a fetch (null money, never 0)", async () => {
     const mock = vi.fn()
     vi.stubGlobal("fetch", mock)
 
@@ -229,14 +229,14 @@ describe("getWorkflowCostSummary", () => {
 
     expect(mock).not.toHaveBeenCalled()
     expect(result).toEqual({
-      data: { total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] },
+      data: { total_credits: null, total_cost_usd: null, total_jobs: 0, unavailable: 0, breakdown: [] },
     })
   })
 
   it("sends POST /v1/jobs/cost-summary and returns response for non-empty jobIds", async () => {
     sessionWith("tok-cost")
     const payload = {
-      data: { total_credits: 10, total_cost_usd: 1.0, total_jobs: 2, breakdown: [] },
+      data: { total_credits: 10, total_cost_usd: 1.0, total_jobs: 2, unavailable: 0, breakdown: [] },
     }
     const mock = mockFetchJson(payload)
     vi.stubGlobal("fetch", mock)
@@ -254,7 +254,7 @@ describe("getWorkflowCostSummary", () => {
 
   const uuid = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`
   const summary = (o: Partial<CostSummary> = {}): CostSummary =>
-    ({ total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [], ...o })
+    ({ total_credits: 0, total_cost_usd: 0, total_jobs: 0, unavailable: 0, breakdown: [], ...o })
   const okJson = (data: unknown) => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) })
 
   it("issues one request per batch and never drops an id", async () => {
@@ -297,12 +297,13 @@ describe("getWorkflowCostSummary", () => {
 describe("mergeCostSummaries", () => {
   const row = (o: Partial<CostBreakdownItem>): CostBreakdownItem => ({
     node_type: "generate-image", model: "flux", runs: 1, successful: 1, failed: 0,
-    total_credits: 0, total_cost_usd: 0, avg_credits_per_run: 0, ...o,
+    total_credits: 0, total_cost_usd: 0, avg_credits_per_run: 0, unavailable: 0, ...o,
   })
   const summary = (breakdown: CostBreakdownItem[]): CostSummary => ({
-    total_credits: breakdown.reduce((n, b) => n + b.total_credits, 0),
-    total_cost_usd: breakdown.reduce((n, b) => n + b.total_cost_usd, 0),
+    total_credits: breakdown.reduce((n, b) => n + (b.total_credits ?? 0), 0),
+    total_cost_usd: breakdown.reduce((n, b) => n + (b.total_cost_usd ?? 0), 0),
     total_jobs: breakdown.reduce((n, b) => n + b.runs, 0),
+    unavailable: breakdown.reduce((n, b) => n + b.unavailable, 0),
     breakdown,
   })
 
@@ -312,7 +313,7 @@ describe("mergeCostSummaries", () => {
       summary([row({ runs: 1, successful: 0, failed: 1, total_credits: 2, total_cost_usd: 0.1 })]),
     ])
     expect(merged).toEqual({
-      total_credits: 12, total_cost_usd: 0.6, total_jobs: 3,
+      total_credits: 12, total_cost_usd: 0.6, total_jobs: 3, unavailable: 0,
       breakdown: [row({ runs: 3, successful: 2, failed: 1, total_credits: 12, total_cost_usd: 0.6, avg_credits_per_run: 4 })],
     })
   })
@@ -323,6 +324,16 @@ describe("mergeCostSummaries", () => {
       summary([row({ node_type: "b", total_credits: 9, avg_credits_per_run: 9 })]),
     ])
     expect(merged.breakdown.map((b) => b.node_type)).toEqual(["b", "a"])
+  })
+
+  it("sums known credits, keeps a total null only when nothing is known, adds unavailable", () => {
+    const a: CostSummary = { total_credits: 10, total_cost_usd: null, total_jobs: 1, unavailable: 0, breakdown: [] }
+    const b: CostSummary = { total_credits: null, total_cost_usd: null, total_jobs: 1, unavailable: 1, breakdown: [] }
+    const m = mergeCostSummaries([a, b])
+    expect(m.total_credits).toBe(10)
+    expect(m.total_cost_usd).toBeNull()
+    expect(m.unavailable).toBe(1)
+    expect(m.total_jobs).toBe(2)
   })
 })
 
