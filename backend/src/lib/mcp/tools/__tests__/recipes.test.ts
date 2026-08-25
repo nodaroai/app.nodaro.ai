@@ -79,12 +79,22 @@ describe("recipe catalog", () => {
     expect(body!).toContain("references")
   })
 
+  it("product-photoshoot teaches the ownership fork", () => {
+    const body = loadRecipe("product-photoshoot")
+    expect(body).toBeTruthy()
+    // The load-bearing distinction: a foreign photo may only feed the
+    // describe node — never any generate node's references input.
+    expect(body!).toContain("Is the photo YOUR product")
+    expect(body!).toContain("the foreign photo touches ONLY the describe node")
+  })
+
   it("bundled reference files load through loadRecipeFile", () => {
     for (const [recipe, rel] of [
       ["one-character-any-scene", "references/prompts.md"],
       ["camera-coverage", "references/coverage-brief.md"],
       ["multi-reference-control", "references/prompt-walkthrough.md"],
       ["instagram-carousel", "references/system-prompt.md"],
+      ["product-photoshoot", "references/shot-list.md"],
     ] as const) {
       expect(loadRecipeFile(recipe, rel), `${recipe}/${rel}`).toBeTruthy()
     }
