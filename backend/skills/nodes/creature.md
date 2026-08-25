@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-08-15T21:55:08.732Z
-generated_from: 150c80ac9
+generated_at: 2026-08-25T18:44:26.436Z
+generated_from: 273c2bef2
 ---
 
 # Animal/Creature
@@ -11,7 +11,7 @@ generated_from: 150c80ac9
 **Category:** creature
 **Credit cost:** 5
 **Inputs (target handles):** `in`, `type`
-**Outputs (source handles):** `creatureRef`
+**Outputs (source handles):** `creatureRef`, `image`
 
 **Required data fields:**
 - `label: string`

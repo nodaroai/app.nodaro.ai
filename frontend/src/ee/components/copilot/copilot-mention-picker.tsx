@@ -23,7 +23,7 @@ import {
   type CopilotMentionVariant,
   type MentionKind,
 } from "@/ee/lib/copilot/types"
-import { CopilotMentionModal } from "./copilot-mention-modal"
+import { MentionPreview, type MentionPreviewContent } from "./copilot-mention-preview"
 
 /** The composer's `aria-controls` target. */
 export const MENTION_LIST_ID = "copilot-mention-list"
@@ -58,6 +58,14 @@ interface CopilotMentionPickerProps {
   onActiveChange: (optionId: string | undefined) => void
   onClose: () => void
   /**
+   * The expand button hands the COMPOSER the active tab and the composer opens
+   * the full-size browser itself. The browser must not be a child of this
+   * picker: the picker unmounts the moment the composer's input blurs — which
+   * the browser's own search-field autofocus causes — so a child modal died
+   * within a frame of opening (the "expand does nothing" bug).
+   */
+  onExpand: (tab: string) => void
+  /**
    * Horizontal inset, so the list lines up with the composer that owns it: the
    * editor rail insets its own padding, the home dock is flush with the glass.
    */
@@ -79,6 +87,7 @@ export function CopilotMentionPicker({
   onPick,
   onActiveChange,
   onClose,
+  onExpand,
   insetClassName = "left-3.5 right-3.5",
   loading = false,
 }: CopilotMentionPickerProps) {
@@ -91,7 +100,7 @@ export function CopilotMentionPicker({
   const firstNonEmptyTab = SECTION_TABS.find((tab) => (counts.get(tab) ?? 0) > 0) ?? SECTION_TABS[0]!
   const [tab, setTab] = useState(firstNonEmptyTab)
   const [drill, setDrill] = useState<CopilotMention | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [preview, setPreview] = useState<(MentionPreviewContent & { insert: () => void }) | null>(null)
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -163,12 +172,19 @@ export function CopilotMentionPicker({
   // routed here through the window so the caret never moves while picking.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (modalOpen) return // the full-size browser owns the keyboard while open
       // Capture phase + stopPropagation: React's own handlers (the textarea's
       // Enter-to-send) must never also see a key the picker just consumed.
       const consume = () => {
         e.preventDefault()
         e.stopPropagation()
+      }
+      if (preview) {
+        // The preview owns the keyboard: Escape closes IT (the component's own
+        // listener also fires — same setState, harmless), everything else is
+        // swallowed so the list cannot move underneath the image.
+        consume()
+        if (e.key === "Escape") setPreview(null)
+        return
       }
       if (e.key === "ArrowDown") {
         consume()
@@ -197,7 +213,7 @@ export function CopilotMentionPicker({
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowCount, active, drill, tabItems, modalOpen, onClose])
+  }, [rowCount, active, drill, tabItems, preview, onClose])
 
   const nothingAtAll = mentions.length === 0
 
@@ -214,7 +230,7 @@ export function CopilotMentionPicker({
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setModalOpen(true)}
+          onClick={() => onExpand(tab)}
           aria-label={S.pickerExpand}
           title={S.pickerExpand}
           className="w-[22px] h-[22px] rounded-md border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center"
@@ -280,7 +296,13 @@ export function CopilotMentionPicker({
             if (row.kind === "default") {
               return (
                 <button key="default" id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(drill)} className={base}>
-                  <MentionThumb mention={drill} size={26} />
+                  <PreviewableThumb
+                    src={safeThumbUrl(drill.imageUrl)}
+                    label={drill.name}
+                    onPreview={(src) => setPreview({ src, label: drill.name, sub: KIND_UI[drill.kind].chip, insert: () => onPick(drill) })}
+                  >
+                    <MentionThumb mention={drill} size={26} />
+                  </PreviewableThumb>
                   <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{S.pickerVariantDefault}</span>
                 </button>
               )
@@ -288,7 +310,13 @@ export function CopilotMentionPicker({
             const { variant } = row
             return (
               <button key={`${variant.bucket}:${variant.name}`} id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} aria-label={`${variant.name} ${variant.bucketNoun}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(drill, variant)} className={base}>
-                <VariantThumb variant={variant} size={26} />
+                <PreviewableThumb
+                  src={safeThumbUrl(variant.imageUrl)}
+                  label={`${drill.name} — ${variant.name}`}
+                  onPreview={(src) => setPreview({ src, label: `${drill.name} — ${variant.name}`, sub: variant.bucketNoun, insert: () => onPick(drill, variant) })}
+                >
+                  <VariantThumb variant={variant} size={26} />
+                </PreviewableThumb>
                 <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{variant.name}</span>
                 <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap capitalize">{variant.bucketNoun}</span>
               </button>
@@ -314,7 +342,13 @@ export function CopilotMentionPicker({
                     isActive ? "bg-[var(--copilot-surface)]" : ""
                   }`}
                 >
-                  <MentionThumb mention={item} size={22} />
+                  <PreviewableThumb
+                    src={safeThumbUrl(item.imageUrl)}
+                    label={item.name}
+                    onPreview={(src) => setPreview({ src, label: item.name, sub: KIND_UI[item.kind].chip, insert: () => onPick(item) })}
+                  >
+                    <MentionThumb mention={item} size={22} />
+                  </PreviewableThumb>
                   <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{item.name}</span>
                   <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap">{KIND_UI[item.kind].chip}</span>
                   {hasVariants && (
@@ -355,19 +389,52 @@ export function CopilotMentionPicker({
         )}
       </div>
 
-      {modalOpen && (
-        <CopilotMentionModal
-          mentions={mentions}
-          initialTab={tab}
-          onPick={(mention, variant) => {
-            setModalOpen(false)
-            if (variant) onPick(mention, variant)
-            else onPick(mention)
+      {preview && (
+        <MentionPreview
+          content={preview}
+          onClose={() => setPreview(null)}
+          onInsert={() => {
+            const { insert } = preview
+            setPreview(null)
+            insert()
           }}
-          onClose={() => setModalOpen(false)}
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Wraps a row's thumbnail so clicking the IMAGE previews it large while the
+ * rest of the row still inserts. Rows without an image render the bare thumb.
+ */
+function PreviewableThumb({
+  src,
+  label,
+  onPreview,
+  children,
+}: {
+  src: string | null
+  label: string
+  onPreview: (src: string) => void
+  children: React.ReactNode
+}) {
+  if (!src) return <>{children}</>
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      aria-label={S.pickerPreviewOf(label)}
+      title={S.pickerPreviewOf(label)}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.stopPropagation()
+        onPreview(src)
+      }}
+      className="flex-none cursor-zoom-in"
+    >
+      {children}
+    </span>
   )
 }
 

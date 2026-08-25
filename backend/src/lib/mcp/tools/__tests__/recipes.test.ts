@@ -95,7 +95,11 @@ describe("recipe catalog", () => {
     // into suno-cover was refused by catalog matching AFTER the pipeline ran).
     expect(body!).toContain("whose recording is it?")
     expect(body!).toContain("Do NOT build a cover from it")
-    expect(body!).toContain("field-style")
+    // The v4 lesson (owner's correct example): the analysis emits a FILM
+    // JSON, so an llm-chat DISTILLER sits between analyzer and composer,
+    // with its name-scrubbing system prompt shipped as a reference file.
+    expect(body!).toContain("Never wire it")
+    expect(body!).toContain("references/style-brief-system-prompt.md")
   })
 
   it("bundled reference files load through loadRecipeFile", () => {
@@ -105,6 +109,7 @@ describe("recipe catalog", () => {
       ["multi-reference-control", "references/prompt-walkthrough.md"],
       ["instagram-carousel", "references/system-prompt.md"],
       ["product-photoshoot", "references/shot-list.md"],
+      ["song-from-reference", "references/style-brief-system-prompt.md"],
     ] as const) {
       expect(loadRecipeFile(recipe, rel), `${recipe}/${rel}`).toBeTruthy()
     }

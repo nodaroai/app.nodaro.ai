@@ -1,8 +1,8 @@
 ---
 name: song-from-reference
-description: A song similar to an existing one — someone else's track is ANALYZED into a style brief that composes an original song; a cover is built only from audio the user owns
+description: A song similar to an existing one — someone else's track is analyzed, DISTILLED by an llm-chat into a name-scrubbed style prompt, and composed as an original song; a cover is built only from audio the user owns
 triggers: ["similar song", "a song like this", "cover this song", "make a song from this link", "youtube song reference", "remake this track", "same vibe as this song", "song inspired by this"]
-version: 3
+version: 4
 ---
 
 # Song From Reference
@@ -29,32 +29,45 @@ entire graph.
 
 ## The style-analysis graph — the default for someone else's song
 
-Analyze the actual song into a STYLE BRIEF, then compose from the brief. The
-analyzer hears the real audio (the platform feeds the YouTube link straight to
-a multimodal model — no download step involved, so this path is also immune to
-fetch failures and to catalog matching), but the song that comes out is an
+Three nodes: the analyzer HEARS, the distiller CLEANS, the composer CREATES.
+The analyzer gets the real audio (the platform feeds the YouTube link straight
+to a multimodal model — no download step involved, so this path is immune to
+fetch failures and to catalog matching), and the song that comes out is an
 original composition.
 
 1. `video-analysis` node (Cloud editions) with:
    - `youtubeUrl` — the user's pasted link (the URL rule below; the source
      must be under ten minutes).
-   - `analysisFocus` — a music-only brief instruction, for example: "Describe
-     ONLY the music: genre and subgenre, tempo and rhythmic feel, groove and
-     drum character, mood and energy arc, instrumentation and production
+   - `analysisFocus` — a music-only instruction, for example: "Describe ONLY
+     the music: genre and subgenre, tempo and rhythmic feel, groove and drum
+     character, mood and energy arc, instrumentation and production
      character, vocal type and delivery, era. Write it as a style brief for
      composing a NEW song in this style. Do not transcribe lyrics and do not
      describe the melody note by note."
-2. `video-analysis` `text → in` into a `text-prompt` node — the editable brief
-   (trim it; briefs work best under a few hundred words).
-3. `text-prompt` `prompt → field-style` into `suno-generate` — `field-style`
-   is the free-text style seat (the `audio-style` input accepts picker nodes
-   only, not text). Give `suno-generate` a short `prompt` of its own for what
-   the NEW song is about (subject, lyrics language). The brief styles it; the
-   prompt gives it something to say.
+   - **Know what this node emits:** its schema is a FILM analysis — a JSON of
+     metadata, visual slots and a scene list, with the music description
+     scattered across per-scene audio entries, and the source's own title and
+     artist names in the metadata. It is NOT a clean brief. Never wire it
+     straight into a music node: the music field would receive a truncated
+     film JSON whose surviving part is mostly the identifying names.
+2. `video-analysis` `text → prompt` into `llm-chat` — **the distiller, and it
+   is load-bearing.** Copy its `systemPrompt` VERBATIM from
+   `references/style-brief-system-prompt.md`: it reads the whole analysis
+   (including every buried audio entry), keeps only generic musical
+   characteristics, silently strips every identifying name (title, artist,
+   soundtrack, label), bans "in the style of" phrasing, forbids melody and
+   lyric reproduction, and outputs ONLY a production-ready Suno prompt. To
+   steer the NEW song's subject or lyrics language, append one line to that
+   system prompt ("The new song is about leaving home; lyrics in Hebrew.").
+3. `llm-chat` `text → prompt` into `suno-generate`. The distilled prompt IS
+   the whole song request — leave `suno-generate`'s own prompt empty rather
+   than competing with it.
 
-Never transcribe or reuse the original lyrics — the brief describes character,
-not content. Without Cloud analysis available, fall back to asking the user to
-describe the style in words (the `suno-music-basics` picker stacks).
+A user may keep this distiller saved as an llm-chat preset —
+`list_node_presets` / `get_node_preset` will find it — but the reference file
+above works for everyone. Without Cloud analysis available, fall back to
+asking the user to describe the style in words (the `suno-music-basics`
+picker stacks).
 
 ## The cover graph — the user's own audio only
 
@@ -101,6 +114,10 @@ original song; new melody, new lyrics about the open road".
 - A cover failed with "matches an existing recording" (or any rights or
   content-policy message) → it was someone else's song; switch to the
   style-analysis graph and say why.
+- The new song ignored the reference's vibe → read the distiller's own result
+  (it is a normal node result): if it is a film-scene dump or carries artist
+  names, the `systemPrompt` was not set from the reference file; if it is a
+  good prompt, push the distiller for more rhythm and instrumentation detail.
 - The result sounds too close to the reference → the prompt named no
   destination; add concrete genre, instrumentation and voice direction.
 - The reference node produced nothing at run time → the audio was never

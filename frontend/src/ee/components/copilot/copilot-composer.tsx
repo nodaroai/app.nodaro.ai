@@ -14,7 +14,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copilotFeatureId } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotAttachButton } from "./copilot-attach-button"
-import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
+import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb, safeThumbUrl } from "./copilot-mention-picker"
+import { CopilotMentionModal } from "./copilot-mention-modal"
+import { MentionPreview } from "./copilot-mention-preview"
 import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
 
 interface CopilotComposerProps {
@@ -44,6 +46,11 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [query, setQuery] = useState<string | null>(null)
   const [activeMentionId, setActiveMentionId] = useState<string | undefined>(undefined)
+  // The full-size browser is owned HERE, not by the picker: the picker unmounts
+  // on input blur (which the browser's own search autofocus causes), so a
+  // browser rendered inside it died within a frame of opening.
+  const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const [chipPreview, setChipPreview] = useState<CopilotMention | null>(null)
 
   const syncQuery = (value: string, caret: number) => {
     const active = activeMentionQuery(value, caret)
@@ -94,6 +101,32 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
           onPick={pick}
           onActiveChange={setActiveMentionId}
           onClose={() => setQuery(null)}
+          onExpand={(tab) => {
+            setBrowserTab(tab)
+            setQuery(null)
+          }}
+        />
+      )}
+
+      {browserTab !== null && (
+        <CopilotMentionModal
+          mentions={mentionSources}
+          initialTab={browserTab}
+          onPick={(mention, variant) => {
+            setBrowserTab(null)
+            pick(mention, variant)
+          }}
+          onClose={() => {
+            setBrowserTab(null)
+            requestAnimationFrame(() => inputRef.current?.focus())
+          }}
+        />
+      )}
+
+      {chipPreview && safeThumbUrl(chipPreview.imageUrl) && (
+        <MentionPreview
+          content={{ src: safeThumbUrl(chipPreview.imageUrl)!, label: chipPreview.name }}
+          onClose={() => setChipPreview(null)}
         />
       )}
 
@@ -107,8 +140,23 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
                 key={`${mention.kind}:${mention.id}`}
                 className="inline-flex items-center gap-1.5 pl-1 pr-1.5 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
               >
-                <MentionThumb mention={mention} size={16} />
-                {mention.name}
+                {safeThumbUrl(mention.imageUrl) ? (
+                  <button
+                    type="button"
+                    aria-label={S.pickerPreviewOf(mention.name)}
+                    title={S.pickerPreviewOf(mention.name)}
+                    onClick={() => setChipPreview(mention)}
+                    className="inline-flex items-center gap-1.5 cursor-zoom-in"
+                  >
+                    <MentionThumb mention={mention} size={16} />
+                    {mention.name}
+                  </button>
+                ) : (
+                  <>
+                    <MentionThumb mention={mention} size={16} />
+                    {mention.name}
+                  </>
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${mention.name}`}

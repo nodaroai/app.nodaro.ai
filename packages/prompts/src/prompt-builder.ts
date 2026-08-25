@@ -1655,7 +1655,22 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     if (refCap > 0) {
       const structuredBudget = Math.max(0, refCap - referenceImageUrls.length)
       if (connectedReferences.length > structuredBudget) {
-        connectedReferences = connectedReferences.slice(0, structuredBudget)
+        // ATTACH-PRIORITY slice, not raw order. The raw list interleaves each
+        // wired character's canonical with its whole variant array, and an
+        // unmentioned VARIANT never attaches — yet a raw slice let one
+        // variant-rich character fill the budget and evict every character
+        // wired after it ENTIRELY, canonical included (the "two characters
+        // wired, one sent" incident: 1 canonical + 7 variants consumed
+        // nano-banana-pro's cap of 8, and the second character vanished
+        // while the provider received TWO urls total). Non-variant entries
+        // (canonicals, manual refs, extra-refs) take the budget first;
+        // variants fill what remains as mention candidates. Survivors keep
+        // their original relative order, so slot numbering is unchanged for
+        // every graph that fit the budget before.
+        const nonVariants = connectedReferences.filter((r) => !r.variantSlug || r.isExtraRef === true)
+        const variants = connectedReferences.filter((r) => r.variantSlug && r.isExtraRef !== true)
+        const kept = new Set([...nonVariants, ...variants].slice(0, structuredBudget))
+        connectedReferences = connectedReferences.filter((r) => kept.has(r))
       }
     }
   }

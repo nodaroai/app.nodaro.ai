@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-08-15T21:55:08.561Z
-generated_from: 150c80ac9
+generated_at: 2026-08-25T18:44:26.368Z
+generated_from: 273c2bef2
 ---
 
 # Character
@@ -11,7 +11,7 @@ generated_from: 150c80ac9
 **Category:** character
 **Credit cost:** 5
 **Inputs (target handles):** `assets`, `in`
-**Outputs (source handles):** `characterRef`
+**Outputs (source handles):** `characterRef`, `image`
 
 **Required data fields:**
 - `label: string`
@@ -127,6 +127,13 @@ generated_from: 150c80ac9
 ## When to use
 
 A reusable person the user saved: portrait, variants (expressions, poses, angles, body angles, wardrobe, detail close-ups), voice and identity description, edited in the Character Studio. Set `characterDbId` to the saved character's id (from `list_characters` / the user's `[references]` line) — the server hydrates the media; never write URLs. Wire `characterRef` into a generator's `assets` handle and the character's identity travels with every generation.
+
+## Two lanes into an image generator — both carry EVERY wired character
+
+- **Identity lane (default): `characterRef → assets`.** The full identity travels: every wired character's canonical portrait auto-attaches, `@slug:N:variant` tokens pick specific looks, usage modes and the identity lock apply. Wire several characters and EACH auto-attaches its canonical — a provider's reference cap trims unmentioned variants BEFORE any wired character's portrait (portraits only start dropping when the characters alone exceed the provider's limit).
+- **Positional lane: `image → references`.** The portrait rides as a PLAIN reference image, addressed from the prompt with positional `{image:N}` tokens (N = connection order on `references`). No identity directives, no variant tokens — raw multi-reference control, the same grammar as any reference image.
+
+Pick ONE lane per consumer. For a multi-character scene either works: assets + naming each character (or `@slug:N` tokens), or references + `{image:N}` tokens bound by connection order.
 
 ## Variants and @-mentions (how to use a SPECIFIC angle, expression or pose)
 

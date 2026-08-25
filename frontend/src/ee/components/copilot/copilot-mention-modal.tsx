@@ -8,11 +8,13 @@
  * picker already holds (variants included, from the characters list payload).
  */
 import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
 import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
-import { KIND_UI, MentionThumb, SECTION_TABS, VariantThumb, sectionOf } from "./copilot-mention-picker"
+import { KIND_UI, MentionThumb, SECTION_TABS, VariantThumb, safeThumbUrl, sectionOf } from "./copilot-mention-picker"
+import { MentionPreview, type MentionPreviewContent } from "./copilot-mention-preview"
 
 interface CopilotMentionModalProps {
   mentions: CopilotMention[]
@@ -25,6 +27,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState(initialTab)
   const [drill, setDrill] = useState<CopilotMention | null>(null)
+  const [preview, setPreview] = useState<(MentionPreviewContent & { insert: () => void }) | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -36,12 +39,21 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
       if (e.key !== "Escape") return
       e.preventDefault()
       e.stopPropagation()
-      if (drill) setDrill(null)
+      if (preview) setPreview(null)
+      else if (drill) setDrill(null)
       else onClose()
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [drill, onClose])
+  }, [preview, drill, onClose])
+
+  /** The preview opener for one tile, or undefined when it has no image. */
+  const previewOf = (
+    src: string | null,
+    label: string,
+    sub: string,
+    insert: () => void,
+  ): (() => void) | undefined => (src ? () => setPreview({ src, label, sub, insert }) : undefined)
 
   const counts = useMemo(() => {
     const map = new Map<string, number>(SECTION_TABS.map((t) => [t, 0]))
@@ -54,8 +66,12 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
     [mentions, tab, search],
   )
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal aria-label={S.pickerModalTitle}>
+  // PORTALED: both composers sit inside containing blocks for fixed
+  // positioning (the home dock's backdrop-filter glass, the picker card's
+  // overflow-hidden), which trapped and clipped this overlay when it rendered
+  // in place — the "expand does nothing" bug. document.body has neither.
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-center justify-center" role="dialog" aria-modal aria-label={S.pickerModalTitle}>
       <div className="absolute inset-0 bg-black/55" onClick={onClose} aria-hidden />
       <div className="relative w-[680px] max-w-[94vw] max-h-[78vh] flex flex-col bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
         <div className="px-4 pt-3.5 pb-3 border-b border-border flex flex-col gap-2.5">
@@ -121,7 +137,12 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
         <div className="flex-1 min-h-0 overflow-y-auto p-3">
           {drill ? (
             <div className="grid grid-cols-3 gap-2">
-              <ModalTile onClick={() => onPick(drill)} label={S.pickerVariantDefault} sub={KIND_UI[drill.kind].chip}>
+              <ModalTile
+                onClick={() => onPick(drill)}
+                label={S.pickerVariantDefault}
+                sub={KIND_UI[drill.kind].chip}
+                onPreview={previewOf(safeThumbUrl(drill.imageUrl), drill.name, KIND_UI[drill.kind].chip, () => onPick(drill))}
+              >
                 <MentionThumb mention={drill} size={64} />
               </ModalTile>
               {(drill.variants ?? []).map((variant) => (
@@ -130,6 +151,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                   onClick={() => onPick(drill, variant)}
                   label={variant.name}
                   sub={variant.bucketNoun}
+                  onPreview={previewOf(safeThumbUrl(variant.imageUrl), `${drill.name} — ${variant.name}`, variant.bucketNoun, () => onPick(drill, variant))}
                 >
                   <VariantThumb variant={variant} size={64} />
                 </ModalTile>
@@ -150,6 +172,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                       ? { label: S.pickerVariantsOf(item.name), onClick: () => setDrill(item) }
                       : undefined
                   }
+                  onPreview={previewOf(safeThumbUrl(item.imageUrl), item.name, KIND_UI[item.kind].chip, () => onPick(item))}
                 >
                   <MentionThumb mention={item} size={64} />
                 </ModalTile>
@@ -158,7 +181,20 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
           )}
         </div>
       </div>
-    </div>
+
+      {preview && (
+        <MentionPreview
+          content={preview}
+          onClose={() => setPreview(null)}
+          onInsert={() => {
+            const { insert } = preview
+            setPreview(null)
+            insert()
+          }}
+        />
+      )}
+    </div>,
+    document.body,
   )
 }
 
@@ -168,12 +204,15 @@ function ModalTile({
   sub,
   onClick,
   cornerAction,
+  onPreview,
 }: {
   children: React.ReactNode
   label: string
   sub: string
   onClick: () => void
   cornerAction?: { label: string; onClick: () => void }
+  /** Clicking the IMAGE previews it large; the rest of the tile still inserts. */
+  onPreview?: () => void
 }) {
   return (
     <button
@@ -182,7 +221,23 @@ function ModalTile({
       aria-label={`${label} · ${sub}`}
       className="relative flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px] border border-border bg-[var(--copilot-surface)]/40 hover:bg-[var(--copilot-surface)] text-left transition-colors"
     >
-      {children}
+      {onPreview ? (
+        <span
+          role="button"
+          tabIndex={-1}
+          aria-label={S.pickerPreviewOf(label)}
+          title={S.pickerPreviewOf(label)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onPreview()
+          }}
+          className="flex-none cursor-zoom-in"
+        >
+          {children}
+        </span>
+      ) : (
+        children
+      )}
       <span className="min-w-0 flex-1">
         <span className="block text-[12.5px] text-foreground truncate">{label}</span>
         <span className="block text-[10.5px] text-[var(--copilot-dim)] capitalize">{sub}</span>

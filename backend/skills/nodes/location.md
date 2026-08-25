@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-08-15T21:55:08.779Z
-generated_from: 150c80ac9
+generated_at: 2026-08-25T18:44:26.463Z
+generated_from: 273c2bef2
 ---
 
 # Location
@@ -11,7 +11,7 @@ generated_from: 150c80ac9
 **Category:** location
 **Credit cost:** 5
 **Inputs (target handles):** `in`, `cinematography`
-**Outputs (source handles):** `locationRef`
+**Outputs (source handles):** `locationRef`, `image`
 
 **Required data fields:**
 - `label: string`

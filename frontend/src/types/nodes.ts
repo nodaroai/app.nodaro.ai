@@ -7920,7 +7920,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "character",
     creditCost: 5,
     inputs: ["assets", "in"],
-    outputs: ["characterRef"],
+    outputs: ["characterRef", "image"],
     // PR #2410 removed the `maxWidth: '220px'` wrapper so the node could be
     // resized horizontally via BaseNode's NodeResizeControl. Without an
     // initial `width`, newly-created character nodes render at React Flow's
@@ -7994,7 +7994,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "object",
     creditCost: 5,
     inputs: ["in", "type"],
-    outputs: ["objectRef"],
+    outputs: ["objectRef", "image"],
     defaultData: {
       label: "Object/Props Asset",
       objectDbId: "",
@@ -8034,7 +8034,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "creature",
     creditCost: 5,
     inputs: ["in", "type"],
-    outputs: ["creatureRef"],
+    outputs: ["creatureRef", "image"],
     defaultData: {
       label: "Animal/Creature Asset",
       creatureDbId: "",
@@ -8076,7 +8076,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "location",
     creditCost: 5,
     inputs: ["in", "cinematography"],
-    outputs: ["locationRef"],
+    outputs: ["locationRef", "image"],
     defaultData: {
       label: "Location Asset",
       locationDbId: "",
