@@ -4,7 +4,7 @@
  *
  * Two halves:
  *   - Native copilot tools (get_graph / edit_workflow / run_workflow /
- *     get_execution), declared here with hand-written JSON Schema.
+ *     get_execution / remember), declared here with hand-written JSON Schema.
  *   - A strict allowlist of in-process MCP tools, whose schemas come from the
  *     server itself so they can never drift from the real handlers.
  *
@@ -17,6 +17,7 @@ import type { McpInvoker, McpToolDef } from "../../../lib/mcp/invoke.js"
 import { FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
 import { EditRejected, runEditWorkflow, type EditWorkflowArgs, type WiredAsset } from "./edit-workflow.js"
 import { runGetGraph, type GetGraphArgs } from "./get-graph.js"
+import { runRemember, type RememberArgs } from "./remember.js"
 import { proposeRun, runGetExecution, type GetExecutionArgs, type RunWorkflowArgs } from "./run-and-execution.js"
 import type { CopilotToolContext, RunProposal } from "./types.js"
 
@@ -151,6 +152,23 @@ const NATIVE_DEFINITIONS: ToolDefinition[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: NATIVE_TOOLS.remember,
+    description:
+      'Save ONE standing user preference or correction so every future conversation honors it (e.g. "always 9:16", "never add background music"). Use it when the user states a durable rule or corrects you in a way that should persist — never for one-off task details, secrets, or anything containing a URL. The user sees every save and can delete it.',
+    input_schema: {
+      type: "object",
+      properties: {
+        content: {
+          type: "string",
+          maxLength: 400,
+          description: "One short standing rule, in the user's own terms.",
+        },
+      },
+      required: ["content"],
+      additionalProperties: false,
+    },
+  },
 ]
 
 function toDefinition(tool: McpToolDef): ToolDefinition {
@@ -222,6 +240,9 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
 
       case NATIVE_TOOLS.getExecution:
         return { text: await runGetExecution(deps.ctx, args as GetExecutionArgs), isError: false }
+
+      case NATIVE_TOOLS.remember:
+        return await runRemember(deps.ctx, args as RememberArgs)
 
       default: {
         if (!MCP_TOOL_ALLOWLIST.has(name)) {

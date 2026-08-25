@@ -92,6 +92,16 @@ export interface CopilotRunProposal {
   note: string | null
 }
 
+/**
+ * One memory the copilot saved THIS turn. Visibility is the consent control:
+ * every save renders a pinned line with a one-tap undo, so there is no such
+ * thing as a silent write into what the copilot remembers.
+ */
+export interface CopilotMemorySave {
+  id: string
+  content: string
+}
+
 export type CopilotStreamEvent =
   | {
       type: "metadata"
@@ -111,6 +121,7 @@ export type CopilotStreamEvent =
   | { type: "tool_call"; data: CopilotToolCallEvent }
   | { type: "workflow_updated"; data: CopilotWorkflowUpdate }
   | { type: "run_proposed"; data: CopilotRunProposal }
+  | { type: "memory_saved"; data: CopilotMemorySave }
   | {
       type: "usage"
       data: { inputTokens: number; outputTokens: number; cacheReadTokens: number; creditsCharged: number | null }
@@ -160,6 +171,8 @@ export interface CopilotTurnState {
   activities: CopilotActivity[]
   update: CopilotWorkflowUpdate | null
   proposal: CopilotRunProposal | null
+  /** Memories saved this turn — each renders as a pinned line with undo. */
+  memorySaves: CopilotMemorySave[]
   creditsCharged: number | null
   error: { code: string; message: string } | null
 }
@@ -173,6 +186,7 @@ export const EMPTY_TURN: CopilotTurnState = {
   activities: [],
   update: null,
   proposal: null,
+  memorySaves: [],
   creditsCharged: null,
   error: null,
 }

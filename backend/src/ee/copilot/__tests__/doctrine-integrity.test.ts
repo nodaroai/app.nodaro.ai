@@ -40,6 +40,14 @@ describe("COPILOT_DOCTRINE", () => {
     expect(COPILOT_DOCTRINE).toContain("get_graph")
   })
 
+  it("tells the model when to remember and to honor existing memories", () => {
+    // The remember tool is self-describing, but WHEN to reach for it — and
+    // that context-listed preferences are standing instructions — lives only
+    // in this rule. Losing it turns memory into a tool nobody calls.
+    expect(COPILOT_DOCTRINE).toContain("remember tool")
+    expect(COPILOT_DOCTRINE).toContain("Never remember secrets")
+  })
+
   it("tells the model the recipe catalog exists", () => {
     // get_recipe is allowlisted but self-describing only at the tool level; the
     // LEARN step is what makes the model actually reach for a proven playbook

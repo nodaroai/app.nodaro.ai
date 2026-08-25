@@ -110,6 +110,8 @@ export interface CopilotStoreState {
   setRunSettings: (mode: CopilotRunMode, limit: number, allowPublishing?: boolean) => void
   /** This thread may author publishing nodes. Off until the user says so. */
   allowPublishing: boolean
+  /** Undo on a pinned memory save — the DELETE already succeeded when this runs. */
+  removeMemorySave: (id: string) => void
   /** Called when the editor loads a different workflow — everything resets. */
   resetForWorkflow: (workflowId: string | null) => void
 }
@@ -169,6 +171,8 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
     }),
   setRunSettings: (runMode, autoRunLimit, allowPublishing) =>
     set({ runMode, autoRunLimit, ...(allowPublishing === undefined ? {} : { allowPublishing }) }),
+  removeMemorySave: (id) =>
+    set((s) => ({ turn: { ...s.turn, memorySaves: s.turn.memorySaves.filter((m) => m.id !== id) } })),
 
   resetForWorkflow: (workflowId) => {
     if (get().workflowId === workflowId) return

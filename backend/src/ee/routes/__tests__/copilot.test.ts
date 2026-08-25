@@ -53,6 +53,15 @@ vi.mock("../../copilot/store.js", async (importOriginal) => {
   }
 })
 
+const memoriesMock = vi.hoisted(() => ({
+  listMemories: vi.fn(async () => [] as unknown[]),
+  deleteMemory: vi.fn(async () => false),
+}))
+vi.mock("../../copilot/memories.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../copilot/memories.js")>()
+  return { ...actual, listMemories: memoriesMock.listMemories, deleteMemory: memoriesMock.deleteMemory }
+})
+
 const { registerCopilotRoutes } = await import("../copilot.js")
 const { TURN_ERROR_TEXT } = await import("../../copilot/turn-runner.js")
 
@@ -170,6 +179,48 @@ describe("copilot routes — turn preconditions", () => {
     })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("thread_cap_reached")
+  })
+})
+
+describe("copilot memories routes (M1)", () => {
+  it("refuses non-JWT callers on both routes — a token must not read or erase a user's memory", async () => {
+    const app = await buildApp()
+    for (const [method, url] of [
+      ["GET", "/v1/copilot/memories"],
+      ["DELETE", "/v1/copilot/memories/5f0e8f6a-1111-2222-3333-444455556666"],
+    ] as const) {
+      const res = await app.inject({ method, url, headers: { "x-test-auth": "app-token" } })
+      expect(res.statusCode, `${method} ${url}`).toBe(403)
+      expect(res.json().error.code).toBe("in_app_only")
+    }
+    expect(memoriesMock.listMemories).not.toHaveBeenCalled()
+    expect(memoriesMock.deleteMemory).not.toHaveBeenCalled()
+  })
+
+  it("lists the CALLER's memories only", async () => {
+    memoriesMock.listMemories.mockResolvedValueOnce([{ id: "m1", content: "always 9:16", created_at: "t" }])
+    const app = await buildApp()
+    const res = await app.inject({ method: "GET", url: "/v1/copilot/memories" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.memories).toHaveLength(1)
+    expect(memoriesMock.listMemories).toHaveBeenCalledWith("u1")
+  })
+
+  it("delete validates the id shape, scopes to the caller, and 404s a foreign or missing row", async () => {
+    const app = await buildApp()
+
+    const bad = await app.inject({ method: "DELETE", url: "/v1/copilot/memories/not-a-uuid" })
+    expect(bad.statusCode).toBe(400)
+    expect(memoriesMock.deleteMemory).not.toHaveBeenCalled()
+
+    const missing = await app.inject({ method: "DELETE", url: "/v1/copilot/memories/5f0e8f6a-1111-2222-3333-444455556666" })
+    expect(missing.statusCode).toBe(404)
+    expect(memoriesMock.deleteMemory).toHaveBeenCalledWith("u1", "5f0e8f6a-1111-2222-3333-444455556666")
+
+    memoriesMock.deleteMemory.mockResolvedValueOnce(true)
+    const ok = await app.inject({ method: "DELETE", url: "/v1/copilot/memories/5f0e8f6a-1111-2222-3333-444455556666" })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json().data.deleted).toBe(true)
   })
 })
 

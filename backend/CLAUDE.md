@@ -123,6 +123,15 @@ incident, not a style nit:
 - **`copilot-turn` is NOT a sync reconcile kind.** `ee/copilot/reconcile.ts`
   commits the per-iteration `copilot_turns.cost_usd` for a crashed turn instead
   of refunding spend that really happened.
+- **Memory (M1) is per-user, visible, and table-tolerant.** `copilot_memories`
+  (migration 343) is user-scoped ONLY — cross-user learning stays a human-gated
+  pipeline, never this table. The `remember` native tool rejects any content
+  containing `http` (a memory is cross-thread persistent — a URL in one is a
+  durable exfiltration channel), every save emits `memory_saved` so the panel
+  pins it with an undo, and EVERY read/write in `ee/copilot/memories.ts`
+  degrades gracefully when the table is absent (staging runs against the shared
+  DB before the migration lands on main). Memories inject into the per-turn
+  context preamble, NEVER the cached doctrine prefix.
 - Liveness is the turn's `heartbeat_at`, never a thread column; a stale turn
   self-heals on the next request. Every route requires `req.authKind === "jwt"`
   (403 `in_app_only`), and access is checked in the FIRST preHandler so a

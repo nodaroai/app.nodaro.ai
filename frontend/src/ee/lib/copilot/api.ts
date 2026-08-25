@@ -75,3 +75,22 @@ export function updateCopilotThread(
 export function cancelCopilotTurn(threadId: string): Promise<{ cancelled: boolean }> {
   return request<{ cancelled: boolean }>(`/v1/copilot/threads/${encodeURIComponent(threadId)}/cancel`, { method: "POST" })
 }
+
+// ---------------------------------------------------------------------------
+// Memories (M1) — what the copilot remembers about this user
+// ---------------------------------------------------------------------------
+
+export interface CopilotMemory {
+  id: string
+  content: string
+  created_at: string
+}
+
+export function listCopilotMemories(): Promise<{ memories: CopilotMemory[] }> {
+  return request<{ memories: CopilotMemory[] }>("/v1/copilot/memories")
+}
+
+/** The undo on a pinned save, and the panel's delete. */
+export function deleteCopilotMemory(memoryId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/v1/copilot/memories/${encodeURIComponent(memoryId)}`, { method: "DELETE" })
+}

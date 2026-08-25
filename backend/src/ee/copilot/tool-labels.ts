@@ -4,6 +4,7 @@ const LABELS: Readonly<Record<string, string>> = {
   edit_workflow: "Editing the canvas",
   run_workflow: "Proposing a run",
   get_execution: "Checking the run",
+  remember: "Saving a memory",
   diagnose_run: "Diagnosing failures",
   get_job: "Reading a job",
   get_node_skill: "Reading node docs",

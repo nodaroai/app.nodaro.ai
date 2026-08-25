@@ -65,6 +65,15 @@ It only ever sees things that are yours: the public gallery is out of reach, and
 - **Start a run on its own**, in Ask mode, or above your limit in Auto mode.
 - **Delete a workflow, publish anything, or touch another workflow** — it can only edit the one you have open.
 
+## What it remembers
+
+Tell the copilot a lasting preference — "always 9:16", "never add background music" — and it saves it, once, for every future conversation. Memory is deliberately narrow and fully visible:
+
+- **Every save shows.** The moment something is remembered, a pinned "Remembered" line appears in the conversation with an **Undo** button. There is no silent remembering.
+- **You hold the list.** The bookmark button in the panel header opens **What the Copilot remembers** — every saved preference, each with a **Forget** button. Deleting one takes effect from your next message.
+- **Per user, and only yours.** Memories never cross accounts and are not shared with a workspace.
+- **Short and safe by construction.** A memory is one short statement (up to 400 characters, at most 50 saved). It can never contain a link, and the copilot is instructed never to save secrets or one-off task details.
+
 ## Credits
 
 A copilot message is billed for the assistant's actual model usage. The panel shows an upper bound before you send; the amount actually charged appears under the reply and is usually well below it. A conversation that reaches the ceiling stops and tells you, rather than continuing silently.

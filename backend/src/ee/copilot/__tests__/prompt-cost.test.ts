@@ -62,9 +62,9 @@ describe("the tool surface's prompt cost", () => {
     expect(size).toBeLessThan(24_000)
   })
 
-  it("is dominated by the ALLOWLIST, not the four native tools", async () => {
+  it("is dominated by the ALLOWLIST, not the five native tools", async () => {
     // Measured, because the opposite was the intuitive guess and it is wrong:
-    // the four hand-written native schemas are ~3.6KB, the allowlisted MCP
+    // the five hand-written native schemas are ~4.3KB, the allowlisted MCP
     // tools ~15KB. So the lever on prompt cost is which tools are allowlisted,
     // not how verbose `edit_workflow`'s schema is — worth knowing before
     // someone optimises the wrong half.

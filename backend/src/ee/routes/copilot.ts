@@ -41,6 +41,7 @@ import {
   type CopilotThread,
 } from "../copilot/store.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
+import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
 
 const createThreadBody = z
@@ -302,6 +303,31 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
     }
     await archiveThread(id, req.userId!)
     return reply.send({ data: { archived: true } })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /v1/copilot/memories — "what the copilot remembers" (per-user, M1)
+  // -------------------------------------------------------------------------
+  app.get("/v1/copilot/memories", async (req, reply) => {
+    if (!requireJwt(req, reply)) return
+    // Table-tolerant by construction: before migration 343 reaches the shared
+    // database, this is an empty list, never an error.
+    const memories = await listMemories(req.userId!)
+    return reply.send({ data: { memories } })
+  })
+
+  // -------------------------------------------------------------------------
+  // DELETE /v1/copilot/memories/:id — the undo, and the panel's delete
+  // -------------------------------------------------------------------------
+  app.delete("/v1/copilot/memories/:id", async (req, reply) => {
+    if (!requireJwt(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid memory id" } })
+    }
+    const deleted = await deleteMemory(req.userId!, id)
+    if (!deleted) return reply.status(404).send({ error: { code: "not_found", message: "Memory not found" } })
+    return reply.send({ data: { deleted: true } })
   })
 
   // -------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { CopilotMemoriesButton } from "./copilot-memories"
 import type { CopilotRunMode } from "@/ee/lib/copilot/types"
 
 interface CopilotHeaderProps {
@@ -47,14 +48,17 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
       <div className="flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-[2px] bg-primary" aria-hidden />
         <span className="text-[13.5px] font-semibold text-foreground tracking-[-0.01em]">{S.title}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={S.close}
-          className="ml-auto w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
-        >
-          <X className="w-3 h-3" strokeWidth={2.2} />
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <CopilotMemoriesButton />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={S.close}
+            className="w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
+          >
+            <X className="w-3 h-3" strokeWidth={2.2} />
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

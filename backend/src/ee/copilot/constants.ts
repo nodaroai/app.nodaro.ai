@@ -137,6 +137,20 @@ export const NATIVE_TOOLS = {
   editWorkflow: "edit_workflow",
   runWorkflow: "run_workflow",
   getExecution: "get_execution",
+  remember: "remember",
+} as const
+
+/**
+ * Per-user copilot memory (M1). User-scoped ONLY — cross-user learning is a
+ * human-gated pipeline, never this table. A memory is cross-thread persistent,
+ * which is why a URL inside one is rejected outright: it would be a
+ * persistence/exfiltration channel that outlives the turn that wrote it.
+ */
+export const MEMORY_CAPS = {
+  maxChars: 400,
+  maxPerUser: 50,
+  /** The injected preamble section's budget — newest memories survive. */
+  blockMaxChars: 2_000,
 } as const
 
 /** Graph size caps for edit_workflow. */

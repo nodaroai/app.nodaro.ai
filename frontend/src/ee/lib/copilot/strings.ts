@@ -105,6 +105,16 @@ export const COPILOT_STRINGS = {
   stillWorkingTitle: "Still working on your last message",
   stillWorkingBlurb: "The connection dropped but the turn is still running. It will appear here when it lands.",
 
+  memoryRemembered: "Remembered",
+  memoryUndo: "Undo",
+  memoryUndoFailed: "Could not remove that — open “What the Copilot remembers” and delete it there.",
+  memoriesOpen: "What the Copilot remembers",
+  memoriesTitle: "What the Copilot remembers",
+  memoriesBlurb: "Standing preferences saved from your conversations. The Copilot reads these at the start of every message.",
+  memoriesEmpty: "Nothing saved yet — when you state a lasting preference (“always 9:16”), it is kept here.",
+  memoriesDelete: "Forget",
+  memoriesLoadFailed: "Could not load memories.",
+
   a11yWorking: "Copilot is working.",
   a11yDone: "Copilot finished.",
   errorRetry: "Try again",
