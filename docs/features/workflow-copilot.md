@@ -59,11 +59,32 @@ It only ever sees things that are yours: the public gallery is out of reach, and
 
 ## What it will not do
 
-- **Add nodes that send data out of Nodaro.** Webhook Output and the social publishers have to be added by you. This is deliberate: text inside a workflow (a node label, a description, a provider error) is content someone else may have written, and an assistant that could act on it could be talked into shipping your data somewhere.
+- **Add a Webhook Output node, or any node that fetches from a web address.** Those send to, or read from, an address written inside the node — so an assistant that could add one could be talked into sending your media somewhere you never chose. They are yours to add, always, and no setting changes that.
 - **Type a URL into a node.** Media reaches a node through a connection, a saved character or location, or one of your own files — which the copilot names by id, never by address.
 - **Use a file that is not yours.** It can only reach what is in your own library, and a file it cannot find is refused rather than guessed at.
 - **Start a run on its own**, in Ask mode, or above your limit in Auto mode.
-- **Delete a workflow, publish anything, or touch another workflow** — it can only edit the one you have open.
+- **Choose where a post goes.** Even with posting turned on (below), the account, the channel, the platform and who can see the result stay yours to set.
+- **Delete a workflow or touch another one** — it can only edit the one you have open.
+
+## Letting it build posting steps
+
+By default the copilot cannot add a step that posts to TikTok, YouTube, Telegram, X, LinkedIn, Facebook or Instagram. Turn on **"Let it build posting steps"** in the panel and it can — for that conversation only, and off again whenever you like.
+
+What it can do with that on: add a posting step and wire it into the workflow it just built, so a flow that makes a video can end by publishing it.
+
+**What it still cannot do, with it on or off:**
+
+- Choose **which account** it posts to. A posting step it builds names no account, and the run uses your default for that platform.
+- Choose the **channel**, the **platform**, or **who can see the post**. Posts start private; only you change that.
+- Add a **Webhook Output** node or a web fetcher. Those stay refused for every conversation — see above.
+
+The reason for the split: a posting step publishes to an account you already connected, so the worst case is something on your own timeline that you did not want, which you can delete. A webhook sends your media to an address written in the node, which is a different kind of thing entirely.
+
+### Choosing the default account
+
+If you have connected more than one account on the same platform, **Integrations** lets you mark which one is the default. That is the account a posting step uses when it does not name one — which is every step the copilot builds.
+
+With one account there is nothing to choose and no control is shown. If you have several and have not marked one, the oldest is used.
 
 ## What it remembers
 
