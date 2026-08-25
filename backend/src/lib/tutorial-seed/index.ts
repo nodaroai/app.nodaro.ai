@@ -23,6 +23,8 @@ import { supabase } from "../supabase.js"
 import { isCloud } from "../config.js"
 import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"
 import { TUTORIAL_SYSTEM_EMAIL } from "../system-account.js"
+import { loadTutorialPacks } from "./packs.js"
+import type { TutorialPackCategory, TutorialTemplateDoc } from "./types.js"
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
 
@@ -43,25 +45,6 @@ const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
 // screen's hasUsers) can exclude it without knowing about this seeder.
 const SYSTEM_EMAIL = TUTORIAL_SYSTEM_EMAIL
 const SYSTEM_NAME = "Nodaro"
-
-interface TutorialTemplateDoc {
-  slug: string
-  name: string
-  description?: string | null
-  markdownDescription?: string | null
-  category?: string
-  outputTypes?: string[]
-  tags?: string[]
-  complexity?: string
-  previewMediaUrl?: string | null
-  previewMediaType?: string | null
-  /** Looked up by slug — migration 114 seeds the categories themselves. */
-  tutorialCategorySlug: string
-  tutorialSortOrder: number
-  nodes: unknown[]
-  edges: unknown[]
-  settings?: Record<string, unknown>
-}
 
 /** Content fingerprint. Stored on the row so a reworded tutorial actually
  *  reaches installations that already seeded an older copy — an insert-only
@@ -143,6 +126,26 @@ async function categoryIdBySlug(slug: string): Promise<string | null> {
     .eq("slug", slug)
     .maybeSingle()
   return (data?.id as string | undefined) ?? null
+}
+
+/**
+ * Ensure a pack-declared category exists (data, not a migration). Select-then-
+ * insert, mirroring ensureSystemProject: an existing slug is a no-op; a new one
+ * is created so the pack's templates satisfy migration 114's CHECK ('tutorial'
+ * in listed_in REQUIRES a category). Returns false on failure so the caller can
+ * skip that pack rather than let N per-template CHECK violations fire.
+ */
+async function ensureTutorialCategory(cat: TutorialPackCategory): Promise<boolean> {
+  const existing = await categoryIdBySlug(cat.slug)
+  if (existing) return true
+  const { error } = await supabase
+    .from("tutorial_categories")
+    .insert({ slug: cat.slug, name: cat.name, sort_order: cat.sortOrder ?? 0 })
+  if (error) {
+    console.warn(`[tutorial-seed] could not ensure category ${cat.slug}:`, error)
+    return false
+  }
+  return true
 }
 
 /**
@@ -313,7 +316,7 @@ async function runSeed(): Promise<void> {
   const projectId = await ensureSystemProject(userId)
 
   const counts = { created: 0, updated: 0, unchanged: 0 }
-  for (const doc of docs) {
+  const seedDoc = async (doc: TutorialTemplateDoc) => {
     try {
       counts[await seedOne(doc, userId, projectId)] += 1
     } catch (err) {
@@ -323,6 +326,27 @@ async function runSeed(): Promise<void> {
       console.warn(`[tutorial-seed] ${doc.slug} failed:`, err)
     }
   }
+
+  for (const doc of docs) await seedDoc(doc)
+
+  // Operator-supplied packs (business/self-host). loadTutorialPacks has already
+  // validated + de-duplicated them against the base slugs; a malformed pack was
+  // skipped whole and logged. Ensure each pack's categories before its docs so
+  // the migration-114 tutorial-requires-category CHECK never fires.
+  const baseSlugs = new Set(docs.map((d) => d.slug))
+  const packs = await loadTutorialPacks({ baseSlugs })
+  for (const pack of packs) {
+    let categoriesOk = true
+    for (const cat of pack.categories) {
+      if (!(await ensureTutorialCategory(cat))) categoriesOk = false
+    }
+    if (!categoriesOk) {
+      console.warn(`[tutorial-seed] pack ${pack.name}: a category could not be ensured — skipping its tutorials`)
+      continue
+    }
+    for (const doc of pack.docs) await seedDoc(doc)
+  }
+
   if (counts.created || counts.updated) {
     console.log(
       `[tutorial-seed] ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`,

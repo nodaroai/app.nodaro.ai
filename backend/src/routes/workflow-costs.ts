@@ -4,18 +4,20 @@ import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { requireScope } from "../lib/scopes.js"
+import { getBillingProvider, type Charge } from "../lib/billing-provider.js"
 
 const costSummaryBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(500),
 })
 
+// The owner-scoped DB read is for METADATA only (status + input_data grouping);
+// money comes from the registered BillingProvider.report() (§5.2 rule 1). This
+// preserves the IDOR hardening (owner-scoped select) while sourcing charges from
+// the metering authority instead of coalescing an unanswered lookup to 0.
 interface JobRow {
   readonly id: string
   readonly status: string
   readonly input_data: Record<string, unknown> | null
-  readonly provider_cost: number | null
-  readonly display_cost: number | null
-  readonly credits: number | null
 }
 
 interface BreakdownEntry {
@@ -24,9 +26,10 @@ interface BreakdownEntry {
   runs: number
   successful: number
   failed: number
-  total_credits: number
-  total_cost_usd: number
-  avg_credits_per_run: number
+  total_credits: number | null
+  total_cost_usd: number | null
+  avg_credits_per_run: number | null
+  unavailable: number
 }
 
 export async function workflowCostRoutes(app: FastifyInstance) {
@@ -57,7 +60,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, input_data, provider_cost, display_cost, credits")
+      .select("id, status, input_data")
       .in("id", jobIds)
     if (!isAdmin) {
       query = query.eq("user_id", req.userId)
@@ -70,10 +73,17 @@ export async function workflowCostRoutes(app: FastifyInstance) {
 
     const rows = (jobs ?? []) as readonly JobRow[]
 
-    // Aggregate by (node_type, model)
+    // Money from the metering authority — null stays null (never a fabricated 0).
+    const charges: Map<string, Charge> | null = await getBillingProvider().report(jobIds)
+
     const groups = new Map<string, BreakdownEntry>()
-    let totalCredits = 0
-    let totalCostUsd = 0
+    // Track "known" so a total is null ONLY when zero jobs had a known value —
+    // never a fabricated 0 for an unanswered lookup (§5.2 rule 1).
+    let creditsSum = 0
+    let creditsKnown = false
+    let usdSum = 0
+    let usdKnown = false
+    let unavailable = 0
     let totalJobs = 0
 
     for (const job of rows) {
@@ -81,55 +91,51 @@ export async function workflowCostRoutes(app: FastifyInstance) {
       const nodeType = (inputData.type as string) ?? "unknown"
       const model = (inputData.provider as string) ?? "unknown"
       const key = `${nodeType}::${model}`
-
-      const credits = job.credits ?? 0
-      const costUsd = job.display_cost ?? job.provider_cost ?? 0
+      const charge = charges?.get(job.id) ?? null
+      const credits = charge?.amount ?? null
+      const usd = charge?.secondaryAmount ?? null
       const isSuccess = job.status === "completed"
       const isFailed = job.status === "failed" || job.status === "cancelled"
+      const priced = credits != null || usd != null
 
-      totalCredits += credits
-      totalCostUsd += costUsd
       totalJobs += 1
+      if (credits != null) { creditsSum += credits; creditsKnown = true }
+      if (usd != null) { usdSum += usd; usdKnown = true }
+      if (!priced) unavailable += 1
 
-      const existing = groups.get(key)
-      if (existing) {
-        groups.set(key, {
-          ...existing,
-          runs: existing.runs + 1,
-          successful: existing.successful + (isSuccess ? 1 : 0),
-          failed: existing.failed + (isFailed ? 1 : 0),
-          total_credits: existing.total_credits + credits,
-          total_cost_usd: existing.total_cost_usd + costUsd,
-          avg_credits_per_run: 0, // calculated below
-        })
-      } else {
-        groups.set(key, {
-          node_type: nodeType,
-          model,
-          runs: 1,
-          successful: isSuccess ? 1 : 0,
-          failed: isFailed ? 1 : 0,
-          total_credits: credits,
-          total_cost_usd: costUsd,
-          avg_credits_per_run: 0,
-        })
+      const prev = groups.get(key)
+      const base: BreakdownEntry = prev ?? {
+        node_type: nodeType, model, runs: 0, successful: 0, failed: 0,
+        total_credits: null, total_cost_usd: null,
+        avg_credits_per_run: null, unavailable: 0,
       }
+      groups.set(key, {
+        ...base,
+        runs: base.runs + 1,
+        successful: base.successful + (isSuccess ? 1 : 0),
+        failed: base.failed + (isFailed ? 1 : 0),
+        total_credits: credits != null ? (base.total_credits ?? 0) + credits : base.total_credits,
+        total_cost_usd: usd != null ? (base.total_cost_usd ?? 0) + usd : base.total_cost_usd,
+        avg_credits_per_run: base.avg_credits_per_run, // computed below
+        unavailable: base.unavailable + (priced ? 0 : 1),
+      })
     }
 
-    // Calculate averages and build sorted array
     const breakdown: BreakdownEntry[] = [...groups.values()]
-      .map((entry) => ({
-        ...entry,
-        total_cost_usd: Math.round(entry.total_cost_usd * 1_000_000) / 1_000_000,
-        avg_credits_per_run: entry.runs > 0 ? Math.round(entry.total_credits / entry.runs) : 0,
+      .map((e) => ({
+        ...e,
+        total_cost_usd: e.total_cost_usd != null ? Math.round(e.total_cost_usd * 1_000_000) / 1_000_000 : null,
+        avg_credits_per_run:
+          e.total_credits != null && e.runs > 0 ? Math.round(e.total_credits / e.runs) : null,
       }))
-      .sort((a, b) => b.total_credits - a.total_credits)
+      .sort((a, b) => (b.total_credits ?? -1) - (a.total_credits ?? -1))
 
     return {
       data: {
-        total_credits: totalCredits,
-        total_cost_usd: Math.round(totalCostUsd * 1_000_000) / 1_000_000,
+        total_credits: creditsKnown ? creditsSum : null,
+        total_cost_usd: usdKnown ? Math.round(usdSum * 1_000_000) / 1_000_000 : null,
         total_jobs: totalJobs,
+        unavailable,
         breakdown,
       },
     }

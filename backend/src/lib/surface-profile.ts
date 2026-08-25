@@ -38,6 +38,7 @@ export interface SurfaceProfile {
   brand: { productName: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
+  voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
   catalogPolicy?: unknown // B4 (Phase 4) — carried opaque; validated loosely, never read here
 }
 
@@ -51,6 +52,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   brand: { productName: "Nodaro" },
   locale: { picker: true },
   outputs: { allowPublic: true },
+  voice: { allowedGenders: [] },
 }
 
 const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community"])
@@ -123,6 +125,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   brand: z.object({ productName: z.string().min(1) }).catch({ productName: "Nodaro" }),
   locale: z.object({ default: z.string().optional(), picker: z.boolean() }).catch({ picker: true }),
   outputs: z.object({ allowPublic: lenientPublicFlag }).catch({ allowPublic: true }),
+  voice: z.object({ allowedGenders: stringArray() }).catch({ allowedGenders: [] }),
   catalogPolicy: z.unknown().optional(),
 }) as z.ZodType<SurfaceProfile>
 
@@ -140,6 +143,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     brand: { ...d.brand, ...override.brand },
     locale: { ...d.locale, ...override.locale },
     outputs: { ...d.outputs, ...override.outputs },
+    voice: { ...d.voice, ...override.voice },
     catalogPolicy: override.catalogPolicy ?? d.catalogPolicy,
   }
 }

@@ -132,6 +132,39 @@ to the project-scoped `GET /v1/projects/:projectId/workflows`. If your
 OAuth token will call any of these, request `workflows:read` in the
 authorization scope.
 
+### External SSO
+
+Two **public** (no-auth) endpoints let a trusted external identity provider
+sign a user in. They are the only things mounted under `/v1/sso/`, and only for
+`GET`. Full setup — provider config, the assertion contract, and the
+account-linking rules — is in [External SSO](./sso.md); it is **off** unless
+`EXTERNAL_SSO_PROVIDERS` is configured.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/sso/providers` | Public provider metadata for the login page. Returns `{ "providers": [{ "id", "label", "kind" }] }` — **never** a secret. `{ "providers": [] }` when SSO is off. |
+| `GET` | `/v1/sso/:provider` | The exchange endpoint (a **browser redirect** endpoint, not a JSON API). |
+
+`GET /v1/sso/:provider` behaves by what it is called with:
+
+- **Without `?assertion=`** — redirects (`302`) to the provider's `initiateUrl`
+  (the login-button entry point), or `400 no_assertion` if none is configured.
+- **With `?assertion=<jwt>`** — verifies the assertion (HS256 signature, `aud`,
+  `exp`, server-enforced max lifetime, single-use `jti`), applies the
+  account-linking rules, mints a one-time Supabase login token, and redirects
+  (`302`) to `/sso?sso_token=<token>&next=<same-origin-relative-path>`. The
+  browser's `/sso` landing exchanges that token for a session.
+- A `?next=` value is honoured only when it is a same-origin **relative** path;
+  anything else falls back to `/projects` (open-redirect guard).
+
+Status codes: `401` (bad or replayed assertion), `403` (`account_exists` /
+`email_unverified` / `account_linked_other_provider` — linking refused; the last
+when the email already belongs to an account linked to a **different** identity
+provider, which is never re-stamped), `404` (unknown provider), `400`
+(`not_assertion_provider` when a native OIDC/SAML provider is hit with an
+assertion), `429` (per-IP rate limit). The assertion and the minted token are
+redacted from request logs.
+
 ## 4. Worked example: generate an image
 
 End-to-end bash. Assumes you've copied your token into `$TOKEN` and have
@@ -980,6 +1013,29 @@ first. The `/v1/billing/*` routes (checkout, load sessions, auto-recharge,
 purchase history with receipt links, Stripe portal) are **first-party-only**:
 they reject API and OAuth-app tokens and are used from a logged-in Nodaro
 session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+
+## 12b. Billing surface
+
+Two endpoints let a client render cost and usage views without hard-coding
+"is this deployment metered?" — the deployment tells you which billing
+provider is registered and answers per-job / per-account cost lookups
+through it.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/billing/surface` | **Public** (no token) | Deployment-level projection — no per-user data, cacheable. Returns `{ data: { contract, providerId, displayUnit, canReport, canQuote, canAccount, mountCostTab } }`. On a keyless / community install `providerId` is `"none"` and `mountCostTab` is `false` (no cost view). |
+| `GET` | `/v1/billing/account` | Bearer token | Per-user account summary from the registered provider: `{ data: { plan, balance, dailyAllowance, unit } \| null }`. `data: null` means the metering authority could not answer — clients MUST render that distinctly and never as a zero balance. |
+
+`contract` is the billing-surface contract version (an integer). `displayUnit`
+is the unit a cost view should default to (e.g. `"usd"` or `"credits"`) — it
+follows the registered metering authority, not the edition.
+
+**Cost summary response (`POST /v1/jobs/cost-summary`).** The money fields
+`total_credits` and `total_cost_usd` (top-level and per breakdown row) are
+`number | null`, and the response carries an `unavailable` count (jobs the
+metering authority could not price). A `null` total means **no** job in the
+batch had a known charge — it is NOT `0`. Render a `null` value distinctly
+(e.g. an em dash), never as a free/zero cost.
 
 ## 13. Job batch polling
 

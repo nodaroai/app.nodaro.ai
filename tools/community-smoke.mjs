@@ -556,6 +556,15 @@ await check("billing routes are absent on an edition with no billing", async () 
   return `${probes.length} ee routes correctly 404`
 })
 
+await check("billing surface is 'none' on the keyless community install (no Cost tab)", async () => {
+  // Public route (deployment config, no per-user data) — answers tokenless.
+  const { status, json } = await api("/v1/billing/surface")
+  assert(status === 200, `expected 200, got ${status}`)
+  assert(json?.data?.providerId === "none", `billing surface should be 'none' on community, got ${json?.data?.providerId}`)
+  assert(json?.data?.mountCostTab === false, "community must not mount the Cost tab")
+  return "surface providerId 'none', mountCostTab false, answered tokenless"
+})
+
 await check("discovery does not advertise nodes this edition cannot run", async () => {
   const cloudOnly = readCloudOnlyNodeTypes()
   if (!cloudOnly) {

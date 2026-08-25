@@ -15,6 +15,7 @@ import { safeFetch } from "../lib/safe-fetch.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
+import { isNodeDenied, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 
 const fromUrlBody = z.object({
   audioUrl: safeUrlSchema,
@@ -86,6 +87,14 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // B4c: reuse B1's nodes.deny — a deployment can remove voice-creation
+    // capability. Inert when "voice-clone" isn't in nodes.deny.
+    if (isNodeDenied("voice-clone")) {
+      return reply.status(403).send({
+        error: { code: "node_not_available", message: deniedNodeRejectionMessage(["voice-clone"]) },
       })
     }
 
@@ -234,6 +243,12 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    // B4c: reuse B1's nodes.deny — inert when "voice-clone" isn't denied.
+    if (isNodeDenied("voice-clone")) {
+      return reply.status(403).send({
+        error: { code: "node_not_available", message: deniedNodeRejectionMessage(["voice-clone"]) },
       })
     }
     if (!config.ELEVENLABS_API_KEY) {

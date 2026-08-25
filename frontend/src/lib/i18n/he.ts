@@ -436,6 +436,7 @@ export const he: ChromeDict = {
   "cost.toggleCredits": "מוצג בקרדיטים -- לחצו למעבר לדולרים",
   "cost.totalFromRun": "סה\"כ מהרצה אחת",
   "cost.totalFromRuns": "סה\"כ מ-{n} הרצות",
+  "cost.unavailable": "{n} לא זמינים",
   "cost.col.type": "סוג",
   "cost.col.model": "מודל",
   "cost.col.runs": "הרצות",

@@ -76,6 +76,7 @@ vi.mock("../../shared.js", () => ({
 
 import { sunoHandlers } from "../suno.js"
 import { config } from "@/lib/config.js"
+import { registerPromptPolicy, clearPromptPolicies } from "../../../lib/prompt-policy.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -210,6 +211,30 @@ describe("suno-generate handler", () => {
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: expect.not.objectContaining({ audioUrls: expect.anything() }),
     }))
+  })
+
+  describe("PromptPolicy (B4b)", () => {
+    afterEach(() => clearPromptPolicies())
+
+    it("applies the audio PromptPolicy (prompt + forced vocalGender) before the provider call", async () => {
+      registerPromptPolicy({
+        id: "audio",
+        apply: (a) => (a.kind === "audio" ? { ...a, prompt: `${a.prompt} A`, vocalGender: "male" } : a),
+      })
+      const job = makeJob("suno-generate", { prompt: "a ballad", vocalGender: "female", customMode: false })
+      await handler(job as never, makeCtx())
+      const call = mocks.mockSunoGenerate.mock.calls[0][0]
+      expect(call.prompt).toBe("a ballad A")
+      expect(call.vocalGender).toBe("male")
+    })
+
+    it("is byte-identical (no policy): keeps the caller's prompt + vocalGender", async () => {
+      const job = makeJob("suno-generate", { prompt: "a ballad", vocalGender: "female", customMode: false })
+      await handler(job as never, makeCtx())
+      const call = mocks.mockSunoGenerate.mock.calls[0][0]
+      expect(call.prompt).toBe("a ballad")
+      expect(call.vocalGender).toBe("female")
+    })
   })
 })
 

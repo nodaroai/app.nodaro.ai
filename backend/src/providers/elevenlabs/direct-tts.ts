@@ -2,6 +2,8 @@ import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
+import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 
 function resolveModel(provider?: string): string {
   if (provider === "elevenlabs-v3") return "eleven_v3"
@@ -29,6 +31,12 @@ function ttsModelKey(provider?: string): string {
 // "Rachel" isn't a valid voice_id path segment.
 const PREMADE_VOICE_IDS: Record<string, string> = {
   Rachel: "21m00Tcm4TlvDq8ikWAM",
+  // Adam + Harry ship in the premade catalog (lib/premade-voices.ts) with their
+  // UUID as the catalog voice_id, so a picker sending the UUID always worked —
+  // but a NAME-based reference (the B4c policy-owned default returns the picked
+  // voice's NAME) needs this name→id entry or the direct API 404s on "Adam".
+  Adam: "pNInz6obpgDQGcFmaJgB",
+  Harry: "SOYHLrjzK2X1ezoPC6cr",
   Aria: "9BWtsMINqrJLrRacOk9x",
   Roger: "CwhRBWXzGAHq8TQ4Fs17",
   Sarah: "EXAVITQu4vr4xnSDxMaL",
@@ -260,12 +268,17 @@ export async function directElevenLabsTTS(
     const errPreview = await response.clone().text().catch(() => "")
     if (errPreview.includes("voice_not_found")) {
       if (options?.allowDefaultVoiceFallback) {
+        // B4c: the default fallback is policy-owned — the first allowed-gender
+        // premade voice (Rachel when unrestricted). Resolve its name → id for
+        // the direct API. Byte-identical to the old Rachel fallback when
+        // voice.allowedGenders is [].
+        const fallbackId = resolveDirectVoiceId(defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"))
         // eslint-disable-next-line no-console
         console.warn(
           `[elevenlabs] voice_not_found for "${resolvedVoiceId}" (likely ` +
-            `LLM hallucination); falling back to Rachel`,
+            `LLM hallucination); falling back to the policy default voice`,
         )
-        response = await attempt(PREMADE_VOICE_IDS.Rachel!)
+        response = await attempt(fallbackId)
       } else {
         throw new Error(
           `Voice "${voiceId}" was not found on ElevenLabs — it may have been ` +

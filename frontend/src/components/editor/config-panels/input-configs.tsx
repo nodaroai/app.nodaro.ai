@@ -37,7 +37,8 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
 import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
-import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatusLean, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import { uploadAudio, fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import { runYouTubeAudioExtraction } from "@/lib/youtube-audio-extraction"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
@@ -1391,19 +1392,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
     setExtracting(true)
     onUpdate({ extractionStatus: "extracting" })
     try {
-      const { jobId } = await extractYouTubeAudioApi(url)
-      const poll = async (): Promise<string> => {
-        const status = await getJobStatusLean(jobId)
-        if (status.status === "completed" && status.output_data?.audioUrl) {
-          return status.output_data.audioUrl
-        }
-        if (status.status === "failed") {
-          throw new Error(status.error_message ?? "Extraction failed")
-        }
-        await new Promise((r) => setTimeout(r, 2000))
-        return poll()
-      }
-      const audioUrl = await poll()
+      const audioUrl = await runYouTubeAudioExtraction(url)
       onUpdate({ extractedAudioUrl: audioUrl, extractionStatus: "ready" })
     } catch {
       onUpdate({ extractionStatus: "failed" })

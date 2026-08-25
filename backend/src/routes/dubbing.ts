@@ -35,6 +35,12 @@ export async function dubbingRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4c note: no voice.allowedGenders enforcement point here — dubbing has no
+    // PREMADE voice selector. It clones the ORIGINAL speaker's voice, or (with
+    // disableVoiceCloning) substitutes a Voice Library voice whose gender is not
+    // knowable at request time. Premade-gender enforcement lives in the routes
+    // that pick a premade voice (text-to-speech); voice-creation nodes are gated
+    // by nodes.deny (Task 9).
     const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio } = parsed.data
     const userId = req.userId
 

@@ -13,6 +13,10 @@ import DashboardLayout from "@/layouts/dashboard-layout"
 
 // Auth callback (eager — critical path)
 import AuthCallback from "@/routes/auth-callback"
+// External SSO landing (B6) — eager, like auth-callback: it runs the one-time
+// token exchange before the user is authenticated, so it must not wait on a
+// lazy chunk (and there is no route-level Suspense boundary here).
+import SsoLandingPage from "@/routes/sso-landing"
 
 // Dashboard pages (eager — /projects is the landing page)
 import ProjectsPage from "@/app/(dashboard)/projects/page"
@@ -192,6 +196,10 @@ export const router = createBrowserRouter([
   {
     path: "/auth/callback",
     element: <AuthCallback />,
+  },
+  {
+    path: "/sso",
+    element: <SsoLandingPage />,
   },
   ...orgPublicRoutes,
   {

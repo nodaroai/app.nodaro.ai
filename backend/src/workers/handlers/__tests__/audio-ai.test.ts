@@ -148,6 +148,7 @@ import { audioAIHandlers } from "../audio-ai.js"
 // down the direct-ElevenLabs path, so the cloud branch was never executed
 // anywhere until CI ran it with no key at all.
 import { config } from "../../../lib/config.js"
+import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
 // Real classifier — this is the EXACT predicate refundJobCredits uses to decide
 // skip-vs-refund. Asserting on it proves the refund decision without re-mocking
 // the credit pipeline.
@@ -281,6 +282,26 @@ describe("text-to-speech handler", () => {
       "Hi", "Daniel", "elevenlabs-v3",
       expect.objectContaining({ stability: 0.5, speed: 1.2, languageCode: "en-US" }),
     )
+  })
+
+  it("resolves an omitted voice to the first allowed-gender voice, not Rachel (B4c)", async () => {
+    // Open the surface gate (config snapshots process.env once at import, so
+    // mutate the live field) + lock to male-only, then reset the memo.
+    const prevEdition = config.EDITION
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    __resetSurfaceProfileCacheForTests()
+    try {
+      const job = makeJob("text-to-speech", { text: "hello", provider: "elevenlabs-v3" }) // no voice
+      await handler(job as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+        "hello", "Adam", "elevenlabs-v3", expect.anything(),
+      )
+    } finally {
+      config.EDITION = prevEdition
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    }
   })
 
   it("returns early when finalize signals not-ok (cancelled)", async () => {

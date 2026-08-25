@@ -9,6 +9,7 @@ import type { ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport,
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
+import type { BillingSurface, BillingAccount } from "./billing-surface"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
 import { runtimeApiUrl } from "@/lib/runtime-config"
 
@@ -5356,15 +5357,17 @@ export interface CostBreakdownItem {
   readonly runs: number
   readonly successful: number
   readonly failed: number
-  readonly total_credits: number
-  readonly total_cost_usd: number
-  readonly avg_credits_per_run: number
+  readonly total_credits: number | null
+  readonly total_cost_usd: number | null
+  readonly avg_credits_per_run: number | null
+  readonly unavailable: number
 }
 
 export interface CostSummary {
-  readonly total_credits: number
-  readonly total_cost_usd: number
+  readonly total_credits: number | null
+  readonly total_cost_usd: number | null
   readonly total_jobs: number
+  readonly unavailable: number
   readonly breakdown: readonly CostBreakdownItem[]
 }
 
@@ -5375,42 +5378,67 @@ function roundUsd(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
-/** Combine per-batch summaries with the route's own (node_type, model) aggregation. */
+/** Combine per-batch summaries with the route's own (node_type, model) aggregation.
+ *  Money is null-aware: a total stays null unless at least one summand was known —
+ *  an unanswered lookup is never coalesced to 0 (§5.2 rule 1); `unavailable` is
+ *  additive across batches. */
 export function mergeCostSummaries(summaries: readonly CostSummary[]): CostSummary {
   const groups = new Map<string, CostBreakdownItem>()
-  let total_credits = 0
-  let total_cost_usd = 0
-  let total_jobs = 0
+  let creditsSum = 0, creditsKnown = false
+  let usdSum = 0, usdKnown = false
+  let total_jobs = 0, unavailable = 0
   for (const s of summaries) {
-    total_credits += s.total_credits
-    total_cost_usd += s.total_cost_usd
+    if (s.total_credits != null) { creditsSum += s.total_credits; creditsKnown = true }
+    if (s.total_cost_usd != null) { usdSum += s.total_cost_usd; usdKnown = true }
     total_jobs += s.total_jobs
+    unavailable += s.unavailable
     for (const item of s.breakdown) {
       const key = `${item.node_type}::${item.model}`
-      const acc = groups.get(key) ?? { ...item, runs: 0, successful: 0, failed: 0, total_credits: 0, total_cost_usd: 0 }
+      const acc = groups.get(key) ?? { ...item, runs: 0, successful: 0, failed: 0, total_credits: null as number | null, total_cost_usd: null as number | null, unavailable: 0 }
       groups.set(key, {
         ...acc,
         runs: acc.runs + item.runs,
         successful: acc.successful + item.successful,
         failed: acc.failed + item.failed,
-        total_credits: acc.total_credits + item.total_credits,
-        total_cost_usd: acc.total_cost_usd + item.total_cost_usd,
+        total_credits: item.total_credits != null ? (acc.total_credits ?? 0) + item.total_credits : acc.total_credits,
+        total_cost_usd: item.total_cost_usd != null ? (acc.total_cost_usd ?? 0) + item.total_cost_usd : acc.total_cost_usd,
+        unavailable: acc.unavailable + item.unavailable,
       })
     }
   }
   const breakdown = [...groups.values()]
     .map((e) => ({
       ...e,
-      total_cost_usd: roundUsd(e.total_cost_usd),
-      avg_credits_per_run: e.runs > 0 ? Math.round(e.total_credits / e.runs) : 0,
+      total_cost_usd: e.total_cost_usd != null ? roundUsd(e.total_cost_usd) : null,
+      avg_credits_per_run: e.total_credits != null && e.runs > 0 ? Math.round(e.total_credits / e.runs) : null,
     }))
-    .sort((a, b) => b.total_credits - a.total_credits)
-  return { total_credits, total_cost_usd: roundUsd(total_cost_usd), total_jobs, breakdown }
+    .sort((a, b) => (b.total_credits ?? -1) - (a.total_credits ?? -1))
+  return {
+    total_credits: creditsKnown ? creditsSum : null,
+    total_cost_usd: usdKnown ? roundUsd(usdSum) : null,
+    total_jobs, unavailable, breakdown,
+  }
+}
+
+export async function getBillingSurface(): Promise<BillingSurface> {
+  const res = await apiJson<{ data: BillingSurface }>("/v1/billing/surface", {
+    method: "GET",
+    label: "Failed to load billing surface",
+  })
+  return res.data
+}
+
+export async function getBillingAccount(): Promise<BillingAccount | null> {
+  const res = await apiJson<{ data: BillingAccount | null }>("/v1/billing/account", {
+    method: "GET",
+    label: "Failed to load billing account",
+  })
+  return res.data
 }
 
 export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise<{ data: CostSummary }> {
   if (jobIds.length === 0) {
-    return { data: { total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] } }
+    return { data: { total_credits: null, total_cost_usd: null, total_jobs: 0, unavailable: 0, breakdown: [] } }
   }
   const batchCount = Math.ceil(jobIds.length / COST_SUMMARY_BATCH_SIZE)
   // Promise.all: one failed batch fails the call — never a partial total.

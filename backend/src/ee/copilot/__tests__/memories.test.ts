@@ -38,6 +38,7 @@ function ctxWithEmit(): { ctx: CopilotToolContext; emit: ReturnType<typeof vi.fn
     turnId: "turn1",
     fastify: {} as CopilotToolContext["fastify"],
     allowPublishing: false,
+    userLinks: new Set<string>(),
     emit,
   } as CopilotToolContext
   return { ctx, emit }

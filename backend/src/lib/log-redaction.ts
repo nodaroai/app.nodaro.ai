@@ -14,7 +14,13 @@
  * a log needs, and a global rule can't miss a future OAuth route.
  */
 
-const SENSITIVE_QUERY_PARAMS = new Set(["code", "state", "access_token"])
+// `assertion` + `sso_token` are the External SSO (B6) secrets that ride the
+// query string on a GET: the signed IdP assertion on `/v1/sso/:provider?
+// assertion=…` and the minted one-time Supabase token on the `/sso?sso_token=…`
+// redirect. Fastify request logging is ENABLED in app.ts (with this
+// serializer), so without these two the assertion/token would be written to the
+// deployment logs verbatim. This global set is the single source of truth.
+const SENSITIVE_QUERY_PARAMS = new Set(["code", "state", "access_token", "assertion", "sso_token"])
 
 const REDACTED = "[redacted]"
 

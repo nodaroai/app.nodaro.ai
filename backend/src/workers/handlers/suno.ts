@@ -22,6 +22,7 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
+import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
 
@@ -212,12 +213,19 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
   console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${duration != null ? `, duration: ${duration}s` : ""}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-generate", "Suno returned no tracks")) return
 
+  // B4b: audio PromptPolicy — modesty clause on prompt/negativeStyle and any
+  // forced vocalGender, applied at the single convergence both the direct
+  // /v1/suno route and the orchestrator reach. No policy registered = identity.
+  const _ap = applyPromptPolicies({ prompt, negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
+  const _prompt = _ap.prompt
+  const _negativeStyle = _ap.negativePrompt || undefined
+  const _vocalGender = _ap.vocalGender
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-generate") }),
+    () => sunoGenerate({ prompt: _prompt, model, lyrics, style, title, negativeStyle: _negativeStyle, vocalGender: _vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-generate") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno returned no tracks", "kie")
 }
@@ -241,12 +249,17 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     console.log(`[worker] Social URL detected for cover, downloading audio first...`)
     resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
   }
+  // B4b: audio PromptPolicy — same convergence hook as suno-generate.
+  const _ap = applyPromptPolicies({ prompt, negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
+  const _prompt = _ap.prompt
+  const _negativeStyle = _ap.negativePrompt || undefined
+  const _vocalGender = _ap.vocalGender
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-cover") }),
+    () => sunoCover({ prompt: _prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle: _negativeStyle, vocalGender: _vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-cover") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie")
 }
@@ -260,12 +273,19 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
   console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-extend", "Suno extend returned no tracks")) return
 
+  // B4b: audio PromptPolicy — extend's prompt is optional; feed "" into the
+  // transform but write the result back only when the original was defined, so
+  // an absent prompt stays undefined (byte-identical when no policy registered).
+  const _ap = applyPromptPolicies({ prompt: prompt ?? "", negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
+  const _prompt = prompt === undefined ? undefined : _ap.prompt
+  const _negativeStyle = _ap.negativePrompt || undefined
+  const _vocalGender = _ap.vocalGender
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-extend") }),
+    () => sunoExtend({ audioId, defaultParamFlag, prompt: _prompt, model, style, title, continueAt, negativeStyle: _negativeStyle, vocalGender: _vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-extend") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks", "kie")
 }

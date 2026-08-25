@@ -34,6 +34,8 @@ To use a file that is not in your library yet, press the paperclip and pick it f
 
 Mentions travel as names and ids, never as file addresses — the same rule as *What it will not do* below. When the copilot uses one of your files it puts the **id** on the node and Nodaro fills in the address, so the rule that it can never type a URL holds even while it is wiring your own media.
 
+**A link you paste in chat is one it may place for you.** Paste a YouTube link and ask for "a song similar to this", and the copilot can put that exact link into the node built to hold one (a Reference Audio source, for example) — the node then fetches the audio on its own. This is the single exception to the no-URLs rule, and it only ever covers links **you yourself pasted**, copied character for character: the copilot still cannot invent a link, modify one, or write one anywhere else.
+
 A character the copilot places this way arrives complete: the picture and the saved variants are read from your library when the workflow runs, so the run uses the right likeness even if the node was added a moment ago and you have not reloaded the page.
 
 **Before a run starts, the card lists every file that was attached to it, by name.** Approving a run is the moment you agree to spend credits on that workflow, so anything the copilot wired in while building it is named there for you to check first.

@@ -11,6 +11,12 @@ export interface CopilotToolContext {
    * toggle reaches those.
    */
   readonly allowPublishing: boolean
+  /**
+   * Links the user pasted in this thread's own messages (see history.ts
+   * `extractUserLinks`) — the ONLY URLs `edit_workflow` may write into a
+   * `*Url` field, byte for byte.
+   */
+  readonly userLinks: ReadonlySet<string>
   readonly workflowId: string
   readonly projectId: string
   readonly threadId: string

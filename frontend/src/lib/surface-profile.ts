@@ -23,6 +23,7 @@ export interface SurfaceProfile {
   brand: { productName: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
+  voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
   catalogPolicy?: unknown
 }
 
@@ -36,6 +37,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   brand: { productName: "Nodaro" },
   locale: { picker: true },
   outputs: { allowPublic: true },
+  voice: { allowedGenders: [] },
 }
 
 function runtimeSurface(): Partial<SurfaceProfile> {
@@ -56,6 +58,7 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     brand: { ...d.brand, ...o.brand },
     locale: { ...d.locale, ...o.locale },
     outputs: { ...d.outputs, ...o.outputs },
+    voice: { ...d.voice, ...o.voice },
     catalogPolicy: o.catalogPolicy ?? d.catalogPolicy,
   }
 }

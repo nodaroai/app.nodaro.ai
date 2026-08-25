@@ -11,6 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { assembleImageInput, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
@@ -416,7 +417,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // In structured mode the non-native negative prompt is already folded into
     // the assembled prompt by `buildImagePrompt`; only the NATIVE negative
     // prompt rides its own channel to the worker (mirrors payload-builder).
-    const effectiveNegativePrompt = structuredMode
+    let effectiveNegativePrompt = structuredMode
       ? assembled?.nativeNegativePrompt
       : negativePrompt
 
@@ -516,6 +517,21 @@ export async function generateImageRoutes(app: FastifyInstance) {
           }
         }
       }
+    }
+
+    // B4b: apply any registered PromptPolicy to the server-authoritative final
+    // image prompt + native negative (covers BOTH structured assembly and the
+    // legacy verbatim path — the legacy branch skips `assembleImageInput`, so a
+    // structured-only hook would be bypassable). No policy registered = identity,
+    // so mainline is byte-identical.
+    {
+      const _pp = applyPromptPolicies({
+        prompt,
+        negativePrompt: effectiveNegativePrompt ?? "",
+        kind: "image",
+      })
+      prompt = _pp.prompt
+      effectiveNegativePrompt = _pp.negativePrompt || undefined
     }
 
     // LoRA inference path bypasses provider auto-routing — the synthetic

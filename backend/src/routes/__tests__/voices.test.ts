@@ -17,7 +17,12 @@ import Fastify, { type FastifyInstance } from "fastify"
 // can flip it to "" to exercise the no-key branch.
 // ---------------------------------------------------------------------------
 
-const cfgState = { key: "test-eleven-key" as string }
+// `business` gates the B4c voice-gender surface profile: surface-profile.ts's
+// surfaceGateOpen() calls isBusiness()/isCloud() (imported from this same
+// config module), reached now that /v1/voices filters by allowedGenders.
+// Default false → the surface profile is the stock default (unrestricted), so
+// every pre-existing test is byte-identical; a filter test flips it to true.
+const cfgState = { key: "test-eleven-key" as string, business: false }
 
 vi.mock("@/lib/config.js", () => ({
   config: {
@@ -28,6 +33,8 @@ vi.mock("@/lib/config.js", () => ({
     // fetches under test are issued against "undefined/v2/voices".
     ELEVENLABS_BASE_URL: "https://api.elevenlabs.io",
   },
+  isBusiness: () => cfgState.business,
+  isCloud: () => false,
 }))
 
 // The premade path registers a voice-id→name lookup as a side effect; stub it.
@@ -185,6 +192,26 @@ describe("GET /v1/voices", () => {
     const body = res.json() as { keyMissing?: boolean; hint?: string }
     expect(body.keyMissing).toBeUndefined()
     expect(body.hint).toBeUndefined()
+  })
+
+  it("filters the catalog to the surface profile's allowed voice genders (B4c)", async () => {
+    // Business edition + a male-only lock → the premade catalog drops every
+    // non-male voice. Keyless path so the FALLBACK_VOICES catalog is served
+    // deterministically. Surface module is fresh per test (vi.resetModules),
+    // so setting the env before the request is enough.
+    cfgState.key = ""
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    try {
+      const res = await app.inject({ method: "GET", url: "/v1/voices" })
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as { voices: Array<{ name: string; gender: string }> }
+      expect(body.voices.length).toBeGreaterThan(0)
+      expect(body.voices.every((v) => v.gender === "male")).toBe(true)
+      expect(body.voices.some((v) => v.name === "Rachel")).toBe(false)
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+    }
   })
 })
 

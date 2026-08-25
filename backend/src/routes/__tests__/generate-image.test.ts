@@ -76,6 +76,7 @@ import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, type ConnectedReference } from "@nodaro/shared"
 import { assembleImageInput } from "@nodaro/prompts"
+import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
 // aspectRatio enum must cover every provider's catalog ratios. Wan 2.7 /
@@ -337,6 +338,46 @@ describe("POST /v1/generate-image", () => {
         provider: "nano-banana",
       })
     )
+  })
+
+  describe("PromptPolicy (B4b)", () => {
+    afterEach(() => clearPromptPolicies())
+
+    it("applies a registered PromptPolicy to the final image prompt (legacy path)", async () => {
+      registerPromptPolicy({
+        id: "test-suffix",
+        apply: (a) => (a.kind === "image" ? { ...a, prompt: `${a.prompt} SUFFIX` } : a),
+      })
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a red car",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "nano-banana",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a red car SUFFIX")
+    })
+
+    it("is byte-identical to today when no PromptPolicy is registered", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a red car",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "nano-banana",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a red car")
+    })
   })
 
   it("returns 500 when job insert fails", async () => {

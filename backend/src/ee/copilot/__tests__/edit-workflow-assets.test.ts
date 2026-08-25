@@ -38,6 +38,7 @@ const ctx = {
   threadId: "t1",
   turnId: "turn1",
   allowPublishing: false,
+  userLinks: new Set<string>(),
   fastify: {} as never,
   emit: () => undefined,
 } as CopilotToolContext
@@ -254,7 +255,7 @@ describe("wiring a file onto a node", () => {
         note: "x",
         upsertNodes: [{ id: "up1", type: "upload-image", data: { url: "https://evil.example/x.png" } }],
       }),
-    ).rejects.toThrow(/not a URL I type/)
+    ).rejects.toThrow(/only when the user pasted that exact link/)
   })
 
   it("refuses to wire more files than one edit should", async () => {

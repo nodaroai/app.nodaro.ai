@@ -173,3 +173,40 @@ describe("locked fields", () => {
     })
   })
 })
+
+describe("the user-pasted-link exception", () => {
+  // The lock defends against model-CRAFTED destinations. A link the user
+  // themselves pasted carries zero crafting freedom, so a verbatim copy into
+  // a genuine *Url field is exactly as safe as the user typing it into the
+  // panel — and nothing looser than that is accepted.
+  const LINK = "https://www.youtube.com/watch?v=abc123XYZ"
+  const userLinks = new Set([LINK])
+
+  it("allows a verbatim user link into a *Url field", () => {
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: LINK }, { userLinks })).toEqual([])
+  })
+
+  it("allows the trailing-punctuation variant the harvest strips", () => {
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: `${LINK}.` }, { userLinks })).toEqual([])
+  })
+
+  it("refuses a crafted URL, an EXTENDED user link, and a case-variant", () => {
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: "https://evil.test/x" }, { userLinks })).toEqual(["youtubeUrl"])
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: `${LINK}&q=exfil` }, { userLinks })).toEqual(["youtubeUrl"])
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: LINK.toUpperCase() }, { userLinks })).toEqual(["youtubeUrl"])
+  })
+
+  it("never unlocks a named destination field, whatever the value", () => {
+    expect(changedLockedUrlFields(undefined, { endpoint: LINK }, { userLinks })).toEqual(["endpoint"])
+    expect(changedLockedUrlFields(undefined, { webhook: LINK }, { userLinks })).toEqual(["webhook"])
+  })
+
+  it("never unlocks array fields or the array-walk leaves", () => {
+    expect(changedLockedUrlFields(undefined, { imageUrls: [LINK] }, { userLinks })).toEqual(["imageUrls"])
+    expect(changedLockedUrlFields(undefined, { extraRefs: [{ url: LINK }] }, { userLinks })).toEqual(["extraRefs[0].url"])
+  })
+
+  it("stays fully locked when nothing was harvested", () => {
+    expect(changedLockedUrlFields(undefined, { youtubeUrl: LINK })).toEqual(["youtubeUrl"])
+  })
+})

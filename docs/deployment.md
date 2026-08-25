@@ -119,6 +119,7 @@ added to `config.ts` without a row here.
 | `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue |
 | `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `DEFAULT_LOCALE` | `""` (browser detection) | The locale a fresh visitor starts in — e.g. `he`, `ar`, `de`, `fr`, `es`, `hi`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `en`. Written into `/config.js` at boot; a user's own saved choice always wins, and an unset/blank/unrecognised value falls back to the visitor's browser language. Restart to apply |
+| `NODARO_TUTORIAL_PACKS` | `""` (built-in tutorials only) | Business / self-host — comma-separated directories of extra tutorial packs (each: a `manifest.json` + one `*.json` per tutorial), mounted read-only into the container. Additive; a malformed pack is skipped and logged, never corrupting the built-in tutorials. Restart to apply. See [tutorials.md](./tutorials.md) for the pack format |
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
@@ -160,6 +161,8 @@ added to `config.ts` without a row here.
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
+| `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button, `/v1/sso/*` 404s. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
+| `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated |
@@ -494,12 +497,31 @@ array empty = "keep the default"):
 - `locale.default` / `locale.picker`
 - `outputs.allowPublic`: `false` forces every output private regardless of the
   user's preference
+- `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
+  restrict voice pickers, policy-owned default voices, and TTS / speech requests to
+  these voice genders. Empty (`[]`) = all genders. Enforced backend-side: the
+  `/v1/voices` list and the ElevenLabs shared-voices library are filtered (and the
+  library query gender is forced to the allowed set), a premade voice of a
+  disallowed gender is refused at request validation with `voice_not_available`,
+  every default/fallback voice resolves to the first allowed-gender voice, and the
+  Suno vocal-gender tags in the editor hide the disallowed side. Pair with
+  `nodes.deny: ["voice-clone","voice-design","voice-remix"]` to remove the
+  voice-creation nodes (whose output gender is not knowable up front).
 
 Example:
 
 ```bash
-NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false}}
+NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]}}
 ```
+
+**Prompt policy (modesty / content clauses).** A deployment that needs to fold a
+fixed clause into every image / video / audio prompt (or force the Suno vocal
+gender) registers a backend `PromptPolicy` at the composition root — it is applied
+server-side, after prompt assembly, so a client cannot bypass it. This is **code
+the deployment owns, not an environment variable**; with none registered, prompt
+assembly is byte-identical to stock. (There is deliberately no env-var switch for
+the clause — the clause text is the deployment's own, kept out of the shipped
+packages rather than read from the environment.)
 
 Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
 not this JSON.

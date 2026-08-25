@@ -1,0 +1,13 @@
+# Acknowledged NON-secrets — gitleaks finding fingerprints (commit:file:rule:line).
+#
+# The secret-scan job (.github/workflows/secret-scan.yml) rescans the WHOLE
+# branch history (`--log-opts="--full-history origin/<base>..HEAD"`), so a finding
+# introduced by an already-pushed commit stays flagged even after the working
+# tree is cleaned — and this branch's history cannot be rewritten (force-push is
+# blocked). These two entries pin the exact historical findings: an obviously-fake
+# HMAC test key (`0123456789abcdef0123456789abcdef`) used as the signing secret in
+# two SSO unit tests. The live tree no longer contains it (replaced with the
+# low-entropy `test-sso-hmac-secret-not-real-000` placeholder); these lines only
+# neutralise the immutable history. Any OTHER secret still trips the gate.
+4269d308e795e01891e1c2a4b0e7001a1b865be7:backend/src/routes/__tests__/sso.test.ts:generic-api-key:5
+7807cdc7c9fc83cd76350f85b7665b8256af6b52:backend/src/lib/__tests__/sso-assertion.test.ts:generic-api-key:6

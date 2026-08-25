@@ -8,6 +8,8 @@ import { promises as fs } from "node:fs"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
+import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../../providers/kie/audio.js"
@@ -111,7 +113,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // install must reach `requireProviderKey` and no further.
   let audioBuffer: Buffer
   if (config.ELEVENLABS_API_KEY) {
-    audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
+    audioBuffer = await directElevenLabsTTS(processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
     })

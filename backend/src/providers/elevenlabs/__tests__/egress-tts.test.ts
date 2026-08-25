@@ -91,4 +91,38 @@ describe("directElevenLabsTTS — routes through the egress seam", () => {
       await srv.close()
     }
   })
+
+  // §5.3 hard gate: the worker calls directElevenLabsTTS with job.data.provider,
+  // which payload-builder now sets from effectiveDispatchProvider (single source
+  // with the deny check). This LOCKS that the egress modelKey tracks the effective
+  // (character-wired) provider so the gate cannot silently reopen.
+  it("the TTS egress modelKey follows the effective dispatched provider", async () => {
+    const srv = await loopback((req, res) => {
+      if (req.url?.includes("/voices/")) {
+        res.writeHead(200, { "content-type": "application/json" })
+        res.end(JSON.stringify({}))
+      } else {
+        res.writeHead(200, { "content-type": "audio/mpeg" })
+        res.end(Buffer.from([0x49, 0x44, 0x33]))
+      }
+    })
+    cfg.ELEVENLABS_BASE_URL = srv.base
+    vi.resetModules()
+
+    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+    const { directElevenLabsTTS } = await import("../direct-tts.js")
+
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+    try {
+      // effectiveDispatchProvider("elevenlabs-v3") → the worker dispatches
+      // provider "elevenlabs-v3" → ttsModelKey derives "elevenlabs-v3".
+      await directElevenLabsTTS("hi", "rachel", "elevenlabs-v3")
+      const tts = seen.find((c) => c.operation === "tts")
+      expect(tts?.modelKey).toBe("elevenlabs-v3")
+    } finally {
+      clearEgressDecorator()
+      await srv.close()
+    }
+  })
 })

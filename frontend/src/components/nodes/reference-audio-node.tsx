@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useEffect, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Volume2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -9,6 +9,7 @@ import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-wi
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runYouTubeAudioExtraction } from "@/lib/youtube-audio-extraction"
 import type { ReferenceAudioData } from "@/types/nodes"
 
 const HANDLES = [
@@ -23,6 +24,36 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.extractionStatus ?? "idle"
   const hasAudio = Boolean(nodeData.extractedAudioUrl)
   const hasThumbnail = Boolean(nodeData.videoThumbnail)
+
+  // Auto-extract a pristine YouTube source. The config panel's Extract button
+  // only exists while the panel is mounted, so a node whose `youtubeUrl` was
+  // written from OUTSIDE the panel — the copilot copying a user-pasted link,
+  // an imported workflow, a template — would otherwise sit silent and resolve
+  // to nothing at run time. This runs wherever the node is rendered. Fires
+  // from "idle" only: a failed extraction keeps its manual retry (no loop),
+  // and an edited URL keeps the panel's explicit re-extract behavior.
+  const extractingRef = useRef(false)
+  const youtubeUrl = nodeData.youtubeUrl?.trim()
+  const directUrl = nodeData.directUrl?.trim()
+  const sourceType = nodeData.sourceType || "youtube"
+  useEffect(() => {
+    if (hasAudio || status !== "idle") return
+    // A direct file link needs no job — the panel's Set button just copies it.
+    if (sourceType === "url" && directUrl) {
+      updateNodeData(id, { extractedAudioUrl: directUrl, extractionStatus: "ready" })
+      return
+    }
+    if (sourceType !== "youtube" || !youtubeUrl) return
+    if (extractingRef.current) return
+    extractingRef.current = true
+    updateNodeData(id, { extractionStatus: "extracting" })
+    void runYouTubeAudioExtraction(youtubeUrl)
+      .then((audioUrl) => updateNodeData(id, { extractedAudioUrl: audioUrl, extractionStatus: "ready" }))
+      .catch(() => updateNodeData(id, { extractionStatus: "failed" }))
+      .finally(() => {
+        extractingRef.current = false
+      })
+  }, [sourceType, youtubeUrl, directUrl, hasAudio, status, id, updateNodeData])
 
   return (
     <div className="relative max-w-[220px]">

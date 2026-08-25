@@ -3,6 +3,10 @@ import { resolveDirectVoiceId, stripAudioTags, isKnownPremadeVoiceRef, directEle
 
 vi.mock("../../../lib/config.js", () => ({
   config: { ELEVENLABS_API_KEY: "test-key" },
+  // surface-profile.ts (reached via the B4c policy-owned default-voice fallback)
+  // calls these; default false → unrestricted → the fallback is Rachel as before.
+  isBusiness: () => false,
+  isCloud: () => false,
 }))
 
 describe("resolveDirectVoiceId", () => {
@@ -10,6 +14,11 @@ describe("resolveDirectVoiceId", () => {
     expect(resolveDirectVoiceId("Rachel")).toBe("21m00Tcm4TlvDq8ikWAM")
     expect(resolveDirectVoiceId("George")).toBe("JBFqnCBsd6RMkjVDRZzb")
     expect(resolveDirectVoiceId("Bill")).toBe("pqHfZKP75CvOlQylNhV4")
+    // B4c: Adam + Harry are premade voices whose catalog voice_id is a UUID, so
+    // they lacked a name→id entry — the policy-owned default returns a NAME, so
+    // the name must resolve on the direct API too.
+    expect(resolveDirectVoiceId("Adam")).toBe("pNInz6obpgDQGcFmaJgB")
+    expect(resolveDirectVoiceId("Harry")).toBe("SOYHLrjzK2X1ezoPC6cr")
   })
 
   it("passes through anything that isn't a known name (UUIDs, custom voices)", () => {

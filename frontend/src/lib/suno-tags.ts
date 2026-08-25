@@ -1,5 +1,6 @@
 import type { AudioTag } from "./audio-tags"
 import type { SuggestionItem } from "@/components/editor/config-panels/tag-textarea"
+import { runtimeSurfaceProfile } from "./surface-profile"
 
 export const SUNO_TAGS: AudioTag[] = [
   // Structure
@@ -186,12 +187,46 @@ export const SUNO_TAGS: AudioTag[] = [
   { tag: "[Accelerando]", label: "Accelerando", category: "Production" },
 ]
 
+/**
+ * B4c: the "Vocal Gender" category is the ONE voice-gender surface not sourced
+ * from /v1/voices (the TTS voice pickers read the backend-filtered /v1/voices
+ * via use-voices.ts, so they inherit filtering; Task 6). These static FE tags
+ * must be filtered here against the deployment's voice.allowedGenders. The FE
+ * SurfaceProfile mirror deliberately carries no logic, so this is a 4-line local.
+ * Gender-CODED tags only ([Male Vocal]/[Boy] → male, [Female Vocal]/[Girl] →
+ * female); [Duet]/[Choir] are mixed and never filtered. Inert by default ([]).
+ */
+const VOCAL_GENDER_TAG_GENDER: Record<string, "male" | "female"> = {
+  "[Male Vocal]": "male",
+  "[Boy]": "male",
+  "[Female Vocal]": "female",
+  "[Girl]": "female",
+}
+
+function isFeGenderAllowed(gender: "male" | "female"): boolean {
+  const allowed = runtimeSurfaceProfile().voice.allowedGenders.map((g) => g.toLowerCase())
+  return allowed.length === 0 || allowed.includes(gender)
+}
+
+/** True unless the deployment disallows this Vocal-Gender tag's coded gender. */
+export function isVocalGenderTagAllowed(tag: string): boolean {
+  const g = VOCAL_GENDER_TAG_GENDER[tag]
+  return g === undefined || isFeGenderAllowed(g)
+}
+
+/** The Vocal-Gender tags the deployment permits (all when unrestricted). */
+export function getVocalGenderTags(): readonly AudioTag[] {
+  return SUNO_TAGS.filter((t) => t.category === "Vocal Gender" && isVocalGenderTagAllowed(t.tag))
+}
+
 /** All Suno tags as SuggestionItems (with brackets) — for prompt fields */
-export const SUNO_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS.map((t) => ({
-  tag: t.tag,
-  label: t.label,
-  category: t.category,
-}))
+export const SUNO_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS
+  .filter((t) => isVocalGenderTagAllowed(t.tag))
+  .map((t) => ({
+    tag: t.tag,
+    label: t.label,
+    category: t.category,
+  }))
 
 /**
  * Lyrics-field suggestions (with brackets) — excludes Mood and Production
@@ -201,7 +236,7 @@ export const SUNO_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS.map((t) => ({
 const LYRICS_EXCLUDED = new Set(["Mood", "Production"])
 
 export const SUNO_LYRICS_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS
-  .filter((t) => !LYRICS_EXCLUDED.has(t.category))
+  .filter((t) => !LYRICS_EXCLUDED.has(t.category) && isVocalGenderTagAllowed(t.tag))
   .map((t) => ({ tag: t.tag, label: t.label, category: t.category }))
 
 /**
@@ -212,7 +247,7 @@ export const SUNO_LYRICS_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS
 const STYLE_CATEGORIES = new Set(["Genre", "Mood", "Instruments", "Production", "Vocal Style", "Vocal Gender"])
 
 export const SUNO_STYLE_SUGGESTION_ITEMS: SuggestionItem[] = SUNO_TAGS
-  .filter((t) => STYLE_CATEGORIES.has(t.category))
+  .filter((t) => STYLE_CATEGORIES.has(t.category) && isVocalGenderTagAllowed(t.tag))
   .map((t) => {
     // Strip brackets: "[Rock]" → "Rock"
     let plain = t.tag.slice(1, -1)
