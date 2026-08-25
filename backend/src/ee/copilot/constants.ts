@@ -24,6 +24,8 @@ export const TURN_CAPS = {
   /** Rows fetched for replay. Each may be 256 KB, so the tail is loaded, not the thread. */
   historyMessageLimit: 60,
   contextPreambleMaxChars: 8_000,
+  /** Attached images fed to the model as vision blocks, per message. */
+  maxVisionImages: 4,
   /** Stop before the NEXT call could push spend past this share of the reservation. */
   budgetSafetyShare: 0.85,
 } as const

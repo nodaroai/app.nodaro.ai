@@ -103,3 +103,39 @@ describe("buildUserContent", () => {
     expect((content[1] as { text: string }).text).toBe("make a video")
   })
 })
+
+describe("vision turns", () => {
+  const U1 = "5f0e8f6a-1111-2222-3333-444455556666"
+  const U2 = "5f0e8f6a-1111-2222-3333-444455557777"
+
+  it("extractImageRefIds pulls ONLY image-file ids from the trailing glossary", async () => {
+    const { extractImageRefIds } = await import("../history.js")
+    const message = `make something like this\n\n[references] image file "shot.png" (id: ${U1}); character "Iris" (id: ${U2})`
+    expect(extractImageRefIds(message)).toEqual([U1])
+  })
+
+  it("ignores ids in prose, malformed ids, and dedupes; caps at the vision limit", async () => {
+    const { extractImageRefIds } = await import("../history.js")
+    const { TURN_CAPS } = await import("../constants.js")
+    expect(extractImageRefIds(`the id ${U1} in prose only`)).toEqual([])
+    const many = Array.from({ length: 9 }, (_, i) => `image file "s${i}.png" (id: 5f0e8f6a-1111-2222-3333-44445555000${i})`).join("; ")
+    const ids = extractImageRefIds(`x\n\n[references] ${many}; image file "bad" (id: not-a-uuid)`)
+    expect(ids).toHaveLength(TURN_CAPS.maxVisionImages)
+    const dup = extractImageRefIds(`x\n\n[references] image file "a" (id: ${U1}); image file "b" (id: ${U1})`)
+    expect(dup).toEqual([U1])
+  })
+
+  it("buildUserContent places image blocks between context and prose — and stays byte-compatible without them", async () => {
+    const { buildUserContent } = await import("../history.js")
+    expect(buildUserContent("ctx", "hi")).toEqual([
+      { type: "text", text: "ctx" },
+      { type: "text", text: "hi" },
+    ])
+    const withImages = buildUserContent("ctx", "hi", ["https://cdn.example/a.png"])
+    expect(withImages).toEqual([
+      { type: "text", text: "ctx" },
+      { type: "image", source: { type: "url", url: "https://cdn.example/a.png" } },
+      { type: "text", text: "hi" },
+    ])
+  })
+})

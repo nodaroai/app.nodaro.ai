@@ -30,6 +30,8 @@ A character row with saved looks carries a small arrow: open it to pick a specif
 
 To use a file that is not in your library yet, press the paperclip and pick it from your computer. It uploads to your library and is attached to the message in one step, exactly as if you had mentioned it.
 
+**An attached image is one the copilot can actually see.** Attach a screenshot, a sketch or a reference photo and ask for "something like this" — it reads the image itself: the layout of a template, the style of a shot, the text in a mock-up — and builds from what it sees. Up to four images per message.
+
 Mentions travel as names and ids, never as file addresses — the same rule as *What it will not do* below. When the copilot uses one of your files it puts the **id** on the node and Nodaro fills in the address, so the rule that it can never type a URL holds even while it is wiring your own media.
 
 A character the copilot places this way arrives complete: the picture and the saved variants are read from your library when the workflow runs, so the run uses the right likeness even if the node was added a moment ago and you have not reloaded the page.
@@ -52,6 +54,7 @@ Either way the run itself is the normal workflow run: the same progress on the c
 ## What it can see
 
 - The workflow you have open: node types, their configuration and how they are wired, plus the last run's per-node status.
+- Images you attach to a message — it sees the picture itself, not just the file name.
 - Nodaro's own documentation: the node catalogue, each node's fields, picker options and model capabilities.
 - Your saved building blocks: brand presets, characters, objects, animals and locations — so it can reference the ones you already made.
 - Media you already have: your own gallery results and your uploads, plus the voices and saved components available to you.

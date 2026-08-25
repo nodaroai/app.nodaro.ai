@@ -48,6 +48,13 @@ describe("COPILOT_DOCTRINE", () => {
     expect(COPILOT_DOCTRINE).toContain("Never remember secrets")
   })
 
+  it("tells the model an attached image is visible — the vision-turn contract", () => {
+    // Without this line the model treats an attached screenshot as an opaque
+    // id and asks the user to describe it — the exact gap vision turns close.
+    expect(COPILOT_DOCTRINE).toContain("VISIBLE to you")
+    expect(COPILOT_DOCTRINE).toContain("like this screenshot")
+  })
+
   it("tells the model how a character variant is reached — tokens, never a URL", () => {
     // The @slug:N:variant grammar is the only model-writable path to a
     // specific angle/expression; without this rule the model either cannot
