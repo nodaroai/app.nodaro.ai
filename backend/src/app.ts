@@ -5,6 +5,7 @@ import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
+import { loadOverlay } from "./lib/overlay/load.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared"
 
@@ -286,6 +287,13 @@ export function rateLimitKeyGenerator(req: {
 }
 
 export async function buildApp() {
+  // Load any deployment-supplied overlay BEFORE routes/workers so its egress
+  // decorator, billing provider, prompt policies and catalog/person packs are
+  // registered before first use. No-op + byte-identical when
+  // NODARO_OVERLAY_PACKAGE is unset (spec §7.2 / G1). Fatal (exit 1) if a named
+  // overlay fails to load.
+  await loadOverlay()
+
   const app = Fastify({
     // Same defaults as `logger: true`, plus a req serializer that redacts
     // OAuth secrets (code/state/access_token query values) out of logged

@@ -1,6 +1,7 @@
 import { createVideoWorker } from "./workers/video-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { beginWorkerDrain } from "./lib/worker-drain.js"
+import { loadOverlay } from "./lib/overlay/load.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -9,6 +10,11 @@ process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err)
   process.exit(1)
 })
+
+// Load any deployment-supplied overlay (egress decorator / prompt policies /
+// packs) before the worker starts consuming jobs — the seams are per-process
+// singletons. No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
+await loadOverlay()
 
 const worker = createVideoWorker()
 

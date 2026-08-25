@@ -1,4 +1,5 @@
 import { createRenderWorker } from "./workers/render-worker.js"
+import { loadOverlay } from "./lib/overlay/load.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -7,6 +8,10 @@ process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err)
   process.exit(1)
 })
+
+// Load any deployment-supplied overlay (e.g. egress decorator) before the
+// render worker starts consuming jobs. No-op when NODARO_OVERLAY_PACKAGE unset.
+await loadOverlay()
 
 const worker = createRenderWorker()
 

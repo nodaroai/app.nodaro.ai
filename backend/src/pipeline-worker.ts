@@ -14,6 +14,7 @@
  */
 
 import { hasCredits } from "./lib/config.js"
+import { loadOverlay } from "./lib/overlay/load.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[pipeline-worker] Unhandled rejection:", err)
@@ -24,6 +25,11 @@ process.on("uncaughtException", (err) => {
 })
 
 async function main() {
+  // Load any deployment-supplied overlay before the pipeline worker starts —
+  // ahead of the hasCredits() gate so a cloud pipeline process still loads it.
+  // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
+  await loadOverlay()
+
   if (!hasCredits()) {
     console.log("[pipeline-worker] EDITION is not cloud — pipeline worker not started")
     return
