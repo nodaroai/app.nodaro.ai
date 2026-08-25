@@ -7956,6 +7956,7 @@ export interface FlowTutorialItem {
   estimatedCredits: number
   nodeTypesUsed: string[]
   providersUsed: string[]
+  creatorDisplayName: string | null
   nodeCount: number
   categoryId: string
   tutorialSortOrder: number

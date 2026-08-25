@@ -27,14 +27,16 @@ export interface EgressCall {
   modelKey: string | null
   /** The body actually being sent (post-resolutionMap/extraParams/duration-snap). */
   body: unknown
-  /** Billing dimensions the wire body implies: resolution, duration, characters, … */
-  dimensions: Record<string, string | number | undefined>
+  /** Billing dimensions the wire body implies: resolution, audio, videoInput,
+   *  durationLabel, duration, characters, … Booleans are allowed (audio /
+   *  videoInput are two-state cost levers). */
+  dimensions: Record<string, string | number | boolean | undefined>
 }
 
 /** The two billing-bearing fields a client entry point threads to a call site. */
 export interface EgressMeta {
   modelKey: string | null
-  dimensions?: Record<string, string | number | undefined>
+  dimensions?: Record<string, string | number | boolean | undefined>
 }
 
 export interface EgressObservation {

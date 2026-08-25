@@ -121,12 +121,19 @@ rebuilding the image. Point `NODARO_TUTORIAL_PACKS` at one or more directories
 (comma-separated), each containing:
 
 - `manifest.json` — the pack's `name`, the `categories` its tutorials use
-  (`slug` + `name`, optional `sortOrder`), and optional `locale`, `version`,
-  and `forbiddenPromptTerms`.
+  (`slug` + `name`, optional `sortOrder` and `description`), and optional
+  `locale`, `version`, `forbiddenPromptTerms`, and `creatorDisplayName`
+  (pack-wide author name shown on every tutorial card, e.g. your studio's name —
+  stamped onto each tutorial that does not set its own).
 - one `*.json` per tutorial — a workflow snapshot with its nodes, edges, and
   **baked demo outputs** (the real run the tutorial teaches). When a viewer
   clones the tutorial, those baked results come with it, so the copy opens
-  showing the finished run rather than empty boxes.
+  showing the finished run rather than empty boxes. Optional card metadata the
+  Tutorials tab surfaces: `estimatedCredits` (credits a run costs),
+  `nodeTypesUsed` / `providersUsed` (the chips shown on the card), and a
+  per-tutorial `creatorDisplayName` (overrides the pack-wide author for this one
+  tutorial). Omit any of them and the card falls back to `0` / no chips / the
+  default author.
 
 Packs are **additive**: they add tutorials to the built-in set and never change
 it. Each tutorial's category must be declared in the pack's `manifest.json`

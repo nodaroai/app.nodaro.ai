@@ -11,12 +11,14 @@ const CategorySchema = z.object({
   slug: z.string().min(1),
   name: z.string().min(1), // tutorial_categories.name is NOT NULL UNIQUE
   sortOrder: z.number().int().optional(),
+  description: z.string().nullish(),
 })
 
 const ManifestSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
   locale: z.string().optional(),
+  creatorDisplayName: z.string().optional(),
   categories: z.array(CategorySchema),
   forbiddenPromptTerms: z.array(z.string()).optional(),
 })
@@ -49,6 +51,10 @@ const DocSchema = z.object({
   outputTypes: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   complexity: z.string().optional(),
+  estimatedCredits: z.number().int().nonnegative().optional(),
+  nodeTypesUsed: z.array(z.string()).optional(),
+  providersUsed: z.array(z.string()).optional(),
+  creatorDisplayName: z.string().nullish(),
   previewMediaUrl: z.string().nullish(),
   previewMediaType: z.string().nullish(),
   tutorialCategorySlug: z.string().min(1),

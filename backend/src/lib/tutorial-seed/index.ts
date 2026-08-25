@@ -140,7 +140,7 @@ async function ensureTutorialCategory(cat: TutorialPackCategory): Promise<boolea
   if (existing) return true
   const { error } = await supabase
     .from("tutorial_categories")
-    .insert({ slug: cat.slug, name: cat.name, sort_order: cat.sortOrder ?? 0 })
+    .insert({ slug: cat.slug, name: cat.name, sort_order: cat.sortOrder ?? 0, description: cat.description ?? null })
   if (error) {
     console.warn(`[tutorial-seed] could not ensure category ${cat.slug}:`, error)
     return false
@@ -248,8 +248,16 @@ async function seedOne(
     preview_media_url: doc.previewMediaUrl ?? null,
     preview_media_type: doc.previewMediaType ?? null,
     // The column the UI shows, so the system account's email never surfaces.
-    creator_display_name: SYSTEM_NAME,
+    // A pack can override attribution (doc.creatorDisplayName, stamped from the
+    // manifest — see loadTutorialPacks); base templates fall back to the owner.
+    creator_display_name: doc.creatorDisplayName ?? SYSTEM_NAME,
     node_count: doc.nodes.length,
+    // Money/facet metadata the Tutorials tab renders on the card. Authored on
+    // the doc (estimated credits cannot be derived in core — the credit engine
+    // is EE). Absent → the same DB defaults the columns already carry.
+    estimated_credits: doc.estimatedCredits ?? 0,
+    node_types_used: doc.nodeTypesUsed ?? [],
+    providers_used: doc.providersUsed ?? [],
     // Migration 114's CHECK is one-directional — 'tutorial' in listed_in
     // REQUIRES a category, not the reverse — so writing the category while
     // leaving listed_in alone is safe whether or not the tag is still there.

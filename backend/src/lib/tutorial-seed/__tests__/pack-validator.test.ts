@@ -7,15 +7,15 @@ import {
 import type { TutorialPackManifest } from "../types.js"
 
 const manifest = (over: Partial<TutorialPackManifest> = {}): TutorialPackManifest => ({
-  name: "SAI Tutorials",
-  categories: [{ slug: "sai-basics", name: "SAI Basics", sortOrder: 0 }],
+  name: "Demo Tutorials",
+  categories: [{ slug: "demo-basics", name: "Demo Basics", sortOrder: 0 }],
   ...over,
 })
 
 const doc = (over: Record<string, unknown> = {}) => ({
-  slug: "sai-welcome",
+  slug: "demo-welcome",
   name: "Welcome",
-  tutorialCategorySlug: "sai-basics",
+  tutorialCategorySlug: "demo-basics",
   tutorialSortOrder: 0,
   nodes: [{ id: "n1", type: "generate-image", data: {
     prompt: "a lighthouse",
@@ -94,6 +94,51 @@ describe("validatePackDoc", () => {
     const { doc: d, issues } = validatePackDoc(named, m)
     expect(d).not.toBeNull()
     expect(issues.some((i) => i.code === "forbidden_prompt_term" && i.severity === "warn")).toBe(true)
+  })
+})
+
+describe("A7 G8 additive schema", () => {
+  it("keeps estimatedCredits / nodeTypesUsed / providersUsed / creatorDisplayName on a valid doc", () => {
+    const { doc: d, issues } = validatePackDoc(
+      doc({
+        estimatedCredits: 42,
+        nodeTypesUsed: ["generate-image"],
+        providersUsed: ["nano-banana"],
+        creatorDisplayName: "Acme Team",
+      }),
+      manifest(),
+    )
+    expect(issues.some((i) => i.severity === "error")).toBe(false)
+    expect(d?.estimatedCredits).toBe(42)
+    expect(d?.nodeTypesUsed).toEqual(["generate-image"])
+    expect(d?.providersUsed).toEqual(["nano-banana"])
+    expect(d?.creatorDisplayName).toBe("Acme Team")
+  })
+
+  it("rejects a fractional or negative estimatedCredits at validation time (INT NOT NULL column)", () => {
+    // estimatedCredits seeds an INT NOT NULL column — a fractional or negative
+    // value must fail HERE (doc_invalid), not blow up at seed time.
+    for (const bad of [2.5, -1]) {
+      const { doc: d, issues } = validatePackDoc(doc({ estimatedCredits: bad }), manifest())
+      expect(d).toBeNull()
+      expect(issues.some((i) => i.code === "doc_invalid" && i.severity === "error")).toBe(true)
+    }
+    // A whole non-negative value still validates.
+    const { doc: ok } = validatePackDoc(doc({ estimatedCredits: 0 }), manifest())
+    expect(ok?.estimatedCredits).toBe(0)
+  })
+
+  it("keeps a manifest creatorDisplayName and a category description", () => {
+    const { manifest: m } = parsePackManifest(
+      {
+        name: "demo",
+        creatorDisplayName: "Acme Team",
+        categories: [{ slug: "demo-basics", name: "Basics", description: "Basic tutorials" }],
+      },
+      "demo-dir",
+    )
+    expect(m?.creatorDisplayName).toBe("Acme Team")
+    expect(m?.categories[0].description).toBe("Basic tutorials")
   })
 })
 

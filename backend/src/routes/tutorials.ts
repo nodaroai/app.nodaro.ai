@@ -39,6 +39,7 @@ interface FlowRow {
   estimated_credits: number | null
   node_types_used: string[] | null
   providers_used: string[] | null
+  creator_display_name: string | null
   node_count: number | null
   tutorial_category_id: string
   tutorial_sort_order: number
@@ -61,7 +62,7 @@ function toVideoResponse(row: VideoRow) {
   }
 }
 
-function toFlowResponse(row: FlowRow) {
+export function toFlowResponse(row: FlowRow) {
   return {
     id: row.id,
     type: "flow" as const,
@@ -76,6 +77,7 @@ function toFlowResponse(row: FlowRow) {
     estimatedCredits: row.estimated_credits ?? 0,
     nodeTypesUsed: row.node_types_used ?? [],
     providersUsed: row.providers_used ?? [],
+    creatorDisplayName: row.creator_display_name ?? null,
     nodeCount: row.node_count ?? 0,
     categoryId: row.tutorial_category_id,
     tutorialSortOrder: row.tutorial_sort_order,
@@ -104,7 +106,7 @@ export async function tutorialsRoutes(app: FastifyInstance) {
       supabase
         .from("workflow_templates")
         .select(
-          "id, slug, name, description, markdown_description, preview_media_url, preview_media_type, complexity, estimated_credits, node_types_used, providers_used, node_count, tutorial_category_id, tutorial_sort_order, workflow_id, created_at",
+          "id, slug, name, description, markdown_description, preview_media_url, preview_media_type, complexity, estimated_credits, node_types_used, providers_used, creator_display_name, node_count, tutorial_category_id, tutorial_sort_order, workflow_id, created_at",
         )
         .contains("listed_in", ["tutorial"])
         .eq("is_active", true)

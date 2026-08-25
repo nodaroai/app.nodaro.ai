@@ -18,6 +18,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
 import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
+import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
@@ -124,7 +125,7 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, duration } },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const audioUrl =
@@ -216,7 +217,7 @@ export class KieAudioProvider
       input,
       undefined,
       undefined,
-      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, characters: text.length } },
+      { ...reconcileOpts, modelKey: provider, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const audioUrl =
@@ -267,7 +268,7 @@ export class KieAudioProvider
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
-      { ...reconcileOpts, modelKey: "elevenlabs-sfx", dimensions: { ...reconcileOpts?.dimensions, duration: options?.duration } },
+      { ...reconcileOpts, modelKey: "elevenlabs-sfx", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const audioUrl =
@@ -417,8 +418,9 @@ export class KieAudioProvider
       MAX_POLL_ATTEMPTS_VIDEO,
       undefined,
       // OUR Nodaro key (NOT modelConfig.model, the KIE provider id) for the
-      // egress seam — mirrors the sibling speechToText site above.
-      { ...reconcileOpts, modelKey: "elevenlabs-dialogue" },
+      // egress seam — mirrors the sibling speechToText site above. Dialogue is
+      // character-priced, so the summed line lengths ride as `characters`.
+      { ...reconcileOpts, modelKey: "elevenlabs-dialogue", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
     )
 
     const audioUrl =
