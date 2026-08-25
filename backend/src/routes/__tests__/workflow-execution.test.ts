@@ -37,6 +37,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -206,12 +207,7 @@ describe("POST /v1/workflows/:id/run", () => {
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: "PGRST116", message: "not found" },
-            }),
-          }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
       }),
     } as never)
@@ -223,19 +219,21 @@ describe("POST /v1/workflows/:id/run", () => {
 
   it("returns 409 when workflow already running", async () => {
     const mockFrom = vi.mocked(supabase.from)
-    let callNum = 0
-    mockFrom.mockImplementation(() => {
-      callNum++
-      if (callNum === 1) {
+    // Starts at 1: the workflow lookup below is keyed by table, not by
+    // position, so the first table that IS counted is the second step.
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      // The run route reads `workflows` twice — the row, then the access
+      // seam’s own lookup — so only the OTHER tables advance the sequence.
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
         // Workflow lookup
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private" },
+                error: null,
               }),
             }),
           }),
@@ -245,10 +243,12 @@ describe("POST /v1/workflows/:id/run", () => {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({
-                data: [{ id: TEST_EXEC_ID }],
-                error: null,
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({
+                  data: [{ id: TEST_EXEC_ID }],
+                  error: null,
+                }),
               }),
             }),
           }),
@@ -264,19 +264,21 @@ describe("POST /v1/workflows/:id/run", () => {
 
   it("returns 202 on success and enqueues orchestration job", async () => {
     const mockFrom = vi.mocked(supabase.from)
-    let callNum = 0
-    mockFrom.mockImplementation(() => {
-      callNum++
-      if (callNum === 1) {
+    // Starts at 1: the workflow lookup below is keyed by table, not by
+    // position, so the first table that IS counted is the second step.
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      // The run route reads `workflows` twice — the row, then the access
+      // seam’s own lookup — so only the OTHER tables advance the sequence.
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
         // Workflow lookup
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private" },
+                error: null,
               }),
             }),
           }),
@@ -287,10 +289,12 @@ describe("POST /v1/workflows/:id/run", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: [],
-                  error: null,
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: [],
+                    error: null,
+                  }),
                 }),
               }),
             }),
@@ -339,18 +343,20 @@ describe("POST /v1/workflows/:id/run", () => {
 
   it("forwards inputOverrides into the enqueued job (was silently dropped)", async () => {
     const mockFrom = vi.mocked(supabase.from)
-    let callNum = 0
-    mockFrom.mockImplementation(() => {
-      callNum++
-      if (callNum === 1) {
+    // Starts at 1: the workflow lookup below is keyed by table, not by
+    // position, so the first table that IS counted is the second step.
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      // The run route reads `workflows` twice — the row, then the access
+      // seam's own lookup — so only the OTHER tables advance the sequence.
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private" },
+                error: null,
               }),
             }),
           }),
@@ -360,8 +366,10 @@ describe("POST /v1/workflows/:id/run", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
               }),
             }),
           }),
@@ -412,19 +420,27 @@ describe("POST /v1/workflows/:id/run", () => {
    */
   function mockRunWithGraph(nodes: Array<{ id: string; type: string; data?: Record<string, unknown> }>) {
     const mockFrom = vi.mocked(supabase.from)
-    let callNum = 0
-    mockFrom.mockImplementation(() => {
-      callNum++
-      if (callNum === 1) {
-        // Workflow lookup — now also selects `nodes`.
+    // Starts at 1: the workflow lookup below is keyed by table, not by
+    // position, so the first table that IS counted is the second step.
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      // The run route reads `workflows` twice — the row, then the access
+      // seam’s own lookup — so only the OTHER tables advance the sequence.
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
+        // Workflow lookup — unfiltered, and it also selects `nodes`.
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, nodes },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: TEST_WORKFLOW_ID,
+                  user_id: TEST_USER_ID,
+                  workspace_id: null,
+                  visibility: "private",
+                  nodes,
+                },
+                error: null,
               }),
             }),
           }),
@@ -434,8 +450,10 @@ describe("POST /v1/workflows/:id/run", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
               }),
             }),
           }),
@@ -527,18 +545,20 @@ describe("POST /v1/workflows/:id/run", () => {
 
   it("returns 500 when execution insert fails", async () => {
     const mockFrom = vi.mocked(supabase.from)
-    let callNum = 0
-    mockFrom.mockImplementation(() => {
-      callNum++
-      if (callNum === 1) {
+    // Starts at 1: the workflow lookup below is keyed by table, not by
+    // position, so the first table that IS counted is the second step.
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      // The run route reads `workflows` twice — the row, then the access
+      // seam's own lookup — so only the OTHER tables advance the sequence.
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private" },
+                error: null,
               }),
             }),
           }),
@@ -548,10 +568,12 @@ describe("POST /v1/workflows/:id/run", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: [],
-                  error: null,
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: [],
+                    error: null,
+                  }),
                 }),
               }),
             }),

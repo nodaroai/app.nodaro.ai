@@ -564,6 +564,26 @@ interface WorkflowState {
   readonly isWorkflowLoading: boolean
   readonly setIsWorkflowLoading: (loading: boolean) => void
   readonly isReadOnly: boolean
+  /**
+   * WHY the canvas is read-only, when there is something worth saying.
+   *
+   * A disabled Run button with no explanation reads as a bug — and the case
+   * this exists for is the one people cannot guess: a collaborator granted
+   * EDIT on work that lives in a class they do not belong to can change the
+   * canvas and cannot start a run, because the class pays for runs. Null when
+   * read-only for a reason the UI already makes obvious, or not read-only.
+   */
+  readonly readOnlyReason: string | null
+  /**
+   * Why RUN is refused, while editing is not.
+   *
+   * A separate field from `readOnlyReason` because it is a separate state:
+   * the canvas is writable, saves land, and only starting a run is refused —
+   * running spends the workspace's credits, so it asks for active membership
+   * on top of edit. Somebody in that state has no way to work it out from the
+   * UI, which is the whole reason this is carried at all.
+   */
+  readonly runBlockedReason: string | null
   readonly needsAutoLayout: boolean
   readonly setNeedsAutoLayout: (v: boolean) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
@@ -928,6 +948,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   _sidebarWasOpenBeforeFullscreen: false,
   isDirty: false,
   isReadOnly: false,
+  readOnlyReason: null,
+  runBlockedReason: null,
   needsAutoLayout: false,
   setNeedsAutoLayout: (v) => set({ needsAutoLayout: v }),
   loadGeneration: 0,
@@ -2635,6 +2657,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       selectedNodeId: null,
       isDirty: false,
       isReadOnly: false,
+      readOnlyReason: null,
+      runBlockedReason: null,
       needsAutoLayout: positioned.filledCount > 0,
       loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,

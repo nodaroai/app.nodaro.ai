@@ -27,6 +27,8 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { resolvePrimaryInputField } from "../lib/mcp/extract-app-inputs.js"
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
+import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
+import { toAccessRow } from "../lib/workflow-route-access.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -249,19 +251,46 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
       : undefined
 
-    // Verify workflow exists and belongs to user. We also load `nodes` so we
-    // can resolve flat per-node overrides (MCP shape) to their primary field
-    // (see normalizeInputOverrides below).
+    // Verify the workflow exists and that this caller may RUN it. We also load
+    // `nodes` so we can resolve flat per-node overrides (MCP shape) to their
+    // primary field (see normalizeInputOverrides below).
+    //
+    // Read unfiltered, because inside a workspace the person entitled to run a
+    // workflow is routinely not the person who created it, and filtering by
+    // creator would answer that before asking.
     const { data: workflow, error: wfError } = await supabase
+      // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, nodes")
+      .select("id, user_id, workspace_id, visibility, nodes")
       .eq("id", workflowId)
-      .eq("user_id", req.userId)
-      .single()
+      .maybeSingle()
 
     if (wfError || !workflow) {
       return reply.status(404).send({
         error: { code: "not_found", message: "Workflow not found" },
+      })
+    }
+
+    // Two questions, because they have different answers and different
+    // refusals. Whether the caller can SEE it decides 404 vs 403; whether they
+    // may RUN it is stricter than editing, since a run spends the workspace's
+    // credits — an outside collaborator granted edit may change the canvas and
+    // must never be able to bill the class for it.
+    const accessFacts = toAccessRow(workflow as unknown as Record<string, unknown>)
+    const access = await workflowAccessFromRow(req.userId, accessFacts)
+    if (access === "none") {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Workflow not found" },
+      })
+    }
+    if (!(await canRunWorkflow(req.userId, workflowId))) {
+      return reply.status(403).send({
+        error: {
+          code: "forbidden",
+          message: accessAtLeast(access, "edit")
+            ? "You are not a member of this workspace, so you cannot run its workflows"
+            : "You do not have permission to run this workflow",
+        },
       })
     }
 
@@ -278,13 +307,21 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>) ?? [],
     )
 
-    // Check for already-running execution (best-effort fast path; the DB
-    // UNIQUE constraint on (user_id, idempotency_key) is the race-proof
-    // backstop below).
+    // Check for an execution THIS CALLER already has running (best-effort fast
+    // path; the DB UNIQUE constraint on (user_id, idempotency_key) is the
+    // race-proof backstop below).
+    //
+    // Scoped to the caller, which is what it always meant: before workflows
+    // could be shared, only the creator could run one, so "an active execution
+    // of this workflow" and "an active execution of mine" were the same set.
+    // Widening the run path split them — and left unscoped this would let one
+    // member of a class block everybody else from running shared work with a
+    // single request, and hand them another member's execution id in the 409.
     const { data: activeExec } = await supabase
       .from("workflow_executions")
       .select("id")
       .eq("workflow_id", workflowId)
+      .eq("user_id", req.userId)
       .in("status", ACTIVE_EXECUTION_STATUSES as unknown as string[])
       .limit(1)
 

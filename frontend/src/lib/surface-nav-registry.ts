@@ -52,6 +52,11 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/video-director",
   "/executions",
   "/archived-runs",
+  // Work somebody else shared with you. Link-only for now: the sharing
+  // feature is dark behind ORGS_ENABLED, so a permanent nav entry would
+  // advertise a page that is empty for everyone until the switch is thrown.
+  // It gets one when sharing goes live.
+  "/shared",
   "/my-files",
   "/library/locations",
   "/integrations",

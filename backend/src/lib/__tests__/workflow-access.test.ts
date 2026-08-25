@@ -14,20 +14,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: vi.fn(() => ({})) }))
+vi.mock("@/lib/config.js", () => ({ hasOrganizations: vi.fn(() => true) }))
 
 import {
   accessAtLeast,
+  canChangeWorkflowVisibility,
   canDeleteWorkflow,
   canRunWorkflow,
   workflowAccess,
   workflowAccessFromRow,
 } from "../workflow-access.js"
 import { supabase } from "../supabase.js"
+import { hasOrganizations } from "../config.js"
 import { getPluginServices } from "../private-plugins/load.js"
 
 const ME = "00000000-0000-4000-8000-000000000001"
 const SOMEONE_ELSE = "00000000-0000-4000-8000-0000000000ff"
 const WF = "00000000-0000-4000-8000-000000000020"
+const WS = "00000000-0000-4000-8000-000000000030"
 
 /** `.from("workflows").select("user_id").eq("id", …).maybeSingle()` */
 function ownerRow(row: { user_id: string } | null, error: unknown = null) {
@@ -41,7 +45,29 @@ function ownerRow(row: { user_id: string } | null, error: unknown = null) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getPluginServices).mockReturnValue({} as never)
+  vi.mocked(hasOrganizations).mockReturnValue(true)
 })
+
+/** A capable plugin, answering whatever the caller wants it to. */
+function pluginAnswering(answers: {
+  access?: unknown
+  fromRow?: unknown
+  canDelete?: boolean
+  canRun?: boolean
+  canChangeVisibility?: boolean
+  canShare?: boolean
+}) {
+  const orgs = {
+    workflowAccess: vi.fn().mockResolvedValue(answers.access ?? "own"),
+    workflowAccessFromRow: vi.fn().mockResolvedValue(answers.fromRow ?? answers.access ?? "own"),
+    canDeleteWorkflow: vi.fn().mockResolvedValue(answers.canDelete ?? true),
+    canRunWorkflow: vi.fn().mockResolvedValue(answers.canRun ?? true),
+    canChangeWorkflowVisibility: vi.fn().mockResolvedValue(answers.canChangeVisibility ?? true),
+    canShareWorkflow: vi.fn().mockResolvedValue(answers.canShare ?? true),
+  }
+  vi.mocked(getPluginServices).mockReturnValue({ orgs } as never)
+  return orgs
+}
 
 describe("with no organizations plugin — every install running today", () => {
   it("the creator owns it", async () => {
@@ -111,6 +137,8 @@ describe("with the plugin present", () => {
         workflowAccessFromRow: vi.fn(),
         canDeleteWorkflow: vi.fn(),
         canRunWorkflow: vi.fn(),
+        canChangeWorkflowVisibility: vi.fn(),
+        canShareWorkflow: vi.fn(),
       },
     } as never)
 
@@ -131,6 +159,8 @@ describe("with the plugin present", () => {
       workflowAccessFromRow: vi.fn(),
       canDeleteWorkflow: vi.fn().mockResolvedValue(false),
       canRunWorkflow: vi.fn().mockResolvedValue(false),
+      canChangeWorkflowVisibility: vi.fn().mockResolvedValue(false),
+      canShareWorkflow: vi.fn().mockResolvedValue(false),
     }
     vi.mocked(getPluginServices).mockReturnValue({ orgs } as never)
 
@@ -173,6 +203,136 @@ describe("with the plugin present", () => {
     vi.mocked(getPluginServices).mockReturnValue({ orgs: { loadMemberships: vi.fn() } } as never)
     ownerRow({ user_id: ME })
     await expect(workflowAccess(ME, WF)).resolves.toBe("own")
+  })
+})
+
+describe("with the flag OFF — production today, and every install before launch", () => {
+  // The plugin builds its SERVICE object unconditionally while gating only its
+  // ROUTES on the feature flag, so "a capable plugin is loaded" and
+  // "organizations are switched on" are two different facts. This seam turns on
+  // the second one. Without that, the by-id routes would start answering the
+  // organization rule the day they were converted — months before launch —
+  // and the most visible way that shows is a platform admin, who the rule
+  // answers `own` to for every workflow in the database.
+  beforeEach(() => {
+    vi.mocked(hasOrganizations).mockReturnValue(false)
+  })
+
+  it("does not ask the plugin, even when a fully capable one is loaded", async () => {
+    const orgs = pluginAnswering({ access: "own", canDelete: true, canRun: true })
+    ownerRow({ user_id: SOMEONE_ELSE })
+
+    await expect(workflowAccess(ME, WF)).resolves.toBe("none")
+    expect(orgs.workflowAccess).not.toHaveBeenCalled()
+
+    ownerRow({ user_id: SOMEONE_ELSE })
+    await expect(canDeleteWorkflow(ME, WF)).resolves.toBe(false)
+    expect(orgs.canDeleteWorkflow).not.toHaveBeenCalled()
+
+    ownerRow({ user_id: SOMEONE_ELSE })
+    await expect(canRunWorkflow(ME, WF)).resolves.toBe(false)
+    expect(orgs.canRunWorkflow).not.toHaveBeenCalled()
+  })
+
+  it("a platform admin gets NOTHING on a stranger's workflow", async () => {
+    // The concrete regression the gate exists for. `computeWorkflowAccess`
+    // answers `own` to a platform admin before it looks at anything else, so
+    // an ungated seam would hand every admin every workflow by id — where
+    // these routes answer 404 today, and must keep answering 404 until the
+    // switch is thrown deliberately.
+    pluginAnswering({ access: "own", fromRow: "own" })
+    ownerRow({ user_id: SOMEONE_ELSE })
+    await expect(workflowAccess(ME, WF)).resolves.toBe("none")
+    await expect(
+      workflowAccessFromRow(ME, {
+        id: WF, user_id: SOMEONE_ELSE, workspace_id: null, visibility: "private",
+      }),
+    ).resolves.toBe("none")
+  })
+
+  it("visibility stays the creator's to change", async () => {
+    pluginAnswering({ canChangeVisibility: true })
+    ownerRow({ user_id: SOMEONE_ELSE })
+    await expect(canChangeWorkflowVisibility(ME, WF)).resolves.toBe(false)
+    ownerRow({ user_id: ME })
+    await expect(canChangeWorkflowVisibility(ME, WF)).resolves.toBe(true)
+  })
+})
+
+describe("the personal-workflow fast path", () => {
+  it("answers the creator of an unscoped workflow WITHOUT asking the plugin", async () => {
+    // Every install today, and the overwhelming majority of reads afterwards.
+    // The plugin would answer `own` here too — its creator branch is reached
+    // with nothing before it that can fire on a workflow with no workspace —
+    // after a platform-admin check, a membership load and a grant lookup
+    // against tables with no relevant rows.
+    const orgs = pluginAnswering({ fromRow: "view" })
+
+    await expect(
+      workflowAccessFromRow(ME, { id: WF, user_id: ME, workspace_id: null, visibility: "private" }),
+    ).resolves.toBe("own")
+    expect(orgs.workflowAccessFromRow).not.toHaveBeenCalled()
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("does NOT short-circuit a workspace workflow, even for its creator", async () => {
+    // The condition that makes the early-out provable. Inside a workspace the
+    // creator can be capped at `view` by archiving, or refused outright by a
+    // suspended membership — answers only the plugin holds.
+    const orgs = pluginAnswering({ fromRow: "view" })
+
+    await expect(
+      workflowAccessFromRow(ME, { id: WF, user_id: ME, workspace_id: WS, visibility: "workspace" }),
+    ).resolves.toBe("view")
+    expect(orgs.workflowAccessFromRow).toHaveBeenCalled()
+  })
+
+  it("does NOT short-circuit for anyone but the creator", async () => {
+    const orgs = pluginAnswering({ fromRow: "edit" })
+
+    await expect(
+      workflowAccessFromRow(ME, {
+        id: WF, user_id: SOMEONE_ELSE, workspace_id: null, visibility: "private",
+      }),
+    ).resolves.toBe("edit")
+    expect(orgs.workflowAccessFromRow).toHaveBeenCalled()
+  })
+})
+
+describe("canChangeWorkflowVisibility", () => {
+  it("delegates when the plugin supplies the member", async () => {
+    const orgs = pluginAnswering({ canChangeVisibility: true })
+    await expect(canChangeWorkflowVisibility(ME, WF)).resolves.toBe(true)
+    expect(orgs.canChangeWorkflowVisibility).toHaveBeenCalledWith(ME, WF)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("falls back to the CREATOR alone when the plugin is not fully capable", async () => {
+    // A plugin missing ANY member of the set is treated as no plugin at all,
+    // and this question goes through the same gate as its siblings. Answering
+    // it org-aware while reads and deletes stayed creator-only is precisely
+    // the mixed state the gate exists to make impossible — and
+    // app-ahead-of-plugin is the normal deployment order, so it is a state the
+    // product really passes through.
+    const partial = vi.fn().mockResolvedValue(true)
+    vi.mocked(getPluginServices).mockReturnValue({
+      orgs: {
+        workflowAccess: vi.fn(),
+        workflowAccessFromRow: vi.fn(),
+        canDeleteWorkflow: vi.fn(),
+        canRunWorkflow: vi.fn(),
+        canChangeWorkflowVisibility: partial,
+        // canShareWorkflow missing — an older build
+      },
+    } as never)
+
+    ownerRow({ user_id: SOMEONE_ELSE })
+    await expect(canChangeWorkflowVisibility(ME, WF)).resolves.toBe(false)
+    // Not merely the right answer: the half-built plugin was never consulted.
+    expect(partial).not.toHaveBeenCalled()
+
+    ownerRow({ user_id: ME })
+    await expect(canChangeWorkflowVisibility(ME, WF)).resolves.toBe(true)
   })
 })
 

@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabase.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
+import { canRunWorkflow } from "./workflow-access.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 let intervalId: ReturnType<typeof setInterval> | null = null
@@ -47,7 +48,7 @@ export function stopScheduleCron(): void {
 // Core cron check
 // ---------------------------------------------------------------------------
 
-async function checkScheduledTriggers(): Promise<void> {
+export async function checkScheduledTriggers(): Promise<void> {
   // Fetch active schedule triggers
   const { data: triggers, error } = await supabase
     .from("workflow_triggers")
@@ -73,11 +74,29 @@ async function checkScheduledTriggers(): Promise<void> {
         continue
       }
 
-      // Check for already-running execution
+      // Does the trigger's owner STILL have the right to run this workflow?
+      //
+      // The same question the webhook fire path asks, for the same reason: a
+      // trigger outlives the session that created it, and a collaborator who
+      // created one can later lose the grant, be suspended, or watch the
+      // workspace be archived. Without this the schedule keeps firing on its
+      // interval forever, running the current graph and writing outputs its
+      // owner can still read. Skipped, not deactivated — `canRunWorkflow`
+      // returns false for a transient outage too, and a cron that turned a
+      // Redis blip into a permanently dead schedule would be worse than one
+      // that quietly skips a tick and tries again next interval.
+      if (!(await canRunWorkflow(trigger.user_id, trigger.workflow_id))) continue
+
+      // Check for an execution THIS OWNER already has running. Scoped to them
+      // like the webhook path and the run route: before workflows were shared,
+      // "an active execution of this workflow" and "an active execution of
+      // mine" were the same set, and leaving it workflow-wide would let one
+      // member's manual run suppress another member's scheduled one.
       const { data: activeExec } = await supabase
         .from("workflow_executions")
         .select("id")
         .eq("workflow_id", trigger.workflow_id)
+        .eq("user_id", trigger.user_id)
         .in("status", ["pending", "running"])
         .limit(1)
 

@@ -38,6 +38,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => false, // disable admin routes for these tests
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/ee/billing/credits.js", () => ({
@@ -70,10 +71,17 @@ const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const TEST_WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 const TEST_TEMPLATE_ID = "00000000-0000-4000-8000-000000000040"
 
-/** Mock: `from("workflows").select(...).eq("id", _).single()` returning `data`. */
+/**
+ * Mock: `from("workflows").select(...).eq("id", _).maybeSingle()` returning
+ * `data`.
+ *
+ * The publish route reads the workflow unfiltered and lets the access rule
+ * judge it — publishing takes `own`, so an editor grant on class work is not
+ * enough to turn somebody else's workflow into a public template.
+ */
 function mockWorkflowSelect(data: Record<string, unknown>) {
-  const single = vi.fn().mockResolvedValue({ data, error: null })
-  const eq = vi.fn().mockReturnValue({ single })
+  const maybeSingle = vi.fn().mockResolvedValue({ data, error: null })
+  const eq = vi.fn().mockReturnValue({ maybeSingle })
   const select = vi.fn().mockReturnValue({ eq })
   return { select } as never
 }
@@ -167,6 +175,8 @@ describe("POST /v1/templates/publish — thumbnail durability", () => {
         return mockWorkflowSelect({
           id: TEST_WORKFLOW_ID,
           user_id: TEST_USER_ID,
+          workspace_id: null,
+          visibility: "private",
           // generate-script is a text-output node — derivePreviewMedia won't
           // pick it up; the test relies on this to drive sourcePreviewUrl=null.
           nodes: [{ id: "n1", type: "generate-script", data: {} }],
@@ -233,6 +243,8 @@ describe("POST /v1/templates/publish — thumbnail durability", () => {
         return mockWorkflowSelect({
           id: TEST_WORKFLOW_ID,
           user_id: TEST_USER_ID,
+          workspace_id: null,
+          visibility: "private",
           nodes: [{ id: "n1", type: "generate-image", data: {} }],
           edges: [],
           settings: {},

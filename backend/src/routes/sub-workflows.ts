@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
+import { toAccessRow } from "../lib/workflow-route-access.js"
 
 // Types mirroring frontend definitions
 interface SubWorkflowPort {
@@ -155,13 +157,26 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
     }
 
     const { data: wf, error } = await supabase
+      // Read unfiltered so the access rule can judge it — inside a workspace
+      // the caller entitled to read a workflow's interface is often not its
+      // creator.
+      // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, nodes")
+      .select("id, user_id, workspace_id, visibility, nodes")
       .eq("id", parsed.data.id)
-      .eq("user_id", req.userId)
-      .single()
+      .maybeSingle()
 
     if (error || !wf) {
+      return reply
+        .status(404)
+        .send({ error: { code: "not_found", message: "Workflow not found" } })
+    }
+
+    // Reading a workflow's callable interface is a read of the workflow.
+    // `none` keeps today's 404 — a workflow you cannot reach stays
+    // indistinguishable from one that does not exist.
+    const access = await workflowAccessFromRow(req.userId, toAccessRow(wf as unknown as Record<string, unknown>))
+    if (!accessAtLeast(access, "view")) {
       return reply
         .status(404)
         .send({ error: { code: "not_found", message: "Workflow not found" } })

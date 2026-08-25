@@ -6621,6 +6621,146 @@ export function deleteWorkflowTrigger(triggerId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Sharing one workflow with named people
+//
+// The counterpart to presentation links below, and a different thing: a link
+// is for anyone who has it, a grant is for one person and can be taken back.
+// ---------------------------------------------------------------------------
+
+/** Ordered weakest to strongest — the same order the server uses. */
+export type WorkflowAccessLevel = "none" | "view" | "edit" | "own"
+export type CollaboratorRole = "viewer" | "editor"
+
+export interface WorkflowAccessInfo {
+  /** What this caller may do with this workflow. */
+  access: WorkflowAccessLevel
+  /** The workspace it belongs to, or null when it is personal work. */
+  workspaceId: string | null
+  visibility: "private" | "workspace"
+  /** Whether THIS caller may change who else can reach it. */
+  canChangeVisibility: boolean
+  /**
+   * Whether they may hand access to another person. WIDER than
+   * `canChangeVisibility` — a team workspace can let ordinary editors invite
+   * people while reserving the class-wide switch for its admins — so the two
+   * must never be guessed from each other.
+   */
+  canShare: boolean
+  /**
+   * Whether they may RUN it. The only one of these that can be false while the
+   * caller may still edit: running spends the workspace's credits, so it also
+   * asks for active membership.
+   */
+  canRun: boolean
+}
+
+export interface WorkflowCollaborator {
+  userId: string
+  name: string | null
+  avatarUrl: string | null
+  role: CollaboratorRole
+  createdAt: string
+}
+
+export interface SharedWorkflow {
+  id: string
+  name: string
+  projectId: string | null
+  userId: string
+  workspaceId: string | null
+  visibility: string
+  thumbnailUrl: string | null
+  updatedAt: string
+  /** The grant that reaches it — not the same as the access it resolves to. */
+  grantedRole: CollaboratorRole
+}
+
+/**
+ * What this caller may do with one workflow.
+ *
+ * Asked of the server rather than worked out here. The rule reads memberships,
+ * a workspace's inherited settings and the caller's grant, and it already
+ * exists twice — in the server and in the row policies, with a test proving
+ * they agree. A third answer computed in the browser would be the one nobody
+ * remembers to change.
+ */
+export function getWorkflowAccess(workflowId: string): Promise<{ data: WorkflowAccessInfo }> {
+  return apiRequest<{ data: WorkflowAccessInfo }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/access`,
+    "Failed to read workflow access",
+  )
+}
+
+/** Everyone individually granted access to this workflow. Never emails. */
+export function listWorkflowCollaborators(
+  workflowId: string,
+): Promise<{ data: WorkflowCollaborator[] }> {
+  return apiRequest<{ data: WorkflowCollaborator[] }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
+    "Failed to load the people with access",
+  )
+}
+
+/** Grant access to one person, by account id or by email address. */
+export function addWorkflowCollaborator(
+  workflowId: string,
+  target: { userId: string } | { email: string },
+  role: CollaboratorRole,
+): Promise<{ data: WorkflowCollaborator }> {
+  return apiRequest<{ data: WorkflowCollaborator }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
+    "Failed to share the workflow",
+    { method: "POST", body: JSON.stringify({ ...target, role }) },
+  )
+}
+
+export function updateWorkflowCollaborator(
+  workflowId: string,
+  userId: string,
+  role: CollaboratorRole,
+): Promise<{ data: WorkflowCollaborator }> {
+  return apiRequest<{ data: WorkflowCollaborator }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
+    "Failed to change the role",
+    { method: "PATCH", body: JSON.stringify({ role }) },
+  )
+}
+
+export function removeWorkflowCollaborator(workflowId: string, userId: string): Promise<void> {
+  return apiRequest(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
+    "Failed to remove access",
+    { method: "DELETE" },
+  )
+}
+
+/**
+ * Who else in the workspace can reach this workflow.
+ *
+ * A different power from editing, refused by the server for anyone but the
+ * creator or a workspace admin — the dialog hides the control for everyone
+ * else rather than offering a switch that answers 403.
+ */
+export function setWorkflowVisibility(
+  workflowId: string,
+  visibility: "private" | "workspace",
+): Promise<unknown> {
+  return apiRequest(
+    `/v1/workflows/${encodeURIComponent(workflowId)}`,
+    "Failed to change who can see this",
+    { method: "PATCH", body: JSON.stringify({ visibility }) },
+  )
+}
+
+/** Work other people shared with me, one workflow at a time. */
+export function getSharedWithMe(): Promise<{ data: SharedWorkflow[] }> {
+  return apiRequest<{ data: SharedWorkflow[] }>(
+    "/v1/workflows/shared-with-me",
+    "Failed to load shared work",
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Presentation mode
 // ---------------------------------------------------------------------------
 

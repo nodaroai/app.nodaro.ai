@@ -31,6 +31,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -334,12 +335,8 @@ describe("GET /v1/workflows/:id/interface", () => {
   })
 
   it("returns 404 when workflow not found", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "not found" },
-    })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const mockEq1 = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -356,13 +353,15 @@ describe("GET /v1/workflows/:id/interface", () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: {
         id: TEST_WORKFLOW_ID,
+        user_id: TEST_USER_ID,
+        workspace_id: null,
+        visibility: "private",
         nodes: [{ id: "n1", type: "generate-image", data: {} }],
         edges: [],
       },
       error: null,
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -380,13 +379,15 @@ describe("GET /v1/workflows/:id/interface", () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: {
         id: TEST_WORKFLOW_ID,
+        user_id: TEST_USER_ID,
+        workspace_id: null,
+        visibility: "private",
         nodes: makeSubWorkflowNodes(),
         edges: makeSubWorkflowEdges(),
       },
       error: null,
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 

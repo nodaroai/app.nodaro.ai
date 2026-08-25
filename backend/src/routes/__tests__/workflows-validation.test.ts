@@ -31,6 +31,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -296,16 +297,19 @@ describe("POST /v1/workflows/:parentId/sub-workflows", () => {
   it("creates a child workflow with parent_workflow_id set + a default seeded route", async () => {
     // ── Mock #1: parent lookup ─────────────────────────────────────────────
     // .from("workflows").select(...).eq("id", parentId).eq("user_id", uid).single()
-    const parentSingle = vi.fn().mockResolvedValue({
+    // The parent is read unfiltered and judged by the access rule: inside a
+    // workspace, someone entitled to edit a workflow is often not its creator.
+    const parentMaybeSingle = vi.fn().mockResolvedValue({
       data: {
         id: TEST_PARENT_ID,
         project_id: TEST_PROJECT_ID,
         user_id: TEST_USER_ID,
+        workspace_id: null,
+        visibility: "private",
       },
       error: null,
     })
-    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
-    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+    const parentEq1 = vi.fn().mockReturnValue({ maybeSingle: parentMaybeSingle })
     const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
 
     // ── Mock #2: insert + select + single ──────────────────────────────────
@@ -355,7 +359,6 @@ describe("POST /v1/workflows/:parentId/sub-workflows", () => {
 
     // Verify parent ownership check
     expect(parentEq1).toHaveBeenCalledWith("id", TEST_PARENT_ID)
-    expect(parentEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
 
     // Verify the seeded shape was inserted
     expect(insertCalls).toHaveLength(1)
@@ -386,16 +389,19 @@ describe("POST /v1/workflows/:parentId/sub-workflows", () => {
   })
 
   it("accepts a custom name in the body", async () => {
-    const parentSingle = vi.fn().mockResolvedValue({
+    // The parent is read unfiltered and judged by the access rule: inside a
+    // workspace, someone entitled to edit a workflow is often not its creator.
+    const parentMaybeSingle = vi.fn().mockResolvedValue({
       data: {
         id: TEST_PARENT_ID,
         project_id: TEST_PROJECT_ID,
         user_id: TEST_USER_ID,
+        workspace_id: null,
+        visibility: "private",
       },
       error: null,
     })
-    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
-    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+    const parentEq1 = vi.fn().mockReturnValue({ maybeSingle: parentMaybeSingle })
     const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
 
     const insertCalls: Array<Record<string, unknown>> = []
@@ -441,13 +447,9 @@ describe("POST /v1/workflows/:parentId/sub-workflows", () => {
     expect(insertCalls[0].name).toBe("My Custom Name")
   })
 
-  it("returns 404 when parent workflow does not exist or is not owned by the caller", async () => {
-    const parentSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "Not found" },
-    })
-    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
-    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+  it("returns 404 when the parent does not exist", async () => {
+    const parentMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const parentEq1 = vi.fn().mockReturnValue({ maybeSingle: parentMaybeSingle })
     const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
 
     vi.mocked(supabase.from).mockReturnValueOnce({ select: parentSelect } as never)
@@ -460,11 +462,40 @@ describe("POST /v1/workflows/:parentId/sub-workflows", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    const body = res.json()
-    expect(body.error.code).toBe("not_found")
-    expect(body.error.message).toMatch(/parent workflow not found/i)
+    expect(res.json().error.code).toBe("not_found")
 
     // The insert chain must NOT have been hit — only the parent select.
+    expect(supabase.from).toHaveBeenCalledTimes(1)
+  })
+
+  it("returns 404 when the parent belongs to somebody else", async () => {
+    // The row is REAL — the refusal comes from the access rule, not from a
+    // filter that made the row invisible. A route that read the parent and
+    // forgot to ask would seed a child under a stranger's workflow.
+    const parentMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_PARENT_ID,
+        project_id: TEST_PROJECT_ID,
+        user_id: "00000000-0000-4000-8000-0000000000ff",
+        workspace_id: null,
+        visibility: "private",
+      },
+      error: null,
+    })
+    const parentEq1 = vi.fn().mockReturnValue({ maybeSingle: parentMaybeSingle })
+    const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
+
+    vi.mocked(supabase.from).mockReturnValueOnce({ select: parentSelect } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_PARENT_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
     expect(supabase.from).toHaveBeenCalledTimes(1)
   })
 

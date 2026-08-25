@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { shareWorkflow, unshareWorkflow } from "@/lib/api"
+import { getWorkflowAccess, shareWorkflow, unshareWorkflow } from "@/lib/api"
+import { CollaboratorsPanel } from "./collaborators-panel"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -36,6 +38,19 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
   const [loading, setLoading] = useState(false)
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // Asked only once the dialog is actually open. It is a per-workflow
+  // authorization question, so it belongs to whoever is looking at it right
+  // now — not to the editor's load path, which would pay for it on every
+  // workflow anyone opens whether or not they ever share one.
+  const { data: accessData, refetch } = useQuery({
+    queryKey: ["workflow-access", workflowId],
+    queryFn: () => getWorkflowAccess(workflowId),
+    enabled: open,
+    staleTime: 30_000,
+  })
+  const access = accessData?.data
+  const refetchAccess = useCallback(() => { void refetch() }, [refetch])
 
   const shareUrl = shareToken
     ? `${window.location.origin}/present/${shareToken}`
@@ -132,6 +147,23 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Sharing with NAMED people, and the workspace-wide switch beside
+              it. Above the presentation link rather than folded into it: a
+              link is for anyone who has it and cannot be taken back from one
+              person, a grant is for one person and can. They are different
+              decisions and the dialog should not blur them. Absent until the
+              server has answered who this caller is. */}
+          {access && (
+            <>
+              <CollaboratorsPanel
+                workflowId={workflowId}
+                access={access}
+                onVisibilityChanged={refetchAccess}
+              />
+              <div className="border-t" />
+            </>
+          )}
+
           <p className="text-sm text-muted-foreground">
             Share this workflow as a presentation. Anyone with the link can run it (they pay their own credits).
           </p>

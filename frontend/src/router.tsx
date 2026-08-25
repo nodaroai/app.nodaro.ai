@@ -33,6 +33,7 @@ const LocationGalleryPage = lazy(() => import("@/components/library/location-gal
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const UsagePage = lazy(() => import("@/app/(dashboard)/usage/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
+const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const CheckoutCompletePage = lazy(() => import("@/app/checkout-complete/page"))
@@ -330,6 +331,10 @@ export const router = createBrowserRouter([
       {
         path: "/archived-runs",
         element: <SuspenseWrapper><ArchivedRunsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/shared",
+        element: <SuspenseWrapper><SharedWithMePage /></SuspenseWrapper>,
       },
       {
         path: "/my-files",

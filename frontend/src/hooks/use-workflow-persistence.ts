@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
+import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { reconcileCompletedSingleNodeJobs } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
@@ -1061,7 +1062,16 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // Studio-origin workflows are view-only in the node editor (the Studio
         // app edits them). `settings` was computed above from data.settings.
-        useWorkflowStore.setState({ isReadOnly: isStudioWorkflowSettings(settings) })
+        useWorkflowStore.setState({
+          isReadOnly: isStudioWorkflowSettings(settings),
+          readOnlyReason: null,
+        })
+
+        // What THIS person may do with THIS workflow, asked of the server and
+        // applied to the canvas. Fire-and-forget: the workflow is interactive
+        // immediately, and a failure leaves it writable — the state it is in
+        // today, with the server still refusing anything it should.
+        void applyWorkflowAccess(id)
 
         // Reconcile per-node `generatedResults` against the backend's
         // `jobs.output_data`. When a single-node run gets stuck → backend

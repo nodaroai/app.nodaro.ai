@@ -1623,6 +1623,61 @@ export interface PluginOrgsService {
    * and cannot start a job the class pays for.
    */
   canRunWorkflow?(userId: string, workflowId: string): Promise<boolean>
+
+  /**
+   * May this user change who ELSE the workflow is visible to?
+   *
+   * Creator, workspace admin, or platform admin — the twin of what
+   * `check_workflows_update_allowed` (migration 338) pins for the browser.
+   * Deliberately not `access >= edit`: changing the canvas and changing the
+   * audience are different powers, and an editor flipping a private workflow
+   * to `workspace` would be publishing someone else's work to the class.
+   *
+   * Core asks rather than assembles because the workspace-admin half is not
+   * computable there: an organization owner or admin is an IMPLICIT admin of
+   * every workspace beneath it, with no membership row to read.
+   */
+  canChangeWorkflowVisibility?(userId: string, workflowId: string): Promise<boolean>
+
+  /**
+   * May this user hand access to somebody ELSE?
+   *
+   * Wider than `canChangeWorkflowVisibility` and narrower than `edit`: the
+   * creator always, a workspace admin whose `admin_access` reaches `edit`, and
+   * an ordinary editor only where the workspace's `collaborators_can_invite`
+   * says so. Core cannot derive it — it turns on inherited settings and on
+   * implicit memberships — and uses it only to decide which controls to show.
+   */
+  canShareWorkflow?(userId: string, workflowId: string): Promise<boolean>
+
+  /**
+   * Record that a workspace workflow is about to be deleted by someone who is
+   * not its creator, and report whether the row was actually written.
+   *
+   * WRITE-AHEAD, unlike every other entry in the log: core refuses the delete
+   * when this resolves false. The row policies admit only the creator, so an
+   * admin deleting a member's work goes through the application or nowhere,
+   * and the reason that is allowed at all is that the application records it.
+   * Audit-after cannot honour that — once the row is gone there is nothing
+   * left to refuse.
+   *
+   * Returning `true` means the entry is durable. Never return `true` on a
+   * failed insert to keep a caller moving; the caller is relying on the
+   * opposite.
+   */
+  auditWorkflowDeleted?(input: WorkflowDeletedAudit): Promise<boolean>
+}
+
+/** What the audit entry for an admin-side workflow delete has to say. */
+export interface WorkflowDeletedAudit {
+  /** Who asked for the deletion. Never the creator — that path is not audited. */
+  actorId: string
+  workflowId: string
+  /** Named, because an id in an audit log tells a reader nothing later. */
+  workflowName: string
+  /** The workflow's workspace; the entry belongs to its organization. */
+  workspaceId: string
+  creatorId: string
 }
 
 /**
