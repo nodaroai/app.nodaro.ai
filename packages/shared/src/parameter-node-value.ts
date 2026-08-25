@@ -77,6 +77,17 @@ export const HINT_EXEMPT_PARAMETER_TYPES: ReadonlySet<string> = new Set([
   "aspect-ratio",
 ])
 
+/**
+ * Extra person-dimension data-field names contributed by registered person
+ * packs. Content-free (field-name strings only) — populated at runtime by
+ * `@nodaro/prompts`'s `registerPersonPack`; empty on mainline (identity).
+ * shared MUST NOT import prompts, so the field list is pushed in, not pulled.
+ */
+let registeredPersonPackFields: readonly string[] = []
+export function setRegisteredPersonPackFields(fields: readonly string[]): void {
+  registeredPersonPackFields = [...fields]
+}
+
 export function getParameterValue(
   data: Record<string, unknown>,
   nodeType: string,
@@ -171,11 +182,11 @@ export function getParameterValue(
       return trim(data.backdrop)
     case "held-prop":
       return trim(data.heldProp)
-    case "person":
+    case "person": {
       // Multi-dimension: return the first set per-dimension value (used for
       // single-string field-mapping resolution; full hint composition goes
       // through buildPersonHints in the executors).
-      return (
+      const base =
         trim(data.type) ??
         trim(data.age) ??
         trim(data.ethnicity) ??
@@ -210,7 +221,16 @@ export function getParameterValue(
         trim(data.distinctiveFeature) ??
         trim(data.lipState) ??
         trim(data.eyeState)
-      )
+      if (base !== undefined) return base
+      // Fall back to any registered person-pack dimension field (G4): a
+      // deployment overlay's extra person dimensions resolve in the
+      // `{PersonLabel}` field-mapping single-string path. Empty on mainline.
+      for (const field of registeredPersonPackFields) {
+        const v = trim(data[field])
+        if (v !== undefined) return v
+      }
+      return undefined
+    }
     case "mood":
       return trim(data.mood)
     case "photographer":
