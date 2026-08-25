@@ -12,7 +12,7 @@
  * composer draft.
  */
 import { create } from "zustand"
-import { EMPTY_TURN, type CopilotMention, type CopilotRunMode, type CopilotRunPhase, type CopilotTurnState } from "./types"
+import { EMPTY_TURN, type CopilotMention, type CopilotRunMode, type CopilotRunPhase, type CopilotTurnState, CopilotModelTier } from "./types"
 
 /**
  * Callbacks the editor owns and the engine borrows. Registered by the panel on
@@ -63,6 +63,8 @@ export interface CopilotStoreState {
   /** Ask/Auto and its ceiling. Local-first so the toggle works before a thread exists. */
   runMode: CopilotRunMode
   autoRunLimit: number
+  /** The thread's model ladder rung. Local-first like runMode. */
+  modelTier: CopilotModelTier
 
   runPhase: CopilotRunPhase
   /** The execution the panel is following — set when a run starts from a proposal. */
@@ -107,7 +109,7 @@ export interface CopilotStoreState {
   setNotice: (notice: string | null) => void
   setInsufficient: (value: { required: number; balance: number } | null) => void
   setBridge: (patch: Partial<CopilotEditorBridge>) => void
-  setRunSettings: (mode: CopilotRunMode, limit: number, allowPublishing?: boolean) => void
+  setRunSettings: (mode: CopilotRunMode, limit: number, allowPublishing?: boolean, modelTier?: CopilotModelTier) => void
   /** This thread may author publishing nodes. Off until the user says so. */
   allowPublishing: boolean
   /** Undo on a pinned memory save — the DELETE already succeeded when this runs. */
@@ -137,6 +139,7 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
   streaming: false,
   runMode: "ask",
   allowPublishing: false,
+  modelTier: "standard",
   autoRunLimit: DEFAULT_AUTO_RUN_LIMIT,
   runPhase: "idle",
   executionId: null,
@@ -169,8 +172,13 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
       const unchanged = (Object.keys(next) as Array<keyof CopilotEditorBridge>).every((k) => next[k] === s.bridge[k])
       return unchanged ? s : { bridge: next }
     }),
-  setRunSettings: (runMode, autoRunLimit, allowPublishing) =>
-    set({ runMode, autoRunLimit, ...(allowPublishing === undefined ? {} : { allowPublishing }) }),
+  setRunSettings: (runMode, autoRunLimit, allowPublishing, modelTier) =>
+    set({
+      runMode,
+      autoRunLimit,
+      ...(allowPublishing === undefined ? {} : { allowPublishing }),
+      ...(modelTier === undefined ? {} : { modelTier }),
+    }),
   removeMemorySave: (id) =>
     set((s) => ({ turn: { ...s.turn, memorySaves: s.turn.memorySaves.filter((m) => m.id !== id) } })),
 

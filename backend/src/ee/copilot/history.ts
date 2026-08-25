@@ -83,10 +83,54 @@ export function buildHistory(rows: readonly CopilotMessageRow[]): Anthropic.Mess
   return kept.flatMap((g) => g.messages)
 }
 
-/** The user message for this turn: the volatile context block, then the user's own words. */
-export function buildUserContent(preamble: string, text: string): Anthropic.Messages.ContentBlockParam[] {
+/**
+ * Image ids from the message's own `[references]` glossary (vision turns).
+ *
+ * The glossary is OUR wire format — one trailing line the composer writes
+ * (`[references] image file "shot.png" (id: <uuid>); character "Iris" …`) —
+ * so parsing it server-side covers every path that produces a message (typed
+ * `@`, the paperclip, the home-page handoff) with zero client changes. Only
+ * `image file` entries count, only well-formed uuids survive, and the cap is
+ * enforced here so a glossary stuffed with ids cannot balloon the request.
+ * Ownership is NOT decided here — the caller resolves each id through the
+ * owner-scoped resolver, and a foreign id simply fails to resolve.
+ */
+export function extractImageRefIds(message: string): string[] {
+  const idx = message.lastIndexOf("\n\n[references] ")
+  const line = idx === -1 && message.startsWith("[references] ")
+    ? message.slice("[references] ".length)
+    : idx !== -1
+      ? message.slice(idx + "\n\n[references] ".length)
+      : null
+  if (!line) return []
+  const firstLine = line.split("\n", 1)[0] ?? ""
+  const ids: string[] = []
+  const re = /image file "[^"]*" \(id: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/gi
+  for (const match of firstLine.matchAll(re)) {
+    const id = match[1]!
+    if (!ids.includes(id)) ids.push(id)
+    if (ids.length >= TURN_CAPS.maxVisionImages) break
+  }
+  return ids
+}
+
+/**
+ * The user message for this turn: the volatile context block, the attached
+ * images (vision turns — the model SEES what the user attached, so "build me
+ * something like this screenshot" works in one turn), then the user's own
+ * words. Images sit between context and prose per the vision guidance: the
+ * question refers to them, so they come first.
+ */
+export function buildUserContent(
+  preamble: string,
+  text: string,
+  imageUrls: readonly string[] = [],
+): Anthropic.Messages.ContentBlockParam[] {
   return [
     { type: "text", text: preamble },
+    ...imageUrls.slice(0, TURN_CAPS.maxVisionImages).map(
+      (url): Anthropic.Messages.ContentBlockParam => ({ type: "image", source: { type: "url", url } }),
+    ),
     { type: "text", text },
   ]
 }

@@ -20,7 +20,7 @@ import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"
 import { redis } from "../../lib/queue.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
-import { COPILOT_FEATURE, COPILOT_MODEL_ID, RESERVATION_FLOOR_CREDITS, THREAD_CAPS, TURN_CAPS } from "../copilot/constants.js"
+import { COPILOT_FEATURE, COPILOT_TIERS, RESERVATION_FLOOR_CREDITS, THREAD_CAPS, TURN_CAPS, resolveCopilotTier } from "../copilot/constants.js"
 import { runCopilotTurn, TURN_ERROR_TEXT } from "../copilot/turn-runner.js"
 import { abortTurnLocally } from "../copilot/cancel-registry.js"
 import {
@@ -58,11 +58,21 @@ const messageBody = z.object({
   message: z.string().min(1).max(THREAD_CAPS.messageMaxChars),
   clientMessageId: z.string().max(100).optional(),
   baseVersion: z.number().int().min(1).optional(),
+  /**
+   * The composer's echo of the thread's model tier — read ONLY by the
+   * creditGuard preHandler (which runs before the thread row is loaded) so
+   * the balance pre-check uses the right ceiling. The RESERVATION below is
+   * authoritative from the thread row; a lying hint moves the pre-check,
+   * never the charge. Doubles as the pre-promotion fallback while the
+   * `model_tier` column is not on the shared database yet.
+   */
+  tier: z.enum(["economy", "standard", "premium"]).optional(),
 })
 
 const patchThreadBody = z.object({
   runMode: z.enum(["ask", "auto"]).optional(),
   autoRunLimitCredits: z.number().int().min(0).max(100000).optional(),
+  modelTier: z.enum(["economy", "standard", "premium"]).optional(),
   /**
    * Let this thread build nodes that publish to the user's connected accounts.
    *
@@ -284,6 +294,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
     const updated = await updateThreadSettings(id, req.userId!, {
       ...(parsed.data.runMode ? { run_mode: parsed.data.runMode } : {}),
       ...(parsed.data.autoRunLimitCredits !== undefined ? { auto_run_limit_credits: parsed.data.autoRunLimitCredits } : {}),
+      ...(parsed.data.modelTier ? { model_tier: parsed.data.modelTier } : {}),
       ...(parsed.data.allowPublishing !== undefined ? { allow_publishing: parsed.data.allowPublishing } : {}),
     })
     if (!updated) return reply.status(404).send({ error: { code: "not_found", message: "Thread not found" } })
@@ -355,7 +366,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         accessGate,
         rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "copilot-messages", failClosed: true }),
         paygSurfaceGuard(),
-        creditGuard(() => COPILOT_FEATURE, {
+        creditGuard((req) => tierSpecFromBody(req).creditId, {
           dedup: false,
           // Reserve the ceiling, but never more than the user actually has:
           // a low balance should shorten a turn, not refuse it outright.
@@ -394,6 +405,13 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         })
       }
 
+      // The thread row is the tier authority; the body hint covers the window
+      // before the `model_tier` column reaches the shared database.
+      const tier = resolveCopilotTier(
+        (thread as { model_tier?: unknown }).model_tier ?? parsed.data.tier,
+      )
+      const tierSpec = COPILOT_TIERS[tier]
+
       await healStaleTurns(threadId)
       if (await findLiveTurn(threadId)) {
         return reply.status(409).send({ error: { code: "turn_in_progress", message: "The copilot is still working on the previous message." } })
@@ -411,14 +429,14 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       })
       if (jobError) return sendInternalError(reply, req, jobError, "Failed to start the turn")
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, COPILOT_FEATURE)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, tierSpec.creditId)
       if (reply.sent) return
       await markProviderCallStart(job.id, "copilot-turn")
 
       const turn = await createTurn({
         threadId,
         userId,
-        modelId: COPILOT_MODEL_ID,
+        modelId: tierSpec.registryId,
         jobId: job.id,
         baseVersion: workflow.version,
       })
@@ -433,7 +451,8 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           threadId,
           turnId: turn.id,
           jobId: job.id,
-          model: COPILOT_MODEL_ID,
+          model: tierSpec.registryId,
+          modelTier: tier,
           baseVersion: workflow.version,
           runMode: thread.run_mode,
           autoRunLimitCredits: thread.auto_run_limit_credits,
@@ -460,6 +479,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           nodes: workflow.nodes,
           edges: workflow.edges,
           message: parsed.data.message,
+          tier,
           usageLogId: reservation?.usageLogId ?? null,
           reservedCredits: reservation?.creditsReserved ?? 0,
           emit: (event) => sse.sendEvent(event as never),
@@ -517,18 +537,35 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
  *  - Below the floor there is no useful turn to run: reserve the floor and let
  *    the guard answer 402 with a number the user can act on.
  */
-async function resolveReservation(req: FastifyRequest): Promise<number> {
+/**
+ * The tier the GUARD stage can know: the composer's body hint (the thread row
+ * is not loaded yet at preHandler time). The handler re-resolves from the
+ * thread row, which stays authoritative for the reservation IDENTIFIER; this
+ * hint prices the guard's balance pre-check and the reservation CEILING. A
+ * lying hint only misprices the caller's own reservation — the commit is
+ * metered on actuals either way, so nothing can be overcharged.
+ */
+function tierSpecFromBody(req: FastifyRequest) {
+  return COPILOT_TIERS[resolveCopilotTier((req.body as { tier?: unknown } | null)?.tier)]
+}
+
+export async function resolveReservation(req: FastifyRequest): Promise<number> {
   const { CreditsService, getModelCreditBaseCost } = await import("../billing/credits.js")
   // The DB row wins, exactly as it does for every other priced identifier —
   // an admin raising the ceiling in /admin/models must move the reservation.
   // A missing row throws PriceNotConfiguredError, which creditGuard turns
   // into the 503 the hard-fail policy specifies.
-  const ceiling = (await getModelCreditBaseCost(COPILOT_FEATURE)).creditCost
+  // Tier-aware: the ceiling row of the RUNG, not the bare feature — this
+  // number becomes the reservation (via creditOverride) and therefore the
+  // turn's USD budget. Pricing premium at the standard row would quietly cap
+  // an Opus turn at a Sonnet budget — the ladder's whole promise.
+  const tierCreditId = tierSpecFromBody(req).creditId
+  const ceiling = (await getModelCreditBaseCost(tierCreditId)).creditCost
   const userId = req.userId
   if (!userId) return ceiling
   try {
     const [balance, settings] = await Promise.all([CreditsService.getBalance(userId), getAppSettings()])
-    const ratePercent = effectiveMarkupPercent(settings, COPILOT_FEATURE)
+    const ratePercent = effectiveMarkupPercent(settings, tierCreditId)
     const affordableBase = Math.floor(balance.total / (1 + ratePercent / 100))
     if (affordableBase < RESERVATION_FLOOR_CREDITS) return RESERVATION_FLOOR_CREDITS
     return Math.min(ceiling, affordableBase)
@@ -551,6 +588,8 @@ function publicThread(thread: CopilotThread): Record<string, unknown> {
     id: thread.id,
     workflowId: thread.workflow_id,
     runMode: thread.run_mode,
+    // Column-tolerant: standard until migration 344 reaches the shared DB.
+    modelTier: resolveCopilotTier((thread as { model_tier?: unknown }).model_tier),
     allowPublishing: threadAllowsPublishing(thread),
     autoRunLimitCredits: thread.auto_run_limit_credits,
     userTurnCount: thread.user_turn_count,

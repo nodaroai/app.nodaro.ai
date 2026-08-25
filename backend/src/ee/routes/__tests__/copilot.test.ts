@@ -31,19 +31,31 @@ vi.mock("@/lib/supabase.js", () => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: state.workflow }),
+      // model_pricing lookups miss here so getModelCreditBaseCost falls back
+      // to STATIC_CREDIT_COSTS — the values the ceiling test asserts against.
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "not in this harness" } }),
     }),
   },
 }))
+const reservedIds = vi.hoisted(() => ({ list: [] as string[] }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
   paygSurfaceGuard: () => async () => undefined,
-  reserveCreditsForJob: async () => ({ usageLogId: "log1", creditsReserved: 150, watermark: false }),
+  reserveCreditsForJob: async (_req: unknown, _reply: unknown, _jobId: unknown, identifier: string) => {
+    reservedIds.list.push(identifier)
+    return { usageLogId: "log1", creditsReserved: 150, watermark: false }
+  },
 }))
 vi.mock("@/lib/queue.js", () => ({ redis: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn(), ttl: vi.fn().mockResolvedValue(60) } }))
+const threadPatches = vi.hoisted(() => ({ list: [] as Array<Record<string, unknown>> }))
 vi.mock("../../copilot/store.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../copilot/store.js")>()
   return {
     ...actual,
+    updateThreadSettings: async (_id: string, _userId: string, patch: Record<string, unknown>) => {
+      threadPatches.list.push(patch)
+      return { ...(state.thread as Record<string, unknown>), ...patch }
+    },
     getThreadForUser: async () => state.thread,
     findActiveThread: async () => state.thread,
     countActiveThreads: async () => state.activeThreads,
@@ -179,6 +191,47 @@ describe("copilot routes — turn preconditions", () => {
     })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("thread_cap_reached")
+  })
+})
+
+describe("the model ladder (Phase 9)", () => {
+  it("PATCH persists the thread's modelTier and echoes it", async () => {
+    threadPatches.list.length = 0
+    const app = await buildApp()
+    const res = await app.inject({ method: "PATCH", url: "/v1/copilot/threads/th1", payload: { modelTier: "premium" } })
+    expect(res.statusCode).toBe(200)
+    expect(threadPatches.list.at(-1)).toMatchObject({ model_tier: "premium" })
+    expect(res.json().data.thread.modelTier).toBe("premium")
+  })
+
+  it("rejects a tier outside the ladder", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "PATCH", url: "/v1/copilot/threads/th1", payload: { modelTier: "deep" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("publicThread reads a missing column as standard — the pre-promotion window", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "GET", url: "/v1/copilot/threads?workflowId=11111111-2222-4333-8444-555555555555" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.thread.modelTier).toBe("standard")
+  })
+})
+
+describe("the reservation ceiling follows the rung", () => {
+  // The review finding this pins: resolveReservation's output BECOMES the
+  // reservation (creditOverride) and therefore the turn's USD budget —
+  // priced at the bare feature row, a premium turn ran on a standard budget.
+  it("prices the guard ceiling from the hinted tier's row", async () => {
+    const { resolveReservation } = await import("../copilot.js")
+    const { STATIC_CREDIT_COSTS } = await import("../../billing/credits.js")
+    const req = (tier?: string) =>
+      ({ body: tier ? { tier } : {}, userId: undefined }) as never
+    // userId undefined → the balance clamp is skipped and the raw ceiling returns.
+    expect(await resolveReservation(req("premium"))).toBe(STATIC_CREDIT_COSTS["workflow-copilot:premium"])
+    expect(await resolveReservation(req("economy"))).toBe(STATIC_CREDIT_COSTS["workflow-copilot:economy"])
+    expect(await resolveReservation(req())).toBe(STATIC_CREDIT_COSTS["workflow-copilot"])
+    expect(await resolveReservation(req("nonsense"))).toBe(STATIC_CREDIT_COSTS["workflow-copilot"])
   })
 })
 

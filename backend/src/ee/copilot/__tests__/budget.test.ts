@@ -43,14 +43,14 @@ describe("resolveTurnBudget", () => {
 describe("the SHIPPED ceiling admits a real turn", () => {
   it("does not refuse the first call, and affords several iterations", async () => {
     const { STATIC_CREDIT_COSTS } = await import("../../billing/credits.js")
-    const { COPILOT_MODEL_ID } = await import("../constants.js")
+    const { COPILOT_TIERS } = await import("../constants.js")
     const ceiling = STATIC_CREDIT_COSTS["workflow-copilot"]!
     const budget = await resolveTurnBudget(ceiling)
     // A realistic first call: the system prompt plus a working conversation.
-    const first = estimateNextCallUsd(COPILOT_MODEL_ID, 30_000)
+    const first = estimateNextCallUsd(COPILOT_TIERS.standard.registryId, 30_000)
     expect(wouldExceedBudget(budget, 0, first), "the first call must not be refused").toBe(false)
     // …and enough headroom for a multi-step turn (cached prefix from #2 on).
-    const cached = estimateNextCallUsd(COPILOT_MODEL_ID, 60_000, true)
+    const cached = estimateNextCallUsd(COPILOT_TIERS.standard.registryId, 60_000, true)
     expect(wouldExceedBudget(budget, first + 3 * cached, cached)).toBe(false)
   })
 })

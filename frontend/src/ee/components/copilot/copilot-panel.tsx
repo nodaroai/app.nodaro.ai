@@ -20,7 +20,7 @@ import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/c
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
 import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
 import { useCopilotHandoff } from "@/ee/hooks/copilot/use-copilot-handoff"
-import type { CopilotMention } from "@/ee/lib/copilot/types"
+import type { CopilotMention, CopilotModelTier } from "@/ee/lib/copilot/types"
 import { CopilotComposer } from "./copilot-composer"
 import { CopilotConversation } from "./copilot-conversation"
 import { CopilotEmptyState } from "./copilot-empty-state"
@@ -126,6 +126,7 @@ export default function CopilotPanel({
     runMode?: "ask" | "auto"
     autoRunLimitCredits?: number
     allowPublishing?: boolean
+    modelTier?: CopilotModelTier
   }) => {
     // Local first so the toggle responds with no thread and with no network.
     const current = useCopilotStore.getState()
@@ -133,6 +134,7 @@ export default function CopilotPanel({
       patch.runMode ?? current.runMode,
       patch.autoRunLimitCredits ?? current.autoRunLimit,
       patch.allowPublishing ?? current.allowPublishing,
+      patch.modelTier ?? current.modelTier,
     )
     if (threadId) settings.mutate(patch)
   }

@@ -19,11 +19,11 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { commitJobCredits } from "../../workers/shared.js"
 import { buildMcpServer } from "../../lib/mcp/server.js"
 import { createMcpInvoker } from "../../lib/mcp/invoke.js"
-import { COPILOT_MODEL_ID, COPILOT_SCOPES, HEARTBEAT_INTERVAL_MS, TURN_CAPS } from "./constants.js"
+import { COPILOT_SCOPES, COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL_MS, TURN_CAPS, type CopilotModelTier } from "./constants.js"
 import { resolveTurnBudget } from "./budget.js"
 import { buildSystemPrompt } from "./system-prompt.js"
 import { buildContextPreamble } from "./context-snapshot.js"
-import { buildHistory, buildUserContent } from "./history.js"
+import { buildHistory, buildUserContent, extractImageRefIds } from "./history.js"
 import { runAgentLoop, type LoopResult } from "./agent-loop.js"
 import { buildToolDefinitions } from "./tools/registry.js"
 import { registerTurnAbort, unregisterTurnAbort } from "./cancel-registry.js"
@@ -40,6 +40,7 @@ import {
   type CopilotThread,
   type CopilotTurn,
 } from "./store.js"
+import { resolveCopilotAssetRefs } from "./tools/asset-refs.js"
 import type { CopilotToolContext } from "./tools/types.js"
 
 export interface TurnEmit {
@@ -59,6 +60,8 @@ export interface RunTurnInput {
   nodes: unknown
   edges: unknown
   message: string
+  /** The thread's model ladder rung — resolved by the route from the thread row. */
+  tier: CopilotModelTier
   usageLogId: string | null
   reservedCredits: number
   emit: TurnEmit
@@ -151,7 +154,28 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       buildToolDefinitions(invoker),
     ])
 
-    const userContent = buildUserContent(preamble, input.message)
+    // Vision: the message's own [references] glossary names the attached
+    // files; image ids that resolve as the CALLER'S OWN become image blocks,
+    // so the model sees what the user attached. A foreign or non-image id
+    // simply does not resolve — the text mention still stands, and the
+    // assetId write path stays the only way media reaches a node.
+    let imageUrls: string[] = []
+    const imageRefIds = extractImageRefIds(input.message)
+    if (imageRefIds.length > 0) {
+      try {
+        const resolvedRefs = await resolveCopilotAssetRefs(imageRefIds, input.userId)
+        imageUrls = imageRefIds
+          .map((id) => resolvedRefs.get(id))
+          .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref && ref.kind === "image" && ref.url))
+          .map((ref) => ref.url)
+      } catch (err) {
+        // Vision is an enhancement, never a turn-blocker: a resolver hiccup
+        // downgrades to the text-only turn the copilot always supported.
+        input.req.log.warn({ err, turnId: input.turn.id }, "[copilot] vision resolve failed; text-only turn")
+      }
+    }
+
+    const userContent = buildUserContent(preamble, input.message, imageUrls)
     const seq = await nextSeq(input.thread.id)
     await appendMessage({
       threadId: input.thread.id,
@@ -165,6 +189,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     })
 
     result = await runAgentLoop({
+      tier: COPILOT_TIERS[input.tier ?? DEFAULT_COPILOT_TIER],
       system: buildSystemPrompt(),
       tools,
       history: buildHistory(priorRows),

@@ -6,7 +6,7 @@
  * buffers streamed responses.
  */
 import { getAuthHeaders } from "@/lib/api"
-import type { CopilotRunMode, CopilotThread, DisplayMessage } from "./types"
+import type { CopilotRunMode, CopilotThread, DisplayMessage, CopilotModelTier } from "./types"
 
 /** A non-2xx REST reply, carrying the backend's error code so callers can branch. */
 export class CopilotApiError extends Error {
@@ -64,7 +64,7 @@ export function getCopilotThread(threadId: string): Promise<{ thread: CopilotThr
 
 export function updateCopilotThread(
   threadId: string,
-  patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number; allowPublishing?: boolean },
+  patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number; allowPublishing?: boolean; modelTier?: CopilotModelTier },
 ): Promise<{ thread: CopilotThread }> {
   return request<{ thread: CopilotThread }>(`/v1/copilot/threads/${encodeURIComponent(threadId)}`, {
     method: "PATCH",

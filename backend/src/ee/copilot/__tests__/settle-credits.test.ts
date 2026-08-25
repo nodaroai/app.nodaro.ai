@@ -79,6 +79,7 @@ const input = () => ({
   nodes: [],
   edges: [],
   message: "hi",
+  tier: "standard" as const,
   usageLogId: "log1",
   reservedCredits: 150,
   emit: vi.fn(),

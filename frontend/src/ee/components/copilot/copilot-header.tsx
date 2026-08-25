@@ -11,7 +11,7 @@ import { X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotMemoriesButton } from "./copilot-memories"
-import type { CopilotRunMode } from "@/ee/lib/copilot/types"
+import type { CopilotModelTier, CopilotRunMode } from "@/ee/lib/copilot/types"
 
 interface CopilotHeaderProps {
   onClose: () => void
@@ -19,12 +19,21 @@ interface CopilotHeaderProps {
     runMode?: CopilotRunMode
     autoRunLimitCredits?: number
     allowPublishing?: boolean
+    modelTier?: CopilotModelTier
   }) => void
 }
+
+/** The ladder's three rungs — names for people, hints for honesty. */
+const TIER_UI: Array<{ tier: CopilotModelTier; label: string; hint: string }> = [
+  { tier: "economy", label: S.tierEconomy, hint: S.tierHintEconomy },
+  { tier: "standard", label: S.tierStandard, hint: S.tierHintStandard },
+  { tier: "premium", label: S.tierPremium, hint: S.tierHintPremium },
+]
 
 export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps) {
   const runMode = useCopilotStore((s) => s.runMode)
   const allowPublishing = useCopilotStore((s) => s.allowPublishing)
+  const modelTier = useCopilotStore((s) => s.modelTier)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
   const [draftLimit, setDraftLimit] = useState(String(autoRunLimit))
 
@@ -104,6 +113,32 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
 
         <span className="ml-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap">
           {runMode === "auto" ? S.modeHintAuto : S.modeHintAsk}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-[var(--copilot-dim)]">{S.tierLabel}</span>
+        <div role="radiogroup" aria-label={S.tierLabel} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
+          {TIER_UI.map(({ tier, label, hint }) => (
+            <button
+              key={tier}
+              type="button"
+              role="radio"
+              aria-checked={modelTier === tier}
+              title={hint}
+              onClick={() => modelTier !== tier && onChangeSettings({ modelTier: tier })}
+              className={`px-2.5 py-[4px] rounded-md text-[11.5px] font-medium transition-colors ${
+                modelTier === tier
+                  ? "bg-[var(--copilot-surface)] text-foreground"
+                  : "text-[var(--copilot-muted)] hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
+          {TIER_UI.find((t) => t.tier === modelTier)?.hint}
         </span>
       </div>
 

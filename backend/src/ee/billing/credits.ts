@@ -1133,6 +1133,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // so the loop keeps its spend under this ceiling. Single identifier: the
   // copilot runs one model; tiers are not exposed.
   "workflow-copilot": 900,
+  // The model ladder's reservation ceilings (migration 344) — the turn still
+  // commits METERED actuals; these only scale what is reserved up front.
+  "workflow-copilot:economy": 300,
+  "workflow-copilot:premium": 2700,
   "translate": 10,                // internal utility (replicate i2i prompt translation)
   "translate:economy": 10,
   "translate:premium": 10,

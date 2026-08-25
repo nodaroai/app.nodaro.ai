@@ -75,12 +75,12 @@ const LLM_FEATURES = [
 ]
 
 /**
- * Features whose runtime never emits a TIERED identifier: the Workflow Copilot
- * runs one pinned model and reserves under the bare feature id, so `:economy`
- * / `:premium` rows would be prices nobody can be charged. Only the bare id is
- * required to exist.
+ * Features whose runtime never emits a TIERED identifier. The Workflow Copilot
+ * LEFT this list with the model ladder (migration 344): its route now reserves
+ * under `workflow-copilot` / `:economy` / `:premium` per the thread's tier, so
+ * all three rows must exist — the walker enforces exactly that.
  */
-const UNTIERED_LLM_FEATURES = ["workflow-copilot"]
+const UNTIERED_LLM_FEATURES: string[] = []
 
 // ---------------------------------------------------------------------------
 // Test

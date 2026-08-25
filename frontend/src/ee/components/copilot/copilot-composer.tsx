@@ -11,7 +11,7 @@ import { ArrowUp, AtSign } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { activeMentionQuery, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { COPILOT_FEATURE_ID } from "@/ee/lib/copilot/constants"
+import { copilotFeatureId } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
@@ -38,7 +38,8 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
 
   // The reservation ceiling for one copilot message. Cached by the hook, and
   // 0 until it resolves — in which case the badge simply stays out of the way.
-  const turnCeiling = useModelCredits(COPILOT_FEATURE_ID)
+  const modelTier = useCopilotStore((s) => s.modelTier)
+  const turnCeiling = useModelCredits(copilotFeatureId(modelTier))
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [query, setQuery] = useState<string | null>(null)
