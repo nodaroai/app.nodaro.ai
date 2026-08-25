@@ -1004,6 +1004,14 @@ not registered and return 404.
 `Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
 `provider`, `metadata`.
 
+`metadata` is an object carrying the run's billing mechanics, projected to a
+fixed set of keys. Present when the ledger recorded them: `model`, `from_sub`
+and `from_topup` (which of your credit pools funded the run), `is_app_run`,
+`allowance_delta`, `web_free_mode`, `status`, `loop_trim_refunded`,
+`surround_refine_refunded`. Any other key is omitted, and `metadata` is always
+an object — `{}` when nothing applies — so it is safe to read without a null
+check. Credits, not currency, are the billing unit the API exposes.
+
 Both routes use the same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT).
 

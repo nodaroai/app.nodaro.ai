@@ -264,6 +264,97 @@ describe("GET /v1/credits/transactions", () => {
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
   })
+
+  it("strips Nodaro's USD valuation from metadata, both spellings", async () => {
+    const rows = [
+      {
+        id: "log-1",
+        created_at: "2026-04-29T10:00:00Z",
+        credits_used: 5,
+        action: "generate-image",
+        provider: "kie",
+        metadata: {
+          model: "nano-banana",
+          from_sub: 5,
+          from_topup: 0,
+          display_cost: 0.01, // reserve_credits' spelling (311:151)
+          display_cost_usd: 0.01, // the zero-cost bypass spelling (credits.ts:2114)
+          some_future_key: "leak", // an allowlist hides new keys by default
+        },
+      },
+    ]
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    const [tx] = res.json().data
+    expect(tx.metadata).toEqual({ model: "nano-banana", from_sub: 5, from_topup: 0 })
+    expect(JSON.stringify(res.json())).not.toContain("display_cost")
+    // the surviving top-level columns are untouched
+    expect(tx.id).toBe("log-1")
+    expect(tx.credits_used).toBe(5)
+  })
+
+  it("keeps `metadata` a present object when the row has none", async () => {
+    const rows = [
+      {
+        id: "log-2",
+        created_at: "2026-04-29T11:00:00Z",
+        credits_used: 3,
+        action: "generate-image",
+        provider: "kie",
+        metadata: null,
+      },
+    ]
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    // the documented Transaction.metadata field must not vanish
+    expect(res.json().data[0].metadata).toEqual({})
+  })
+
+  it("still paginates after projection (cursor reads created_at off the last item)", async () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({
+      id: `log-${i}`,
+      created_at: `2026-04-29T12:0${i}:00Z`,
+      credits_used: 1,
+      action: "generate-image",
+      provider: "kie",
+      metadata: { display_cost: 0.02, from_sub: 1 }, // banned key present
+    }))
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=5")
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.nextCursor).toBe("2026-04-29T12:04:00Z")
+    expect(JSON.stringify(body)).not.toContain("display_cost")
+  })
 })
 
 // ---------------------------------------------------------------------------

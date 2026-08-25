@@ -5,6 +5,61 @@ import { hasCredits } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 
 /**
+ * The metadata keys a caller may see on their OWN usage_logs row.
+ *
+ * An ALLOWLIST, not a denylist, and that direction is the whole point: the
+ * transactions route used to `select("... metadata")` and send the object
+ * whole, so `display_cost` -- Nodaro's own USD valuation of the run, written by
+ * reserve_credits (311_payg_web_free_pool.sql:149-157) -- went out on the wire.
+ * Dividing it by `credits_used` recovers CREDIT_BASE_USD exactly. A denylist
+ * would leak again the next time an RPC learns a new key; an allowlist makes a
+ * new key invisible until someone decides otherwise.
+ *
+ * Everything here is the user's own billing mechanics, not our economics:
+ *   model                        -- the model they picked (already implied by `action`)
+ *   from_sub / from_topup        -- which of THEIR credit pools funded the run
+ *   is_app_run / allowance_delta -- app-credit allowance movement
+ *   web_free_mode / status       -- product state
+ *   *_refunded                   -- addon refunds (workers/shared.ts:957, :1003)
+ *
+ * Deliberately absent: `display_cost` (reserve_credits' spelling, 311:151) AND
+ * `display_cost_usd` (the zero-cost-reserve bypass spelling at credits.ts:2114)
+ * -- two spellings of the same value, which is why a denylist would have caught
+ * only one. `usage_logs.cost_usd` is a COLUMN, not a metadata key; a response
+ * projection cannot reach it, which is why migration 346 revokes the table from
+ * anon/authenticated in this same PR. Guarded by
+ * __tests__/credits-metadata-allowlist.test.ts (no economics-shaped key may
+ * ever enter this list).
+ */
+export const ALLOWED_TRANSACTION_METADATA_KEYS = [
+  "model",
+  "from_sub",
+  "from_topup",
+  "is_app_run",
+  "allowance_delta",
+  "web_free_mode",
+  "status",
+  "loop_trim_refunded",
+  "surround_refine_refunded",
+] as const
+
+/**
+ * Shape-preserving: always returns an object, so `metadata` stays a documented
+ * field of the `Transaction` contract (docs/api-integration.md) and existing
+ * bearer-token consumers keep parsing it -- they see a narrowed object, never a
+ * vanished field. `{}` when the row has no metadata or only disallowed keys.
+ */
+export function projectTransactionMetadata(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const src = value as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const key of ALLOWED_TRANSACTION_METADATA_KEYS) {
+    if (key in src) out[key] = src[key]
+  }
+  return out
+}
+
+/**
  * Net-new credit routes for the MCP `check_balance` and `credit_transactions`
  * tools — also useful for non-MCP API consumers that just want a flat balance
  * payload without the kitchen-sink shape from `GET /v1/user/credits`.
@@ -108,7 +163,13 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
       })
     }
 
-    const items = data ?? []
+    // Project metadata BEFORE the cursor is derived -- the cursor reads
+    // `created_at` off the last item, so the projection must preserve every
+    // top-level column and only narrow `metadata`.
+    const items = (data ?? []).map((row) => ({
+      ...(row as Record<string, unknown>),
+      metadata: projectTransactionMetadata((row as { metadata?: unknown }).metadata),
+    }))
     const last = items[items.length - 1] as { created_at?: string } | undefined
     const nextCursor =
       items.length === limit && last?.created_at ? last.created_at : null
