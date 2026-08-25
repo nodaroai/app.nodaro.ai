@@ -131,6 +131,9 @@ describe("home dock", () => {
     // way to be told about it.
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    // Kinds live on TABS now (the Studio pattern) — Objects is one click away,
+    // and the tab carries its count so nothing the user owns is invisible.
+    fireEvent.click(await screen.findByRole("tab", { name: /Objects/ }))
     fireEvent.click(await screen.findByRole("option", { name: /Kettle/ }))
     expect(input().value).toBe("@Kettle ")
 
@@ -145,6 +148,7 @@ describe("home dock", () => {
     // travels as an id, and the server turns it into the node's url.
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    fireEvent.click(await screen.findByRole("tab", { name: /Files/ }))
     fireEvent.click(await screen.findByRole("option", { name: /cat.png/ }))
     expect(input().value).toBe("@cat.png ")
 
@@ -176,6 +180,7 @@ describe("home dock", () => {
 
     renderDock()
     fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    fireEvent.click(await screen.findByRole("tab", { name: /Files/ }))
 
     // The image beside it must still be offered — otherwise this would pass
     // just as well if the picker had crashed on the document.

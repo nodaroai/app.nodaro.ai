@@ -217,9 +217,29 @@ export const MENTION_KINDS = [...ENTITY_NODE_KINDS, ...MEDIA_MENTION_KINDS] as c
 
 export type MentionKind = EntityNodeKind | MediaMentionKind
 
+/**
+ * One selectable variant of a character — an angle, an expression, a pose.
+ *
+ * Carried on the mention so the picker can drill in with ZERO extra fetches
+ * (the characters list endpoint already returns every bucket). Picking one
+ * changes only the inserted PROSE — the wire format stays name+id, and the
+ * doctrine (since the variant-knowledge PR) translates "the \"back\" angle"
+ * into an `@slug:N:back` prompt token itself.
+ */
+export interface CopilotMentionVariant {
+  /** Bucket key on the character row (angles, expressions, …). */
+  bucket: string
+  /** The singular noun the inserted prose uses ("angle", "expression"). */
+  bucketNoun: string
+  name: string
+  imageUrl: string | null
+}
+
 export interface CopilotMention {
   id: string
   name: string
   kind: MentionKind
   imageUrl?: string | null
+  /** Characters only; absent or empty elsewhere. */
+  variants?: CopilotMentionVariant[]
 }

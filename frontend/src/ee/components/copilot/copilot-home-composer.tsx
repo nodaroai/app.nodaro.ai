@@ -28,12 +28,12 @@ import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { CopilotApiError, createCopilotThread } from "@/ee/lib/copilot/api"
 import { COPILOT_MESSAGE_MAX_CHARS } from "@/ee/lib/copilot/constants"
-import { activeMentionQuery, buildWireMessage, insertMentionName } from "@/ee/lib/copilot/mentions"
+import { activeMentionQuery, buildWireMessage, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
 import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
-import type { CopilotMention } from "@/ee/lib/copilot/types"
+import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
 
 /**
  * Remembering the collapsed state is per browser; there is nothing here worth a
@@ -149,12 +149,13 @@ export default function CopilotHomeComposer() {
     setQuery(active ? active.query : null)
   }
 
-  const pick = (mention: CopilotMention) => {
+  const pick = (mention: CopilotMention, variant?: CopilotMentionVariant) => {
     const el = inputRef.current
     const caret = el?.selectionStart ?? prompt.length
     // The name stays in the sentence, at the caret — a chip alone tells the
-    // model WHO without telling it WHERE. See `insertMentionName`.
-    const { text, caret: nextCaret } = insertMentionName(prompt, caret, mention.name)
+    // model WHO without telling it WHERE. See `insertMentionName`. A variant
+    // pick appends prose the doctrine turns into a prompt token.
+    const { text, caret: nextCaret } = insertMentionName(prompt, caret, mention.name, variantSuffix(variant))
     setMentions((prev) => (prev.some((m) => m.id === mention.id) ? prev : [...prev, mention]))
     setPrompt(text)
     setQuery(null)

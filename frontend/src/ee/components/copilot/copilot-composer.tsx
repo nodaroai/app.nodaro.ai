@@ -9,13 +9,13 @@
 import { useRef, useState } from "react"
 import { ArrowUp, AtSign } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
-import { activeMentionQuery, insertMentionName } from "@/ee/lib/copilot/mentions"
+import { activeMentionQuery, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { COPILOT_FEATURE_ID } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb } from "./copilot-mention-picker"
-import type { CopilotMention } from "@/ee/lib/copilot/types"
+import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
 
 interface CopilotComposerProps {
   /** The @ catalogue. Not to be confused with the chips the user has picked. */
@@ -49,12 +49,13 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
     setQuery(active ? active.query : null)
   }
 
-  const pick = (mention: CopilotMention) => {
+  const pick = (mention: CopilotMention, variant?: CopilotMentionVariant) => {
     const el = inputRef.current
     const caret = el?.selectionStart ?? draft.length
     // The name stays in the sentence, at the caret — the chip alone would tell
-    // the model WHO without telling it WHERE. See `insertMentionName`.
-    const { text, caret: nextCaret } = insertMentionName(draft, caret, mention.name)
+    // the model WHO without telling it WHERE. See `insertMentionName`. A
+    // variant pick appends prose the doctrine turns into a prompt token.
+    const { text, caret: nextCaret } = insertMentionName(draft, caret, mention.name, variantSuffix(variant))
     addMention(mention)
     setDraft(text)
     setQuery(null)

@@ -206,3 +206,30 @@ describe("every mentionable kind reaches the model", () => {
     expect(wire).toContain('image file "cat.png"')
   })
 })
+
+describe("variant prose (the zero-format-change path)", () => {
+  it("variantSuffix builds the phrase the doctrine knows how to translate", async () => {
+    const { variantSuffix } = await import("../mentions")
+    expect(variantSuffix({ name: "back", bucketNoun: "angle" })).toBe(' (the "back" angle)')
+    expect(variantSuffix(undefined)).toBe("")
+  })
+
+  it("insertMentionName appends the suffix INSIDE the token, before the trailing space", async () => {
+    const { insertMentionName, variantSuffix } = await import("../mentions")
+    const { text } = insertMentionName("show @ir", 8, "Iris", variantSuffix({ name: "back", bucketNoun: "angle" }))
+    expect(text).toBe('show @Iris (the "back" angle) ')
+  })
+
+  it("characterMentionVariants reshapes every named bucket entry, skipping unnamed ones", async () => {
+    const { characterMentionVariants } = await import("../mentions")
+    const variants = characterMentionVariants({
+      angles: [{ name: "back", url: "https://x/1.png" }, { name: "", url: "https://x/2.png" }],
+      expressions: [{ name: "smile", url: "https://x/3.png" }],
+      poses: "not an array",
+    })
+    expect(variants).toEqual([
+      { bucket: "angles", bucketNoun: "angle", name: "back", imageUrl: "https://x/1.png" },
+      { bucket: "expressions", bucketNoun: "expression", name: "smile", imageUrl: "https://x/3.png" },
+    ])
+  })
+})
