@@ -13,6 +13,8 @@ There are two ways in.
 
 **From the home page** — a box at the top of the page: describe what you want, press **Build it**, and you land in a new workflow with the copilot already building it. It can be dismissed and stays dismissed.
 
+In both boxes **Enter** sends and **Shift + Enter** starts a new line, so a description can run to several lines and a pasted link can sit on its own. If a hand-off from the home page fails before the copilot answers — a lost connection, a closed tab — your sentence comes back into the box so you can send it again, and the empty workflow it had opened for you is cleared away on its own a few hours later.
+
 **From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar, from the narrow tab beside the canvas, or with `Ctrl/Cmd + J`. Closing the panel does not stop a message that is still being written.
 
 ## What it can do
