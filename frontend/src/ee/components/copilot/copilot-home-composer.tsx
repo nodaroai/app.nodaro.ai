@@ -105,7 +105,7 @@ export default function CopilotHomeComposer() {
   // should not cost a list request per entity kind on every visit to the home
   // page.
   const entityUserId = collapsed ? undefined : userId
-  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(undefined, entityUserId)
+  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(entityUserId)
 
   /**
    * The dock is fixed, so it covers whatever the page's last rows are. The

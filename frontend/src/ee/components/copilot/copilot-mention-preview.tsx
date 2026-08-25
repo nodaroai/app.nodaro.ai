@@ -14,10 +14,19 @@
  * capture listeners on the same target are not stopped by stopPropagation —
  * and both call the same setState(null), so the double-fire is harmless. For
  * hosts with no key handling (composer chips) this listener is the only one.
+ *
+ * NOTHING here may take focus. The inline picker lives and dies by the
+ * composer input's blur, and this overlay is a PORTAL — a click on its
+ * backdrop, its Close or its Insert lands outside the composer, blurs it, and
+ * the picker unmounts, taking this preview with it. So "enlarge, close, keep
+ * choosing" worked with Escape and died with the mouse: both layers vanished
+ * on one click. The root swallows mousedown's default action, which is the
+ * same trick every row in the picker already uses, and clicks still fire.
  */
 import { useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 
 export interface MentionPreviewContent {
@@ -48,12 +57,27 @@ export function MentionPreview({
   }, [onClose])
 
   return createPortal(
-    <div role="dialog" aria-modal aria-label={S.pickerPreviewOf(content.label)} className="fixed inset-0 z-[90] flex items-center justify-center p-6">
+    <div
+      role="dialog"
+      aria-modal
+      aria-label={S.pickerPreviewOf(content.label)}
+      // One handler for the whole overlay: mousedown on the backdrop, the
+      // image, Close or Insert all bubble here, and preventing the default
+      // stops the focus shift that would close the picker underneath.
+      onMouseDown={(e) => e.preventDefault()}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-6"
+    >
       <div className="absolute inset-0 bg-black/70" onClick={onClose} aria-hidden />
       <div className="relative flex flex-col items-center gap-3 max-w-[88vw]">
-        <img
+        {/* The app's one image pipeline, same as the thumbnails: a capped,
+            transcoded variant instead of the multi-megabyte original, with the
+            proxy fallback for hosts a browser refuses to load directly.
+            `noPlaceholder` because a 320px placeholder scaled to 70vh is a
+            blur the viewer notices. */}
+        <CachedImage
           src={content.src}
           alt={content.label}
+          noPlaceholder
           className="max-w-[88vw] max-h-[70vh] object-contain rounded-xl border border-[var(--copilot-strong)] shadow-[0_24px_60px_rgba(0,0,0,0.6)] bg-[var(--copilot-card)]"
         />
         <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[var(--copilot-card)] border border-[var(--copilot-strong)] shadow-[0_10px_30px_rgba(0,0,0,0.45)]">

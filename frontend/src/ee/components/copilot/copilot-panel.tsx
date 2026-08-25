@@ -74,7 +74,7 @@ export default function CopilotPanel({
   useCopilotHandoff(thread, workflowId)
   const settings = useCopilotSettings(threadId)
 
-  const { mentions: mentionSources } = useCopilotMentions(projectId, userId)
+  const { mentions: mentionSources } = useCopilotMentions(userId)
 
   // Hand the engine the editor callbacks it cannot reach on its own.
   //
