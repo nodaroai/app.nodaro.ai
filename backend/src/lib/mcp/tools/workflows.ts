@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { hasCredits } from "../../config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../../cloud-only-nodes.js"
+import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripTransientRuntimeData, normalizeNodeModelParams, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
@@ -23,9 +24,13 @@ import { migrateGenerateImageHandles } from "../../generate-image-handle-migrati
 import { findUnroutableMedia, rehostForeignMedia } from "../../media-portability.js"
 
 
-/** Refuse Cloud-only node types on editions that can't run them — an
- *  agent-authored workflow never passes through the node pickers. */
+/** Refuse Cloud-only node types on editions that can't run them, plus any node
+ *  the deployment surface profile denies (B1, business+) — an agent-authored
+ *  workflow never passes through the node pickers. The deny check runs on every
+ *  edition the gate is open for, so it is not behind the hasCredits() early-out. */
 function cloudOnlyGuard(nodes: unknown): string | null {
+  const denied = findDeniedNodeTypes(nodes as ReadonlyArray<{ type?: unknown }> | undefined)
+  if (denied.length > 0) return deniedNodeRejectionMessage(denied)
   if (hasCredits()) return null
   const found = findCloudOnlyNodeTypes(nodes as ReadonlyArray<{ type?: unknown }> | undefined)
   return found.length > 0 ? cloudOnlyRejectionMessage(found) : null

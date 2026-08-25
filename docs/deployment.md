@@ -466,6 +466,44 @@ build time):
 |---|---|
 | `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
 
+## Surface profile (`NODARO_SURFACE_PROFILE`)
+
+**Business and Cloud editions only.** The Community edition ignores
+`NODARO_SURFACE_PROFILE` entirely and always serves the stock surface — set
+`EDITION=business` (or `cloud`) to use it.
+
+Set `NODARO_SURFACE_PROFILE` to inline JSON or `@/path/to/profile.json` to narrow
+the UI without a rebuild: hide nav entries and dashboard tabs, deny node and model
+types, set the product name, sibling-app links and login methods, pin a default
+locale, and force outputs private. It rides the same `/config.js` channel as the
+values above (env → validated at boot → mirrored to the browser); a
+malformed/unreadable value degrades to the stock surface with a warning and never
+blocks boot. Unset = the full default surface. The profile can only **narrow** —
+it never turns on a surface the edition gates off. Fields (all optional; each
+array empty = "keep the default"):
+
+- `nav.hide`: `["gallery","explore","pricing","templates","apps","community"]`
+- `dashboard.tabs`: explicit ordered whitelist of dashboard tabs
+- `nodes.deny` / `models.deny`: node types / model ids to remove everywhere — the
+  picker, `GET /v1/nodes`, `GET /v1/models`, the MCP tools, and at run time (a
+  denied node fails with `node_not_available`)
+- `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel`)
+- `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
+  family links in the product switcher
+- `brand.productName`: replaces the wordmark and the document title
+- `locale.default` / `locale.picker`
+- `outputs.allowPublic`: `false` forces every output private regardless of the
+  user's preference
+
+Example:
+
+```bash
+NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false}}
+```
+
+Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
+not this JSON.
+
 ## 6. Updating
 
 Pull the newer image and restart:
@@ -492,6 +530,17 @@ migration, but specific routes will 500 until their schema lands.
 We aim to keep migrations forward-compatible (new tables, additive
 columns) — if anything changes destructively, it'll be called out in
 the changelog. Pin to a specific commit/tag if you need to be cautious.
+
+### VM deploy lane
+
+To keep a self-hosted VM install updated over SSH, copy
+[`examples/deploy-host.yml`](../examples/deploy-host.yml) into your own
+repository's `.github/workflows/`, set the `DEPLOY_HOST`, `DEPLOY_USER` and
+`DEPLOY_SSH_KEY` secrets, and dispatch it. It reuses the published community
+image tag, runs `docker compose pull && up -d`, health-gates on `/health`, then
+prunes old layers. Never trigger production deploys on a branch push, and use
+separate secret names per environment. It ships as an example, not a workflow in
+this repo — there are no deploy secrets where the public mirror runs.
 
 ## 7. Scaling
 

@@ -6905,6 +6905,23 @@ export async function connectSocialCustom(
   })
 }
 
+/**
+ * Publish here by default, for this platform.
+ *
+ * Which account a publish node uses when it names none — the normal case for
+ * anything the Copilot builds, since it is forbidden to write a destination.
+ */
+export async function setDefaultSocialConnection(connectionId: string): Promise<void> {
+  const res = await fetch(`/v1/social/connections/${encodeURIComponent(connectionId)}/default`, {
+    method: "PUT",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    throwApiError(body, "Could not set the default account")
+  }
+}
+
 export async function disconnectSocial(connectionId: string): Promise<{ success: boolean }> {
   return apiJson(`/v1/social/connections/${encodeURIComponent(connectionId)}`, {
     method: "DELETE",

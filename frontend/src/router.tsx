@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from "react-router-do
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
+import { surfaceNavHidden } from "@/lib/surface-selectors"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -155,7 +156,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
 // Community route block — only included when EDITION is multi-user (business or
 // cloud). In community (single-user) builds the spread is empty and the
 // ExplorePage chunk is never loaded.
-const communityRoutes: RouteObject[] = isMultiUser()
+const communityRoutes: RouteObject[] = isMultiUser() && !surfaceNavHidden("explore")
   ? [{ path: "/explore", element: <SuspenseWrapper><ExplorePage /></SuspenseWrapper> }]
   : []
 
@@ -203,11 +204,15 @@ export const router = createBrowserRouter([
     element: <SuspenseWrapper><SignupPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
-  {
-    path: "/gallery",
-    element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
-    errorElement: <RouteErrorBoundary />,
-  },
+  // Public gallery — hidden when the deployment surface profile hides it (the
+  // backend also skips registering /v1/gallery, so this is not just cosmetic).
+  ...(surfaceNavHidden("gallery")
+    ? []
+    : [{
+        path: "/gallery",
+        element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
+        errorElement: <RouteErrorBoundary />,
+      }]),
   // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
   // Only reachable by returning from Stripe, which never happens without
   // billing — and the page talks about plans and credits.
@@ -357,18 +362,25 @@ export const router = createBrowserRouter([
             { path: "/w/:id/settings", element: <SuspenseWrapper><WorkspaceSettingsPage /></SuspenseWrapper> },
           ]
         : []),
-      {
-        path: "/_gallery",
-        element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
-      },
-      {
-        // In-app pricing. Lives inside DashboardLayout so it shows the sidebar
-        // when used in-app, and (via the iframe check in DashboardLayout) renders
-        // chromeless when studio.nodaro.ai embeds it. The session-handoff here
-        // lets the embedded iframe authenticate.
-        path: "/pricing",
-        element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
-      },
+      // In-shell gallery. Gated on the SAME surface switch as the public /gallery
+      // (NAV_ENTRY_ROUTES.gallery lists both) — a hidden-gallery deployment must
+      // not still mount /_gallery against a backend that skips /v1/gallery.
+      ...(surfaceNavHidden("gallery")
+        ? []
+        : [{
+            path: "/_gallery",
+            element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
+          }]),
+      ...(surfaceNavHidden("pricing")
+        ? []
+        : [{
+            // In-app pricing. Lives inside DashboardLayout so it shows the sidebar
+            // when used in-app, and (via the iframe check in DashboardLayout) renders
+            // chromeless when studio.nodaro.ai embeds it. The session-handoff here
+            // lets the embedded iframe authenticate.
+            path: "/pricing",
+            element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+          }]),
       {
         // Back-compat: /_pricing was the interim in-shell path. Redirect any old
         // links/bookmarks to the clean /pricing.

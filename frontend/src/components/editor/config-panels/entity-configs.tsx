@@ -31,7 +31,7 @@ import {
   LocationAssetButton,
   LocationAssetGrid,
 } from "./entity-shared"
-import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS, withoutDeniedModels } from "./model-options"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
@@ -260,7 +260,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         <ModelSearchSelect
           value={data.provider || "nano-banana"}
           onChange={(v) => onUpdate({ provider: v })}
-          options={IMAGE_GEN_MODELS}
+          options={withoutDeniedModels(IMAGE_GEN_MODELS)}
           triggerClassName="h-8 text-xs mt-1"
           contentClassName="z-[9999]"
           ariaLabel="Image model"

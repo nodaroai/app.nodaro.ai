@@ -6,6 +6,9 @@
  * drift apart across the fleet. (The client apps carry the same file; their
  * Flow entry tracks the platform origin they're built against.)
  */
+import { surfaceSiblings } from "./surface-selectors"
+import type { SurfaceSibling } from "./surface-profile"
+
 export type NodaroAppId = "flow" | "studio" | "person" | "voice" | "recast"
 
 export interface NodaroApp {
@@ -22,7 +25,13 @@ export const NODARO_APPS: readonly NodaroApp[] = [
   { id: "recast", label: "Recast", href: "https://recast.nodaro.ai" },
 ]
 
-/** The canonical list minus the app rendering it. */
-export function otherNodaroApps(current: NodaroAppId): readonly NodaroApp[] {
-  return NODARO_APPS.filter((app) => app.id !== current)
+/**
+ * The canonical family minus the app rendering it, narrowed by the deployment
+ * surface profile: with no profile it is the Nodaro family (projected to the
+ * {label,url} sibling shape); a profile's `siblings.apps` replaces it wholesale
+ * (e.g. a white-label install pointing at its own sibling products).
+ */
+export function otherNodaroApps(current: NodaroAppId): readonly SurfaceSibling[] {
+  const codeDefault = NODARO_APPS.filter((app) => app.id !== current).map((a) => ({ label: a.label, url: a.href }))
+  return surfaceSiblings(codeDefault)
 }

@@ -64,7 +64,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { PICKER_CATALOGS, type PickerOption } from "../picker-catalogs.js"
+import { getRegisteredPickerCatalogs, type PickerOption } from "../picker-catalogs.js"
 import { NON_EN_LOCALE_IDS, type LocaleId, type LocaleCatalogMap } from "@nodaro/shared"
 
 const LOCALES = NON_EN_LOCALE_IDS
@@ -81,7 +81,10 @@ interface CatalogEntries {
   readonly options: readonly PickerOption[]
 }
 
-const CATALOGS: readonly CatalogEntries[] = PICKER_CATALOGS.map((c) => {
+// Enumerate the REGISTERED (pack-composed) set — inert/identical to the base
+// with no packs registered (mainline default), so the standing per-entry cases
+// stay green; a registered pack's added ids are then covered here too.
+const CATALOGS: readonly CatalogEntries[] = getRegisteredPickerCatalogs().map((c) => {
   const collected: PickerOption[] = []
   const seen = new Set<string>()
   const push = (opts: readonly PickerOption[] | undefined) => {

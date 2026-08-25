@@ -11,6 +11,7 @@
 
 import { config } from "../../lib/config.js"
 import { requireProviderKey } from "../provider-keys.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 import type { RawHeygenErrorBody } from "./types.js"
 
 export const HEYGEN_BASE_URL = "https://api.heygen.com"
@@ -62,7 +63,7 @@ export class HeygenError extends Error {
  * - Throws `HeygenError` on a 200 response whose body contains
  *   `{ error: { code, message } }` (HeyGen's mixed-status error pattern).
  */
-export async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function heygenFetch<T>(path: string, init?: RequestInit, meta?: EgressMeta): Promise<T> {
   // isHeygenConfigured() only ever reached the catalog, so generation sent
   // `X-Api-Key: ""` and surfaced a raw HeyGen 401 after burning the retry
   // budget (community grind, 2026-08-13). Guard the fetch itself.
@@ -75,7 +76,17 @@ export async function heygenFetch<T>(path: string, init?: RequestInit): Promise<
     ...(init?.headers as Record<string, string> | undefined),
   }
 
-  const response = await fetch(url, { ...init, headers })
+  const response = await providerFetch(
+    {
+      provider: "heygen",
+      operation: `heygen${new URL(url).pathname}`,
+      modelKey: meta?.modelKey ?? null,
+      body: init?.body,
+      dimensions: meta?.dimensions ?? {},
+    },
+    url,
+    { ...init, headers },
+  )
 
   // Parse JSON regardless of status — the body may contain useful error info
   let body: T & RawHeygenErrorBody

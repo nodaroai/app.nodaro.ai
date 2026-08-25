@@ -126,14 +126,30 @@ generated_from: 150c80ac9
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+A reusable person the user saved: portrait, variants (expressions, poses, angles, body angles, wardrobe, detail close-ups), voice and identity description, edited in the Character Studio. Set `characterDbId` to the saved character's id (from `list_characters` / the user's `[references]` line) — the server hydrates the media; never write URLs. Wire `characterRef` into a generator's `assets` handle and the character's identity travels with every generation.
 
-<!-- AUTO-GEN:START mcp-call -->
-<!-- AUTO-GEN:END mcp-call -->
+## Variants and @-mentions (how to use a SPECIFIC angle, expression or pose)
+
+When a character node is wired into a generator, EVERY named variant in its buckets becomes addressable from the prompt by an `@` token — the model-writable way to pick "the back angle of Iris" with no URL:
+
+- `@<slug>:<N>` — the canonical portrait. `<slug>` is the slugified character name (lowercase, non-alphanumerics collapsed to dashes: "Emma Walker 2" → `emma-walker-2`). `<N>` is the 1-based position this mention takes in the prompt's identity-directive block — number mentions in order of appearance, starting at 1.
+- `@<slug>:<N>:<variant>` — a specific variant IMAGE. `<variant>` is the slugified variant name from the character's buckets (an `angles` entry named "3/4 left" → `3-4-left`). Read the real names with `get_character` (FULL returns `expressions`, `poses`, `angles`, `body_angles`, and the wardrobe/detail arrays) and slugify the same way.
+- `@<slug>:<N>:<mode>` — canonical image with a usage-mode override shaping the identity directive: one of `identical`, `face`, `face-pose`, `pose`, `emotion`, `style`, `name`, `none`. A third segment that matches a mode keyword IS a mode; anything else is a variant slug.
+- `@<slug>:<N>:<variant>:<mode-or-role>` — variant picks the IMAGE, the 4th segment shapes the PHRASE: a mode keyword sets the usage mode; any other slug is a per-mention role ("the clothes from …").
+- A trailing `~lock` / `~nolock` forces the identity lock on/off for that one mention.
+
+The prompt reads naturally around the tokens: `@iris:1:back walks away down the corridor`. Unmatched tokens (wrong slug, variant not in the buckets) are simply skipped — verify the slugs against `get_character` rather than guessing.
 
 ## Common gotchas
 
-(Add prose here.)
+- The token index is REQUIRED: bare `@iris` is not a mention — always at least `@iris:1`.
+- A variant slug must exist in the character's buckets to resolve; a typo does not error, it silently un-references. Check `get_character` first.
+- The character must actually be WIRED (its `characterRef` into the consumer's `assets`) for its `@` tokens to resolve — a mention with no wired character is inert text.
+- The `image` output handle is a PLAIN image of the portrait (routes like an upload), not an identity reference — identity flows through `characterRef`/`assets`.
+- Never write `sourceImageUrl`/asset URLs on this node; set `characterDbId` and let hydration fill the media.
+
+<!-- AUTO-GEN:START mcp-call -->
+<!-- AUTO-GEN:END mcp-call -->
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

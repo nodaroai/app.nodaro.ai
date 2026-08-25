@@ -193,6 +193,23 @@ await check(
   { required: true },
 )
 
+await check("community serves the stock surface — no surface block in /config.js (d2)", async () => {
+  // The surface profile (B1) is a business+ capability: a community install must
+  // ignore NODARO_SURFACE_PROFILE entirely and emit no `surface` key, so the
+  // browser inherits the stock default. Boot-writer gate: tools/build-runtime-config.mjs.
+  const res = await fetch(`${BASE}/config.js`)
+  assert(res.status === 200, `expected 200 from /config.js, got ${res.status}`)
+  const text = await res.text()
+  const m = text.match(/window\.__NODARO_RUNTIME__\s*=\s*(\{[\s\S]*?\})\s*;?\s*$/)
+  assert(m, `/config.js did not define window.__NODARO_RUNTIME__: ${text.slice(0, 200)}`)
+  const cfg = JSON.parse(m[1])
+  assert(
+    !("surface" in cfg),
+    `community must ignore NODARO_SURFACE_PROFILE, but /config.js carried a surface block: ${JSON.stringify(cfg.surface)}`,
+  )
+  return "no surface block — the surface profile is business+ only"
+})
+
 await check("a fresh install reports no operator account yet", async () => {
   const { json } = await api("/v1/setup/status")
   if (json?.hasUsers === true) {

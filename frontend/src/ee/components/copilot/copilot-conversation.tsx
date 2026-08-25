@@ -15,6 +15,7 @@ import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotActivityRows } from "./copilot-activity"
 import { CopilotAnswerSkeleton, CopilotLivePill } from "./copilot-live-pill"
 import { WorkflowUpdatedCard } from "./copilot-cards"
+import { MemorySavedPins } from "./copilot-memories"
 import { CopilotRunSection } from "./copilot-run-section"
 import type { CopilotActivity, DisplayMessage } from "@/ee/lib/copilot/types"
 
@@ -109,6 +110,11 @@ export function CopilotConversation({
       {turn.update && (
         <WorkflowUpdatedCard update={turn.update} onShowOnCanvas={() => onShowOnCanvas(turn.update!.addedNodeIds)} />
       )}
+
+      {/* Every memory the model saved this turn, pinned with its undo — the
+          consent surface. Panel state like the cards above: the save outlives
+          the live block, and the undo must too. */}
+      <MemorySavedPins />
 
       <CopilotRunSection userId={userId} nodeCount={nodeCount} onStopRun={onStopRun} />
 

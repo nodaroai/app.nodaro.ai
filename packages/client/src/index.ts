@@ -55,6 +55,12 @@ export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
+export {
+  CatalogsResource,
+  type ProjectedCatalog,
+  type ProjectedCatalogOption,
+  type ProjectedCatalogDimension,
+} from "./resources/catalogs.js"
 export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
 export {
   ShotsResource,

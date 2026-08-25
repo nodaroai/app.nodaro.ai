@@ -16,6 +16,12 @@ export interface CopilotThread {
   id: string
   workflowId: string
   runMode: CopilotRunMode
+  /**
+   * This conversation may build nodes that post to the user's connected
+   * accounts. Off unless they say otherwise, and optional so a thread from a
+   * server that predates the column reads as off rather than undefined.
+   */
+  allowPublishing?: boolean
   autoRunLimitCredits: number
   userTurnCount: number
   lastMessageAt: string | null
@@ -64,10 +70,36 @@ export interface CopilotWorkflowUpdate {
   adjustments: string[]
 }
 
+/** A file this turn wired onto a node. Named on the run card, never counted. */
+export interface CopilotWiredAsset {
+  id: string
+  kind: MediaMentionKind
+  filename: string
+  nodeId: string
+}
+
 export interface CopilotRunProposal {
   workflowId: string
   addedNodeTypes: string[]
+  /**
+   * Files the copilot attached while building this graph.
+   *
+   * On the card because approving a run is the moment the user agrees to spend
+   * credits on THIS graph — and a file they cannot see was wired in is a thing
+   * they did not actually approve.
+   */
+  wiredAssets?: CopilotWiredAsset[]
   note: string | null
+}
+
+/**
+ * One memory the copilot saved THIS turn. Visibility is the consent control:
+ * every save renders a pinned line with a one-tap undo, so there is no such
+ * thing as a silent write into what the copilot remembers.
+ */
+export interface CopilotMemorySave {
+  id: string
+  content: string
 }
 
 export type CopilotStreamEvent =
@@ -81,12 +113,15 @@ export type CopilotStreamEvent =
         baseVersion: number | null
         runMode: CopilotRunMode
         autoRunLimitCredits: number
+        /** Absent from a server that predates it — reads as "leave it alone". */
+        allowPublishing?: boolean
       }
     }
   | { type: "token"; data: { text: string } }
   | { type: "tool_call"; data: CopilotToolCallEvent }
   | { type: "workflow_updated"; data: CopilotWorkflowUpdate }
   | { type: "run_proposed"; data: CopilotRunProposal }
+  | { type: "memory_saved"; data: CopilotMemorySave }
   | {
       type: "usage"
       data: { inputTokens: number; outputTokens: number; cacheReadTokens: number; creditsCharged: number | null }
@@ -136,6 +171,8 @@ export interface CopilotTurnState {
   activities: CopilotActivity[]
   update: CopilotWorkflowUpdate | null
   proposal: CopilotRunProposal | null
+  /** Memories saved this turn — each renders as a pinned line with undo. */
+  memorySaves: CopilotMemorySave[]
   creditsCharged: number | null
   error: { code: string; message: string } | null
 }
@@ -149,6 +186,7 @@ export const EMPTY_TURN: CopilotTurnState = {
   activities: [],
   update: null,
   proposal: null,
+  memorySaves: [],
   creditsCharged: null,
   error: null,
 }
@@ -163,9 +201,21 @@ export const EMPTY_TURN: CopilotTurnState = {
  * a fifth kind is a compiler error in each place that must handle it — and the
  * picker groups by kind rather than taking a prop per kind.
  */
-export const MENTION_KINDS = ENTITY_NODE_KINDS
+/**
+ * Files, as opposed to saved entities.
+ *
+ * A different family with a different destination: an entity id goes on the
+ * entity node that owns it, a file id goes into `assetId` on an upload node and
+ * the server fills in the rest. Same journey to the model — a name and an id,
+ * never an address.
+ */
+export const MEDIA_MENTION_KINDS = ["image", "video", "audio"] as const
 
-export type MentionKind = EntityNodeKind
+export type MediaMentionKind = (typeof MEDIA_MENTION_KINDS)[number]
+
+export const MENTION_KINDS = [...ENTITY_NODE_KINDS, ...MEDIA_MENTION_KINDS] as const
+
+export type MentionKind = EntityNodeKind | MediaMentionKind
 
 export interface CopilotMention {
   id: string

@@ -961,6 +961,9 @@ export * from "./smart-cut-windows.js"
 export * from "./entity-asset-types.js"
 export * from "./hint-graph-types.js"
 
+// --- Tag-free /v1/catalogs projection wire shape (the ONLY catalog type in shared) ---
+export * from "./catalog-projection.js"
+
 // --- Organizations (second tenancy axis): wire contract only — enums, settings request schemas, error codes ---
 export * from "./organizations/index.js"
 

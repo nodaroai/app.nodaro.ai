@@ -197,7 +197,7 @@ export class KieImageProvider
           "Image generation"
         )
       }
-      return this.grok2ReferenceChain(prompt, referenceImageUrls, reconcileOpts)
+      return this.grok2ReferenceChain(prompt, referenceImageUrls, provider, reconcileOpts)
     }
 
     console.log(
@@ -330,11 +330,24 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
+    // Egress money-metadata: OUR Nodaro key is `provider` (NOT modelConfig.model,
+    // the KIE id two of our keys can collapse onto); the resolution/quality lever
+    // rides `dimensions` (the wire `input` carries the same values as `body`).
+    const egressOpts: ReconcileOpts = {
+      ...reconcileOpts,
+      modelKey: provider,
+      dimensions: {
+        ...reconcileOpts?.dimensions,
+        resolution: input.resolution as string | number | undefined,
+        quality: input.quality as string | number | undefined,
+      },
+    }
+
     // Flux Kontext uses a special endpoint (not standard createTask)
     const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
     const result = await (isKontext
-      ? runFluxKontextTask(modelConfig.model, input, reconcileOpts)
-      : runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+      ? runFluxKontextTask(modelConfig.model, input, egressOpts)
+      : runKieTask(modelConfig.model, input, undefined, undefined, egressOpts)
     ).catch((err) => {
       throw withIdeogramEditHint(provider, err)
     })
@@ -395,6 +408,7 @@ export class KieImageProvider
   private async grok2ReferenceChain(
     prompt: string,
     referenceImageUrls: string[],
+    modelKey: string,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const segConfig = KIE_IMAGE_MODELS["grok-2-segment"]
@@ -427,7 +441,7 @@ export class KieImageProvider
       { prompt, task_id: segTaskId },
       undefined,
       undefined,
-      reconcileOpts,
+      { ...reconcileOpts, modelKey },
     )
     const imageUrl = result.resultJson.resultUrls?.[0]
     if (!imageUrl) {
@@ -530,7 +544,21 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, providerMs, taskId } = await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
+    const { resultJson, providerMs, taskId } = await runKieTask(
+      modelConfig.model,
+      input,
+      undefined,
+      undefined,
+      {
+        ...reconcileOpts,
+        modelKey: provider,
+        dimensions: {
+          ...reconcileOpts?.dimensions,
+          resolution: input.resolution as string | number | undefined,
+          quality: input.quality as string | number | undefined,
+        },
+      },
+    )
 
     // Grok 2 segment-map returns named region masks in resultObject.segments
     // (NOT resultUrls). Map onto the standard result shape: first mask → url,

@@ -80,6 +80,20 @@ export const COPILOT_STRINGS = {
   kindObject: "Object",
   kindCreature: "Animal",
   kindLocation: "Location",
+  allowPublishing: "Let it build posting steps",
+  // Says what it can do AND what it still cannot, because the second half is
+  // what makes the first safe to agree to.
+  allowPublishingOn: "It can add posting steps. It still cannot choose the account, the channel, or who sees the post.",
+  allowPublishingOff: "Posting steps are yours to add on the canvas.",
+  sectionFiles: "Files",
+  proposeUsingFiles: "Using your files",
+  attach: "Attach a file",
+  attachFailed: "That file could not be uploaded.",
+  attachNoId: "That file uploaded but cannot be attached — add it from your library instead.",
+  attachWrongKind: "Only images, videos and audio can be attached.",
+  kindImage: "Image",
+  kindVideo: "Video",
+  kindAudio: "Audio",
 
   stepsCollapsed: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
   /** What the live pill says before the first tool call names a real step. */
@@ -90,6 +104,16 @@ export const COPILOT_STRINGS = {
   otherTabTitle: "Copilot is working in another tab",
   stillWorkingTitle: "Still working on your last message",
   stillWorkingBlurb: "The connection dropped but the turn is still running. It will appear here when it lands.",
+
+  memoryRemembered: "Remembered",
+  memoryUndo: "Undo",
+  memoryUndoFailed: "Could not remove that — open “What the Copilot remembers” and delete it there.",
+  memoriesOpen: "What the Copilot remembers",
+  memoriesTitle: "What the Copilot remembers",
+  memoriesBlurb: "Standing preferences saved from your conversations. The Copilot reads these at the start of every message.",
+  memoriesEmpty: "Nothing saved yet — when you state a lasting preference (“always 9:16”), it is kept here.",
+  memoriesDelete: "Forget",
+  memoriesLoadFailed: "Could not load memories.",
 
   a11yWorking: "Copilot is working.",
   a11yDone: "Copilot finished.",

@@ -6,6 +6,7 @@ import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, sunoMusicVideo,
   sunoMashup, sunoReplaceSection, sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
+  sunoCreditType,
   type SunoModel, type SunoAddTrackModel, type SunoSeparateType, type SunoTaskResult,
   type SunoLyricsResult, type SunoSeparateResult, type SunoMusicVideoResult, type SunoConvertWavResult,
 } from "../../providers/kie/suno-client.js"
@@ -216,7 +217,7 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel }, { onTaskCreated }),
+    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, duration, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-generate") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno returned no tracks", "kie")
 }
@@ -245,7 +246,7 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated }),
+    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-cover") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie")
 }
@@ -264,7 +265,7 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated }),
+    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-extend") }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks", "kie")
 }
@@ -303,7 +304,7 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
     job,
     ctx.jobId,
     { start: 10, cap: 80 },
-    () => sunoLyrics({ prompt }, { onTaskCreated }),
+    () => sunoLyrics({ prompt }, { onTaskCreated, modelKey: "suno-lyrics" }),
   )
   await finalizeSunoLyrics(job, ctx, result, "kie")
 }
@@ -384,7 +385,7 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }, { onTaskCreated }),
+    () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }, { onTaskCreated, modelKey: sepType === "split_stem" ? "suno-separate-stem" : "suno-separate" }),
   )
   await finalizeSunoSeparate(job, ctx, result, sepType, "kie")
 }
@@ -419,7 +420,7 @@ const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job,
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoMusicVideo({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
+    () => sunoMusicVideo({ taskId: sunoTaskId, audioId }, { onTaskCreated, modelKey: "suno-music-video" }),
   )
   await finalizeSunoMusicVideo(job, ctx, result, "kie")
 }
@@ -437,7 +438,7 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
+    () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }, { onTaskCreated, modelKey: "suno-mashup" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno mashup returned no tracks", "kie")
 }
@@ -455,7 +456,7 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title, fullLyrics, negativeTags }, { onTaskCreated }),
+    () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title, fullLyrics, negativeTags }, { onTaskCreated, modelKey: "suno-replace-section" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks", "kie")
 }
@@ -472,7 +473,7 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
+    () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }, { onTaskCreated, modelKey: "suno-add-instrumental" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks", "kie")
 }
@@ -489,7 +490,7 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
+    () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }, { onTaskCreated, modelKey: "suno-add-vocals" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks", "kie")
 }
@@ -523,7 +524,7 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
+    () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated, modelKey: "suno-convert-wav" }),
   )
   await finalizeSunoConvertWav(job, ctx, result, "kie")
 }
@@ -551,7 +552,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
+    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }, { onTaskCreated, modelKey: "suno-upload-extend" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks", "kie")
 }

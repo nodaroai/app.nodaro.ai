@@ -30,6 +30,13 @@
  * backend orchestrator.
  */
 
+import {
+  getRegisteredPeople,
+  getRegisteredPersonDimensionOrder,
+  getRegisteredPersonFieldByDimension,
+  personPacksVersion,
+} from "./person-packs.js"
+
 export type PersonDimension =
   | "type"
   | "age"
@@ -1111,11 +1118,27 @@ export interface PersonValue {
   postText?: string
 }
 
-const personById = new Map<string, Person>(PEOPLE.map((p) => [p.id, p]))
+// The person id → entry index reads the REGISTERED (pack-composed) person set,
+// memoized on the person-pack registry version so late registration is seen.
+// The import is cycle-safe: person-packs.ts imports PEOPLE from this module but
+// only reads it inside function bodies, and this module only calls the
+// registered accessors inside functions (never at module-eval time).
+let _personMemo: { v: number; map: Map<string, Person> } | null = null
+function personIndex(): Map<string, Person> {
+  const v = personPacksVersion()
+  if (_personMemo && _personMemo.v === v) return _personMemo.map
+  const map = new Map<string, Person>()
+  // Pack entries widen `dimension` to a string outside the closed union; every
+  // field getPerson's callers read (label/description/promptHint/group) is
+  // shared, so the structural cast is safe.
+  for (const p of getRegisteredPeople()) map.set(p.id, p as Person)
+  _personMemo = { v, map }
+  return map
+}
 
 export function getPerson(id: string | undefined | null): Person | undefined {
   if (!id) return undefined
-  return personById.get(id)
+  return personIndex().get(id)
 }
 
 export function getPersonLabel(id: string | undefined | null, fallback?: string): string {
@@ -1268,8 +1291,10 @@ export function buildPersonHints(
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) hints.push(pre)
 
-  for (const dimension of PERSON_DIMENSION_ORDER) {
-    const field = PERSON_FIELD_BY_DIMENSION[dimension]
+  const fieldByDimension = getRegisteredPersonFieldByDimension()
+  for (const dimension of getRegisteredPersonDimensionOrder()) {
+    const field = fieldByDimension[dimension]
+    if (!field) continue
     const raw = data[field]
     if (dimension === "age") {
       const ageId = typeof raw === "string" ? raw : undefined

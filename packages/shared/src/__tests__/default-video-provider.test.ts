@@ -23,7 +23,7 @@ describe("DEFAULT_VIDEO_PROVIDER", () => {
   })
 
   it("nothing-specified request resolves to the cheapest seeded composite", () => {
-    const sel = applyDefaultVideoSelection({})
+    const sel = applyDefaultVideoSelection<number>({})
     const id = buildVideoCreditModelIdentifier(
       sel.provider, sel.duration, undefined, "image-to-video", undefined, undefined, false,
     )

@@ -15,6 +15,7 @@ vi.mock("@/lib/config.js", () => ({
 import { generateCinematicAvatar } from "../cinematic.js"
 import { HeygenError } from "../client.js"
 import { cinematicUsdCost } from "../../../lib/pricing/cinematic-avatar-cost.js"
+import { setEgressDecorator, clearEgressDecorator, type EgressCall } from "../../egress.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -319,5 +320,59 @@ describe("generateCinematicAvatar — duration guard, cost, failure", () => {
     await expect(generateCinematicAvatar(baseOpts)).rejects.toSatisfy(
       (err: unknown) => err instanceof HeygenError && err.message === "content policy violation",
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B3 egress seam — create POST carries OUR modelKey "cinematic-avatar" (never a
+// HeyGen provider id) with NO caller-supplied meta; poll stays null. Duration
+// is dropped from dimensions when auto_duration lets HeyGen pick the length.
+// ---------------------------------------------------------------------------
+describe("generateCinematicAvatar — egress modelKey", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => {
+    clearEgressDecorator()
+    vi.unstubAllGlobals()
+  })
+
+  function capture(): EgressCall[] {
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c) => { seen.push(c); return null } })
+    return seen
+  }
+
+  it("create carries cinematic-avatar + {resolution, duration}; poll carries null", async () => {
+    const seen = capture()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+
+    await generateCinematicAvatar(baseOpts) // 720p, duration 10, NO meta supplied
+
+    const create = seen.find((c) => c.operation === "heygen/v3/videos")
+    expect(create).toBeDefined()
+    expect(create!.provider).toBe("heygen")
+    expect(create!.modelKey).toBe("cinematic-avatar")
+    expect(create!.dimensions).toEqual({ resolution: "720p", duration: 10 })
+    const poll = seen.find((c) => c.operation === "heygen/v1/video_status.get")
+    expect(poll!.modelKey).toBeNull()
+  })
+
+  it("omits the duration dimension when auto_duration is on", async () => {
+    const seen = capture()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+
+    await generateCinematicAvatar({ ...baseOpts, autoDuration: true, duration: undefined })
+
+    const create = seen.find((c) => c.operation === "heygen/v3/videos")
+    expect(create!.modelKey).toBe("cinematic-avatar")
+    expect(create!.dimensions).toEqual({ resolution: "720p" })
   })
 })

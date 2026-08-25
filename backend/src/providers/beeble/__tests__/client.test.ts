@@ -19,6 +19,9 @@ vi.mock("@/lib/config.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { beebleFetch, BeebleError, isBeebleConfigured } from "../client.js"
+import { startSwitchXGeneration, getSwitchXStatus } from "../switchx.js"
+import { setEgressDecorator, clearEgressDecorator, type EgressCall } from "../../egress.js"
+import type { CreateSwitchXRequest } from "../types.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,6 +146,75 @@ describe("beebleFetch", () => {
     const headers = init.headers as Record<string, string>
     expect(headers["x-api-key"]).toBe("test-beeble-key")
     expect(headers["Idempotency-Key"]).toBe("abc")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B3 egress seam — startSwitchXGeneration (the CREATE) must carry OUR modelKey
+// "beeble-switchx" (never a vendor id); getSwitchXStatus (the poll) stays null.
+// Proves the funnel threads it by construction with NO caller-supplied meta.
+// ---------------------------------------------------------------------------
+describe("switchx egress modelKey", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    mockConfig.BEEBLE_API_KEY = "test-beeble-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => {
+    clearEgressDecorator()
+    vi.unstubAllGlobals()
+  })
+
+  function capture(): EgressCall[] {
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c) => { seen.push(c); return null } })
+    return seen
+  }
+
+  const req: CreateSwitchXRequest = {
+    generation_type: "video",
+    source_uri: "https://r2.example.com/in.mp4",
+    alpha_mode: "auto",
+    max_resolution: 1080,
+  }
+
+  it("create carries beeble-switchx + the max-resolution dimension", async () => {
+    const seen = capture()
+    fetchMock.mockResolvedValueOnce(makeResponse({ id: "swx-1" }))
+
+    const out = await startSwitchXGeneration(req)
+    expect(out.id).toBe("swx-1")
+
+    const create = seen.find((c) => c.operation === "beeble/v1/switchx/generations")
+    expect(create).toBeDefined()
+    expect(create!.provider).toBe("beeble")
+    expect(create!.modelKey).toBe("beeble-switchx")
+    expect(create!.dimensions).toEqual({ maxResolution: 1080 })
+  })
+
+  it("omits dimensions when max_resolution is absent", async () => {
+    const seen = capture()
+    fetchMock.mockResolvedValueOnce(makeResponse({ id: "swx-2" }))
+
+    const { max_resolution: _drop, ...noRes } = req
+    await startSwitchXGeneration(noRes)
+
+    const create = seen.find((c) => c.operation === "beeble/v1/switchx/generations")
+    expect(create!.modelKey).toBe("beeble-switchx")
+    expect(create!.dimensions).toEqual({})
+  })
+
+  it("the status poll carries a null modelKey (not a billing create)", async () => {
+    const seen = capture()
+    fetchMock.mockResolvedValueOnce(makeResponse({ id: "swx-1", status: "processing" }))
+
+    await getSwitchXStatus("swx-1")
+
+    const poll = seen.find((c) => c.operation === "beeble/v1/switchx/generations/swx-1")
+    expect(poll).toBeDefined()
+    expect(poll!.modelKey).toBeNull()
   })
 })
 

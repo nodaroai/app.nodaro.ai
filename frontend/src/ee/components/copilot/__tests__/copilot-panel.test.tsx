@@ -31,6 +31,7 @@ vi.mock("@/hooks/queries/use-assets-queries", () => ({
   useObjects: () => ({ data: [] }),
   useCreatures: () => ({ data: [] }),
   useLocations: () => ({ data: [] }),
+  useLibraryInfinite: () => ({ data: { pages: [] }, isLoading: false }),
 }))
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 900 }))
 vi.mock("@/ee/hooks/copilot/use-copilot-thread", () => ({
@@ -214,6 +215,7 @@ describe("a live turn", () => {
         activities: [{ id: "tu1", label: "Reading the workflow", note: "", status: "started" }],
         update: null,
         proposal: null,
+        memorySaves: [],
         creditsCharged: null,
         error: null,
       },

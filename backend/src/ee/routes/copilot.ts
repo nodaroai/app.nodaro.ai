@@ -37,9 +37,11 @@ import {
   requestTurnCancel,
   threadAtTurnCap,
   updateThreadSettings,
+  threadAllowsPublishing,
   type CopilotThread,
 } from "../copilot/store.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
+import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
 
 const createThreadBody = z
@@ -61,6 +63,15 @@ const messageBody = z.object({
 const patchThreadBody = z.object({
   runMode: z.enum(["ask", "auto"]).optional(),
   autoRunLimitCredits: z.number().int().min(0).max(100000).optional(),
+  /**
+   * Let this thread build nodes that publish to the user's connected accounts.
+   *
+   * Per thread and off by default. It lifts the social publishers only — a
+   * webhook or an outbound fetcher stays denied whatever this says, and the
+   * model still cannot write which account, which channel, or who can see the
+   * result.
+   */
+  allowPublishing: z.boolean().optional(),
 })
 
 interface WorkflowRow {
@@ -273,6 +284,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
     const updated = await updateThreadSettings(id, req.userId!, {
       ...(parsed.data.runMode ? { run_mode: parsed.data.runMode } : {}),
       ...(parsed.data.autoRunLimitCredits !== undefined ? { auto_run_limit_credits: parsed.data.autoRunLimitCredits } : {}),
+      ...(parsed.data.allowPublishing !== undefined ? { allow_publishing: parsed.data.allowPublishing } : {}),
     })
     if (!updated) return reply.status(404).send({ error: { code: "not_found", message: "Thread not found" } })
     return reply.send({ data: { thread: publicThread(updated) } })
@@ -291,6 +303,31 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
     }
     await archiveThread(id, req.userId!)
     return reply.send({ data: { archived: true } })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /v1/copilot/memories — "what the copilot remembers" (per-user, M1)
+  // -------------------------------------------------------------------------
+  app.get("/v1/copilot/memories", async (req, reply) => {
+    if (!requireJwt(req, reply)) return
+    // Table-tolerant by construction: before migration 343 reaches the shared
+    // database, this is an empty list, never an error.
+    const memories = await listMemories(req.userId!)
+    return reply.send({ data: { memories } })
+  })
+
+  // -------------------------------------------------------------------------
+  // DELETE /v1/copilot/memories/:id — the undo, and the panel's delete
+  // -------------------------------------------------------------------------
+  app.delete("/v1/copilot/memories/:id", async (req, reply) => {
+    if (!requireJwt(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid memory id" } })
+    }
+    const deleted = await deleteMemory(req.userId!, id)
+    if (!deleted) return reply.status(404).send({ error: { code: "not_found", message: "Memory not found" } })
+    return reply.send({ data: { deleted: true } })
   })
 
   // -------------------------------------------------------------------------
@@ -400,6 +437,11 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           baseVersion: workflow.version,
           runMode: thread.run_mode,
           autoRunLimitCredits: thread.auto_run_limit_credits,
+          // A second tab that changed this is otherwise showing a permission
+          // the user already withdrew. It cannot ACT on the stale value — the
+          // server reads the row on every turn — but a checkbox that lies
+          // about a permission is its own problem.
+          allowPublishing: threadAllowsPublishing(thread),
         },
       })
 
@@ -495,11 +537,21 @@ async function resolveReservation(req: FastifyRequest): Promise<number> {
   }
 }
 
+/**
+ * The thread, narrowed for the browser.
+ *
+ * An explicit allowlist, and load-bearing as one: the row is read with
+ * `select("*")` — because naming a column that a not-yet-promoted migration has
+ * not added would 500 every read on staging — so this mapper is the only thing
+ * standing between "a new column exists" and "a new column is public". Add
+ * fields here deliberately, never by spreading the row.
+ */
 function publicThread(thread: CopilotThread): Record<string, unknown> {
   return {
     id: thread.id,
     workflowId: thread.workflow_id,
     runMode: thread.run_mode,
+    allowPublishing: threadAllowsPublishing(thread),
     autoRunLimitCredits: thread.auto_run_limit_credits,
     userTurnCount: thread.user_turn_count,
     lastMessageAt: thread.last_message_at,

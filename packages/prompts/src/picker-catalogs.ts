@@ -59,6 +59,7 @@ import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER } from "@n
 import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared"
+import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension } from "@nodaro/shared"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
 import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"
 import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
@@ -71,6 +72,7 @@ import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES } from "./music-mood.js"
 import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "./instrumentation.js"
 import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES } from "./voice-character.js"
 import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.js"
+import { composePickerCatalogs, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
 
 export interface PickerOption {
   readonly id: string
@@ -719,21 +721,46 @@ const MULTI_CATALOGS: readonly PickerCatalog[] = [
   },
 ]
 
-export const PICKER_CATALOGS: readonly PickerCatalog[] = [
+/**
+ * The frozen upstream base — the pure-data catalogs as authored, never mutated
+ * in place. Deployment curation is additive-by-registration (catalog packs);
+ * `getRegisteredPickerCatalogs()` is the pack-composed view every enumerating
+ * consumer reads.
+ */
+export const PICKER_CATALOGS: readonly PickerCatalog[] = Object.freeze([
   ...SINGLE_CATALOGS,
   ...MULTI_CATALOGS,
-]
+])
+
+let _registeredMemo: { v: number; catalogs: readonly PickerCatalog[] } | null = null
+/**
+ * The pack-composed picker catalogs — the single funnel every enumerating
+ * consumer (funnel getters, /v1/catalogs, MCP, completeness tests) reads.
+ * Memoized on the pack registry version so late registration is reflected.
+ *
+ * DEFERRED PLUG-IN POINT (do not build in Phase 0): a future `CatalogPolicy`
+ * filter (deny-by-tag / override, per read kind) applies HERE, after pack
+ * composition, e.g. `applyCatalogPolicy(composed, runtimePolicy())`.
+ */
+export function getRegisteredPickerCatalogs(): readonly PickerCatalog[] {
+  const v = catalogPacksVersion()
+  if (_registeredMemo && _registeredMemo.v === v) return _registeredMemo.catalogs
+  const catalogs = composePickerCatalogs(PICKER_CATALOGS, getRegisteredCatalogPacks())
+  _registeredMemo = { v, catalogs }
+  return catalogs
+}
 
 /** Resolve a catalog by `nodeType` first, then by `catalogId`. */
 export function getPickerCatalog(nodeTypeOrCatalogId: string): PickerCatalog | undefined {
+  const all = getRegisteredPickerCatalogs()
   return (
-    PICKER_CATALOGS.find((c) => c.nodeType === nodeTypeOrCatalogId) ??
-    PICKER_CATALOGS.find((c) => c.catalogId === nodeTypeOrCatalogId)
+    all.find((c) => c.nodeType === nodeTypeOrCatalogId) ??
+    all.find((c) => c.catalogId === nodeTypeOrCatalogId)
   )
 }
 
 export function listPickerCatalogs(): readonly PickerCatalog[] {
-  return PICKER_CATALOGS
+  return getRegisteredPickerCatalogs()
 }
 
 // ─── Summary + projection (for MCP / REST exposure) ──────────────────────────
@@ -753,7 +780,7 @@ export interface PickerCatalogSummary {
 
 /** Lightweight directory of every picker catalog — no option payloads. */
 export function summarizePickerCatalogs(): readonly PickerCatalogSummary[] {
-  return PICKER_CATALOGS.map((c) => ({
+  return getRegisteredPickerCatalogs().map((c) => ({
     nodeType: c.nodeType,
     label: c.label,
     catalogId: c.catalogId,
@@ -778,36 +805,13 @@ export interface ProjectPickerCatalogOptions {
   readonly field?: string
 }
 
-/** An option after projection — description/promptHint present only when detail="full". */
-export interface ProjectedPickerOption {
-  readonly id: string
-  readonly label: string
-  readonly description?: string
-  readonly category?: string
-  readonly promptHint?: string
-  readonly icon?: string
-}
-
-export interface ProjectedPickerDimension {
-  readonly field: string
-  readonly label: string
-  readonly options: readonly ProjectedPickerOption[]
-}
-
-export interface ProjectedPickerCatalog {
-  readonly nodeType: string
-  readonly label: string
-  readonly catalogId: string
-  readonly kind: "single" | "multi"
-  readonly valueField?: string
-  readonly defaultValue?: string
-  readonly categoryOrder?: readonly string[]
-  readonly categoryLabels?: Readonly<Record<string, string>>
-  readonly options?: readonly ProjectedPickerOption[]
-  readonly fields?: readonly string[]
-  readonly dimensions?: readonly ProjectedPickerDimension[]
-  readonly detail: PickerCatalogDetail
-}
+// The projection shape now lives in `@nodaro/shared` (Apache) as the tag-free
+// `/v1/catalogs` wire contract — the ONLY catalog type that crosses that
+// boundary. These prompts-side names are kept as aliases so existing importers
+// (backend route, MCP, SDK mirror) are unaffected.
+export type ProjectedPickerOption = ProjectedCatalogOption
+export type ProjectedPickerDimension = ProjectedCatalogDimension
+export type ProjectedPickerCatalog = ProjectedCatalog
 
 function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedPickerOption {
   return detail === "full"
@@ -855,4 +859,13 @@ export function projectPickerCatalog(
       options: d.options.map((o) => projectOption(o, detail)),
     })),
   }
+}
+
+/**
+ * Project every REGISTERED (pack-composed) catalog to the tag-free
+ * `/v1/catalogs` wire shape. This is what the `GET /v1/catalogs` route and its
+ * SDK resource serve, so a deployment's vendored packs are reflected verbatim.
+ */
+export function projectAllCatalogs(opts: { detail?: PickerCatalogDetail } = {}): ProjectedCatalog[] {
+  return getRegisteredPickerCatalogs().map((c) => projectPickerCatalog(c, { detail: opts.detail }))
 }

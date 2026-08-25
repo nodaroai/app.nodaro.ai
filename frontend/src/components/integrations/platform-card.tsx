@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Loader2, Unlink, Plus, AlertTriangle, RefreshCw, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send, Share2, MessageCircle, Cloud, PenLine, BookOpen, Globe, Users, Pin, Gamepad2, AtSign, Hash } from "lucide-react"
-import { getSocialAuthUrl, disconnectSocial, connectTelegram, connectSocialCustom, type SocialProviderInfo } from "@/lib/api"
+import { getSocialAuthUrl, disconnectSocial, connectTelegram, connectSocialCustom, setDefaultSocialConnection, type SocialProviderInfo } from "@/lib/api"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 import { isCloud } from "@/lib/edition"
@@ -77,6 +77,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
   const t = useT()
   const [connecting, setConnecting] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [defaultingId, setDefaultingId] = useState<string | null>(null)
   const [telegramDialogOpen, setTelegramDialogOpen] = useState(false)
   const [botToken, setBotToken] = useState("")
   const [fieldsDialogOpen, setFieldsDialogOpen] = useState(false)
@@ -161,6 +162,20 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
     }
   }, [provider.label, onConnectionChange, t])
 
+  const handleMakeDefault = useCallback(async (connectionId: string) => {
+    setDefaultingId(connectionId)
+    try {
+      await setDefaultSocialConnection(connectionId)
+      // Re-read rather than patch locally: setting one default CLEARS the
+      // previous, so the row that changed is not only the one clicked.
+      onConnectionChange()
+    } catch {
+      toast.error(t("integ.toastDefaultFailed"))
+    } finally {
+      setDefaultingId(null)
+    }
+  }, [onConnectionChange, t])
+
   const handleTelegramConnect = useCallback(async () => {
     setDialogError(null)
     setDialogBusy(true)
@@ -242,6 +257,11 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
             // say otherwise. Surface it per account, not per card: a card can
             // hold several accounts and only one of them may be dead.
             const needsReconnect = conn.reconnect_needed === true
+            // Only meaningful with something to choose BETWEEN. One account is
+            // already where everything goes, and a "Default" chip beside it
+            // would be a control that does nothing.
+            const showsDefault = connections.length > 1
+            const isDefault = conn.is_default === true
             return (
               <div
                 key={conn.id}
@@ -268,6 +288,24 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
                   </div>
                 </div>
                 <div className="flex items-center shrink-0 ms-2">
+                  {showsDefault &&
+                    (isDefault ? (
+                      <span className="text-[11px] font-medium text-primary px-2 whitespace-nowrap">
+                        {t("integ.defaultAccount")}
+                      </span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleMakeDefault(conn.id)}
+                        disabled={defaultingId === conn.id}
+                        className="text-[11px] text-gray-500 hover:text-primary dark:text-gray-400 whitespace-nowrap"
+                      >
+                        {defaultingId === conn.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : t("integ.makeDefault")}
+                      </Button>
+                    ))}
                   {needsReconnect && (
                     <Button
                       variant="ghost"

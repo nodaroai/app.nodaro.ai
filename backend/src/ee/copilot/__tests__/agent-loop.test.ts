@@ -57,7 +57,7 @@ const baseInput = () => ({
   userContent: [{ type: "text" as const, text: "hi" }],
   budget: { limitUsd: 10, reservedCredits: 150 },
   signal: new AbortController().signal,
-  deps: { ctx: {} as never, invoker: {} as never, addedNodeTypes: new Set<string>() },
+  deps: { ctx: {} as never, invoker: {} as never, addedNodeTypes: new Set<string>(), wiredAssets: [] },
   events: { onToken: vi.fn(), onToolCall: vi.fn(), onIteration: vi.fn() },
   isCancelRequested: async () => false,
 })

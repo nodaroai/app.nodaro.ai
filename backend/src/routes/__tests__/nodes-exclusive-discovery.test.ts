@@ -15,7 +15,13 @@ const mocks = vi.hoisted(() => ({
   isNodaroConnected: vi.fn(async () => false),
 }))
 
-vi.mock("@/lib/config.js", () => ({ hasCredits: mocks.hasCredits }))
+// isBusiness/isCloud are needed by the surface-deny path (B1) that nodes.ts now
+// consults; community defaults keep the surface gate closed → stock (no deny).
+vi.mock("@/lib/config.js", () => ({
+  hasCredits: mocks.hasCredits,
+  isBusiness: () => false,
+  isCloud: () => false,
+}))
 vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.isNodaroConnected }))
 vi.mock("@/lib/node-registry.js", () => {
   const registry = [

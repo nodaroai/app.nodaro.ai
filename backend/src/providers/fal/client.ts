@@ -27,6 +27,7 @@ import { requireProviderKey } from "../provider-keys.js"
 import { config } from "../../lib/config.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
+import { egressSdkFetch } from "../egress.js"
 
 /** Default poll cadence (ms). fal's own SDK defaults to 500ms; 3s keeps our
  *  queue-status load light for the long-running media jobs we use fal for. */
@@ -40,7 +41,9 @@ let configured = false
 function ensureConfigured(): void {
   if (configured) return
   requireProviderKey(config.FAL_KEY, "FAL_KEY")
-  fal.config({ credentials: config.FAL_KEY })
+  // Inject the egress-decorated fetch so fal's queue transport (submit/status/
+  // result) flows through the seam like every other provider call.
+  fal.config({ credentials: config.FAL_KEY, fetch: egressSdkFetch("fal") })
   configured = true
 }
 

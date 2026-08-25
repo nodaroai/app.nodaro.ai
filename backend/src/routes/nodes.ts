@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "../lib/cloud-only-nodes.js"
+import { isNodeDenied } from "../lib/surface-deny.js"
 import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
 import { getEnrichedRegistry, findNode } from "../lib/node-registry.js"
@@ -50,6 +51,9 @@ export async function nodesRoutes(app: FastifyInstance) {
     // a connect/disconnect lags discovery by up to that long.
     const connected = hasCredits() ? true : await isNodaroConnected().catch(() => false)
     const data = getEnrichedRegistry().filter((n) => {
+      // Deployment surface deny (B1) applies on every edition the gate is open
+      // for (business+), so it runs before the cloud/credits branch.
+      if (isNodeDenied(n.type)) return false
       if (hasCredits()) return true
       if (CLOUD_ONLY_NODE_TYPES.has(n.type)) return false
       if (NODARO_EXCLUSIVE_NODE_TYPES.has(n.type)) return connected
@@ -64,6 +68,12 @@ export async function nodesRoutes(app: FastifyInstance) {
     const parsed = typeParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid type" } })
+    }
+    // Deployment surface deny (B1): a denied node is not describable either.
+    if (isNodeDenied(parsed.data.type)) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: `Node type not found: ${parsed.data.type}` },
+      })
     }
     // Same reason as the list route: don't describe a node this edition can't run.
     if (!hasCredits() && CLOUD_ONLY_NODE_TYPES.has(parsed.data.type)) {

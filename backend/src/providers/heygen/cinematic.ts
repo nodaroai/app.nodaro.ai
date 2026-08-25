@@ -174,6 +174,13 @@ export async function generateCinematicAvatar(
   const resp = await heygenFetch<RawCreateVideoResponse>("/v3/videos", {
     method: "POST",
     body: JSON.stringify(body),
+  }, {
+    // OUR Nodaro key for the egress seam (never a HeyGen provider id); the
+    // reserve id is `cinematic-avatar:<res>:<dur>s`, so the base key + the
+    // resolution/duration dimensions reconstruct it. duration is omitted when
+    // auto_duration lets HeyGen pick the length.
+    modelKey: "cinematic-avatar",
+    dimensions: { resolution, ...(autoDuration ? {} : { duration }) },
   })
   const videoId = resp.data.video_id
 

@@ -4,6 +4,7 @@ import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { uploadFileToR2 } from "../lib/storage.js"
+import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompleted, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt } from "./shared.js"
@@ -758,23 +759,22 @@ export function createRenderWorker() {
       const shouldWatermark = typeof jobShouldWatermark === "boolean"
         ? jobShouldWatermark
         : userTier === "free"
-      let isPublic = profileData?.public_outputs !== false
-
-      // Force private when job uses uploaded/private input content
-      if (isPublic && jobRecord?.force_private === true) {
-        isPublic = false
-      }
-
-      // Force private for MCP-generated content (Claude.ai / Cursor / etc.) —
-      // those are external private surfaces, not the public web app where
-      // the user opted into gallery sharing. Mirrors video-worker.ts.
-      // Two detection paths: direct (`mcp_client` on the job row) or
-      // workflow-driven (parent workflow_execution's `mcp_client`).
+      // Output visibility — the shared decision (output-visibility.ts) with the
+      // B1 deployment surface switch as the OUTERMOST gate; mirrors
+      // video-worker.ts so the two can't drift. Direct MCP + workflow-driven MCP
+      // are the private-forcing origins; the parent workflow_execution's
+      // mcp_client needs an async lookup, so it stays inline and is ANDed after
+      // (short-circuits when the output is already private).
       const jobMcpClient = (jobRecord as Record<string, unknown>)?.mcp_client
       const jobWfExecId = (jobRecord as Record<string, unknown>)?.workflow_execution_id
-      if (isPublic && jobMcpClient) {
-        isPublic = false
-      }
+      let isPublic = resolveIsPublicOutput({
+        publicOutputs: profileData?.public_outputs !== false,
+        forcePrivate: jobRecord?.force_private === true,
+        // jobs.mcp_client is a TEXT client name ("claude-ai"), never a boolean —
+        // `=== true` was always false and leaked direct-MCP output to the gallery.
+        mcpClient: mcpClientForcesPrivate(jobMcpClient),
+        workflowExecutionId: null,
+      })
       if (isPublic && jobWfExecId) {
         const { data: parent } = await supabase
           .from("workflow_executions")

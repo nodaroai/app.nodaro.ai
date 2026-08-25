@@ -15,6 +15,7 @@ vi.mock("@/lib/config.js", () => ({
 import { generateAvatarVideo } from "../video.js"
 import { HeygenError } from "../client.js"
 import { aiAvatarUsdCost } from "../../../lib/pricing/ai-avatar-cost.js"
+import { setEgressDecorator, clearEgressDecorator, type EgressCall } from "../../egress.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -619,5 +620,85 @@ describe("generateAvatarVideo", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     const body = JSON.parse(init.body as string) as Record<string, unknown>
     expect(body.motion_prompt).toBe("slow zoom in")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B3 egress seam — the create POST must carry OUR modelKey (heygen-<engine>,
+// the billing engine, never a HeyGen provider id) with NO key supplied by the
+// caller. Proves the funnel threads it in production by construction; the poll
+// (a detail read) must stay null. `generateAvatarVideo` self-polls, so this is
+// the funnel-internal equivalent of the handler-level suno test.
+// ---------------------------------------------------------------------------
+describe("generateAvatarVideo — egress modelKey", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => {
+    clearEgressDecorator()
+    vi.unstubAllGlobals()
+  })
+
+  function capture(): EgressCall[] {
+    const seen: EgressCall[] = []
+    setEgressDecorator({ decorate: (c) => { seen.push(c); return null } })
+    return seen
+  }
+
+  it("create carries heygen-<engine> + resolution dimension; poll carries null", async () => {
+    const seen = capture()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo(baseOpts) // engine avatar-iv, 720p, NO meta supplied
+
+    const create = seen.find((c) => c.operation === "heygen/v3/videos")
+    expect(create).toBeDefined()
+    expect(create!.provider).toBe("heygen")
+    expect(create!.modelKey).toBe("heygen-avatar-iv")
+    expect(create!.dimensions).toEqual({ resolution: "720p" })
+    const poll = seen.find((c) => c.operation === "heygen/v1/video_status.get")
+    expect(poll).toBeDefined()
+    expect(poll!.modelKey).toBeNull()
+  })
+
+  it("image-source mode pins the key to heygen-avatar-iv even with engine avatar-v", async () => {
+    const seen = capture()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      engine: "avatar-v",
+      avatarSource: "image",
+      imageUrl: "https://r2.example.com/portrait.png",
+    })
+
+    const create = seen.find((c) => c.operation === "heygen/v3/videos")
+    expect(create!.modelKey).toBe("heygen-avatar-iv")
+  })
+
+  it("V→IV eligibility fallback: the retry create carries heygen-avatar-iv", async () => {
+    const seen = capture()
+    fetchMock
+      // First POST (avatar_v) → 200 + eligibility error body
+      .mockResolvedValueOnce(
+        makeResponse({ code: 400, error: { code: "NOT_SUPPORTED", message: "does not support Avatar V" } }),
+      )
+      // Retry POST (avatar_iv) → success
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({ ...baseOpts, engine: "avatar-v" })
+
+    const creates = seen.filter((c) => c.operation === "heygen/v3/videos")
+    expect(creates).toHaveLength(2)
+    expect(creates[0].modelKey).toBe("heygen-avatar-v") // first attempt, engine as-sent
+    expect(creates[1].modelKey).toBe("heygen-avatar-iv") // retry, effectiveEngine flipped
   })
 })

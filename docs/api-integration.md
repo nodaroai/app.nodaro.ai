@@ -120,6 +120,11 @@ an ordinary save keeps the response shape it has always had:
 }
 ```
 
+Those grants are the ones described under [workflow
+collaborators](./organizations.md#workflow-collaborators): a move can carry
+work out of the reach of somebody who was sharing it, and the response names
+who so you can tell them.
+
 **OAuth scope note:** the `workflows:read` scope also gates the broader
 workflow REST routes: `GET /v1/workflows` (flat list across all projects),
 `GET /v1/workflows/:id`, and `GET /v1/workflows/:id/export` — in addition
@@ -903,6 +908,29 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 — prefer importing the package when you can bundle it (see
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
+
+### Catalogs (server-driven projection)
+
+`GET /v1/catalogs` returns **every** picker catalog in one call, projected to a
+single flat wire shape — the server-driven counterpart to the per-picker
+`/v1/picker-catalogs/:nodeType`. Its purpose is deployment curation: a
+self-hosted or managed deployment can register *vendored catalog packs*
+(replace / extend / deny a catalog's options), and this endpoint reflects the
+**registered, pack-composed** set. A thin client that renders its own pickers
+therefore honors the deployment's curation without shipping its own copy of the
+catalogs. Public, no auth, same 5-minute cache (`Cache-Control: public, max-age=300`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/catalogs` | Every registered catalog (`{ data: ProjectedCatalog[] }`). |
+
+Query param (a bad value returns 400 `validation_error`):
+
+| Param | Values | Purpose |
+|---|---|---|
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
+
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field). The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 

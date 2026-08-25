@@ -24,6 +24,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
+import { providerFetch } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -48,7 +49,14 @@ export async function runLumaModifyTask(
   }
 
   // Step 1: Create task — body is top-level (prompt, videoUrl)
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "luma.modify",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: input,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/modify/generate`,
     {
       method: "POST",
@@ -131,7 +139,8 @@ export async function pollLumaTask(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "luma.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/modify/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )

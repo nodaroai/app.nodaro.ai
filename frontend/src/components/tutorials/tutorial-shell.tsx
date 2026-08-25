@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { surfaceBrandName } from "@/lib/surface-selectors"
 import { X } from "lucide-react"
 import {
   ReactFlow,
@@ -175,7 +176,7 @@ export function TutorialShell({
             that class, so in a light-themed app it would render the dark-on-light
             mark and near-black text onto a near-black bar. Pin the dark-background
             asset instead of inheriting a theme this page does not follow. */}
-        <Link to="/projects" className="nd-wordmark" aria-label="Nodaro">
+        <Link to="/projects" className="nd-wordmark" aria-label={surfaceBrandName()}>
           <img src="/logo-dark.svg?v=4" alt="" className="nd-logo" />
           <span>odaro</span>
         </Link>

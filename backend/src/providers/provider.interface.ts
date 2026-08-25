@@ -64,6 +64,12 @@ export type ProgressCallback = (progress: number) => Promise<void>
  */
 export interface ReconcileOpts {
   onTaskCreated?: (taskId: string) => Promise<void>
+  /** OUR Nodaro key (money-bearing) forwarded to the egress seam
+   *  (providers/egress.ts). `null`/omitted for non-billing calls. */
+  modelKey?: string | null
+  /** Billing dimensions the wire body implies (resolution/duration/…),
+   *  read by the egress decorator for the body-based price read. */
+  dimensions?: Record<string, string | number | undefined>
 }
 
 // Standard options passed to all operations

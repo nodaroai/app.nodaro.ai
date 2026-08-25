@@ -18,6 +18,7 @@ import {
   type KieTaskResponse,
   type VeoRecordInfoResponse,
 } from "./client.js"
+import { providerFetch } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -45,7 +46,14 @@ export async function runFluxKontextTask(
   }
 
   // Step 1: Create task
-  const createResponse = await fetch(
+  const createResponse = await providerFetch(
+    {
+      provider: "kie",
+      operation: "kontext.generate",
+      modelKey: reconcileOpts?.modelKey ?? null,
+      body: requestBody,
+      dimensions: reconcileOpts?.dimensions ?? {},
+    },
     `${KIE_API_BASE}/api/v1/flux/kontext/generate`,
     {
       method: "POST",
@@ -128,7 +136,8 @@ export async function pollKontextTask(
 
     let detailResponse: Response
     try {
-      detailResponse = await fetch(
+      detailResponse = await providerFetch(
+        { provider: "kie", operation: "kontext.recordInfo", modelKey: null, body: undefined, dimensions: {} },
         `${KIE_API_BASE}/api/v1/flux/kontext/record-info?taskId=${taskId}`,
         { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
       )

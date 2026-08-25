@@ -141,6 +141,16 @@ nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--mo
 #   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
 
+# Catalog — maintain a deployment's VENDORED catalog packs (offline, file-based; no auth/client)
+nodaro catalog snapshot --in <file>                     # echo a detail=full /v1/catalogs projection + sidecars JSON
+nodaro catalog diff-upstream --baseline <f> --upstream <f> --pack <f> [--write <f>]
+#   three-way merge: carries upstream edits for entries you left UNMODIFIED (with their 11-locale
+#   sidecar strings), reports conflicts (you edited AND upstream changed — pack kept), lists new
+#   upstream entries and upstream removals — NOTHING is auto-admitted. Exit code 2 on conflicts.
+nodaro catalog validate --pack <file> [--exempt es,fr,…]
+#   checks a pack snapshot has sidecar coverage across the 11 locales (or declared exemptions);
+#   exit code 1 when a non-exempt locale is missing a translation
+
 # Shots — Cine share → remix records
 nodaro shots get <id> [--json]                          # public shots resolve for anyone holding the id
 nodaro shots create [--file shot.json] [--visibility private|public] [--json]

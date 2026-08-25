@@ -25,7 +25,7 @@ import {
   type CopilotSaveResult,
 } from "./turn-store"
 import { reduceTurn, startTurn } from "./turn-reducer"
-import { EMPTY_TURN, type CopilotStreamEvent, type CopilotThread, type CopilotTurnState } from "./types"
+import { EMPTY_TURN, type CopilotRunProposal, type CopilotStreamEvent, type CopilotThread, type CopilotTurnState } from "./types"
 
 /**
  * How many runs one assistant message may start on its own: exactly one.
@@ -271,7 +271,11 @@ async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<v
     // Remembered past the end of the stream: it is how the panel later tells
     // its own unfinished turn from another tab's.
     setCopilotState({ lastTurnId: event.data.turnId })
-    copilotState().setRunSettings(event.data.runMode, event.data.autoRunLimitCredits)
+    copilotState().setRunSettings(
+      event.data.runMode,
+      event.data.autoRunLimitCredits,
+      event.data.allowPublishing,
+    )
     return
   }
   if (event.type === "workflow_updated") {
@@ -282,11 +286,11 @@ async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<v
     return
   }
   if (event.type === "run_proposed") {
-    onProposal()
+    onProposal(event.data)
   }
 }
 
-function onProposal(): void {
+function onProposal(proposal: CopilotRunProposal): void {
   const { bridge, autoRunCount, runMode, autoRunLimit, runPhase } = copilotState()
 
   // A single assistant message can carry two `run_workflow` calls, and the

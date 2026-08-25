@@ -1,6 +1,7 @@
 import { DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
 import { resolveDirectVoiceId } from "./direct-tts.js"
+import { providerFetch, type EgressMeta } from "../egress.js"
 
 export interface VoiceChangerOptions {
   modelId?: string
@@ -21,6 +22,7 @@ export async function directVoiceChanger(
   audioBuffer: Buffer,
   voiceId: string,
   options?: VoiceChangerOptions,
+  meta?: EgressMeta,
 ): Promise<Buffer> {
   const headers = getElevenLabsHeaders()
 
@@ -67,14 +69,20 @@ export async function directVoiceChanger(
     formData.append("voice_settings", JSON.stringify(voiceSettings))
   }
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/speech-to-speech/${targetVoiceId}`, {
-    method: "POST",
-    headers: {
-      ...headers,
-      Accept: "audio/mpeg",
+  const response = await providerFetch(
+    // Single-purpose funnel → default OUR key inside (core + VCP callers pass
+    // no meta); a plugin that bills differently can still override via meta.
+    { provider: "elevenlabs", operation: "voiceChanger", modelKey: meta?.modelKey ?? "elevenlabs-voice-changer", body: undefined, dimensions: meta?.dimensions ?? {} },
+    `${ELEVENLABS_BASE_URL}/v1/speech-to-speech/${targetVoiceId}`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        Accept: "audio/mpeg",
+      },
+      body: formData,
     },
-    body: formData,
-  })
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")

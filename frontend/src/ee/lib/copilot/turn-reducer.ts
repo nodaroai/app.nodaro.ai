@@ -84,6 +84,13 @@ export function reduceTurn(state: CopilotTurnState, event: CopilotStreamEvent): 
     case "run_proposed":
       return { ...state, proposal: event.data }
 
+    case "memory_saved": {
+      // Idempotent by id: a reconnect can replay the event, and two pinned
+      // lines for one save would read as two writes.
+      if (state.memorySaves.some((m) => m.id === event.data.id)) return state
+      return { ...state, memorySaves: [...state.memorySaves, event.data] }
+    }
+
     case "usage":
       return { ...state, creditsCharged: event.data.creditsCharged }
 

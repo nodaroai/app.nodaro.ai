@@ -9,6 +9,7 @@
  * turn; the run's outcome comes back as the user's next message.
  */
 import { supabase } from "../../../lib/supabase.js"
+import type { WiredAsset } from "./edit-workflow.js"
 import { classifyFailure } from "../../../lib/mcp/tools/diagnose.js"
 import type { CopilotToolContext, RunProposal } from "./types.js"
 
@@ -24,9 +25,15 @@ export interface RunWorkflowArgs {
  * destination lock. The model configures nodes through `edit_workflow`, or
  * not at all.
  */
-export function proposeRun(ctx: CopilotToolContext, args: RunWorkflowArgs, addedNodeTypes: string[]): { proposal: RunProposal; message: string } {
+export async function proposeRun(
+  ctx: CopilotToolContext,
+  args: RunWorkflowArgs,
+  addedNodeTypes: string[],
+  wiredAssets: readonly WiredAsset[] = [],
+): Promise<{ proposal: RunProposal; message: string }> {
   const proposal: RunProposal = {
     addedNodeTypes,
+    wiredAssets: [...wiredAssets],
     note: args.note,
   }
   ctx.emit({
@@ -34,6 +41,9 @@ export function proposeRun(ctx: CopilotToolContext, args: RunWorkflowArgs, added
     data: {
       workflowId: ctx.workflowId,
       addedNodeTypes: proposal.addedNodeTypes,
+      // Named, not counted: "1 file" tells the user nothing about WHICH file
+      // they are about to spend credits on.
+      wiredAssets: proposal.wiredAssets,
       note: proposal.note ?? null,
     },
   })

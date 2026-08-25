@@ -82,11 +82,12 @@ function copilotDeps(invoker: ReturnType<typeof createMcpInvoker>) {
       projectId: "p1",
       threadId: "t1",
       turnId: "turn1",
+  allowPublishing: false,
       fastify: {} as never,
       emit: vi.fn(),
     },
     invoker,
-    addedNodeTypes: new Set<string>(),
+    addedNodeTypes: new Set<string>(), wiredAssets: [],
   }
 }
 

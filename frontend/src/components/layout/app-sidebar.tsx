@@ -58,6 +58,8 @@ const OrgSwitcherSection = hasOrganizations()
   ? lazy(() => import("@/ee/components/org/org-switcher-section").then((m) => ({ default: m.OrgSwitcherSection })))
   : null
 import { otherNodaroApps } from "@/lib/nodaro-apps"
+import { surfaceNavHidden } from "@/lib/surface-selectors"
+import type { NavKey } from "@/lib/surface-profile"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -134,6 +136,21 @@ const NAV_SECTIONS: readonly NavSection[] = [
 ]
 
 const NAV_ITEMS: readonly NavItem[] = NAV_SECTIONS.flatMap(s => s.items)
+
+/** Sidebar items whose visibility a deployment surface profile can hide (B1). */
+const NAV_HREF_TO_SURFACE_KEY: Partial<Record<string, NavKey>> = {
+  "/_gallery": "gallery",
+  "/pricing": "pricing",
+  "/explore": "explore",
+  "/apps": "apps",
+  "/templates": "templates",
+}
+
+/** True when the deployment surface profile hides this item's nav entry. */
+function isNavItemSurfaceHidden(item: NavItem): boolean {
+  const key = NAV_HREF_TO_SURFACE_KEY[item.href]
+  return key ? surfaceNavHidden(key) : false
+}
 
 function formatRenewalTime(periodEnd: string): string | null {
   const msLeft = new Date(periodEnd).getTime() - Date.now()
@@ -377,13 +394,13 @@ export function AppSidebar({
               <DropdownMenuLabel>Nodaro</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {NODARO_SURFACES.map((surface) => (
-                <DropdownMenuItem key={surface.id} asChild className="px-3">
-                  <a href={surface.href} target="_blank" rel="noopener noreferrer">
+                <DropdownMenuItem key={surface.url} asChild className="px-3">
+                  <a href={surface.url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-4" />
                     <span className="flex flex-col">
                       <span>{surface.label}</span>
                       <span className="text-xs text-muted-foreground">
-                        {new URL(surface.href).host}
+                        {new URL(surface.url).host}
                       </span>
                     </span>
                   </a>
@@ -572,6 +589,7 @@ export function AppSidebar({
             // Collapsed: flat icon list, no labels
             NAV_ITEMS.map((item) => {
               if (item.hidden) return null
+              if (isNavItemSurfaceHidden(item)) return null
               if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return null
               if (item.billingOnly && !isFeatureEnabled("billing")) return null
               if (item.multiUserOnly && !isMultiUser()) return null
@@ -613,6 +631,7 @@ export function AppSidebar({
             NAV_SECTIONS.map((section) => {
               const visibleItems = section.items.filter((item) => {
                 if (item.hidden) return false
+                if (isNavItemSurfaceHidden(item)) return false
                 if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return false
                 if (item.billingOnly && !isFeatureEnabled("billing")) return false
                 if (item.multiUserOnly && !isMultiUser()) return false

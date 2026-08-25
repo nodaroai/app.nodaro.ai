@@ -191,3 +191,18 @@ function update(version: number, addedNodeIds: string[]): CopilotStreamEvent {
     },
   }
 }
+
+describe("memory_saved", () => {
+  it("appends a pinned save and dedupes a replayed event by id", () => {
+    let state = startTurn("remember this", 0)
+    state = reduceTurn(state, { type: "memory_saved", data: { id: "m1", content: "always 9:16" } })
+    expect(state.memorySaves).toEqual([{ id: "m1", content: "always 9:16" }])
+
+    // A reconnect can replay the event — one save must stay one pin.
+    state = reduceTurn(state, { type: "memory_saved", data: { id: "m1", content: "always 9:16" } })
+    expect(state.memorySaves).toHaveLength(1)
+
+    state = reduceTurn(state, { type: "memory_saved", data: { id: "m2", content: "no music" } })
+    expect(state.memorySaves).toHaveLength(2)
+  })
+})

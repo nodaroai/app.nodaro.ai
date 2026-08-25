@@ -1585,6 +1585,67 @@ export interface PluginOrgsService {
    * this — it turns on memberships and effective settings the plugin owns.
    */
   canMoveWorkflow?(input: CanMoveWorkflowInput): Promise<{ allowed: boolean; reason?: string }>
+
+  /**
+   * What this user may do with this workflow — the twin of the SQL
+   * `workflow_access()` the row policies use.
+   *
+   * Core asks rather than computes. The rule reads membership, the
+   * workspace's settings inheritance, the caller's collaborator grant and
+   * whether the workspace is archived; all four are the plugin's to know, and
+   * a second implementation in core would be a third answer to a question
+   * that already has two (TypeScript here, SQL in the policies) and a parity
+   * test to keep those two honest.
+   */
+  workflowAccess?(userId: string, workflowId: string): Promise<WorkflowAccessLevel>
+
+  /**
+   * The same answer for a caller that already loaded the row.
+   *
+   * Exists for cost, not convenience: every by-id route loads the workflow
+   * anyway, and asking by id would fire a second read on the hottest path in
+   * the product.
+   */
+  workflowAccessFromRow?(userId: string, row: WorkflowAccessRow): Promise<WorkflowAccessLevel>
+
+  /**
+   * May this user DELETE it? Deliberately not `access >= edit`.
+   *
+   * A collaborator with an editor grant may change the work and must never be
+   * able to destroy it — the grant was given to help with it, not to end it.
+   */
+  canDeleteWorkflow?(userId: string, workflowId: string): Promise<boolean>
+
+  /**
+   * May this user RUN it? Stricter than editing, because running spends
+   * money: `edit` plus ACTIVE membership when the workflow is workspace
+   * -scoped. A granted editor who does not belong to the class can change it
+   * and cannot start a job the class pays for.
+   */
+  canRunWorkflow?(userId: string, workflowId: string): Promise<boolean>
+}
+
+/**
+ * How much of a workflow one person may reach.
+ *
+ * Ordered: `none` < `view` < `edit` < `own`. Mirrored in core's
+ * `lib/workflow-access.ts`, which is what routes import — this declaration
+ * exists so the contract can name it without core importing from the plugin.
+ */
+export type WorkflowAccessLevel = "none" | "view" | "edit" | "own"
+
+/**
+ * The columns the access rule needs off a workflow row a caller already has.
+ *
+ * Deliberately small: everything else the rule reads (the workspace, the
+ * caller's memberships, their grant) is the plugin's to load, and widening
+ * this would move that knowledge into core one column at a time.
+ */
+export interface WorkflowAccessRow {
+  id: string
+  user_id: string
+  workspace_id: string | null
+  visibility: string
 }
 
 /** Facts `canMoveWorkflow` decides on. Core loads them; the plugin judges. */

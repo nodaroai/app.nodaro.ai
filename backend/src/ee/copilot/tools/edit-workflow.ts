@@ -25,6 +25,8 @@ import { migrateGenerateImageHandles } from "../../../lib/generate-image-handle-
 import { GRAPH_CAPS, LAYOUT, MAX_WORKFLOW_NAME_CHARS, NODE_ID_RE } from "../constants.js"
 import { changedLockedUrlFields, isDeniedNodeType } from "./deny-lists.js"
 import { assertEntitiesAreTheirs } from "./entity-ownership.js"
+import { MAX_ASSET_REFS, resolveCopilotAssetRefs, type ResolvedAsset } from "./asset-refs.js"
+import { collectAssetIds, rejectInventedFileSyntax, stampAssetRefs } from "./asset-wiring.js"
 import { knownNodeTypes, suggestNodeTypes, validateWorkflowEdges, type EdgeLike } from "./edge-validation.js"
 import type { CopilotToolContext } from "./types.js"
 
@@ -58,6 +60,20 @@ export interface EditWorkflowArgs {
   note: string
 }
 
+/**
+ * A file this edit put on a node.
+ *
+ * Carried all the way to the run card because approving a run is the moment the
+ * user is agreeing to spend credits on THIS graph — and a file they cannot see
+ * was wired in is a thing they did not actually approve.
+ */
+export interface WiredAsset {
+  id: string
+  kind: "image" | "video" | "audio"
+  filename: string
+  nodeId: string
+}
+
 export interface EditWorkflowResult {
   version: number
   updatedAt: string
@@ -65,6 +81,7 @@ export interface EditWorkflowResult {
   updatedNodeIds: string[]
   removedNodeIds: string[]
   addedNodeTypes: string[]
+  wiredAssets: WiredAsset[]
   nodeCount: number
   edgeCount: number
   adjustments: string[]
@@ -74,7 +91,7 @@ export interface EditWorkflowResult {
 /** A rejected edit. The message is written for the model, not for a log. */
 
 
-interface StoredGraph {
+export interface StoredGraph {
   nodes: GenericNode[]
   edges: EdgeLike[]
   version: number
@@ -162,6 +179,8 @@ interface Prepared {
   addedNodeIds: string[]
   updatedNodeIds: string[]
   addedNodeTypes: string[]
+  /** Files this call put on a node — the run card names them for the user. */
+  wiredAssets: WiredAsset[]
   fullNodes: GenericNode[]
   fullEdges: EdgeLike[]
   adjustments: string[]
@@ -173,7 +192,12 @@ interface Prepared {
  * time, so a rebase after a version conflict re-merges patches onto the
  * current node rather than re-sending a stale copy.
  */
-function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
+function prepare(
+  args: EditWorkflowArgs,
+  stored: StoredGraph,
+  assets: ReadonlyMap<string, ResolvedAsset>,
+  allowPublishing: boolean,
+): Prepared {
   const existingById = new Map(stored.nodes.map((n) => [n.id, n]))
   const deleteNodeIds = [...new Set(args.deleteNodeIds ?? [])]
   const deleteSet = new Set(deleteNodeIds)
@@ -189,7 +213,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     if (/_iter_\d+$/.test(input.id)) {
       throw new EditRejected(`Node id "${input.id}" is reserved for list-expansion clones. Pick another id.`)
     }
-    if (isDeniedNodeType(input.type)) {
+    if (isDeniedNodeType(input.type, { allowPublishing })) {
       throw new EditRejected(
         `I can't add a "${input.type}" node — nodes that send data out of Nodaro (webhooks, social publishing) have to be added by you on the canvas.`,
       )
@@ -202,6 +226,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
         `I can't set ${locked.join(", ")} on "${input.id}". Media reaches a node through an edge, a saved character/location, or the user's upload — not a URL I type.`,
       )
     }
+    rejectInventedFileSyntax(input.type, input.id, data)
     const node: GenericNode = {
       id: input.id,
       type: input.type,
@@ -223,7 +248,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     // Same gate as the upsert path: an existing outbound node must not be
     // RE-POINTED either (a patched chatId publishes the user's media to
     // someone else's channel).
-    if (isDeniedNodeType(existing.type)) {
+    if (isDeniedNodeType(existing.type, { allowPublishing })) {
       throw new EditRejected(
         `I can't change the "${existing.type}" node "${patch.id}" — nodes that send data out of Nodaro are yours to configure.`,
       )
@@ -235,6 +260,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     if (locked.length > 0) {
       throw new EditRejected(`I can't change ${locked.join(", ")} on "${patch.id}".`)
     }
+    rejectInventedFileSyntax(String(existing.type), patch.id, merged)
     upserts.push({
       ...existing,
       ...(patch.position ? { position: patch.position } : {}),
@@ -301,18 +327,49 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
   // plus the generated-output keys, which `stripTransientRuntimeData` leaves
   // alone. A model that could write `generatedImageUrl` could fake a finished
   // node and feed a downstream one whatever it liked.
+  //
+  // But the strip cannot be unconditional, because the RPC replaces a node
+  // WHOLE. A patch merges the stored data first, so a completed node's results
+  // travel back through here on any edit — relabel it, move it, change one
+  // field — and stripping them then DELETES them from the row. The user watches
+  // their finished images disappear from a node the copilot only renamed.
+  //
+  // So: an execution value that deep-equals what is already stored is the
+  // user's own and survives; one the model INTRODUCED or CHANGED is stripped.
+  // The forgery it guards against is by definition a value that differs.
   const stripped = stripTransientRuntimeData(upserts).map((node) => {
     const data = node.data as Record<string, unknown> | undefined
     if (!data) return node
+    const storedData = existingById.get(node.id)?.data as Record<string, unknown> | undefined
     const cleaned: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(data)) {
-      if (!EXECUTION_DATA_KEYS.has(key)) cleaned[key] = value
+      if (!EXECUTION_DATA_KEYS.has(key)) {
+        cleaned[key] = value
+        continue
+      }
+      if (storedData && JSON.stringify(storedData[key]) === JSON.stringify(value)) cleaned[key] = value
     }
     return { ...node, data: cleaned }
   })
-  const normalized = normalizeNodeModelParams(stripped)
+  // Files land HERE — on the chain that is actually persisted, after the
+  // strip, so nothing downstream can remove what was just stamped. (An earlier
+  // draft substituted into the validation graph, which is never written.)
+  const wired = stampAssetRefs(stripped, existingById, assets)
+  const normalized = normalizeNodeModelParams(wired.nodes)
   const positioned = applyLayout(normalized.nodes, fullNodes, fullEdges, new Set(addedNodeIds))
   const orderedUpserts = orderParentFirst(positioned)
+
+  // Nothing may leave here still holding an unresolved pointer: the run engine
+  // reads `data.url`, so a node with a changed assetId and no url is a node
+  // that runs on nothing. An assert, not a check — if this fires the pipeline
+  // above is wrong, and the model cannot fix it by trying again.
+  for (const node of orderedUpserts) {
+    const changed = wired.wiredNodeIds.has(node.id)
+    const url = (node.data as Record<string, unknown> | undefined)?.url
+    if (changed && (typeof url !== "string" || url.length === 0)) {
+      throw new Error(`edit_workflow: node "${node.id}" was wired to a file but has no url`)
+    }
+  }
 
   // Handle migration can rewrite EXISTING edges too; anything it changed has
   // to travel in the delta or the stored copy stays stale. Every edge carries
@@ -329,7 +386,11 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     if (changed || upsertEdgeIds.has(id)) finalUpsertEdges.push({ ...edge, id })
   }
 
-  const jsonBytes = Buffer.byteLength(JSON.stringify({ nodes: fullNodes, edges: migratedEdges }), "utf8")
+  // Measured on the POST-stamp graph: a wired file adds a url per node, and a
+  // cap computed before the stamp would let the write exceed it.
+  const upsertById = new Map(orderedUpserts.map((n) => [n.id, n]))
+  const finalFullNodes = fullNodes.map((n) => upsertById.get(n.id) ?? n)
+  const jsonBytes = Buffer.byteLength(JSON.stringify({ nodes: finalFullNodes, edges: migratedEdges }), "utf8")
   if (jsonBytes > GRAPH_CAPS.maxJsonBytes) {
     throw new EditRejected(`The workflow would be ${Math.round(jsonBytes / 1024)} KB; the limit is ${Math.round(GRAPH_CAPS.maxJsonBytes / 1024)} KB.`)
   }
@@ -342,6 +403,7 @@ function prepare(args: EditWorkflowArgs, stored: StoredGraph): Prepared {
     addedNodeIds,
     updatedNodeIds,
     addedNodeTypes: [...addedNodeTypes],
+    wiredAssets: wired.wiredAssets,
     fullNodes,
     fullEdges: migratedEdges,
     adjustments: describeNodeAdjustments(normalized.adjustments),
@@ -355,6 +417,7 @@ function knownTypeSet(): Set<string> {
   if (!knownTypes) knownTypes = new Set(knownNodeTypes())
   return knownTypes
 }
+
 
 /**
  * Position every node this call CREATES, whatever the model asked for.
@@ -387,9 +450,21 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
   // cannot change between attempts, and the check costs a query per kind.
   await assertEntitiesAreTheirs([...(args.upsertNodes ?? []), ...(args.patchNodes ?? [])], ctx.userId)
 
+  let assets: ReadonlyMap<string, ResolvedAsset> = new Map()
+
   for (let attempt = 0; attempt < 2; attempt++) {
     const stored = await loadGraph(ctx)
-    const prepared = prepare(args, stored)
+    // Resolved once, on the first attempt: the ids come from the args, which do
+    // not move between retries. Whether each one is a CHANGE still gets asked
+    // again inside `prepare`, against the graph this attempt actually read.
+    if (attempt === 0) {
+      const ids = collectAssetIds(args, stored)
+      if (ids.length > MAX_ASSET_REFS) {
+        throw new EditRejected(`That wires ${ids.length} files at once; ${MAX_ASSET_REFS} is the limit for one edit.`)
+      }
+      if (ids.length > 0) assets = await resolveCopilotAssetRefs(ids, ctx.userId)
+    }
+    const prepared = prepare(args, stored, assets, ctx.allowPublishing)
 
     const { data, error } = await supabase.rpc("apply_workflow_delta", {
       p_workflow_id: ctx.workflowId,
@@ -420,6 +495,7 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
         addedNodeTypes: prepared.addedNodeTypes,
         nodeCount: prepared.fullNodes.length,
         edgeCount: prepared.fullEdges.length,
+        wiredAssets: prepared.wiredAssets,
         adjustments: prepared.adjustments,
         warnings: prepared.warnings,
       }

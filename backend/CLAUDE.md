@@ -92,6 +92,21 @@ incident, not a style nit:
   `import_workflow` are never registered. The allowlist (`constants.ts`) is
   enforced at `dispatchTool`, not only at list time — `workflows:execute`
   registers ~100 generation verbs that must stay unreachable.
+- **A file reaches a node as an ID, never an address.** The model writes
+  `data.assetId` on an `upload-image` / `upload-video` / `upload-audio` node and
+  the server stamps the WHOLE media copy (`asset-wiring.ts` + `asset-slots.ts`);
+  any other spelling — an object in `url`, a `$asset` wrapper — is refused with a
+  message naming `assetId`, because a persisted-and-ignored write is the silent
+  failure this exists to prevent. Ids batch-resolve ONCE before the CAS loop
+  (they come from the args); "is this a change" and "is this still a slot" are
+  re-asked inside `prepare()` per attempt. `resolveCopilotAssetRefs` is a
+  SIBLING of `lib/mcp/asset-resolver.ts`, not a wrapper: ownership is part of the
+  query, so a foreign id and a missing one are both zero rows — that one is an
+  existence oracle by design and must not be reached by a model.
+- **An upsert replaces a node WHOLE**, so anything derived that the model was
+  told not to send has to be carried across: the stored media for an unchanged
+  `assetId`, and any `EXECUTION_DATA_KEYS` value that deep-equals what is stored
+  (a copilot edit used to delete a finished node's results).
 - **Egress deny-list** (`tools/deny-lists.ts`): `webhook-output` + every social
   publisher cannot be authored, and the model may not introduce or change a
   URL field on any node. Untrusted content (node labels, entity descriptions,
@@ -108,6 +123,15 @@ incident, not a style nit:
 - **`copilot-turn` is NOT a sync reconcile kind.** `ee/copilot/reconcile.ts`
   commits the per-iteration `copilot_turns.cost_usd` for a crashed turn instead
   of refunding spend that really happened.
+- **Memory (M1) is per-user, visible, and table-tolerant.** `copilot_memories`
+  (migration 343) is user-scoped ONLY — cross-user learning stays a human-gated
+  pipeline, never this table. The `remember` native tool rejects any content
+  containing `http` (a memory is cross-thread persistent — a URL in one is a
+  durable exfiltration channel), every save emits `memory_saved` so the panel
+  pins it with an undo, and EVERY read/write in `ee/copilot/memories.ts`
+  degrades gracefully when the table is absent (staging runs against the shared
+  DB before the migration lands on main). Memories inject into the per-turn
+  context preamble, NEVER the cached doctrine prefix.
 - Liveness is the turn's `heartbeat_at`, never a thread column; a stale turn
   self-heals on the next request. Every route requires `req.authKind === "jwt"`
   (403 `in_app_only`), and access is checked in the FIRST preHandler so a

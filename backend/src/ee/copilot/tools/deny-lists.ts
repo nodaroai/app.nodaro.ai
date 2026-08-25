@@ -38,6 +38,30 @@ export const DENIED_NODE_TYPES: ReadonlySet<string> = new Set([
   "youtube-video",
 ])
 
+/**
+ * The publishers, as a named subset.
+ *
+ * These are the ONLY denied types a user can lift, and only for their own
+ * thread: they post under an account the user already connected, so the harm
+ * ceiling is unwanted content on their own timeline. `webhook-output` and the
+ * outbound fetchers stay denied for everyone, always — those name an arbitrary
+ * host in node data, which is exfiltration, not embarrassment.
+ *
+ * A subset rather than a shrunken `DENIED_NODE_TYPES`, because that set is
+ * DERIVED from the orchestrator's executor by a test: removing a member would
+ * mean a genuinely outbound node had stopped being covered.
+ */
+export const SOCIAL_PUBLISHER_TYPES: ReadonlySet<string> = new Set([
+  "x-post",
+  "telegram-post",
+  "linkedin-post",
+  "facebook-post",
+  "instagram-post",
+  "tiktok-post",
+  "youtube-upload",
+  "publish-social",
+])
+
 /** Named destination fields that do not end in "url". */
 const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
   "target",
@@ -49,6 +73,12 @@ const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
   "webhook",
   "endpoint",
   "host",
+  // Not a destination — a DISCLOSURE control, and locked for the same reason.
+  // Publishing nodes default to `private`, and once the copilot can author one
+  // the difference between a draft the user reviews and a post the world sees
+  // is this single word. It authors the scaffold; who can see the result stays
+  // the user's decision, on the canvas.
+  "privacy",
 ])
 
 /**
@@ -61,8 +91,22 @@ export function isLockedField(key: string): boolean {
   return /urls?$/i.test(key) || NAMED_DESTINATION_FIELDS.has(key)
 }
 
-export function isDeniedNodeType(type: unknown): boolean {
-  return typeof type === "string" && DENIED_NODE_TYPES.has(type)
+/**
+ * Whether the copilot may write this node type.
+ *
+ * `allowPublishing` is a per-THREAD choice the user makes, never a default and
+ * never global: it lifts the publishers only. Everything else in
+ * `DENIED_NODE_TYPES` is unreachable regardless, because a webhook or a scraper
+ * names its own destination and no toggle should be able to hand a model that.
+ *
+ * The lock on the fields is untouched either way — `connectionId`, `chatId`,
+ * `channel`, `platform` and `privacy` stay the user's. The copilot builds the
+ * scaffold; where it goes and who sees it are not its to write.
+ */
+export function isDeniedNodeType(type: unknown, opts?: { allowPublishing?: boolean }): boolean {
+  if (typeof type !== "string") return false
+  if (!DENIED_NODE_TYPES.has(type)) return false
+  return !(opts?.allowPublishing && SOCIAL_PUBLISHER_TYPES.has(type))
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

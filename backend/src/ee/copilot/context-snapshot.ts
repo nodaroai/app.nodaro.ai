@@ -9,6 +9,7 @@
  */
 import { supabase } from "../../lib/supabase.js"
 import { MAX_WORKFLOW_NAME_CHARS, TURN_CAPS } from "./constants.js"
+import { listMemories, renderMemoriesSection } from "./memories.js"
 import { newUntrustedNonce, stripControlChars } from "./untrusted.js"
 
 /**
@@ -98,9 +99,14 @@ export async function buildContextPreamble(input: SnapshotInput): Promise<string
   const edges = Array.isArray(input.edges) ? input.edges : []
   const lines = nodes.slice(0, MAX_LISTED_NODES).map(nodeLine).filter((l): l is string => l !== null)
   const overflow = nodes.length > MAX_LISTED_NODES ? `\n… and ${nodes.length - MAX_LISTED_NODES} more nodes (call get_graph for the full list).` : ""
-  const [runLine, entities] = await Promise.all([
+  const [runLine, entities, memories] = await Promise.all([
     lastRunLine(input.workflowId, input.userId),
     entityCounts(input.userId),
+    // Per-user memories (M1). Injected HERE — the per-turn context region —
+    // never the cached doctrine prefix: they differ per user and would
+    // invalidate the shared prefix on every save. Best-effort by design: a
+    // missing table (pre-promotion staging) is an empty list.
+    listMemories(input.userId),
   ])
 
   const body = [
@@ -108,7 +114,10 @@ export async function buildContextPreamble(input: SnapshotInput): Promise<string
     lines.length > 0 ? `Nodes:\n${lines.join("\n")}${overflow}` : "The canvas is empty.",
     runLine,
     entities,
-  ].join("\n\n")
+    renderMemoriesSection(memories),
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 
   const capped = body.length > TURN_CAPS.contextPreambleMaxChars
     ? `${body.slice(0, TURN_CAPS.contextPreambleMaxChars)}\n… (truncated)`

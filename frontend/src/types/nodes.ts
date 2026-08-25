@@ -3455,6 +3455,11 @@ export interface SocialConnection {
    * the "Reconnect" chip; optional so pre-existing fixtures stay valid.
    */
   reconnect_needed?: boolean
+  /**
+   * Publish here when a node names no account. At most one per platform.
+   * Optional: absent until the column is promoted, and absent means "not it".
+   */
+  is_default?: boolean
 }
 
 export type SocialPostData = {

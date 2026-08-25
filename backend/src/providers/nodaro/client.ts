@@ -13,6 +13,7 @@
  */
 
 import { Agent } from "undici"
+import { providerFetch } from "../egress.js"
 import { nodaroCloudFetch, getNodaroCredential, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
 import { r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
@@ -361,7 +362,11 @@ async function readOwnMedia(url: string): Promise<{ buffer: Buffer; mime: string
     }
   }
 
-  const local = await fetch(url)
+  // Reading OUR OWN media over PUBLIC_URL, not a provider egress — no
+  // decoration/metering applies (allowlisted in Task 8's guard). The marker
+  // sits on the fetch line ITSELF: the guard now allows this exact line, not a
+  // window around it, so a raw fetch nearby is still named.
+  const local = await fetch(url) // egress-allow: local self-probe
   if (!local.ok) {
     throw new NodaroCloudError(
       `nodaro.ai: failed to read local media for cloud upload (${local.status})`,
@@ -408,11 +413,15 @@ export async function ensureCloudReachableMediaUrl(url: string | undefined): Pro
   }
   const form = new FormData()
   form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), uploadNameFor(mime))
-  const res = await fetch(`${nodaroCloudBase()}/v1/upload`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${credential.token}` },
-    body: form,
-  })
+  const res = await providerFetch(
+    { provider: "nodaro", operation: "nodaro.upload", modelKey: null, body: undefined, dimensions: {} },
+    `${nodaroCloudBase()}/v1/upload`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${credential.token}` },
+      body: form,
+    },
+  )
   if (!res.ok) {
     throw new NodaroCloudError(`nodaro.ai: media upload failed (${res.status})`, res.status)
   }

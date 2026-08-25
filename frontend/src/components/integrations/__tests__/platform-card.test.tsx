@@ -37,6 +37,7 @@ vi.mock("@/lib/api", () => ({
   disconnectSocial: vi.fn(),
   connectTelegram: vi.fn(),
   connectSocialCustom: (platform: string, fields: Record<string, string>) => connectSocialCustom(platform, fields),
+  setDefaultSocialConnection: vi.fn(),
 }))
 
 function provider(overrides: Partial<SocialProviderInfo> = {}): SocialProviderInfo {
@@ -209,5 +210,41 @@ describe("PlatformCard (reconnect surfacing)", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: /Reconnect/i }))
     await waitFor(() => expect(getSocialAuthUrl).toHaveBeenCalledWith("facebook"))
+  })
+})
+
+describe("choosing which account publishes by default", () => {
+  // Which account a publish node uses when it names none — the normal case for
+  // anything the Copilot builds, since it is forbidden to write a destination.
+  const twoAccounts = [
+    { id: "a", platform: "telegram", display_name: "Main", platform_username: "main", platform_avatar_url: null, is_default: true },
+    { id: "b", platform: "telegram", display_name: "Side", platform_username: "side", platform_avatar_url: null },
+  ] as never[]
+
+  const renderCard = (connections: never[]) =>
+    render(<PlatformCard provider={provider({ id: "telegram", label: "Telegram" })} connections={connections} onConnectionChange={() => {}} />)
+
+  it("says nothing when there is nothing to choose between", () => {
+    // One account is already where everything goes. A "Default" control beside
+    // it would be a control that does nothing.
+    renderCard([twoAccounts[0]!])
+
+    expect(screen.queryByText(/make default/i)).toBeNull()
+    expect(screen.queryByText(/^Default$/)).toBeNull()
+  })
+
+  it("marks the one that is, and offers the one that is not", () => {
+    renderCard(twoAccounts)
+
+    expect(screen.getByText(/^Default$/)).toBeTruthy()
+    expect(screen.getByText(/make default/i)).toBeTruthy()
+  })
+
+  it("offers it for BOTH when neither has been chosen", () => {
+    // Before anyone picks, the publisher falls back to oldest-first — which is
+    // deterministic but not a decision, so both are still offerable.
+    renderCard(twoAccounts.map((c) => ({ ...(c as object), is_default: false })) as never[])
+
+    expect(screen.getAllByText(/make default/i)).toHaveLength(2)
   })
 })

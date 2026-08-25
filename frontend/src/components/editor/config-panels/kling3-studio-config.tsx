@@ -20,7 +20,7 @@ import { toast } from "sonner"
 import { uploadFile } from "@/lib/api"
 import { optimizedImageUrl } from "@/lib/image"
 import type { ImageToVideoData } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS } from "./model-options"
+import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS, withoutDeniedModels } from "./model-options"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -331,7 +331,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 <ModelSearchSelect
                   value={data.provider || "seedance-2-fast"}
                   onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-                  options={VIDEO_I2V_MODELS}
+                  options={withoutDeniedModels(VIDEO_I2V_MODELS)}
                   ariaLabel="Model"
                 />
               </MappableField>

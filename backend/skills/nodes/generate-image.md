@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-08-18T12:16:55.631Z
-generated_from: 894717598
+generated_at: 2026-08-24T22:10:20.720Z
+generated_from: 39fdb63a4
 ---
 
 # generate-image
@@ -128,3 +128,34 @@ Text-to-image generation. For trailer / cinematic flows, embed character + locat
 }
 ```
 <!-- AUTO-GEN:END examples -->
+
+<!-- AUTO-GEN:START image-reference-prompting -->
+## Reference-image prompting ({image:N:label} tokens)
+
+The `references` handle takes MULTIPLE image producers (upload-image, generate-image, …) wired into one generate-image node. Connection order is the numbering: the first-connected reference is 1. The prompt then binds them with tokens:
+
+- `{image:N:label}` → expands server-side to `Image N (label)`, aligned with the numbered reference list sent to the provider.
+- `{image:N}` → `Image N` (no role named).
+- A token whose N has no wired reference is left as literal text in the final prompt — visible on purpose, so fix the numbering instead of ignoring it.
+
+**How to compose**
+- The prompt should be little more than tokens plus glue words: `{image:1:person} with {image:2:face}`. The label tells the model what to TAKE from that image — `person`, `face`, `background`, `settings`, or a concrete garment/prop name (`jacket`).
+- Order = priority. Put the identity-critical image first. Swapping the numbers (or the labels) swaps the result — `{image:2:person} with {image:1:face}` transplants in the opposite direction.
+- Do NOT re-describe what a referenced image already shows; a sentence fighting the reference degrades adherence. Add only what is NEW (pose, lighting, scene) — or better, reference it from another image.
+
+**Core patterns (each is one generate-image node with two wired references)**
+- Identity transplant: `{image:1:person} with {image:2:face}` — body/outfit/scene from 1, face from 2.
+- Reverse transplant: `{image:2:person} with {image:1:face}` — same two references, opposite result.
+- Keep the stage, change the star: `{image:1:background} with {image:2:person}`.
+- Relocation: `{image:1:person} in {image:2:settings}`.
+- Garment transfer: `{image:1:person} Wearing {image:2:jacket} on top, at {image:2:settings}` — several labels can pull different things from the SAME image.
+
+**Providers & settings**
+- Multi-reference composition is strongest on the GPT-Image family (`gpt-image-2`) and the Nano Banana family (`nano-banana-pro`). Check a model's reference support via `list_models` before relying on more than one reference.
+- Set an explicit `aspectRatio` and prefer `resolution: "2K"` for composites — face detail survives the merge better.
+
+**Known pitfall**
+- Person+face composition intermittently trips provider content filters ("Content policy violation"). Keep wording neutral (no glamor/body emphasis), and on a rejection rephrase the glue words or swap provider rather than retrying unchanged.
+
+_Generated from `IMAGE_REFERENCE_PROMPT_DOCTRINE` in `@nodaro/prompts` — edit there, then `npm run gen:skills`._
+<!-- AUTO-GEN:END image-reference-prompting -->

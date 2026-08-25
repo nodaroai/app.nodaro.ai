@@ -191,9 +191,18 @@ describe("every mentionable kind reaches the model", () => {
     const wire = buildWireMessage("put it in the shot", [
       { id: "11111111-1111-4111-8111-111111111111", name: "Rex", kind },
     ])
-    // The label must be the one the matching get_<kind> tool is named after —
-    // that is how the model knows which lookup resolves the id.
-    expect(wire).toContain(`${kind} "Rex"`)
+    // Every kind says WHAT it is next to the id, so the model knows where the
+    // id goes: an entity's label is the `get_<kind>` tool that resolves it, a
+    // file's says "file" and the doctrine points it at `assetId`.
+    expect(wire).toContain(`${kind} `)
+    expect(wire).toContain(`"Rex"`)
     expect(wire).toContain("(id: 11111111-1111-4111-8111-111111111111)")
+  })
+
+  it("says which kind of thing a file is, so it lands on the right node", () => {
+    const wire = buildWireMessage("use it", [
+      { id: "11111111-1111-4111-8111-111111111111", name: "cat.png", kind: "image" },
+    ])
+    expect(wire).toContain('image file "cat.png"')
   })
 })

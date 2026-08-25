@@ -24,6 +24,7 @@ import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
+import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
@@ -176,6 +177,7 @@ export class NodaroClient {
   readonly library: LibraryResource
   readonly presets: PresetsResource
   readonly pickerCatalogs: PickerCatalogsResource
+  readonly catalogs: CatalogsResource
   readonly models: ModelsResource
   readonly shots: ShotsResource
   readonly recast: RecastResource
@@ -222,6 +224,7 @@ export class NodaroClient {
     this.library = new LibraryResource(this)
     this.presets = new PresetsResource(this)
     this.pickerCatalogs = new PickerCatalogsResource(this)
+    this.catalogs = new CatalogsResource(this)
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
     this.recast = new RecastResource(this)

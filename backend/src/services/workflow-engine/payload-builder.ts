@@ -3,7 +3,7 @@
  * Returns { jobName, queueName, payload } for worker-queued nodes.
  */
 
-import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
+import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, WorkflowNodeData } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput } from "@nodaro/shared"
@@ -14,6 +14,7 @@ import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-iden
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
+import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRejectionMessage } from "../../lib/surface-deny.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
@@ -1633,6 +1634,38 @@ function composeVideoPrompt(args: {
   return p
 }
 
+/**
+ * The provider a node will ACTUALLY dispatch (and be billed for) — the single
+ * place that decides "which model does this node dispatch". Only `text-to-speech`
+ * diverges from `data.provider`: its case dispatches
+ * `resolvedInputs.provider || data.provider || "elevenlabs-v3"`, and
+ * input-resolver auto-injects a wired Character/creature node's recommended TTS
+ * provider into `resolvedInputs.provider` (a FieldMapping can inject it too), so
+ * a denied model reaches dispatch through an UNSET `data.provider`. The surface
+ * MODEL-deny backstop must consult this same value or that path bypasses it.
+ *
+ * Every OTHER node type dispatches on `data.provider` alone — this deliberately
+ * does NOT read `resolvedInputs.provider` for them, so a node that merely carries
+ * an unrelated `resolvedInputs.provider` is never falsely denied. Uses `||` to
+ * mirror the TTS case's precedence byte-for-byte (an empty-string provider must
+ * fall through exactly as dispatch does). The hardcoded `"elevenlabs-v3"` default
+ * is intentionally NOT folded in — see the backstop's `typeof` guard.
+ *
+ * Exported so B3's egress-key derivation can consume the same helper later.
+ */
+export function effectiveDispatchProvider(
+  nodeType: string,
+  data: WorkflowNodeData | undefined,
+  resolvedInputs: Pick<ResolvedInputs, "provider"> | undefined,
+): string | undefined {
+  const raw = data?.provider
+  const dataProvider = typeof raw === "string" ? raw : undefined
+  if (nodeType === "text-to-speech") {
+    return resolvedInputs?.provider || dataProvider
+  }
+  return dataProvider
+}
+
 export function buildPayload(
   node: SimpleNode,
   jobId: string,
@@ -1642,6 +1675,32 @@ export function buildPayload(
 ): PayloadResult {
   const data = node.data
   const type = node.type
+
+  // Deployment surface deny (B1): a workflow row / import / template can reach
+  // buildPayload with a denied node WITHOUT passing a write guard (write guards
+  // reject new saves; discovery hides it). Reject at run time with the friendly,
+  // coded error so ANY denied type fails honestly — not just the fall-through
+  // cases the switch default catches.
+  if (isNodeDenied(type)) {
+    const err = new Error(deniedNodeRejectionMessage([type])) as Error & { code?: string }
+    err.code = "node_not_available"
+    throw err
+  }
+
+  // Deployment surface MODEL deny (B1): node deny has a run-time backstop above,
+  // but model deny was discovery-only — a denied model still runs + bills when its
+  // `provider` arrives via an imported/templated workflow row or a FieldMapping-
+  // injected value (never passing a write guard). Check the EFFECTIVE dispatched
+  // provider (not just `data.provider`) so the text-to-speech case — which
+  // dispatches an auto-wired `resolvedInputs.provider` ahead of `data.provider` —
+  // can't slip a denied model through an unset `data.provider`. Throw here too,
+  // mirroring the node-deny shape exactly, so a denied model fails honestly at run.
+  const dispatchProvider = effectiveDispatchProvider(type, data, resolvedInputs)
+  if (typeof dispatchProvider === "string" && isModelDenied(dispatchProvider)) {
+    const err = new Error(deniedModelRejectionMessage([dispatchProvider])) as Error & { code?: string }
+    err.code = "model_not_available"
+    throw err
+  }
 
   // Build label→output map for resolving {Node Label} refs in text fields
   const refMap = buildNodeRefMap(node.id, buildCtx)

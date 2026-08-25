@@ -229,6 +229,12 @@ services:
       # "de"). A user's own saved choice always wins; an unset/blank/unknown
       # value falls back to the visitor's browser language. Restart to apply.
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-}
+      # Deployment surface profile (B1) — inline JSON or @/path/to/profile.json.
+      # Narrows the UI: hide nav/tabs, deny nodes/models, set brand/siblings/auth,
+      # force outputs private. BUSINESS+ ONLY — this community edition ignores it
+      # and always serves the stock surface (set EDITION=business to use it).
+      # Restart to apply. Unset = full default surface.
+      NODARO_SURFACE_PROFILE: ${NODARO_SURFACE_PROFILE:-}
       # nodaro.ai as a provider like the others: a personal API token from
       # app.nodaro.ai (Settings -> API). Alternative to "Connect nodaro.ai".
       NODARO_API_KEY: ${NODARO_API_KEY:-}

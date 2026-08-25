@@ -51,6 +51,7 @@ import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
+import { surfaceTabs } from "@/lib/surface-selectors"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 
 function TemplatesCarousel() {
@@ -317,6 +318,23 @@ export default function ProjectsPage() {
   useEffect(() => {
     localStorage.setItem("nodaro-dashboard-workspace-tab", workspaceTab)
   }, [workspaceTab])
+
+  // B1: a deployment surface profile can narrow which dashboard tabs show.
+  // "studio" is not a DashboardTabKey, so it is always available; workflows and
+  // projects can be narrowed. surfaceTabs returns the code default unless a
+  // profile whitelists a subset. effectiveWorkspaceTab guards against a stored/
+  // URL tab that the profile has since hidden (which would blank the view).
+  const allowedDashTabs = surfaceTabs(["workflows", "projects"] as const)
+  const workspaceTabDefs = (
+    [
+      { id: "workflows", label: t("dash.myWorkflows") },
+      { id: "projects", label: t("dash.myProjects") },
+      { id: "studio", label: t("dash.studioWorkflows") },
+    ] as const
+  ).filter((tab) => tab.id === "studio" || allowedDashTabs.includes(tab.id))
+  const effectiveWorkspaceTab: WorkspaceTab = workspaceTabDefs.some((tb) => tb.id === workspaceTab)
+    ? workspaceTab
+    : (workspaceTabDefs[0]?.id ?? "studio")
 
   const [search, setSearch] = useState("")
 
@@ -711,18 +729,14 @@ export default function ProjectsPage() {
 
       {/* Workspace tab strip — flat workflow list (default) vs. project organization */}
       <div className="flex items-center gap-1 mb-3 border-b border-border">
-        {([
-          { id: "workflows", label: t("dash.myWorkflows") },
-          { id: "projects", label: t("dash.myProjects") },
-          { id: "studio", label: t("dash.studioWorkflows") },
-        ] as const).map((tab) => (
+        {workspaceTabDefs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setWorkspaceTab(tab.id)}
             className={cn(
               "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
-              workspaceTab === tab.id
+              effectiveWorkspaceTab === tab.id
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
@@ -732,7 +746,7 @@ export default function ProjectsPage() {
         ))}
       </div>
 
-      {workspaceTab === "workflows" && (
+      {effectiveWorkspaceTab === "workflows" && (
         <MyWorkflowsView
           onCreateWorkflow={handleCreateWorkflow}
           onMoveWorkflow={handleMoveWorkflow}
@@ -740,9 +754,9 @@ export default function ProjectsPage() {
         />
       )}
 
-      {workspaceTab === "studio" && <StudioWorkflowsView showAll={showAll} />}
+      {effectiveWorkspaceTab === "studio" && <StudioWorkflowsView showAll={showAll} />}
 
-      {workspaceTab === "projects" && (
+      {effectiveWorkspaceTab === "projects" && (
       <>
       {/* My Projects heading + view toggle + search */}
       <div className="flex items-center justify-between mb-3">

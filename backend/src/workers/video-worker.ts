@@ -10,6 +10,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
+import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -142,43 +143,32 @@ export function createVideoWorker() {
       // Use watermark decision from reservation time (C4 fix: prevents bypass via tier upgrade)
       const shouldWatermark = hasCredits() ? (jobRecord?.should_watermark ?? false) : false
 
-      let isPublicOutput = true
+      // Output visibility (is_public) — the shared decision lives in
+      // output-visibility.ts so this worker and render-worker can't drift, with
+      // the deployment surface switch (B1) as the OUTERMOST gate. Worker-local
+      // signals (blocked prompt) fold into forcePrivate; the parent
+      // workflow_execution's mcp flag needs an async lookup, so it stays inline
+      // and is ANDed after (and short-circuits when the output is already private).
+      let publicPref = true
       if (jobUserId && jobRecord?.profiles) {
         const profile = jobRecord.profiles as unknown as { public_outputs?: boolean }
-        isPublicOutput = profile?.public_outputs ?? true
+        publicPref = profile?.public_outputs ?? true
       }
-
-      // Auto-hide outputs whose prompt contains blocked words
-      if (isPublicOutput) {
-        const jobData = job.data as Record<string, unknown>
-        const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
-        if (isPromptBlocked(promptText)) {
-          isPublicOutput = false
-        }
-      }
-
-      // Force private when job uses uploaded/private input content
-      if (isPublicOutput && jobRecord?.force_private === true) {
-        isPublicOutput = false
-      }
-
-      // Force private for MCP-generated content. The user is generating
-      // through an external client (Claude.ai, Cursor) — that's a private
-      // surface, NOT the public web app where they consciously opted in
-      // to gallery sharing. Free/Basic tiers can't disable public_outputs
-      // in the profile, so without this clause every MCP generation would
-      // leak to the public gallery.
-      //
-      // Two paths to detect MCP origin:
-      //   (a) Direct generate_image / modify_image / animate_image / etc.
-      //       — `mcp_client` populated on the job row itself by the route.
-      //   (b) Workflow / app run — the parent workflow_execution carries
-      //       `mcp_client`; per-node child jobs don't (the orchestrator
-      //       calls the same internal routes which don't see the MCP
-      //       header on each per-node call). Look up the parent.
-      if (isPublicOutput && jobRecord?.mcp_client) {
-        isPublicOutput = false
-      }
+      const jobData = job.data as Record<string, unknown>
+      const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
+      let isPublicOutput = resolveIsPublicOutput({
+        publicOutputs: publicPref,
+        // uploaded/private input content, or a blocked prompt
+        forcePrivate: jobRecord?.force_private === true || isPromptBlocked(promptText),
+        // direct MCP generation (Claude.ai / Cursor) — a private surface.
+        // jobs.mcp_client is a TEXT client name, never a boolean — `=== true`
+        // was always false and leaked direct-MCP output to the public gallery.
+        mcpClient: mcpClientForcesPrivate(jobRecord?.mcp_client),
+        workflowExecutionId: null,
+      })
+      // Workflow / app run: the parent workflow_execution carries `mcp_client`;
+      // per-node child jobs don't (the orchestrator's internal per-node calls
+      // never see the MCP header). Look up the parent only if still public.
       if (isPublicOutput && jobRecord?.workflow_execution_id) {
         const { data: parent } = await supabase
           .from("workflow_executions")
@@ -235,7 +225,7 @@ export function createVideoWorker() {
 
         // Bind a cancellation context so provider poll loops abort the moment
         // the user cancels — instead of polling the upstream job to completion.
-        await runWithJobCancellation(jobId, () => handler(job, ctx))
+        await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
 
         // Record execution duration for progress bar estimation
         // (started_at was set on the job record at the start of processing above)

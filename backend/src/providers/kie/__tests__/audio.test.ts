@@ -25,6 +25,9 @@ vi.mock("../models.js", () => ({
   KIE_AUDIO_ISOLATION_MODELS: {
     "elevenlabs-isolation": { model: "elevenlabs/audio-isolation", cost: 0.01 },
   },
+  KIE_DIALOGUE_MODELS: {
+    "elevenlabs-dialogue": { model: "elevenlabs/text-to-dialogue-v3", cost: 0.07 },
+  },
 }))
 
 import { KieAudioProvider } from "../audio.js"
@@ -42,14 +45,14 @@ beforeEach(() => {
 describe("KieAudioProvider.generateMusic", () => {
   it("happy path with default model", async () => {
     const result = await provider.generateMusic("epic orchestral")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "epic orchestral" }, 90, undefined, undefined)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "epic orchestral" }, 90, undefined, expect.objectContaining({ modelKey: "suno" }))
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
     expect(result.cost).toBe(0.10)
   })
 
   it("passes duration and lyrics", async () => {
     await provider.generateMusic("rock", undefined, 30, "yeah!")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "rock", duration: 30, lyrics: "yeah!" }, 90, undefined, undefined)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "rock", duration: 30, lyrics: "yeah!" }, 90, undefined, expect.objectContaining({ modelKey: "suno" }))
   })
 
   it("throws when no result URL", async () => {
@@ -66,7 +69,7 @@ describe("KieAudioProvider.textToSpeech", () => {
       expect.objectContaining({ text: "Hello world", voice: "Rachel" }),
       undefined,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-turbo" }),
     )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })
@@ -80,7 +83,7 @@ describe("KieAudioProvider.textToSpeech", () => {
       expect.objectContaining({ voice: "Daniel", stability: 0.5, similarity_boost: 0.8, speed: 1.2 }),
       undefined,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-turbo" }),
     )
   })
 
@@ -91,7 +94,7 @@ describe("KieAudioProvider.textToSpeech", () => {
       expect.objectContaining({ language_code: "fr" }),
       undefined,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-turbo" }),
     )
   })
 
@@ -109,7 +112,7 @@ describe("KieAudioProvider.generateSoundEffect", () => {
       { text: "explosion" },
       90,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-sfx" }),
     )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })
@@ -121,8 +124,49 @@ describe("KieAudioProvider.generateSoundEffect", () => {
       expect.objectContaining({ text: "rain", duration_seconds: 10, loop: true, prompt_influence: 0.5 }),
       90,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-sfx" }),
     )
+  })
+})
+
+describe("KieAudioProvider.generateDialogue", () => {
+  // Production-path proof: generateDialogue itself does the spread, so the
+  // 5th arg to runKieTask must carry OUR Nodaro key (never the KIE provider
+  // id "elevenlabs/text-to-dialogue-v3"). Guards the null-key create it used
+  // to egress (bare reconcileOpts → modelKey null).
+  it("threads OUR modelKey into the create funnel", async () => {
+    const result = await provider.generateDialogue([
+      { text: "Hi", voice: "Rachel" },
+      { text: "Hello", voice: "Daniel" },
+    ])
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
+      "elevenlabs/text-to-dialogue-v3",
+      expect.objectContaining({ dialogue: expect.any(Array) }),
+      90,
+      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-dialogue" }),
+    )
+    expect(result.url).toBe("https://kie.example.com/audio.mp3")
+  })
+
+  it("preserves passed reconcileOpts while forcing the key", async () => {
+    const onTaskCreated = vi.fn()
+    await provider.generateDialogue(
+      [{ text: "Hi", voice: "Rachel" }],
+      { stability: 0.4, languageCode: "en" },
+      { onTaskCreated },
+    )
+    const call = mocks.mockRunKieTask.mock.calls.at(-1)!
+    expect(call[4]).toEqual(expect.objectContaining({ onTaskCreated, modelKey: "elevenlabs-dialogue" }))
+    // stability + language_code reach the wire body
+    expect(call[1]).toEqual(expect.objectContaining({ stability: 0.4, language_code: "en" }))
+  })
+
+  it("throws when no result URL", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: {} })
+    await expect(
+      provider.generateDialogue([{ text: "x", voice: "Rachel" }]),
+    ).rejects.toThrow()
   })
 })
 
@@ -134,7 +178,7 @@ describe("KieAudioProvider.isolateAudio", () => {
       { audio_url: "https://example.com/song.mp3" },
       90,
       undefined,
-      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-isolation" }),
     )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })

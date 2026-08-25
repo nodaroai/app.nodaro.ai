@@ -21,6 +21,7 @@
 
 import { config } from "../../lib/config.js"
 import { KIE_API_BASE } from "./client.js"
+import { providerFetch } from "../egress.js"
 
 const KIE_GENERIC_URL = `${KIE_API_BASE}/api/v1/playground/pageRecordListByDoris`
 const KIE_USER_RECORD_URL = `${KIE_API_BASE}/client/v1/userRecord`
@@ -151,18 +152,22 @@ async function fetchPaginated(
 
   for (let page = 1; page <= 100; page++) {
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: auditHeaders(sessionToken, uniqueId),
-        body: JSON.stringify({
-          pageNum: page,
-          pageSize: 50,
-          beginTime,
-          endTime,
-          ...extraBody,
-        }),
-        signal: AbortSignal.timeout(30_000),
-      })
+      const response = await providerFetch(
+        { provider: "kie", operation: "audit.creditLookup", modelKey: null, body: undefined, dimensions: {} },
+        url,
+        {
+          method: "POST",
+          headers: auditHeaders(sessionToken, uniqueId),
+          body: JSON.stringify({
+            pageNum: page,
+            pageSize: 50,
+            beginTime,
+            endTime,
+            ...extraBody,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        },
+      )
 
       if (!response.ok) {
         if (response.status === 401) {

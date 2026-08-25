@@ -123,6 +123,7 @@ import {
 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
+import { runtimeSurfaceProfile } from "@/lib/surface-profile"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -1521,5 +1522,10 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
  * Use this instead of `NODE_OPTIONS` whenever building a user-visible list.
  */
 export function getNodeOptions(): ReadonlyArray<NodeOption> {
-  return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits());
+  // Deployment surface deny (B1): a denied node never appears in the picker (the
+  // backend also hides it from discovery and rejects it at write/run).
+  const deny = runtimeSurfaceProfile().nodes.deny;
+  return NODE_OPTIONS.filter(
+    (o) => (!CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits()) && !deny.includes(o.type),
+  );
 }

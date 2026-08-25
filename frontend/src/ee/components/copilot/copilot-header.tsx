@@ -10,15 +10,21 @@ import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { CopilotMemoriesButton } from "./copilot-memories"
 import type { CopilotRunMode } from "@/ee/lib/copilot/types"
 
 interface CopilotHeaderProps {
   onClose: () => void
-  onChangeSettings: (patch: { runMode?: CopilotRunMode; autoRunLimitCredits?: number }) => void
+  onChangeSettings: (patch: {
+    runMode?: CopilotRunMode
+    autoRunLimitCredits?: number
+    allowPublishing?: boolean
+  }) => void
 }
 
 export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps) {
   const runMode = useCopilotStore((s) => s.runMode)
+  const allowPublishing = useCopilotStore((s) => s.allowPublishing)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
   const [draftLimit, setDraftLimit] = useState(String(autoRunLimit))
 
@@ -42,14 +48,17 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
       <div className="flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-[2px] bg-primary" aria-hidden />
         <span className="text-[13.5px] font-semibold text-foreground tracking-[-0.01em]">{S.title}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={S.close}
-          className="ml-auto w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
-        >
-          <X className="w-3 h-3" strokeWidth={2.2} />
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <CopilotMemoriesButton />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={S.close}
+            className="w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
+          >
+            <X className="w-3 h-3" strokeWidth={2.2} />
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -97,6 +106,24 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
           {runMode === "auto" ? S.modeHintAuto : S.modeHintAsk}
         </span>
       </div>
+
+      {/* A checkbox and not a segmented track: unlike Ask/Auto these are not two
+          named behaviours, they are a permission the user grants. Off is the
+          absence of it, and it should look like one. */}
+      <label className="flex items-start gap-2 cursor-pointer group">
+        <input
+          type="checkbox"
+          checked={allowPublishing}
+          onChange={(e) => onChangeSettings({ allowPublishing: e.target.checked })}
+          className="mt-[2px] w-3.5 h-3.5 flex-none rounded-[4px] accent-[var(--copilot-mention)] cursor-pointer"
+        />
+        <span className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[11.5px] text-foreground leading-tight">{S.allowPublishing}</span>
+          <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">
+            {allowPublishing ? S.allowPublishingOn : S.allowPublishingOff}
+          </span>
+        </span>
+      </label>
     </div>
   )
 }
