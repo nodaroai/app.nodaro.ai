@@ -132,6 +132,39 @@ to the project-scoped `GET /v1/projects/:projectId/workflows`. If your
 OAuth token will call any of these, request `workflows:read` in the
 authorization scope.
 
+### External SSO
+
+Two **public** (no-auth) endpoints let a trusted external identity provider
+sign a user in. They are the only things mounted under `/v1/sso/`, and only for
+`GET`. Full setup — provider config, the assertion contract, and the
+account-linking rules — is in [External SSO](./sso.md); it is **off** unless
+`EXTERNAL_SSO_PROVIDERS` is configured.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/sso/providers` | Public provider metadata for the login page. Returns `{ "providers": [{ "id", "label", "kind" }] }` — **never** a secret. `{ "providers": [] }` when SSO is off. |
+| `GET` | `/v1/sso/:provider` | The exchange endpoint (a **browser redirect** endpoint, not a JSON API). |
+
+`GET /v1/sso/:provider` behaves by what it is called with:
+
+- **Without `?assertion=`** — redirects (`302`) to the provider's `initiateUrl`
+  (the login-button entry point), or `400 no_assertion` if none is configured.
+- **With `?assertion=<jwt>`** — verifies the assertion (HS256 signature, `aud`,
+  `exp`, server-enforced max lifetime, single-use `jti`), applies the
+  account-linking rules, mints a one-time Supabase login token, and redirects
+  (`302`) to `/sso?sso_token=<token>&next=<same-origin-relative-path>`. The
+  browser's `/sso` landing exchanges that token for a session.
+- A `?next=` value is honoured only when it is a same-origin **relative** path;
+  anything else falls back to `/projects` (open-redirect guard).
+
+Status codes: `401` (bad or replayed assertion), `403` (`account_exists` /
+`email_unverified` / `account_linked_other_provider` — linking refused; the last
+when the email already belongs to an account linked to a **different** identity
+provider, which is never re-stamped), `404` (unknown provider), `400`
+(`not_assertion_provider` when a native OIDC/SAML provider is hit with an
+assertion), `429` (per-IP rate limit). The assertion and the minted token are
+redacted from request logs.
+
 ## 4. Worked example: generate an image
 
 End-to-end bash. Assumes you've copied your token into `$TOKEN` and have

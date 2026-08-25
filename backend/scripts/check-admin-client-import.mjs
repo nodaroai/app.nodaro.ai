@@ -56,6 +56,14 @@ const ALLOWED_PATHS = [
   /^src\/routes\/social-auth\.ts$/,
   /^src\/routes\/webhook-triggers\.ts$/,
 
+  // External SSO exchange (B6): a pre-authentication route (no user JWT yet).
+  // The verified IdP assertion is exchanged for a session, which requires the
+  // service-role admin auth API — getUserByEmail/createUser/updateUserById —
+  // and a profiles-by-email lookup, none of which a user-scoped client can do.
+  // The OAuth-callback class the check's docstring explicitly sanctions;
+  // account-linking is takeover-safe (lib/sso-linking.ts).
+  /^src\/routes\/sso\.ts$/,
+
   // text-to-picker: exact twin of describe-to-picker (baseline entry) — same
   // job-lifecycle writes (insert + own-row status updates filtered by
   // user_id); migrates to the user-scoped client together with its twin

@@ -161,6 +161,8 @@ added to `config.ts` without a row here.
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
+| `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button, `/v1/sso/*` 404s. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
+| `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated |

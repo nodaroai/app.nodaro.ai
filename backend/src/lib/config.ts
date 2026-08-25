@@ -171,6 +171,15 @@ export const envSchema = z.object({
    * getter's test hook must be able to bypass). Business+ only — see d2.
    */
   NODARO_SURFACE_PROFILE: z.string().optional(),
+  // External SSO (B6). Inline JSON or "@/path/to/file.json" describing the
+  // trusted IdP list. Unset ⇒ no SSO (inert). Parsed + validated in
+  // lib/sso-providers.ts (fail-loud: a typo'd secret-bearing entry must NOT
+  // silently drop — unlike the surface profile's element-wise degrade).
+  EXTERNAL_SSO_PROVIDERS: z.string().default(""),
+  // Global gate: may a verified-email assertion link to a PRE-EXISTING account
+  // that is not already SSO-linked? Default false (takeover-safe). ANDed with
+  // the per-assertion email_verified claim in sso-linking.ts.
+  EXTERNAL_SSO_LINK_EXISTING: z.string().default("false"),
   /**
    * Comma-separated list of directories holding operator-supplied tutorial
    * packs. Each directory: a manifest.json (name, categories, optional

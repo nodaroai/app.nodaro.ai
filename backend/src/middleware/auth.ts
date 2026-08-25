@@ -171,6 +171,13 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // Between-steps account picker: the popup posts the one-time Redis token
   // (10-min TTL, consumed once) — the token IS the auth, like /v1/webhooks.
   { method: "POST", path: "/v1/social/connect/finalize" },
+  // External SSO (B6): the assertion exchange + provider metadata. Public BY
+  // DESIGN — the caller is signed OUT (that is the point of logging in), and
+  // the assertion (a signed, aud-bound, single-use JWT) IS the auth, verified
+  // in routes/sso.ts. Namespace is EXCHANGE + METADATA only; never mount an
+  // authed route under /v1/sso/. Trailing slash is deliberate (matches
+  // /v1/sso/providers and /v1/sso/:provider, not a hypothetical /v1/ssoX).
+  { method: "GET", path: "/v1/sso/", prefix: true },
   { method: "GET", path: "/v1/present/", prefix: true },
   { method: "GET", path: "/v1/app/", prefix: true },
   { method: "GET", path: "/og/app/", prefix: true },
@@ -241,6 +248,12 @@ function isPublicRoute(method: string, url: string): boolean {
     }
   }
   return false
+}
+
+/** Test-only accessor for the private public-route matcher (the query-string
+ *  strip lives inside `isPublicRoute`, so tests exercise the real path split). */
+export function __isPublicRouteForTest(method: string, url: string): boolean {
+  return isPublicRoute(method, url)
 }
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,18 @@ describe("sanitizeLogUrl", () => {
   it("is case-insensitive on the param name", () => {
     expect(sanitizeLogUrl("/cb?Code=SECRET")).not.toContain("SECRET")
   })
+
+  it("redacts the External SSO (B6) assertion and sso_token secrets", () => {
+    // The signed IdP assertion on the exchange route…
+    const withAssertion = sanitizeLogUrl("/v1/sso/librechat?assertion=eyJraWD.SIGNED.SECRET&next=/library")
+    expect(withAssertion).not.toContain("eyJraWD.SIGNED.SECRET")
+    expect(withAssertion).toContain("assertion=%5Bredacted%5D")
+    expect(withAssertion).toContain("next=%2Flibrary") // non-sensitive param kept
+    // …and the minted one-time Supabase token on the landing redirect.
+    const withToken = sanitizeLogUrl("/sso?sso_token=HASHED_TOKEN_SECRET&next=/projects")
+    expect(withToken).not.toContain("HASHED_TOKEN_SECRET")
+    expect(withToken).toContain("sso_token=%5Bredacted%5D")
+  })
 })
 
 describe("requestLogSerializer", () => {

@@ -76,6 +76,8 @@ export const en = {
   "auth.signingIn": "Signing in...",
   "auth.or": "or",
   "auth.continueWithGoogle": "Continue with Google",
+  "auth.continueWithSso": "Single sign-on",
+  "auth.ssoExchanging": "Signing you in…",
   "auth.redirecting": "Redirecting...",
   "auth.signInFailed": "Sign in failed",
   "auth.newHere": "New here?",

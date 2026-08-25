@@ -31,6 +31,28 @@
         } catch (e) {}
       })();
     </script>
+    <!-- External SSO (B6): the exchange route redirects to /sso?sso_token=…&next=…
+         The @supabase/supabase-js browser client boots with
+         flowType:"pkce" + detectSessionInUrl:true, which scans the URL for an
+         auth token as soon as any module loads — before the /sso route mounts.
+         Stash the one-time token + next into a global and STRIP them from the
+         URL (history.replaceState) so the token never reaches the PKCE
+         auto-detector, browser history, or any logger. Non-obvious — do not
+         remove: without it the landing route finds an empty URL. -->
+    <script>
+      (function () {
+        try {
+          if (window.location.pathname !== "/sso") return;
+          var q = new URLSearchParams(window.location.search);
+          var token = q.get("sso_token");
+          if (!token) return;
+          var next = q.get("next") || "/projects";
+          if (next.indexOf("/") !== 0 || next.indexOf("//") === 0) next = "/projects";
+          window.__NODARO_SSO__ = { token: token, next: next };
+          window.history.replaceState({}, "", "/sso");
+        } catch (e) {}
+      })();
+    </script>
     <!-- Analytics (Microsoft Clarity + Google gtag) — opt-in via build-time env
          (VITE_CLARITY_ID / VITE_GA_ID); empty/unset (the self-hosted
          Community/Business default) is a no-op and nothing leaves the

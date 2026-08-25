@@ -234,6 +234,7 @@ import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
+import { ssoRoutes } from "./routes/sso.js"
 import { registerWellKnown } from "./routes/well-known.js"
 import { registerMcpRoute } from "./routes/mcp.js"
 import { adminNodeDefaultsRoutes } from "./ee/routes/admin-node-defaults.js"
@@ -583,6 +584,7 @@ export async function buildApp() {
   await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
   await registerOauthRegister(app)
+  await app.register(ssoRoutes)
   await registerWellKnown(app)
   await registerMcpRoute(app)
   if (hasAdmin()) await app.register(adminNodeDefaultsRoutes)

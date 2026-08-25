@@ -30,6 +30,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/login",
   "/signup",
   "/auth/callback",
+  "/sso",
   "/auth/cli",
   "/setup",
   "/checkout-complete",

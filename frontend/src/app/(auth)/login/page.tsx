@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
-import { surfaceAuthMethods } from "@/lib/surface-selectors"
+import { surfaceAuthMethods, surfaceAuthSsoLabel } from "@/lib/surface-selectors"
 import type { AuthMethod } from "@/lib/surface-profile"
+import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
@@ -78,6 +79,23 @@ export default function LoginPage() {
     }
   }, [])
 
+  // External SSO (B6): the login page advertises SSO only when the deployment
+  // has configured at least one provider. Mirrors the googleAvailable probe —
+  // a method the code can't fulfil never reaches the auth-method set (N3).
+  const [ssoProviders, setSsoProviders] = useState<{ id: string; label: string; kind: string }[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch("/v1/sso/providers", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { providers?: { id: string; label: string; kind: string }[] } | null) => {
+        if (!cancelled && json?.providers?.length) setSsoProviders(json.providers)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // Email/password is the self-host path (GoTrue native); cloud stays
   // Google-only. B1: the deployment surface profile can NARROW which methods
   // show — surfaceAuthMethods drops any method the code doesn't offer, so a
@@ -85,10 +103,13 @@ export default function LoginPage() {
   const codeDefaultAuthMethods: AuthMethod[] = [
     ...(isCloud() ? [] : (["email"] as const)),
     ...(googleAvailable ? (["google"] as const) : []),
+    ...(ssoProviders.length ? (["sso"] as const) : []),
   ]
   const authMethods = surfaceAuthMethods(codeDefaultAuthMethods)
   const showEmailAuth = authMethods.includes("email")
   const showGoogle = authMethods.includes("google")
+  const showSso = authMethods.includes("sso")
+  const ssoLabel = surfaceAuthSsoLabel()
 
   // Persist redirect param to localStorage (survives Google OAuth round-trip).
   // Both spellings are live senders: dashboard guards use ?redirect=, while
@@ -127,6 +148,33 @@ export default function LoginPage() {
     try {
       await signInWithEmail(email, password)
       navigate(consumeRedirect(), { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
+      setPending(false)
+    }
+  }
+
+  async function handleSso(p: { id: string; kind: string }) {
+    setPending(true)
+    setError(null)
+    try {
+      if (p.kind === "assertion") {
+        // The backend route 302s to the IdP; a full navigation (not fetch).
+        window.location.assign(`/v1/sso/${encodeURIComponent(p.id)}`)
+        return
+      }
+      // Supabase-native OIDC/SAML: let the client redirect to the IdP and land
+      // on /auth/callback (the existing OAuth return path). For native providers
+      // the id doubles as the SAML domain / OAuth provider name; a deployment
+      // that needs them to differ is the per-provider open question — the
+      // assertion path (the B6 focus) does not use this branch.
+      const supabase = createClient()
+      const redirectTo = `${window.location.origin}/auth/callback`
+      const { error } =
+        p.kind === "saml"
+          ? await supabase.auth.signInWithSSO({ domain: p.id, options: { redirectTo } })
+          : await supabase.auth.signInWithOAuth({ provider: p.id as never, options: { redirectTo } })
+      if (error) throw error
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.signInFailed"))
       setPending(false)
@@ -219,6 +267,29 @@ export default function LoginPage() {
             >
               {pending ? t("auth.redirecting") : t("auth.continueWithGoogle")}
             </Button>
+          )}
+
+          {showSso && ssoProviders.length > 0 && (
+            <div className="space-y-2">
+              {(showEmailAuth || showGoogle) && (
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground/60">{t("auth.or")}</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              {ssoProviders.map((p) => (
+                <Button
+                  key={p.id}
+                  variant={showEmailAuth || showGoogle ? "outline" : "default"}
+                  className="w-full"
+                  onClick={() => handleSso(p)}
+                  disabled={pending}
+                >
+                  {ssoLabel ?? (ssoProviders.length === 1 ? t("auth.continueWithSso") : p.label)}
+                </Button>
+              ))}
+            </div>
           )}
 
           {error && (
