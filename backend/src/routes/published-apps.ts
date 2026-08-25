@@ -7,6 +7,8 @@ import { getNodeResult, getOutputType, parseHandleId, calculateMonetizationMarku
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
+import { toAccessRow } from "../lib/workflow-route-access.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -439,16 +441,33 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
     }
 
-    // Verify user owns the workflow
+    // Publishing is a DISCLOSURE decision, not an edit — it puts a snapshot of
+    // this work in front of strangers — so it takes `own`, the same bar as
+    // changing who a workflow is visible to. A workspace editor may help with
+    // the class's work and does not get to publish it.
     const { data: workflow, error: wfError } = await supabase
+      // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, nodes, edges, settings")
+      .select("id, user_id, workspace_id, visibility, nodes, edges, settings")
       .eq("id", workflowId)
-      .single()
+      .maybeSingle()
 
     if (wfError || !workflow) {
       return reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
     }
+    // 403 rather than 404 for an insufficient level, because that is what this
+    // route has always answered here (§9's "match what it does") — the
+    // existence of the id is already disclosed to anyone who reaches this.
+    const access = await workflowAccessFromRow(userId, toAccessRow(workflow as unknown as Record<string, unknown>))
+    if (!accessAtLeast(access, "own")) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
+    }
+    // `own` is the LEVEL bar; authorship is a separate one, and both are
+    // needed. A platform admin resolves to `own` on every workflow in the
+    // database (that is decision 1 of the access rule, and it is deliberate),
+    // which would let one publish a stranger's private work under their own
+    // creator id. Publishing is the one act where being able to reach the
+    // work is not the question — having made it is.
     if (workflow.user_id !== userId) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
     }

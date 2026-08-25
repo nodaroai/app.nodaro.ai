@@ -223,6 +223,15 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // moderation implementation stays private, like the other plugin routes), so
   // it is intentionally absent from core and allowlisted here.
   "/v1/moderate-image",
+  // The collaborator routes are organization routes, registered at runtime by
+  // the cloud-plugins `registerRoutes()` the static scanner cannot see, and
+  // deliberately absent from core: the membership tables, the settings
+  // inheritance and the access rule they enforce are all the plugin's, and a
+  // core stub would be a second implementation of a rule that already has two.
+  // Their contract is published in docs/organizations.md and exercised by the
+  // plugin's own route matrices.
+  "/v1/workflows/:p/collaborators",
+  "/v1/workflows/:p/collaborators/:p",
 ])
 
 // ---------------------------------------------------------------------------

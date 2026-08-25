@@ -10,6 +10,8 @@ import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
+import { toAccessRow } from "../lib/workflow-route-access.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -361,16 +363,32 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       category, outputTypes, tags, previewMediaUrl, previewMediaType, isListed,
     } = parsed.data
 
-    // Verify user owns the workflow
+    // `own`, for the same reason publishing an app takes `own`: a template is
+    // a snapshot of this work handed to people outside it. Being allowed to
+    // help with a class workflow is not being allowed to publish it, so
+    // neither an editor grant nor workspace visibility reaches this.
     const { data: workflow, error: wfError } = await supabase
+      // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, nodes, edges, settings, thumbnail_url")
+      .select("id, user_id, workspace_id, visibility, nodes, edges, settings, thumbnail_url")
       .eq("id", workflowId)
-      .single()
+      .maybeSingle()
 
     if (wfError || !workflow) {
       return reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
     }
+    // 403 for an insufficient level: this route already answered 403 here, and
+    // changing a status code is not something a scoping change should do.
+    const access = await workflowAccessFromRow(userId, toAccessRow(workflow as unknown as Record<string, unknown>))
+    if (!accessAtLeast(access, "own")) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
+    }
+    // `own` is the LEVEL bar; authorship is a separate one, and both are
+    // needed. A platform admin resolves to `own` on every workflow in the
+    // database (that is decision 1 of the access rule, and it is deliberate),
+    // which would let one publish a stranger's private work under their own
+    // creator id. Publishing is the one act where being able to reach the
+    // work is not the question — having made it is.
     if (workflow.user_id !== userId) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
     }

@@ -64,11 +64,15 @@ const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const TEST_PROJECT_ID = "00000000-0000-4000-8000-000000000010"
 const TEST_WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 const TEST_FOLDER_ID = "00000000-0000-4000-8000-000000000030"
+/** Somebody else entirely — the caller has no standing on their work. */
+const OTHER_USER_ID = "00000000-0000-4000-8000-0000000000ff"
 
 const DB_WORKFLOW_META = {
   id: TEST_WORKFLOW_ID,
   project_id: TEST_PROJECT_ID,
   user_id: TEST_USER_ID,
+  workspace_id: null,
+  visibility: "private",
   folder_id: null,
   name: "My Workflow",
   description: "Test workflow",
@@ -91,6 +95,8 @@ const CAMEL_META = {
   id: TEST_WORKFLOW_ID,
   projectId: TEST_PROJECT_ID,
   userId: TEST_USER_ID,
+  workspaceId: null,
+  visibility: "private",
   folderId: null,
   name: "My Workflow",
   description: "Test workflow",
@@ -156,10 +162,44 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 
 /**
- * The project-addressed routes now read the project BEFORE touching
- * workflows: whether the caller may work inside it is decided from the row,
- * not filtered out by the query, because inside a workspace the owning user
- * is not the caller.
+ * The unfiltered by-id read every converted route now begins with.
+ *
+ * `.eq("id", …).eq("user_id", …)` decided who may reach a workflow inside the
+ * query. The by-id routes ask the access rule instead, which means reading the
+ * row first and judging it after — so a by-id test answers that read before
+ * whatever chain it is actually about.
+ *
+ * Successive results feed successive reads, and the LAST one then repeats —
+ * one request legitimately reads the same row more than once (DELETE asks the
+ * access rule and then asks again whether this caller may delete), and a row
+ * does not become a different row in between. Where the two answers really
+ * must differ, pass both: PATCH's conflict path authorizes on the first read
+ * and reports the other writer's version from the second.
+ */
+function workflowReads(...results: Array<{ data: unknown; error?: unknown }>) {
+  const maybeSingle = vi.fn()
+  for (const r of results.slice(0, -1)) {
+    maybeSingle.mockResolvedValueOnce({ data: r.data, error: r.error ?? null })
+  }
+  const last = results[results.length - 1] ?? { data: null }
+  maybeSingle.mockResolvedValue({ data: last.data, error: last.error ?? null })
+  const eq = vi.fn().mockReturnValue({ maybeSingle })
+  const select = vi.fn().mockReturnValue({ eq })
+  return { select, eq, maybeSingle }
+}
+
+/** `workflowReads` wired straight onto `supabase.from`, for read-only routes. */
+function mockWorkflowRead(...results: Array<{ data: unknown; error?: unknown }>) {
+  const reads = workflowReads(...results)
+  vi.mocked(supabase.from).mockReturnValue({ select: reads.select } as never)
+  return reads
+}
+
+/**
+ * The project-addressed routes read the project BEFORE touching workflows:
+ * whether the caller may work inside it is decided from the row, not filtered
+ * out by the query, because inside a workspace the owning user is not the
+ * caller.
  *
  * `otherTables` is whatever the test wants every non-`projects` table to
  * return, so each test keeps mocking only the chain it cares about.
@@ -384,15 +424,11 @@ describe("GET /v1/workflows/:id", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns 404 when not found (PGRST116)", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "not found" },
-    })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+  it("returns 404 when the row does not exist", async () => {
+    // `.maybeSingle()` reports "no rows" as data null with no error — the old
+    // PGRST116 error shape belonged to `.single()`, which the access read
+    // deliberately does not use: a missing row is an ordinary answer here.
+    mockWorkflowRead({ data: null })
 
     const res = await app.inject({
       method: "GET",
@@ -404,12 +440,24 @@ describe("GET /v1/workflows/:id", () => {
     expect(res.json().error.code).toBe("not_found")
   })
 
-  it("returns 200 with full data (includes nodes/edges)", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+  it("returns 404 — NOT 403 — for a workflow this caller cannot reach", async () => {
+    // The rule the conversion had to preserve: a workflow you have no access
+    // to is indistinguishable from one that does not exist. A 403 here would
+    // confirm to a stranger that the id is real.
+    mockWorkflowRead({ data: { ...DB_WORKFLOW_FULL, user_id: OTHER_USER_ID } })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 200 with full data (includes nodes/edges) and the caller's access level", async () => {
+    mockWorkflowRead({ data: DB_WORKFLOW_FULL })
 
     const res = await app.inject({
       method: "GET",
@@ -419,20 +467,13 @@ describe("GET /v1/workflows/:id", () => {
 
     expect(res.statusCode).toBe(200)
     const data = res.json().data
-    expect(data).toEqual(CAMEL_FULL)
+    expect(data).toEqual({ ...CAMEL_FULL, access: "own" })
     expect(data.nodes).toEqual([{ id: "n1", type: "generate-image" }])
     expect(data.edges).toEqual([{ source: "n1", target: "n2" }])
   })
 
   it("returns 500 on DB error", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "OTHER", message: "DB error" },
-    })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    mockWorkflowRead({ data: null, error: { code: "OTHER", message: "DB error" } })
 
     const res = await app.inject({
       method: "GET",
@@ -524,10 +565,10 @@ describe("PATCH /v1/workflows/:id", () => {
     // so a 0-row result is no longer expressed as a PGRST116 error — it's
     // `data === null` with no error. Mock matches the new chain.
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -543,10 +584,10 @@ describe("PATCH /v1/workflows/:id", () => {
     const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -565,10 +606,10 @@ describe("PATCH /v1/workflows/:id", () => {
     const updated = { ...DB_WORKFLOW_FULL, nodes: newNodes, edges: newEdges }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -589,10 +630,10 @@ describe("PATCH /v1/workflows/:id", () => {
   it("strips transient run-state from incoming nodes (server-side defense)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -625,10 +666,10 @@ describe("PATCH /v1/workflows/:id", () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEqVersion = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect, eq: mockEqVersion })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect, eq: mockEqVersion })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -646,22 +687,17 @@ describe("PATCH /v1/workflows/:id", () => {
     const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
     const mockEqVersion = vi.fn().mockReturnValue({ select: updateSelect })
-    const mockEq2 = vi.fn().mockReturnValue({ select: updateSelect, eq: mockEqVersion })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: updateSelect, eq: mockEqVersion })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
 
-    // fallback current-fetch returns the row's full current record
-    const curMaybeSingle = vi.fn().mockResolvedValue({
-      data: { ...DB_WORKFLOW_FULL, updated_at: "2026-06-12T00:00:00Z", version: 9 },
-      error: null,
-    })
-    const curEq2 = vi.fn().mockReturnValue({ maybeSingle: curMaybeSingle })
-    const curEq1 = vi.fn().mockReturnValue({ eq: curEq2 })
-    const curSelect = vi.fn().mockReturnValue({ eq: curEq1 })
-
-    vi.mocked(supabase.from)
-      .mockReturnValueOnce({ update: mockUpdate } as never)
-      .mockReturnValueOnce({ select: curSelect } as never)
+    // Two reads of the row through the same chain: the access read that
+    // authorizes the write, then the conflict re-read that reports what the
+    // other writer left behind.
+    const reads = workflowReads(
+      { data: DB_WORKFLOW_FULL },
+      { data: { ...DB_WORKFLOW_FULL, updated_at: "2026-06-12T00:00:00Z", version: 9 } },
+    )
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -785,10 +821,10 @@ describe("PATCH /v1/workflows/:id", () => {
     const updated = { ...DB_WORKFLOW_FULL, folder_id: null }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -807,10 +843,10 @@ describe("PATCH /v1/workflows/:id", () => {
     const updated = { ...DB_WORKFLOW_FULL, source_prompt: "New prompt" }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -829,10 +865,10 @@ describe("PATCH /v1/workflows/:id", () => {
       error: { code: "OTHER", message: "DB error" },
     })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -845,32 +881,23 @@ describe("PATCH /v1/workflows/:id", () => {
   })
 
   it("returns 409 when expectedUpdatedAt mismatches the row's current updated_at", async () => {
-    // First call: UPDATE chain — `.eq(id).eq(user_id).eq(updated_at).select().maybeSingle()`
-    // returns 0 rows because optimistic lock failed. Second call: SELECT
-    // fallback to fetch the current `updated_at` so the handler can echo
-    // it in the 409 body.
+    // The UPDATE chain — `.eq(id).eq(updated_at).select().maybeSingle()` —
+    // matches 0 rows because the optimistic lock failed, and the handler then
+    // re-reads the row to report the `updated_at` it actually has.
     const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
-    const updateEq3 = vi.fn().mockReturnValue({ select: updateSelect })
-    const updateEq2 = vi.fn().mockReturnValue({ eq: updateEq3 })
-    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const updateEq2 = vi.fn().mockReturnValue({ select: updateSelect })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2, select: updateSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
 
-    const currentMaybeSingle = vi.fn().mockResolvedValue({
-      data: { ...DB_WORKFLOW_FULL, updated_at: "2026-01-02T00:00:00Z" },
-      error: null,
-    })
-    const currentEq2 = vi.fn().mockReturnValue({ maybeSingle: currentMaybeSingle })
-    const currentEq1 = vi.fn().mockReturnValue({ eq: currentEq2 })
-    const mockSelectTop = vi.fn().mockReturnValue({ eq: currentEq1 })
-
-    // The handler hits `supabase.from("workflows")` twice — first for the
-    // UPDATE, then for the fallback SELECT. The mock returns both shapes
-    // on the same `from()` since chained method calls only pull what each
-    // path needs.
+    // Read once to authorize, once to report the conflict.
+    const reads = workflowReads(
+      { data: DB_WORKFLOW_FULL },
+      { data: { ...DB_WORKFLOW_FULL, updated_at: "2026-01-02T00:00:00Z" } },
+    )
     vi.mocked(supabase.from).mockReturnValue({
       update: mockUpdate,
-      select: mockSelectTop,
+      select: reads.select,
     } as never)
 
     const res = await app.inject({
@@ -892,18 +919,18 @@ describe("PATCH /v1/workflows/:id", () => {
       updatedAt: "2026-01-02T00:00:00Z",
     })
     // Verify the optimistic lock filter was chained.
-    expect(updateEq3).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
+    expect(updateEq2).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
   })
 
   it("returns 200 when expectedUpdatedAt matches (happy path)", async () => {
     const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
     const updateMaybeSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
-    const updateEq3 = vi.fn().mockReturnValue({ select: updateSelect })
-    const updateEq2 = vi.fn().mockReturnValue({ eq: updateEq3 })
-    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const updateEq2 = vi.fn().mockReturnValue({ select: updateSelect })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2, select: updateSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -916,7 +943,7 @@ describe("PATCH /v1/workflows/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(updateEq3).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
+    expect(updateEq2).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
   })
 })
 
@@ -942,7 +969,9 @@ describe("DELETE /v1/workflows/:id", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns 200 on success", async () => {
+  it("returns 200 on success, and hands the RPC the CREATOR's id", async () => {
+    mockWorkflowRead({ data: DB_WORKFLOW_FULL })
+
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
@@ -951,13 +980,31 @@ describe("DELETE /v1/workflows/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+    // The RPC filters its row by `user_id = p_user_id`. Called with the
+    // service role that parameter is a row filter, not an identity claim, and
+    // it has to name the row's creator — which here happens to be the caller.
     expect(deleteWorkflowWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
       workflowId: TEST_WORKFLOW_ID,
       userId: TEST_USER_ID,
     }))
   })
 
-  it("returns 404 when the scoped delete matched nothing (someone else's workflow, or already gone)", async () => {
+  it("returns 404 for a workflow this caller cannot reach — the RPC is never called", async () => {
+    mockWorkflowRead({ data: { ...DB_WORKFLOW_FULL, user_id: OTHER_USER_ID } })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(deleteWorkflowWithPrivateMedia).not.toHaveBeenCalled()
+  })
+
+  it("returns 404 when the delete matched nothing (already gone)", async () => {
+    mockWorkflowRead({ data: DB_WORKFLOW_FULL })
     vi.mocked(deleteWorkflowWithPrivateMedia).mockResolvedValue(false)
 
     const res = await app.inject({
@@ -971,6 +1018,7 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 
   it("returns 500 on DB error", async () => {
+    mockWorkflowRead({ data: DB_WORKFLOW_FULL })
     vi.mocked(deleteWorkflowWithPrivateMedia).mockRejectedValue(new Error("FK constraint"))
 
     const res = await app.inject({
@@ -986,24 +1034,26 @@ describe("DELETE /v1/workflows/:id", () => {
 // ---------------------------------------------------------------------------
 // Cross-tenant denial — behavior contract
 // ---------------------------------------------------------------------------
-// These tests simulate the case where a workflow UUID exists in the DB but
-// is owned by a DIFFERENT user than the caller. The user_id-scoped query
-// returns PGRST116 (no match), and the handler must reject the request.
-// We additionally assert `.eq("user_id", CALLER)` is invoked — without this,
-// a refactor that drops the scope but keeps the 404 path (e.g., by handling
-// PGRST116 generically) would look green while silently re-opening IDOR.
+// A workflow UUID that exists in the database but belongs to a DIFFERENT
+// user. Every by-id route must refuse it, and refuse it as 404 — a 403 would
+// confirm to a stranger that the id is real.
+//
+// What enforces that MOVED in P10 and these tests moved with it. The refusal
+// used to live inside the query (`.eq("user_id", CALLER)` returned no rows) and
+// now lives in the access rule, which judges the row after reading it. So the
+// row here is REAL and owned by someone else — the strictly harder case, and
+// the one the old shape could not express: with the filter gone, a route that
+// forgot to ask the rule would hand the caller somebody else's workflow, and
+// these tests are what fails when it does. Each also asserts the effect
+// downstream of the refusal (no update called, no delete called), so a handler
+// that answers 404 and mutates anyway cannot pass.
 // ---------------------------------------------------------------------------
 
 describe("cross-tenant denial", () => {
-  it("GET /v1/workflows/:id — foreign-owner row is 404 and query is user-scoped", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "no rows" },
-    })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+  const FOREIGN_WORKFLOW = { ...DB_WORKFLOW_FULL, user_id: OTHER_USER_ID }
+
+  it("GET /v1/workflows/:id — a foreign row is 404, not 403 and not the row", async () => {
+    const reads = mockWorkflowRead({ data: FOREIGN_WORKFLOW })
 
     const res = await app.inject({
       method: "GET",
@@ -1012,20 +1062,15 @@ describe("cross-tenant denial", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
-    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(res.json().error.code).toBe("not_found")
+    expect(res.json().data).toBeUndefined()
+    expect(reads.eq).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
   })
 
-  it("PATCH /v1/workflows/:id — foreign-owner row is 404 and update is user-scoped", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: null,
-    })
-    const mockSelectAfterEq = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelectAfterEq })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+  it("PATCH /v1/workflows/:id — a foreign row is 404 and nothing is written", async () => {
+    const mockUpdate = vi.fn()
+    const reads = workflowReads({ data: FOREIGN_WORKFLOW })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",
@@ -1035,22 +1080,48 @@ describe("cross-tenant denial", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
-    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(mockUpdate).not.toHaveBeenCalled()
   })
 
-  it("DELETE /v1/workflows/:id — delete is user-scoped (foreign rows untouched)", async () => {
+  it("DELETE /v1/workflows/:id — a foreign row is 404 and nothing is deleted", async () => {
+    mockWorkflowRead({ data: FOREIGN_WORKFLOW })
+
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
       headers: { "x-user-id": TEST_USER_ID },
     })
 
-    expect(res.statusCode).toBe(200)
-    expect(deleteWorkflowWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
-      workflowId: TEST_WORKFLOW_ID,
-      userId: TEST_USER_ID,
-    }))
+    expect(res.statusCode).toBe(404)
+    expect(deleteWorkflowWithPrivateMedia).not.toHaveBeenCalled()
+  })
+
+  it("GET /v1/workflows/:id/export — a foreign row is 404", async () => {
+    mockWorkflowRead({ data: FOREIGN_WORKFLOW })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("POST /v1/workflows/:parentId/sub-workflows — a foreign parent is 404", async () => {
+    const mockInsert = vi.fn()
+    const reads = workflowReads({ data: FOREIGN_WORKFLOW })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "child" },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 })
 
@@ -1085,12 +1156,7 @@ describe("GET /v1/workflows/:id/export", () => {
   })
 
   it("returns 404 when workflow not found", async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
-    }
-    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+    mockWorkflowRead({ data: null })
 
     const res = await app.inject({
       method: "GET",
@@ -1101,12 +1167,7 @@ describe("GET /v1/workflows/:id/export", () => {
   })
 
   it("returns template export (no assets) by default", async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null }),
-    }
-    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+    mockWorkflowRead({ data: DB_WORKFLOW_FULL })
 
     const res = await app.inject({
       method: "GET",
@@ -1131,12 +1192,7 @@ describe("GET /v1/workflows/:id/export", () => {
         { id: "n-img", type: "generate-image", data: { imageUrl: "https://cdn.nodaro.ai/images/public.png" } },
       ],
     }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: localMedia, error: null }),
-    }
-    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+    mockWorkflowRead({ data: localMedia })
 
     const res = await app.inject({
       method: "GET",
@@ -1159,11 +1215,7 @@ describe("GET /v1/workflows/:id/export", () => {
       ...DB_WORKFLOW_FULL,
       nodes: [{ id: "n-char", type: "character", data: { characterDbId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" } }],
     }
-    const workflowChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: workflowWithChar, error: null }),
-    }
+    const workflowChain = { select: workflowReads({ data: workflowWithChar }).select }
     // `.eq(...)` is now the terminal call (after `.in()`) → the chain resolves like a thenable.
     // Use a real thenable (invokes `resolve`), not `mockResolvedValue` (which
     // only returns a promise and ignores the callbacks `await`/`Promise.all` pass).
@@ -1449,10 +1501,10 @@ describe("OAuth scope enforcement", () => {
     const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
     const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
-    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    const reads = workflowReads({ data: DB_WORKFLOW_FULL })
+    vi.mocked(supabase.from).mockReturnValue({ select: reads.select, update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "PATCH",

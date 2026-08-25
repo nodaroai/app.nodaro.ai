@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight, Search, X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
 import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
-import { KIND_UI, MentionThumb, SECTION_TABS, VariantThumb, safeThumbUrl, sectionOf } from "./copilot-mention-picker"
+import { KIND_UI, MentionThumb, PreviewableThumb, SECTION_TABS, VariantThumb, safeThumbUrl, sectionOf } from "./copilot-mention-picker"
 import { MentionPreview, type MentionPreviewContent } from "./copilot-mention-preview"
 
 interface CopilotMentionModalProps {
@@ -142,6 +142,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                 label={S.pickerVariantDefault}
                 sub={KIND_UI[drill.kind].chip}
                 onPreview={previewOf(safeThumbUrl(drill.imageUrl), drill.name, KIND_UI[drill.kind].chip, () => onPick(drill))}
+                round={KIND_UI[drill.kind].round}
               >
                 <MentionThumb mention={drill} size={64} />
               </ModalTile>
@@ -152,6 +153,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                   label={variant.name}
                   sub={variant.bucketNoun}
                   onPreview={previewOf(safeThumbUrl(variant.imageUrl), `${drill.name} — ${variant.name}`, variant.bucketNoun, () => onPick(drill, variant))}
+                  round={false}
                 >
                   <VariantThumb variant={variant} size={64} />
                 </ModalTile>
@@ -173,6 +175,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                       : undefined
                   }
                   onPreview={previewOf(safeThumbUrl(item.imageUrl), item.name, KIND_UI[item.kind].chip, () => onPick(item))}
+                  round={KIND_UI[item.kind].round}
                 >
                   <MentionThumb mention={item} size={64} />
                 </ModalTile>
@@ -205,6 +208,7 @@ function ModalTile({
   onClick,
   cornerAction,
   onPreview,
+  round,
 }: {
   children: React.ReactNode
   label: string
@@ -213,31 +217,24 @@ function ModalTile({
   cornerAction?: { label: string; onClick: () => void }
   /** Clicking the IMAGE previews it large; the rest of the tile still inserts. */
   onPreview?: () => void
+  /** The thumb's shape, so the magnifier badge matches it. */
+  round: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={`${label} · ${sub}`}
-      className="relative flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px] border border-border bg-[var(--copilot-surface)]/40 hover:bg-[var(--copilot-surface)] text-left transition-colors"
+      // `group`: hovering the tile reveals the thumb's magnifier.
+      className="group relative flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px] border border-border bg-[var(--copilot-surface)]/40 hover:bg-[var(--copilot-surface)] text-left transition-colors"
     >
-      {onPreview ? (
-        <span
-          role="button"
-          tabIndex={-1}
-          aria-label={S.pickerPreviewOf(label)}
-          title={S.pickerPreviewOf(label)}
-          onClick={(e) => {
-            e.stopPropagation()
-            onPreview()
-          }}
-          className="flex-none cursor-zoom-in"
-        >
-          {children}
-        </span>
-      ) : (
-        children
-      )}
+      {/* The SAME wrapper the inline list uses, so the magnifier badge, the
+          focus-preserving mousedown and the zoom cursor are one implementation.
+          A tile that grew its own copy is how one surface ends up with an
+          affordance the other quietly lost. */}
+      <PreviewableThumb label={label} round={round} onPreview={onPreview}>
+        {children}
+      </PreviewableThumb>
       <span className="min-w-0 flex-1">
         <span className="block text-[12.5px] text-foreground truncate">{label}</span>
         <span className="block text-[10.5px] text-[var(--copilot-dim)] capitalize">{sub}</span>

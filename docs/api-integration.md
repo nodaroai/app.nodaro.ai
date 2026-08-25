@@ -662,7 +662,7 @@ calling user.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/objects` | List objects. Query: `projectId`, `archived=true`. |
+| `GET` | `/v1/objects` | List objects. Query: `projectId`, `archived=true`; optional `limit` (max 500) + `cursor` opt into the same cursor pagination as `/v1/characters` and add `nextCursor` to the response — without `limit` the full legacy listing returns, unchanged. `/v1/creatures`, `/v1/locations` and `/v1/faces` accept the identical parameters. |
 | `GET` | `/v1/objects/:id` | Get full object + in-flight asset jobs. Archived rows return uniform 404 `not_found`. |
 | `POST` | `/v1/objects` | Upsert (create if no `id`, update otherwise). Optimistic-concurrency via `expectedUpdatedAt`. |
 | `POST` | `/v1/objects/:id/restore` | Un-archive a soft-deleted object. |

@@ -99,7 +99,7 @@ afterEach(async () => {
 describe("POST /v1/workflows — settings-marker stamping", () => {
   it("stamps app_slug from a vcp settings marker when no appSlug is sent", async () => {
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "c", app_slug: "voice-changer-pro", settings: {}, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "c", app_slug: "voice-changer-pro", settings: {}, nodes: [], edges: [] },
       error: null,
     })
     const projectsChain = chain({
@@ -127,7 +127,7 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
 
   it("leaves app_slug NULL for an unregistered settings marker", async () => {
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "n", app_slug: null, settings: {}, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "n", app_slug: null, settings: {}, nodes: [], edges: [] },
       error: null,
     })
     const projectsChain = chain({
@@ -157,7 +157,7 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
     // appSlug present -> clientAppExists (maybeSingle -> object); inference is
     // short-circuited, so client_apps returns the single-row lookup shape.
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "s", app_slug: "studio", settings: {}, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "s", app_slug: "studio", settings: {}, nodes: [], edges: [] },
       error: null,
     })
     const projectsChain = chain({
@@ -185,7 +185,7 @@ describe("POST /v1/workflows — settings-marker stamping", () => {
 
   it("inherits the project's slug on a bare project-scoped create (no settings)", async () => {
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "conv", app_slug: "voice-changer-pro", settings: {}, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "conv", app_slug: "voice-changer-pro", settings: {}, nodes: [], edges: [] },
       error: null,
     })
     // Project already classified (vcp) — a bare conversion created inside it is vcp.
@@ -220,7 +220,7 @@ describe("PATCH /v1/workflows/:id — late settings-marker stamping", () => {
     // Main update returns the row with app_slug still NULL; the guarded stamp
     // then flips it. One chain records both `update` calls.
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "c", app_slug: null, settings: { vcp: { version: 1 } }, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "c", app_slug: null, settings: { vcp: { version: 1 } }, nodes: [], edges: [] },
       error: null,
     })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {
@@ -247,7 +247,7 @@ describe("PATCH /v1/workflows/:id — late settings-marker stamping", () => {
 
   it("does not stamp when the settings carry no registered marker", async () => {
     const workflowsChain = chain({
-      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, name: "c", app_slug: null, settings: { foo: 1 }, nodes: [], edges: [] },
+      data: { id: WORKFLOW_ID, project_id: PROJECT_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", name: "c", app_slug: null, settings: { foo: 1 }, nodes: [], edges: [] },
       error: null,
     })
     vi.mocked(supabase.from).mockImplementation(((table: string) => {

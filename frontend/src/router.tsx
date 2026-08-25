@@ -33,6 +33,7 @@ const LocationGalleryPage = lazy(() => import("@/components/library/location-gal
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const UsagePage = lazy(() => import("@/app/(dashboard)/usage/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
+const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const CheckoutCompletePage = lazy(() => import("@/app/checkout-complete/page"))
@@ -93,6 +94,7 @@ const AdminApps = lazy(() => import("@/ee/app/(admin)/admin/apps/page"))
 const AdminCreditAudit = lazy(() => import("@/ee/app/(admin)/admin/credit-audit/page"))
 const AdminCreditAnomalies = lazy(() => import("@/ee/app/(admin)/admin/credit-anomalies/page"))
 const AdminPickerGaps = lazy(() => import("@/ee/app/(admin)/admin/picker-gaps/page"))
+const AdminCopilotGaps = lazy(() => import("@/ee/app/(admin)/admin/copilot-gaps/page"))
 const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/page"))
 const AdminSubscriptions = lazy(() => import("@/ee/app/(admin)/admin/subscriptions/page"))
 const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page"))
@@ -139,6 +141,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "credit-audit", element: <SuspenseWrapper><AdminCreditAudit /></SuspenseWrapper> },
       { path: "credit-anomalies", element: <SuspenseWrapper><AdminCreditAnomalies /></SuspenseWrapper> },
       { path: "picker-gaps", element: <SuspenseWrapper><AdminPickerGaps /></SuspenseWrapper> },
+      { path: "copilot-gaps", element: <SuspenseWrapper><AdminCopilotGaps /></SuspenseWrapper> },
       { path: "kie-credits", element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper> },
       { path: "subscriptions", element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper> },
       { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
@@ -330,6 +333,10 @@ export const router = createBrowserRouter([
       {
         path: "/archived-runs",
         element: <SuspenseWrapper><ArchivedRunsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/shared",
+        element: <SuspenseWrapper><SharedWithMePage /></SuspenseWrapper>,
       },
       {
         path: "/my-files",

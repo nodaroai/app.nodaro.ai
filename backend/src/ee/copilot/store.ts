@@ -89,6 +89,8 @@ export interface CopilotMessageRow {
 // the whole copilot down. A missing column is simply absent from the row.
 // Nothing on this table is secret, so there is nothing to narrow away from.
 const THREAD_COLUMNS = "*"
+/** PostgREST's code for "that column is not on this table (yet)". */
+const UNDEFINED_COLUMN = "42703"
 const TURN_COLUMNS =
   "id, thread_id, user_id, status, heartbeat_at, model_id, job_id, base_version, final_version, iterations, tool_calls, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, credits_charged, cancel_requested_at, error, started_at, finished_at"
 
@@ -126,12 +128,33 @@ export async function countActiveThreads(userId: string): Promise<number> {
   return count ?? 0
 }
 
-export async function createThread(userId: string, workflowId: string): Promise<CopilotThread> {
-  const { data, error } = await supabase
-    .from("copilot_threads")
-    .insert({ user_id: userId, workflow_id: workflowId })
-    .select(THREAD_COLUMNS)
-    .single()
+/**
+ * `createdWorkflow` records that the handshake MADE this workflow, as opposed
+ * to opening the copilot on one the user already had. Only the first is the
+ * sweep's to delete when the hop never produced a turn (#904).
+ *
+ * Tolerant of the column not being there yet: reads on this table use a star
+ * select for that reason, but an INSERT names its columns, and staging shares
+ * the production database — so between the dev merge and the promotion, a
+ * column-naming insert would 42703 and take copilot thread creation down
+ * entirely. One retry without the flag, and the worst case is a workflow the
+ * sweep declines to touch.
+ */
+export async function createThread(
+  userId: string,
+  workflowId: string,
+  opts: { createdWorkflow?: boolean } = {},
+): Promise<CopilotThread> {
+  const base = { user_id: userId, workflow_id: workflowId }
+  const insert = async (row: Record<string, unknown>) =>
+    supabase.from("copilot_threads").insert(row).select(THREAD_COLUMNS).single()
+
+  let { data, error } = opts.createdWorkflow
+    ? await insert({ ...base, created_workflow: true })
+    : await insert(base)
+  if (error && (error as { code?: string }).code === UNDEFINED_COLUMN) {
+    ;({ data, error } = await insert(base))
+  }
   if (error) throw new Error(`createThread: ${error.message}`)
   return data as CopilotThread
 }
@@ -202,13 +225,25 @@ export async function findStaleTurns(threadId: string): Promise<CopilotTurn[]> {
   })
 }
 
+/**
+ * Claim the thread's one live turn.
+ *
+ * NULL means the claim was LOST — migration 348's partial unique index
+ * (`thread_id` WHERE status = 'running') refused a second live turn, because
+ * a concurrent request won the race between the caller's `findLiveTurn` check
+ * and this insert. The caller must undo whatever it spent getting here and
+ * answer with the same 409 the pre-check gives (#903).
+ *
+ * A throw stays a throw: only 23505 is the race, and swallowing anything else
+ * would turn a broken insert into a silent "someone else is running".
+ */
 export async function createTurn(input: {
   threadId: string
   userId: string
   modelId: string
   jobId: string
   baseVersion: number | null
-}): Promise<CopilotTurn> {
+}): Promise<CopilotTurn | null> {
   const { data, error } = await supabase
     .from("copilot_turns")
     .insert({
@@ -222,7 +257,10 @@ export async function createTurn(input: {
     })
     .select(TURN_COLUMNS)
     .single()
-  if (error) throw new Error(`createTurn: ${error.message}`)
+  if (error) {
+    if ((error as { code?: string }).code === "23505") return null
+    throw new Error(`createTurn: ${error.message}`)
+  }
   return data as CopilotTurn
 }
 

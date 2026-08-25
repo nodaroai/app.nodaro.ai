@@ -63,6 +63,8 @@ const DB_WORKFLOW_FULL = {
   id: TEST_WORKFLOW_ID,
   project_id: TEST_PROJECT_ID,
   user_id: TEST_USER_ID,
+  workspace_id: null,
+  visibility: "private",
   folder_id: null,
   name: "Untitled Workflow",
   description: null,
@@ -344,6 +346,7 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
               id: TEST_WORKFLOW_ID,
               user_id: TEST_USER_ID,
               workspace_id: null,
+              visibility: "private",
               project_id: TEST_PROJECT_ID,
               assignment_id: null,
             }
@@ -384,8 +387,7 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
     })
     // Optimistic-locking landed: PATCH now uses `.maybeSingle()`.
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateSingle })
-    const updateEq2 = vi.fn().mockReturnValue({ select: updateSelect })
-    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const updateEq1 = vi.fn().mockReturnValue({ select: updateSelect })
     const workflowsUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
 
     const { projEq } = mockMoveTables({ onUpdate: workflowsUpdate })
@@ -440,12 +442,24 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
     expect(res.json().error.code).toBe("not_permitted")
   })
 
-  it("refuses to move someone else's workflow", async () => {
+  it("refuses to move someone else's workflow — 404, because it is not theirs to see", async () => {
+    // 403 until P10. The PATCH route now settles ACCESS before it looks at
+    // anything else, so a workflow this caller has no standing on is refused
+    // the same way every other by-id route refuses it: as one that does not
+    // exist. The move authorization is still there and still runs — it is
+    // simply no longer the first thing a stranger can reach, which is what
+    // made 403 an existence oracle for anyone holding two ids.
+    //
+    // `POST /v1/workflows/:id/move` still answers 403 for this case; it was
+    // not part of P10's conversion list and its status code is not something
+    // a scoping change gets to alter silently. Unifying the two is a
+    // deliberate follow-up.
     mockMoveTables({
       workflow: {
         id: TEST_WORKFLOW_ID,
         user_id: "00000000-0000-4000-8000-0000000000ff",
         workspace_id: null,
+        visibility: "private",
         project_id: TEST_PROJECT_ID,
         assignment_id: null,
       },
@@ -458,7 +472,7 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
       payload: { projectId: OTHER_PROJECT_ID },
     })
 
-    expect(res.statusCode).toBe(403)
+    expect(res.statusCode).toBe(404)
   })
 
   it("refuses work that belongs to an assignment", async () => {
@@ -467,6 +481,7 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
         id: TEST_WORKFLOW_ID,
         user_id: TEST_USER_ID,
         workspace_id: null,
+        visibility: "private",
         project_id: TEST_PROJECT_ID,
         assignment_id: "00000000-0000-4000-8000-0000000000aa",
       },

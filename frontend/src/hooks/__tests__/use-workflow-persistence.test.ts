@@ -32,6 +32,12 @@ vi.mock("@/lib/api", () => ({
   getBatchJobStatus: (...args: unknown[]) => mockGetBatchJobStatus(...args),
   listWorkflowExecutions: (...args: unknown[]) => mockListWorkflowExecutions(...args),
   getCharacter: (...args: unknown[]) => mockGetCharacter(...args),
+  // The load path asks the server what this caller may do, so viewer mode is
+  // decided before somebody types into a canvas they cannot save. It is
+  // fire-and-forget by design: rejecting here must leave the canvas exactly as
+  // these tests already expect to find it, which is what this stub asserts by
+  // being the failing case.
+  getWorkflowAccess: () => Promise.reject(new Error("not mocked in this file")),
 }))
 
 vi.mock("@/lib/supabase", () => ({

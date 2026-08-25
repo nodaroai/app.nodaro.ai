@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js"
+import { hasOrganizations } from "./config.js"
 import { getPluginServices } from "./private-plugins/load.js"
 import type { PluginOrgsService, WorkflowAccessRow } from "./private-plugins/types.js"
 
@@ -43,15 +44,37 @@ type AccessCapableOrgs = {
   workflowAccessFromRow: NonNullable<PluginOrgsService["workflowAccessFromRow"]>
   canDeleteWorkflow: NonNullable<PluginOrgsService["canDeleteWorkflow"]>
   canRunWorkflow: NonNullable<PluginOrgsService["canRunWorkflow"]>
+  canChangeWorkflowVisibility: NonNullable<PluginOrgsService["canChangeWorkflowVisibility"]>
+  canShareWorkflow: NonNullable<PluginOrgsService["canShareWorkflow"]>
 }
 
+/**
+ * ...and only where organizations are actually SWITCHED ON.
+ *
+ * `hasOrganizations()` and not merely "is a capable plugin loaded", because
+ * the two are not the same thing and the difference is visible in production.
+ * The plugin gates its ROUTES on the feature flag and builds its SERVICE
+ * object unconditionally, so a host running with the flag off still has every
+ * member above available to call. Delegating there would change what this
+ * product does today: the organization rule answers `own` to a platform admin
+ * for every workflow in the database, where these routes answer 404 — and it
+ * would pay three reads (the admin check, the memberships, the grant) on the
+ * hottest path in the product to reach tables with no rows in them.
+ *
+ * Gated HERE rather than in each route, because a per-route gate is a thing to
+ * remember. Same shape as `orgs-context.ts` and `routes/me.ts`, which is where
+ * this rule already lives for the rest of the axis.
+ */
 function accessCapableOrgs(): AccessCapableOrgs | null {
+  if (!hasOrganizations()) return null
   const orgs = getPluginServices().orgs
   if (
     !orgs?.workflowAccess ||
     !orgs.workflowAccessFromRow ||
     !orgs.canDeleteWorkflow ||
-    !orgs.canRunWorkflow
+    !orgs.canRunWorkflow ||
+    !orgs.canChangeWorkflowVisibility ||
+    !orgs.canShareWorkflow
   ) {
     return null
   }
@@ -105,11 +128,24 @@ export async function workflowAccess(userId: string, workflowId: string): Promis
  * a hot path — asking by id there would cost a second round trip on every
  * read. The plugin loads only what the row cannot carry: the workspace facts,
  * the caller's memberships, and the caller's grant.
+ *
+ * ONE cell is answered here rather than delegated, and it is the only place in
+ * this file that departs from "the plugin decides". A personal workflow read
+ * by its own creator is `own` under BOTH implementations, unconditionally: the
+ * organization rule reaches its creator branch with nothing before it that can
+ * fire — a platform admin would already have answered `own`, the fail-closed
+ * precondition needs a workspace, and so do suspension and archiving. So the
+ * early-out cannot disagree with the plugin; it can only skip the three reads
+ * that were always going to conclude the same thing. That case is every
+ * install today and the overwhelming majority of reads afterwards, which is
+ * why it is worth the one exception. Pinned by test — remove the
+ * `workspace_id === null` half and the equivalence proof goes red.
  */
 export async function workflowAccessFromRow(
   userId: string,
   row: WorkflowAccessRow,
 ): Promise<AccessLevel> {
+  if (row.workspace_id === null && row.user_id === userId) return "own"
   const orgs = accessCapableOrgs()
   if (!orgs) return creatorOnlyFromRow(userId, row)
   return orgs.workflowAccessFromRow(userId, row)
@@ -142,4 +178,58 @@ export async function canRunWorkflow(userId: string, workflowId: string): Promis
   const orgs = accessCapableOrgs()
   if (!orgs) return (await creatorOnly(userId, workflowId)) === "own"
   return orgs.canRunWorkflow(userId, workflowId)
+}
+
+/**
+ * May this user change WHO ELSE the workflow is visible to?
+ *
+ * A fourth question, and not `accessAtLeast(access, "edit")`. An editor who
+ * could flip a private workflow to `workspace` would be publishing somebody
+ * else's work to the whole class — changing the canvas and changing the
+ * audience are different powers. The rule is creator, workspace admin, or
+ * platform admin, which is what the row policy's twin
+ * (`check_workflows_update_allowed`, migration 338) already enforces for the
+ * browser: it pins `visibility` — alongside `project_id` and the public-share
+ * levers — to `workflow_access() = 'own' OR workspace_role() = 'admin'`.
+ *
+ * It has its OWN service member rather than being assembled here, because the
+ * workspace-admin half is not something core can compute: an organization
+ * owner or admin is an IMPLICIT admin of every workspace under it and has no
+ * `workspace_members` row to read. Deriving that in core would be a third
+ * implementation of a rule that already has two.
+ *
+ * Fallback — no plugin, no member, or the flag off — is the creator alone.
+ * Strictly narrower than the row policy, so nothing widens while the plugin
+ * half is still on its way.
+ */
+export async function canChangeWorkflowVisibility(
+  userId: string,
+  workflowId: string,
+): Promise<boolean> {
+  const orgs = accessCapableOrgs()
+  if (!orgs) return (await creatorOnly(userId, workflowId)) === "own"
+  return orgs.canChangeWorkflowVisibility(userId, workflowId)
+}
+
+/**
+ * May this user hand access to somebody ELSE?
+ *
+ * A fifth question, and deliberately WIDER than changing visibility: a
+ * workspace can be configured to let ordinary editors invite further
+ * collaborators (`collaborators_can_invite`, which a team preset turns on and
+ * a school preset leaves off), while nobody but the creator or an admin gets
+ * to publish the work to the whole class.
+ *
+ * Core asks rather than deriving it for the same reason as the rest: the
+ * answer turns on a workspace's inherited settings and on implicit
+ * memberships, and a second reading of either in core would be the third
+ * implementation the seam exists to prevent. The UI uses it to decide whether
+ * to show the invite controls at all — showing a control the server refuses
+ * teaches people the product is broken, and hiding one it would accept teaches
+ * them a rule that is not the real one.
+ */
+export async function canShareWorkflow(userId: string, workflowId: string): Promise<boolean> {
+  const orgs = accessCapableOrgs()
+  if (!orgs) return (await creatorOnly(userId, workflowId)) === "own"
+  return orgs.canShareWorkflow(userId, workflowId)
 }

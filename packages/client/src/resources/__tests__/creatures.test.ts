@@ -628,4 +628,32 @@ describe("creatures resource", () => {
       c.creatures.update("missing", { name: "X" }),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
+  // The pagination legs, mirroring the characters resource: without them the
+  // params compile (the interface has the fields) while the wire never sees
+  // them — a paginating caller silently reads page 1 forever.
+  it("list serializes limit and cursor into the query string", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ creatures: [], nextCursor: null }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.creatures.list({ limit: 5, cursor: "eyJhIjoxfQ==" })
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain("limit=5")
+    expect(url).toContain("cursor=eyJhIjoxfQ%3D%3D")
+  })
+
+  it("list omits limit and cursor when not supplied — the legacy request is unchanged", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ creatures: [] }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.creatures.list()
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).not.toContain("limit")
+    expect(url).not.toContain("cursor")
+  })
 })

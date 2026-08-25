@@ -66,7 +66,7 @@ function renderDock() {
   )
 }
 
-const input = () => screen.getByRole("combobox") as HTMLInputElement
+const input = () => screen.getByRole("combobox") as HTMLTextAreaElement
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -287,5 +287,60 @@ describe("home dock", () => {
     fireEvent.click(screen.getByRole("button", { name: /Build it/ }))
 
     await waitFor(() => expect(createCopilotThread).toHaveBeenCalledWith({ prompt: "hello" }))
+  })
+})
+
+describe("Enter is send, Shift+Enter is a new line (#904)", () => {
+  // This dock was a single-line <input> inside a <form>, so Enter was the
+  // browser's implicit submission and there was no newline to insert at all:
+  // reaching for a second line before pasting a link jumped the user into the
+  // editor with half a prompt, and a multi-line paste arrived flattened. The
+  // editor panel's composer already had this contract; two composers for one
+  // model must not disagree about what Enter does.
+  it("is a textarea, so a second line can exist", () => {
+    renderDock()
+    expect(input().tagName).toBe("TEXTAREA")
+  })
+
+  it("Shift+Enter does not send", async () => {
+    renderDock()
+    fireEvent.change(input(), { target: { value: "a reel about" } })
+    fireEvent.keyDown(input(), { key: "Enter", shiftKey: true })
+    await Promise.resolve()
+    expect(createCopilotThread).not.toHaveBeenCalled()
+  })
+
+  it("Enter still sends what is typed", async () => {
+    renderDock()
+    fireEvent.change(input(), { target: { value: "a reel about a kettle" } })
+    fireEvent.keyDown(input(), { key: "Enter" })
+    await waitFor(() => expect(createCopilotThread).toHaveBeenCalled())
+    expect(createCopilotThread.mock.calls.at(-1)![0].prompt).toBe("a reel about a kettle")
+  })
+
+  it("a newline in the middle survives to the hop", async () => {
+    // What the user was reaching for in the first place: a line, then a link.
+    renderDock()
+    fireEvent.change(input(), { target: { value: "make me this:\nhttps://example.com/x" } })
+    fireEvent.click(screen.getByRole("button", { name: /Build it/i }))
+    await waitFor(() => expect(createCopilotThread).toHaveBeenCalled())
+    expect(createCopilotThread.mock.calls.at(-1)![0].prompt).toContain("\nhttps://example.com/x")
+  })
+})
+
+describe("Enter belongs to the picker while the picker is open", () => {
+  it("picks the highlighted row instead of sending the message", async () => {
+    // The home box only grew an Enter handler with the textarea, so this is a
+    // NEW way for the two to collide: the picker consumes arrow keys and Enter
+    // on the window in capture phase precisely so the composer's
+    // Enter-to-send never also sees them.
+    renderDock()
+    fireEvent.change(input(), { target: { value: "a shot of " } })
+    fireEvent.click(screen.getByLabelText("Mention something of yours"))
+    await screen.findByRole("option", { name: /Maya/ })
+
+    fireEvent.keyDown(input(), { key: "Enter" })
+    await waitFor(() => expect(input().value).toContain("@Maya"))
+    expect(createCopilotThread).not.toHaveBeenCalled()
   })
 })

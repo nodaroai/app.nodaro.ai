@@ -121,6 +121,23 @@ export async function executeSubWorkflow(
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
   }
 
+  // Scoping the fetch to the workflow's AUTHOR (`ownerId`) is the guard, and it
+  // is the one this path has always had: a sub-workflow reference resolves only
+  // against the author's own workflows, so a run cannot reach into a stranger's.
+  //
+  // A NARROWER gap remains once workflows can be edited by non-authors: an org
+  // collaborator with an editor grant could inject a reference to ANOTHER of
+  // the author's workflows and read its output through the parent. Closing that
+  // correctly means telling an author-authored reference from an injected one,
+  // which is a write-time question (which references may an editor add), not a
+  // runtime one — a blanket runtime "can the RUNNER see it" check refuses the
+  // author-vouched flows too, because a published-app run and a presentation
+  // run BOTH execute with `ctx.userId` = the runner and `ctx.workflowOwnerId` =
+  // the author, so `userId !== ownerId` is exactly those legitimate cases. The
+  // gap is orgs-gated (needs an editor grant) and therefore dark today; it is
+  // tracked as a flag-flip prerequisite in the orgs deferred-items note rather
+  // than closed here by breaking live app and presentation runs.
+
   // Migrate legacy node types before processing, via the shared helper (single
   // source of truth). Re-threads parentId so group children flow into the
   // sub-workflow execution graph — see prepareSubWorkflowNodes.

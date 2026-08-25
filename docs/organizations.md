@@ -193,6 +193,65 @@ You cannot grant to the workflow's creator (they own it) or to yourself
 (you already have access, and a grant would outlive the role that allowed
 you to write it). Both answer `400`.
 
+A grant takes effect the moment it is written — there is no acceptance step.
+The recipient finds the workflow under **Shared with me** (below), and it
+also turns up in their search, the same as anything else they can open.
+
+### Work shared with me
+
+| Method | Path | Who | Body / query |
+|--------|------|-----|--------------|
+| `GET` | `/v1/workflows/shared-with-me` | anyone signed in | Workflows the caller holds a grant on, each with the `grantedRole` that reaches it. Newest first, up to 200. |
+
+Only work that is **not** in a workspace you belong to. Anything shared with
+the whole workspace already appears in that workspace's own lists, and
+listing it twice would make "shared with me" the less true of the two labels.
+
+### Reaching one workflow
+
+Every by-id workflow route asks one question — what may this person do with
+this workflow — and enforces the answer:
+
+| Route | Needs |
+|-------|-------|
+| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. |
+| `GET /v1/workflows/:id/access` | `view`. Just the answer — `{ access, workspaceId, visibility, canChangeVisibility }` and never the graph, for a client that already has the workflow and only needs to know what it may do with it. |
+| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. |
+| `GET /v1/workflows/:id/interface` | `view` |
+| `PATCH /v1/workflows/:id` | `edit` |
+| `POST /v1/workflows/:parentId/sub-workflows` | `edit` on the parent |
+| `POST /v1/workflow-triggers` | the same bar as running — a trigger IS a run, just an unattended one. Every fire re-checks that its owner may still run the workflow, and a trigger whose owner has lost access deactivates itself. |
+| `POST /v1/workflows/:id/run` | `edit` **and** active membership when the workflow belongs to a workspace |
+| `POST /v1/apps/publish`, `POST /v1/templates/publish` | `own` **and** authorship. Publishing is a disclosure decision, not an edit — and `own` alone does not mean "the creator", so both are required. |
+| `PATCH /v1/workflows/:id { settings }` | `edit`, except when the write would change `settings.studio.shared` — the opt-in that makes a workflow readable by `GET /v1/public/workflows/:id` with no auth. That is an audience decision and takes the same authority as `visibility`. |
+| `DELETE /v1/workflows/:id` | creator, workspace admin, or platform admin — **never a collaborator**, whatever their grant says |
+
+**What a refusal looks like.** No access at all answers **`404`** — a
+workflow you cannot reach is indistinguishable from one that does not exist,
+and any other answer would confirm to a stranger that an id is real. Only
+when you can already see it and need more does the answer become **`403`**.
+
+**Changing `visibility`** (`PATCH /v1/workflows/:id { visibility }`) is the
+creator's or a workspace admin's, not an editor's — flipping a private
+workflow to `workspace` publishes someone else's work to the class. On a
+workflow that is not in a workspace there is nothing to be visible to, and
+the request answers `400 not_workspace_scoped`.
+
+**Deleting somebody else's work is recorded.** The row policies admit only
+the creator; a workspace admin can delete a member's workflow through the
+API and nowhere else, and the audit entry
+(`workflow.deleted_by_admin`) is written *before* the deletion — if it
+cannot be written, the deletion does not happen (`503 audit_unavailable`).
+Deleting your own work is unchanged and is not audited. A workflow that is
+in no workspace has no organization to record an entry under, so nobody but
+its creator can delete it at all.
+
+**`GET /v1/workflows/:id/access` answers three permissions separately** —
+`canChangeVisibility`, `canShare`, `canRun` — because they are three
+different rules. A workspace can let ordinary editors invite collaborators
+while reserving the class-wide visibility switch for admins, and `canRun`
+can be false while the caller may still edit. Never infer one from another.
+
 ### Audit
 
 | Method | Path | Who | Body / query |

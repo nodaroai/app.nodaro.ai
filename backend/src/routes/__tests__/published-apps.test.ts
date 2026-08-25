@@ -31,6 +31,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  hasOrganizations: () => false,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -61,6 +62,8 @@ const TEST_APP_ID = "00000000-0000-4000-8000-000000000040"
 const DB_WORKFLOW = {
   id: TEST_WORKFLOW_ID,
   user_id: TEST_USER_ID,
+  workspace_id: null,
+  visibility: "private",
   nodes: [{ id: "n1", type: "generate-image" }],
   edges: [{ source: "n1", target: "n2" }],
   settings: { autoSave: true },
@@ -127,7 +130,7 @@ const CAMEL_PUBLISHED_APP = {
 /** Mock helper: returns a chainable mock for profiles.select().eq().single() */
 function mockProfilesQuery() {
   const mockSingle = vi.fn().mockResolvedValue({ data: { full_name: null, email: "test@example.com" }, error: null })
-  const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+  const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
   return { select: mockSelect } as never
 }
@@ -199,7 +202,7 @@ describe("POST /v1/apps/publish", () => {
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -218,7 +221,7 @@ describe("POST /v1/apps/publish", () => {
       data: { ...DB_WORKFLOW, user_id: OTHER_USER_ID },
       error: null,
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -242,7 +245,7 @@ describe("POST /v1/apps/publish", () => {
         if (workflowCallCount === 1) {
           // First call: select workflow
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW, error: null })
-          const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {
@@ -266,7 +269,7 @@ describe("POST /v1/apps/publish", () => {
         } else {
           // Second apps call: insert published app
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_PUBLISHED_APP, error: null })
-          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
           return { insert: mockInsert } as never
         }
@@ -298,7 +301,7 @@ describe("POST /v1/apps/publish", () => {
         workflowCallCount++
         if (workflowCallCount === 1) {
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW, error: null })
-          const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {
@@ -342,7 +345,7 @@ describe("POST /v1/apps/publish", () => {
           // Insert with version 4
           const v4App = { ...DB_PUBLISHED_APP, version: 4 }
           const mockSingle = vi.fn().mockResolvedValue({ data: v4App, error: null })
-          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
           return { insert: mockInsert } as never
         }
@@ -367,7 +370,7 @@ describe("POST /v1/apps/publish", () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "workflows") {
         const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW, error: null })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       }
@@ -389,7 +392,7 @@ describe("POST /v1/apps/publish", () => {
             data: null,
             error: { code: "23505", message: "duplicate key" },
           })
-          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
           return { insert: mockInsert } as never
         }
@@ -422,7 +425,7 @@ describe("POST /v1/apps/publish — component metadata", () => {
           data: { ...DB_WORKFLOW, nodes: workflowNodes },
           error: null,
         })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       }
@@ -449,7 +452,7 @@ describe("POST /v1/apps/publish — component metadata", () => {
             data: { ...DB_WORKFLOW, nodes: workflowNodes },
             error: null,
           })
-          const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         }
@@ -469,7 +472,7 @@ describe("POST /v1/apps/publish — component metadata", () => {
           return { select: mockSelect } as never
         }
         const mockSingle = vi.fn().mockResolvedValue({ data: returnApp, error: null })
-        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
         return { insert: mockInsert } as never
       }
@@ -711,7 +714,7 @@ describe("PATCH /v1/apps/:appId", () => {
       data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
       error: null,
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -730,7 +733,7 @@ describe("PATCH /v1/apps/:appId", () => {
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -749,7 +752,7 @@ describe("PATCH /v1/apps/:appId", () => {
       data: { id: TEST_APP_ID, creator_id: OTHER_USER_ID },
       error: null,
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -774,14 +777,14 @@ describe("PATCH /v1/apps/:appId", () => {
           data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
           error: null,
         })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       } else {
         // Update
         const updatedRow = { ...DB_PUBLISHED_APP, name: "Updated Name" }
         const mockSingle = vi.fn().mockResolvedValue({ data: updatedRow, error: null })
-        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockEq = vi.fn().mockReturnValue({ select: mockSelect })
         const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
         return { update: mockUpdate } as never
@@ -814,7 +817,7 @@ describe("PATCH /v1/apps/:appId", () => {
           data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
           error: null,
         })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       } else {
@@ -822,7 +825,7 @@ describe("PATCH /v1/apps/:appId", () => {
           data: null,
           error: { message: "update failed" },
         })
-        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockEq = vi.fn().mockReturnValue({ select: mockSelect })
         const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
         return { update: mockUpdate } as never
@@ -858,7 +861,7 @@ describe("DELETE /v1/apps/:appId", () => {
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -876,7 +879,7 @@ describe("DELETE /v1/apps/:appId", () => {
       data: { id: TEST_APP_ID, creator_id: OTHER_USER_ID },
       error: null,
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -900,7 +903,7 @@ describe("DELETE /v1/apps/:appId", () => {
           data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
           error: null,
         })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       } else {
@@ -931,7 +934,7 @@ describe("DELETE /v1/apps/:appId", () => {
           data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
           error: null,
         })
-        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       } else {

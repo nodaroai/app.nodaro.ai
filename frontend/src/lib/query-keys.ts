@@ -275,6 +275,10 @@ export const queryKeys = {
       ["admin", "app-reports", "list", offset, kind, appSlug, status, userFilter] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
+    copilotGapsOverview: (days: number) =>
+      ["admin", "copilot-gaps", "overview", days] as const,
+    copilotGapsDay: (day: string) =>
+      ["admin", "copilot-gaps", "day", day] as const,
     llmModels: () => ["admin", "llm-models"] as const,
     tutorials: () => ["admin", "tutorials"] as const,
     tutorialCategories: () => ["admin", "tutorial-categories"] as const,

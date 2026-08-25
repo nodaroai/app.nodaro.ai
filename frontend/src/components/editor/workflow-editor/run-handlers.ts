@@ -265,7 +265,27 @@ export async function handleRun(
   onExecutionEnded?: () => void,
   opts?: { skipConfirm?: boolean },
 ): Promise<void> {
-  if (useWorkflowStore.getState().isReadOnly) return;
+  // Read-only returns silently for the cases that explain themselves — a
+  // Studio workflow opens with its whole toolbar gone. When the store carries
+  // a REASON it is because the person cannot be expected to work it out:
+  // an outside collaborator with an editor grant sees a canvas they may change
+  // and a Run that does nothing, and "nothing happened" is the worst possible
+  // answer to give them.
+  {
+    const st = useWorkflowStore.getState();
+    if (st.isReadOnly) {
+      if (st.readOnlyReason) toast.error(st.readOnlyReason);
+      return;
+    }
+    // Editable, and still not runnable. The state nobody can guess: the canvas
+    // responds, saves land, and Run spends the workspace's credits — which
+    // takes membership on top of edit. Returning silently here is the worst
+    // possible answer, because everything else on the page works.
+    if (st.runBlockedReason) {
+      toast.error(st.runBlockedReason);
+      return;
+    }
+  }
 
   // Confirm FIRST — before any mutation — so Cancel is a true no-op. Execute-All
   // always confirms (the accidental-press guard); also confirms when >100 cr.

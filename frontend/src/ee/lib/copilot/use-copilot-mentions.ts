@@ -1,12 +1,24 @@
 /**
  * The one place that says what `@` can reach.
  *
- * Two composers offer mentions — the editor rail (scoped to the open project)
- * and the home dock (no project, so the user's whole library). They used to
- * each fetch their own lists and hand the picker one prop per kind, which is
+ * Two composers offer mentions — the editor rail and the home dock. They used
+ * to each fetch their own lists and hand the picker one prop per kind, which is
  * exactly how `@` came to cover characters and locations while the library had
  * four kinds. One hook: a new kind is a fetcher and an entry, and both surfaces
  * get it.
+ *
+ * THE WHOLE LIBRARY, never one project. The editor rail used to scope its
+ * lists to the open project, and the owner found it with 100 characters saved
+ * and 14 offered: everything he had made elsewhere was unreachable through
+ * `@`, with no filter to widen. Three things say the scoping was wrong. My
+ * Library asks for every project and filters client-side, defaulting to all.
+ * The home dock has no project and always asked for everything. And the
+ * copilot's own entity tools are USER-scoped — so the MODEL could already see
+ * all 100 while the person choosing could not, which is backwards.
+ *
+ * The parameter is GONE rather than defaulted, so nobody can re-narrow this by
+ * passing a project id: the picker has tabs, counts and a search that reaches
+ * across them, which is what makes a whole library navigable.
  *
  * Two families, deliberately kept apart here and joined only at the end:
  * ENTITIES are saved things with their own studios, and their id goes on the
@@ -49,16 +61,18 @@ const MEDIA_PAGE = 40
  * nothing.
  */
 export function useCopilotMentions(
-  projectId: string | undefined,
   userId: string | undefined,
 ): { mentions: CopilotMention[]; loading: boolean } {
   // Typed as a Record so a new entity kind is a compile error here too, not a
   // silent undefined at `entities[kind]`.
+  //
+  // `undefined` project on every one of them: see the header. An entity the
+  // user saved is theirs wherever they made it.
   const entities: Record<EntityNodeKind, { data?: EntityRow[]; isLoading: boolean }> = {
-    character: useCharacters(projectId, userId),
-    object: useObjects(projectId, userId),
-    creature: useCreatures(projectId, userId),
-    location: useLocations(projectId, userId),
+    character: useCharacters(undefined, userId),
+    object: useObjects(undefined, userId),
+    creature: useCreatures(undefined, userId),
+    location: useLocations(undefined, userId),
   }
 
   // Files are not project-scoped: a library belongs to the person, not to the

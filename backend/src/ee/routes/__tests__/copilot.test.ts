@@ -12,6 +12,7 @@ const { state } = vi.hoisted(() => ({
     thread: null as unknown,
     workflow: null as unknown,
     liveTurn: null as unknown,
+    claimedTurn: null as unknown,
     activeThreads: 0,
   },
 }))
@@ -25,11 +26,26 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   }
 })
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => state.settings }))
+/** Every `jobs` UPDATE the route makes, so the lost-claim undo can be read. */
+const jobPatches = vi.hoisted(() => ({ list: [] as Array<Record<string, unknown>> }))
+/** …and what it filtered on, so the owner scoping is provable. */
+const jobFilters = vi.hoisted(() => ({ list: [] as Array<[string, unknown]> }))
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
-    from: () => ({
+    from: (table: string) => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      update: vi.fn((patch: Record<string, unknown>) => {
+        if (table === "jobs") jobPatches.list.push(patch)
+        const chain: Record<string, unknown> = {
+          eq: vi.fn((col: string, value: unknown) => {
+            if (table === "jobs") jobFilters.list.push([col, value])
+            return chain
+          }),
+          in: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }
+        return chain
+      }),
       maybeSingle: vi.fn().mockResolvedValue({ data: state.workflow }),
       // model_pricing lookups miss here so getModelCreditBaseCost falls back
       // to STATIC_CREDIT_COSTS — the values the ceiling test asserts against.
@@ -37,6 +53,12 @@ vi.mock("@/lib/supabase.js", () => ({
     }),
   },
 }))
+vi.mock("@/lib/insert-job.js", () => ({
+  insertJob: async () => ({ data: { id: "job1" }, error: null }),
+}))
+vi.mock("@/lib/reconcile/persistence.js", () => ({ markProviderCallStart: vi.fn() }))
+const refundMock = vi.hoisted(() => ({ fn: vi.fn(async () => 1) }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: refundMock.fn }))
 const reservedIds = vi.hoisted(() => ({ list: [] as string[] }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
@@ -61,6 +83,9 @@ vi.mock("../../copilot/store.js", async (importOriginal) => {
     countActiveThreads: async () => state.activeThreads,
     findLiveTurn: async () => state.liveTurn,
     findStaleTurns: async () => [],
+    // NULL is the lost claim: the partial unique index from migration 345
+    // refused a second live turn on this thread (#903).
+    createTurn: async () => state.claimedTurn,
     threadAtTurnCap: actual.threadAtTurnCap,
   }
 })
@@ -106,7 +131,11 @@ beforeEach(() => {
   state.thread = thread
   state.workflow = { id: "wf1", project_id: "p1", name: "W", version: 3, nodes: [], edges: [] }
   state.liveTurn = null
+  state.claimedTurn = null
   state.activeThreads = 0
+  jobPatches.list.length = 0
+  jobFilters.list.length = 0
+  refundMock.fn.mockClear()
 })
 
 describe("copilot routes — access", () => {
@@ -284,5 +313,37 @@ describe("SSE error text", () => {
       expect(text.length).toBeLessThan(120)
     }
     expect(Object.keys(TURN_ERROR_TEXT)).toContain("internal_error")
+  })
+})
+
+describe("the lost turn claim is never charged (#903)", () => {
+  // The 409 the pre-check gives is free — it precedes the reservation. THIS
+  // 409 does not: the loser of the race has already inserted a job and
+  // reserved its ceiling by the time the index refuses it. Answering without
+  // undoing that would MOVE the double charge, not fix it.
+  it("refunds the reservation, settles the job and answers turn_in_progress", async () => {
+    state.claimedTurn = null
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/copilot/threads/th1/messages",
+      payload: { message: "hi" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("turn_in_progress")
+    expect(refundMock.fn).toHaveBeenCalledWith("job1")
+    // Left at `processing` with provider_kind "copilot-turn", the reconcile
+    // cron would re-scan this job every 15 minutes forever.
+    expect(jobPatches.list.at(-1)).toMatchObject({ status: "failed" })
+    expect(String(jobPatches.list.at(-1)?.error_message)).toMatch(/Nothing was charged/)
+    // Owner-scoped in the chain, not by an argument a reader has to trace
+    // three lines up — the tenant-scope lint's rule, and the reason it is one.
+    expect(jobFilters.list).toEqual(
+      expect.arrayContaining([
+        ["id", "job1"],
+        ["user_id", "u1"],
+      ]),
+    )
   })
 })

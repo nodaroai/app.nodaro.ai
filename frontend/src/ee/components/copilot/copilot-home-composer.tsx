@@ -66,6 +66,13 @@ const GLASS =
   "backdrop-blur-[30px] backdrop-saturate-[160%] border border-border " +
   "shadow-[0_20px_56px_rgba(15,23,42,0.14)] dark:shadow-[0_20px_56px_rgba(0,0,0,0.5)]"
 
+/**
+ * How tall the composer may grow before it scrolls instead — about six lines.
+ * The dock is fixed over the page, so an unbounded box would eventually cover
+ * the cards it sits in front of.
+ */
+const INPUT_MAX_PX = 132
+
 function readCollapsed(): boolean {
   try {
     return window.localStorage.getItem(DOCK_KEY) === "1"
@@ -95,7 +102,7 @@ export default function CopilotHomeComposer() {
   const [browserTab, setBrowserTab] = useState<string | null>(null)
   const [chipPreview, setChipPreview] = useState<CopilotMention | null>(null)
 
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const dockRef = useRef<HTMLDivElement>(null)
   const [dockHeight, setDockHeight] = useState(0)
 
@@ -105,7 +112,23 @@ export default function CopilotHomeComposer() {
   // should not cost a list request per entity kind on every visit to the home
   // page.
   const entityUserId = collapsed ? undefined : userId
-  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(undefined, entityUserId)
+  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(entityUserId)
+
+  /**
+   * The box grows with what is typed, up to `INPUT_MAX_PX`, then scrolls. It
+   * starts at one row, so a composer nobody has typed in is the same height it
+   * always was. Before paint: a box that renders one line tall and then jumps
+   * to five is worse than one that arrives at its size.
+   *
+   * `collapsed` is a dependency because the textarea is unmounted while the
+   * dock is a pill — reopening it mounts a fresh node with no height set.
+   */
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${Math.min(el.scrollHeight, INPUT_MAX_PX)}px`
+  }, [prompt, collapsed])
 
   /**
    * The dock is fixed, so it covers whatever the page's last rows are. The
@@ -339,8 +362,10 @@ export default function CopilotHomeComposer() {
                 </div>
               )}
 
+              {/* `items-end` because the box grows: the buttons belong beside
+                  the LAST line, not floating in the middle of a tall block. */}
               <form
-                className="flex items-center gap-2.5"
+                className="flex items-end gap-2.5"
                 onSubmit={(e) => {
                   e.preventDefault()
                   void build(prompt)
@@ -357,14 +382,28 @@ export default function CopilotHomeComposer() {
                 </button>
                 {/* Same journey as a picked file: id in, id out. */}
                 <CopilotAttachButton disabled={building} onAttached={pick} />
-                <input
+                {/* A TEXTAREA, not a text input, and the difference was a bug
+                    (#904): a single-line input has no newline to insert, so
+                    Enter was the browser's implicit form submission and SENT
+                    whatever was typed so far. Wanting a second line before
+                    pasting a link jumped the user into the editor with half a
+                    prompt — and half-prompt hops are one of the ways the empty
+                    workflow this issue is about gets made. A multi-line paste
+                    was flattened by the input's own value sanitization on the
+                    way in, too.
+
+                    Same contract as the editor panel's composer: Enter sends,
+                    Shift+Enter breaks the line. Two composers for one model
+                    must not disagree about what Enter does. */}
+                <textarea
                   ref={inputRef}
+                  rows={1}
                   value={prompt}
                   disabled={building}
                   maxLength={promptLimit}
                   placeholder={S.homePlaceholder}
                   aria-label={S.homePlaceholder}
-                  // Focus never leaves the input while the picker is open, so
+                  // Focus never leaves the box while the picker is open, so
                   // the combobox wiring is what tells a screen reader a list
                   // appeared and which row the arrow keys are on.
                   role="combobox"
@@ -384,7 +423,14 @@ export default function CopilotHomeComposer() {
                   // leaving it open after the composer loses focus would
                   // swallow arrow keys and Escape for the whole page.
                   onBlur={() => setQuery(null)}
-                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13.5px] text-foreground placeholder:text-[var(--copilot-dim)] disabled:cursor-not-allowed"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      void build(prompt)
+                    }
+                  }}
+                  style={{ maxHeight: INPUT_MAX_PX }}
+                  className="flex-1 min-w-0 resize-none overflow-y-auto bg-transparent border-none outline-none text-[13.5px] leading-[1.5] text-foreground placeholder:text-[var(--copilot-dim)] disabled:cursor-not-allowed"
                 />
                 <button
                   type="submit"

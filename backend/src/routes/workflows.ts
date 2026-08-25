@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import { hasCredits } from "../lib/config.js"
+import { hasCredits, hasOrganizations } from "../lib/config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { z } from "zod"
-import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
 import { getPluginServices } from "../lib/private-plugins/load.js"
@@ -15,6 +15,18 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { sendNotFound } from "../lib/scoped-delete.js"
 import { refuseIfWorkspaceArchived } from "../lib/orgs-context.js"
+import {
+  accessAtLeast,
+  canChangeWorkflowVisibility,
+  canDeleteWorkflow,
+  canRunWorkflow,
+  canShareWorkflow,
+  workflowAccessFromRow,
+  type AccessLevel,
+} from "../lib/workflow-access.js"
+import { auditWorkflowDeleted } from "../lib/orgs-audit.js"
+import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
+import type { WorkflowAccessRow } from "../lib/private-plugins/types.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -31,6 +43,7 @@ import {
   inferAppSlugFromSettings,
 } from "../lib/client-app-stamp.js"
 import { deleteWorkflowWithPrivateMedia } from "../lib/workflow-delete.js"
+import { settledWithLimit } from "../lib/settled-with-limit.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -117,6 +130,10 @@ const updateWorkflowBody = z.object({
   // to a single project (FK ON DELETE SET NULL would orphan otherwise).
   projectId: z.string().uuid().optional(),
   folderId: z.string().uuid().nullable().optional(),
+  // Who else in the workspace can reach this workflow. Not an edit — see the
+  // handler, which asks a different question of a different authority before
+  // writing it.
+  visibility: z.enum(WORKFLOW_VISIBILITIES).optional(),
   nodes: z.array(z.record(z.string(), z.unknown())).optional(),
   edges: z.array(z.record(z.string(), z.unknown())).optional(),
   settings: z.record(z.string(), z.unknown()).optional(),
@@ -151,6 +168,78 @@ const updateWorkflowBody = z.object({
     })
     .optional(),
 })
+
+/**
+ * The FOURTH audience lever, and the one that is not a column.
+ *
+ * `settings.studio.shared === true` makes a workflow readable by
+ * `GET /v1/public/workflows/:id` — no auth, whole graph, forever, to anyone
+ * holding the id. It is exactly the same kind of decision as `visibility`,
+ * `share_token` and `is_presentation_enabled`, and unlike those three it lives
+ * inside a free-form JSON column, so neither the PATCH schema nor the row
+ * policy's column pinning can see it.
+ *
+ * That mattered the moment editing stopped meaning ownership: a collaborator
+ * with an editor grant writes `settings` on every ordinary save, and without
+ * this they could publish the creator's work to the open internet in one
+ * request, with no signal in the creator's share dialog (the dialog shows
+ * `share_token`, which is untouched).
+ *
+ * So a settings write that TOUCHES the studio block is treated as what it is —
+ * a change to who can reach the workflow — and asked of the same authority.
+ * Detected by presence rather than by comparing values on the delta path,
+ * where the stored settings are not in hand and a read would cost the hottest
+ * write in the product its single round trip. A creator or workspace admin
+ * passes either way, so the stricter test costs nobody anything.
+ */
+function touchesStudioPublishFlag(settings: unknown): boolean {
+  if (typeof settings !== "object" || settings === null) return false
+  // Two audience levers live in this JSON: `studio.shared` opens the
+  // no-auth public read, and `presentationSettings.shareReadOnly` decides
+  // whether a share-link holder may RUN (flipping it off widens who can spend
+  // the owner's credits through the link). A write that mentions either is
+  // touching who can reach the work.
+  return "studio" in settings || "presentationSettings" in settings
+}
+
+/**
+ * The two audience bits this JSON carries, read defensively and NORMALIZED to
+ * their effective boolean state.
+ *
+ * Both are consumed as `=== true` downstream — the public read requires
+ * `studio.shared === true`, the presentation run gate is `shareReadOnly &&
+ * …`. So `false`, `undefined` and a missing key are one state, and only a
+ * transition into or out of `true` is a real audience change. Comparing raw
+ * values instead would flag erasing an already-`false` flag as a change and
+ * refuse an ordinary save.
+ */
+function readAudienceBits(settings: unknown): { shared: boolean; shareReadOnly: boolean } {
+  const s = settings as
+    | { studio?: { shared?: unknown }; presentationSettings?: { shareReadOnly?: unknown } }
+    | null
+    | undefined
+  return {
+    shared: s?.studio?.shared === true,
+    shareReadOnly: s?.presentationSettings?.shareReadOnly === true,
+  }
+}
+
+/**
+ * Whether a full-body settings write would CHANGE either audience lever.
+ *
+ * No early-out on "the write does not mention them": the full-body path
+ * REPLACES the whole settings object, so a write that omits the keys erases
+ * them — and erasing `presentationSettings.shareReadOnly` flips a view-only
+ * share link into a runnable one. Omission is a change, and a change in either
+ * direction is asked of the audience authority. The real editor client
+ * round-trips the whole object, so an ordinary save sends the same values and
+ * diffs to false.
+ */
+function changesStudioPublishFlag(next: unknown, stored: unknown): boolean {
+  const a = readAudienceBits(next)
+  const b = readAudienceBits(stored)
+  return a.shared !== b.shared || a.shareReadOnly !== b.shareReadOnly
+}
 
 /** ids of an upsert array; null when any element lacks a string id. */
 function deltaIds(arr: ReadonlyArray<Record<string, unknown>> | undefined): string[] | null {
@@ -231,17 +320,38 @@ const createSubWorkflowBody = z.object({
   name: z.string().min(1).max(200).default("Sub-workflow"),
 })
 
+/**
+ * How many shared workflows one person can be handed at once.
+ *
+ * Capped rather than paged, matching the collaborator roster it is the other
+ * side of: being individually named on more than this many workflows is not a
+ * list problem, it is a sign the work belongs in a workspace. Revisit together
+ * with that roster if either ever runs into the ceiling.
+ */
+const SHARED_WITH_ME_LIMIT = 200
+
+/** How many access lookups the shared-with-me judging runs at once. */
+const SHARED_WITH_ME_CONCURRENCY = 8
+
+// `workspace_id` and `visibility` are selected on BOTH projections because the
+// access seam needs them off any row a route already loaded — without them
+// every converted route would have to re-read the workflow just to ask who may
+// touch it, on the hottest path in the product. They are mapped out too:
+// the editor's share controls need to know which scope a workflow is in and
+// who it is currently open to.
 const WORKFLOW_META_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, created_at, updated_at"
+  "id, project_id, user_id, workspace_id, visibility, folder_id, name, description, is_template, version, thumbnail_url, created_at, updated_at"
 
 const WORKFLOW_FULL_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, parent_workflow_id, app_slug, created_at, updated_at"
+  "id, project_id, user_id, workspace_id, visibility, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, parent_workflow_id, app_slug, created_at, updated_at"
 
 function toWorkflowMeta(row: Record<string, unknown>) {
   return {
     id: row.id,
     projectId: row.project_id,
     userId: row.user_id,
+    workspaceId: row.workspace_id ?? null,
+    visibility: row.visibility ?? "private",
     folderId: row.folder_id,
     name: row.name,
     description: row.description,
@@ -1002,6 +1112,149 @@ export async function workflowRoutes(app: FastifyInstance) {
     return reply.status(201).send({ data: toWorkflowFull(data) })
   })
 
+  // Work somebody else shared with me, one workflow at a time.
+  //
+  // Grants only, and only on work that is NOT in a workspace this caller
+  // belongs to. Workspace-visible work already appears in that workspace's own
+  // lists, so including it here would show every shared class workflow twice —
+  // once as "the class's", once as "shared with me" — and the second label
+  // would be the less true of the two.
+  //
+  // Registered ahead of `/v1/workflows/:id` for readers; the router prefers a
+  // static segment over a parameter either way, so `shared-with-me` is never
+  // mistaken for an id.
+  app.get("/v1/workflows/shared-with-me", async (req, reply) => {
+    const userId = authorize(req, reply, "workflows:read")
+    if (!userId) return
+
+    // Nothing can have been shared where sharing does not exist: the routes
+    // that write grants are registered behind the same flag. Answering from
+    // here keeps the feature genuinely dark rather than merely empty — if the
+    // switch is ever turned back off, this stops listing rather than
+    // continuing to hand out what it granted.
+    if (!hasOrganizations()) return { data: [] }
+
+    const memberships = await req.orgs()
+    const myWorkspaceIds = new Set(memberships.workspaces.map((w) => w.workspaceId))
+
+    const { data, error } = await supabase
+      // Keyed by the caller: these are the grants held BY them, which is the
+      // whole question this route asks.
+      // tenant-scope-ignore: `.eq("user_id", userId)` IS the tenant scope here.
+      .from("workflow_collaborators")
+      .select(`role, workflows!inner(${WORKFLOW_META_COLS})`)
+      .eq("user_id", userId)
+      // ORDERED before it is capped. A bare `.limit()` takes an arbitrary 200
+      // rows and reorders them between requests, so sorting afterwards
+      // produces "some 200 of your shared workflows, shuffled" rather than the
+      // 200 most recent — and quietly hides recent work from anyone near the
+      // ceiling.
+      .order("updated_at", { referencedTable: "workflows", ascending: false })
+      .limit(SHARED_WITH_ME_LIMIT)
+
+    if (error) return sendInternalError(reply, req, error, "Failed to fetch shared workflows")
+
+    // The workspace exclusion runs HERE and not in the query on purpose. Most
+    // callers belong to no workspace at all, and PostgREST's `not.in` on an
+    // empty list does not mean "exclude nothing" — it is the classic way to
+    // write a filter that quietly matches wrongly. A `Set` cannot.
+    const rows = (data ?? []) as unknown as Array<{
+      role: string
+      workflows: Record<string, unknown> | null
+    }>
+    const candidates = rows
+      .filter((r) => r.workflows !== null)
+      .filter((r) => {
+        const workspaceId = (r.workflows!.workspace_id as string | null) ?? null
+        return workspaceId === null || !myWorkspaceIds.has(workspaceId)
+      })
+
+    // A GRANT and ACCESS are not the same thing, and this list must show the
+    // second one. The rule refuses over a live grant in more than one state —
+    // a suspended membership, a workspace whose organization has been deleted
+    // — and in each of those the row would otherwise sit here with its name
+    // and thumbnail while opening it correctly 404s. A list of things you
+    // cannot open is worse than an empty one, and this page is exactly where
+    // somebody whose access was just revoked goes to look.
+    //
+    // Cheap where it matters: with no plugin this is pure computation on rows
+    // already in hand, and the ceiling is `SHARED_WITH_ME_LIMIT`.
+    // Capped concurrency: up to SHARED_WITH_ME_LIMIT rows, each an access
+    // lookup, must not open that many database round trips at once. `failFast:
+    // false` so one row's error drops that row rather than the whole list.
+    const settled = await settledWithLimit(
+      candidates.map((r) => async () => ({
+        row: r,
+        access: await workflowAccessFromRow(userId, toAccessRow(r.workflows!)),
+      })),
+      SHARED_WITH_ME_CONCURRENCY,
+      undefined,
+      false,
+    )
+
+    const shared = settled
+      .filter((s): s is PromiseFulfilledResult<{ row: (typeof candidates)[number]; access: AccessLevel }> =>
+        s.status === "fulfilled" && s.value.access !== "none",
+      )
+      .map((s) => ({ ...toWorkflowMeta(s.value.row.workflows!), grantedRole: s.value.row.role }))
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+
+    return { data: shared }
+  })
+
+  // What may I do with this one workflow?
+  //
+  // The editor loads a workflow's CONTENT straight from Supabase, where the
+  // row policies decide what it may read — but "may I write this" is a
+  // different question and the policies answer it silently, by refusing a
+  // save that has already been typed. So the canvas asks here on open, and
+  // puts itself in read-only mode when the answer is `view`.
+  //
+  // Its own route rather than a field on the full GET, because that one
+  // carries the entire graph: fetching a workflow's nodes and edges a second
+  // time to read one word off the response would be a strange way to save a
+  // request. `view` is the floor to ask at all — anyone who cannot see the
+  // workflow gets the same 404 they get everywhere else.
+  app.get("/v1/workflows/:id/access", async (req, reply) => {
+    const userId = authorize(req, reply, "workflows:read")
+    if (!userId) return
+
+    const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
+    if (!params) return
+
+    const loaded = await loadWorkflowFor(
+      req, reply, userId, params.id, "view",
+      "id, user_id, workspace_id, visibility",
+      "Failed to read workflow access",
+    )
+    if (!loaded.ok) return
+
+    const facts = toAccessRow(loaded.row)
+    // Everything the two surfaces need to render themselves honestly, answered
+    // in one breath. `canShare` and `canChangeVisibility` are DIFFERENT
+    // questions with different answers — a team workspace can let an editor
+    // invite people while still reserving the class-wide switch for its
+    // admins — and the dialog would show the wrong controls if it guessed one
+    // from the other. `canRun` is separate again, because it is the only one
+    // that can be false while the caller may still edit.
+    const [canChangeVisibility, canShare, canRun] = await Promise.all([
+      canChangeWorkflowVisibility(userId, params.id),
+      canShareWorkflow(userId, params.id),
+      canRunWorkflow(userId, params.id),
+    ])
+
+    return {
+      data: {
+        access: loaded.access,
+        workspaceId: facts.workspace_id,
+        visibility: facts.visibility,
+        canChangeVisibility,
+        canShare,
+        canRun,
+      },
+    }
+  })
+
   // Get workflow by ID
   app.get("/v1/workflows/:id", async (req, reply) => {
     const userId = authorize(req, reply, "workflows:read")
@@ -1010,18 +1263,17 @@ export async function workflowRoutes(app: FastifyInstance) {
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
     if (!params) return
 
-    const { data, error } = await supabase
-      .from("workflows")
-      .select(WORKFLOW_FULL_COLS)
-      .eq("id", params.id)
-      .eq("user_id", userId)
-      .single()
+    const loaded = await loadWorkflowFor(
+      req, reply, userId, params.id, "view", WORKFLOW_FULL_COLS, "Failed to fetch workflow",
+    )
+    if (!loaded.ok) return
 
-    if (error) {
-      if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return sendInternalError(reply, req, error, "Failed to fetch workflow")
-    }
-    return { data: toWorkflowFull(data) }
+    // `access` rides along because the editor needs it the moment it opens the
+    // workflow — a `view` answer is what puts the canvas in read-only mode.
+    // Sent from here rather than fetched separately so the editor never has to
+    // ask a second question about a workflow it just received, and so the two
+    // answers cannot disagree with each other.
+    return { data: { ...toWorkflowFull(loaded.row), access: loaded.access } }
   })
 
   // Public (share-by-link) read — NO auth (listed in auth.ts PUBLIC_ROUTES).
@@ -1107,7 +1359,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         body.name !== undefined || body.description !== undefined || body.folderId !== undefined ||
         body.projectId !== undefined || body.sourcePrompt !== undefined ||
         body.thumbnailUrl !== undefined || body.expectedUpdatedAt !== undefined ||
-        body.expectedVersion !== undefined
+        body.expectedVersion !== undefined || body.visibility !== undefined
       if (mixed) {
         return reply.status(400).send({
           error: { code: "validation_error", message: "delta is mutually exclusive with full-body fields" },
@@ -1133,6 +1385,37 @@ export async function workflowRoutes(app: FastifyInstance) {
       // NOTE: sub-workflow route validation needs the FULL graph and is not
       // possible on a partial delta — the editor maintains the invariant
       // client-side, and the full-save path keeps the server-side check.
+      //
+      // AUTHORIZATION on this branch is the RPC's own, and deliberately so.
+      // `apply_workflow_delta` asks SQL `workflow_access(w.id, v_uid) IN
+      // ('own','edit')` inside its row lookup (migration 338) — the same rule
+      // this route asks in TypeScript below, from the twin implementation the
+      // parity job keeps honest. Adding a pre-check here would be a THIRD
+      // reading of it, and would cost a second round trip on the hottest write
+      // in the product, where this branch exists precisely to make one.
+      //
+      // The visible consequence, and it is accepted rather than overlooked: a
+      // caller holding only `view` is refused here as 404 (the RPC's
+      // not-found arm) and as 403 on the full-body branch below. Same refusal,
+      // two shapes, because one of them is a row lock that never learned
+      // whether the row was missing or merely closed to this caller.
+      //
+      // ONE exception, and it is not a second reading of the access rule: the
+      // RPC authorizes at `edit`, and a delta may carry `set.settings`, which
+      // can reach the public-publish flag (see `touchesStudioPublishFlag`).
+      // That is an audience decision, not an edit, so it is asked of the
+      // audience authority before the RPC is reached — the same question the
+      // full-body branch asks about `visibility`.
+      if (touchesStudioPublishFlag(body.delta.set?.settings)) {
+        if (!(await canChangeWorkflowVisibility(userId, params.id))) {
+          return reply.status(403).send({
+            error: {
+              code: "forbidden",
+              message: "Only the owner or a workspace admin can change who this is shared with",
+            },
+          })
+        }
+      }
       const { data: rpcData, error: rpcError } = await supabase.rpc("apply_workflow_delta", {
         p_workflow_id: params.id,
         p_base_version: body.delta.baseVersion,
@@ -1168,6 +1451,14 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
 
+    // The full-body path's authorization. `edit` is the bar for changing the
+    // canvas; `visibility` is asked separately below because it is not an edit.
+    const loaded = await loadWorkflowFor(
+      req, reply, userId, params.id, "edit", WORKFLOW_FULL_COLS, "Failed to update workflow",
+    )
+    if (!loaded.ok) return
+    const target = toAccessRow(loaded.row)
+
     if (body.nodes && body.edges) {
       body.edges = migrateGenerateImageHandles(
         body.nodes as unknown as ReadonlyArray<{ id: string; type?: string }>,
@@ -1188,9 +1479,55 @@ export async function workflowRoutes(app: FastifyInstance) {
       updates.nodes = stripTransientRuntimeData(body.nodes as Array<{ data?: Record<string, unknown> }>)
     }
     if (body.edges !== undefined) updates.edges = body.edges
-    if (body.settings !== undefined) updates.settings = body.settings
+    if (body.settings !== undefined) {
+      // The full-body path HAS the stored row, so it can ask the narrower
+      // question: is the public-publish flag actually being changed? An
+      // ordinary save that carries the studio block through unchanged is an
+      // edit and stays one.
+      if (changesStudioPublishFlag(body.settings, loaded.row.settings)) {
+        if (!(await canChangeWorkflowVisibility(userId, params.id))) {
+          return reply.status(403).send({
+            error: {
+              code: "forbidden",
+              message: "Only the owner or a workspace admin can change who this is shared with",
+            },
+          })
+        }
+      }
+      updates.settings = body.settings
+    }
     if (body.sourcePrompt !== undefined) updates.source_prompt = body.sourcePrompt
     if (body.thumbnailUrl !== undefined) updates.thumbnail_url = body.thumbnailUrl
+
+    // Visibility is a different power from editing, asked of a different
+    // authority: the creator, or an admin of the workspace the work lives in.
+    // An editor may change the canvas all day and still not decide who the
+    // class gets to see it — that would be publishing somebody else's work.
+    //
+    // Asked only when the field is actually present, so an ordinary save never
+    // pays for a question it is not asking.
+    if (body.visibility !== undefined) {
+      if (target.workspace_id === null) {
+        // Nothing to be visible TO. Storing the value would leave a field that
+        // reads as a setting and governs nothing — worse than a refusal,
+        // because the caller would believe they had shared something.
+        return reply.status(400).send({
+          error: {
+            code: "not_workspace_scoped",
+            message: "This workflow is not in a workspace, so it has no visibility to change.",
+          },
+        })
+      }
+      if (!(await canChangeWorkflowVisibility(userId, params.id))) {
+        return reply.status(403).send({
+          error: {
+            code: "forbidden",
+            message: "Only the owner or a workspace admin can change who this is shared with",
+          },
+        })
+      }
+      updates.visibility = body.visibility
+    }
 
     // Cross-project move. This predates the move endpoint and keeps working,
     // but it goes through the SAME authorization — refusing it instead would
@@ -1222,10 +1559,12 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
 
     let updateQuery = supabase
+      // A workspace editor writing a class workflow is not the row's creator,
+      // so this cannot be scoped by user_id any more.
+      // tenant-scope-ignore: authorized by loadWorkflowFor(..., "edit") above.
       .from("workflows")
       .update(updates)
       .eq("id", params.id)
-      .eq("user_id", userId)
     if (body.expectedUpdatedAt) {
       updateQuery = updateQuery.eq("updated_at", body.expectedUpdatedAt)
     }
@@ -1248,12 +1587,17 @@ export async function workflowRoutes(app: FastifyInstance) {
       // can refetch + merge. If the caller did NOT supply
       // expectedUpdatedAt, the row truly doesn't exist (or isn't owned).
       if (body.expectedUpdatedAt || body.expectedVersion !== undefined) {
-        const { data: current } = await supabase
+        const { data: currentRow } = await supabase
+          // Same reason as the update above — and it must match it exactly.
+          // Left scoped by user_id, this re-read would miss for every workspace
+          // editor, turning their perfectly ordinary save conflict into "your
+          // workflow does not exist".
+          // tenant-scope-ignore: authorized by loadWorkflowFor(..., "edit") above.
           .from("workflows")
           .select(WORKFLOW_FULL_COLS)
           .eq("id", params.id)
-          .eq("user_id", userId)
           .maybeSingle()
+        const current = currentRow as Record<string, unknown> | null
         if (current?.updated_at) {
           return reply.status(409).send({
             error: {
@@ -1301,10 +1645,13 @@ export async function workflowRoutes(app: FastifyInstance) {
       const inferred = await inferAppSlugFromSettings(body.settings)
       if (inferred) {
         const { error: stampErr } = await supabase
+          // As above: the save this follows was authorized by access, not by
+          // ownership, so scoping the stamp by creator would silently skip it
+          // for every workspace editor and leave the row unclassified.
+          // tenant-scope-ignore: authorized by loadWorkflowFor(..., "edit") above.
           .from("workflows")
           .update({ app_slug: inferred })
           .eq("id", params.id)
-          .eq("user_id", userId)
           .is("app_slug", null)
         if (stampErr) {
           req.log.warn({ err: stampErr, workflowId: params.id }, "workflow app_slug stamp failed")
@@ -1325,14 +1672,102 @@ export async function workflowRoutes(app: FastifyInstance) {
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
     if (!params) return
 
-    // Owner-scoped and atomic. The RPC preserves a server-only cleanup
-    // manifest for private Recast remux bases before the workflow -> jobs ->
-    // recast_audio_bases cascade erases their database pointers.
+    // Deleting is its own question, not "edit and then some". A collaborator
+    // holding an editor grant may change the work and must never be able to
+    // end it — the grant was given to help with it. So `view` is only enough
+    // to earn a 403 instead of a 404 here; the decision itself is
+    // `canDeleteWorkflow`.
+    const loaded = await loadWorkflowFor(
+      req, reply, userId, params.id, "view",
+      "id, user_id, workspace_id, visibility, name",
+      "Failed to delete workflow",
+    )
+    if (!loaded.ok) return
+    const row = toAccessRow(loaded.row)
+
+    if (!(await canDeleteWorkflow(userId, params.id))) {
+      return reply.status(403).send({
+        error: {
+          code: "forbidden",
+          message: "Only the owner or a workspace admin can delete this workflow",
+        },
+      })
+    }
+
+    // Somebody other than the creator is deleting a workspace member's work.
+    // That power exists ONLY through this route — the row policies admit the
+    // creator and nobody else — and the reason it is granted here is that here
+    // it can be attributed. So the entry is written BEFORE the delete and the
+    // delete does not happen without it: after the row is gone there is
+    // nothing left to refuse, and an unattributable deletion is exactly what
+    // routing this through the application was meant to prevent.
+    //
+    // A personal workflow has no organization for an entry to belong to, and a
+    // creator deleting their own work is not the case this guards, so neither
+    // reaches it — both keep the behaviour they have always had.
+    // A non-creator deleting a PERSONAL workflow has no organization for the
+    // entry to belong to — and therefore no way to be recorded. Only a
+    // platform admin can reach that combination (they resolve to `own`
+    // everywhere), and it is the single most consequential delete in the
+    // product: somebody else's private work, gone, with nobody's name on it.
+    //
+    // The invariant this route is built around is "a non-creator deletion is
+    // recorded, or it does not happen". Where it cannot be recorded, it does
+    // not happen — which is also exactly what this route answered before the
+    // access rule widened it. The admin surfaces remain, and they audit.
+    if (row.user_id !== userId && row.workspace_id === null) {
+      req.log.warn(
+        { workflowId: params.id, actorId: userId, creatorId: row.user_id },
+        "[workflows/delete] refused: a personal workflow cannot be deleted on someone else's behalf",
+      )
+      return reply.status(403).send({
+        error: {
+          code: "forbidden",
+          message: "Only the owner can delete this workflow",
+        },
+      })
+    }
+
+    const workspaceOfSomeoneElsesWork =
+      row.user_id !== userId ? row.workspace_id : null
+    if (workspaceOfSomeoneElsesWork !== null) {
+      const recorded = await auditWorkflowDeleted({
+        actorId: userId,
+        workflowId: params.id,
+        workflowName: (loaded.row.name as string | null) ?? "",
+        workspaceId: workspaceOfSomeoneElsesWork,
+        creatorId: row.user_id,
+      })
+      if (!recorded) {
+        req.log.error(
+          { workflowId: params.id, actorId: userId, workspaceId: workspaceOfSomeoneElsesWork },
+          "[workflows/delete] refused: the audit entry could not be written",
+        )
+        return reply.status(503).send({
+          error: {
+            code: "audit_unavailable",
+            message: "This deletion could not be recorded, so it was not performed. Try again later.",
+          },
+        })
+      }
+    }
+
+    // Atomic, and it preserves a server-only cleanup manifest for private
+    // Recast remux bases before the workflow -> jobs -> recast_audio_bases
+    // cascade erases their database pointers.
+    //
+    // `userId` is the CREATOR's, not the caller's. The RPC filters its row by
+    // `user_id = p_user_id`; called with the service role, that parameter is a
+    // row filter and not an identity claim, and the caller's right to be here
+    // was settled by `canDeleteWorkflow` two statements ago. Passing the
+    // caller's id instead would silently no-op every admin deletion — the
+    // filter would match nothing and the route would answer 404 for a workflow
+    // it had just confirmed the caller may delete.
     let deleted: boolean
     try {
       deleted = await deleteWorkflowWithPrivateMedia({
         workflowId: params.id,
-        userId,
+        userId: row.user_id,
         logger: req.log,
       })
     } catch (error) {
@@ -1354,17 +1789,11 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!query) return
     const includeAssets = query.assets
 
-    const { data: wf, error } = await supabase
-      .from("workflows")
-      .select(WORKFLOW_FULL_COLS)
-      .eq("id", params.id)
-      .eq("user_id", userId)
-      .single()
-
-    if (error) {
-      if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return sendInternalError(reply, req, error, "Failed to export workflow")
-    }
+    const loaded = await loadWorkflowFor(
+      req, reply, userId, params.id, "view", WORKFLOW_FULL_COLS, "Failed to export workflow",
+    )
+    if (!loaded.ok) return
+    const wf = loaded.row
 
     const rawNodes = asObjectArray(wf.nodes)
     const result: WorkflowExport = {
@@ -1377,6 +1806,12 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
 
     if (includeAssets) {
+      // Bundled assets stay scoped to the CALLER, not the workflow's creator.
+      // Being allowed to read one workflow is not being allowed to walk out
+      // with the characters and locations behind it — so a shared workflow
+      // exported by a collaborator comes back with the graph and without the
+      // entities they were never given. Deliberate; do not "fix" it by passing
+      // the creator's id.
       const ids = collectAssetIds(rawNodes)
       const assetsResult = await fetchExportAssets(ids, userId)
       if ("error" in assetsResult) return sendInternalError(reply, req, assetsResult.error, "Failed to export workflow")
@@ -1570,15 +2005,21 @@ export async function workflowRoutes(app: FastifyInstance) {
       return validationError(reply, deniedNodeRejectionMessage(deniedNodes))
     }
 
-    // 1. Verify caller owns the parent + grab its project_id
-    const { data: parent, error: parentErr } = await supabase
-      .from("workflows")
-      .select("id, project_id, user_id")
-      .eq("id", params.parentId)
-      .eq("user_id", userId)
-      .single()
-
-    if (parentErr || !parent) return notFound(reply, "Parent workflow not found")
+    // 1. Verify the caller may EDIT the parent + grab its project_id. A
+    // sub-workflow is part of the parent's graph, so adding one is an edit of
+    // it — which is why a workspace member may add one to class work they can
+    // legitimately edit but did not create.
+    const loadedParent = await loadWorkflowFor(
+      req, reply, userId, params.parentId, "edit",
+      "id, project_id, user_id, workspace_id, visibility",
+      "Failed to create sub-workflow",
+    )
+    if (!loadedParent.ok) return
+    const parent = loadedParent.row as {
+      id: string
+      project_id: string | null
+      user_id: string
+    }
 
     // 2. Seed a default route — one input + one output sharing a routeId
     const routeId = crypto.randomUUID()
@@ -1610,7 +2051,15 @@ export async function workflowRoutes(app: FastifyInstance) {
       .from("workflows")
       .insert({
         project_id: parent.project_id,
-        user_id: userId,
+        // The PARENT's creator, not the caller. A sub-workflow is a part of
+        // its parent, not a work of its own: it lives in the parent's project,
+        // it dies with the parent, and — the part that made this load-bearing
+        // once editing stopped meaning ownership — the orchestrator resolves
+        // sub-workflow references by the parent's owner. A child stamped with
+        // a collaborator's id resolves to nothing, so the graph they just
+        // built would fail at run time; and it would put a row they own inside
+        // a project its owner cannot see into.
+        user_id: parent.user_id,
         parent_workflow_id: parent.id,
         name: body.name,
         nodes: seededNodes,

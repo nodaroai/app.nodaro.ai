@@ -11,6 +11,7 @@ import {
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
+import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -23,6 +24,7 @@ import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
  * - sweepVideoAnalysisTmp:      daily at 04:30 UTC (double-stall orphan reaper)
+ * - sweepAbandonedCopilotWorkflows: every hour at :45 (#904)
  * - sendStorageWarnings:        daily at 09:00 UTC
  *
  * All jobs are idempotent and wrapped in try/catch to prevent server crashes.
@@ -203,11 +205,33 @@ export function startCleanupCron(): void {
     }
   })
 
+  // Empty workflows a failed home-page copilot handoff left behind (#904) --
+  // every hour at :45. See ee/copilot/abandoned-sweep.ts; a no-op until
+  // migration 346 reaches the database.
+  cron.schedule("45 * * * *", async () => {
+    try {
+      const result = await sweepAbandonedCopilotWorkflows()
+      // Saturation means the pass deleted nothing because it could not PROVE
+      // the batch was unspoken — the one outcome that must never read as a
+      // quiet "nothing to do".
+      if (result.saturated) {
+        console.warn("[cron] abandoned copilot seed sweep deferred: the turn probe came back at its ceiling")
+      } else if (result.deleted > 0 || result.kept > 0) {
+        console.log(
+          `[cron] abandoned copilot seeds swept: ${result.deleted} deleted, ` +
+          `${result.kept} kept (canvas in use, or touched recently)`,
+        )
+      }
+    } catch (err) {
+      console.error("[cron] abandoned copilot workflow sweep failed:", err)
+    }
+  })
+
   // NOTE: the external-call reconciliation sweep (reconcileInflightJobs) is
   // deliberately NOT here anymore. It is a core correctness mechanism, not
   // billing — scheduling it behind hasCredits() left Community/Business with
   // no reconcile at all (audit B2). It now starts unconditionally from
   // server.ts via lib/reconcile/start.ts.
 
-  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (9 schedules)")
 }

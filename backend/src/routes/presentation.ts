@@ -37,6 +37,31 @@ const runBody = z.object({
   selectedRouteId: z.string().optional(),
 })
 
+/**
+ * Public presentation links — deliberately OUTSIDE the workflow access rule.
+ *
+ * Two halves, both left as they are on purpose when the by-id workflow routes
+ * moved onto `workflowAccess`, and both easy to mistake for something that was
+ * forgotten:
+ *
+ * 1. **The `share_token` reads** (`GET /v1/present/:token`, `POST
+ *    /v1/present/:token/run`) load a workflow with the service-role client and
+ *    no access check at all. That is what a share link IS: it is read by
+ *    someone who is not signed in and has no access level to consult. The
+ *    unguessable token is the credential. Converting these to `workflowAccess`
+ *    would break every public share link in the product.
+ *
+ * 2. **The owner-side `POST`/`DELETE /v1/workflows/:id/share`** stay
+ *    creator-only. Enabling a public link is a disclosure decision, not an
+ *    edit — the same class of lever as `visibility` — and the row policy that
+ *    governs it in the browser (`check_workflows_update_allowed`, migration
+ *    338) pins `share_token` and `is_presentation_enabled` to the creator or a
+ *    workspace admin. Widening these routes to `edit` would make the API
+ *    strictly more permissive than the database underneath it. Creator-only is
+ *    narrower than both and therefore safe; adding the workspace-admin half is
+ *    a deliberate decision to take with the visibility rule, not a side effect
+ *    of a scoping pass.
+ */
 export async function presentationRoutes(app: FastifyInstance) {
   // --- Enable sharing (generate token) ---
   app.post("/v1/workflows/:id/share", async (req, reply) => {

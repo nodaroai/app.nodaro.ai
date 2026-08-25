@@ -1390,15 +1390,22 @@ walkthrough.
 #### `list(params?)`
 
 ```ts
-list(params?: ListLocationsParams): Promise<{ locations: Location[] }>
+list(params?: ListLocationsParams): Promise<{ locations: Location[]; nextCursor?: string | null }>
 ```
 
 Lists the caller's locations. By default returns active locations only;
 pass `archived: true` for an "archive" view.
 
+Pagination is **opt-in**: without `limit` you get the full legacy listing
+and no `nextCursor`; with `limit` (max 500) you get one page plus a
+`nextCursor` to pass back as `cursor` — loop until it is `null`, the same
+pattern as `characters.list()`.
+
 ```ts
 const { locations } = await client.locations.list()
 const { locations: archived } = await client.locations.list({ archived: true })
+const page = await client.locations.list({ limit: 100 })          // page 1
+const next = await client.locations.list({ limit: 100, cursor: page.nextCursor! })
 ```
 
 #### `listArchived(params?)`
@@ -1681,9 +1688,16 @@ Lists the caller's objects. By default returns active objects only; pass
 `archived: true` for an "archive" view. Optional `projectId` scopes the
 result to a single project.
 
+Pagination is **opt-in**: without `limit` you get the full legacy listing
+and no `nextCursor`; with `limit` (max 500) you get one page plus a
+`nextCursor` to pass back as `cursor` — loop until it is `null`, the same
+pattern as `characters.list()`. Applies to `creatures.list()` identically.
+
 ```ts
 const { objects } = await client.objects.list()
 const { objects: archived } = await client.objects.list({ archived: true })
+const page = await client.objects.list({ limit: 100 })            // page 1
+const next = await client.objects.list({ limit: 100, cursor: page.nextCursor! })
 ```
 
 > `Object` shadows the JS global, which TypeScript handles cleanly via

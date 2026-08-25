@@ -14,7 +14,8 @@
  * what let this surface sit at two kinds while the library had four.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Maximize2, ZoomIn } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
 import {
@@ -103,6 +104,18 @@ export function CopilotMentionPicker({
   const [preview, setPreview] = useState<(MentionPreviewContent & { insert: () => void }) | null>(null)
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * An `onPreview` for a row that HAS an image, and `undefined` for one that
+   * does not — which is what makes the thumb render bare, with no magnifier
+   * promising a picture there is none of. Same shape as the browser modal's.
+   */
+  const previewOf = (
+    src: string | null,
+    label: string,
+    sub: string,
+    insert: () => void,
+  ): (() => void) | undefined => (src ? () => setPreview({ src, label, sub, insert }) : undefined)
 
   // A collection that loads after mount must not leave the picker on an empty
   // default tab while another tab has everything.
@@ -284,7 +297,9 @@ export function CopilotMentionPicker({
         ) : drill ? (
           drillRows.map((row, index) => {
             const isActive = index === active
-            const base = `flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${isActive ? "bg-[var(--copilot-surface)]" : ""}`
+            // `group`: hovering anywhere on the row reveals the thumb's
+            // magnifier, not only the 26px circle itself.
+            const base = `group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${isActive ? "bg-[var(--copilot-surface)]" : ""}`
             if (row.kind === "back") {
               return (
                 <button key="back" id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} onMouseDown={(e) => e.preventDefault()} onClick={() => setDrill(null)} className={base}>
@@ -297,9 +312,10 @@ export function CopilotMentionPicker({
               return (
                 <button key="default" id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(drill)} className={base}>
                   <PreviewableThumb
-                    src={safeThumbUrl(drill.imageUrl)}
                     label={drill.name}
-                    onPreview={(src) => setPreview({ src, label: drill.name, sub: KIND_UI[drill.kind].chip, insert: () => onPick(drill) })}
+                    round={KIND_UI[drill.kind].round}
+                    highlighted={isActive}
+                    onPreview={previewOf(safeThumbUrl(drill.imageUrl), drill.name, KIND_UI[drill.kind].chip, () => onPick(drill))}
                   >
                     <MentionThumb mention={drill} size={26} />
                   </PreviewableThumb>
@@ -311,9 +327,10 @@ export function CopilotMentionPicker({
             return (
               <button key={`${variant.bucket}:${variant.name}`} id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} aria-label={`${variant.name} ${variant.bucketNoun}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(drill, variant)} className={base}>
                 <PreviewableThumb
-                  src={safeThumbUrl(variant.imageUrl)}
                   label={`${drill.name} — ${variant.name}`}
-                  onPreview={(src) => setPreview({ src, label: `${drill.name} — ${variant.name}`, sub: variant.bucketNoun, insert: () => onPick(drill, variant) })}
+                  round={false}
+                  highlighted={isActive}
+                  onPreview={previewOf(safeThumbUrl(variant.imageUrl), `${drill.name} — ${variant.name}`, variant.bucketNoun, () => onPick(drill, variant))}
                 >
                   <VariantThumb variant={variant} size={26} />
                 </PreviewableThumb>
@@ -338,14 +355,15 @@ export function CopilotMentionPicker({
                   aria-selected={isActive}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => onPick(item)}
-                  className={`flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${
+                  className={`group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${
                     isActive ? "bg-[var(--copilot-surface)]" : ""
                   }`}
                 >
                   <PreviewableThumb
-                    src={safeThumbUrl(item.imageUrl)}
                     label={item.name}
-                    onPreview={(src) => setPreview({ src, label: item.name, sub: KIND_UI[item.kind].chip, insert: () => onPick(item) })}
+                    round={KIND_UI[item.kind].round}
+                    highlighted={isActive}
+                    onPreview={previewOf(safeThumbUrl(item.imageUrl), item.name, KIND_UI[item.kind].chip, () => onPick(item))}
                   >
                     <MentionThumb mention={item} size={22} />
                   </PreviewableThumb>
@@ -405,44 +423,74 @@ export function CopilotMentionPicker({
 }
 
 /**
- * Wraps a row's thumbnail so clicking the IMAGE previews it large while the
- * rest of the row still inserts. Rows without an image render the bare thumb.
+ * Wraps a thumbnail so clicking the IMAGE previews it large while the rest of
+ * the row or tile still inserts. Rows without an image render the bare thumb.
+ *
+ * The magnifier badge is the whole point of the wrapper being visible at all:
+ * "the picture is a button" is not something a person can see, and the owner
+ * reported exactly that — able to enlarge only AFTER picking, because after
+ * picking there is a chip they know to click. It is the same badge in the
+ * inline list and in the full-size browser because both render THIS component.
+ * Two copies of an affordance is how one of them ends up missing.
+ *
+ * TWO ways it shows, because this list has two cursors. The parent row carries
+ * Tailwind's `group`, so hovering anywhere on the row reveals it — not only
+ * the 22px circle. And `highlighted` forces it on the arrow-key row: focus
+ * NEVER moves here (every row preventDefaults its mousedown so the composer
+ * keeps it, and the list is driven by `aria-activedescendant`), so a
+ * `:focus-within` rule would look right in the source and never once fire.
  */
-function PreviewableThumb({
-  src,
+export function PreviewableThumb({
   label,
+  round,
+  highlighted,
   onPreview,
   children,
 }: {
-  src: string | null
   label: string
-  onPreview: (src: string) => void
+  /** Matches the thumb's own shape, so the badge cannot square off a portrait. */
+  round: boolean
+  /** The arrow-key cursor is on this row — show the badge without a pointer. */
+  highlighted?: boolean
+  /** Absent when the row has no image: it renders as a bare thumb, as before. */
+  onPreview?: () => void
   children: React.ReactNode
 }) {
-  if (!src) return <>{children}</>
+  if (!onPreview) return <>{children}</>
   return (
     <span
       role="button"
       tabIndex={-1}
       aria-label={S.pickerPreviewOf(label)}
       title={S.pickerPreviewOf(label)}
+      // Focus must stay in the composer: its blur closes the picker, so a
+      // thumbnail that stole focus would close the list it sits in.
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation()
-        onPreview(src)
+        onPreview()
       }}
-      className="flex-none cursor-zoom-in"
+      className="relative flex-none cursor-zoom-in"
     >
       {children}
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 text-white transition-opacity group-hover:opacity-100 ${
+          highlighted ? "opacity-100" : "opacity-0"
+        } ${round ? "rounded-full" : "rounded-[6px]"}`}
+      >
+        <ZoomIn className="w-1/2 h-1/2 max-w-[18px] max-h-[18px]" strokeWidth={2.4} />
+      </span>
     </span>
   )
 }
 
 /**
- * Only http(s) reaches a `url()`. `JSON.stringify` already makes a breakout
- * impossible, but without a scheme check the browser would still fetch whatever
- * string sits in the row — a `data:` payload, or a third-party host that then
- * learns the user's IP and referrer just because the picker opened.
+ * Only http(s) reaches the browser. The CSS `url()` this once guarded is gone
+ * — the thumb is an `<img>` now — and the check is worth every bit as much
+ * there: without it the browser would fetch whatever string sits in the row,
+ * a `data:` payload or a third-party host that then learns the user's IP and
+ * referrer just because the picker opened.
  */
 export function safeThumbUrl(url: string | null | undefined): string | null {
   if (typeof url !== "string" || url.length === 0) return null
@@ -454,32 +502,67 @@ export function safeThumbUrl(url: string | null | undefined): string | null {
   }
 }
 
+/**
+ * The frame a thumbnail lives in, and the ONE way it loads.
+ *
+ * This used to be a CSS `background-image` pointing at the raw asset URL, and
+ * that is why the picker looked empty for a library that shows fine
+ * everywhere else: every other surface in the app
+ * shows an image through `CachedImage`, which asks the CDN for a small
+ * transformed variant, keeps decoded images in memory across remounts, and
+ * falls back to the image proxy for hosts the browser refuses to load
+ * directly. A hand-rolled `url()` gets none of that — it asks for the
+ * ORIGINAL, which for a character portrait is a multi-megabyte PNG, so a
+ * fourteen-row list quietly started fourteen full-size downloads and painted
+ * nothing for as long as they took.
+ *
+ * Two ways to show an image is the bug. There is one now.
+ */
+function ThumbFrame({
+  src,
+  size,
+  round,
+}: {
+  src: string | null
+  size: number
+  round: boolean
+}) {
+  return (
+    // Decorative: every row and tile already carries the name in text beside
+    // it, and the preview wrapper carries its own label. An announced thumb
+    // would say each name twice.
+    <span
+      aria-hidden
+      className="flex-none overflow-hidden border border-border bg-[var(--copilot-surface)] block"
+      style={{ width: size, height: size, borderRadius: round ? "50%" : "6px" }}
+    >
+      {src && (
+        <CachedImage
+          src={src}
+          alt=""
+          // Retina: ask for more pixels than the box, never fewer. Still two
+          // orders of magnitude smaller than the original.
+          thumbnail
+          thumbnailWidth={Math.max(64, size * 3)}
+          className="w-full h-full object-cover"
+        />
+      )}
+    </span>
+  )
+}
+
 /** Round for living things, square for things and places — the shape
  *  carries the kind at a glance. */
 export function MentionThumb({ mention, size }: { mention: CopilotMention; size: number }) {
-  const radius = KIND_UI[mention.kind].round ? "50%" : "6px"
-  const src = safeThumbUrl(mention.imageUrl)
   return (
-    <span
-      className="flex-none border border-border bg-[var(--copilot-surface)] bg-cover bg-center"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        ...(src ? { backgroundImage: `url(${JSON.stringify(src)})` } : {}),
-      }}
-      aria-hidden
+    <ThumbFrame
+      src={safeThumbUrl(mention.imageUrl)}
+      size={size}
+      round={KIND_UI[mention.kind].round}
     />
   )
 }
 
 export function VariantThumb({ variant, size }: { variant: CopilotMentionVariant; size: number }) {
-  const src = safeThumbUrl(variant.imageUrl)
-  return (
-    <span
-      className="flex-none border border-border bg-[var(--copilot-surface)] bg-cover bg-center rounded-[6px]"
-      style={{ width: size, height: size, ...(src ? { backgroundImage: `url(${JSON.stringify(src)})` } : {}) }}
-      aria-hidden
-    />
-  )
+  return <ThumbFrame src={safeThumbUrl(variant.imageUrl)} size={size} round={false} />
 }

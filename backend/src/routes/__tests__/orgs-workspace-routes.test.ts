@@ -620,7 +620,7 @@ describe("POST /v1/workflows/:id/move", () => {
 
   it("names who lost access when the move changes scope", async () => {
     const { collabDelete } = moveTables({
-      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, project_id: PROJECT, assignment_id: null },
+      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, visibility: "private", project_id: PROJECT, assignment_id: null },
       collaborators: [{ user_id: OTHER }],
     })
 
@@ -653,7 +653,7 @@ describe("POST /v1/workflows/:id/move", () => {
   it("refuses moving INTO an archived workspace, and allows moving OUT of one", async () => {
     context = { workspaceId: WS, archived: true }
     moveTables({
-      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, project_id: PROJECT, assignment_id: null },
+      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, visibility: "private", project_id: PROJECT, assignment_id: null },
       project: { id: OTHER_PROJECT, user_id: USER, workspace_id: WS },
     })
 
@@ -669,7 +669,7 @@ describe("POST /v1/workflows/:id/move", () => {
     // Out of it, into the caller's personal space: allowed. Rescuing your work
     // is the reason anyone opens an archived workspace at all.
     moveTables({
-      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, project_id: PROJECT, assignment_id: null },
+      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, visibility: "private", project_id: PROJECT, assignment_id: null },
       project: { id: OTHER_PROJECT, user_id: USER, workspace_id: null },
     })
     const out = await app.inject({
@@ -686,7 +686,7 @@ describe("POST /v1/workflows/:id/move", () => {
     // identically and then skipped the consequence, so a workflow could leave
     // a workspace with everyone in it still able to read it.
     const { collabDelete } = moveTables({
-      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, project_id: PROJECT, assignment_id: null },
+      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, visibility: "private", project_id: PROJECT, assignment_id: null },
       collaborators: [{ user_id: OTHER }],
     })
 
@@ -708,7 +708,7 @@ describe("POST /v1/workflows/:id/move", () => {
     // it. A response that is wrong about who can see something is worse than
     // an error, because nobody goes looking.
     moveTables({
-      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, project_id: PROJECT, assignment_id: null },
+      workflow: { id: WORKFLOW, user_id: USER, workspace_id: WS, visibility: "private", project_id: PROJECT, assignment_id: null },
       collaborators: [{ user_id: OTHER }],
       collabDeleteFails: true,
     })

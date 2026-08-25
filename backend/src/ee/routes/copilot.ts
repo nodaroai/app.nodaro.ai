@@ -56,7 +56,6 @@ const createThreadBody = z
 
 const messageBody = z.object({
   message: z.string().min(1).max(THREAD_CAPS.messageMaxChars),
-  clientMessageId: z.string().max(100).optional(),
   baseVersion: z.number().int().min(1).optional(),
   /**
    * The composer's echo of the thread's model tier — read ONLY by the
@@ -168,7 +167,15 @@ async function healStaleTurns(threadId: string): Promise<void> {
     // persisted per iteration and refunds only when there was none. A local
     // refund here would disagree with the cron and hand back burned tokens.
     if (turn.job_id) await reconcileCopilotTurn({ id: turn.job_id, reconcile_attempts: 0 })
-    else await finishTurn(turn.id, "failed", { error: "turn_abandoned" })
+    // The row must leave `running` whatever the settle brain decided.
+    // `reconcileCopilotTurn` returns EARLY when the job was already settled by
+    // a live handler, and its own turn update is skipped with it — harmless
+    // before migration 348 (a stale row just read as not-live), but with the
+    // partial unique index in place a leftover `running` row is a thread
+    // wedged at 409 forever, which is exactly what 336's heartbeat design
+    // exists to prevent. CAS'd on `status = 'running'`, so a turn the settle
+    // brain DID finish is untouched.
+    await finishTurn(turn.id, "failed", { error: "turn_abandoned" })
   }
 }
 
@@ -198,6 +205,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
 
       try {
         let workflow: WorkflowRow | null = null
+        let seededWorkflow = false
 
         if (parsed.data.workflowId) {
           workflow = await loadOwnedWorkflow(parsed.data.workflowId, userId)
@@ -227,10 +235,14 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
             .single()
           if (error) return sendInternalError(reply, req, error, "Failed to create workflow")
           workflow = data as WorkflowRow
+          seededWorkflow = true
         }
 
         const existing = await findActiveThread(userId, workflow.id)
-        const thread = existing ?? (await createThread(userId, workflow.id))
+        // `seededWorkflow` is what lets the sweep tell a workflow this
+        // handshake CREATED from one the user opened the copilot on (#904).
+        const thread =
+          existing ?? (await createThread(userId, workflow.id, { createdWorkflow: seededWorkflow }))
         return reply.status(existing ? 200 : 201).send({
           data: {
             thread: publicThread(thread),
@@ -440,6 +452,33 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         jobId: job.id,
         baseVersion: workflow.version,
       })
+      // The claim was lost inside the check-then-act window: another request
+      // passed the same `findLiveTurn` above and wrote its turn row first, and
+      // migration 348's partial unique index refused this one (#903).
+      //
+      // Everything spent getting here has to come back, in the order the live
+      // path uses: release the reservation, then settle the job. Without the
+      // refund this branch would MOVE the double charge rather than fix it,
+      // and a job left at `processing` with `provider_kind = "copilot-turn"`
+      // would be re-scanned by the reconcile cron every 15 minutes.
+      if (!turn) {
+        await refundReservedCreditsForJob(job.id)
+        await supabase
+          .from("jobs")
+          .update({
+            status: "failed",
+            error_message: "Another copilot turn claimed this conversation first. Nothing was charged.",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", job.id)
+          // This request minted the row seconds ago for this user, so the
+          // owner filter changes nothing today. It is in the chain because
+          // ownership a reader has to reconstruct from three lines up is
+          // ownership the next edit can quietly drop.
+          .eq("user_id", userId)
+          .in("status", ["pending", "processing"])
+        return reply.status(409).send({ error: { code: "turn_in_progress", message: "The copilot is still working on the previous message." } })
+      }
 
       const sse = await createSSEStream(req, reply)
       const abort = new AbortController()

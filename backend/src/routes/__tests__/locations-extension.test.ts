@@ -267,10 +267,12 @@ describe("GET /v1/locations — archived filter", () => {
       not: vi.fn().mockReturnThis(),
       is: vi.fn().mockReturnThis(),
     }
+    // `order` chains twice now (created_at, then the id tie-break), so it
+    // lives on the chainable itself.
+    chainable.order = vi.fn().mockReturnValue(chainable)
     chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
       Promise.resolve({ data: [], error: null }).then(resolve)
-    const mockOrder = vi.fn().mockReturnValue(chainable)
-    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockSelect = vi.fn().mockReturnValue(chainable)
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
@@ -290,10 +292,12 @@ describe("GET /v1/locations — archived filter", () => {
       not: vi.fn().mockReturnThis(),
       is: vi.fn().mockReturnThis(),
     }
+    // `order` chains twice now (created_at, then the id tie-break), so it
+    // lives on the chainable itself.
+    chainable.order = vi.fn().mockReturnValue(chainable)
     chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
       Promise.resolve({ data: [], error: null }).then(resolve)
-    const mockOrder = vi.fn().mockReturnValue(chainable)
-    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockSelect = vi.fn().mockReturnValue(chainable)
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
