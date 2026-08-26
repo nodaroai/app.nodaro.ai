@@ -25,19 +25,20 @@ function renderHeader(onChangeSettings = vi.fn()) {
   return onChangeSettings
 }
 
-const box = () => screen.getByRole("checkbox") as HTMLInputElement
+const toggle = () => screen.getByRole("switch")
+const isOn = () => toggle().getAttribute("aria-checked") === "true"
 
 describe("the publishing permission", () => {
   it("is off until the user says otherwise", () => {
     renderHeader()
 
-    expect(box().checked).toBe(false)
+    expect(isOn()).toBe(false)
   })
 
   it("asks the server to turn it on when ticked", () => {
     const onChange = renderHeader()
 
-    fireEvent.click(box())
+    fireEvent.click(toggle())
 
     expect(onChange).toHaveBeenCalledWith({ allowPublishing: true })
   })
@@ -47,7 +48,7 @@ describe("the publishing permission", () => {
     useCopilotStore.setState({ allowPublishing: true })
     const onChange = renderHeader()
 
-    fireEvent.click(box())
+    fireEvent.click(toggle())
 
     expect(onChange).toHaveBeenCalledWith({ allowPublishing: false })
   })
@@ -59,7 +60,7 @@ describe("the publishing permission", () => {
     useCopilotStore.setState({ allowPublishing: true })
     renderHeader()
 
-    expect(box().checked).toBe(true)
+    expect(isOn()).toBe(true)
   })
 
   it("says what it still cannot do, not only what it can", () => {
@@ -67,13 +68,13 @@ describe("the publishing permission", () => {
     useCopilotStore.setState({ allowPublishing: true })
     renderHeader()
 
-    expect(screen.getByText(/cannot choose the account/i)).toBeTruthy()
+    expect(screen.getByText(/you still choose the account/i)).toBeTruthy()
   })
 
   it("does not disturb the run mode", () => {
     const onChange = renderHeader()
 
-    fireEvent.click(box())
+    fireEvent.click(toggle())
 
     expect(onChange.mock.calls[0]![0]).not.toHaveProperty("runMode")
   })
