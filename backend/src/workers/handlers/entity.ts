@@ -29,6 +29,7 @@ import { autoAttachObjectAsset, setObjectMainImage } from "../../lib/object-auto
 import { autoAttachCreatureAsset, setCreatureMainImage } from "../../lib/creature-auto-attach.js"
 import { clampAspectRatioToModel } from "../../lib/aspect-ratio.js"
 import { entityImageRefCap } from "../../lib/entity-ref-cap.js"
+import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 
 interface EntityImageJobData {
   jobId: string
@@ -113,7 +114,7 @@ function makeEntityImageHandler(
   return async function entityImageHandler(job: Job, ctx: JobContext) {
     const data = job.data as EntityImageJobData
     const {
-      prompt,
+      prompt: promptRaw,
       sourceImageUrl,
       assembledReferenceUrls,
       assetType,
@@ -132,6 +133,18 @@ function makeEntityImageHandler(
       resolution,
       quality,
     } = data
+    // SAI-2 / H5 — apply the deployment's prompt policy (e.g. SAI's modesty
+    // clause) at the entity IMAGE chokepoint. All four person/scene entity types
+    // (generate-character / -location / -object / -creature, main + assets) flow
+    // through this ONE factory, from BOTH the DAG (payload-builder polices there
+    // too — the policy is idempotent, so this is a no-op on those) AND the direct
+    // single-node Run routes (which do NOT police — this is their only policing
+    // point). Character Studio's "Create character" is the most person-centric
+    // surface in the product and reached the provider with zero modesty text
+    // before this. Inert on mainline (no policy registered = identity). Entity
+    // generation carries no negative-prompt field, so the positive clause is the
+    // enforcement.
+    const prompt = applyPromptPolicies({ prompt: promptRaw, negativePrompt: "", kind: "image" }).prompt
     const resolvedProvider = provider ?? "nano-banana"
 
     if (opts?.includeAssetType) {

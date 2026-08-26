@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockGenerateImage = vi.fn()
@@ -91,6 +91,7 @@ vi.mock("../../shared.js", () => ({
 }))
 
 import { entityHandlers } from "../entity.js"
+import { registerPromptPolicy, clearPromptPolicies } from "../../../lib/prompt-policy.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -1243,5 +1244,46 @@ describe("generate-character handler — skipPortraitAttach (extension reimagine
     // The variant attach still fires — the flag only guards setCharacterPortrait.
     expect(mocks.mockAttach).toHaveBeenCalledTimes(1)
     expect(mocks.mockSetPortrait).not.toHaveBeenCalled()
+  })
+})
+
+describe("SAI-2/H5: the deployment prompt policy is applied at the entity image chokepoint", () => {
+  afterEach(() => clearPromptPolicies())
+
+  // Every person/scene entity image type flows through makeEntityImageHandler,
+  // so a single chokepoint must police them ALL — the modesty studio's core
+  // surface, unpoliced before this on the direct single-node Run path.
+  const IMAGE_TYPES = [
+    "generate-character",
+    "generate-face",
+    "generate-character-asset",
+    "generate-object",
+    "generate-object-asset",
+    "generate-creature",
+    "generate-creature-asset",
+    "generate-location",
+    "generate-location-asset",
+  ]
+
+  it("generateImage receives the POLICED prompt for every entity image type", async () => {
+    registerPromptPolicy({ id: "test-modesty", apply: (a) => ({ ...a, prompt: `MODEST: ${a.prompt}` }) })
+    for (const type of IMAGE_TYPES) {
+      await entityHandlers[type](makeJob(type, { prompt: "a person" }) as never, makeCtx())
+    }
+    expect(mocks.mockGenerateImage.mock.calls.length).toBe(IMAGE_TYPES.length)
+    for (const call of mocks.mockGenerateImage.mock.calls) {
+      // arg 0 is the prompt handed to the provider
+      expect(call[0]).toBe("MODEST: a person")
+    }
+  })
+
+  it("is inert when no policy is registered (mainline byte-identical)", async () => {
+    await entityHandlers["generate-character"](
+      makeJob("generate-character", { prompt: "a person" }) as never,
+      makeCtx(),
+    )
+    // No policy registered → applyPromptPolicies is identity → the raw prompt
+    // reaches the provider unchanged.
+    expect(mocks.mockGenerateImage.mock.calls[0]?.[0]).toBe("a person")
   })
 })
