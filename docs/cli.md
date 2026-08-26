@@ -114,6 +114,15 @@ nodaro workflows export <id> [--with-assets] [--output bundle.json]
 nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 
+# Sharing (workspace features)
+nodaro workflows share <id> [--visibility workspace|private] [--json]
+nodaro workflows move <id> --project <projectId> [--json]
+nodaro workflows shared-with-me [--json]
+nodaro workflows collaborators list <id> [--json]
+nodaro workflows collaborators add <id> (--user <userId> | --email <email>) --role viewer|editor [--json]
+nodaro workflows collaborators update <id> <userId> --role viewer|editor [--json]
+nodaro workflows collaborators remove <id> <userId> [--json]
+
 # Apps — workflows wrapped in a curated UI
 nodaro apps list [--search <query>] [--limit <n>] [--cursor <token>] [--category <slug>]
 nodaro apps get <slug>                                  # show input schema + outputs

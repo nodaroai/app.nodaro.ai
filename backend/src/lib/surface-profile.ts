@@ -201,6 +201,44 @@ export function surfaceGateOpen(): boolean {
 }
 
 /**
+ * True when the deployment restricts sign-in to SSO ONLY — auth.methods is
+ * non-empty and every entry is "sso". Drives the server-authoritative SSO gate
+ * (middleware/auth.ts, SAI-5 / H6): on such a deployment, every JWT-authenticated
+ * account must have been provisioned through the SSO path. Inert by default
+ * (auth.methods defaults [] → false → gate off, mainline unaffected); also false
+ * when a deployment allows mixed auth (e.g. ["email","sso"]), since a
+ * password/OAuth account is legitimate there.
+ */
+export function surfaceSsoOnly(): boolean {
+  const methods = runtimeSurfaceProfile().auth.methods
+  return methods.length > 0 && methods.every((m) => m === "sso")
+}
+
+/**
+ * Fail-closed guard (SAI-4 / H8). True when a deployment CONFIGURED a surface
+ * profile (NODARO_SURFACE_PROFILE set) on an edition that honors it
+ * (surfaceGateOpen) but the profile did NOT load — detected because
+ * parseSurfaceProfile returns the SURFACE_PROFILE_DEFAULT object BY IDENTITY on
+ * every failure path (unreadable @file, invalid JSON, failed validation), while
+ * a successful parse always returns a fresh object (mergeOverDefault), even when
+ * its values happen to match the defaults. So `runtimeSurfaceProfile() ===
+ * SURFACE_PROFILE_DEFAULT` with the env set and the gate open is an un-fakeable
+ * "the profile I asked for did not load" signal.
+ *
+ * app.ts turns a true here into exit(1): booting a NARROWING deployment
+ * mainline-open (email login, Nodaro brand, un-denied nodes/models, unrestricted
+ * voice genders, the public gallery) is a security failure — a partial config
+ * must fail closed, not serve everything with a lone console.warn.
+ */
+export function surfaceProfileFailedToLoad(): boolean {
+  return (
+    Boolean(process.env.NODARO_SURFACE_PROFILE?.trim()) &&
+    surfaceGateOpen() &&
+    runtimeSurfaceProfile() === SURFACE_PROFILE_DEFAULT
+  )
+}
+
+/**
  * Narrows-never-widens refinement: strip anything the profile tries to turn ON
  * that the edition (or the profile itself) does not actually support. Only
  * additive vectors need checking — subtractive fields (nav.hide, *.deny,

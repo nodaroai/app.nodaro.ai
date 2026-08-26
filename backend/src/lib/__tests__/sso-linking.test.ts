@@ -79,6 +79,10 @@ describe("resolveSsoUser", () => {
       email: "new@example.com",
       email_confirm: true,
       user_metadata: { sso: "librechat", sso_subject: "idp-7" },
+      // SAI-5/H6: the app_metadata copy is the ONLY marker the auth gate trusts
+      // (user_metadata is forgeable via public signUp). Dropping it silently
+      // locks every new SSO user out of an SSO-only deployment — guard it.
+      app_metadata: { sso: "librechat", sso_subject: "idp-7" },
     })
   })
 
@@ -110,7 +114,13 @@ describe("resolveSsoUser", () => {
     state.userById = { id: "u1", user_metadata: {} }
     const r = await resolveSsoUser(provider, assertion())
     expect(r).toMatchObject({ ok: true, action: "linked", userId: "u1" })
-    expect(state.updated).toMatchObject({ id: "u1", attrs: { user_metadata: { sso: "librechat", sso_subject: "idp-7" } } })
+    expect(state.updated).toMatchObject({
+      id: "u1",
+      attrs: {
+        user_metadata: { sso: "librechat", sso_subject: "idp-7" },
+        app_metadata: { sso: "librechat", sso_subject: "idp-7" },
+      },
+    })
   })
 
   it("REJECTS link-existing when the email is unverified even with the flag on", async () => {

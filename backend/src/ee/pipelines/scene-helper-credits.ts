@@ -67,6 +67,7 @@ export async function reserveHelperCredits(
     throw err
   }
   const modelIdentifier = `scene-helper:${args.helperName}`
+  // billing-payer-ok: scene helpers are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
     p_user_id: args.userId,
     p_credits: credits,

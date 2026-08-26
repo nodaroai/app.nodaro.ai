@@ -67,8 +67,14 @@ function shapeProject(p: ProjectRow, workflowCount: number) {
  * Both `list_projects` and `get_project` query Supabase directly, scoped to
  * `session.userId` (the service-role client bypasses RLS, so the manual
  * `user_id` filter is the only thing keeping projects from leaking across
- * users). Neither is restricted to the session's mcp-project — they see ALL
- * of the caller's projects.
+ * users) AND to the session's workspace dimension, copied verbatim from the
+ * REST projects list (`routes/projects.ts`): `.eq("workspace_id", …)` inside a
+ * workspace, `.is("workspace_id", null)` in the personal space. `user_id`
+ * stays in BOTH branches — like the REST list this may under-show the wider
+ * workspace rule and be widened later, never over-show. With `ORGS_ENABLED`
+ * off `session.workspaceId` is always undefined and every project row has a
+ * null `workspace_id`, so the personal branch is byte-identical to the old
+ * unscoped read.
  *
  * Gated on `workflows:read`: a project is just a folder of workflows, and the
  * same scope already governs `list_workflows`.
@@ -86,11 +92,14 @@ export function registerProjectTools(server: McpServer, session: McpSession): vo
       annotations: { readOnlyHint: true },
     },
     async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("projects")
         .select("id, name, description, created_at")
         .eq("user_id", session.userId)
-        .order("name", { ascending: true })
+      q = session.workspaceId
+        ? q.eq("workspace_id", session.workspaceId)
+        : q.is("workspace_id", null)
+      const { data, error } = await q.order("name", { ascending: true })
       if (error) return err(`Error: ${error.message}`)
       const rows = (data ?? []) as ProjectRow[]
       const counts = await workflowCountsByProject(
@@ -115,12 +124,15 @@ export function registerProjectTools(server: McpServer, session: McpSession): vo
     async (args) => {
       const key = args.project_id
       const filterColumn = UUID_RE.test(key) ? "id" : "name"
-      const { data, error } = await supabase
+      let q = supabase
         .from("projects")
         .select("id, name, description, created_at")
         .eq("user_id", session.userId)
         .eq(filterColumn, key)
-        .maybeSingle()
+      q = session.workspaceId
+        ? q.eq("workspace_id", session.workspaceId)
+        : q.is("workspace_id", null)
+      const { data, error } = await q.maybeSingle()
       if (error) return err(`Error: ${error.message}`)
       if (!data) return err(`Project "${key}" not found`)
       const project = data as ProjectRow

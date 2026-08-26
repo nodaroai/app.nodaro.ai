@@ -124,6 +124,7 @@ function createSupabaseChain(overrides: Record<string, unknown> = {}) {
   const defaults = {
     select: vi.fn(),
     eq: vi.fn(),
+    is: vi.fn(),
     in: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),

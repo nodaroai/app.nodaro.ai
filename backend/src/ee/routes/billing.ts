@@ -99,14 +99,30 @@ export async function billingRoutes(app: FastifyInstance) {
     }
     if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
 
-    const { data, error } = await supabase
+    // Org pack claims carry the OWNER's user_id by design (migration 351);
+    // those credits never entered the personal balance, so the personal
+    // receipts view must not list them. 42703 = the org_id column has not
+    // reached this database yet (351 applies on the next promotion) — then
+    // no org rows can exist and the unfiltered query is the same answer.
+    let { data, error } = await supabase
       .from("transactions")
       .select(
         "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url"
       )
       .eq("user_id", userId)
+      .is("org_id", null)
       .order("created_at", { ascending: false })
       .limit(50)
+    if (error?.code === "42703") {
+      ;({ data, error } = await supabase
+        .from("transactions")
+        .select(
+          "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url"
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50))
+    }
 
     if (error) {
       console.error("[billing] Failed to fetch transactions:", error.message)

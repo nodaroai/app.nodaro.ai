@@ -2,6 +2,17 @@ import { supabase } from "./supabase.js"
 import { ssoLinkExistingEnabled, type SsoProviderConfig } from "./sso-providers.js"
 import type { VerifiedAssertion } from "./sso-assertion.js"
 
+/**
+ * The SSO marker key. Stamped into BOTH `user_metadata` (back-compat + B3's
+ * egress decorator reads `sso_subject` there) AND `app_metadata`. The
+ * server-authoritative SSO gate (middleware/auth.ts, SAI-5 / H6) trusts ONLY the
+ * `app_metadata` copy: `user_metadata` is settable by a public `supabase.auth.
+ * signUp({ options: { data } })`, so a self-registered account could forge the
+ * marker there — `app_metadata` is writable only through the service-role admin
+ * API this file uses.
+ */
+export const SSO_APP_METADATA_KEY = "sso"
+
 export type SsoLinkResult =
   | { ok: true; email: string; userId: string; action: "linked" | "provisioned" }
   | {
@@ -63,7 +74,12 @@ export async function resolveSsoUser(
       }
     }
     if (ssoLinkExistingEnabled() && assertion.emailVerified) {
-      await supabase.auth.admin.updateUserById(profile.id, { user_metadata: metadata })
+      // Stamp BOTH: user_metadata for egress/back-compat, app_metadata for the
+      // server-authoritative auth gate (the only copy that gate trusts).
+      await supabase.auth.admin.updateUserById(profile.id, {
+        user_metadata: metadata,
+        app_metadata: metadata,
+      })
       return { ok: true, email, userId: profile.id, action: "linked" }
     }
     return {
@@ -85,6 +101,9 @@ export async function resolveSsoUser(
     email,
     email_confirm: true,
     user_metadata: metadata,
+    // Service-role-only copy — the SSO gate (middleware/auth.ts) trusts this,
+    // NOT user_metadata (which a public signUp can forge).
+    app_metadata: metadata,
   })
   if (error || !created?.user?.id) {
     // A race (concurrent provision) surfaces here as a create failure; treat as

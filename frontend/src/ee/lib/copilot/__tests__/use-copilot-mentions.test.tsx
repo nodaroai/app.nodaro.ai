@@ -18,6 +18,14 @@ const calls = vi.hoisted(() => ({
   library: [] as unknown[][],
 }))
 
+/** The library query's paging state — kept OUT of `calls`, which holds only
+ *  arrays and is reset by zeroing their length. */
+const state = vi.hoisted(() => ({
+  hasNextPage: true,
+  isFetchingNextPage: false,
+  fetchNextPage: vi.fn(),
+}))
+
 const row = (id: string, name: string) => ({ id, name, sourceImageUrl: null })
 
 vi.mock("@/hooks/queries/use-assets-queries", () => ({
@@ -39,7 +47,15 @@ vi.mock("@/hooks/queries/use-assets-queries", () => ({
   },
   useLibraryInfinite: (...args: unknown[]) => {
     calls.library.push(args)
-    return { data: { pages: [] }, isLoading: false }
+    // `totalCount` is what the server answers on the first page — the real
+    // number of matching files, not how many this page carried.
+    return {
+      data: { pages: [{ data: [], totalCount: 523 }] },
+      isLoading: false,
+      hasNextPage: state.hasNextPage,
+      isFetchingNextPage: state.isFetchingNextPage,
+      fetchNextPage: state.fetchNextPage,
+    }
   },
 }))
 
@@ -61,8 +77,12 @@ describe("the mention lists are the whole library", () => {
     }
   })
 
-  it("takes no project parameter at all, so it cannot be re-narrowed", () => {
-    // A default would still let a caller pass one. The signature is the guard.
+  it("requires only the user — a project is not a parameter it accepts", () => {
+    // `.length` counts parameters BEFORE the first default, so this pins that
+    // `userId` is the only required one. It is deliberately paired with the
+    // call-site assertions above: those are what prove no project id reaches
+    // the entity hooks, and this alone would not catch a defaulted one being
+    // added back.
     expect(useCopilotMentions.length).toBe(1)
   })
 
@@ -79,5 +99,97 @@ describe("the mention lists are the whole library", () => {
   it("asks for nothing while there is no user", () => {
     renderHook(() => useCopilotMentions(undefined))
     expect(calls.character[0]?.[1]).toBeUndefined()
+  })
+})
+
+describe("files are searched on the SERVER, entities in the browser", () => {
+  // The picker showed the newest 40 files and filtered THOSE. A user with 500
+  // files typing a filename got "no match" about a file they own and can see
+  // in My Library — the same lie the entity lists told at 100, by a different
+  // mechanism.
+  it("sends no search until the user types", () => {
+    renderHook(() => useCopilotMentions("u1"))
+    expect(calls.library[0]?.[0]).toMatchObject({ owned: true })
+    expect((calls.library[0]?.[0] as { search?: string }).search).toBeUndefined()
+  })
+
+  it("passes the typed text to the library query once it settles", async () => {
+    const { rerender } = renderHook(({ q }: { q: string }) => useCopilotMentions("u1", q), {
+      initialProps: { q: "" },
+    })
+    rerender({ q: "cat" })
+    // Debounced: the keystroke itself must not reach the server.
+    expect((calls.library.at(-1)?.[0] as { search?: string }).search).toBeUndefined()
+    await new Promise((r) => setTimeout(r, 320))
+    rerender({ q: "cat" })
+    expect((calls.library.at(-1)?.[0] as { search?: string }).search).toBe("cat")
+  })
+
+  it("does NOT re-fetch the entity lists when the user types", async () => {
+    const { rerender } = renderHook(({ q }: { q: string }) => useCopilotMentions("u1", q), {
+      initialProps: { q: "" },
+    })
+    rerender({ q: "iris" })
+    await new Promise((r) => setTimeout(r, 320))
+    rerender({ q: "iris" })
+    // Entities are all in memory; filtering them in the browser is instant and
+    // exact, and a server round-trip per keystroke would buy nothing.
+    for (const kind of ["character", "object", "creature", "location"] as const) {
+      for (const call of calls[kind]) expect(call[0]).toBeUndefined()
+    }
+  })
+
+  it("trims what it sends — a trailing space is not a different search", async () => {
+    const { rerender } = renderHook(({ q }: { q: string }) => useCopilotMentions("u1", q), {
+      initialProps: { q: "" },
+    })
+    rerender({ q: "  cat  " })
+    await new Promise((r) => setTimeout(r, 320))
+    rerender({ q: "  cat  " })
+    expect((calls.library.at(-1)?.[0] as { search?: string }).search).toBe("cat")
+  })
+
+  it("reports the server's exact file total, not how many arrived", () => {
+    const { result } = renderHook(() => useCopilotMentions("u1"))
+    // The tab used to show the loaded count — "Files 40" to someone with 500.
+    expect(result.current.fileTotal).toBe(523)
+  })
+})
+
+describe("reaching the files a search does not narrow away", () => {
+  // Search alone is not enough: a broad one ("img") can match hundreds, and a
+  // count saying 120 beside 40 rows is honest but useless if the other 80 are
+  // unreachable.
+  beforeEach(() => {
+    state.hasNextPage = true
+    state.isFetchingNextPage = false
+    state.fetchNextPage = vi.fn()
+  })
+
+  it("reports that more pages exist", () => {
+    const { result } = renderHook(() => useCopilotMentions("u1"))
+    expect(result.current.hasMoreFiles).toBe(true)
+  })
+
+  it("pulls the next page on request", () => {
+    const { result } = renderHook(() => useCopilotMentions("u1"))
+    result.current.loadMoreFiles()
+    expect(state.fetchNextPage).toHaveBeenCalled()
+  })
+
+  it("does nothing while a page is already in flight", () => {
+    // The scroll handler that calls this fires on every frame of a flick.
+    state.isFetchingNextPage = true
+    const { result } = renderHook(() => useCopilotMentions("u1"))
+    result.current.loadMoreFiles()
+    expect(state.fetchNextPage).not.toHaveBeenCalled()
+  })
+
+  it("does nothing when the server says there is no more", () => {
+    state.hasNextPage = false
+    const { result } = renderHook(() => useCopilotMentions("u1"))
+    result.current.loadMoreFiles()
+    expect(state.fetchNextPage).not.toHaveBeenCalled()
+    expect(result.current.hasMoreFiles).toBe(false)
   })
 })

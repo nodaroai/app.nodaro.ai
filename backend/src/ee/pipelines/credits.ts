@@ -212,6 +212,7 @@ export type ReservePipelineResult =
 export async function reservePipelineCredits(
   args: ReservePipelineCreditsArgs,
 ): Promise<ReservePipelineResult> {
+  // billing-payer-ok: pipeline jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
     p_user_id: args.userId,
     p_credits: args.credits,
@@ -272,6 +273,7 @@ export async function refundPipelineCredits(args: RefundPipelineCreditsArgs): Pr
     return
   }
   const usageLogId = pipeline.reservation_usage_log_id
+  // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351); this site only relays the stored reservation log id
   const { error } = await args.supabase.rpc("refund_credits", { p_usage_log_id: usageLogId })
   if (error) {
     console.error(`[pipelines/credits] refund_credits failed (${args.reason}):`, error.message)

@@ -1248,5 +1248,27 @@ export function buildToolkit(): PluginToolkit {
         return (data?.role as string | undefined) ?? null
       },
     },
+    // Organization money-in (E2/P13). Dynamic ee imports on purpose: the
+    // toolkit is core, and core may not statically import ee/ — the same shim
+    // shape as credit-guard. The plugin `?.`-guards this member (additive
+    // contract rule), so an older host simply has no org checkout.
+    // Gated on hasCredits(): only a Cloud build has Stripe wiring — leaving
+    // the member absent on Business/Community makes the plugin's own
+    // `billing_unavailable` 503 the honest answer instead of a raw Stripe
+    // failure from a host that was never meant to sell anything.
+    ...(hasCredits()
+      ? {
+          billing: {
+            createOrgPackCheckout: async (orgId: string, actorUserId: string, packId: string) => {
+              const { createOrgPackCheckout } = await import("../../ee/billing/org-customer.js")
+              return createOrgPackCheckout(orgId, actorUserId, packId)
+            },
+            getOrgCustomerPortalUrl: async (orgId: string) => {
+              const { getOrgCustomerPortalUrl } = await import("../../ee/billing/org-customer.js")
+              return getOrgCustomerPortalUrl(orgId)
+            },
+          },
+        }
+      : {}),
   }
 }

@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { Switch } from "@/components/ui/switch"
 import { CopilotMemoriesButton } from "./copilot-memories"
 import type { CopilotModelTier, CopilotRunMode } from "@/ee/lib/copilot/types"
 
@@ -142,23 +143,25 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
         </span>
       </div>
 
-      {/* A checkbox and not a segmented track: unlike Ask/Auto these are not two
-          named behaviours, they are a permission the user grants. Off is the
-          absence of it, and it should look like one. */}
-      <label className="flex items-start gap-2 cursor-pointer group">
-        <input
-          type="checkbox"
-          checked={allowPublishing}
-          onChange={(e) => onChangeSettings({ allowPublishing: e.target.checked })}
-          className="mt-[2px] w-3.5 h-3.5 flex-none rounded-[4px] accent-[var(--copilot-mention)] cursor-pointer"
-        />
-        <span className="flex flex-col gap-0.5 min-w-0">
+      {/* A switch, matching the on/off toggles across the editor (Voice, Fast
+          Mode): unlike Ask/Auto these are not two named behaviours, they are a
+          single permission the user grants, and the pink track states plainly
+          whether it is on. The text is beside the control, not wrapped in a
+          label — the Switch carries its own accessible name. */}
+      <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
           <span className="text-[11.5px] text-foreground leading-tight">{S.allowPublishing}</span>
           <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">
             {allowPublishing ? S.allowPublishingOn : S.allowPublishingOff}
           </span>
-        </span>
-      </label>
+        </div>
+        <Switch
+          checked={allowPublishing}
+          onCheckedChange={(v: boolean) => onChangeSettings({ allowPublishing: v })}
+          aria-label={S.allowPublishing}
+          className="flex-none"
+        />
+      </div>
     </div>
   )
 }

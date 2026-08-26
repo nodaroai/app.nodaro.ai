@@ -140,6 +140,7 @@ import { mediaImportUrlRoutes } from "./routes/media-import-url.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { adminJobsRoutes } from "./ee/routes/admin-jobs.js"
+import { adminSsoRoutes } from "./ee/routes/admin-sso.js"
 import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
 import { billingSurfaceRoutes } from "./routes/billing-surface.js"
@@ -148,7 +149,7 @@ import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
 import { billingRoutes } from "./ee/routes/billing.js"
 import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
-import { runtimeSurfaceProfile } from "./lib/surface-profile.js"
+import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -295,6 +296,21 @@ export async function buildApp() {
   // NODARO_OVERLAY_PACKAGE is unset (spec §7.2 / G1). Fatal (exit 1) if a named
   // overlay fails to load.
   await loadOverlay()
+
+  // SAI-4 / H8 — fail closed. If a surface profile was configured but did not
+  // load, refuse to boot rather than silently serving the un-narrowed mainline
+  // (email login, Nodaro brand, un-denied nodes/models, public gallery). The
+  // check is exact: parseSurfaceProfile returns SURFACE_PROFILE_DEFAULT by
+  // identity ONLY on a load failure. Inert on mainline (env unset) and in
+  // community (gate closed).
+  if (surfaceProfileFailedToLoad()) {
+    console.error(
+      "[surface-profile] FATAL: NODARO_SURFACE_PROFILE is set but did not load " +
+        "(unreadable @file, invalid JSON, or failed validation). Refusing to boot a " +
+        "narrowing deployment mainline-open. Fix the profile and redeploy.",
+    )
+    process.exit(1)
+  }
 
   const app = Fastify({
     // Same defaults as `logger: true`, plus a req serializer that redacts
@@ -476,6 +492,7 @@ export async function buildApp() {
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)
+  if (hasAdmin()) await app.register(adminSsoRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)
   await app.register(storageStatusRoutes)

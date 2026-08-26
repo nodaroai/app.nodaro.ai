@@ -128,6 +128,11 @@ export function registerWorkspaces({ server, session }: RegisterWorkspacesOpts):
         if (requested === null) {
           await storeSessionWorkspace(session.userId, null)
           session.workspaceId = undefined
+          // The cached mcp/landing project belonged to the OLD context. Clear
+          // it so `ensureMcpProject` re-resolves for the personal space instead
+          // of writing this session's work into the previous workspace's
+          // project — silently, for the rest of the session.
+          session.mcpProjectId = undefined
           return { content: [{ type: "text", text: "Now working in the personal space." }] }
         }
 
@@ -157,6 +162,10 @@ export function registerWorkspaces({ server, session }: RegisterWorkspacesOpts):
         // worse than none, because the next session pays to discover it.
         await storeSessionWorkspace(session.userId, result.workspaceId)
         session.workspaceId = result.workspaceId
+        // Same reason as the deselect path: the cached mcp/landing project id is
+        // the previous context's. Clear it so `ensureMcpProject` resolves the
+        // newly-selected workspace's landing project on the next write.
+        session.mcpProjectId = undefined
         return {
           content: [{ type: "text", text: `Now working in workspace ${result.workspaceId}.` }],
           structuredContent: { workspaceId: result.workspaceId, orgId: result.orgId ?? null },

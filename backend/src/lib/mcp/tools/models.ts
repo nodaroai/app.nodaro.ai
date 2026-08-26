@@ -190,16 +190,27 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     },
     async (args) => {
       const limit = args.limit ?? 50
-      let query = supabase
-        .from("transactions")
-        .select(
-          "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url",
-        )
-        .eq("user_id", session.userId)
-        .order("created_at", { ascending: false })
-        .limit(limit)
+      // Org pack claims ride the owner's user_id (351) — not personal history.
+      // 42703 = pre-351 schema (column lands on the next promotion): no org
+      // rows can exist there, so the unfiltered query is the same answer.
+      const buildQuery = (withOrgFilter: boolean) => {
+        let q = supabase
+          .from("transactions")
+          .select(
+            "id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url",
+          )
+          .eq("user_id", session.userId)
+        if (withOrgFilter) q = q.is("org_id", null)
+        return q.order("created_at", { ascending: false }).limit(limit)
+      }
+      let query = buildQuery(true)
       if (args.cursor) query = query.lt("created_at", args.cursor)
-      const { data, error } = await query
+      let { data, error } = await query
+      if (error?.code === "42703") {
+        let retry = buildQuery(false)
+        if (args.cursor) retry = retry.lt("created_at", args.cursor)
+        ;({ data, error } = await retry)
+      }
       if (error) {
         return {
           content: [{ type: "text", text: `Error: ${error.message}` }],

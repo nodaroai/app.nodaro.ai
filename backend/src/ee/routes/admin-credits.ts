@@ -111,12 +111,24 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
     const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
 
-    const { data, error } = await supabase
+    // credit_type='org' rows (pool grants/variance, 351) are org ledger lines
+    // that happen to carry an actor's id — not this user's history. 42703 =
+    // pre-351 schema; no org rows can exist there, same answer unfiltered.
+    let { data, error } = await supabase
       .from("credit_transactions")
       .select("*")
       .eq("user_id", id)
+      .is("org_id", null)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
+    if (error?.code === "42703") {
+      ;({ data, error } = await supabase
+        .from("credit_transactions")
+        .select("*")
+        .eq("user_id", id)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1))
+    }
 
     if (error) return reply.code(500).send({ error: error.message })
     return data

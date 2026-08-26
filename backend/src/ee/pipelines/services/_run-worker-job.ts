@@ -115,6 +115,7 @@ export async function runPipelineWorkerJob(
   // 2. Reserve credits via the canonical service. Worker commits/refunds the
   //    real cost on its own — we don't double-commit here.
   const { CreditsService } = await import("../../billing/credits.js")
+  // billing-payer-ok: pipeline worker jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   const reservation = await CreditsService.reserveCredits(
     userId,
     jobId,

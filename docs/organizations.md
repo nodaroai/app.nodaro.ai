@@ -43,7 +43,7 @@ fall through; setting a key to `false` is a real value, not "unset".
 | `default_workflow_visibility` | `private` \| `workspace` | The visibility a new workflow gets. |
 | `member_access_to_shared` | `view` \| `edit` | What members may do with a workflow shared to the workspace. |
 | `members_can_create_projects` | boolean | Whether members may create projects in the workspace. |
-| `member_caps_enabled` | boolean | Whether per-member credit caps apply. **Stored now, not yet enforced** — it takes effect when organization billing is enabled, along with `creditCap` on a workspace member. |
+| `member_caps_enabled` | boolean | Whether per-member credit caps apply. Enforced at reserve time once workspace-paid runs roll out (the payer-selection stage of the organizations feature), together with `creditCap` on the workspace member. |
 | `personal_space_enabled` | boolean | Whether members keep a personal (non-workspace) space. |
 | `workspace_admins_can_invite` | boolean | Whether workspace admins may invite new people into the organization. |
 | `collaborators_can_invite` | boolean | Whether an editor collaborator may invite further collaborators. |
@@ -284,6 +284,49 @@ The surface stops there on purpose. A platform administrator decides whether
 an organization may **operate** on the instance; renaming it, reading its
 members and changing its settings belong to the people who run it.
 
+## Budgets and credits
+
+An organization pays for its members' work in three moves, each one narrower
+than the last:
+
+1. **The pool.** The organization buys prepaid credit packs (the same packs and
+   prices as personal top-ups) into one org-wide pool. Purchases go through
+   Stripe Checkout against the organization's own Stripe customer — never a
+   member's card on file.
+2. **Allocations.** An owner moves credits from the pool into a workspace's
+   budget. Allocation is a *move*, not a copy: the pool goes down by exactly
+   what the workspace gains. Credits can be reclaimed back to the pool, but only
+   down to what the workspace has already reserved or spent.
+3. **Member caps (optional).** Inside a workspace, an admin can cap what a
+   single member may spend. Caps bind only where the workspace's settings enable
+   them (the school preset does; the team preset does not), and only for
+   explicit members — an organization admin acting in the workspace is never
+   capped.
+
+Work done inside a workspace is paid by the workspace, whatever the member's
+own balance says: the member's personal credits are untouched, and the two
+balances are shown side by side. (Workspace-paid runs and the side-by-side
+balance view arrive with the payer-selection and budget-UI stages of the
+organizations feature — until then allocations are held and reported, not
+yet spent against.) Headroom at every level is
+`allocated − reserved − spent`; a run that would exceed it is refused with a
+stable error code (`budget_exceeded`, `member_cap_exceeded`) rather than
+started.
+
+| Route | Who | Does |
+|---|---|---|
+| `GET /v1/orgs/:id/credits` | owner / org admin | pool, lifetime purchased, and every workspace's allocation with reserved/spent |
+| `POST /v1/orgs/:id/credits/checkout` `{ packId }` | owner | Stripe Checkout URL for one prepaid pack |
+| `POST /v1/orgs/:id/workspaces/:wsId/allocate` `{ delta }` | owner | move credits pool ⇄ workspace; returns the new headroom |
+| `GET /v1/workspaces/:id/budget` | member | own spend, cap and headroom; admins also get per-member rows |
+| `PATCH /v1/workspaces/:id/members/:userId` `{ creditCap, resetSpend }` | workspace admin | cap a member / zero their counted spend |
+
+Refunds and disputes claw credits back from the organization's pool,
+proportionally to the refunded amount and floored at zero — a pool that
+already spent what was refunded records the shortfall instead of going
+negative. Deleting an organization requires reclaiming every workspace
+allocation first.
+
 ## Errors
 
 Errors use the standard envelope `{ "error": { "code", "message" } }`; dispatch
@@ -404,4 +447,4 @@ token continuing to reach these endpoints without asking for anything.
 created organization is `pending` until a platform administrator approves it.
 Say so to whoever created it, or waiting is indistinguishable from broken.
 
-Budgets, model policy and assignments are documented as they become available.
+Model policy and assignments are documented as they become available.

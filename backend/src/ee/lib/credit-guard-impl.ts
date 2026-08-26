@@ -246,6 +246,7 @@ export async function reserveCreditsForJobImpl(
   const routeName = req.url.split("?")[0] ?? "unknown"
 
   try {
+    // billing-payer-ok: THE P14 threading point — req.billingContext resolves in this impl and rides this call; personal payer until that lands
     const reservation = await CreditsService.reserveCredits(
       userId,
       jobId,

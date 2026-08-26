@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2 } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot } from "lucide-react"
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
@@ -27,6 +27,9 @@ export default function AdminSettingsPage() {
   const [serviceMargins, setServiceMargins] = useState<Array<{ prefix: string; percent: number }>>([])
   const [carouselAutoplay, setCarouselAutoplay] = useState(true)
   const [appsPageAutoplay, setAppsPageAutoplay] = useState(true)
+  // The copilot emergency stop. Defaults ON, matching the seed — an absent
+  // row means enabled, so a fresh install shows it on.
+  const [copilotEnabled, setCopilotEnabled] = useState(true)
   const [appsLimit, setAppsLimit] = useState(20)
   const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
   const [saving, setSaving] = useState(false)
@@ -42,6 +45,7 @@ export default function AdminSettingsPage() {
       )
       setCarouselAutoplay(settings.carousel_video_autoplay)
       setAppsPageAutoplay(settings.apps_page_video_autoplay)
+      setCopilotEnabled(settings.copilot_enabled)
       setAppsLimit(settings.featured_apps_limit)
       setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
     }
@@ -80,6 +84,10 @@ export default function AdminSettingsPage() {
       updates.push({ key: "apps_page_video_autoplay", value: appsPageAutoplay })
     }
 
+    if (copilotEnabled !== settings?.copilot_enabled) {
+      updates.push({ key: "copilot_enabled", value: copilotEnabled })
+    }
+
     if (appsLimit !== settings?.featured_apps_limit) {
       updates.push({ key: "featured_apps_limit", value: appsLimit })
     }
@@ -115,6 +123,7 @@ export default function AdminSettingsPage() {
     (isFeatureEnabled("costMarkup") && marginsDirty) ||
     carouselAutoplay !== settings.carousel_video_autoplay ||
     appsPageAutoplay !== settings.apps_page_video_autoplay ||
+    copilotEnabled !== settings.copilot_enabled ||
     appsLimit !== settings.featured_apps_limit ||
     autoScrollSeconds !== settings.apps_auto_scroll_seconds
   )
@@ -287,6 +296,35 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+
+        {/* Workflow Copilot — runtime pause. Its own card because it is not a
+            display preference; it is the switch that stops an assistant that
+            edits users' canvases and spends their credits, and it must read as
+            a control an operator reaches for in an incident, not a checkbox
+            buried among cosmetics. */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Bot className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Workflow Copilot</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="copilot-enabled">Copilot enabled</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Turn off to stop the copilot for everyone — no restart needed.
+                It takes effect within about a minute; a turn already running
+                finishes, and new ones are refused with a clear message until
+                you turn it back on.
+              </p>
+            </div>
+            <Switch
+              id="copilot-enabled"
+              checked={copilotEnabled}
+              onCheckedChange={setCopilotEnabled}
+            />
+          </div>
+        </div>
 
         {/* Apps Video Autoplay */}
         <div className="border rounded-lg p-4 bg-card">

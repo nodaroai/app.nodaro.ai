@@ -42,6 +42,14 @@ describe("MCP tools: project_id is a narrowing filter, user_id is the authorizat
         // Pure writes (`project_id: mcpProjectId` inside an insert payload)
         // are scoped by the insert's own user_id — same rule, same check.
         if (/\buser_id\b/.test(block)) continue
+        // A by-id read delegated to the P10 seam is scoped INSIDE the helper:
+        // `loadMcpWorkflow` filters user_id AND the mcp-project floor when there
+        // is no workspace, and defers to the `workflowAccess` rule when there
+        // is. Such a block names `project_id` only as a column to SELECT (part
+        // of the cols string it hands the helper), never as its own unscoped
+        // filter — the seam call is the authorization signal, and the helper
+        // itself (`tools/_workflow-access.ts`) is scanned by this same guard.
+        if (/\bloadMcpWorkflow\b/.test(block)) continue
         const line = source.slice(0, start).split("\n").length
         offenders.push(`${relative(TOOLS_DIR, file)}:${line}`)
       }

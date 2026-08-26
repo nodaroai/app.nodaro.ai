@@ -2124,6 +2124,7 @@ export class CreditsService {
     }
 
     // Atomic reservation via single RPC (deducts credits + increments daily spent + creates usage log)
+    // billing-payer-ok: family 0 — the one line that talks to reserve_credits. P14 threads p_workspace_id here from BillingContext; until then every caller is a personal payer by definition
     const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
       p_user_id: userId,
       p_credits: pricing.creditCost,
@@ -2207,6 +2208,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
 
     // Try RPC first
+    // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; the TS fallback below REFUSES workspace-payer rows (billing-04/H22)
     const { error: rpcError } = await supabase.rpc("commit_credits", {
       p_usage_log_id: usageLogId,
       p_actual_credits: actualCredits,
@@ -2217,7 +2219,24 @@ export class CreditsService {
     // Fallback: manual commit. Update the canonical `status` column (the same
     // column the SQL `commit_credits`/`refund_credits` functions use), guarded
     // by status='reserved' so a concurrent commit/refund can't double-fire.
-    console.warn("[credits] commit_credits RPC not found, using fallback")
+    console.warn("[credits] commit_credits RPC failed, using fallback:", rpcError.message)
+
+    // PAYER-AWARE (billing-04/H22): a workspace-paid row may NOT be settled
+    // here — flipping it to committed without moving the workspace budget's
+    // reserved → spent would strand the class's headroom with nothing able
+    // to reconcile it (refund refuses non-reserved rows). Leave it reserved
+    // and loud; a later retry of the RPC is the only correct settlement.
+    const { data: payerRow } = await supabase
+      .from("usage_logs")
+      .select("workspace_id")
+      .eq("id", usageLogId)
+      .maybeSingle()
+    if (payerRow?.workspace_id) {
+      console.error(
+        `[credits] commit fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
+      )
+      return
+    }
 
     const { error } = await supabase
       .from("usage_logs")
@@ -2238,6 +2257,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
 
     // Try RPC first
+    // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; the TS fallback below REFUSES workspace-payer rows (billing-04/H22)
     const { error: rpcError } = await supabase.rpc("refund_credits", {
       p_usage_log_id: usageLogId,
     })
@@ -2245,17 +2265,30 @@ export class CreditsService {
     if (!rpcError) return
 
     // Fallback: manual refund
-    console.warn("[credits] refund_credits RPC not found, using fallback")
+    console.warn("[credits] refund_credits RPC failed, using fallback:", rpcError.message)
 
     // Get the usage log to find credits to refund
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
-      .select("user_id, job_id, credits_used, status, metadata")
+      .select("user_id, job_id, credits_used, status, metadata, workspace_id")
       .eq("id", usageLogId)
       .single()
 
     if (logError || !usageLog) {
       console.error("[credits] Usage log not found for refund:", usageLogId)
+      return
+    }
+
+    // PAYER-AWARE (billing-04/H22): a workspace-paid row must NEVER be
+    // settled by this fallback. Its metadata carries no from_sub/from_topup
+    // by construction, so the zero-split branch below would MINT the class's
+    // money into the member's personal topup pool — and flipping the status
+    // would strand the workspace's reserved headroom unreconcilably. Leave
+    // the row reserved and loud; only the RPC can settle a workspace payer.
+    if ((usageLog as { workspace_id?: string | null }).workspace_id) {
+      console.error(
+        `[credits] refund fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
+      )
       return
     }
 

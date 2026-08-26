@@ -104,10 +104,13 @@ export const COPILOT_STRINGS = {
   kindCreature: "Animal",
   kindLocation: "Location",
   allowPublishing: "Let it build posting steps",
-  // Says what it can do AND what it still cannot, because the second half is
-  // what makes the first safe to agree to.
-  allowPublishingOn: "It can add posting steps. It still cannot choose the account, the channel, or who sees the post.",
-  allowPublishingOff: "Posting steps are yours to add on the canvas.",
+  // Both halves name Copilot as the subject and state the guarantee from the
+  // USER's side ("you still choose…"). That reads as product, not as docs, and
+  // the control the user keeps is what makes the toggle safe to turn on — which
+  // is why the on-copy leads with what it does and closes with what stays
+  // theirs.
+  allowPublishingOn: "Copilot can add posting steps, but you still choose the account, channel, and audience.",
+  allowPublishingOff: "Copilot won't add posting steps. You can add them yourself on the canvas.",
   sectionFiles: "Files",
   proposeUsingFiles: "Using your files",
   attach: "Attach a file",

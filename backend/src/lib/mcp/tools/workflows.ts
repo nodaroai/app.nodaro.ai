@@ -12,6 +12,9 @@ import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
+import { loadMcpWorkflow } from "./_workflow-access.js"
+import { canChangeWorkflowVisibility } from "../../workflow-access.js"
+import { changesStudioPublishFlag } from "../../studio-audience.js"
 import {
   asObjectArray,
   collectAssetIds,
@@ -55,6 +58,25 @@ function ok(text: string, structuredContent?: Record<string, unknown>) {
   return structuredContent
     ? { content: [{ type: "text" as const, text }], structuredContent }
     : { content: [{ type: "text" as const, text }] }
+}
+
+/**
+ * Turn a route's error response (relayed through `mcpInject`) into readable MCP
+ * text. When the body is our standard `{ error: { message } }` envelope — a
+ * 403 "only the owner or a workspace admin", a 503 "could not be recorded" —
+ * that friendly message IS the answer and the model should see it verbatim.
+ * Anything else falls back to the status + raw body.
+ */
+function mcpRouteError(statusCode: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown } }
+    if (typeof parsed.error?.message === "string" && parsed.error.message.length > 0) {
+      return parsed.error.message
+    }
+  } catch {
+    /* not JSON — fall through */
+  }
+  return `Error from Nodaro: ${statusCode} ${body}`
 }
 
 /**
@@ -137,21 +159,14 @@ export function registerWorkflows({
         annotations: { readOnlyHint: true },
       },
       async (args) => {
-        const mcpProjectId = await ensureMcpProject(session)
-        const { data, error } = await supabase
-          .from("workflows")
-          .select(
-            "id, project_id, name, description, version, thumbnail_url, created_at, updated_at",
-          )
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .maybeSingle()
-        if (error) return err(`Error: ${error.message}`)
-        if (!data) return err("Workflow not found")
-        if ((data as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err(`Workflow not found ${projectNoun}`)
-        }
-        return ok(JSON.stringify({ data }, null, 2))
+        const loaded = await loadMcpWorkflow(
+          session,
+          args.workflow_id,
+          "view",
+          "id, project_id, name, description, version, thumbnail_url, created_at, updated_at",
+        )
+        if (!loaded.ok) return err(loaded.message)
+        return ok(JSON.stringify({ data: loaded.row }, null, 2))
       },
     )
 
@@ -165,17 +180,14 @@ export function registerWorkflows({
         annotations: { readOnlyHint: true },
       },
       async (args) => {
-        const mcpProjectId = await ensureMcpProject(session)
-        const { data, error } = await supabase
-          .from("workflows")
-          .select("id, project_id, name, nodes, edges, settings, updated_at, version")
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .eq("project_id", mcpProjectId)
-          .maybeSingle()
-        if (error) return err(`Error: ${error.message}`)
-        if (!data) return err(`Workflow not found ${projectNoun}`)
-        const row = data as Record<string, unknown>
+        const loaded = await loadMcpWorkflow(
+          session,
+          args.workflow_id,
+          "view",
+          "id, project_id, name, nodes, edges, settings, updated_at, version",
+        )
+        if (!loaded.ok) return err(loaded.message)
+        const row = loaded.row
         return ok(
           JSON.stringify(
             {
@@ -214,16 +226,17 @@ export function registerWorkflows({
       },
       async (args) => {
         const includeAssets = args.with_assets === true
-        const { data: wf, error } = await supabase
-          .from("workflows")
-          .select("id, name, nodes, edges, settings")
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .maybeSingle()
-        if (error) return err(`Error: ${error.message}`)
-        if (!wf) return err("Workflow not found")
-
-        const row = wf as Record<string, unknown>
+        // `export_workflow` reaches any of the caller's workflows, so no "mcp"
+        // project floor — but in a workspace it is still an access-gated `view`.
+        const loaded = await loadMcpWorkflow(
+          session,
+          args.workflow_id,
+          "view",
+          "id, name, nodes, edges, settings",
+          { personalProjectFloor: false },
+        )
+        if (!loaded.ok) return err(loaded.message)
+        const row = loaded.row
         const rawNodes = asObjectArray(row.nodes)
         const result: WorkflowExport = {
           version: 1,
@@ -310,6 +323,32 @@ export function registerWorkflows({
         annotations: { readOnlyHint: false, destructiveHint: true },
       },
       async (args) => {
+        // Workspace context: the delete goes through the REST route, which
+        // carries the whole P10 delete invariant that must not be reimplemented
+        // here — `canDeleteWorkflow` (an editor grant may change work, never
+        // end it), the refusal to delete a personal workflow on someone else's
+        // behalf, the write-ahead audit entry (or a 503 when it cannot be
+        // recorded), and the cascade RPC keyed by the CREATOR's id. Routing
+        // through `mcpInject` reuses all of it; the workspace header travels
+        // automatically, and a DELETE carries no body, so the caller's identity
+        // rides the `x-internal-user-id` header the auth hook reads for
+        // bodyless internal injects.
+        if (session.workspaceId) {
+          const res = await mcpInject(fastify, session, {
+            method: "DELETE",
+            url: `/v1/workflows/${encodeURIComponent(args.workflow_id)}`,
+            headers: { "x-internal-user-id": session.userId },
+          })
+          if (res.statusCode >= 400) return err(mcpRouteError(res.statusCode, res.body))
+          return ok(`Deleted workflow ${args.workflow_id}.`, {
+            id: args.workflow_id,
+            deleted: true,
+          })
+        }
+
+        // No workspace (every caller today, and every caller while
+        // ORGS_ENABLED is off): unchanged — creator plus the isolated "mcp"
+        // project, a raw delete with no audit. Byte-identical to before P11.
         const mcpProjectId = await ensureMcpProject(session)
         const { data: existing, error: lookupError } = await supabase
           .from("workflows")
@@ -371,7 +410,22 @@ export function registerWorkflows({
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
-        const mcpProjectId = await ensureMcpProject(session)
+        // Fork on workspace, exactly as the by-id reads do. In a workspace the
+        // P10 seam decides who may write (`edit` access) and the write is scoped
+        // to the id alone; with no workspace the long-standing creator + "mcp"
+        // -project scoping is kept, byte-identical to before P11. `edit` here
+        // means a view-only member gets "not found", the same answer these
+        // tools have always given for a workflow the caller may not reach.
+        const isWorkspace = session.workspaceId !== undefined
+        let mcpProjectId: string | null = null
+        let storedSettings: unknown
+        if (isWorkspace) {
+          const loaded = await loadMcpWorkflow(session, args.workflow_id, "edit", "id, settings")
+          if (!loaded.ok) return err(loaded.message)
+          storedSettings = loaded.row.settings
+        } else {
+          mcpProjectId = await ensureMcpProject(session)
+        }
 
         // nodes + edges are a unit (the handle migration needs both). Allow
         // neither (metadata-only update) or both — never just one.
@@ -386,6 +440,27 @@ export function registerWorkflows({
           return err(
             "Nothing to update — provide nodes+edges, settings, and/or thumbnail_url.",
           )
+        }
+
+        // Audience gate — workspace only. A settings write that would change WHO
+        // can reach the workflow (`studio.shared` opens the no-auth public read;
+        // `presentationSettings.shareReadOnly` widens who may spend the owner's
+        // credits through a share link) is asked of `canChangeWorkflowVisibility`
+        // — the same authority the two REST PATCH paths ask. MCP update is a
+        // third settings door and has no RLS underneath it, so without this an
+        // edit-level member could publish the creator's work to the whole class,
+        // or the open internet, in one write. With no workspace the caller is the
+        // creator, who passes that check by definition, so the gate is skipped.
+        if (
+          isWorkspace &&
+          args.settings !== undefined &&
+          changesStudioPublishFlag(args.settings, storedSettings)
+        ) {
+          if (!(await canChangeWorkflowVisibility(session.userId, args.workflow_id))) {
+            return err(
+              "Only the owner or a workspace admin can change who this workflow is shared with.",
+            )
+          }
         }
 
         const updates: Record<string, unknown> = {
@@ -422,8 +497,12 @@ export function registerWorkflows({
           .from("workflows")
           .update(updates)
           .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .eq("project_id", mcpProjectId)
+        // The no-workspace floor: creator + "mcp" project. In a workspace the
+        // row was already access-judged by `loadMcpWorkflow` above, so the write
+        // is scoped to the id alone (the row may belong to another member).
+        if (!isWorkspace) {
+          query = query.eq("user_id", session.userId).eq("project_id", mcpProjectId!)
+        }
         if (args.expected_updated_at !== undefined) {
           query = query.eq("updated_at", args.expected_updated_at)
         }
@@ -436,13 +515,14 @@ export function registerWorkflows({
           // 0 rows matched. Distinguish a stale-version conflict from a genuine
           // not-found (only does the extra read on this rare path).
           if (args.expected_updated_at !== undefined || args.expected_version !== undefined) {
-            const { data: stillExists } = await supabase
+            let existsQuery = supabase
               .from("workflows")
               .select("id")
               .eq("id", args.workflow_id)
-              .eq("user_id", session.userId)
-              .eq("project_id", mcpProjectId)
-              .maybeSingle()
+            if (!isWorkspace) {
+              existsQuery = existsQuery.eq("user_id", session.userId).eq("project_id", mcpProjectId!)
+            }
+            const { data: stillExists } = await existsQuery.maybeSingle()
             if (stillExists) {
               return err(
                 "Workflow was modified since you last read it. Fetch the latest JSON with get_workflow_json and retry.",
@@ -609,17 +689,17 @@ export function registerWorkflows({
         },
       },
       async (args) => {
-        const mcpProjectId = await ensureMcpProject(session)
-        const { data: wfRow, error: wfErr } = await supabase
-          .from("workflows")
-          .select("name, project_id")
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .maybeSingle()
-        if (wfErr) return err(`Error: ${wfErr.message}`)
-        if (!wfRow || (wfRow as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err(`Workflow not found ${projectNoun}`)
-        }
+        // Access + existence via the P10 seam (workspace-aware); the ROUTE's
+        // `canRunWorkflow` is the authority on whether a paid run may start —
+        // running spends money and is stricter than viewing — so `view` is
+        // enough here to confirm the caller can see it and to fetch the name.
+        // A view-only workspace member therefore passes this gate and is
+        // refused by the route with a reason, not a generic "not found". In
+        // the no-workspace case `loadMcpWorkflow` keeps the mcp-project floor,
+        // byte-identical to the pre-check this replaces.
+        const loaded = await loadMcpWorkflow(session, args.workflow_id, "view", "name")
+        if (!loaded.ok) return err(loaded.message)
+        const wfRow = loaded.row
 
         const payload = {
           mcp_client: session.clientName,

@@ -5,6 +5,8 @@ import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { resolveApiToken } from "../lib/api-token-resolver.js"
+import { surfaceSsoOnly } from "../lib/surface-profile.js"
+import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
 
 /**
  * Extend Fastify request with auth data.
@@ -423,6 +425,32 @@ export function registerAuthHook(app: FastifyInstance): void {
       }
 
       const userId = data.user.id
+
+      // SAI-5 / H6 — server-authoritative SSO gate. When the deployment restricts
+      // sign-in to SSO only (surfaceSsoOnly()), every JWT-authenticated account
+      // MUST have been provisioned through the SSO path — which stamps
+      // app_metadata.sso (service-role-only). A self-registered account (public
+      // signUp against the reachable GoTrue) has no app_metadata.sso and is
+      // rejected here, so it can never spend the tenant's prepaid credits.
+      // user_metadata is NOT trusted: a signUp can set it. Checked BEFORE
+      // setCache, so a rejected account is never cached (every request re-hits
+      // this) and only passing accounts populate the fast path. Inert on mainline
+      // (auth.methods default [] → surfaceSsoOnly() false).
+      if (surfaceSsoOnly()) {
+        const marker = (data.user.app_metadata as Record<string, unknown> | undefined)?.[
+          SSO_APP_METADATA_KEY
+        ]
+        if (!marker) {
+          if (isPublic) return
+          reply.status(403).send({
+            error: {
+              code: "sso_required",
+              message: "This deployment requires sign-in through its identity provider.",
+            },
+          })
+          return
+        }
+      }
 
       // Fetch role from profiles
       const { data: profile } = await supabase

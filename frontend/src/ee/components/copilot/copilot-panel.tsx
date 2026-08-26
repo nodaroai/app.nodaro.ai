@@ -9,7 +9,7 @@
  * Lazy-loaded through a core shim (`copilot-panel-slot.tsx`); this file and
  * everything it imports never reach a community build.
  */
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
@@ -78,7 +78,12 @@ export default function CopilotPanel({
   useCopilotHandoff(thread, workflowId)
   const settings = useCopilotSettings(threadId)
 
-  const { mentions: mentionSources } = useCopilotMentions(userId)
+  // Held here, not in the composer: for FILES this is a server query, and this
+  // is the component that owns the fetch.
+  const [mentionSearch, setMentionSearch] = useState("")
+  // Stable, because the composer reports through an effect that lists it.
+  const handleMentionSearch = useCallback((value: string) => setMentionSearch(value), [])
+  const { mentions: mentionSources, fileTotal, hasMoreFiles, loadMoreFiles } = useCopilotMentions(userId, mentionSearch)
 
   // Hand the engine the editor callbacks it cannot reach on its own.
   //
@@ -212,6 +217,10 @@ export default function CopilotPanel({
       ) : (
         <CopilotComposer
           mentionSources={mentionSources}
+          onSearchChange={handleMentionSearch}
+          fileTotal={fileTotal}
+          hasMoreFiles={hasMoreFiles}
+          onLoadMoreFiles={loadMoreFiles}
           onSend={send}
           onStop={() => void stopCopilotTurn()}
           disabled={busy !== null}

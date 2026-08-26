@@ -2,6 +2,12 @@ import type { FastifyRequest, FastifyReply } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import {
+  isModelDenied,
+  isNodeDenied,
+  deniedModelRejectionMessage,
+  deniedNodeRejectionMessage,
+} from "../lib/surface-deny.js"
+import {
   computeFingerprint,
   findRecentMatchingJob,
   MIN_IDEMPOTENCY_KEY_LENGTH,
@@ -79,6 +85,47 @@ export function creditGuard(
   const dedupEnabled = opts?.dedup !== false
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    // Surface-profile deny at the SECOND front door (B1 / SAI-1 / H9).
+    // models.deny / nodes.deny are already enforced at discovery (GET
+    // /v1/models, /v1/nodes), at the workflow write guards, and at the DAG
+    // runtime backstop (payload-builder's effectiveDispatchProvider throw) --
+    // but NOT on the direct generation routes. The canvas single-node Run, the
+    // SDK, and MCP `app.inject()` all dispatch straight to those routes, so a
+    // denied provider injected via workflow-JSON / a FieldMapping / a
+    // hand-written body would run and bill against a model the deployment
+    // declared invisible. Fire the deny FIRST -- before the OAuth-scope gate,
+    // before the dedup fast-path (which can 200 a dedup hit and mask the deny),
+    // and before any credit reservation. It runs in every edition creditGuard is
+    // used in, but is BYTE-INERT on mainline: runtimeSurfaceProfile() returns the
+    // stock default (deny lists []) unless surfaceGateOpen() (business/cloud) AND
+    // a NODARO_SURFACE_PROFILE is set. Uses the RAW body.provider, never the
+    // remapped pricing id (T2V_CREDIT_OVERRIDES turns t2v "grok" -> "grok-i2v"),
+    // so it matches the deny vocabulary and the DAG backstop's coded error shape
+    // -- every door rejects identically.
+    {
+      const rawProvider =
+        typeof (req.body as { provider?: unknown } | undefined)?.provider === "string"
+          ? (req.body as { provider: string }).provider
+          : undefined
+      if (rawProvider && isModelDenied(rawProvider)) {
+        return reply.code(403).send({
+          error: {
+            code: "model_not_available",
+            message: deniedModelRejectionMessage([rawProvider]),
+          },
+        })
+      }
+      const nodeType = (req.routeOptions?.url ?? "").replace(/^\/v1\//, "")
+      if (nodeType && isNodeDenied(nodeType)) {
+        return reply.code(403).send({
+          error: {
+            code: "node_not_available",
+            message: deniedNodeRejectionMessage([nodeType]),
+          },
+        })
+      }
+    }
+
     // OAuth app-token scope gate (cloud only). An app token authenticates AS the
     // resource owner and spends THEIR credits. Per-route requireScope() is opt-in
     // and only a handful of routes use it, so every credit-spending generation

@@ -142,7 +142,15 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
-    if (key === "carousel_video_autoplay" || key === "apps_page_video_autoplay") {
+    if (
+      key === "carousel_video_autoplay" ||
+      key === "apps_page_video_autoplay" ||
+      // The copilot's runtime pause. `copilotEnabled()` in routes/copilot.ts
+      // reads this and stops serving turns when it is false; a non-boolean
+      // written here would be read tolerantly as "on" and the off switch would
+      // silently not work, which is the one thing an emergency stop must not do.
+      key === "copilot_enabled"
+    ) {
       if (typeof value !== "boolean") {
         return reply.status(400).send({
           error: {

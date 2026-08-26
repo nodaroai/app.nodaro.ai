@@ -140,15 +140,20 @@ describe("get_workflow tool", () => {
     expect(result.content[0]?.text).toContain('"Flow"')
   })
 
-  it("rejects a workflow that lives in another project", async () => {
-    fromMock.mockReturnValue(
-      chain({ data: { id: WORKFLOW_ID, project_id: "some-other-project", name: "Flow" }, error: null }),
-    )
+  it("rejects a workflow outside the mcp project — and proves the floor is applied", async () => {
+    // Exclusion now happens in SQL: the seam applies `.eq("project_id", mcpProject)`
+    // (+ `.eq("user_id")`), so an out-of-project row simply never comes back. The
+    // filter-ignoring mock can't replay that, so assert the floor was applied
+    // rather than leaning on a row the query would never have returned.
+    const c = chain({ data: null, error: null })
+    fromMock.mockReturnValue(c)
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
     const result = await callTool(server, "get_workflow", { workflow_id: WORKFLOW_ID })
     expect(result.isError).toBe(true)
-    expect(result.content[0]?.text).toContain("mcp project")
+    expect(result.content[0]?.text).toContain("not found")
+    expect(c.eq).toHaveBeenCalledWith("user_id", "u1")
+    expect(c.eq).toHaveBeenCalledWith("project_id", MCP_PROJECT_ID)
   })
 })
 
@@ -532,20 +537,25 @@ describe("run_workflow tool", () => {
     expect(result.content.length).toBe(1)
   })
 
-  it("rejects a workflow that is not in the mcp project (no run issued)", async () => {
+  it("rejects a workflow outside the mcp project — no run issued, floor proven", async () => {
     const fastify = Fastify()
     let hit = false
     fastify.post("/v1/workflows/:id/run", async () => {
       hit = true
       return { executionId: "e-1" }
     })
-    fromMock.mockReturnValue(chain({ data: { name: "Other", project_id: "elsewhere" }, error: null }))
+    // Same as get_workflow: the project floor excludes it in SQL, so the seam
+    // read returns no row and the run is never dispatched.
+    const c = chain({ data: null, error: null })
+    fromMock.mockReturnValue(c)
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
     const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID })
     expect(result.isError).toBe(true)
-    expect(result.content[0]?.text).toContain("mcp project")
+    expect(result.content[0]?.text).toContain("not found")
     expect(hit).toBe(false)
+    expect(c.eq).toHaveBeenCalledWith("user_id", "u1")
+    expect(c.eq).toHaveBeenCalledWith("project_id", MCP_PROJECT_ID)
   })
 
   it("does NOT register without workflows:execute scope", async () => {

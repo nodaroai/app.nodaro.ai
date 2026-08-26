@@ -628,7 +628,7 @@ export async function handleTransactionCompleted(
  * the PI id the grant used. Post-grant UPDATE by design (migration 313):
  * the grant RPC stays untouched and a failure here costs only the link.
  */
-async function captureReceiptUrl(piId: string): Promise<void> {
+export async function captureReceiptUrl(piId: string): Promise<void> {
   try {
     const pi = await getStripe().paymentIntents.retrieve(piId, { expand: ["latest_charge"] })
     const charge = pi.latest_charge
@@ -677,14 +677,14 @@ async function insertTransaction(params: InsertTransactionParams): Promise<void>
 
 // ── Top-up Refund / Dispute Clawback (payg NET-lifetime, design §4.1a) ──
 
-interface TopupClawbackRefund {
+export interface TopupClawbackRefund {
   /** Stripe refund id (re_...) or dispute id (dp_...) — the idempotency key. */
   readonly refundId: string
   /** Refunded amount in cents for THIS refund/dispute (not cumulative). */
   readonly amountCents: number
 }
 
-interface TopupClawbackData {
+export interface TopupClawbackData {
   /** The payment intent the original top-up claim was keyed by. */
   readonly paymentIntentId: string | null
   readonly refunds: readonly TopupClawbackRefund[]
