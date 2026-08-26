@@ -138,6 +138,9 @@ export interface NodeExecutionState {
   /** Resolved inputs fed to this node (stored for debugging). */
   inputs?: Record<string, unknown>
   error?: string
+  /** Stable refusal code when the failure is a mapped billing refusal
+   *  (reserve-errors.ts) — P16's budget UI branches on this, never on text. */
+  errorCode?: string
   startedAt?: string
   completedAt?: string
   /** Total fan-out iterations (when node runs via list/loop) */

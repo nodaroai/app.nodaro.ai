@@ -67,6 +67,7 @@ vi.mock("@/lib/config.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { CreditsService, invalidateModelPricingCache } from "../credits.js"
+import { ReserveRpcError } from "../../../lib/reserve-errors.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,6 +206,24 @@ describe("CreditsService — extended", () => {
       await expect(
         CreditsService.reserveCredits("user-123", "job-456", "flux", 0.05, 0.0625, { watermarkOverride: false })
       ).rejects.toThrow("Credit reservation failed: insufficient_credits")
+    })
+
+    it("a workspace refusal keeps its IDENTITY — ReserveRpcError, raw amounts out of the message (P14.3)", async () => {
+      // The single point the whole refusal vocabulary hangs on: reverting
+      // this throw to a string-concatenated Error silently disarms every
+      // downstream anchored match (review finding — the guard test).
+      mockTable("model_pricing", {
+        credit_cost: 5,
+        is_enabled: true,
+        tier_restriction: null,
+      })
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: "BUDGET_EXCEEDED: allocated 5000, headroom 0, need 40" },
+      })
+      const attempt = CreditsService.reserveCredits("user-123", "job-456", "flux", 0.05, 0.0625, { watermarkOverride: false })
+      await expect(attempt).rejects.toBeInstanceOf(ReserveRpcError)
+      await expect(attempt).rejects.not.toThrow(/5000/)
     })
   })
 

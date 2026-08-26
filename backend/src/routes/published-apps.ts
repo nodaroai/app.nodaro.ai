@@ -806,7 +806,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Verify ownership (include monetization fields to avoid a second SELECT)
     const { data: existing, error: fetchError } = await supabase
       .from("published_apps")
-      .select("id, creator_id, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug")
+      .select("id, creator_id, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
       .eq("id", appId)
       .single()
 
@@ -853,6 +853,29 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
 
       invalidateAppCache(existing.slug)
+
+      // Owner decision (2026-08-26, E2/P14): an organization's approval of a
+      // paid app survives republishes and fixes but NOT a price rise —
+      // raising the EFFECTIVE markup (fees count only while monetization is
+      // enabled) clears every org approval for this workflow, forcing
+      // re-approval. Revoke BEFORE applying the rise: a failed revoke blocks
+      // the price change rather than trailing it, so approvals can never
+      // outlive a cheaper price than the one they were given for.
+      const oldEffFlat = existing.monetization_enabled ? (existing.monetization_flat_fee ?? 0) : 0
+      const oldEffPct = existing.monetization_enabled ? (existing.monetization_percent ?? 0) : 0
+      const newEffFlat = enabled ? flat : 0
+      const newEffPct = enabled ? pct : 0
+      if (newEffFlat > oldEffFlat || newEffPct > oldEffPct) {
+        const { error: revokeError } = await supabase
+          .from("organization_approved_apps")
+          .delete()
+          .eq("workflow_id", existing.workflow_id)
+        // 42P01 = the table has not reached this database yet (352 applies on
+        // the next promotion) — no approvals can exist there to outlive a rise.
+        if (revokeError && revokeError.code !== "42P01") {
+          return sendInternalError(reply, req, revokeError, "Failed to update app")
+        }
+      }
     }
 
     if (Object.keys(updates).length === 0) {

@@ -1428,6 +1428,9 @@ export interface PluginToolkit {
  * host-side over `ee/billing/org-customer.ts` (the plugin cannot import
  * `ee/`); everything else about org money is a database RPC the plugin calls
  * through `db`.
+ * Direction: host → plugin. The OTHER `billing` in this file —
+ * `PluginServices.billing` (PluginBillingService) — points the opposite
+ * way (plugin → host: payer resolution, P14).
  */
 export interface PluginBillingToolkit {
   /**
@@ -1743,10 +1746,96 @@ export interface CanMoveWorkflowInput {
  * delegates one computation; `services` are called by core SEAMS that have
  * no behaviour of their own and no-op when the plugin is absent.
  */
+/**
+ * The entitlements a WORKSPACE payer works under (E2/P14, decision A3): one
+ * hard-coded grade — today's business-tier values, watermark off, no personal
+ * daily cap. No per-org grades in v1; `organizations` deliberately has no
+ * tier column. The literal-typed members make misuse unrepresentable: a
+ * workspace context that watermarks or daily-caps cannot even be constructed.
+ */
+export interface PluginOrgEntitlements {
+  watermark: false
+  dailyCapCredits: null
+  /** TIER_PARALLELISM.business at resolve time (the resolver reads the table). */
+  parallelism: number
+  /** What tierRestriction / resolution / upload gates compare against. */
+  tierForGates: "business"
+  freeTierBlocklist: false
+  webFreeMode: false
+  appCreditsAllowance: false
+}
+
+/**
+ * One resolved answer per job to "who pays, under which entitlements".
+ * Resolved ONCE per lane (per HTTP request; per execution at enqueue),
+ * carried explicitly — on `req`, or verbatim on a queue payload (the shape
+ * is JSON-safe by construction) — and never re-derived downstream.
+ *
+ * ABSENT means PERSONAL: a queue payload without the field reads as
+ * `{ payer: "user", userId: <payload userId> }`, unconditionally and
+ * permanently — old-enqueuer/new-worker and rollback windows depend on it.
+ */
+export type PluginBillingContext =
+  | {
+      payer: "user"
+      userId: string
+      /**
+       * Present ONLY on the fallback answer core substitutes when the
+       * resolver failed or returned a malformed value — never on a resolved
+       * personal context. A spend site may refuse a degraded context where
+       * silently charging the member for work they explicitly asked a
+       * workspace to pay for would be worse than failing the request.
+       */
+      degraded?: true
+    }
+  | {
+      payer: "workspace"
+      /** The human doing the work — jobs.user_id stays this. */
+      userId: string
+      workspaceId: string
+      orgId: string
+      entitlements: PluginOrgEntitlements
+      /** Display data only — enforcement is the RPC, atomically. */
+      memberCap: number | null
+    }
+
+/** What the resolver is told about one request/run. */
+export interface PluginBillingResolveInput {
+  userId: string
+  /** The hook-validated `req.workspaceId`, when the request carried one. */
+  explicitWorkspaceId?: string
+  /**
+   * Client-supplied pre-Zod (`extractWorkflowId`) — UNTRUSTED. The resolver
+   * may let the workflow's home workspace pay only through the run predicate
+   * (`canRunWorkflow`'s twin), never the read rule.
+   */
+  workflowId?: string
+  isAppRun?: boolean
+  /**
+   * Internal-secret lane (orchestrator loopback, MCP dispatch). Rung 1 is
+   * SKIPPED: the forwarded workspace header IS the parent's resolved answer,
+   * and its absence means personal — the parent already decided.
+   */
+  internal?: boolean
+}
+
+/**
+ * Payer/entitlement resolution (E2/P14) — the org-billing plugin's seam.
+ * Direction: plugin → host (a capability core seams call). The OTHER
+ * `billing` in this file — `PluginToolkit.billing` — points the opposite
+ * way (host → plugin: Stripe operations for the org billing routes, P13).
+ */
+export interface PluginBillingService {
+  resolve(input: PluginBillingResolveInput): Promise<PluginBillingContext>
+}
+
 export interface PluginServices {
   orgs?: PluginOrgsService
-  /** Payer/entitlement resolution — narrowed when the billing seam lands. */
-  billing?: unknown
+  /**
+   * Payer/entitlement resolution (E2/P14). Optional-by-absence like every
+   * member here: an older plugin build simply has no workspace payers.
+   */
+  billing?: PluginBillingService
   /** Model-policy enforcement — narrowed when the policy seam lands. */
   policy?: unknown
   /** Live-document writer — narrowed when the collaboration seam lands. */

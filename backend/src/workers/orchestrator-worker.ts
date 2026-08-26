@@ -1005,11 +1005,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           const error = result.reason instanceof Error
             ? result.reason.message
             : String(result.reason)
+          // A mapped billing refusal rides its stable code into the node
+          // state (attached at the node-executor throw site) — text stays
+          // display-only.
+          const errorCode = (result.reason as { errorCode?: string } | null)?.errorCode
 
           nodeStates[node.id] = {
             status: "failed",
             nodeType: node.type,
             error,
+            ...(errorCode ? { errorCode } : {}),
             inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
             startedAt: nodeStates[node.id]?.startedAt,

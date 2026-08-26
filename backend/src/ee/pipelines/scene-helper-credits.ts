@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { creditsToUsd } from "@nodaro/shared"
 import type { SceneHelperName } from "@nodaro/shared"
@@ -32,7 +33,7 @@ export type ReserveHelperResult =
   | { ok: true; usageLogId: string }
   | {
       ok: false
-      reason: "insufficient_credits" | "rpc_error" | "price_not_configured"
+      reason: "insufficient_credits" | "rpc_error" | "price_not_configured" | MappedReserveError["code"]
       detail?: string
     }
 
@@ -81,6 +82,11 @@ export async function reserveHelperCredits(
     const msg = error.message ?? ""
     if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("not enough")) {
       return { ok: false, reason: "insufficient_credits" }
+    }
+    // P14.3 (dormant until W4e): stable code over generic rpc_error.
+    const refusal = mapReserveError(new Error(msg))
+    if (refusal) {
+      return { ok: false, reason: refusal.code, detail: refusal.message }
     }
     return { ok: false, reason: "rpc_error", detail: msg }
   }

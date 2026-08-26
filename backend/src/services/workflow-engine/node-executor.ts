@@ -14,6 +14,7 @@ import { insertInternalJob } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config } from "../../lib/config.js"
+import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
@@ -1404,7 +1405,15 @@ async function executeWorkerNode(
     } catch (err) {
       // Clean up job if reservation fails
       await supabase.from("jobs").delete().eq("id", jobId)
-      throw new Error(`Credit reservation failed for ${node.type}: ${err instanceof Error ? err.message : String(err)}`)
+      // P14/W3: a mapped billing refusal keeps its stable code (the worker
+      // copies it into the node state) and its FIXED message — the raw RPC
+      // text never reaches user-visible node states.
+      const mapped = mapReserveError(err)
+      const wrapped = new Error(
+        `Credit reservation failed for ${node.type}: ${mapped ? mapped.message : err instanceof Error ? err.message : String(err)}`,
+      )
+      if (mapped) (wrapped as Error & { errorCode?: string }).errorCode = mapped.code
+      throw wrapped
     }
   }
 
