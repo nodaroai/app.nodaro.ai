@@ -31,6 +31,26 @@ export interface CopilotToolContext {
  * deliberately carries NO per-node overrides — those would be a write path
  * around `edit_workflow`'s guards.
  */
+/**
+ * A proposal to run ONE node instead of the whole graph.
+ *
+ * All three fields are the same guard from different angles: the card must
+ * run the node the copilot MEANT, and a proposal outlives the graph it was
+ * made against. `edit_workflow` can change an existing node's type, and a
+ * user can edit or delete a node between the proposal and the click — so the
+ * client re-reads the live graph and refuses unless the version is untouched
+ * AND the node still has the type the copilot saw. Without the type check, an
+ * old card could run a node that is no longer the one it names.
+ */
+export interface RunProposalNode {
+  readonly id: string
+  readonly type: string
+  /** The workflow version the graph was at when this was proposed. */
+  readonly graphVersion: number
+  /** What the user calls it, for the card. */
+  readonly label: string
+}
+
 export interface RunProposal {
   /**
    * Files this turn wired onto a node, NAMED.
@@ -42,4 +62,6 @@ export interface RunProposal {
   wiredAssets: WiredAsset[]
   readonly addedNodeTypes: string[]
   readonly note?: string
+  /** Present when the copilot proposed ONE node rather than the whole graph. */
+  readonly node?: RunProposalNode
 }

@@ -163,11 +163,15 @@ const NATIVE_DEFINITIONS: ToolDefinition[] = [
   {
     name: NATIVE_TOOLS.runWorkflow,
     description:
-      "PROPOSE running the workflow as it is now. This does not start anything: the user sees the proposal with its credit estimate and decides. Configure everything through edit_workflow first — a run has no override channel. After calling it, summarize what will run and stop; the outcome arrives in the user's next message.",
+      "PROPOSE a run. This does not start anything: the user sees the proposal with its credit estimate and decides. Pass node_id to propose ONE node — the right choice when you changed a single step and only that step needs redoing, since it spends a fraction of a whole-graph run. Configure everything through edit_workflow first — a run has no override channel. After calling it, say what will run and stop; the outcome arrives in the user's next message.",
     input_schema: {
       type: "object",
       properties: {
         note: { type: "string", description: "One line shown on the Run card." },
+        node_id: {
+          type: "string",
+          description: "Run only this node, from get_graph. Omit to propose the whole workflow.",
+        },
       },
       additionalProperties: false,
     },

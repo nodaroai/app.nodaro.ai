@@ -83,6 +83,14 @@ export interface CopilotWiredAsset {
   nodeId: string
 }
 
+/** Mirrors the backend's `RunProposalNode` verbatim. */
+export interface CopilotRunProposalNode {
+  id: string
+  type: string
+  graphVersion: number
+  label: string
+}
+
 /**
  * A workflow the copilot created — a DIFFERENT one from the open canvas.
  *
@@ -108,6 +116,8 @@ export interface CopilotRunProposal {
    */
   wiredAssets?: CopilotWiredAsset[]
   note: string | null
+  /** Present when the copilot proposed ONE node rather than the whole graph. */
+  node?: CopilotRunProposalNode | null
 }
 
 /**

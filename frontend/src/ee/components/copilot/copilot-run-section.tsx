@@ -48,6 +48,7 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
   const runMode = useCopilotStore((s) => s.runMode)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
   const estimate = useCopilotStore((s) => s.bridge.creditEstimate)
+  const estimateNode = useCopilotStore((s) => s.bridge.estimateNode)
   const estimateStale = useCopilotStore((s) => s.bridge.estimateStale)
   const isRunning = useCopilotStore((s) => s.bridge.isRunning)
   const activeExecutionId = useCopilotStore((s) => s.bridge.activeExecutionId)
@@ -94,11 +95,17 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
   }
 
   if (runPhase === "proposed" && proposal && !proposalDismissed) {
+    // A single-node card must show what THAT node costs and say which node it
+    // is. The whole-graph number is wrong by an order of magnitude, and it is
+    // the number the user is agreeing to spend.
+    const node = proposal.node
+    const nodeEstimate = node ? estimateNode?.(node.id) : undefined
     return (
       <RunProposalCard
-        estimate={estimate}
+        estimate={nodeEstimate ?? estimate}
         estimateStale={estimateStale}
-        nodeCount={nodeCount}
+        nodeCount={node ? 1 : nodeCount}
+        nodeLabel={node?.label}
         balance={balance?.total ?? null}
         overLimit={runMode === "auto" && !estimateStale && estimate > autoRunLimit}
         ceiling={autoRunLimit}

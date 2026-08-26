@@ -59,6 +59,8 @@ const props = {
   projectId: "p1",
   save: vi.fn(async () => ({ success: true })),
   run: vi.fn(async () => ({ executionId: "exec-1" })),
+  runNode: vi.fn(async () => ({ started: true })),
+  estimateNode: vi.fn(() => 7),
   onStopRun: vi.fn(),
   creditEstimate: 12,
   estimateStale: false,

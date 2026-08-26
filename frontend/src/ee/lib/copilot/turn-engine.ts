@@ -25,7 +25,7 @@ import {
   type CopilotSaveResult,
 } from "./turn-store"
 import { reduceTurn, startTurn } from "./turn-reducer"
-import { EMPTY_TURN, type CopilotRunProposal, type CopilotStreamEvent, type CopilotThread, type CopilotTurnState } from "./types"
+import { EMPTY_TURN, type CopilotRunProposal, type CopilotRunProposalNode, type CopilotStreamEvent, type CopilotThread, type CopilotTurnState } from "./types"
 
 /**
  * How many runs one assistant message may start on its own: exactly one.
@@ -330,8 +330,15 @@ function onProposal(proposal: CopilotRunProposal): void {
   setCopilotState({ runPhase: "proposed" })
   if (runMode !== "auto") return
 
+  // A single-node proposal is priced as ONE node. Auto compares the number
+  // the user set a ceiling on against what will actually be spent — the
+  // whole-graph estimate would refuse cheap single-node runs on a big canvas
+  // and, worse, could let an expensive one through on a small one.
+  const node = proposal.node
+  const estimate = node ? (bridge.estimateNode?.(node.id) ?? bridge.creditEstimate) : bridge.creditEstimate
+
   const canAuto =
-    bridge.run !== null &&
+    (node ? bridge.runNode !== null : bridge.run !== null) &&
     // The estimate is recomputed asynchronously and holds the PREVIOUS graph's
     // number while it refetches — which is exactly the moment a proposal
     // arrives, since the copilot proposes right after it adds nodes. Never
@@ -340,7 +347,7 @@ function onProposal(proposal: CopilotRunProposal): void {
     // Secondary, and slower: the editor's own view of whether a run is live.
     !bridge.isRunning &&
     autoRunCount < MAX_AUTO_RUNS_PER_TURN &&
-    bridge.creditEstimate <= autoRunLimit
+    estimate <= autoRunLimit
   if (canAuto) startProposedRun()
 }
 
@@ -352,8 +359,64 @@ function onProposal(proposal: CopilotRunProposal): void {
  * Start the proposed run. `skipConfirm` because the proposal card IS the
  * confirmation — the editor's own dialog would be a second one.
  */
+/**
+ * Is the proposed node still the node that was proposed?
+ *
+ * A proposal outlives the graph it was made against: the user can edit,
+ * retype or delete a node between reading the card and pressing Run, and
+ * `edit_workflow` can change an existing node's TYPE. Running "the node with
+ * that id" without checking would spend credits on something the card does
+ * not describe.
+ *
+ * Both halves are needed. The version alone misses nothing the user did (it
+ * moves on every save) but the TYPE is what makes the failure silent when it
+ * happens: same id, different node, card unchanged.
+ */
+function proposedNodeIsIntact(node: CopilotRunProposalNode): boolean {
+  const store = useWorkflowStore.getState()
+  if (store.loadedVersion !== node.graphVersion) return false
+  const live = store.nodes.find((n: { id: string }) => n.id === node.id)
+  return Boolean(live) && (live as { type?: string }).type === node.type
+}
+
+/** Start the single-node run a card proposed, or say why not. */
+function startProposedNodeRun(node: CopilotRunProposalNode): void {
+  const { bridge } = copilotState()
+  if (!bridge.runNode) return
+  // The canvas check comes FIRST and it matters which way round: a moved
+  // version also makes the estimate stale, so checking the price first would
+  // answer "still pricing" to a user whose real problem is that the card no
+  // longer describes their canvas — the wrong diagnosis, and one they would
+  // retry into forever.
+  if (!proposedNodeIsIntact(node)) {
+    copilotState().dismissProposal()
+    setCopilotState({ notice: COPILOT_STRINGS.nodeRunStale })
+    return
+  }
+  // The card shows a price and this click agrees to spend it. A price computed
+  // for a different graph is not this one's.
+  if (!estimateIsCurrent(bridge)) {
+    setCopilotState({ notice: COPILOT_STRINGS.estimateStale })
+    return
+  }
+  // A single-node run has no execution to follow: the canvas owns its
+  // progress and its Stop, and the copilot's auto fix-loop stays
+  // workflow-level. So the card's job ends here — leaving the panel on a
+  // "Running" state it could never resolve would be the lie.
+  copilotState().dismissProposal()
+  setCopilotState({ notice: COPILOT_STRINGS.nodeRunStarted(node.label) })
+  void Promise.resolve(bridge.runNode(node.id, { skipConfirm: true })).then((result) => {
+    if (!result?.started) setCopilotState({ notice: COPILOT_STRINGS.nodeRunFailed })
+  })
+}
+
 export function startProposedRun(): void {
-  const { bridge, runPhase } = copilotState()
+  const { bridge, runPhase, turn } = copilotState()
+  const node = turn.proposal?.node
+  if (node) {
+    startProposedNodeRun(node)
+    return
+  }
   // `runPhase` first: it is synchronous, so it also catches a double-click on
   // the card's Run button, which `bridge.isRunning` would be too slow for.
   if (!bridge.run || runPhase === "running" || bridge.isRunning) return

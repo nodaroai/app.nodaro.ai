@@ -8,14 +8,18 @@
  * therefore records a proposal, emits it to the panel, and ends the model's
  * turn; the run's outcome comes back as the user's next message.
  */
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { supabase } from "../../../lib/supabase.js"
 import type { WiredAsset } from "./edit-workflow.js"
 import { classifyFailure } from "../../../lib/mcp/tools/diagnose.js"
-import type { CopilotToolContext, RunProposal } from "./types.js"
+import { EditRejected } from "./edit-rejected.js"
+import type { CopilotToolContext, RunProposal, RunProposalNode } from "./types.js"
 
 export interface RunWorkflowArgs {
   /** One line the panel shows on the Run card. */
   note?: string
+  /** Propose ONE node instead of the whole graph. */
+  node_id?: string
 }
 
 /**
@@ -31,10 +35,13 @@ export async function proposeRun(
   addedNodeTypes: string[],
   wiredAssets: readonly WiredAsset[] = [],
 ): Promise<{ proposal: RunProposal; message: string }> {
+  const node = args.node_id ? await describeProposedNode(ctx, args.node_id) : undefined
+
   const proposal: RunProposal = {
     addedNodeTypes,
     wiredAssets: [...wiredAssets],
     note: args.note,
+    ...(node ? { node } : {}),
   }
   ctx.emit({
     type: "run_proposed",
@@ -45,13 +52,64 @@ export async function proposeRun(
       // they are about to spend credits on.
       wiredAssets: proposal.wiredAssets,
       note: proposal.note ?? null,
+      node: proposal.node ?? null,
     },
   })
   return {
     proposal,
-    message:
-      "Run proposed. The user decides whether to start it — summarize what will run and stop; you'll get the outcome in their next message.",
+    message: node
+      ? `Run proposed for "${node.label}" only. The user decides whether to start it — say what that one node will do and stop; you'll get the outcome in their next message.`
+      : "Run proposed. The user decides whether to start it — summarize what will run and stop; you'll get the outcome in their next message.",
   }
+}
+
+/**
+ * Read the node out of the LIVE graph, now.
+ *
+ * The turn's `base_version` is the version at turn START and is stale the
+ * moment the copilot's own first edit lands — which is exactly when a run
+ * gets proposed. Stamping the proposal with it would make the client's
+ * version check refuse every proposal that followed an edit, i.e. all of them.
+ */
+async function describeProposedNode(ctx: CopilotToolContext, nodeId: string): Promise<RunProposalNode> {
+  const { data, error } = await supabase
+    .from("workflows")
+    .select("nodes, version")
+    .eq("id", ctx.workflowId)
+    .eq("user_id", ctx.userId)
+    .maybeSingle()
+  if (error) throw new Error(`run_workflow: ${error.message}`)
+  if (!data) throw new Error("run_workflow: workflow not found")
+
+  const row = data as { nodes: unknown; version: number }
+  const nodes = Array.isArray(row.nodes) ? (row.nodes as Array<Record<string, unknown>>) : []
+  const found = nodes.find((n) => n?.id === nodeId)
+  if (!found) {
+    throw new EditRejected(
+      `No node "${nodeId}" on this canvas. Call get_graph and use an id from it, or propose the whole run.`,
+    )
+  }
+  const type = typeof found.type === "string" ? found.type : ""
+  if (!type) throw new EditRejected(`Node "${nodeId}" has no type — it cannot be run on its own.`)
+
+  // Refused HERE rather than at the click. A parameter node is read from its
+  // own data and never executed, so a card offering to run one is a button
+  // that cannot work — and refusing at the click teaches the model nothing,
+  // because by then its tool call has already returned success. This way it
+  // hears why and can propose the whole run instead.
+  //
+  // The SHARED set, not a list of our own: a new parameter node joins it once
+  // and this inherits the answer.
+  if (PARAMETER_NODE_TYPES.has(type)) {
+    throw new EditRejected(
+      `"${type}" is a setting the graph reads, not a step that runs — it cannot be run on its own. Propose the whole run instead.`,
+    )
+  }
+
+  const data_ = (found.data ?? {}) as Record<string, unknown>
+  const label = typeof data_.label === "string" && data_.label.trim() ? data_.label.trim().slice(0, 80) : type
+
+  return { id: nodeId, type, graphVersion: row.version, label }
 }
 
 export interface GetExecutionArgs {

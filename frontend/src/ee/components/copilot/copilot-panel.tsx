@@ -31,6 +31,8 @@ export interface CopilotPanelProps {
   projectId: string | undefined
   save: ((projectId: string) => Promise<CopilotSaveResult>) | null
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
+  runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
+  estimateNode: ((nodeId: string) => number | null) | null
   onStopRun: () => void
   creditEstimate: number
   /** True while the editor is refetching model costs — the estimate is the previous graph's. */
@@ -48,6 +50,8 @@ export default function CopilotPanel({
   projectId,
   save,
   run,
+  runNode,
+  estimateNode,
   onStopRun,
   creditEstimate,
   estimateStale,
@@ -83,22 +87,28 @@ export default function CopilotPanel({
   // `bridge` object would be replaced on every render of the editor. The
   // wrapper is null (not a no-op) when the underlying callback is missing, so
   // the engine's `bridge.run !== null` check keeps meaning "a run can happen".
-  const callbacksRef = useRef({ save, run })
+  const callbacksRef = useRef({ save, run, runNode, estimateNode })
   useEffect(() => {
-    callbacksRef.current = { save, run }
-  }, [save, run])
+    callbacksRef.current = { save, run, runNode, estimateNode }
+  }, [save, run, runNode, estimateNode])
 
   const canSave = save !== null
   const canRun = run !== null
+  const canRunNode = runNode !== null
+  const canEstimateNode = estimateNode !== null
   useEffect(() => {
     setBridge({
       save: canSave ? (pid: string) => callbacksRef.current.save!(pid) : null,
       run: canRun ? (opts?: { skipConfirm?: boolean }) => callbacksRef.current.run!(opts) : null,
+      runNode: canRunNode
+        ? (nodeId: string, opts?: { skipConfirm?: boolean }) => callbacksRef.current.runNode!(nodeId, opts)
+        : null,
+      estimateNode: canEstimateNode ? (nodeId: string) => callbacksRef.current.estimateNode!(nodeId) : null,
     })
     // Nulled on unmount so a stale `run` from a closed editor can never fire a
     // paid run.
-    return () => setBridge({ save: null, run: null })
-  }, [setBridge, canSave, canRun])
+    return () => setBridge({ save: null, run: null, runNode: null, estimateNode: null })
+  }, [setBridge, canSave, canRun, canRunNode, canEstimateNode])
 
   useEffect(() => {
     setBridge({ projectId, creditEstimate, estimateStale, estimateVersion, isRunning, activeExecutionId })

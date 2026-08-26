@@ -39,6 +39,8 @@ const props = {
   projectId: "p1",
   save: null,
   run: null,
+  runNode: null,
+  estimateNode: null,
   onStopRun: () => undefined,
   creditEstimate: 0,
   estimateStale: false,
