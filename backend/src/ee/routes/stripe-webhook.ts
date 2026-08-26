@@ -16,12 +16,12 @@ import {
   handleSubscriptionUpdated,
   handleSubscriptionCanceled,
   handleTransactionCompleted,
-  handleTopupClawback,
   handleAutoRechargeSucceeded,
   handleAutoRechargeFailed,
   handleInvoicePaid,
   resolveUserId,
 } from "../billing/provision-credits.js"
+import { handleOrgPackCompleted, routeClawback } from "../billing/org-customer.js"
 import { config } from "../../lib/config.js"
 import type Stripe from "stripe"
 
@@ -102,6 +102,20 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
           const settled =
             session.payment_status === "paid" ||
             session.payment_status === "no_payment_required"
+          // An ORGANIZATION pack (E2/P13): the org-owned customer bought a
+          // prepaid pack. Branch BEFORE the personal handler — resolveUserId's
+          // metadata fallback and customer upsert assume a person and would
+          // mint a spurious user row for an org checkout (billing-m05). Same
+          // settlement gate as the personal path, same payment-intent
+          // idempotency mutex, different ledger.
+          if (session.mode === "payment" && settled && session.metadata?.payerKind === "org") {
+            await handleOrgPackCompleted({
+              orgId: session.metadata.orgId ?? "",
+              packId: session.metadata.packId ?? "",
+              transactionId: (session.payment_intent as string) ?? session.id,
+            })
+            break
+          }
           if (session.mode === "payment" && settled) {
             await handleTransactionCompleted({
               transactionId: (session.payment_intent as string) ?? session.id,
@@ -184,7 +198,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
               .filter((r) => (r.amount ?? 0) > 0 && r.status !== "failed")
               .map((r) => ({ refundId: r.id, amountCents: r.amount }))
           }
-          await handleTopupClawback({
+          await routeClawback({
             paymentIntentId: (charge.payment_intent as string) ?? null,
             refunds,
           })
@@ -195,7 +209,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
           // Chargeback: funds left our account — claw the credits back now.
           // Idempotent per dispute id (same claim mechanism as refunds).
           const dispute = event.data.object as Stripe.Dispute
-          await handleTopupClawback({
+          await routeClawback({
             paymentIntentId: (dispute.payment_intent as string) ?? null,
             refunds: [{ refundId: dispute.id, amountCents: dispute.amount ?? 0 }],
           })

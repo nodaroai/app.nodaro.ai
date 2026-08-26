@@ -1248,5 +1248,19 @@ export function buildToolkit(): PluginToolkit {
         return (data?.role as string | undefined) ?? null
       },
     },
+    // Organization money-in (E2/P13). Dynamic ee imports on purpose: the
+    // toolkit is core, and core may not statically import ee/ — the same shim
+    // shape as credit-guard. The plugin `?.`-guards this member (additive
+    // contract rule), so an older host simply has no org checkout.
+    billing: {
+      createOrgPackCheckout: async (orgId, actorUserId, packId) => {
+        const { createOrgPackCheckout } = await import("../../ee/billing/org-customer.js")
+        return createOrgPackCheckout(orgId, actorUserId, packId)
+      },
+      getOrgCustomerPortalUrl: async (orgId) => {
+        const { getOrgCustomerPortalUrl } = await import("../../ee/billing/org-customer.js")
+        return getOrgCustomerPortalUrl(orgId)
+      },
+    },
   }
 }

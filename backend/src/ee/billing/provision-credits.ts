@@ -677,14 +677,14 @@ async function insertTransaction(params: InsertTransactionParams): Promise<void>
 
 // ── Top-up Refund / Dispute Clawback (payg NET-lifetime, design §4.1a) ──
 
-interface TopupClawbackRefund {
+export interface TopupClawbackRefund {
   /** Stripe refund id (re_...) or dispute id (dp_...) — the idempotency key. */
   readonly refundId: string
   /** Refunded amount in cents for THIS refund/dispute (not cumulative). */
   readonly amountCents: number
 }
 
-interface TopupClawbackData {
+export interface TopupClawbackData {
   /** The payment intent the original top-up claim was keyed by. */
   readonly paymentIntentId: string | null
   readonly refunds: readonly TopupClawbackRefund[]

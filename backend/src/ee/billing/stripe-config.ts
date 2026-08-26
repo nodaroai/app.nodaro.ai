@@ -49,6 +49,32 @@ export const TOP_UPS: Record<string, number> = {
   "price_1T8T6B6EOX16l3P8CmcSaJyR": 36000,  // $100
 }
 
+export interface OrgPack {
+  priceId: string
+  credits: number
+  usd: number
+}
+
+/**
+ * Prepaid packs an ORGANIZATION can buy (E2/P13). Identical to the personal
+ * ladder — owner decision, 2026-08-26 — down to the Stripe price ids: the same product
+ * is sold, and what makes the purchase an org purchase is the checkout's
+ * `metadata.payerKind === "org"` plus the org-owned Stripe customer, never a
+ * different price. A guard test pins each pack's (priceId, credits) to the
+ * TOP_UPS row it mirrors, so a personal re-rate cannot silently drift the two
+ * ladders apart.
+ */
+export const ORG_TOP_UPS: Record<string, OrgPack> = {
+  "org-10": { priceId: "price_1T8T5M6EOX16l3P85i5sCtUs", credits: 3300, usd: 10 },
+  "org-25": { priceId: "price_1T8T5k6EOX16l3P8a1goDXGm", credits: 8500, usd: 25 },
+  "org-50": { priceId: "price_1T8T5w6EOX16l3P8mNU7sLkU", credits: 17500, usd: 50 },
+  "org-100": { priceId: "price_1T8T6B6EOX16l3P8CmcSaJyR", credits: 36000, usd: 100 },
+}
+
+export function getOrgPack(packId: string): OrgPack | null {
+  return ORG_TOP_UPS[packId] ?? null
+}
+
 export const TIER_CREDITS: Record<string, number> = {
   // Tier flattening + x10 re-denomination. $/credit spread collapses 1.79x -> 1.08x.
   // MUST stay in lockstep with tier_config.monthly_credits — migrations 067 and

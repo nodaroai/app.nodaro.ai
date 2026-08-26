@@ -122,6 +122,10 @@ describe("webhook wiring text pins", () => {
     // must fetch the real refunds (first live refund regression).
     expect(src).toContain("refunds.list({ charge: charge.id")
     expect(src).toContain('case "charge.dispute.funds_withdrawn"')
-    expect(src.match(/handleTopupClawback\(/g)?.length).toBeGreaterThanOrEqual(2)
+    // E2/P13: both events now go through routeClawback — the org/personal
+    // fork keyed on the grant claim's org_id. The personal path is UNCHANGED
+    // behind it: routeClawback delegates to handleTopupClawback for every
+    // non-org transaction (pinned behaviorally in org-customer.test.ts).
+    expect(src.match(/routeClawback\(/g)?.length).toBeGreaterThanOrEqual(2)
   })
 })

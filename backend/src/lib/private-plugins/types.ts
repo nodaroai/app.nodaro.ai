@@ -1413,6 +1413,30 @@ export interface PluginToolkit {
    * fallback); a plugin must never carry a copy of that default.
    */
   deployment: PluginDeploymentToolkit
+  /**
+   * Organization money-in (E2/P13). OPTIONAL and additive: a plugin built
+   * against this member must `?.`-guard it, because it may load on an older
+   * host that predates it (the contract's standing additive rule — no
+   * CONTRACT_VERSION bump). The Stripe SDK and the `ee/billing` glue stay on
+   * the host; the plugin only ever asks for a URL.
+   */
+  billing?: PluginBillingToolkit
+}
+
+/**
+ * The two Stripe operations the organization billing routes need. Implemented
+ * host-side over `ee/billing/org-customer.ts` (the plugin cannot import
+ * `ee/`); everything else about org money is a database RPC the plugin calls
+ * through `db`.
+ */
+export interface PluginBillingToolkit {
+  /**
+   * A Checkout session for one prepaid org pack. Null when the packId is not
+   * in the ladder — the route turns that into a 400, never a Stripe call.
+   */
+  createOrgPackCheckout(orgId: string, actorUserId: string, packId: string): Promise<{ url: string } | null>
+  /** The org customer's Stripe portal (receipts). Null when the org has never bought. */
+  getOrgCustomerPortalUrl(orgId: string): Promise<{ url: string } | null>
 }
 
 /** One member per gated feature. `organizations` = `hasOrganizations()`. */
