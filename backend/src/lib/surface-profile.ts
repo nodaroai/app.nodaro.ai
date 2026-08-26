@@ -201,6 +201,20 @@ export function surfaceGateOpen(): boolean {
 }
 
 /**
+ * True when the deployment restricts sign-in to SSO ONLY — auth.methods is
+ * non-empty and every entry is "sso". Drives the server-authoritative SSO gate
+ * (middleware/auth.ts, SAI-5 / H6): on such a deployment, every JWT-authenticated
+ * account must have been provisioned through the SSO path. Inert by default
+ * (auth.methods defaults [] → false → gate off, mainline unaffected); also false
+ * when a deployment allows mixed auth (e.g. ["email","sso"]), since a
+ * password/OAuth account is legitimate there.
+ */
+export function surfaceSsoOnly(): boolean {
+  const methods = runtimeSurfaceProfile().auth.methods
+  return methods.length > 0 && methods.every((m) => m === "sso")
+}
+
+/**
  * Narrows-never-widens refinement: strip anything the profile tries to turn ON
  * that the edition (or the profile itself) does not actually support. Only
  * additive vectors need checking — subtractive fields (nav.hide, *.deny,
