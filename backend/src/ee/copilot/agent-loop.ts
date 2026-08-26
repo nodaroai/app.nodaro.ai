@@ -88,7 +88,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
   const client = getAnthropicClient()
   const tier = input.tier ?? COPILOT_TIERS[DEFAULT_COPILOT_TIER]
   const nonce = newUntrustedNonce()
-  const deadline = Date.now() + TURN_CAPS.wallClockMs
+  const deadline = Date.now() + tier.caps.wallClockMs
   const usage: LoopUsage = { ...EMPTY_USAGE }
   const turnMessages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: input.userContent }]
   const callCounts = new Map<string, number>()
@@ -109,7 +109,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
 
   while (true) {
     if (input.signal.aborted) return finish("cancelled")
-    if (iterations >= TURN_CAPS.maxIterations) return finish("capped")
+    if (iterations >= tier.caps.maxIterations) return finish("capped")
     if (Date.now() > deadline) return finish("capped")
 
     const messages = [...input.history, ...turnMessages]
@@ -178,7 +178,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
       if (await input.isCancelRequested()) return finish("cancelled")
       if (input.signal.aborted) return finish("cancelled")
 
-      if (toolCalls >= TURN_CAPS.maxToolCalls) {
+      if (toolCalls >= tier.caps.maxToolCalls) {
         results.push(errorResult(use.id, nonce, use.name, "Tool-call limit for this turn reached. Summarize what you have and stop."))
         continue
       }

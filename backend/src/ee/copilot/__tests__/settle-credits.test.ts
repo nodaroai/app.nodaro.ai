@@ -80,6 +80,7 @@ const input = () => ({
   edges: [],
   message: "hi",
   tier: "standard" as const,
+  caps: { maxIterations: 12, maxToolCalls: 24, wallClockMs: 8 * 60_000, hardTimeoutMs: 9 * 60_000 },
   usageLogId: "log1",
   reservedCredits: 150,
   emit: vi.fn(),

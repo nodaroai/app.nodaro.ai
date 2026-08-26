@@ -128,7 +128,7 @@ describe("resolveMarkup", () => {
       providerChain: ["kie"],
       markupPercent: 50,
       activeProvider: "kie",
-      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true },
+      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null },
     }
     expect(resolveMarkup(kieDecision, "kie")).toBe(50)
     // With replicate disabled, even replicate providerUsed returns the same KIE markup

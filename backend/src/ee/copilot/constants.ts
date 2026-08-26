@@ -19,11 +19,33 @@ export const COPILOT_FEATURE = "workflow-copilot" as const
  */
 export type CopilotModelTier = "economy" | "standard" | "premium"
 
+/**
+ * How far ONE turn of a tier may run before it is capped.
+ *
+ * These were a single flat set: a user paying for Opus stopped at exactly the
+ * same 12 iterations / 24 tool calls / 8 minutes as one on Haiku, so the
+ * ceiling erased the reason to pay for the stronger model on the exact tasks
+ * that need it — a big multi-stage build hits the wall mid-graph. They live on
+ * the tier spec now, so every place that already resolves a tier gets its caps
+ * for free and a fifth reader cannot forget one.
+ *
+ * `hardTimeoutMs` is the last-resort timer that ends the HTTP stream; it must
+ * be strictly greater than `wallClockMs`, so a turn that reaches its soft
+ * wall-clock stop reports "capped" cleanly instead of being cut off mid-write.
+ */
+export interface TierCaps {
+  readonly maxIterations: number
+  readonly maxToolCalls: number
+  readonly wallClockMs: number
+  readonly hardTimeoutMs: number
+}
+
 export interface CopilotTierSpec {
   readonly registryId: string
   readonly anthropicModelId: string
   readonly reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max"
   readonly creditId: string
+  readonly caps: TierCaps
 }
 
 export const COPILOT_TIERS: Record<CopilotModelTier, CopilotTierSpec> = {
@@ -31,18 +53,30 @@ export const COPILOT_TIERS: Record<CopilotModelTier, CopilotTierSpec> = {
     registryId: "claude-haiku-4.5",
     anthropicModelId: "claude-haiku-4-5-20251001",
     creditId: "workflow-copilot:economy",
+    // The fast rung: quick edits, not long builds. A tighter cap keeps its
+    // spend as low as its price.
+    caps: { maxIterations: 10, maxToolCalls: 20, wallClockMs: 6 * 60_000, hardTimeoutMs: 7 * 60_000 },
   },
   standard: {
     registryId: "claude-sonnet-5",
     anthropicModelId: "claude-sonnet-5",
     reasoningEffort: "high",
     creditId: "workflow-copilot",
+    // The default, and today's numbers — unchanged, so nothing regresses for
+    // the tier most turns run on.
+    caps: { maxIterations: 12, maxToolCalls: 24, wallClockMs: 8 * 60_000, hardTimeoutMs: 9 * 60_000 },
   },
   premium: {
     registryId: "claude-opus-5",
     anthropicModelId: "claude-opus-5",
     reasoningEffort: "xhigh",
     creditId: "workflow-copilot:premium",
+    // The deep rung: room to hold a whole campaign in one turn. Roughly 1.7x
+    // the standard headroom. It has a higher reservation ceiling to match
+    // (workflow-copilot:premium, 2700cr) — so whichever binds first is a real
+    // stop: the budget guard on an expensive turn, this cap on a long cheap
+    // one. Neither is meant to make the other unreachable.
+    caps: { maxIterations: 20, maxToolCalls: 40, wallClockMs: 13 * 60_000, hardTimeoutMs: 14 * 60_000 },
   },
 }
 
@@ -53,13 +87,15 @@ export function resolveCopilotTier(value: unknown): CopilotModelTier {
   return value === "economy" || value === "premium" ? value : DEFAULT_COPILOT_TIER
 }
 
-/** Per-turn caps. The USD budget is derived from the credit reservation at run time. */
+/**
+ * Per-turn caps that do NOT vary by tier. The four that do — iterations, tool
+ * calls, wall-clock and the hard timeout — moved onto `CopilotTierSpec.caps`;
+ * deleting them from here is deliberate, so the compiler names every reader
+ * that must now ask which tier it is capping.
+ *
+ * The USD budget is derived from the credit reservation at run time.
+ */
 export const TURN_CAPS = {
-  maxIterations: 12,
-  maxToolCalls: 24,
-  wallClockMs: 8 * 60_000,
-  /** The hard timer that ends the HTTP stream even if the loop misbehaves. */
-  hardTimeoutMs: 9 * 60_000,
   maxTokensPerCall: 16_384,
   maxToolResultChars: 24_000,
   /** Identical (name + canonical args) calls tolerated before short-circuiting. */

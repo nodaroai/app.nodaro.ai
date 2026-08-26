@@ -143,15 +143,22 @@ export async function countActiveThreads(userId: string): Promise<number> {
 export async function createThread(
   userId: string,
   workflowId: string,
-  opts: { createdWorkflow?: boolean } = {},
+  opts: { createdWorkflow?: boolean; modelTier?: string } = {},
 ): Promise<CopilotThread> {
-  const base = { user_id: userId, workflow_id: workflowId }
+  // `model_tier` (migration 344) is on production, so it is named directly —
+  // unlike `created_workflow` (349), which the retry below strips when a
+  // pre-promotion database rejects it. Written at birth so the thread row is
+  // the single tier authority from turn one, and the admin's default only ever
+  // affects NEW conversations (an existing thread is `existing ??`-guarded by
+  // the caller and never re-defaulted).
+  const base: Record<string, unknown> = { user_id: userId, workflow_id: workflowId }
+  if (opts.modelTier) base.model_tier = opts.modelTier
   const insert = async (row: Record<string, unknown>) =>
     supabase.from("copilot_threads").insert(row).select(THREAD_COLUMNS).single()
 
   let { data, error } = opts.createdWorkflow
     ? await insert({ ...base, created_workflow: true })
-    : await insert(base)
+    : await insert({ ...base })
   if (error && (error as { code?: string }).code === UNDEFINED_COLUMN) {
     ;({ data, error } = await insert(base))
   }

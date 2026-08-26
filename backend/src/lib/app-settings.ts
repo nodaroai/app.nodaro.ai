@@ -37,6 +37,10 @@ export interface AppSettings {
   nodaro_provider_prefs: NodaroProviderPrefs | null
   /** Runtime pause for the Workflow Copilot (on top of the COPILOT_ENABLED env kill switch). Default true. */
   copilot_enabled: boolean
+  /** Which tier a NEW copilot thread starts on. Absent = the compiled default. */
+  copilot_default_tier: string | null
+  /** Admin overrides for per-tier caps (minutes + counts). Absent fields fall back to compiled defaults. */
+  copilot_tier_caps: Record<string, unknown> | null
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -74,7 +78,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true }
+    return { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null }
   }
 
   const settings: AppSettings = {
@@ -88,11 +92,21 @@ async function refreshSettings(): Promise<AppSettings> {
     apps_auto_scroll_seconds: 4,
     nodaro_provider_prefs: null,
     copilot_enabled: true,
+    copilot_default_tier: null,
+    copilot_tier_caps: null,
   }
 
   for (const row of data ?? []) {
     if (row.key === "copilot_enabled" && typeof row.value === "boolean") {
       settings.copilot_enabled = row.value
+      continue
+    }
+    if (row.key === "copilot_default_tier" && typeof row.value === "string") {
+      settings.copilot_default_tier = row.value
+      continue
+    }
+    if (row.key === "copilot_tier_caps" && row.value && typeof row.value === "object" && !Array.isArray(row.value)) {
+      settings.copilot_tier_caps = row.value as Record<string, unknown>
       continue
     }
     if (row.key === "ai_provider" && typeof row.value === "string") {

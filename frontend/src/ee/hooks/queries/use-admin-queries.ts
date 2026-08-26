@@ -557,6 +557,10 @@ export function useAdminSettings() {
         // the backend's own default — an ABSENT row means on, so a fresh
         // install shows the switch on rather than off.
         copilot_enabled: (settings.copilot_enabled as boolean) ?? true,
+        copilot_default_tier: (settings.copilot_default_tier as string) ?? "",
+        copilot_tier_caps: (settings.copilot_tier_caps && typeof settings.copilot_tier_caps === "object"
+          ? settings.copilot_tier_caps
+          : {}) as AppSettings["copilot_tier_caps"],
         featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
         featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
         apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,

@@ -15,6 +15,29 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+/** The compiled per-tier defaults, mirrored for the input placeholders. The
+ *  authority is `backend/ee/copilot/constants.ts`; a stale placeholder here
+ *  only affects the greyed hint, never the runtime cap (the resolver clamps). */
+const TIER_CAP_DEFAULTS = {
+  economy: { maxIterations: 10, maxToolCalls: 20, wallClockMinutes: 6 },
+  standard: { maxIterations: 12, maxToolCalls: 24, wallClockMinutes: 8 },
+  premium: { maxIterations: 20, maxToolCalls: 40, wallClockMinutes: 13 },
+} as const
+
+/** Upper bounds, mirroring backend `CAP_BOUNDS` (tier-settings.ts). Clamp on
+ *  the way in so a stored cap can never exceed the value the resolver will
+ *  honour — otherwise the panel shows a number the runtime silently caps. */
+const TIER_CAP_MAX = { maxIterations: 100, maxToolCalls: 400, wallClockMinutes: 30 } as const
+
+const TIER_ROWS = [
+  { key: "economy", label: "Fast" },
+  { key: "standard", label: "Smart" },
+  { key: "premium", label: "Max" },
+] as const
+
+type TierCapField = "maxIterations" | "maxToolCalls" | "wallClockMinutes"
+type CopilotTierCaps = Record<string, Partial<Record<TierCapField, number>>>
+
 export default function AdminSettingsPage() {
   const { data: settings, isLoading: loading, error: queryError } = useAdminSettings()
   const updateSettingMut = useUpdateSettingMutation()
@@ -30,6 +53,18 @@ export default function AdminSettingsPage() {
   // The copilot emergency stop. Defaults ON, matching the seed — an absent
   // row means enabled, so a fresh install shows it on.
   const [copilotEnabled, setCopilotEnabled] = useState(true)
+  const [copilotDefaultTier, setCopilotDefaultTier] = useState("")
+  // Sparse: only tiers/fields the admin actually changed. Blank means "use the
+  // built-in default", which the backend resolver fills and clamps.
+  const [tierCaps, setTierCaps] = useState<CopilotTierCaps>({})
+  const setTierCap = (tier: string, field: TierCapField, value: number | undefined) =>
+    setTierCaps((prev) => {
+      const next: CopilotTierCaps = { ...prev, [tier]: { ...prev[tier] } }
+      if (value === undefined || Number.isNaN(value)) delete next[tier]![field]
+      else next[tier]![field] = Math.min(TIER_CAP_MAX[field], Math.max(1, value))
+      if (Object.keys(next[tier]!).length === 0) delete next[tier]
+      return next
+    })
   const [appsLimit, setAppsLimit] = useState(20)
   const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
   const [saving, setSaving] = useState(false)
@@ -46,6 +81,8 @@ export default function AdminSettingsPage() {
       setCarouselAutoplay(settings.carousel_video_autoplay)
       setAppsPageAutoplay(settings.apps_page_video_autoplay)
       setCopilotEnabled(settings.copilot_enabled)
+      setCopilotDefaultTier(settings.copilot_default_tier ?? "")
+      setTierCaps((settings.copilot_tier_caps ?? {}) as CopilotTierCaps)
       setAppsLimit(settings.featured_apps_limit)
       setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
     }
@@ -56,6 +93,8 @@ export default function AdminSettingsPage() {
     Object.fromEntries(rows.filter(r => r.prefix.trim().length > 0).map(r => [r.prefix.trim(), r.percent]))
   const marginsDirty =
     JSON.stringify(marginsAsObject(serviceMargins)) !== JSON.stringify(settings?.service_margin_percent ?? {})
+  const tierCapsDirty =
+    JSON.stringify(tierCaps) !== JSON.stringify(settings?.copilot_tier_caps ?? {})
 
   const handleSave = async () => {
     setSaving(true)
@@ -86,6 +125,14 @@ export default function AdminSettingsPage() {
 
     if (copilotEnabled !== settings?.copilot_enabled) {
       updates.push({ key: "copilot_enabled", value: copilotEnabled })
+    }
+
+    if (copilotDefaultTier && copilotDefaultTier !== settings?.copilot_default_tier) {
+      updates.push({ key: "copilot_default_tier", value: copilotDefaultTier })
+    }
+
+    if (tierCapsDirty) {
+      updates.push({ key: "copilot_tier_caps", value: tierCaps })
     }
 
     if (appsLimit !== settings?.featured_apps_limit) {
@@ -124,6 +171,8 @@ export default function AdminSettingsPage() {
     carouselAutoplay !== settings.carousel_video_autoplay ||
     appsPageAutoplay !== settings.apps_page_video_autoplay ||
     copilotEnabled !== settings.copilot_enabled ||
+    (copilotDefaultTier !== "" && copilotDefaultTier !== settings.copilot_default_tier) ||
+    tierCapsDirty ||
     appsLimit !== settings.featured_apps_limit ||
     autoScrollSeconds !== settings.apps_auto_scroll_seconds
   )
@@ -323,6 +372,65 @@ export default function AdminSettingsPage() {
               checked={copilotEnabled}
               onCheckedChange={setCopilotEnabled}
             />
+          </div>
+
+          <div className="mt-4">
+            <Label htmlFor="copilot-default-tier">Default tier for new conversations</Label>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+              What the copilot starts on before a user picks Fast / Smart / Max. Existing conversations keep their tier.
+            </p>
+            <Select value={copilotDefaultTier || "standard"} onValueChange={setCopilotDefaultTier}>
+              <SelectTrigger id="copilot-default-tier" className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="economy">Fast (economy)</SelectItem>
+                <SelectItem value="standard">Smart (standard)</SelectItem>
+                <SelectItem value="premium">Max (premium)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="mt-4">
+            <Label>Per-tier limits</Label>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+              How far one message may run on each tier before it pauses. Blank uses the built-in default. The hard cut-off is always one minute past the time limit.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="text-sm w-full max-w-lg">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="font-medium py-1 pr-3">Tier</th>
+                    <th className="font-medium py-1 px-2">Steps</th>
+                    <th className="font-medium py-1 px-2">Actions</th>
+                    <th className="font-medium py-1 px-2">Minutes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TIER_ROWS.map(({ key, label }) => (
+                    <tr key={key}>
+                      <td className="py-1 pr-3">{label}</td>
+                      {(["maxIterations", "maxToolCalls", "wallClockMinutes"] as const).map((field) => (
+                        <td key={field} className="py-1 px-1">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={TIER_CAP_MAX[field]}
+                            aria-label={`${label} ${field}`}
+                            className="h-8 w-20"
+                            placeholder={String(TIER_CAP_DEFAULTS[key][field])}
+                            value={tierCaps[key]?.[field] ?? ""}
+                            onChange={(e) =>
+                              setTierCap(key, field, e.target.value === "" ? undefined : Number(e.target.value))
+                            }
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
