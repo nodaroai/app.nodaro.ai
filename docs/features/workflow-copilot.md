@@ -23,6 +23,8 @@ In both boxes **Enter** sends and **Shift + Enter** starts a new line, so a desc
 - **Edit.** "Add a video step after the image", "switch the model to VEO 3.1", "delete the second branch." Changes arrive as an incremental edit — your other nodes are untouched.
 - **Run — with your permission.** The copilot never starts a run by itself. It proposes one, you see the credit estimate, and you decide. See *Ask or Auto* below.
 - **Fix.** After a run it can read the per-node result, diagnose a failure and change the configuration that caused it.
+- **Borrow from a flow you already have.** "Build it like my product one." It can read another of your workflows *in the same project* and follow its shape. Reading is all it does there — it cannot edit or run a workflow other than the one you have open.
+- **Start a separate flow.** "Also make me an ads version." It creates a new workflow in the same project and builds it in one go; a line in the conversation links straight to it. One new workflow per message. Your open canvas is untouched, and the run it proposes is still the flow you are looking at — never the one it just made.
 
 ## Point at your own saved things
 

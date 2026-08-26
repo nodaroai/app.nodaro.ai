@@ -202,7 +202,10 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       userContent: userContent as Anthropic.Messages.ContentBlockParam[],
       budget,
       signal: controller.signal,
-      deps: { ctx: { ...ctx, emit: emitWithVersion }, invoker, addedNodeTypes, wiredAssets },
+      // `created` starts at zero per TURN, which is what bounds it: a fresh
+      // object here means one conversation cannot accumulate creations across
+      // messages by keeping the loop alive.
+      deps: { ctx: { ...ctx, emit: emitWithVersion }, invoker, addedNodeTypes, wiredAssets, created: { count: 0 } },
       events: {
         onToken: (delta) => input.emit({ type: "token", data: { text: delta } }),
         onToolCall: (event) => input.emit({ type: "tool_call", data: { ...event } }),

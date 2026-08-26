@@ -736,3 +736,61 @@ describe("the auto-posted user strings", () => {
     expect(COPILOT_STRINGS.fixItMessage).not.toMatch(/http/i)
   })
 })
+
+describe("an update about a workflow this turn is not attached to", () => {
+  // `create_workflow` builds the workflow it just made, and that edit emits a
+  // `workflow_updated` carrying the NEW id — mid-turn, while the user is
+  // looking at a different canvas.
+  const foreign: CopilotStreamEvent = {
+    type: "workflow_updated",
+    data: {
+      workflowId: "wf-OTHER",
+      version: 2,
+      addedNodeIds: ["n1", "n2"],
+      updatedNodeIds: [],
+      removedNodeIds: [],
+      addedNodeTypes: ["generate-image"],
+      nodeCount: 2,
+      edgeCount: 1,
+      adjustments: [],
+    },
+  }
+
+  it("never reconciles the open canvas to another workflow's version", async () => {
+    // Version 2 of a brand-new workflow against version 6 of the open one:
+    // reconciling would declare the canvas behind and fetch over the user's
+    // graph.
+    events([metadata("ask", 100), foreign, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("also make me an ads flow")
+    expect(ensureCanvasVersion).not.toHaveBeenCalled()
+  })
+
+  it("never describes the open workflow as having gained those nodes", async () => {
+    events([metadata("ask", 100), foreign, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("also make me an ads flow")
+    // `update` drives the "added 2 nodes" card and the auto-layout that
+    // follows it — both would be about a canvas the user never changed.
+    expect(useCopilotStore.getState().turn.update).toBeNull()
+    expect(workflowState.setNeedsAutoLayout).not.toHaveBeenCalled()
+  })
+
+  it("still reconciles an update that IS this turn's workflow", async () => {
+    const own: CopilotStreamEvent = { ...foreign, data: { ...foreign.data, workflowId: "wf-1" } }
+    events([metadata("ask", 100), own, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("add a node")
+    expect(ensureCanvasVersion).toHaveBeenCalled()
+    expect(useCopilotStore.getState().turn.update).not.toBeNull()
+  })
+
+  it("lets workflow_created through — it is about another workflow BY DESIGN", async () => {
+    events([
+      metadata("ask", 100),
+      { type: "workflow_created", data: { workflowId: "wf-OTHER", name: "Ads", projectId: "p1" } },
+      { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } },
+    ])
+    await sendCopilotMessage("also make me an ads flow")
+    expect(useCopilotStore.getState().turn.createdWorkflows).toEqual([
+      { workflowId: "wf-OTHER", name: "Ads", projectId: "p1" },
+    ])
+  })
+})

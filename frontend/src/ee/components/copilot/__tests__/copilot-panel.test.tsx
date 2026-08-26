@@ -215,7 +215,7 @@ describe("a live turn", () => {
         activities: [{ id: "tu1", label: "Reading the workflow", note: "", status: "started" }],
         update: null,
         proposal: null,
-        memorySaves: [],
+        memorySaves: [], createdWorkflows: [],
         creditsCharged: null,
         error: null,
       },

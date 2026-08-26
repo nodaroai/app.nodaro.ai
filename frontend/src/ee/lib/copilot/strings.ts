@@ -126,6 +126,8 @@ export const COPILOT_STRINGS = {
 
   memoryRemembered: "Remembered",
   memoryUndo: "Undo",
+  workflowCreated: "New workflow",
+  workflowCreatedOpen: "Open",
   memoryUndoFailed: "Could not remove that — open “What the Copilot remembers” and delete it there.",
   memoriesOpen: "What the Copilot remembers",
   memoriesTitle: "What the Copilot remembers",

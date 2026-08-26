@@ -30,7 +30,7 @@ const deps = {
   ctx: { userId: "u1", workflowId: "wf1", projectId: "p1", threadId: "t1", turnId: "turn1",
   allowPublishing: false, userLinks: new Set<string>(), fastify: {} as never, emit: vi.fn() },
   invoker: fakeInvoker(),
-  addedNodeTypes: new Set<string>(), wiredAssets: [],
+  addedNodeTypes: new Set<string>(), wiredAssets: [], created: { count: 0 },
 }
 
 describe("buildToolDefinitions", () => {
@@ -116,5 +116,55 @@ describe("dispatchTool", () => {
     const outcome = await dispatchTool({ ...deps, invoker }, "get_node_skill", {})
     expect(outcome.isError).toBe(true)
     expect(outcome.text).toContain("upstream exploded")
+  })
+})
+
+describe("create_workflow is bounded per TURN, not per model's judgement", () => {
+  it("allows one and refuses the second in the same turn", async () => {
+    const invoker = fakeInvoker()
+    const turnDeps = { ...deps, invoker, created: { count: 0 } }
+    const first = await dispatchTool(turnDeps as never, NATIVE_TOOLS.createWorkflow, { name: "One" })
+    const second = await dispatchTool(turnDeps as never, NATIVE_TOOLS.createWorkflow, { name: "Two" })
+    // The first may fail on the mocked supabase; what is pinned is that the
+    // SECOND is refused by the counter before it ever reaches the database.
+    expect(second.isError).toBe(true)
+    expect(second.text).toMatch(/per message/)
+    expect(first.text).not.toMatch(/per message/)
+  })
+
+  it("counts before awaiting — two calls a microtask apart cannot both pass", async () => {
+    const turnDeps = { ...deps, invoker: fakeInvoker(), created: { count: 0 } }
+    const [a, b] = await Promise.all([
+      dispatchTool(turnDeps as never, NATIVE_TOOLS.createWorkflow, { name: "A" }),
+      dispatchTool(turnDeps as never, NATIVE_TOOLS.createWorkflow, { name: "B" }),
+    ])
+    const refused = [a, b].filter((r) => /per message/.test(r.text))
+    expect(refused).toHaveLength(1)
+  })
+
+  it("keeps a created workflow's nodes off the OPEN workflow's run card", async () => {
+    // `addedNodeTypes` feeds the Run card for the graph on screen. Listing
+    // nodes that went into a different workflow would tell the user they are
+    // about to spend credits on something their canvas never gained.
+    const turnDeps = { ...deps, invoker: fakeInvoker(), addedNodeTypes: new Set<string>(), created: { count: 0 } }
+    await dispatchTool(turnDeps as never, NATIVE_TOOLS.createWorkflow, { name: "Side", nodes: [] })
+    expect([...turnDeps.addedNodeTypes]).toEqual([])
+  })
+})
+
+describe("get_workflow_graph is on the tool surface", () => {
+  it("is offered to the model, and is NATIVE — not a name the MCP path could serve", () => {
+    // Asserted through the allowlist rather than by dispatching: the MCP
+    // fall-through pins `workflow_id` to the OPEN workflow, so a native tool
+    // that ever leaked into that branch would silently read the wrong graph.
+    // Absent from the allowlist, the branch refuses it outright.
+    expect(MCP_TOOL_ALLOWLIST.has(NATIVE_TOOLS.getWorkflowGraph)).toBe(false)
+    expect(MCP_TOOL_ALLOWLIST.has(NATIVE_TOOLS.createWorkflow)).toBe(false)
+  })
+
+  it("both appear in the model's tool list", async () => {
+    const names = (await buildToolDefinitions(fakeInvoker())).map((t) => t.name)
+    expect(names).toContain(NATIVE_TOOLS.getWorkflowGraph)
+    expect(names).toContain(NATIVE_TOOLS.createWorkflow)
   })
 })

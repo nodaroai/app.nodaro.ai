@@ -218,6 +218,15 @@ async function send(
     })
     for await (const event of stream) {
       if (bornIn !== generation) break
+      // `create_workflow` edits the workflow it just made, and that edit emits
+      // a `workflow_updated` carrying the NEW id — mid-turn, while the user is
+      // looking at a different canvas. Dropped here, at the one point both the
+      // reducer and `onEvent` read from, because both would get it wrong in
+      // their own way: the reducer would describe the open workflow as having
+      // gained nodes it never gained (and the auto-layout that follows would
+      // rearrange it), and `onEvent` would try to reconcile the open canvas to
+      // a version number belonging to another row entirely.
+      if (isForeignWorkflowUpdate(event, workflowId)) continue
       apply((turn) => reduceTurn(turn, event), bornIn)
       await onEvent(event, workflowId)
     }
@@ -261,6 +270,16 @@ function tidyCanvasAfterBuild(workflowId: string): void {
   // workflow they are no longer looking at would be a surprise edit.
   if (useWorkflowStore.getState().workflowId !== workflowId) return
   useWorkflowStore.getState().setNeedsAutoLayout(true)
+}
+
+/**
+ * An update about a workflow this turn is not attached to.
+ *
+ * `workflow_created` is deliberately NOT foreign: it is ABOUT another
+ * workflow by design, and the panel wants it.
+ */
+function isForeignWorkflowUpdate(event: CopilotStreamEvent, workflowId: string): boolean {
+  return event.type === "workflow_updated" && event.data.workflowId !== workflowId
 }
 
 async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<void> {

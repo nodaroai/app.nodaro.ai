@@ -16,6 +16,7 @@ import { CopilotActivityRows } from "./copilot-activity"
 import { CopilotAnswerSkeleton, CopilotLivePill } from "./copilot-live-pill"
 import { WorkflowUpdatedCard } from "./copilot-cards"
 import { MemorySavedPins } from "./copilot-memories"
+import { CreatedWorkflowPins } from "./copilot-created-workflows"
 import { CopilotRunSection } from "./copilot-run-section"
 import type { CopilotActivity, DisplayMessage } from "@/ee/lib/copilot/types"
 
@@ -115,6 +116,7 @@ export function CopilotConversation({
           consent surface. Panel state like the cards above: the save outlives
           the live block, and the undo must too. */}
       <MemorySavedPins />
+      <CreatedWorkflowPins />
 
       <CopilotRunSection userId={userId} nodeCount={nodeCount} onStopRun={onStopRun} />
 

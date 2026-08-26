@@ -181,11 +181,22 @@ export const FORCED_MCP_ARGS: Readonly<Record<string, Readonly<Record<string, un
 /** Native copilot tool names. */
 export const NATIVE_TOOLS = {
   getGraph: "get_graph",
+  getWorkflowGraph: "get_workflow_graph",
   editWorkflow: "edit_workflow",
+  createWorkflow: "create_workflow",
   runWorkflow: "run_workflow",
   getExecution: "get_execution",
   remember: "remember",
 } as const
+
+/**
+ * Workflows one turn may create. The model can be talked into loops, and a
+ * loop that creates rows leaves them behind whatever the turn decides next —
+ * so the bound is on the TURN, where a single conversation cannot exceed it,
+ * rather than on the model's judgement. With the daily turn cap that is the
+ * real ceiling on how many workflows a runaway conversation can produce.
+ */
+export const CREATES_PER_TURN = 1
 
 /**
  * Per-user copilot memory (M1). User-scoped ONLY — cross-user learning is a
