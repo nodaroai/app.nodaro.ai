@@ -24,6 +24,9 @@ function projectsListChain(rows: unknown[]) {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    // Personal branch: `.is("workspace_id", null)`; workspace branch swaps this
+    // for `.eq("workspace_id", …)` (also covered by `.eq` above).
+    is: vi.fn().mockReturnThis(),
     order: vi.fn().mockResolvedValue({ data: rows, error: null }),
   }
 }
@@ -36,6 +39,9 @@ function projectsSingleChain(row: unknown | null) {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    // Personal branch: `.is("workspace_id", null)`; workspace branch swaps this
+    // for `.eq("workspace_id", …)`.
+    is: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
   }
 }

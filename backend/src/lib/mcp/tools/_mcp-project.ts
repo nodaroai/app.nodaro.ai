@@ -1,4 +1,5 @@
 import { supabase } from "../../supabase.js"
+import { getPluginServices } from "../../private-plugins/load.js"
 import type { McpSession } from "../session.js"
 
 /**
@@ -31,8 +32,28 @@ async function findOldestMcpProject(userId: string): Promise<string | null> {
 export async function ensureMcpProject(session: McpSession): Promise<string> {
   // An in-app session is pinned to the open workflow's real project (see
   // `McpSession.scopedProjectId`) — no "mcp" side project is consulted or
-  // created for it. `/mcp` sessions never set this and keep the behavior below.
+  // created for it, and this pin wins over everything: the copilot works in
+  // the project it was opened on, workspace or not. `/mcp` sessions never set
+  // this and keep the behavior below.
   if (session.scopedProjectId) return session.scopedProjectId
+
+  // A WORKSPACE selection wins over the isolated "mcp" project. When a `/mcp`
+  // caller is working inside a workspace, new work lands in the workspace's own
+  // landing project (spec §8.4), the same one the REST create path uses — not
+  // in a per-user "mcp" side project, and NOT in a second "mcp" project per
+  // workspace (that would split a member's work across two places nobody asked
+  // for). The rule lives in the plugin, which owns the workspace tables; core
+  // asks. Present only when organizations are enabled AND a workspace is
+  // selected, so with the flag off this branch never runs and everything below
+  // is byte-identical to today.
+  if (session.workspaceId) {
+    const landing = await getPluginServices().orgs?.workspaceDefaultProject?.(session.workspaceId)
+    // Null only if the project was deleted out from under the workspace (the
+    // FK is ON DELETE SET NULL). Fall through to the personal "mcp" project
+    // rather than throw — a missing landing project must not brick MCP writes.
+    if (landing) return landing
+  }
+
   if (session.mcpProjectId) return session.mcpProjectId
 
   const existing = await findOldestMcpProject(session.userId)

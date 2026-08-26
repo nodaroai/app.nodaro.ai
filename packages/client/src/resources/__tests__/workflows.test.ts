@@ -200,4 +200,70 @@ describe("workflows resource", () => {
     expect(err).toBeInstanceOf(NotFoundError)
     expect(err).toBeInstanceOf(NodaroError)
   })
+
+  // ── P11: visibility / move / shared-with-me / collaborators ────────────────
+
+  it("setVisibility PATCHes the workflow with the visibility lever", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { id: "wf-1", visibility: "workspace" } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.setVisibility("wf-1", "workspace")
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/workflows/wf-1")
+    expect(init.method).toBe("PATCH")
+    expect(JSON.parse(init.body)).toEqual({ visibility: "workspace" })
+  })
+
+  it("move POSTs to /move and surfaces droppedCollaborators", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ data: { id: "wf-1" }, droppedCollaborators: [{ userId: "u9", name: "Dana" }] }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const res = await c.workflows.move("wf-1", { projectId: "proj-2" })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/workflows/wf-1/move")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ projectId: "proj-2" })
+    expect(res.droppedCollaborators[0]).toEqual({ userId: "u9", name: "Dana" })
+  })
+
+  it("sharedWithMe GETs the shared list", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [{ id: "wf-1", grantedRole: "viewer" }] }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const res = await c.workflows.sharedWithMe()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/shared-with-me")
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+    expect(res.data[0].grantedRole).toBe("viewer")
+  })
+
+  it("collaborators.list GETs the workflow's collaborators", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [] }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.collaborators.list("wf-1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/collaborators")
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+  })
+
+  it("collaborators.add POSTs the userId-or-email body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { userId: "u2", role: "editor" } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.collaborators.add("wf-1", { email: "dana@example.com", role: "editor" })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/workflows/wf-1/collaborators")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ email: "dana@example.com", role: "editor" })
+  })
+
+  it("collaborators.update PATCHes the per-user role, remove DELETEs it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: { userId: "u2", role: "viewer" } }))
+      .mockReturnValueOnce(mockOk({ success: true }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.collaborators.update("wf-1", "u2", { role: "viewer" })
+    await c.workflows.collaborators.remove("wf-1", "u2")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/collaborators/u2")
+    expect(fetchMock.mock.calls[0][1].method).toBe("PATCH")
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/workflows/wf-1/collaborators/u2")
+    expect(fetchMock.mock.calls[1][1].method).toBe("DELETE")
+  })
 })

@@ -1,5 +1,12 @@
 import type { NodaroClient } from "../client.js"
-import type { GenericNode, GenericEdge, WorkflowExport, WorkflowImportReport } from "@nodaro/shared"
+import type {
+  GenericNode,
+  GenericEdge,
+  WorkflowExport,
+  WorkflowImportReport,
+  WorkflowVisibility,
+  CollaboratorRole,
+} from "@nodaro/shared"
 
 /**
  * Workflow metadata + (when fetched as a single record) full nodes/edges/settings.
@@ -78,8 +85,92 @@ export interface RunWorkflowResult {
   status: "pending" | "running"
 }
 
-export class WorkflowsResource {
+/** A person granted access to a workflow. Email is never returned (privacy). */
+export interface Collaborator {
+  userId: string
+  name?: string | null
+  avatar?: string | null
+  role: CollaboratorRole
+}
+
+export interface AddCollaboratorInput {
+  /** Provide exactly one of `userId` or `email`. */
+  userId?: string
+  email?: string
+  role: CollaboratorRole
+}
+
+/** A workflow someone else shared with you, plus the role you hold on it. */
+export interface SharedWorkflow extends Workflow {
+  grantedRole: CollaboratorRole
+}
+
+/** A grant dropped because a move took the workflow out of the workspace the
+ *  access came from. */
+export interface DroppedCollaborator {
+  userId: string
+  name: string | null
+}
+
+/**
+ * The people a workflow is shared with — reached as `client.workflows.collaborators`.
+ * All four endpoints are served by the organizations feature and exist only when
+ * it is enabled server-side; against an install without it they 404
+ * (→ `NotFoundError`). The active workspace travels on the request like every
+ * other call, so a workspace admin's grants apply automatically.
+ */
+export class WorkflowCollaboratorsResource {
   constructor(private client: NodaroClient) {}
+
+  /** List a workflow's collaborators (id, name, avatar, role — never email). */
+  list(workflowId: string): Promise<{ data: Collaborator[] }> {
+    return this.client.request(
+      "GET",
+      `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
+    )
+  }
+
+  /** Add a collaborator by `userId` OR `email` (exactly one), at the given role. */
+  add(
+    workflowId: string,
+    input: AddCollaboratorInput,
+  ): Promise<{ data: { userId: string; role: CollaboratorRole } }> {
+    return this.client.request(
+      "POST",
+      `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
+      { body: input },
+    )
+  }
+
+  /** Change a collaborator's role. */
+  update(
+    workflowId: string,
+    userId: string,
+    input: { role: CollaboratorRole },
+  ): Promise<{ data: { userId: string; role: CollaboratorRole } }> {
+    return this.client.request(
+      "PATCH",
+      `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
+      { body: input },
+    )
+  }
+
+  /** Remove a collaborator — or yourself. Returns `{ success: true }`. */
+  remove(workflowId: string, userId: string): Promise<{ success: true }> {
+    return this.client.request(
+      "DELETE",
+      `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
+    )
+  }
+}
+
+export class WorkflowsResource {
+  /** The people this workflow is shared with. See {@link WorkflowCollaboratorsResource}. */
+  readonly collaborators: WorkflowCollaboratorsResource
+
+  constructor(private client: NodaroClient) {
+    this.collaborators = new WorkflowCollaboratorsResource(client)
+  }
 
   /** List workflows for a project. Returns metadata only — `nodes`/`edges` are not included. */
   list(params: ListWorkflowsParams): Promise<{ data: Workflow[] }> {
@@ -172,5 +263,42 @@ export class WorkflowsResource {
     return this.client.request("POST", "/v1/workflows/import", {
       body: { projectId, workflow_json: workflowJson },
     })
+  }
+
+  /**
+   * Set a workflow's visibility — `"private"` (creator + explicit collaborators)
+   * or `"workspace"` (everyone in its workspace). Only the creator or a workspace
+   * admin may change it; anyone else gets HTTP 403. Thin wrapper over `update()`:
+   * the visibility lever lives on `PATCH /v1/workflows/:id`.
+   */
+  setVisibility(id: string, visibility: WorkflowVisibility): Promise<{ data: Workflow }> {
+    return this.client.request("PATCH", `/v1/workflows/${encodeURIComponent(id)}`, {
+      body: { visibility },
+    })
+  }
+
+  /**
+   * Move a workflow to another project (`POST /v1/workflows/:id/move`); its folder
+   * is cleared. When the move takes the workflow out of a workspace, collaborator
+   * grants that came from that workspace are dropped and returned as
+   * `droppedCollaborators`.
+   */
+  move(
+    id: string,
+    params: { projectId: string },
+  ): Promise<{ data: Workflow; droppedCollaborators: DroppedCollaborator[] }> {
+    return this.client.request("POST", `/v1/workflows/${encodeURIComponent(id)}/move`, {
+      body: params,
+    })
+  }
+
+  /**
+   * Workflows other people shared with you (`GET /v1/workflows/shared-with-me`) —
+   * grants on work that is NOT in a workspace you belong to (workspace work already
+   * shows in that workspace's own lists). Each carries the `grantedRole` you hold.
+   * Empty when the organizations feature is off server-side.
+   */
+  sharedWithMe(): Promise<{ data: SharedWorkflow[] }> {
+    return this.client.request("GET", "/v1/workflows/shared-with-me")
   }
 }

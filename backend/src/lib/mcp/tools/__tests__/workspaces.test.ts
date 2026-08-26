@@ -193,4 +193,22 @@ describe("select_workspace", () => {
     expect(h.storeSessionWorkspace).toHaveBeenCalledWith(USER, null)
     expect(sess.workspaceId).toBeUndefined()
   })
+
+  it("clears the cached mcp/landing project on SELECT — the id belonged to the old context", async () => {
+    const s = session(ALL)
+    s.mcpProjectId = "stale-project-from-before"
+    await call({ workspace_id: WS }, s)
+    expect(s.workspaceId).toBe(WS)
+    // Without this, ensureMcpProject would keep writing this session's work into
+    // the previous context's project for the rest of the session.
+    expect(s.mcpProjectId).toBeUndefined()
+  })
+
+  it("clears the cached mcp/landing project on DESELECT too", async () => {
+    const s = session(ALL, WS)
+    s.mcpProjectId = "stale-workspace-landing-project"
+    await call({ workspace_id: null }, s)
+    expect(s.workspaceId).toBeUndefined()
+    expect(s.mcpProjectId).toBeUndefined()
+  })
 })

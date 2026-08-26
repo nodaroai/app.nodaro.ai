@@ -541,6 +541,57 @@ importReport
 // }
 ```
 
+#### `setVisibility(id, visibility)`
+
+```ts
+setVisibility(id: string, visibility: WorkflowVisibility): Promise<{ data: Workflow }>
+```
+
+Sets a workflow's visibility — `"private"` (the creator plus anyone explicitly
+added as a collaborator) or `"workspace"` (everyone in the workflow's
+workspace). Only the creator or a workspace admin may change it; anyone else
+gets `403`. A thin wrapper over `update()` — the visibility lever also lives on
+`PATCH /v1/workflows/:id`.
+
+#### `move(id, { projectId })`
+
+```ts
+move(
+  id: string,
+  params: { projectId: string },
+): Promise<{ data: Workflow; droppedCollaborators: { userId: string; name: string | null }[] }>
+```
+
+Moves a workflow to another project (its folder is cleared). If the move takes
+the workflow out of a workspace, collaborator grants that came from that
+workspace are dropped and returned as `droppedCollaborators`.
+
+#### `sharedWithMe()`
+
+```ts
+sharedWithMe(): Promise<{ data: (Workflow & { grantedRole: CollaboratorRole })[] }>
+```
+
+Workflows other people shared with you — grants on work that is **not** in a
+workspace you belong to (workspace work already appears in that workspace's own
+lists). Each carries the `grantedRole` you hold.
+
+#### `collaborators`
+
+The people a workflow is shared with, reached as `client.workflows.collaborators`:
+
+```ts
+collaborators.list(workflowId): Promise<{ data: Collaborator[] }>
+collaborators.add(workflowId, { userId?, email?, role }): Promise<{ data: { userId, role } }>
+collaborators.update(workflowId, userId, { role }): Promise<{ data: { userId, role } }>
+collaborators.remove(workflowId, userId): Promise<{ success: true }>
+```
+
+`add` takes **exactly one** of `userId` or `email` (any address — the person
+need not already have an account), at `role` `"viewer"` or `"editor"`. `remove`
+also lets a collaborator remove themselves. Listing never returns email
+addresses.
+
 ---
 
 ### `client.projects`

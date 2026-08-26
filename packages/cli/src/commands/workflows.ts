@@ -226,6 +226,162 @@ export function workflowsCommand(): Command {
       }
     })
 
+  cmd
+    .command("share <id>")
+    .description("set a workflow's visibility: workspace (everyone in its workspace) or private (creator + named collaborators)")
+    .option("--visibility <level>", "workspace | private", "workspace")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: { visibility: string } & GlobalOpts) => {
+      try {
+        if (opts.visibility !== "workspace" && opts.visibility !== "private") {
+          throw new Error("--visibility must be `workspace` or `private`")
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.setVisibility(id, opts.visibility)
+        if (opts.json) emit(result.data, opts)
+        else success(`workflow ${id} is now ${opts.visibility}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("move <id>")
+    .description("move a workflow to another project")
+    .requiredOption("--project <projectId>", "destination project id")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: { project: string } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.move(id, { projectId: opts.project })
+        if (opts.json) {
+          emit(result, opts)
+          return
+        }
+        success(`moved workflow ${id} → project ${opts.project}`)
+        if (result.droppedCollaborators.length > 0) {
+          dim(
+            `${result.droppedCollaborators.length} collaborator grant(s) were dropped — they came from the workspace this workflow just left`,
+          )
+        }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("shared-with-me")
+    .description("list workflows other people shared with you")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.sharedWithMe()
+        if (opts.json) {
+          emit(result.data, opts)
+          return
+        }
+        table(
+          result.data.map((w) => ({ id: w.id, name: w.name, role: w.grantedRole, updatedAt: w.updatedAt })),
+          ["id", "name", "role", "updatedAt"],
+        )
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd.addCommand(collaboratorsCommand())
+
+  return cmd
+}
+
+/** `nodaro workflows collaborators …` — the people a workflow is shared with. */
+function collaboratorsCommand(): Command {
+  const cmd = new Command("collaborators").description("manage who a workflow is shared with")
+
+  cmd
+    .command("list <id>")
+    .description("list a workflow's collaborators")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.collaborators.list(id)
+        if (opts.json) emit(result.data, opts)
+        else table(result.data.map((c) => ({ userId: c.userId, name: c.name ?? "", role: c.role })), ["userId", "name", "role"])
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("add <id>")
+    .description("share a workflow with a person by user id or email")
+    .option("--user <userId>", "the collaborator's user id")
+    .option("--email <email>", "the collaborator's email (any address; they need not have an account yet)")
+    .requiredOption("--role <role>", "viewer | editor")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: { user?: string; email?: string; role: string } & GlobalOpts) => {
+      try {
+        if ((opts.user === undefined) === (opts.email === undefined)) {
+          throw new Error("provide exactly one of --user or --email")
+        }
+        if (opts.role !== "viewer" && opts.role !== "editor") {
+          throw new Error("--role must be `viewer` or `editor`")
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.collaborators.add(id, {
+          ...(opts.user ? { userId: opts.user } : { email: opts.email }),
+          role: opts.role,
+        })
+        if (opts.json) emit(result.data, opts)
+        else success(`shared workflow ${id} with ${opts.user ?? opts.email} as ${opts.role}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("update <id> <userId>")
+    .description("change a collaborator's role")
+    .requiredOption("--role <role>", "viewer | editor")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, userId: string, opts: { role: string } & GlobalOpts) => {
+      try {
+        if (opts.role !== "viewer" && opts.role !== "editor") {
+          throw new Error("--role must be `viewer` or `editor`")
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.workflows.collaborators.update(id, userId, { role: opts.role })
+        if (opts.json) emit(result.data, opts)
+        else success(`${userId} is now ${opts.role} on workflow ${id}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("remove <id> <userId>")
+    .description("remove a collaborator (or yourself)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, userId: string, opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        await client.workflows.collaborators.remove(id, userId)
+        if (opts.json) emit({ workflowId: id, userId, removed: true }, opts)
+        else success(`removed ${userId} from workflow ${id}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   return cmd
 }
 
