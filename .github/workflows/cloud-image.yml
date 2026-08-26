@@ -1,0 +1,185 @@
+name: Cloud Image
+
+# Builds + publishes the PRIVATE cloud-edition base image so Nodaro-operated
+# dedicated hosted instances (SAI, and future single-tenant instances) can layer
+# a thin overlay Dockerfile FROM it — SAI-10 Design 2. The mainline Dockerfile
+# stays byte-identical: no overlay-specific code ever enters it.
+#
+# Design-2 flow (end to end):
+#   1. THIS workflow publishes ghcr.io/nodaroai/nodaro-cloud:<tag>  (private)
+#   2. the tenant repo's CI (e.g. nodaro-sai deploy-dev/prod) builds its thin
+#      image FROM that tag — it COPYs its own packages/sai-overlay/dist (built +
+#      type-checked in that CI, which is what gates the deploy) onto the base
+#   3. Railway DEPLOYS the prebuilt thin image with EDITION=cloud +
+#      SAI_PROFILE=hosted + the tenant's runtime env. Railway does NOT build the
+#      thin Dockerfile (it has no overlay dist and would bypass the type-check).
+#
+# WHY PRIVATE: this image bakes @nodaroai/cloud-plugins (proprietary) and
+# VITE_EDITION=cloud (admin + billing UI). It must NEVER be public — so it runs
+# ONLY in the internal repo (the job `if` below; a mirrored copy no-ops in the
+# public repo) and the GHCR package stays private (no visibility flip, unlike
+# community-image.yml).
+#
+# Single-arch linux/amd64: the consumers are Railway (amd64). Add arm64 only if
+# an ARM tenant appears.
+#
+# The runtime-overridable trio (VITE_API_URL / VITE_SUPABASE_URL /
+# VITE_SUPABASE_ANON_KEY) is baked to harmless localhost/demo defaults — each
+# hosted instance overrides them at boot via /config.js (runtime-config.ts), so
+# ONE cloud image serves every tenant's own Supabase + domain without a rebuild.
+#
+# ── ONE-TIME OPS (Tal), or the build fails loudly on the first cut ──
+#  • Repo SECRET  NPM_TOKEN            — a PAT with read:packages scoped to
+#                                        nodaroai/cloud-plugins. GITHUB_TOKEN
+#                                        cannot read ANOTHER repo's private
+#                                        package, which is why Railway carries a
+#                                        separate token; same reason here.
+#  • Repo VARIABLE CLOUD_PLUGINS_VERSION — the plugin version to bake. Set it to
+#                                        the SAME value Railway uses, and honour
+#                                        the merge-app-first ordering rule
+#                                        (backend/CLAUDE.md) for THIS copy too.
+#  • GHCR package read access for the tenant repo's Actions (nodaro-sai) and for
+#    Railway's registry credentials, so both can pull nodaro-cloud.
+#  • Runner minutes: a full cut is ~30–60 min of PRIVATE-repo (billed) time.
+#    Dispatch-only cadence (plus release tags) keeps that fine — the base does
+#    NOT rebuild on every dev commit; the tenant rebuilds only its thin layer.
+#
+# NOTE: the droplet's own base image (business flavor,
+# ghcr.io/nodaroai/app.nodaro.ai-internal:dev referenced by nodaro-sai's
+# deploy-*.yml) is a SEPARATE gap — the self-host/WBF second profile — and is
+# deliberately not addressed here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cloud_plugins_version:
+        description: "Override CLOUD_PLUGINS_VERSION (default: repo var CLOUD_PLUGINS_VERSION)"
+        required: false
+        type: string
+  push:
+    # A cloud base per platform release. app-release.yml pushes vX.Y.Z tags to
+    # THIS (internal) repo, so the tag lane is live, not dead code.
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+# Per-ref: a re-dispatch on the same ref supersedes the older build; distinct
+# release tags (different ref) never collide on :latest.
+concurrency:
+  group: cloud-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/nodaroai/nodaro-cloud
+
+jobs:
+  build:
+    name: Build + publish cloud base image
+    # SECRET asset: build ONLY in the internal repo (which has cloud-plugins
+    # access), NEVER in the public mirror. A mirrored copy of this file no-ops
+    # here.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail early if NPM_TOKEN is missing
+        # Without this the Dockerfile's `if [ -n "$(printenv NPM_TOKEN)" ]`
+        # SILENTLY SKIPS the cloud-plugins install — the image builds green and
+        # only exit(1)s at deploy under EDITION=cloud. Fail here instead.
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::secrets.NPM_TOKEN is not set — a PAT with read:packages scoped to nodaroai/cloud-plugins is required to bake the private plugin into a cloud image."
+            exit 1
+          fi
+
+      - name: Resolve version + plugins version + tag list
+        id: meta
+        env:
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          DISPATCH_CPV: ${{ inputs.cloud_plugins_version }}
+          VAR_CPV: ${{ vars.CLOUD_PLUGINS_VERSION }}
+        run: |
+          set -euo pipefail
+          short=$(git rev-parse --short HEAD)
+          reltag=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          near=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v0.0.0)
+          version=${reltag:-${near}-dev.${short}}
+
+          cpv="${DISPATCH_CPV:-$VAR_CPV}"
+          if [ -z "$cpv" ]; then
+            echo "::error::CLOUD_PLUGINS_VERSION is not set (repo var CLOUD_PLUGINS_VERSION, or the workflow_dispatch input). A cloud image without cloud-plugins exit(1)s at boot under EDITION=cloud."
+            exit 1
+          fi
+
+          # Tags: an immutable :{sha} ALWAYS (prod pins this); a moving :dev ONLY
+          # when the ref IS dev (so a dispatch from main to cut a prod pin never
+          # moves staging's pointer); the release tag + :latest on a v* push.
+          # $'\n' keeps the list free of the indentation a bare multiline would
+          # bake into each tag.
+          tags="${IMAGE}:${SHA}"
+          if [ "$REF" = "refs/heads/dev" ]; then
+            tags="${tags}"$'\n'"${IMAGE}:dev"
+          fi
+          if [ -n "$reltag" ]; then
+            tags="${tags}"$'\n'"${IMAGE}:${reltag}"$'\n'"${IMAGE}:latest"
+          fi
+
+          {
+            echo "version=${version#v}"
+            echo "cpv=$cpv"
+            echo "tags<<__TAGS__"
+            echo "$tags"
+            echo "__TAGS__"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=${version} cloud-plugins=$cpv"
+          echo "tags:"; echo "$tags"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          # NPM_TOKEN as a build-arg matches Railway: the Dockerfile reads it via
+          # $(printenv) and never lands it in a final-stage ENV, so it stays out
+          # of the image; GitHub masks it in the build log.
+          build-args: |
+            VITE_EDITION=cloud
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            VITE_APP_VERSION=${{ steps.meta.outputs.version }}
+            VITE_API_URL=http://localhost:3000
+            VITE_SUPABASE_URL=http://localhost:3000/supabase
+            VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU0Nzg0MDAwLCJleHAiOjIwNzAxNDQwMDB9.Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo
+            NPM_TOKEN=${{ secrets.NPM_TOKEN }}
+            CLOUD_PLUGINS_VERSION=${{ steps.meta.outputs.cpv }}
+          cache-from: type=gha,scope=cloud
+          cache-to: type=gha,mode=max,scope=cloud
+
+      - name: Verify the PUSHED image actually contains cloud-plugins
+        # The Dockerfile's import-smoke runs in the prod-deps STAGE; the runner
+        # gets node_modules via COPY. A cloud image missing the plugin builds
+        # green and exit(1)s only at deploy. Prove it on the pushed artifact:
+        # `docker run … node -e` overrides the CMD (start.sh), WORKDIR is /app.
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -e
+          docker pull "${IMAGE}:${SHA}"
+          docker run --rm "${IMAGE}:${SHA}" node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('cloud-plugins present but contractVersion=',m.contractVersion);process.exit(1)}console.log('OK: cloud-plugins baked, contractVersion=',m.contractVersion)}).catch(e=>{console.error('FAIL: cloud-plugins NOT in the image —',e&&e.message);process.exit(1)})"
