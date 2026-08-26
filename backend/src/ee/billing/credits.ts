@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -2139,6 +2140,12 @@ export class CreditsService {
 
     if (reserveError) {
       console.error("[credits] reserve_credits RPC failed:", reserveError.message)
+      // A known refusal keeps its identity (anchored prefix survives as a
+      // typed error, raw text only in .raw for logs); anything else stays a
+      // real fault. String-wrapping here is how prefixes used to die before
+      // any catch could match them anchored (P14 review, W3).
+      const refusalPrefix = reservePrefixOf(reserveError.message)
+      if (refusalPrefix) throw new ReserveRpcError(refusalPrefix, reserveError.message)
       throw new Error(`Credit reservation failed: ${reserveError.message}`)
     }
 

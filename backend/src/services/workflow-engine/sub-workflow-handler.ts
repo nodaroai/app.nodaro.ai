@@ -286,7 +286,13 @@ export async function executeSubWorkflow(
         const error = result.reason instanceof Error
           ? result.reason.message
           : String(result.reason)
-        throw new Error(`Sub-workflow node ${executableNodes[i].id} failed: ${error}`)
+        // P14.3: a mapped billing refusal keeps its stable code across this
+        // rewrap — without it, every sub-workflow-nested refusal loses the
+        // field the budget UI branches on (review finding).
+        const wrapped = new Error(`Sub-workflow node ${executableNodes[i].id} failed: ${error}`)
+        const code = (result.reason as { errorCode?: string } | null)?.errorCode
+        if (code) (wrapped as Error & { errorCode?: string }).errorCode = code
+        throw wrapped
       }
       creditsUsed += result.value.creditsUsed ?? 0
     }

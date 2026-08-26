@@ -255,6 +255,7 @@ import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
+import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
@@ -394,6 +395,9 @@ export async function buildApp() {
   // identity this validates against. A no-op unless organizations are
   // enabled AND a private plugin provides the orgs service.
   registerOrgsContextHook(app)
+  // P14: the per-request payer resolve point. MUST follow the orgs-context
+  // hook — rung 2 reads the req.workspaceId it validates.
+  registerBillingContextHook(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)

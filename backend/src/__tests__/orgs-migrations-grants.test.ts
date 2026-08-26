@@ -88,6 +88,14 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
       "set_member_credit_cap",
     ],
   },
+  // P14: the payer-aware markup. One function, restated from 083/173 with the
+  // workspace fork and a FRESH full grant block (083/173 predate the
+  // convention — they only revoked authenticated/anon, and the old signature's
+  // grants died with the DROP).
+  "352_orgs_app_monetization_payer.sql": {
+    authenticated: [],
+    serviceRole: ["process_app_monetization"],
+  },
   // Content scoping, part b: backfills and four trigger functions. Three are
   // SECURITY DEFINER (they read projects / organizations past the caller's
   // RLS); all four return trigger, so none is classified — a trigger function

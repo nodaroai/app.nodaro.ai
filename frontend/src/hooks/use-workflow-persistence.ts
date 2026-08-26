@@ -68,6 +68,8 @@ interface NodeExecutionState {
     reduceMeta?: Record<string, unknown>
   }
   error?: string
+  /** Stable billing-refusal code — mirrors backend NodeExecutionState. */
+  errorCode?: string
 }
 
 interface SaveResult {

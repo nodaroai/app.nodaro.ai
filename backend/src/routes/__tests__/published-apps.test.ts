@@ -695,6 +695,98 @@ describe("GET /v1/apps/mine", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Owner decision (2026-08-26, E2/P14): raising the EFFECTIVE markup clears
+// every organization approval for the workflow; lowering it keeps them.
+describe("PATCH /v1/apps/:appId — org-approval revoke on price rise", () => {
+  function wire(existing: Record<string, unknown>, revoke: { eq: ReturnType<typeof vi.fn> }) {
+    let publishedCalls = 0
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "organization_approved_apps") {
+        return { delete: vi.fn().mockReturnValue(revoke) } as never
+      }
+      publishedCalls++
+      if (publishedCalls === 1) {
+        const single = vi.fn().mockResolvedValue({ data: existing, error: null })
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single, maybeSingle: single }) }) } as never
+      }
+      const single = vi.fn().mockResolvedValue({ data: { ...DB_PUBLISHED_APP }, error: null })
+      return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single, maybeSingle: single }) }) }) } as never
+    }) as never)
+  }
+
+  const EXISTING = {
+    id: TEST_APP_ID,
+    creator_id: TEST_USER_ID,
+    base_estimated_credits: 10,
+    monetization_enabled: true,
+    monetization_flat_fee: 5,
+    monetization_percent: 0,
+    slug: "test-app",
+    workflow_id: "wf-under-test",
+  }
+
+  it("a fee RISE deletes the workflow's approvals BEFORE the update lands", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null })
+    wire(EXISTING, { eq })
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${TEST_APP_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { monetizationFlatFee: 50 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(eq).toHaveBeenCalledWith("workflow_id", "wf-under-test")
+  })
+
+  it("ENABLING monetization with fees counts as a rise from effective zero", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null })
+    wire({ ...EXISTING, monetization_enabled: false, monetization_flat_fee: 5 }, { eq })
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${TEST_APP_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { monetizationEnabled: true },
+    })
+    expect(eq).toHaveBeenCalledWith("workflow_id", "wf-under-test")
+  })
+
+  it("a fee DROP keeps every approval — fixes must not force re-approval", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null })
+    wire(EXISTING, { eq })
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${TEST_APP_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { monetizationFlatFee: 1 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(eq).not.toHaveBeenCalled()
+  })
+
+  it("a pre-migration database (42P01) tolerates the revoke and applies the rise", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: { code: "42P01", message: "relation does not exist" } })
+    wire(EXISTING, { eq })
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${TEST_APP_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { monetizationFlatFee: 50 },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("any OTHER revoke failure blocks the price change — approvals never outlive a cheaper price", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: { code: "57014", message: "timeout" } })
+    wire(EXISTING, { eq })
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${TEST_APP_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { monetizationFlatFee: 50 },
+    })
+    expect(res.statusCode).toBe(500)
+  })
+})
 // PATCH /v1/apps/:appId
 // ---------------------------------------------------------------------------
 

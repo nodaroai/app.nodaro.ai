@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
+import { mapReserveError } from "../../lib/reserve-errors.js"
 import { z as zOpenApi } from "zod"
 import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
@@ -287,10 +288,16 @@ export async function creditsRoutes(app: FastifyInstance) {
       invalidateBalanceCache(userId)
       return { data: result }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reserve credits"
       console.error("[credits] Failed to reserve credits:", error)
+      // P14/W3: workspace refusals answer their stable code; everything else
+      // keeps the legacy shape with a FIXED message (the raw text carried
+      // interpolated ids/amounts and belongs in the log line above).
+      const mapped = mapReserveError(error)
+      if (mapped) {
+        return reply.status(mapped.status).send({ error: { code: mapped.code, message: mapped.message } })
+      }
       return reply.status(400).send({
-        error: { code: "insufficient_credits", message },
+        error: { code: "insufficient_credits", message: "Failed to reserve credits" },
       })
     }
   })

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 // ee-to-ee static import — allowed (only core/backend/src/lib/** is barred from
@@ -198,7 +199,11 @@ export interface ReservePipelineCreditsArgs {
 
 export type ReservePipelineResult =
   | { ok: true; usageLogId: string }
-  | { ok: false; reason: "insufficient_credits" | "rpc_error"; detail?: string }
+  | {
+      ok: false
+      reason: "insufficient_credits" | "rpc_error" | MappedReserveError["code"]
+      detail?: string
+    }
 
 /**
  * Reserves `credits` for a pipeline run via the shared `reserve_credits` RPC.
@@ -227,6 +232,12 @@ export async function reservePipelineCredits(
     const msg = error.message ?? ""
     if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("not enough")) {
       return { ok: false, reason: "insufficient_credits" }
+    }
+    // P14.3 (dormant until W4e threads p_workspace_id here): a workspace
+    // refusal classifies by its stable code, never as a generic rpc_error.
+    const refusal = mapReserveError(new Error(msg))
+    if (refusal) {
+      return { ok: false, reason: refusal.code, detail: refusal.message }
     }
     return { ok: false, reason: "rpc_error", detail: msg }
   }

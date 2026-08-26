@@ -1229,6 +1229,8 @@ interface NodeExecutionState {
     _outputResults?: Record<string, string>;
   };
   error?: string;
+  /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
+  errorCode?: string;
   jobId?: string;
   /** Per-iteration job IDs for fan-out runs (list / loop iterations). */
   jobIds?: string[];

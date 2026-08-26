@@ -13,6 +13,7 @@ import { resolveEffectiveTier } from "@nodaro/shared"
 import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
+import { ReserveRpcError, mapReserveError } from "../../lib/reserve-errors.js"
 
 // Per-instance monthly spend rollup for the community-connect cap. Reads the
 // jobs ledger (source_detail carries the appId — stamped by insertJob) with a
@@ -303,9 +304,21 @@ export async function reserveCreditsForJobImpl(
       sendSubscriptionRequired(reply)
       return undefined
     }
+    // P14/W3: a workspace-payer refusal answers with its stable code and a
+    // FIXED message — the raw RPC text (ids, amounts) stays in the log line.
+    const mapped = mapReserveError(err)
+    if (mapped) {
+      console.warn(
+        `[credit-guard] ${routeName} reserve refused job=${jobId} code=${mapped.code}: ${err instanceof ReserveRpcError ? err.raw : detail}`,
+      )
+      reply.status(mapped.status).send({ error: { code: mapped.code, message: mapped.message } })
+      return undefined
+    }
     console.error(`[credit-guard] ${routeName} credit reservation failed:`, detail)
+    // Generic on the wire — the raw detail leaked schema/param text here for
+    // years and the audit called it (W3): logs keep it, callers do not.
     reply.status(500).send({
-      error: { code: "credit_reservation_failed", message: `Failed to reserve credits: ${detail}` },
+      error: { code: "credit_reservation_failed", message: "Failed to reserve credits" },
     })
     return undefined
   }
