@@ -113,7 +113,7 @@ Each conversation runs on one of three models, switchable in the panel header:
 
 - **Fast** — the cheapest and quickest. Good for small edits and questions; noticeably weaker at building large workflows.
 - **Smart** — the default. Builds well at a fair price.
-- **Max** — the strongest model, for complex builds. Costs the most per message.
+- **Max** — the strongest model, for complex builds. Costs the most per message, and is allowed to work longer within a single message before it pauses — so a large, multi-step build that Smart would stop partway through can finish in one turn.
 
 The choice is per conversation, and the "up to" price under the message box follows it. Switching models mid-conversation is fine — the next message simply runs on the new one.
 

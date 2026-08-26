@@ -161,6 +161,45 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    if (key === "copilot_default_tier") {
+      if (value !== "economy" && value !== "standard" && value !== "premium") {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "copilot_default_tier must be economy, standard or premium" },
+        })
+      }
+    }
+
+    if (key === "copilot_tier_caps") {
+      // Shape only — the runtime resolver (`tier-settings.ts`) is what CLAMPS
+      // every number and DERIVES the hard timeout, so a value that passes this
+      // can still never wedge a turn or invert the stop-timer pair. This guard
+      // just refuses a payload that is not a map of tiers to number fields.
+      const tiers = ["economy", "standard", "premium"]
+      const fields = ["maxIterations", "maxToolCalls", "wallClockMinutes"]
+      const ok =
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.entries(value as Record<string, unknown>).every(
+          ([tier, caps]) =>
+            tiers.includes(tier) &&
+            caps !== null &&
+            typeof caps === "object" &&
+            !Array.isArray(caps) &&
+            Object.entries(caps as Record<string, unknown>).every(
+              ([f, v]) => fields.includes(f) && typeof v === "number" && Number.isFinite(v),
+            ),
+        )
+      if (!ok) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "copilot_tier_caps must map economy/standard/premium to { maxIterations, maxToolCalls, wallClockMinutes } numbers",
+          },
+        })
+      }
+    }
+
     if (key === "featured_app_ids") {
       if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === "string")) {
         return reply.status(400).send({

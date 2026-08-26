@@ -22,6 +22,7 @@ import { redis } from "../../lib/queue.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
 import { COPILOT_FEATURE, COPILOT_TIERS, RESERVATION_FLOOR_CREDITS, THREAD_CAPS, TURN_CAPS, resolveCopilotTier } from "../copilot/constants.js"
 import { runCopilotTurn, TURN_ERROR_TEXT } from "../copilot/turn-runner.js"
+import { resolveDefaultTier, resolveEffectiveTierCaps } from "../copilot/tier-settings.js"
 import { abortTurnLocally } from "../copilot/cancel-registry.js"
 import {
   archiveThread,
@@ -242,7 +243,12 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         // `seededWorkflow` is what lets the sweep tell a workflow this
         // handshake CREATED from one the user opened the copilot on (#904).
         const thread =
-          existing ?? (await createThread(userId, workflow.id, { createdWorkflow: seededWorkflow }))
+          existing ??
+          (await createThread(userId, workflow.id, {
+            createdWorkflow: seededWorkflow,
+            // The admin's default tier, baked in at birth (see createThread).
+            modelTier: await resolveDefaultTier(),
+          }))
         return reply.status(existing ? 200 : 201).send({
           data: {
             thread: publicThread(thread),
@@ -385,7 +391,6 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           computeCredits: async (_body, req) => resolveReservation(req),
         }),
       ],
-      config: { requestTimeout: TURN_CAPS.hardTimeoutMs + 60_000 } as Record<string, unknown>,
     },
     async (req, reply) => {
       // Access and the kill switch were settled by `accessGate` above.
@@ -422,7 +427,12 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       const tier = resolveCopilotTier(
         (thread as { model_tier?: unknown }).model_tier ?? parsed.data.tier,
       )
-      const tierSpec = COPILOT_TIERS[tier]
+      // Model and pricing stay compiled; the CAPS are the admin's, merged over
+      // the defaults. Building one effective spec means every downstream reader
+      // that already reads `tierSpec.caps` — the hard-stop timer here, the loop
+      // — gets the override with no new plumbing.
+      const effectiveCaps = (await resolveEffectiveTierCaps())[tier]
+      const tierSpec = { ...COPILOT_TIERS[tier], caps: effectiveCaps }
 
       await healStaleTurns(threadId)
       if (await findLiveTurn(threadId)) {
@@ -503,7 +513,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         },
       })
 
-      const hardStop = setTimeout(() => abort.abort(), TURN_CAPS.hardTimeoutMs)
+      const hardStop = setTimeout(() => abort.abort(), tierSpec.caps.hardTimeoutMs)
       try {
         const outcome = await runCopilotTurn({
           req,
@@ -519,6 +529,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           edges: workflow.edges,
           message: parsed.data.message,
           tier,
+          caps: effectiveCaps,
           usageLogId: reservation?.usageLogId ?? null,
           reservedCredits: reservation?.creditsReserved ?? 0,
           emit: (event) => sse.sendEvent(event as never),

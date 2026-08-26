@@ -272,3 +272,52 @@ describe("PUT /v1/admin/settings/copilot_enabled — the runtime kill switch", (
     expect(invalidateSettingsCache).toHaveBeenCalled()
   })
 })
+
+describe("PUT /v1/admin/settings — copilot tier controls", () => {
+  it("rejects a default tier outside the ladder", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_default_tier",
+      payload: { value: "ultra", userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("copilot_default_tier")
+  })
+
+  it("accepts a valid default tier", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { key: "copilot_default_tier", value: "premium", updated_at: "x" }, error: null })
+    const mockUpsert = vi.fn().mockReturnValue({ select: () => ({ single: mockSingle }) })
+    vi.mocked(supabase.from).mockReturnValue({ upsert: mockUpsert } as never)
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_default_tier",
+      payload: { value: "premium", userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects tier caps that are not a tier->numbers map", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_tier_caps",
+      payload: { value: { premium: { maxIterations: "lots" } }, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects an unknown tier key in the caps map", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_tier_caps",
+      payload: { value: { ultra: { maxIterations: 5 } }, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts a well-formed caps map", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { key: "copilot_tier_caps", value: {}, updated_at: "x" }, error: null })
+    const mockUpsert = vi.fn().mockReturnValue({ select: () => ({ single: mockSingle }) })
+    vi.mocked(supabase.from).mockReturnValue({ upsert: mockUpsert } as never)
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_tier_caps",
+      payload: { value: { premium: { maxIterations: 20, maxToolCalls: 40, wallClockMinutes: 13 } }, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})

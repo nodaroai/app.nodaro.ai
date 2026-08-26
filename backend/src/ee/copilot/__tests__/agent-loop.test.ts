@@ -3,7 +3,7 @@
  * parallel tool results in ONE user message, the caps, the identical-call
  * short circuit, cancel, and the run proposal ending the turn.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest"
+import { describe, expect, it, vi, beforeEach, beforeAll } from "vitest"
 import type Anthropic from "@anthropic-ai/sdk"
 
 const { streamMock, dispatchMock } = vi.hoisted(() => ({ streamMock: vi.fn(), dispatchMock: vi.fn() }))
@@ -191,5 +191,68 @@ describe("the model ladder in the loop", () => {
     const params = streamMock.mock.calls.at(-1)![0] as Record<string, unknown>
     expect(params.model).toBe(COPILOT_TIERS.standard.anthropicModelId)
     expect(params.output_config).toEqual({ effort: "high" })
+  })
+})
+
+describe("per-tier caps", () => {
+  let COPILOT_TIERS: typeof import("../constants.js").COPILOT_TIERS
+  beforeAll(async () => { ({ COPILOT_TIERS } = await import("../constants.js")) })
+
+
+  // A stream that ALWAYS proposes one distinct tool call, so the loop only
+  // ever stops when it hits a cap — never on end_turn. Distinct args each
+  // iteration so the identical-call short-circuit never fires first.
+  const neverEnds = () => {
+    let n = 0
+    streamMock.mockImplementation(() =>
+      scriptStream({
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: `t${n}`, name: "get_graph", input: { i: n++ } }],
+      }),
+    )
+  }
+
+  it("stops economy at its OWN iteration cap", async () => {
+    // One tool call per round, so `iterations` is the binding cap (it is the
+    // smaller of the two for every tier). What matters is that economy stops
+    // at economy's number, not a shared one.
+    neverEnds()
+    const result = await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.economy })
+    expect(result.stopReason).toBe("capped")
+    expect(result.iterations).toBe(COPILOT_TIERS.economy.caps.maxIterations)
+  })
+
+  it("lets premium run STRICTLY further than economy on the same runaway stream", async () => {
+    // The whole point of the change: paying for the stronger tier buys more
+    // room. Same infinite stream, different ceilings.
+    neverEnds()
+    const economy = await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.economy })
+    neverEnds()
+    const premium = await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.premium })
+    expect(premium.iterations).toBe(COPILOT_TIERS.premium.caps.maxIterations)
+    expect(premium.iterations).toBeGreaterThan(economy.iterations)
+  })
+
+  it("the caps STRICTLY increase economy < standard < premium", () => {
+    // The product promise, at the config level: a higher tier is never merely
+    // equal. A mutation collapsing premium onto standard passes a test that
+    // only compares premium to economy — this is the one that catches it.
+    const e = COPILOT_TIERS.economy.caps
+    const s = COPILOT_TIERS.standard.caps
+    const p = COPILOT_TIERS.premium.caps
+    expect(e.maxIterations).toBeLessThan(s.maxIterations)
+    expect(s.maxIterations).toBeLessThan(p.maxIterations)
+    expect(e.maxToolCalls).toBeLessThan(s.maxToolCalls)
+    expect(s.maxToolCalls).toBeLessThan(p.maxToolCalls)
+    expect(e.wallClockMs).toBeLessThan(s.wallClockMs)
+    expect(s.wallClockMs).toBeLessThan(p.wallClockMs)
+  })
+
+  it("every tier's hard timeout is strictly greater than its wall clock", async () => {
+    // The soft wall-clock stop must land BEFORE the hard timer, or a turn is
+    // cut off mid-write instead of reporting 'capped'.
+    for (const tier of Object.values(COPILOT_TIERS)) {
+      expect(tier.caps.hardTimeoutMs).toBeGreaterThan(tier.caps.wallClockMs)
+    }
   })
 })
