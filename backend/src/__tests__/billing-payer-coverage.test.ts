@@ -58,7 +58,9 @@ const SRC = join(__dirname, "..")
 /** Blank out comments, preserving every byte offset and line ending. */
 export function blankComments(source: string): string {
   let out = source.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n\r]/g, " "))
-  out = out.replace(/\/\/[^\n\r]*/g, (m) => {
+  // (?<!:) — never treat a URL scheme's // (https://…) as a comment opener:
+  // a real call sharing a line with a URL literal went invisible otherwise.
+  out = out.replace(/(?<!:)\/\/[^\n\r]*/g, (m) => {
     // The exemption marker must SURVIVE stripping — it is a comment on purpose.
     if (/^\/\/\s*billing-payer-ok:/.test(m)) return m
     return " ".repeat(m.length)
@@ -66,8 +68,10 @@ export function blankComments(source: string): string {
   return out
 }
 
+// Dotless alternatives catch destructured/aliased calls (`const { reserveCredits }`),
+// and the rpc-name quote class includes backticks — both second-review escapes.
 const MARKER_RE =
-  /\.(?:reserveCredits|commitCredits|refundCredits)\s*\(|(?<![.\w])reserveCreditsForJob\s*\(|\.rpc\(\s*["'](?:reserve_credits|commit_credits|refund_credits)["']/g
+  /\.(?:reserveCredits|commitCredits|refundCredits)\s*\(|(?<![.\w])(?<!async )(?:reserveCredits|commitCredits|refundCredits|reserveCreditsForJob)\s*\(|\.rpc\(\s*["'`](?:reserve_credits|commit_credits|refund_credits)["'`]/g
 
 const CONTEXT_RE = /\bbillingContext\b|\bp_workspace_id\b|\bworkspaceId\b/
 const REQ_FIRST_ARG_RE = /reserveCreditsForJob\s*\(\s*(?:req|request)\b/
@@ -94,7 +98,7 @@ export function findUncoveredBillingSites(source: string, file = "<fixture>"): P
     // read from the usage_logs row inside the RPC (migration 351), never
     // chosen by the caller. See the header — raw rpc() settlement strings do
     // NOT take this exit.
-    if (/^\.(commitCredits|refundCredits)\s*\($/.test(markerText)) continue
+    if (/^\.?(commitCredits|refundCredits)\s*\($/.test(markerText)) continue
 
     // (a) the request itself is handed over — the payer rides it.
     const local = lines.slice(lineIdx, lineIdx + 3).join("\n")

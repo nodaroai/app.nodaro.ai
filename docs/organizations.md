@@ -43,7 +43,7 @@ fall through; setting a key to `false` is a real value, not "unset".
 | `default_workflow_visibility` | `private` \| `workspace` | The visibility a new workflow gets. |
 | `member_access_to_shared` | `view` \| `edit` | What members may do with a workflow shared to the workspace. |
 | `members_can_create_projects` | boolean | Whether members may create projects in the workspace. |
-| `member_caps_enabled` | boolean | Whether per-member credit caps apply. Enforced at reserve time for workspace-paid work, together with `creditCap` on the workspace member. |
+| `member_caps_enabled` | boolean | Whether per-member credit caps apply. Enforced at reserve time once workspace-paid runs roll out (the payer-selection stage of the organizations feature), together with `creditCap` on the workspace member. |
 | `personal_space_enabled` | boolean | Whether members keep a personal (non-workspace) space. |
 | `workspace_admins_can_invite` | boolean | Whether workspace admins may invite new people into the organization. |
 | `collaborators_can_invite` | boolean | Whether an editor collaborator may invite further collaborators. |
@@ -305,7 +305,10 @@ than the last:
 
 Work done inside a workspace is paid by the workspace, whatever the member's
 own balance says: the member's personal credits are untouched, and the two
-balances are shown side by side. Headroom at every level is
+balances are shown side by side. (Workspace-paid runs and the side-by-side
+balance view arrive with the payer-selection and budget-UI stages of the
+organizations feature — until then allocations are held and reported, not
+yet spent against.) Headroom at every level is
 `allocated − reserved − spent`; a run that would exceed it is refused with a
 stable error code (`budget_exceeded`, `member_cap_exceeded`) rather than
 started.

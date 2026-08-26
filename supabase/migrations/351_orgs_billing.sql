@@ -258,6 +258,15 @@ BEGIN
       RAISE EXCEPTION 'WORKSPACE_ARCHIVED: workspace % is archived (read-only)', p_workspace_id;
     END IF;
     v_ws_status := workspace_member_status(p_workspace_id, p_user_id);
+    -- NULL = not a member AT ALL (the helper returns NULL for a stranger,
+    -- and — fail-CLOSED — for its own internal errors). Without this check a
+    -- complete non-member sails past the suspension test (NULL <> 'suspended')
+    -- and drains a workspace budget they were never part of; implicit org
+    -- admins are unaffected (the helper answers 'active' for them, no row
+    -- needed). Second-review finding, 2026-08-26.
+    IF v_ws_status IS NULL THEN
+      RAISE EXCEPTION 'MEMBER_NOT_FOUND: user % is not a member of workspace %', p_user_id, p_workspace_id;
+    END IF;
     IF v_ws_status = 'suspended' THEN
       RAISE EXCEPTION 'MEMBER_SUSPENDED: user % is suspended in workspace %', p_user_id, p_workspace_id;
     END IF;

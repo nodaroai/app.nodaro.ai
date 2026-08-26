@@ -110,8 +110,20 @@ try {
   if (b.reserved_credits + b.spent_credits > b.allocated_credits) {
     fail(`invariant violated: reserved ${b.reserved_credits} + spent ${b.spent_credits} > allocated ${b.allocated_credits}`)
   }
-  if (winners.length !== ALLOCATED / EACH) {
-    fail(`expected exactly ${ALLOCATED / EACH} winners for a ${ALLOCATED}-credit budget, got ${winners.length}`)
+  // <= rather than === : a loser that failed for a NON-budget reason (a
+  // connection-pool blip under 51 concurrent sessions) must surface through
+  // badLosers below as ITS OWN failure, not masquerade as a lost-update bug
+  // here. The real invariant is that no over-admission ever happens and that
+  // every admitted reserve is exactly accounted (the next check).
+  if (winners.length > ALLOCATED / EACH) {
+    fail(`over-admission: ${winners.length} winners for a ${ALLOCATED}-credit budget (max ${ALLOCATED / EACH})`)
+  }
+  // Under-admission is a bug ONLY if headroom was left on the table — a
+  // spurious BUDGET_EXCEEDED with room to spare is the lost-update the ===
+  // used to catch; fewer winners with a genuinely exhausted budget is not.
+  const headroomLeft = ALLOCATED - b.reserved_credits - b.spent_credits
+  if (winners.length < ALLOCATED / EACH && headroomLeft >= EACH) {
+    fail(`under-admission with headroom left: ${winners.length} winners, ${headroomLeft} headroom unspent`)
   }
   if (b.reserved_credits !== winners.length * EACH) {
     fail(`reserved ${b.reserved_credits} != winners ${winners.length} * ${EACH} — a reservation was lost or double-counted`)

@@ -169,27 +169,26 @@ describe("check_balance tool (cloud + credits:read)", () => {
 
 describe("credit_transactions tool", () => {
   it("returns the user's transaction history", async () => {
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "tx-1",
-                  type: "subscription",
-                  amount_usd: 24,
-                  credits_granted: 475,
-                  tier: "basic",
-                  created_at: "2026-04-01T00:00:00Z",
-                },
-              ],
-              error: null,
-            }),
-          }),
-        }),
-      }),
-    })
+    // Self-returning chain: the route now inserts `.is("org_id", null)`
+    // between eq and order (org rows are not personal history), so a rigid
+    // nested mock breaks on every wiring change — the fluent shape doesn't.
+    const chainResult = {
+      data: [
+        {
+          id: "tx-1",
+          type: "subscription",
+          amount_usd: 24,
+          credits_granted: 475,
+          tier: "basic",
+          created_at: "2026-04-01T00:00:00Z",
+        },
+      ],
+      error: null,
+    }
+    const chain: Record<string, unknown> = {}
+    for (const m of ["select", "eq", "is", "order", "lt"]) chain[m] = vi.fn().mockReturnValue(chain)
+    chain.limit = vi.fn().mockResolvedValue(chainResult)
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(chain)
     const server = buildServer()
     registerModels({
       server,

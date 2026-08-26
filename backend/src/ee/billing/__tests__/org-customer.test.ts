@@ -26,7 +26,10 @@ vi.mock("../stripe-client.js", () => ({
     billingPortal: { sessions: { create: h.portalCreate } },
   }),
 }))
-vi.mock("../provision-credits.js", () => ({ handleTopupClawback: h.handleTopupClawback }))
+vi.mock("../provision-credits.js", () => ({
+  handleTopupClawback: h.handleTopupClawback,
+  captureReceiptUrl: vi.fn(async () => {}),
+}))
 
 const { resolvePayer, routeClawback, handleOrgPackCompleted, createOrgPackCheckout } = await import("../org-customer.js")
 const { ORG_TOP_UPS, TOP_UPS } = await import("../stripe-config.js")
@@ -67,21 +70,65 @@ describe("resolvePayer", () => {
   })
 })
 
-describe("handleOrgPackCompleted", () => {
-  it("grants the pack exactly as configured, keyed by the transaction id", async () => {
-    const granted = await handleOrgPackCompleted({ orgId: "org-1", packId: "org-25", transactionId: "pi_1" })
+const ORG_UUID = "0a0a0a0a-1111-4222-8333-000000000001"
+
+/** A settled session whose evidence all holds together. */
+function goodPack(overrides: Partial<Parameters<typeof handleOrgPackCompleted>[0]> = {}) {
+  return {
+    orgId: ORG_UUID,
+    packId: "org-25",
+    transactionId: "pi_1",
+    stripeCustomerId: "cus_org_1",
+    amountTotalCents: 2500,
+    lineItems: [{ priceId: ORG_TOP_UPS["org-25"].priceId }],
+    ...overrides,
+  }
+}
+
+describe("handleOrgPackCompleted — metadata never stands alone", () => {
+  it("grants when the line items, customer owner, and pack agree; records the SETTLED price", async () => {
+    // resolvePayer's stripe_customers row: this customer belongs to the org.
+    h.from.mockReturnValueOnce(chain({ data: { user_id: null, org_id: ORG_UUID } }))
+    const granted = await handleOrgPackCompleted(goodPack({ amountTotalCents: 1500 /* 40%-off promo */ }))
     expect(granted).toBe(true)
     expect(h.rpc).toHaveBeenCalledWith("grant_org_credits_idempotent", {
-      p_org_id: "org-1",
+      p_org_id: ORG_UUID,
       p_credits: 8500,
       p_external_id: "pi_1",
       p_source: "org_purchase",
-      p_amount_usd: 25,
+      // The DISCOUNTED price — clawback divides by this, so recording the
+      // catalog price would under-claw every partial refund of a promo buy.
+      p_amount_usd: 15,
     })
   })
 
   it("an unknown pack grants NOTHING (and does not throw — Stripe would redeliver forever)", async () => {
-    const granted = await handleOrgPackCompleted({ orgId: "org-1", packId: "org-9999", transactionId: "pi_2" })
+    const granted = await handleOrgPackCompleted(goodPack({ packId: "org-9999" }))
+    expect(granted).toBe(false)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("a non-uuid orgId in metadata grants nothing", async () => {
+    const granted = await handleOrgPackCompleted(goodPack({ orgId: "org-1" }))
+    expect(granted).toBe(false)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("line items that do not carry the pack's price grant nothing — metadata cannot size a grant", async () => {
+    const granted = await handleOrgPackCompleted(goodPack({ lineItems: [{ priceId: "price_something_else" }] }))
+    expect(granted).toBe(false)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("a customer the org does not own grants nothing — metadata cannot point money at a foreign org", async () => {
+    h.from.mockReturnValueOnce(chain({ data: { user_id: "u-1", org_id: null } }))
+    const granted = await handleOrgPackCompleted(goodPack())
+    expect(granted).toBe(false)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("no customer on the session grants nothing", async () => {
+    const granted = await handleOrgPackCompleted(goodPack({ stripeCustomerId: null }))
     expect(granted).toBe(false)
     expect(h.rpc).not.toHaveBeenCalled()
   })
@@ -118,6 +165,28 @@ describe("routeClawback — the org/personal fork", () => {
     await routeClawback({ paymentIntentId: null, refunds: [] })
     expect(h.handleTopupClawback).toHaveBeenCalledTimes(1)
     expect(h.from).not.toHaveBeenCalled()
+  })
+
+  it("a FAILED routing lookup refuses to route — guessing personal would debit the org owner's own pools", async () => {
+    h.from.mockReturnValueOnce(chain({ data: null, error: { code: "57014", message: "statement timeout" } }))
+    await routeClawback({ paymentIntentId: "pi_x", refunds: [{ refundId: "re_9", amountCents: 1000 }] })
+    expect(h.handleTopupClawback).not.toHaveBeenCalled()
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("a pre-351 schema (42703: no org_id column) falls through to the personal path — no org rows can exist there", async () => {
+    h.from.mockReturnValueOnce(chain({ data: null, error: { code: "42703", message: "column transactions.org_id does not exist" } }))
+    const data = { paymentIntentId: "pi_old", refunds: [{ refundId: "re_10", amountCents: 500 }] }
+    await routeClawback(data)
+    expect(h.handleTopupClawback).toHaveBeenCalledWith(data)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it("a zero-settled grant (100%-off promo) claws NOTHING — never 'claw everything' on missing price data", async () => {
+    h.from.mockReturnValueOnce(chain({ data: { org_id: ORG_UUID, credits_granted: 8500, amount_usd: 0 } }))
+    await routeClawback({ paymentIntentId: "pi_free", refunds: [{ refundId: "re_11", amountCents: 1 }] })
+    expect(h.rpc).not.toHaveBeenCalled()
+    expect(h.handleTopupClawback).not.toHaveBeenCalled()
   })
 })
 

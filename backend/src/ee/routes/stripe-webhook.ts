@@ -109,10 +109,17 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
           // settlement gate as the personal path, same payment-intent
           // idempotency mutex, different ledger.
           if (session.mode === "payment" && settled && session.metadata?.payerKind === "org") {
+            // Metadata only NAMES the org and pack — the grant is verified
+            // against the session's REAL line items and the customer's owner
+            // row inside the handler (metadata never sizes or authorizes a
+            // grant, same rule as the personal path).
             await handleOrgPackCompleted({
               orgId: session.metadata.orgId ?? "",
               packId: session.metadata.packId ?? "",
               transactionId: (session.payment_intent as string) ?? session.id,
+              stripeCustomerId: (session.customer as string | null) ?? null,
+              amountTotalCents: session.amount_total ?? 0,
+              lineItems: await getSessionLineItems(session.id),
             })
             break
           }

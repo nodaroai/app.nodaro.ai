@@ -628,7 +628,7 @@ export async function handleTransactionCompleted(
  * the PI id the grant used. Post-grant UPDATE by design (migration 313):
  * the grant RPC stays untouched and a failure here costs only the link.
  */
-async function captureReceiptUrl(piId: string): Promise<void> {
+export async function captureReceiptUrl(piId: string): Promise<void> {
   try {
     const pi = await getStripe().paymentIntents.retrieve(piId, { expand: ["latest_charge"] })
     const charge = pi.latest_charge

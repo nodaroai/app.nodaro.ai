@@ -226,6 +226,13 @@ SELECT pg_temp.assert_raises('a suspended member refuses to spend',
 UPDATE workspace_members SET status = 'active'
 WHERE workspace_id = 'b0000000-0000-4000-8000-000000000501' AND user_id = '00000000-0000-4000-8000-000000000502';
 
+-- A complete NON-member (the loner belongs to nothing) must be refused, not
+-- sail past the suspension test on NULL <> 'suspended' (second-review
+-- finding, 2026-08-26): membership is the workspace branch's first gate.
+SELECT pg_temp.assert_raises('a non-member cannot spend a workspace budget at all',
+  $q$SELECT reserve_credits('00000000-0000-4000-8000-000000000505', 1, NULL, NULL, NULL, NULL, FALSE, NULL, FALSE, 'b0000000-0000-4000-8000-000000000501')$q$,
+  'MEMBER_NOT_FOUND');
+
 -- ------------------------------------------------- metered overrun clamps
 DO $$
 DECLARE v_log UUID; v_headroom INTEGER;
