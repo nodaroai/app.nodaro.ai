@@ -6,6 +6,7 @@ import {
   refineSurfaceEdition,
   runtimeSurfaceProfile,
   surfaceGateOpen,
+  surfaceProfileFailedToLoad,
   __resetSurfaceProfileCacheForTests,
 } from "../surface-profile.js"
 
@@ -164,5 +165,59 @@ describe("d2 gate — the surface profile is business+ only", () => {
     __resetSurfaceProfileCacheForTests()
     expect(surfaceGateOpen()).toBe(true)
     expect(runtimeSurfaceProfile().outputs.allowPublic).toBe(false)
+  })
+})
+
+describe("surfaceProfileFailedToLoad — fail-closed boot guard (SAI-4/H8)", () => {
+  const originalEdition = config.EDITION
+  afterEach(() => {
+    config.EDITION = originalEdition
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("true: a profile is configured on an honoring edition but fails to load (invalid JSON)", () => {
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = "{ not valid json"
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceProfileFailedToLoad()).toBe(true)
+  })
+
+  it("true: an unreadable @file path", () => {
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = "@/nonexistent/does-not-exist.json"
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceProfileFailedToLoad()).toBe(true)
+  })
+
+  it("false (LOAD-BEARING): an empty-but-VALID profile {} loads as a FRESH object, not the default identity", () => {
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = "{}"
+    __resetSurfaceProfileCacheForTests()
+    // A successful parse returns mergeOverDefault(...), a distinct object — so
+    // the by-identity check does not mistake "loaded, equals default" for "failed".
+    expect(runtimeSurfaceProfile()).not.toBe(SURFACE_PROFILE_DEFAULT)
+    expect(surfaceProfileFailedToLoad()).toBe(false)
+  })
+
+  it("false: a real profile loads", () => {
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nav: { hide: ["gallery"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceProfileFailedToLoad()).toBe(false)
+  })
+
+  it("false: no profile configured (env unset) — a plain deployment is not a failure", () => {
+    config.EDITION = "cloud"
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceProfileFailedToLoad()).toBe(false)
+  })
+
+  it("false: community ignores the profile (gate closed) — nothing to fail closed on", () => {
+    config.EDITION = "community"
+    process.env.NODARO_SURFACE_PROFILE = "{ not valid json"
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceProfileFailedToLoad()).toBe(false)
   })
 })
