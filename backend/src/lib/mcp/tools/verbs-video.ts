@@ -16,7 +16,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -645,6 +645,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration: z.number().int().min(4).max(15).optional().describe("Seconds to add (seedance-2-extend, default 8)"),
         resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional().describe("Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam)"),
         generate_audio: z.boolean().optional().describe("Continue the soundtrack into the extension (seedance-2-extend, default true)"),
+        reference_image_urls: z
+          .array(z.string().url())
+          .max(SEEDANCE_2_REF_LIMITS.images - 1)
+          .optional()
+          .describe(
+            "Reference images for the extension (seedance-2-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.",
+          ),
         seed: z.number().int().min(10000).max(99999).optional(),
       },
               outputSchema: {
@@ -697,6 +704,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             duration: args.duration,
             resolution: args.resolution,
             generateAudio: args.generate_audio,
+            referenceImageUrls: args.reference_image_urls,
             mcp_client: session.clientName,
             userId: session.userId,
           },

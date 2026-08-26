@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-08-15T21:55:08.393Z
-generated_from: 150c80ac9
+generated_at: 2026-08-26T00:26:54.443Z
+generated_from: cce51deb6
 ---
 
 # Extend Video
@@ -72,6 +72,7 @@ generated_from: 150c80ac9
 - `duration`
 - `resolution`
 - `generate_audio`
+- `reference_image_urls`
 - `seed`
 <!-- AUTO-GEN:END mcp-call -->
 

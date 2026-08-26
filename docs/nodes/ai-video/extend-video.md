@@ -20,7 +20,7 @@ The Extend Video node continues a video by appending new content guided by a tex
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
 | ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add |
-| seedance-2-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p (default 720p); Generate Audio: continue the soundtrack into the extension (default on) |
+| seedance-2-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p (default 720p); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 
 ## Inputs & Outputs
 
@@ -45,6 +45,31 @@ LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_
 
 Seedance 2 generates the continuation natively (it watches the source clip and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio.
 
+### Reference images (Seedance 2 Extend only)
+
+`POST /v1/extend-video` and the MCP `extend_video` tool accept reference images
+alongside the continuation prompt, so the extension can hold a specific
+identity, product, or object steady — instead of describing it by name and
+hoping:
+
+- **`referenceImageUrls`** — a flat URL list. Mention each as `@image_1` …
+  `@image_N` (list order) in the prompt.
+- **`connectedReferences`** — the same structured-reference shape
+  `/v1/generate-video` takes (see
+  [Structured references on video](../../api-integration.md#structured-references-connectedreferences-on-video)):
+  entity references assemble server-side into attached images + per-reference
+  directives.
+
+**Up to 8 user references attach** — the Seedance 2 image cap minus one, because
+the extension pipeline itself occupies one reference seat with the source's
+last frame (the continuation anchor). User references are numbered
+`@image_1…@image_8` **ahead** of the anchor, so their ordinals never shift; the
+source's 2-second tail rides as `@video_1`.
+
+Only `seedance-2-extend` has a reference path. Sending reference images with any
+other extend provider returns a 400 (they would otherwise be silently ignored).
+Reference images add **no extra credits** — the rates below are unchanged.
+
 ### Seedance 2 Extend credits
 
 Pricing is per duration tier × resolution (the same rates as Seedance 2 generation with a video reference, plus a flat 3-credit stitch overhead baked into every row). Off-tier durations snap up to the next tier (e.g. 6s bills as 8s):
@@ -61,6 +86,7 @@ Pricing is per duration tier × resolution (the same rates as Seedance 2 generat
 - For VEO / Runway: the source video must come from the matching generation node — this node cannot extend arbitrary uploaded videos for those providers.
 - For LTX 2.3 Pro: any video URL works; use `extend_mode: "start"` to add a lead-in, `extend_mode: "end"` (default) to add a continuation.
 - For Seedance 2 Extend: describe only what happens next, in plain action language (e.g. "the ball keeps rolling until it hits a cup") — the platform handles the continuation phrasing. Match the source's resolution for the cleanest seam.
+- For Seedance 2 Extend with reference images: mention every reference you attach (`@image_1`, `@image_2`, …) in the continuation prompt — an unmentioned flat reference still rides along, but naming it tells the model what it's for.
 - Write prompts that describe the continuation, not the original content.
 - Use "fast" mode for iteration, "quality" for final output (VEO).
 - Chain multiple Extend Video nodes to create progressively longer content — each LTX extend adds up to 20s, so two chained runs give +40s.
