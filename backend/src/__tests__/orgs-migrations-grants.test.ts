@@ -69,6 +69,25 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: ["create_workspace_with_project"],
   },
+  // P12: the billing schema and RPCs. Every function here is a mutating
+  // credit operation called with the service client only — nothing is an
+  // RLS-facing helper (the three new tables have plain SELECT policies
+  // instead). reserve/commit/refund are the long-standing credit RPCs
+  // restated with their workspace branch (personal bodies verbatim, pins
+  // hardened to pg_temp); the other five are new.
+  "351_orgs_billing.sql": {
+    authenticated: [],
+    serviceRole: [
+      "allocate_workspace_credits",
+      "claw_back_org_credits",
+      "commit_credits",
+      "grant_org_credits_idempotent",
+      "refund_credits",
+      "reserve_credits",
+      "reset_member_spend",
+      "set_member_credit_cap",
+    ],
+  },
   // Content scoping, part b: backfills and four trigger functions. Three are
   // SECURITY DEFINER (they read projects / organizations past the caller's
   // RLS); all four return trigger, so none is classified — a trigger function

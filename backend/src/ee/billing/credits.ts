@@ -2124,6 +2124,7 @@ export class CreditsService {
     }
 
     // Atomic reservation via single RPC (deducts credits + increments daily spent + creates usage log)
+    // billing-payer-ok: family 0 — the one line that talks to reserve_credits. P14 threads p_workspace_id here from BillingContext; until then every caller is a personal payer by definition
     const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
       p_user_id: userId,
       p_credits: pricing.creditCost,
@@ -2207,6 +2208,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
 
     // Try RPC first
+    // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; its TS fallback below must stay payer-aware (billing-04/H22)
     const { error: rpcError } = await supabase.rpc("commit_credits", {
       p_usage_log_id: usageLogId,
       p_actual_credits: actualCredits,
@@ -2238,6 +2240,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
 
     // Try RPC first
+    // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; its TS fallback below must stay payer-aware (billing-04/H22)
     const { error: rpcError } = await supabase.rpc("refund_credits", {
       p_usage_log_id: usageLogId,
     })

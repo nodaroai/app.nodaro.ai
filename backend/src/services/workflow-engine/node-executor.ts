@@ -1380,6 +1380,7 @@ async function executeWorkerNode(
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
 
+      // billing-payer-ok: orchestrator-side reserve — P14 rides the execution-resolved payer on the payload; personal payer until that lands
       const reservation = await CreditsService.reserveCredits(
         ctx.userId,
         jobId,

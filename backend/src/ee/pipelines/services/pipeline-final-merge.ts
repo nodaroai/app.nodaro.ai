@@ -165,6 +165,7 @@ export async function pipelineFinalMerge(
 
   // 2. Reserve credits.
   const { CreditsService } = await import("../../billing/credits.js")
+  // billing-payer-ok: pipeline merge jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   await CreditsService.reserveCredits(userId, jobId, "pipeline-final-merge", 0, 0, {
     isAppRun: false,
   })

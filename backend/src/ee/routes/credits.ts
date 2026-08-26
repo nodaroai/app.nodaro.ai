@@ -276,6 +276,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = parsed.data
 
     try {
+      // billing-payer-ok: internal-secret orchestrator route (family 8) — the enqueuing site owns the payer and forwards it explicitly in P14; personal until then
       const result = await CreditsService.reserveCredits(
         userId,
         jobId,

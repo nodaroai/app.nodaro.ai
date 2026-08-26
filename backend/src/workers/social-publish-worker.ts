@@ -81,6 +81,7 @@ async function ensureJobRow(row: ScheduledPostRow): Promise<string | null> {
 async function reserveScheduledCredits(userId: string, jobId: string): Promise<string | null> {
   if (!hasCredits()) return null
   const { CreditsService } = await import("../ee/services/credits.js")
+  // billing-payer-ok: social publish jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   const result = await CreditsService.reserveCredits(userId, jobId, "social-publish", 0, 0)
   return result.usageLogId
 }

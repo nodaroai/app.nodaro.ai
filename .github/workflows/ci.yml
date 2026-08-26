@@ -416,6 +416,12 @@ jobs:
           latest="${migrations[-1]}"
           echo "re-applying $latest"
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$latest"
+      # After the idempotency re-apply on purpose: the invariant must hold on
+      # the state a re-run leaves behind, not only on a pristine first apply.
+      - name: Concurrency proof — workspace budget under 50 simultaneous reserves
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/orgs-billing-concurrency.mjs
 
   i18n-completeness:
     name: i18n Locale Completeness
