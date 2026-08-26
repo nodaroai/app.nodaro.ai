@@ -51,6 +51,12 @@ export function sectionOf(mention: CopilotMention): string {
 type DrillRow = { kind: "back" } | { kind: "default" } | { kind: "variant"; variant: CopilotMentionVariant }
 
 interface CopilotMentionPickerProps {
+  /** The server-side total for FILES — what arrived is not what the user has. */
+  fileTotal?: number | null
+  /** More file pages exist on the server. */
+  hasMoreFiles?: boolean
+  /** Pull the next page. Called when the list is scrolled near its end. */
+  onLoadMoreFiles?: () => void
   query: string
   /** Every mentionable entity, any kind, any order — grouped here. */
   mentions: CopilotMention[]
@@ -91,6 +97,9 @@ export function CopilotMentionPicker({
   onExpand,
   insetClassName = "left-3.5 right-3.5",
   loading = false,
+  fileTotal = null,
+  hasMoreFiles = false,
+  onLoadMoreFiles,
 }: CopilotMentionPickerProps) {
   const counts = useMemo(() => {
     const map = new Map<string, number>(SECTION_TABS.map((tab) => [tab, 0]))
@@ -255,7 +264,11 @@ export function CopilotMentionPicker({
       {!drill && !nothingAtAll && (
         <div className="px-2 pt-1.5 flex flex-wrap gap-1" role="tablist" aria-label={S.mention}>
           {SECTION_TABS.map((section) => {
-            const count = counts.get(section) ?? 0
+            // Files are paged, so what arrived is not what the user has. The
+            // server's exact count is the honest number; without it the tab
+            // read "Files 40" to someone with five hundred, which is the same
+            // lie the entity lists used to tell at 100.
+            const count = section === S.sectionFiles && fileTotal !== null ? fileTotal : counts.get(section) ?? 0
             const isActive = section === tab
             return (
               <button
@@ -286,7 +299,19 @@ export function CopilotMentionPicker({
         </div>
       )}
 
-      <div ref={listRef} className="pt-1 pb-1.5 max-h-[280px] overflow-y-auto overflow-x-hidden">
+      <div
+        ref={listRef}
+        // Only the Files tab pages: every other kind is fully in memory, and
+        // asking for "more" there would be a request for nothing.
+        onScroll={
+          tab === S.sectionFiles && hasMoreFiles
+            ? (e) => {
+                if (scrolledNearBottom(e.currentTarget)) onLoadMoreFiles?.()
+              }
+            : undefined
+        }
+        className="pt-1 pb-1.5 max-h-[280px] overflow-y-auto overflow-x-hidden"
+      >
         {nothingAtAll && loading ? (
           <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{S.pickerLoading}</div>
         ) : nothingAtAll ? (
@@ -483,6 +508,20 @@ export function PreviewableThumb({
       </span>
     </span>
   )
+}
+
+/**
+ * "Nearly at the bottom" — the trigger for pulling the next page of files.
+ *
+ * Deliberately generous: firing only at the exact bottom means a fast flick
+ * lands past it with nothing loading, and the user sees an end that is not
+ * the end. Exported so the inline list and the full-size browser cannot
+ * drift into two different definitions of the same moment.
+ */
+export const NEAR_BOTTOM_PX = 120
+
+export function scrolledNearBottom(el: HTMLElement): boolean {
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - NEAR_BOTTOM_PX
 }
 
 /**

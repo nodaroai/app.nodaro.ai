@@ -6,7 +6,7 @@
  * stop went. The hint to its left always states what will happen to their
  * credits, which is the whole contract of Ask vs Auto.
  */
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ArrowUp, AtSign } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { activeMentionQuery, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
@@ -22,12 +22,21 @@ import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/typ
 interface CopilotComposerProps {
   /** The @ catalogue. Not to be confused with the chips the user has picked. */
   mentionSources: CopilotMention[]
+  /**
+   * Reported up because the PANEL owns the mentions fetch, and for files this
+   * string is a server query rather than a browser-side filter.
+   */
+  onSearchChange: (value: string) => void
+  /** The server-side total for FILES, and the way to reach the rest of them. */
+  fileTotal: number | null
+  hasMoreFiles: boolean
+  onLoadMoreFiles: () => void
   onSend: (text: string) => void
   onStop: () => void
   disabled?: boolean
 }
 
-export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: CopilotComposerProps) {
+export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, hasMoreFiles, onLoadMoreFiles, onSend, onStop, disabled }: CopilotComposerProps) {
   const draft = useCopilotStore((s) => s.draft)
   const mentions = useCopilotStore((s) => s.mentions)
   const setDraft = useCopilotStore((s) => s.setDraft)
@@ -50,6 +59,19 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
   // on input blur (which the browser's own search autofocus causes), so a
   // browser rendered inside it died within a frame of opening.
   const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const [browserSearch, setBrowserSearch] = useState("")
+
+  // Whichever box the user is typing in drives the FILE search on the server:
+  // the full-size browser when it is open, the `@query` otherwise.
+  const mentionSearch = browserTab !== null ? browserSearch : (query ?? "")
+  // A BLOCK body, deliberately: `useEffect(() => onSearchChange(x), …)` returns
+  // whatever the callback returns, and React reads a returned value as a
+  // cleanup function. It happens to be undefined today; the day a caller
+  // passes a handler that returns anything, React throws on an effect it never
+  // asked for a cleanup from.
+  useEffect(() => {
+    onSearchChange(mentionSearch)
+  }, [mentionSearch, onSearchChange])
   const [chipPreview, setChipPreview] = useState<CopilotMention | null>(null)
 
   const syncQuery = (value: string, caret: number) => {
@@ -101,6 +123,9 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
           onPick={pick}
           onActiveChange={setActiveMentionId}
           onClose={() => setQuery(null)}
+          fileTotal={fileTotal}
+          hasMoreFiles={hasMoreFiles}
+          onLoadMoreFiles={onLoadMoreFiles}
           onExpand={(tab) => {
             setBrowserTab(tab)
             setQuery(null)
@@ -112,6 +137,11 @@ export function CopilotComposer({ mentionSources, onSend, onStop, disabled }: Co
         <CopilotMentionModal
           mentions={mentionSources}
           initialTab={browserTab}
+          fileTotal={fileTotal}
+          hasMoreFiles={hasMoreFiles}
+          onLoadMoreFiles={onLoadMoreFiles}
+          search={browserSearch}
+          onSearchChange={setBrowserSearch}
           onPick={(mention, variant) => {
             setBrowserTab(null)
             pick(mention, variant)

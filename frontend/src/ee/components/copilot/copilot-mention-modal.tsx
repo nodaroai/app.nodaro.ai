@@ -13,18 +13,31 @@ import { ChevronLeft, ChevronRight, Search, X } from "lucide-react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
 import type { CopilotMention, CopilotMentionVariant } from "@/ee/lib/copilot/types"
-import { KIND_UI, MentionThumb, PreviewableThumb, SECTION_TABS, VariantThumb, safeThumbUrl, sectionOf } from "./copilot-mention-picker"
+import { KIND_UI, MentionThumb, PreviewableThumb, SECTION_TABS, VariantThumb, safeThumbUrl, scrolledNearBottom, sectionOf } from "./copilot-mention-picker"
 import { MentionPreview, type MentionPreviewContent } from "./copilot-mention-preview"
 
 interface CopilotMentionModalProps {
+  /** The server-side total for FILES — what arrived is not what the user has. */
+  fileTotal?: number | null
+  /** More file pages exist on the server. */
+  hasMoreFiles?: boolean
+  /** Pull the next page. Called when the list is scrolled near its end. */
+  onLoadMoreFiles?: () => void
   mentions: CopilotMention[]
   initialTab: string
+  /**
+   * Lifted to the composer, not held here: for FILES this string is a server
+   * query, and the composer is what owns the fetch. Kept local, this box
+   * would filter whatever 40 rows happened to be in memory and answer "no
+   * match" about files the user owns.
+   */
+  search: string
+  onSearchChange: (value: string) => void
   onPick: (mention: CopilotMention, variant?: CopilotMentionVariant) => void
   onClose: () => void
 }
 
-export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: CopilotMentionModalProps) {
-  const [search, setSearch] = useState("")
+export function CopilotMentionModal({ mentions, initialTab, search, onSearchChange, fileTotal = null, hasMoreFiles = false, onLoadMoreFiles, onPick, onClose }: CopilotMentionModalProps) {
   const [tab, setTab] = useState(initialTab)
   const [drill, setDrill] = useState<CopilotMention | null>(null)
   const [preview, setPreview] = useState<(MentionPreviewContent & { insert: () => void }) | null>(null)
@@ -92,7 +105,7 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
             <input
               ref={inputRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => onSearchChange(e.target.value)}
               placeholder={S.pickerModalSearch}
               aria-label={S.pickerModalSearch}
               className="flex-1 bg-transparent border-none outline-none text-[12.5px] text-foreground placeholder:text-[var(--copilot-dim)]"
@@ -115,7 +128,10 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
                         : "border-transparent text-[var(--copilot-muted)] hover:text-foreground"
                     }`}
                   >
-                    {section} <span className="text-[var(--copilot-dim)]">{counts.get(section) ?? 0}</span>
+                    {section}{" "}
+                    <span className="text-[var(--copilot-dim)]">
+                      {section === S.sectionFiles && fileTotal !== null ? fileTotal : counts.get(section) ?? 0}
+                    </span>
                   </button>
                 )
               })}
@@ -134,7 +150,19 @@ export function CopilotMentionModal({ mentions, initialTab, onPick, onClose }: C
           )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        <div
+          // Same trigger as the inline list, from the same helper — two
+          // definitions of "near the bottom" is how one surface silently
+          // stops loading.
+          onScroll={
+            tab === S.sectionFiles && hasMoreFiles && !drill
+              ? (e) => {
+                  if (scrolledNearBottom(e.currentTarget)) onLoadMoreFiles?.()
+                }
+              : undefined
+          }
+          className="flex-1 min-h-0 overflow-y-auto p-3"
+        >
           {drill ? (
             <div className="grid grid-cols-3 gap-2">
               <ModalTile

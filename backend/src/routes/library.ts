@@ -110,6 +110,12 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     query = query
       .order("created_at", { ascending: false })
+      // The tie-break that makes the ordering TOTAL. `created_at` defaults to
+      // `NOW()`, which is the TRANSACTION timestamp — every asset written by
+      // one multi-file upload shares a value to the microsecond. Without `id`
+      // the page boundary has no defined place among the tied rows, and the
+      // cursor below cannot land between two specific ones.
+      .order("id", { ascending: false })
       .limit(limit + 1) // Fetch one extra to determine nextCursor
 
     if (type !== "all") {
@@ -125,7 +131,19 @@ export async function libraryRoutes(app: FastifyInstance) {
     }
 
     if (cursor) {
-      // Cursor-based pagination: fetch items created before the cursor item
+      // Everything strictly AFTER the cursor row under
+      // `ORDER BY created_at DESC, id DESC`.
+      //
+      // A bare `created_at.lt.<ts>` — which this was — SKIPS every row tied
+      // with the cursor row's timestamp. `created_at` defaults to `NOW()`,
+      // the transaction timestamp, so one multi-file upload writes a whole
+      // group sharing a value: land a page boundary inside that group and the
+      // rest of it silently disappears from the listing. The same reasoning,
+      // and the same predicate, as `lib/keyset-cursor.ts`.
+      //
+      // Both interpolated values are trusted: `cursor` is `z.string().uuid()`
+      // at the schema, and `createdAt` is read back OUT of the database rather
+      // than taken from the request.
       const { data: cursorRow } = await supabase
         .from("assets")
         .select("created_at")
@@ -133,7 +151,10 @@ export async function libraryRoutes(app: FastifyInstance) {
         .single()
 
       if (cursorRow) {
-        query = query.lt("created_at", cursorRow.created_at)
+        const createdAt = cursorRow.created_at as string
+        query = query.or(
+          `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${cursor})`,
+        )
       }
     }
 

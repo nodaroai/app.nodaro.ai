@@ -50,6 +50,7 @@ function renderPicker(query = "") {
 /** The composer wiring, minimally: expand closes the picker, the browser takes over. */
 function Harness() {
   const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const [browserSearch, setBrowserSearch] = useState("")
   return (
     <>
       {browserTab === null && (
@@ -66,6 +67,8 @@ function Harness() {
         <CopilotMentionModal
           mentions={MENTIONS}
           initialTab={browserTab}
+          search={browserSearch}
+          onSearchChange={setBrowserSearch}
           onPick={(mention, variant) => {
             setBrowserTab(null)
             if (variant) onPick(mention, variant)
@@ -313,7 +316,7 @@ describe("the magnifier says the picture can be enlarged", () => {
 
   it("the browser's tiles carry the same badge, from the same component", () => {
     render(
-      <CopilotMentionModal mentions={MENTIONS} initialTab="Characters" onPick={onPick} onClose={noop} />,
+      <CopilotMentionModal mentions={MENTIONS} initialTab="Characters" search="" onSearchChange={noop} onPick={onPick} onClose={noop} />,
     )
     const tile = screen.getByRole("button", { name: /^Iris ·/ })
     const zoom = within(tile).getByRole("button", { name: /Preview/i })
@@ -371,5 +374,84 @@ describe("the preview must not close the picker under it", () => {
     const dialog = openPreview()
     const img = dialog.querySelector("img")!
     expect(img.getAttribute("src")).toContain("/cdn-cgi/image/")
+  })
+})
+
+describe("reaching the rest of the files", () => {
+  // The count says how many match; scrolling is how the user gets to them.
+  // Without this, a broad search shows 40 rows beside "120" and no way down.
+  const FILES: CopilotMention[] = Array.from({ length: 12 }, (_, i) => ({
+    id: `f${i}`,
+    name: `shot-${i}.png`,
+    kind: "image",
+    imageUrl: null,
+  }))
+
+  function renderFiles(props: Partial<{ hasMoreFiles: boolean; onLoadMoreFiles: () => void }> = {}) {
+    return render(
+      <CopilotMentionPicker
+        query=""
+        mentions={FILES}
+        onPick={onPick}
+        onActiveChange={noop}
+        onClose={noop}
+        onExpand={onExpand}
+        hasMoreFiles
+        {...props}
+      />,
+    )
+  }
+
+  /** The scrollable list the rows live in. */
+  const listOf = (container: HTMLElement) =>
+    container.querySelector(".overflow-y-auto") as HTMLElement
+
+  it("asks for the next page when the list is scrolled near its end", () => {
+    const onLoadMoreFiles = vi.fn()
+    const { container } = renderFiles({ onLoadMoreFiles })
+    const list = listOf(container)
+    Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true })
+    Object.defineProperty(list, "clientHeight", { value: 280, configurable: true })
+    list.scrollTop = 700 // 700 + 280 = 980, within 120 of 1000
+    fireEvent.scroll(list)
+    expect(onLoadMoreFiles).toHaveBeenCalled()
+  })
+
+  it("does not ask while the user is still far from the end", () => {
+    const onLoadMoreFiles = vi.fn()
+    const { container } = renderFiles({ onLoadMoreFiles })
+    const list = listOf(container)
+    Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true })
+    Object.defineProperty(list, "clientHeight", { value: 280, configurable: true })
+    list.scrollTop = 100
+    fireEvent.scroll(list)
+    expect(onLoadMoreFiles).not.toHaveBeenCalled()
+  })
+
+  it("does not ask when the server says there is no more", () => {
+    const onLoadMoreFiles = vi.fn()
+    const { container } = renderFiles({ hasMoreFiles: false, onLoadMoreFiles })
+    const list = listOf(container)
+    Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true })
+    Object.defineProperty(list, "clientHeight", { value: 280, configurable: true })
+    list.scrollTop = 900
+    fireEvent.scroll(list)
+    expect(onLoadMoreFiles).not.toHaveBeenCalled()
+  })
+
+  it("shows the server's total on the Files tab, not how many arrived", () => {
+    render(
+      <CopilotMentionPicker
+        query=""
+        mentions={FILES}
+        onPick={onPick}
+        onActiveChange={noop}
+        onClose={noop}
+        onExpand={onExpand}
+        fileTotal={523}
+      />,
+    )
+    // 12 rows are loaded; the user has 523.
+    expect(screen.getByRole("tab", { name: /Files 523/ })).toBeTruthy()
   })
 })

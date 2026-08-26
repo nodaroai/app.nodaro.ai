@@ -100,6 +100,7 @@ export default function CopilotHomeComposer() {
   // own search autofocus causes. It also portals to body, escaping this
   // dock's backdrop-filter glass (a containing block that trapped it).
   const [browserTab, setBrowserTab] = useState<string | null>(null)
+  const [browserSearch, setBrowserSearch] = useState("")
   const [chipPreview, setChipPreview] = useState<CopilotMention | null>(null)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -112,7 +113,19 @@ export default function CopilotHomeComposer() {
   // should not cost a list request per entity kind on every visit to the home
   // page.
   const entityUserId = collapsed ? undefined : userId
-  const { mentions: mentionSources, loading: mentionsLoading } = useCopilotMentions(entityUserId)
+  // Whichever box the user is typing in drives the FILE search on the server:
+  // the full-size browser when it is open, the `@query` otherwise.
+  const mentionSearch = browserTab !== null ? browserSearch : (query ?? "")
+  const {
+    mentions: mentionSources,
+    loading: mentionsLoading,
+    fileTotal,
+    hasMoreFiles,
+    loadMoreFiles,
+  } = useCopilotMentions(
+    entityUserId,
+    mentionSearch,
+  )
 
   /**
    * The box grows with what is typed, up to `INPUT_MAX_PX`, then scrolls. It
@@ -272,11 +285,15 @@ export default function CopilotHomeComposer() {
                 onActiveChange={setActiveMentionId}
                 onClose={() => setQuery(null)}
                 onExpand={(tab) => {
+                  setBrowserSearch("")
                   setBrowserTab(tab)
                   setQuery(null)
                 }}
                 insetClassName="left-0 right-0"
                 loading={mentionsLoading}
+                fileTotal={fileTotal}
+                hasMoreFiles={hasMoreFiles}
+                onLoadMoreFiles={loadMoreFiles}
               />
             )}
 
@@ -284,6 +301,11 @@ export default function CopilotHomeComposer() {
               <CopilotMentionModal
                 mentions={mentionSources}
                 initialTab={browserTab}
+              search={browserSearch}
+              onSearchChange={setBrowserSearch}
+              fileTotal={fileTotal}
+              hasMoreFiles={hasMoreFiles}
+              onLoadMoreFiles={loadMoreFiles}
                 onPick={(mention, variant) => {
                   setBrowserTab(null)
                   pick(mention, variant)

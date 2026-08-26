@@ -26,7 +26,7 @@
  * upload node for the server to resolve. Same journey to the model — a name and
  * an id, never an address — but different destinations.
  */
-import { useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useCharacters, useCreatures, useLibraryInfinite, useLocations, useObjects } from "@/hooks/queries/use-assets-queries"
 import { characterMentionVariants, toMentions } from "./mentions"
 import { MEDIA_MENTION_KINDS, MENTION_KINDS, type CopilotMention, type MediaMentionKind } from "./types"
@@ -48,8 +48,34 @@ interface LibraryRow {
   url?: string
 }
 
-/** How many recent files `@` offers before the user has to narrow by typing. */
+/**
+ * Files fetched per page. Unlike the entity lists — which are drained whole,
+ * because a library holds hundreds of characters, not thousands — files are
+ * paged and SEARCHED ON THE SERVER.
+ *
+ * The difference is the size of the thing. Draining a five-thousand-file
+ * library on every `@` would be a bad trade for a dropdown; leaving the
+ * newest 40 and filtering them in the browser was a worse one, because a
+ * search that only sees 40 rows answers "no match" about a file the user
+ * owns and can see in My Library.
+ */
 const MEDIA_PAGE = 40
+
+/** Typing pause before a search reaches the server. */
+const SEARCH_DEBOUNCE_MS = 250
+
+/**
+ * Trails `value` by `delayMs`, so a search fires once the user stops typing
+ * rather than once per keystroke.
+ */
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+  return settled
+}
 
 /**
  * Every entity and file the user can mention, in picker order.
@@ -62,7 +88,22 @@ const MEDIA_PAGE = 40
  */
 export function useCopilotMentions(
   userId: string | undefined,
-): { mentions: CopilotMention[]; loading: boolean } {
+  /**
+   * What the user is typing to narrow the list — the `@query` in the composer,
+   * or the full-size browser's own search box.
+   *
+   * ENTITIES ignore it: they are all in memory, and filtering them in the
+   * browser is instant and exact. FILES use it as a server query, because
+   * they are paged and the newest 40 are not the library.
+   */
+  search = "",
+): {
+  mentions: CopilotMention[]
+  loading: boolean
+  fileTotal: number | null
+  hasMoreFiles: boolean
+  loadMoreFiles: () => void
+} {
   // Typed as a Record so a new entity kind is a compile error here too, not a
   // silent undefined at `entities[kind]`.
   //
@@ -77,7 +118,40 @@ export function useCopilotMentions(
 
   // Files are not project-scoped: a library belongs to the person, not to the
   // flow they happen to have open.
-  const library = useLibraryInfinite({ userId, owned: true, limit: MEDIA_PAGE })
+  //
+  // The trimmed, debounced search goes to the SERVER, which matches the same
+  // filename field the browser-side filter does — so the two agree and the
+  // local pass over the results is a no-op rather than a second, narrower
+  // filter.
+  const debouncedSearch = useDebounced(search.trim(), SEARCH_DEBOUNCE_MS)
+  const library = useLibraryInfinite({
+    userId,
+    owned: true,
+    limit: MEDIA_PAGE,
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+  })
+  /**
+   * How many files actually match — the server's exact count, not how many
+   * arrived. The tab used to show the loaded count, which read as "you have
+   * 40 files" to someone with five hundred.
+   */
+  const fileTotal = library.data?.pages[0]?.totalCount ?? null
+
+  /**
+   * Pull the next page of files.
+   *
+   * Search alone is not enough: a broad one ("img") can match hundreds, and a
+   * count saying 120 beside 40 rows is honest but useless if the other 80 are
+   * unreachable. Guarded on `isFetchingNextPage` because the scroll handler
+   * that calls this fires on every frame of a flick.
+   */
+  const hasMoreFiles = Boolean(library.hasNextPage)
+  const fetchNextPage = library.fetchNextPage
+  const isFetchingNextPage = library.isFetchingNextPage
+  const loadMoreFiles = useCallback(() => {
+    if (!hasMoreFiles || isFetchingNextPage) return
+    void fetchNextPage()
+  }, [hasMoreFiles, isFetchingNextPage, fetchNextPage])
 
   const entityLists = ENTITY_NODE_KINDS.map((kind) => entities[kind].data)
   const entityLoading = ENTITY_NODE_KINDS.map((kind) => entities[kind].isLoading)
@@ -123,7 +197,13 @@ export function useCopilotMentions(
       (a, b) => (order.get(a.kind) ?? 0) - (order.get(b.kind) ?? 0),
     )
 
-    return { mentions, loading: [...entityLoading, libraryLoading].some(Boolean) }
+    return {
+      mentions,
+      loading: [...entityLoading, libraryLoading].some(Boolean),
+      fileTotal,
+      hasMoreFiles,
+      loadMoreFiles,
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...entityLists, ...entityLoading, libraryPages, libraryLoading])
+  }, [...entityLists, ...entityLoading, libraryPages, libraryLoading, fileTotal, hasMoreFiles, loadMoreFiles])
 }
