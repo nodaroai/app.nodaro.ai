@@ -36,6 +36,24 @@ export interface CopilotEditorBridge {
    * still true at the moment a bail resolves.
    */
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
+  /**
+   * Run ONE node. Deliberately a different callback with a different answer:
+   * a single-node run creates NO workflow execution — it runs a job, tracked
+   * on the canvas by the node's own status and stopped by the node's own Stop
+   * — so there is no execution id to follow, and pretending otherwise would
+   * give the panel a Stop button that stops nothing and a progress card that
+   * never fills. It answers only whether it started.
+   */
+  runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
+  /**
+   * What running ONE node would cost, from the live graph.
+   *
+   * The whole-graph `creditEstimate` is the wrong number for a single-node
+   * card by an order of magnitude, and it is the number the user is agreeing
+   * to spend. Computed in the editor, where the per-model cost cache lives.
+   * `null` when the node is gone or cannot be priced.
+   */
+  estimateNode: ((nodeId: string) => number | null) | null
   projectId: string | undefined
   creditEstimate: number
   /** True while the estimate is being refetched — its current value is the PREVIOUS graph's. */
@@ -124,6 +142,8 @@ export const DEFAULT_AUTO_RUN_LIMIT = 100
 const EMPTY_BRIDGE: CopilotEditorBridge = {
   save: null,
   run: null,
+  runNode: null,
+  estimateNode: null,
   projectId: undefined,
   creditEstimate: 0,
   estimateStale: false,

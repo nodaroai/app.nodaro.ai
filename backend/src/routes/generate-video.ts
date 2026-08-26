@@ -170,6 +170,17 @@ export function assembleVideoConnectedReferences(args: {
   referenceOrder?: string[]
   referenceVideoCount: number
   referenceAudioCount: number
+  /**
+   * Lower the provider's image cap for this call (never raises it, and a
+   * provider with no image-ref support stays at 0). The extend flow passes
+   * `cap − 1` because its i2v transport appends the source's last frame as an
+   * anchor INTO `reference_image_urls` at generation time — without the
+   * reserved slot, a full assembly here would number an `@image_N` directive
+   * onto the seat the anchor later occupies (misbind). Pre-slicing the INPUTS
+   * is not equivalent: mention-variant multiplication can emit more URLs than
+   * refs went in, so the budget must bound the assembly itself.
+   */
+  imageCapOverride?: number
 }): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
   const {
     prompt,
@@ -180,7 +191,9 @@ export function assembleVideoConnectedReferences(args: {
     referenceVideoCount,
     referenceAudioCount,
   } = args
-  const imageCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
+  const providerCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
+  const imageCap =
+    args.imageCapOverride !== undefined ? Math.min(Math.max(0, args.imageCapOverride), providerCap) : providerCap
 
   // Provider can't carry image references → nothing to attach. Strip the
   // editor's `{image:N}` tokens to bare labels so they never ship raw to the

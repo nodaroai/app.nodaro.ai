@@ -14,7 +14,8 @@
  * not spend the user's credits.
  */
 import type { McpInvoker, McpToolDef } from "../../../lib/mcp/invoke.js"
-import { FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
+import { CREATES_PER_TURN, FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
+import { runCreateWorkflow, runGetWorkflowGraph, type CreateWorkflowArgs, type GetWorkflowGraphArgs } from "./workflow-crud.js"
 import { EditRejected, runEditWorkflow, type EditWorkflowArgs, type WiredAsset } from "./edit-workflow.js"
 import { runGetGraph, type GetGraphArgs } from "./get-graph.js"
 import { runRemember, type RememberArgs } from "./remember.js"
@@ -131,13 +132,46 @@ const NATIVE_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: NATIVE_TOOLS.getWorkflowGraph,
+    description:
+      "Read ANOTHER of the user's workflows in this project — how a flow they already like is built, so you can follow the same shape here. Find ids with list_workflows. Reading is all this does: you cannot edit or run another workflow from this conversation.",
+    input_schema: {
+      type: "object",
+      properties: {
+        workflow_id: { type: "string", description: "From list_workflows." },
+      },
+      required: ["workflow_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: NATIVE_TOOLS.createWorkflow,
+    description:
+      "Create a NEW workflow in this project and build it in one call — use it when the user asks for something separate rather than changes to the flow on screen. Once per conversation turn. The new workflow opens from their dashboard; this conversation stays attached to the workflow already open, so run_workflow still proposes THAT one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", maxLength: 120, description: "What the user would call it." },
+        nodes: { type: "array", items: { type: "object" }, description: "Same node shape as edit_workflow's upsertNodes." },
+        edges: { type: "array", items: { type: "object" }, description: "Same edge shape as edit_workflow's upsertEdges." },
+        note: { type: "string", description: "One sentence describing what you built, shown to the user." },
+      },
+      required: ["name"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: NATIVE_TOOLS.runWorkflow,
     description:
-      "PROPOSE running the workflow as it is now. This does not start anything: the user sees the proposal with its credit estimate and decides. Configure everything through edit_workflow first — a run has no override channel. After calling it, summarize what will run and stop; the outcome arrives in the user's next message.",
+      "PROPOSE a run. This does not start anything: the user sees the proposal with its credit estimate and decides. Pass node_id to propose ONE node — the right choice when you changed a single step and only that step needs redoing, since it spends a fraction of a whole-graph run. Configure everything through edit_workflow first — a run has no override channel. After calling it, say what will run and stop; the outcome arrives in the user's next message.",
     input_schema: {
       type: "object",
       properties: {
         note: { type: "string", description: "One line shown on the Run card." },
+        node_id: {
+          type: "string",
+          description: "Run only this node, from get_graph. Omit to propose the whole workflow.",
+        },
       },
       additionalProperties: false,
     },
@@ -200,6 +234,8 @@ export interface DispatchDeps {
   readonly addedNodeTypes: Set<string>
   /** Files wired onto a node this turn, so the Run card can name them too. */
   readonly wiredAssets: WiredAsset[]
+  /** Workflows created this turn — the bound lives here, not in the model. */
+  readonly created: { count: number }
 }
 
 /** Execute one tool call. Never throws for a model-visible problem — it returns an error result the model can act on. */
@@ -209,6 +245,45 @@ export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: un
     switch (name) {
       case NATIVE_TOOLS.getGraph:
         return { text: await runGetGraph(deps.ctx, args as GetGraphArgs), isError: false }
+
+      case NATIVE_TOOLS.getWorkflowGraph:
+        return {
+          text: await runGetWorkflowGraph(deps.ctx, args as GetWorkflowGraphArgs),
+          isError: false,
+        }
+
+      case NATIVE_TOOLS.createWorkflow: {
+        if (deps.created.count >= CREATES_PER_TURN) {
+          return {
+            text: `Only ${CREATES_PER_TURN} workflow can be created per message. Tell the user what you would build and let them ask again.`,
+            isError: true,
+          }
+        }
+        // Counted BEFORE the await: two `create_workflow` blocks in one
+        // assistant message are dispatched a microtask apart, and a count
+        // written after the insert would let both through.
+        deps.created.count += 1
+        const result = await runCreateWorkflow(deps.ctx, args as CreateWorkflowArgs)
+        // Deliberately NOT folded into `deps.addedNodeTypes` / `wiredAssets`:
+        // those feed the Run card for the workflow on SCREEN, and listing
+        // nodes that went into a different workflow would tell the user they
+        // are about to spend credits on something they never gained.
+        return {
+          text: JSON.stringify(
+            {
+              workflowId: result.workflowId,
+              name: result.name,
+              nodeCount: result.edit.nodeCount,
+              edgeCount: result.edit.edgeCount,
+              note: "Created. This conversation stays attached to the workflow already open — run_workflow still proposes that one.",
+            },
+            null,
+            2,
+          ),
+          isError: false,
+          summary: `created ${result.name}`,
+        }
+      }
 
       case NATIVE_TOOLS.editWorkflow: {
         const result = await runEditWorkflow(deps.ctx, args as unknown as EditWorkflowArgs)

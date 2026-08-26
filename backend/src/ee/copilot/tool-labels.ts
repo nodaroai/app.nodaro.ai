@@ -1,7 +1,9 @@
 /** Human labels for the activity rows in the panel. Unknown tools fall back to their name. */
 const LABELS: Readonly<Record<string, string>> = {
   get_graph: "Reading the workflow",
+  get_workflow_graph: "Reading another workflow",
   edit_workflow: "Editing the canvas",
+  create_workflow: "Creating a workflow",
   run_workflow: "Proposing a run",
   get_execution: "Checking the run",
   remember: "Saving a memory",

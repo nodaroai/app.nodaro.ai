@@ -1083,13 +1083,15 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   // smart-stitch source+extension into one seamless clip (PSNR boundary
   // matching; the fixed trim counts are the no-match fallback).
   if (provider === "seedance-2-extend") {
-    const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
+    const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio, referenceImageUrls } = job.data as {
       jobId: string
       video: string
       prompt: string
       duration?: number
       resolution?: "480p" | "720p" | "1080p"
       generateAudio?: boolean
+      /** Route-assembled user refs (anchor-budgeted) — seats @image_1…N. */
+      referenceImageUrls?: string[]
     }
     console.log(`[worker] extend-video ${ctx.jobId} (provider: seedance-2-extend)`)
 
@@ -1154,6 +1156,10 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       gen = await imageToVideo(lastFrameUrl, "seedance-2", kiePrompt, extSeconds, undefined, {
         resolution: resolution ?? "720p",
         generateAudio: generateAudio ?? true,
+        // User references (route-assembled) ride alongside the tail; the
+        // shared seedance resolver seats them as @image_1…N and appends the
+        // last-frame anchor after them, so their prompt ordinals hold.
+        ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
         referenceVideoUrls: [tailUrl],
         aspectRatio,
       })

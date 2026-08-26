@@ -83,6 +83,27 @@ export interface CopilotWiredAsset {
   nodeId: string
 }
 
+/** Mirrors the backend's `RunProposalNode` verbatim. */
+export interface CopilotRunProposalNode {
+  id: string
+  type: string
+  graphVersion: number
+  label: string
+}
+
+/**
+ * A workflow the copilot created — a DIFFERENT one from the open canvas.
+ *
+ * Its own event rather than a `workflow_updated` with a foreign id: the two
+ * mean opposite things to this panel. An update says "reconcile the canvas";
+ * this says "something new exists elsewhere, here is the way to it".
+ */
+export interface CopilotWorkflowCreated {
+  workflowId: string
+  name: string
+  projectId: string
+}
+
 export interface CopilotRunProposal {
   workflowId: string
   addedNodeTypes: string[]
@@ -95,6 +116,8 @@ export interface CopilotRunProposal {
    */
   wiredAssets?: CopilotWiredAsset[]
   note: string | null
+  /** Present when the copilot proposed ONE node rather than the whole graph. */
+  node?: CopilotRunProposalNode | null
 }
 
 /**
@@ -126,6 +149,7 @@ export type CopilotStreamEvent =
   | { type: "token"; data: { text: string } }
   | { type: "tool_call"; data: CopilotToolCallEvent }
   | { type: "workflow_updated"; data: CopilotWorkflowUpdate }
+  | { type: "workflow_created"; data: CopilotWorkflowCreated }
   | { type: "run_proposed"; data: CopilotRunProposal }
   | { type: "memory_saved"; data: CopilotMemorySave }
   | {
@@ -179,6 +203,8 @@ export interface CopilotTurnState {
   proposal: CopilotRunProposal | null
   /** Memories saved this turn — each renders as a pinned line with undo. */
   memorySaves: CopilotMemorySave[]
+  /** Workflows created this turn — each renders as a link out to it. */
+  createdWorkflows: CopilotWorkflowCreated[]
   creditsCharged: number | null
   error: { code: string; message: string } | null
 }
@@ -193,6 +219,7 @@ export const EMPTY_TURN: CopilotTurnState = {
   update: null,
   proposal: null,
   memorySaves: [],
+  createdWorkflows: [],
   creditsCharged: null,
   error: null,
 }

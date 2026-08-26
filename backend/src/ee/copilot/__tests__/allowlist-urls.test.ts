@@ -88,7 +88,7 @@ function copilotDeps(invoker: ReturnType<typeof createMcpInvoker>) {
       emit: vi.fn(),
     },
     invoker,
-    addedNodeTypes: new Set<string>(), wiredAssets: [],
+    addedNodeTypes: new Set<string>(), wiredAssets: [], created: { count: 0 },
   }
 }
 

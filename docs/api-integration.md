@@ -852,11 +852,11 @@ so a value the model doesn't support is ignored, never a 400:
 
 ### Structured references (`connectedReferences`) on video
 
-`POST /v1/generate-video` and `POST /v1/text-to-video` accept an optional
-`connectedReferences` array — the SAME structured-reference shape
-`/v1/generate-image` takes — so a direct API / SDK / MCP caller gets the identical
-reference assembly the editor performs client-side, instead of hand-building a
-prose "Image N is …" guide. When present, the route
+`POST /v1/generate-video`, `POST /v1/text-to-video`, and `POST /v1/extend-video`
+accept an optional `connectedReferences` array — the SAME structured-reference
+shape `/v1/generate-image` takes — so a direct API / SDK / MCP caller gets the
+identical reference assembly the editor performs client-side, instead of
+hand-building a prose "Image N is …" guide. When present, the route
 assembles them server-side (via the shared video resolver the canvas and
 orchestrator already use):
 
@@ -903,6 +903,16 @@ orchestrator already use):
   exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
   through unchanged. `connectedReferences` feeds the **image** channel only;
   `referenceVideoUrls` / `referenceAudioUrls` stay as explicit flat inputs.
+- **Extend Video: Seedance 2 Extend only, with one seat reserved.** On
+  `POST /v1/extend-video` both `connectedReferences` and the flat
+  `referenceImageUrls` are accepted when `provider` is `seedance-2-extend` — the
+  only extend transport with a reference path; any other extend provider
+  refuses them with a 400 rather than silently dropping. The image budget is
+  the Seedance 2 cap **minus one** (up to **8** user references): the extension
+  pipeline itself occupies one reference seat with the source's last frame (the
+  continuation anchor), appended AFTER the user references so `@image_1…@image_8`
+  ordinals never shift. The source's 2-second tail rides as `@video_1` and is
+  already priced into the extend rates — reference images add no extra credits.
 
 Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
 ref pointing at a private address / non-http(s) scheme is rejected at the route

@@ -206,3 +206,29 @@ describe("memory_saved", () => {
     expect(state.memorySaves).toHaveLength(2)
   })
 })
+
+describe("workflow_created", () => {
+  const created = (workflowId: string, name: string): CopilotStreamEvent => ({
+    type: "workflow_created",
+    data: { workflowId, name, projectId: "p1" },
+  })
+
+  it("pins the new workflow so the user has a way to reach it", () => {
+    // It is the ONE thing the copilot can do that leaves no trace on the
+    // canvas in front of the user — without the pin, the only evidence is a
+    // sentence in the transcript.
+    const state = drive([metadata, created("wf-new", "Ads")])
+    expect(state.createdWorkflows).toEqual([{ workflowId: "wf-new", name: "Ads", projectId: "p1" }])
+  })
+
+  it("is idempotent by id — a replayed stream must not show two workflows", () => {
+    const state = drive([metadata, created("wf-new", "Ads"), created("wf-new", "Ads")])
+    expect(state.createdWorkflows).toHaveLength(1)
+  })
+
+  it("does NOT describe the open workflow as having changed", () => {
+    // `update` drives the "added N nodes" card AND the canvas auto-layout.
+    const state = drive([metadata, created("wf-new", "Ads")])
+    expect(state.update).toBeNull()
+  })
+})

@@ -91,6 +91,7 @@ describe("golden task B — remember rides the REAL dispatch", () => {
     ctx,
     invoker: { listTools: async () => [], callTool: vi.fn(), close: async () => undefined } as never,
     addedNodeTypes: new Set<string>(),
+    created: { count: 0 },
     wiredAssets: [],
   })
 

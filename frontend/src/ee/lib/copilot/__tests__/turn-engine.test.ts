@@ -22,6 +22,9 @@ const workflowState = {
   isDirty: false,
   isReadOnly: false,
   loadedVersion: 6 as number | null,
+  /** Read by the single-node proposal's "is this still that node?" check. */
+  nodes: [] as Array<{ id: string; type?: string }>,
+  edges: [] as unknown[],
   setNeedsAutoLayout,
 }
 
@@ -734,5 +737,162 @@ describe("the auto-posted user strings", () => {
     // exclude it first. This pin makes that change loud instead of silent.
     const { COPILOT_STRINGS } = await import("../strings")
     expect(COPILOT_STRINGS.fixItMessage).not.toMatch(/http/i)
+  })
+})
+
+describe("running ONE node the copilot proposed", () => {
+  const nodeProposal = (over: Partial<{ id: string; type: string; graphVersion: number; label: string }> = {}): CopilotStreamEvent => ({
+    type: "run_proposed",
+    data: {
+      workflowId: "wf-1",
+      addedNodeTypes: [],
+      note: null,
+      node: { id: "n1", type: "generate-image", graphVersion: 6, label: "Hero shot", ...over },
+    },
+  })
+
+  beforeEach(() => {
+    Object.assign(workflowState, {
+      workflowId: "wf-1",
+      isDirty: false,
+      isReadOnly: false,
+      loadedVersion: 6,
+      nodes: [{ id: "n1", type: "generate-image" }],
+      edges: [],
+    })
+    useCopilotStore.getState().setBridge({
+      runNode: vi.fn(async () => ({ started: true })),
+      estimateNode: vi.fn(() => 9),
+    })
+  })
+
+  it("runs the node the card names", async () => {
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    await Promise.resolve()
+    expect(useCopilotStore.getState().bridge.runNode).toHaveBeenCalledWith("n1", { skipConfirm: true })
+  })
+
+  it("refuses when the canvas moved on — a proposal outlives its graph", async () => {
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    workflowState.loadedVersion = 7
+    startProposedRun()
+    expect(useCopilotStore.getState().bridge.runNode).not.toHaveBeenCalled()
+    expect(useCopilotStore.getState().notice).toMatch(/canvas changed/i)
+  })
+
+  it("refuses when the node kept its id but changed TYPE", async () => {
+    // `edit_workflow` can retype an existing node. Same id, different node,
+    // card unchanged — the failure the version check alone would not catch,
+    // because a retype the copilot itself did lands at the SAME version it
+    // proposed against.
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    workflowState.nodes = [{ id: "n1", type: "generate-video" }]
+    startProposedRun()
+    expect(useCopilotStore.getState().bridge.runNode).not.toHaveBeenCalled()
+    expect(useCopilotStore.getState().notice).toMatch(/canvas changed/i)
+  })
+
+  it("refuses when the node is gone", async () => {
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    workflowState.nodes = []
+    startProposedRun()
+    expect(useCopilotStore.getState().bridge.runNode).not.toHaveBeenCalled()
+  })
+
+  it("never starts a whole-workflow run instead", async () => {
+    // The failure that would be invisible on the card and expensive in
+    // credits: falling through to `bridge.run` and running everything.
+    const run = vi.fn(async () => ({ executionId: "exec-1" }))
+    useCopilotStore.getState().setBridge({ run })
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    await Promise.resolve()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it("prices the NODE for the auto ceiling, not the whole graph", async () => {
+    // The graph estimate is 12 and the ceiling is 10, so a whole-graph price
+    // would refuse; the node costs 9 and must run.
+    useCopilotStore.setState({ runMode: "auto", autoRunLimit: 10 })
+    useCopilotStore.getState().setBridge({ creditEstimate: 12 })
+    events([metadata("auto", 10), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    await Promise.resolve()
+    expect(useCopilotStore.getState().bridge.runNode).toHaveBeenCalled()
+  })
+
+  it("leaves the panel idle — a single-node run has no execution to follow", async () => {
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    await Promise.resolve()
+    // "Running" with no execution id would be a card that never resolves and
+    // a Stop button that stops nothing.
+    expect(useCopilotStore.getState().runPhase).not.toBe("running")
+    expect(useCopilotStore.getState().notice).toMatch(/Hero shot/)
+  })
+})
+
+describe("an update about a workflow this turn is not attached to", () => {
+  // `create_workflow` builds the workflow it just made, and that edit emits a
+  // `workflow_updated` carrying the NEW id — mid-turn, while the user is
+  // looking at a different canvas.
+  const foreign: CopilotStreamEvent = {
+    type: "workflow_updated",
+    data: {
+      workflowId: "wf-OTHER",
+      version: 2,
+      addedNodeIds: ["n1", "n2"],
+      updatedNodeIds: [],
+      removedNodeIds: [],
+      addedNodeTypes: ["generate-image"],
+      nodeCount: 2,
+      edgeCount: 1,
+      adjustments: [],
+    },
+  }
+
+  it("never reconciles the open canvas to another workflow's version", async () => {
+    // Version 2 of a brand-new workflow against version 6 of the open one:
+    // reconciling would declare the canvas behind and fetch over the user's
+    // graph.
+    events([metadata("ask", 100), foreign, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("also make me an ads flow")
+    expect(ensureCanvasVersion).not.toHaveBeenCalled()
+  })
+
+  it("never describes the open workflow as having gained those nodes", async () => {
+    events([metadata("ask", 100), foreign, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("also make me an ads flow")
+    // `update` drives the "added 2 nodes" card and the auto-layout that
+    // follows it — both would be about a canvas the user never changed.
+    expect(useCopilotStore.getState().turn.update).toBeNull()
+    expect(workflowState.setNeedsAutoLayout).not.toHaveBeenCalled()
+  })
+
+  it("still reconciles an update that IS this turn's workflow", async () => {
+    const own: CopilotStreamEvent = { ...foreign, data: { ...foreign.data, workflowId: "wf-1" } }
+    events([metadata("ask", 100), own, { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("add a node")
+    expect(ensureCanvasVersion).toHaveBeenCalled()
+    expect(useCopilotStore.getState().turn.update).not.toBeNull()
+  })
+
+  it("lets workflow_created through — it is about another workflow BY DESIGN", async () => {
+    events([
+      metadata("ask", 100),
+      { type: "workflow_created", data: { workflowId: "wf-OTHER", name: "Ads", projectId: "p1" } },
+      { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } },
+    ])
+    await sendCopilotMessage("also make me an ads flow")
+    expect(useCopilotStore.getState().turn.createdWorkflows).toEqual([
+      { workflowId: "wf-OTHER", name: "Ads", projectId: "p1" },
+    ])
   })
 })

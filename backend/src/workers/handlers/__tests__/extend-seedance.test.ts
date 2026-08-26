@@ -232,11 +232,29 @@ describe("extend-video / seedance-2-extend", () => {
     expect(mocks.mockImageToVideo.mock.calls[0]![2]).toBe("extend @video_1 as follows:\nshe opens the door")
   })
 
-  it("defaults duration to the 8s pricing tier, 720p, audio on", async () => {
+  it("defaults duration to the 8s pricing tier, 720p, audio on — and NO reference images key when none were sent", async () => {
     await handler()(makeJob() as never, makeCtx() as never)
     const [, , , duration, , opts] = mocks.mockImageToVideo.mock.calls[0]!
     expect(duration).toBe(8)
     expect(opts).toMatchObject({ resolution: "720p", generateAudio: true })
+    // Refs are additive: their absence keeps the spike-validated opts shape
+    // byte-identical (no stray undefined key reaching the provider layer).
+    expect("referenceImageUrls" in (opts as Record<string, unknown>)).toBe(false)
+  })
+
+  it("passes route-assembled referenceImageUrls through to the i2v transport alongside the tail", async () => {
+    const REF_A = "https://r2.example.com/images/ref-a.png"
+    const REF_B = "https://r2.example.com/images/ref-b.png"
+    await handler()(makeJob({ referenceImageUrls: [REF_A, REF_B] }) as never, makeCtx() as never)
+
+    const [imageUrl, provider, , , , opts] = mocks.mockImageToVideo.mock.calls[0]!
+    // The anchor + tail transport is unchanged; user refs ride IN ADDITION.
+    expect(imageUrl).toBe(LAST_FRAME_URL)
+    expect(provider).toBe("seedance-2")
+    expect(opts).toMatchObject({
+      referenceImageUrls: [REF_A, REF_B],
+      referenceVideoUrls: [TAIL_URL],
+    })
   })
 
   it("snaps out-of-range durations into seedance's native 4–15s window", async () => {

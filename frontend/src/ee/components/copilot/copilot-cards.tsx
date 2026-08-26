@@ -62,6 +62,7 @@ export function RunProposalCard({
   estimate,
   estimateStale,
   nodeCount,
+  nodeLabel,
   balance,
   overLimit,
   ceiling,
@@ -74,6 +75,12 @@ export function RunProposalCard({
   /** The number on screen belongs to the previous graph — say so rather than quote it. */
   estimateStale: boolean
   nodeCount: number
+  /**
+   * Set when ONE node was proposed. The card must NAME it: "1 step" beside a
+   * price tells the user how much, not what — and on a canvas of twenty nodes
+   * that is the whole question.
+   */
+  nodeLabel?: string
   balance: number | null
   overLimit: boolean
   ceiling: number
@@ -84,7 +91,7 @@ export function RunProposalCard({
   disabled?: boolean
 }) {
   const detail = [
-    `${nodeCount} ${nodeCount === 1 ? "step" : "steps"}`,
+    nodeLabel ?? `${nodeCount} ${nodeCount === 1 ? "step" : "steps"}`,
     balance !== null ? `balance ${balance.toLocaleString()}` : null,
   ]
     .filter(Boolean)

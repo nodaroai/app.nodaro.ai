@@ -922,6 +922,40 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return { executionId: started };
   }
 
+  /**
+   * Run ONE node for the Copilot's card.
+   *
+   * `handleRunSingleNode` creates no workflow execution — it runs a job, and
+   * the canvas owns its progress and its Stop — so this answers only whether
+   * it started, and the panel does not pretend to follow it.
+   *
+   * `started` is false when the node is gone or is not individually runnable:
+   * the panel says so instead of leaving the user waiting for a run that was
+   * never going to happen.
+   */
+  async function runNodeForCopilot(nodeId: string, opts?: { skipConfirm?: boolean }): Promise<{ started: boolean }> {
+    const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
+    if (!node || !isExecutableNode(node)) return { started: false };
+    await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
+    return { started: true };
+  }
+
+  /**
+   * What running ONE node would cost — the same arithmetic the whole-graph
+   * badge uses, scoped to one node, so the Copilot's single-node card cannot
+   * quote a number computed for a different set of nodes.
+   */
+  function estimateNodeForCopilot(nodeId: string): number | null {
+    const { nodes: storeNodes, edges: storeEdges } = useWorkflowStore.getState();
+    const node = storeNodes.find((n) => n.id === nodeId);
+    if (!node || !isExecutableNode(node)) return null;
+    const cached = getCachedCredits(getModelIdentifier(node, storeEdges));
+    const cost = cached !== undefined
+      ? cached
+      : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges);
+    return cost * getFanOutMultiplier(node, storeNodes, storeEdges);
+  }
+
   // Stop, from the Copilot's run card. `handleExecutionDiscarded` is only the
   // LOCAL teardown — without the discard call the orchestrator keeps running
   // every remaining node and bills them, while the panel shows idle.
@@ -1279,6 +1313,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               projectId={projectId}
               save={isReadOnly ? null : save}
               run={isReadOnly ? null : runForCopilot}
+              runNode={isReadOnly ? null : runNodeForCopilot}
+              estimateNode={estimateNodeForCopilot}
               onStopRun={handleCopilotStopRun}
               creditEstimate={workflowCreditEstimate}
               estimateStale={estimateLoading}

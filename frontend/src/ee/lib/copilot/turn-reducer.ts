@@ -81,6 +81,13 @@ export function reduceTurn(state: CopilotTurnState, event: CopilotStreamEvent): 
     case "workflow_updated":
       return { ...state, update: mergeUpdate(state.update, event.data) }
 
+    case "workflow_created":
+      // Idempotent by id, like `memory_saved`: a reconnect replays the event,
+      // and two cards for one workflow would read as two workflows.
+      return state.createdWorkflows.some((w) => w.workflowId === event.data.workflowId)
+        ? state
+        : { ...state, createdWorkflows: [...state.createdWorkflows, event.data] }
+
     case "run_proposed":
       return { ...state, proposal: event.data }
 

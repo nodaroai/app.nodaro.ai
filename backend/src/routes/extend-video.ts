@@ -20,7 +20,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, applyVideoNegativePrompt, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
+import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -42,7 +44,56 @@ export const extendVideoBody = z.object({
   duration: z.number().int().min(1).max(20).optional(), // Seconds to add — LTX 1-20; seedance-2-extend snaps to 4-15 in the worker
   resolution: z.enum(["480p", "720p", "1080p"]).optional(), // seedance-2-extend only
   generateAudio: z.boolean().optional(), // seedance-2-extend only (default true)
+  // Reference images for the extension (seedance-2-extend only — the other
+  // extend transports have no reference path, and a ref they'd silently drop
+  // is refused with a 400 instead). Wire ceiling mirrors generate-video (the
+  // widest provider's cap); the actual budget is enforced at assembly.
+  referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
+  // Structured references (parity with generate-video): assembled server-side
+  // into referenceImageUrls + identity directives, so an entity chip travels
+  // as a real reference instead of degrading to a name in the prompt.
+  connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
 })
+
+/**
+ * The generation model the seedance-2-extend worker drives its i2v transport
+ * through — assembly caps must derive from ITS reference limits, and the same
+ * pairing is hardcoded at the worker's `imageToVideo(..., "seedance-2", ...)`
+ * call.
+ */
+export const SEEDANCE_2_EXTEND_GENERATION_MODEL = "seedance-2"
+
+/**
+ * Image-reference slots the extend transport consumes on its own: the source's
+ * last frame, which the shared seedance input resolver appends into
+ * `reference_image_urls` as the anchor (bound as the opening frame by its
+ * prompt suffix). User references must leave it a free seat or the assembly's
+ * `@image_N` directives would number onto the anchor's seat.
+ */
+const EXTEND_ANCHOR_IMAGE_SLOTS = 1
+
+/**
+ * Assemble the extend flow's user references through the SAME shared video
+ * assembler generate-video uses, with two extend-specific facts pinned:
+ * the provider is the underlying generation model (the caps source), and the
+ * image budget reserves the anchor's seat. `referenceVideoCount: 1` because
+ * the worker's 2s source tail rides as `@video_1`. Pure; exported for tests.
+ */
+export function assembleExtendVideoReferences(args: {
+  prompt: string | undefined
+  referenceImageUrls?: string[]
+  connectedReferences?: ConnectedReference[]
+}): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
+  return assembleVideoConnectedReferences({
+    prompt: args.prompt,
+    provider: SEEDANCE_2_EXTEND_GENERATION_MODEL,
+    connectedReferences: args.connectedReferences ?? [],
+    baseReferenceImageUrls: args.referenceImageUrls,
+    imageCapOverride: SEEDANCE_2_REF_LIMITS.images - EXTEND_ANCHOR_IMAGE_SLOTS,
+    referenceVideoCount: 1,
+    referenceAudioCount: 0,
+  })
+}
 
 // Resolve the credit identifier used by both the preHandler check and the
 // downstream credit reservation. Keeping these in sync is critical — a
@@ -81,12 +132,6 @@ export async function extendVideoRoutes(app: FastifyInstance) {
     }
 
     const { kieTaskId, videoUrl, prompt, negativePrompt, provider, model, seeds, quality, extendMode, duration } = parsed.data
-    // None of the current extend providers (veo-extend / runway-extend / ltx-2.3-pro)
-    // support `negative_prompt` natively, so the helper appends "Avoid: …" to
-    // the user prompt before it reaches the queue. LTX doesn't consume the
-    // prompt at all — the negative is silently dropped for that provider,
-    // matching its existing prompt-ignored behavior.
-    const { prompt: effectivePrompt } = applyVideoNegativePrompt(prompt, negativePrompt, provider)
     const userId = req.userId
 
     if (!userId) {
@@ -143,6 +188,45 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       }
     }
 
+    // Reference images ride ONLY the seedance-2-extend transport (i2v with a
+    // native reference_image_urls array). The other extend providers have no
+    // reference path at all — refuse instead of silently dropping, so a
+    // caller learns at submit time rather than after a billed generation.
+    const hasImageRefs =
+      (parsed.data.referenceImageUrls?.length ?? 0) > 0 ||
+      (parsed.data.connectedReferences?.length ?? 0) > 0
+    if (hasImageRefs && provider !== "seedance-2-extend") {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: "referenceImageUrls / connectedReferences are only supported by the seedance-2-extend provider",
+        },
+      })
+    }
+
+    // Assembly (seedance only) rewrites the prompt — {image:N} tokens resolve,
+    // entity chips gain identity directives — and produces the final capped
+    // reference list. It must run BEFORE the negative injection so the
+    // "Avoid: …" clause stays the prompt's last line.
+    const assembled = hasImageRefs
+      ? assembleExtendVideoReferences({
+          prompt,
+          referenceImageUrls: parsed.data.referenceImageUrls,
+          connectedReferences: parsed.data.connectedReferences,
+        })
+      : undefined
+
+    // None of the current extend providers (veo-extend / runway-extend / ltx-2.3-pro)
+    // support `negative_prompt` natively, so the helper appends "Avoid: …" to
+    // the user prompt before it reaches the queue. LTX doesn't consume the
+    // prompt at all — the negative is silently dropped for that provider,
+    // matching its existing prompt-ignored behavior.
+    const { prompt: effectivePrompt } = applyVideoNegativePrompt(
+      assembled?.prompt ?? prompt,
+      negativePrompt,
+      provider,
+    )
+
     const mcpClient = extractMcpClient(req.body)
     // job_type powers the reconcile cron's correct finalization path —
     // see lib/reconcile/replicate.ts (defaults to "generate-image" when
@@ -190,11 +274,18 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             provider,
             video: videoUrl,
             // effectivePrompt carries any negative as in-prompt "Avoid: …" —
-            // the seedance-correct constraint placement (no native param).
+            // the seedance-correct constraint placement (no native param) —
+            // plus the assembled reference directives when refs are present.
             prompt: effectivePrompt,
             duration,
             resolution: parsed.data.resolution,
             generateAudio: parsed.data.generateAudio,
+            // Assembled + anchor-budgeted user refs; the worker forwards them
+            // into the i2v call, where the shared resolver seats them FIRST
+            // (@image_1…N) and appends the last-frame anchor after them.
+            ...(assembled?.referenceImageUrls?.length
+              ? { referenceImageUrls: assembled.referenceImageUrls }
+              : {}),
             usageLogId,
           }
         : {

@@ -50,6 +50,8 @@ export interface CopilotPanelSlotProps {
   projectId: string | undefined
   save: ((projectId: string) => Promise<{ success: boolean; error?: string }>) | null
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
+  runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
+  estimateNode: ((nodeId: string) => number | null) | null
   onStopRun: () => void
   creditEstimate: number
   /** True while the editor is refetching model costs. */
