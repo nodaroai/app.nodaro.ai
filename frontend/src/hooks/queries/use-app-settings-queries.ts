@@ -10,6 +10,8 @@ export interface AppSettings {
   readonly service_margin_percent?: Readonly<Record<string, number>>
   readonly carousel_video_autoplay: boolean
   readonly apps_page_video_autoplay: boolean
+  /** The copilot runtime pause. True = serving turns. Absent row reads as true. */
+  readonly copilot_enabled: boolean
   readonly featured_app_ids: readonly string[]
   readonly featured_apps_limit: number
   readonly apps_auto_scroll_seconds: number
@@ -20,6 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   cost_markup_percent: 0,
   carousel_video_autoplay: true,
   apps_page_video_autoplay: true,
+  copilot_enabled: true,
   featured_app_ids: [],
   featured_apps_limit: 20,
   apps_auto_scroll_seconds: 4,
@@ -37,6 +40,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
     cost_markup_percent: (settings.cost_markup_percent as number) ?? 0,
     carousel_video_autoplay: (settings.carousel_video_autoplay as boolean) ?? true,
     apps_page_video_autoplay: (settings.apps_page_video_autoplay as boolean) ?? true,
+    copilot_enabled: (settings.copilot_enabled as boolean) ?? true,
     featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
     featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
     apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,

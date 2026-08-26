@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   cost_markup_percent: 0,
   carousel_video_autoplay: true,
   apps_page_video_autoplay: true,
+    copilot_enabled: true,
   featured_app_ids: [],
   featured_apps_limit: 20,
   apps_auto_scroll_seconds: 4,
@@ -100,12 +101,38 @@ describe("useAppSettings", () => {
       cost_markup_percent: 30,
       carousel_video_autoplay: true,
       apps_page_video_autoplay: true,
+    copilot_enabled: true,
       featured_app_ids: [],
       featured_apps_limit: 20,
       apps_auto_scroll_seconds: 4,
     })
   })
 
+  it("reads copilot_enabled=false off the wire — the kill switch must not default to on", async () => {
+    // The GET-mapping seam. If this line is missing, the admin toggle shows
+    // ON while the copilot is OFF (or the reverse), and the operator flips a
+    // switch that does nothing — the setting-built-three-times trap.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ settings: { copilot_enabled: false } }),
+    })
+    mockUseQuery.mockReturnValue({ data: null })
+    useAppSettings()
+    const opts = mockUseQuery.mock.calls[0][0]
+    const result = await opts.queryFn()
+    expect(result.copilot_enabled).toBe(false)
+  })
+
+  it("defaults copilot_enabled to ON when the row is absent", async () => {
+    // An install that never wrote the row is enabled, matching the seed and
+    // the backend default — the switch shows on, not off.
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ settings: {} }) })
+    mockUseQuery.mockReturnValue({ data: null })
+    useAppSettings()
+    const opts = mockUseQuery.mock.calls[0][0]
+    const result = await opts.queryFn()
+    expect(result.copilot_enabled).toBe(true)
+  })
   it("queryFn returns defaults on fetch failure", async () => {
     mockFetch.mockResolvedValue({ ok: false })
     mockUseQuery.mockReturnValue({ data: null })

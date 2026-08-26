@@ -237,3 +237,38 @@ describe("PUT /v1/admin/settings/:key", () => {
     expect(res.statusCode).toBe(200)
   })
 })
+
+describe("PUT /v1/admin/settings/copilot_enabled — the runtime kill switch", () => {
+  // The one setting where a wrong TYPE is dangerous: routes/copilot.ts reads
+  // it and stops serving turns when it is `false`. A non-boolean written here
+  // would be read tolerantly as "on", and the emergency stop would silently
+  // not work — the one failure an emergency stop cannot have.
+  it("rejects a non-boolean before it can reach the row", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_enabled",
+      payload: { value: "off", userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("copilot_enabled")
+  })
+
+  it("writes a boolean and invalidates the cache so it takes effect", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { key: "copilot_enabled", value: false, updated_at: "2026-08-26" },
+      error: null,
+    })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockUpsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ upsert: mockUpsert } as never)
+
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/copilot_enabled",
+      payload: { value: false, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().value).toBe(false)
+    // Without this, the running process keeps the old value for up to a
+    // minute — an eternity in an incident.
+    expect(invalidateSettingsCache).toHaveBeenCalled()
+  })
+})
