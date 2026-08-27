@@ -17,8 +17,15 @@ import { PASSTHROUGH_TYPES } from "@nodaro/shared"
 
 export type IdentityLockMode = "off" | "soft" | "strict"
 
-/** Default applied when a Character node was created before the field existed. */
-export const DEFAULT_IDENTITY_LOCK: IdentityLockMode = "soft"
+/**
+ * The identity-lock default for characters — the value used wherever a Character
+ * node or entity has no explicit `identityLock`/`identity_lock`: the UI display
+ * fallback (canvas node, config panel, Character Studio), the runtime coercion in
+ * `toIdentityLockMode`, and the backend create defaults (characters route, MCP
+ * create_character, asset generation). Mirror this value in the
+ * `characters.identity_lock` SQL column default (migration 353).
+ */
+export const DEFAULT_IDENTITY_LOCK: IdentityLockMode = "off"
 
 /** Strict beats Soft beats Off — when multiple Character nodes feed one node. */
 const RANK: Record<IdentityLockMode, number> = { off: 0, soft: 1, strict: 2 }
@@ -68,9 +75,9 @@ const CHARACTER_NODE_LOCK_TEXT: Record<Exclude<IdentityLockMode, "off">, string>
  *   - off    → { enabled: false }                     (no lock line)
  *   - soft   → { enabled: true, text: <soft clause> }  (mild "preserve likeness")
  *   - strict → { enabled: true, text: <strict clause> }(strong "match exactly")
- * `undefined` coerces to the runtime default (`"soft"`) via `toIdentityLockMode`,
- * so existing nodes (which never set the field) emit the mild line in hybrid. The
- * per-mention `~lock`/`~nolock` sentinel still overrides via `withForcedIdentityLock`.
+ * `undefined` coerces to the runtime default (`DEFAULT_IDENTITY_LOCK`, now `"off"`)
+ * via `toIdentityLockMode`, so a node that never set the field emits NO lock line
+ * in hybrid. The per-mention `~lock`/`~nolock` sentinel still overrides via `withForcedIdentityLock`.
  */
 export function characterLockToRefLock(
   mode: IdentityLockMode | undefined,

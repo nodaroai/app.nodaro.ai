@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { TTS_PROVIDERS, CHARACTER_REFERENCE_PHOTO_KINDS, PLACEHOLDER_CHARACTER_NAME, CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
@@ -696,7 +697,7 @@ export async function characterRoutes(app: FastifyInstance) {
       personality: personality ?? null,
       seed_prompt: seedPrompt ?? null,
       canonical_description: canonicalDescription ?? null,
-      identity_lock: identityLock ?? "strict",
+      identity_lock: identityLock ?? DEFAULT_IDENTITY_LOCK,
       reference_photos: referencePhotos ?? [],
       real_life_refs_by_variant: normalizedVariantRefs ?? {},
       reference_videos_by_variant: normalizedVideoRefs ?? {},
